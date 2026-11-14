@@ -1474,6 +1474,14 @@ export interface InboxThreadMessage {
   readonly drawn: readonly InboxDrawnMedia[];
   /** What the answer it carries says it was, in the past, as the panel's stamp says it: "Chose Both", "Done 3/3"; none on a message that answers nothing. */
   readonly stamp?: AnswerStamp | undefined;
+  /** The form's values the answer it carries filled, one a line in the form's order, each field's name and what was put in it ("yes" or "no" for a yes or no), as the panel lists them under the stamp; none where it filled none. */
+  readonly values?: readonly InboxAnswerValue[] | undefined;
+}
+
+/** One field an answer filled: its name, and what was put in it, in words. */
+export interface InboxAnswerValue {
+  readonly label: string;
+  readonly words: string;
 }
 
 /** One of the item's own files a message's words draw in place, and how: a picture, or a video it carried, played where the words name it. */
@@ -1559,6 +1567,14 @@ export function inboxThreadMessages(
       media,
       drawn,
       ...(answers === undefined ? undefined : { stamp: sentStamp(answers, asked?.ask) }),
+      ...((answers?.values ?? []).length === 0
+        ? undefined
+        : {
+            values: (answers?.values ?? []).map(({ label, value }) => ({
+              label,
+              words: fieldValueWords(value),
+            })),
+          }),
     };
   });
 }

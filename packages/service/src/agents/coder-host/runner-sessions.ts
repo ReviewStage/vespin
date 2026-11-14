@@ -1183,7 +1183,7 @@ export const runnerSessions = <
                 eventsUrl: named(config.eventsUrl),
                 ...("tokenUrl" in config ? { tokenUrl: named(config.tokenUrl) } : undefined),
                 ...(layout.linesRead ? { linesUrl: named(options.linesUrl) } : undefined),
-                ...(layout.transcriptsKept && resumed.fromDisk !== true
+                ...(resumed.fromDisk !== true
                   ? { transcriptsUrl: named(options.transcriptsUrl) }
                   : undefined),
                 ...(resumed.fork === true ? { fork: true } : undefined),
@@ -1735,8 +1735,7 @@ export const runnerSessions = <
 
     /**
      * The session a launch resumes, the one decision every launch, the line
-     * a send queues for one, and a warm call ask. On a machine that keeps the
-     * CLI's transcript (`MachineLayout`'s `transcriptsKept`), the harness
+     * a send queues for one, and a warm call ask. The harness
      * resumes from the store whenever it holds any entry of the session, and
      * from those alone, whatever the disk holds, so a session resumes from
      * the store only where it holds it from its first entry
@@ -1745,9 +1744,7 @@ export const runnerSessions = <
      * session that opens in its place is handed the agent's steps so far
      * (`replay`); on a Mac, whose disk keeps it (`diskSessions`), it resumes
      * from the disk with the store left out of the launch (`fromDisk`), so
-     * the store never comes to hold a tail it would load alone. On a machine
-     * that keeps none, the session resumes from the disk alone, so not in a
-     * place made anew (`created`), whose disk is gone. A continued or forked agent with
+     * the store never comes to hold a tail it would load alone. A continued or forked agent with
      * no session of its own yet forks its source's in a new place, where the
      * Start copied a transcript the store holds from its first entry, cut
      * where the Start cut it.
@@ -1770,18 +1767,18 @@ export const runnerSessions = <
         const { conversationId } = agent;
 
         if (own !== undefined) {
-          if (layout.transcriptsKept && (yield* holdsSession(userId, conversationId, own))) {
+          if (yield* holdsSession(userId, conversationId, own)) {
             return { resume: own } satisfies ResumedSession;
           }
 
-          const fromDisk = (!layout.transcriptsKept || layout.diskSessions) && !(yield* created);
+          const fromDisk = layout.diskSessions && !(yield* created);
 
           return (fromDisk ? { resume: own, fromDisk } : { replay: true }) satisfies ResumedSession;
         }
 
         const source = agent.startedFrom?.session;
 
-        if (!layout.transcriptsKept || source === undefined || !(yield* created)) return {};
+        if (source === undefined || !(yield* created)) return {};
 
         // A session let go (`/clear`) leaves the agent a fresh one of its own, never its source's again.
         if (yield* holdsSessionClearedMark({ userId, conversationId })) return {};
@@ -3299,37 +3296,51 @@ const stoppedHolding = (machine: MachineLifecycle, unheld: UnheldSandbox) =>
       return false;
     }
 
-    const retired = yield* runnerRetiredIfIdle(userId, agentId);
-
-    if (Option.isNone(retired)) return false;
     const place = recordOf(found.value, userId, agentId);
-    const bearer = retired.value;
 
     // The runner is told of no longer before the sandbox stops, its launch kept for a late END, so
     // the next message relaunches it rather than writing to a runner the stop ended. Note that
     // anything short of a stop made, a write or the stop failing or the call interrupted, puts the
-    // runner and its bearer back, because the runner may still run, and a launch beside it would
-    // read the same lines twice.
-    yield* Effect.andThen(
-      machine.recordRunner(
-        place,
-        launch === undefined
-          ? { kind: RUNNER_RECORD.NONE }
-          : { kind: RUNNER_RECORD.LAUNCHED, mark: launch },
-      ),
-      machine.stop(running),
-    ).pipe(
-      Effect.onError(() =>
-        Effect.ignore(
-          Effect.all([
-            runner === undefined
-              ? Effect.void
-              : machine.recordRunner(place, { kind: RUNNER_RECORD.RUNNING, runner }),
-            bearer === null ? Effect.void : restoreAgentRunnerToken(userId, agentId, bearer),
-          ]),
-        ),
-      ),
+    // runner and its bearer back, each apart from the other, because the runner may still run, and
+    // a launch beside it would read the same lines twice. The retire and the restore's arming run
+    // uninterruptibly, so no interruption falls between them.
+    const stopped = yield* Effect.uninterruptibleMask((interruptible) =>
+      Effect.gen(function* () {
+        const retired = yield* runnerRetiredIfIdle(userId, agentId);
+
+        if (Option.isNone(retired)) return false;
+        const bearer = retired.value;
+
+        yield* interruptible(
+          Effect.andThen(
+            machine.recordRunner(
+              place,
+              launch === undefined
+                ? { kind: RUNNER_RECORD.NONE }
+                : { kind: RUNNER_RECORD.LAUNCHED, mark: launch },
+            ),
+            machine.stop(running),
+          ),
+        ).pipe(
+          Effect.onError(() =>
+            Effect.andThen(
+              runner === undefined
+                ? Effect.void
+                : Effect.ignore(
+                    machine.recordRunner(place, { kind: RUNNER_RECORD.RUNNING, runner }),
+                  ),
+              bearer === null
+                ? Effect.void
+                : Effect.ignore(restoreAgentRunnerToken(userId, agentId, bearer)),
+            ),
+          ),
+        );
+
+        return true;
+      }),
     );
+
+    if (!stopped) return false;
     yield* recordedSandboxStopped(sandboxName);
 
     return true;

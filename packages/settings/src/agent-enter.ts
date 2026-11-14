@@ -32,6 +32,13 @@ export const AGENT_ENTER_DETAIL = {
   [AGENT_ENTER.QUEUE]: "Use ⌘ Enter to steer. On a touch screen, press and hold Send.",
 } as const satisfies Record<AgentEnter, string>;
 
+/** What the row's footer says in the iOS app, which has no ⌘ Enter and no second press on Send: what Send does while an agent works. */
+export const AGENT_ENTER_TOUCH_DETAIL = {
+  [AGENT_ENTER.STEER]: "Send steers the agent's turn with your message.",
+  [AGENT_ENTER.QUEUE]:
+    "Send queues your message behind the agent's turn. Steer sends a queued message now.",
+} as const satisfies Record<AgentEnter, string>;
+
 const readsAgentEnter = Schema.is(Schema.Literals(AGENT_ENTER_LIST));
 
 /** Guards a choice arriving from storage or IPC. */

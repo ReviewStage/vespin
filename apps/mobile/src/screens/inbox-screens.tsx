@@ -47,12 +47,14 @@ import {
 import {
   BAR_TITLE,
   type BarAction,
+  type BarFootItem,
   type BarMenu,
   BUTTON_LOOK,
   EmptyState,
   GLYPH,
   GlassDock,
   glyphSymbol,
+  isBarMenu,
   LIST_LOOK,
   type ListLook,
   ListRow,
@@ -65,6 +67,7 @@ import {
   type RowChoosing,
   RowForEach,
   RowList,
+  type RowSubmenu,
   SCOPE_LOOK,
   type Scope,
   ScopePicker,
@@ -82,6 +85,8 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAppReadyCount } from "../app-ready.js";
+import { PUSHED_PAGE, useDetailPush } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -118,7 +123,7 @@ import {
   threadActs,
   threadMenu,
 } from "./inbox-ask.js";
-import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
+import { useRemind } from "./inbox-remind.js";
 
 /** The Inbox's name, at its head and on its back button. */
 const INBOX_TITLE = "Inbox";
@@ -169,10 +174,12 @@ type InboxRowsProps = {
   readonly onSelect: (id: string) => void;
   readonly onRefresh: () => Promise<void>;
   readonly onMark: (itemId: string, unread: boolean) => void;
-  readonly onRemind: (item: InboxItem) => void;
+  readonly remindMenu: (item: InboxItem) => RowSubmenu;
   readonly onResolve: (item: InboxItem) => void;
   /** The list's Select mode, while it stands in one. */
   readonly choosing?: RowChoosing | undefined;
+  /** Starts Select mode with the threads the system ticked at once, such as by a two-finger drag. */
+  readonly onChooseStart: (ids: readonly string[]) => void;
 };
 
 /**
@@ -180,7 +187,7 @@ type InboxRowsProps = {
  * thread's title, and the line of what it asks led by its glyph, with the
  * teammate it waits on before the time, or when its reminder comes back in
  * the time's place; a swipe from the leading edge marks it read or unread, a
- * swipe from the trailing edge resolves it or opens Remind me, and a long
+ * swipe from the trailing edge resolves it or opens Remind me's times, and a long
  * press lifts its preview over the same acts.
  */
 function InboxRows({
@@ -191,9 +198,10 @@ function InboxRows({
   onSelect,
   onRefresh,
   onMark,
-  onRemind,
+  remindMenu,
   onResolve,
   choosing,
+  onChooseStart,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
   const pictureOf = useMemberPictures();
@@ -205,13 +213,14 @@ function InboxRows({
       onSelect={onSelect}
       onRefresh={onRefresh}
       choosing={choosing}
+      onChooseStart={onChooseStart}
     >
       <InboxItemRows
         listed={listed}
         readerId={readerId}
         pictureOf={pictureOf}
         onMark={onMark}
-        onRemind={onRemind}
+        remindMenu={remindMenu}
         onResolve={onResolve}
       />
     </RowList>
@@ -223,8 +232,8 @@ type InboxRowActs = {
   /** Each member's picture by their id, read once by the list the row stands in. */
   readonly pictureOf: PictureOf;
   readonly onMark: (itemId: string, unread: boolean) => void;
-  /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
-  readonly onRemind: (item: InboxItem) => void;
+  /** Remind me's times on the thread, a menu a swipe from the trailing edge opens. */
+  readonly remindMenu: (item: InboxItem) => RowSubmenu;
   /** Resolves the open thread, which a full swipe from the trailing edge runs. */
   readonly onResolve: (item: InboxItem) => void;
 };
@@ -260,7 +269,7 @@ function InboxRow({
   readerId,
   pictureOf,
   onMark,
-  onRemind,
+  remindMenu,
   onResolve,
 }: InboxRowActs & { readonly listed: InboxListed }) {
   const { holder, item } = listed;
@@ -318,10 +327,7 @@ function InboxRow({
       }
       at={item.updatedAt}
       due={item.remindAt}
-      trailingActions={[
-        ...resolve,
-        { ...REMIND_ME, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => onRemind(item) },
-      ]}
+      trailingActions={[...resolve, remindMenu(item)]}
       leadingActions={[
         {
           label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
@@ -331,7 +337,7 @@ function InboxRow({
         },
       ]}
       link={linkOf(
-        { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+        { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
         workspaceStep,
       )}
       preview={
@@ -432,9 +438,9 @@ function moreMenu(
 function chosenActs(
   chosen: readonly InboxItem[],
   acts: ReturnType<typeof useInboxActs>,
-  remind: ReturnType<typeof useRemindSheet>,
+  remind: ReturnType<typeof useRemind>,
   stop: () => void,
-): readonly BarAction[] {
+): readonly BarFootItem[] {
   if (chosen.length === 0) return [];
   const unread = chosen.filter(isUnread);
   const open = chosen.filter((item) => item.status === INBOX_STATUS.OPEN);
@@ -466,9 +472,31 @@ function chosenActs(
         stop();
       },
     },
-    { ...REMIND_ME, onPress: () => remind.openMany(chosen, stop) },
+    remind.menu(chosen, stop),
     ...resolve,
   ];
+}
+
+/**
+ * A menu's acts as the stack bar's own menu items, each with what it says
+ * under its words, such as when a reminder's time comes due, dimmed or red
+ * as the act asks. Note that it's
+ * a function of elements rather than a component, because the bar's menu
+ * takes only its own items as children.
+ */
+function toolbarMenuActions(menu: BarMenu) {
+  return menu.actions.map((action) => (
+    <Stack.Toolbar.MenuAction
+      key={action.label}
+      {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
+      {...(action.detail === undefined ? {} : { subtitle: action.detail })}
+      disabled={action.disabled === true}
+      destructive={action.destructive === true}
+      onPress={action.onPress}
+    >
+      {action.label}
+    </Stack.Toolbar.MenuAction>
+  ));
 }
 
 /** Every agent's name the document holds, by the agent's id, as the panel names it. */
@@ -494,7 +522,8 @@ type ThreadPlace =
   | { readonly inStack: true }
   | {
       readonly inStack: false;
-      readonly onRemind: (item: InboxItem) => void;
+      /** Remind me's times on a thread, from its screen, which draws the picker sheet outside the split view. */
+      readonly remindMenu: (item: InboxItem) => BarMenu;
       /** Selects another thread in the split view, such as one the box just started. */
       readonly onOpen: (id: string) => void;
     };
@@ -507,7 +536,7 @@ type ThreadPlace =
  * foot, above the keyboard, and holds the menu in the stack's bar; a split
  * view's detail stands both in its own column.
  *
- * Note that a split view's detail draws no Remind me sheet of its own, and
+ * Note that a split view's detail draws no Remind me picker of its own, and
  * opens its screen's instead, because the column stacks whatever it is
  * handed one under the other, so a sheet beside the page would take half
  * the column's height.
@@ -596,7 +625,7 @@ function ThreadDetail({
   const openOnWeb = () => {
     const place = {
       kind: LINK_DESTINATION.INBOX_ITEM,
-      planId: holder.task.id,
+      taskId: holder.task.id,
       itemId: item.id,
     } as const;
 
@@ -609,6 +638,7 @@ function ThreadDetail({
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const onTab = useOnTab();
+  const toDetail = useDetailPush();
 
   // Whether this thread still stands, so a start that answers after the reader left it opens nothing over where they went.
   const shown = useRef(false);
@@ -638,19 +668,19 @@ function ThreadDetail({
   };
 
   const answer = useThreadAnswer(listed, openStarted);
-  const remind = useRemindSheet();
+  const remind = useRemind();
   const inboxActs = useInboxActs();
   const keeping = useKeeping();
   const inStack = place.inStack;
-  const openRemind = place.inStack ? remind.open : place.onRemind;
+  const remindMenu = place.inStack ? (on: InboxItem) => remind.menu([on]) : place.remindMenu;
 
   const doors = {
     onMark: (unread: boolean) => inboxActs.mark(item.id, unread),
-    onRemind: () => openRemind(item),
+    remind: remindMenu(item),
     onCopyLink: () =>
       keeping.copyWords(
         linkOf(
-          { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+          { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
           workspaceStep,
         ),
       ),
@@ -660,18 +690,23 @@ function ThreadDetail({
   // Note that a split view's detail bar stands the thread's main acts as glyphs, as Mail's stands Reply and Trash, and ⋯ keeps the rest; a compact window's stack keeps them all in ⋯.
   const acts = threadActs(item, answer, doors);
 
-  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them; a compact window's stack names the path as its plain title, which can hold no menu, so there they lead the ⋯ menu instead.
+  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them, inside the detail's own column beside the list where the window stands three; a compact window's stack names the path as its plain title, which can hold no menu, so there they lead the ⋯ menu instead.
   const pathActions = [
     {
       label: PATH_OPENS.TASK,
       symbol: GLYPH.TASK,
-      onPress: () =>
-        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: holder.task.id }))),
+      onPress: () => {
+        if (toDetail({ kind: PUSHED_PAGE.TASK, taskId: holder.task.id })) return;
+        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: holder.task.id })));
+      },
     },
     {
       label: PATH_OPENS.AGENT,
       symbol: GLYPH.AGENT,
-      onPress: () => router.push(onTab(iosAgentRoute(item.agentId))),
+      onPress: () => {
+        if (toDetail({ kind: PUSHED_PAGE.AGENT, agentId: item.agentId })) return;
+        router.push(onTab(iosAgentRoute(item.agentId)));
+      },
     },
   ] as const;
 
@@ -778,7 +813,7 @@ function ThreadDetail({
                 linkOf(
                   {
                     kind: LINK_DESTINATION.PAGE,
-                    planId: page.place.taskId,
+                    taskId: page.place.taskId,
                     pageId: page.pageId,
                   },
                   workspaceStep,
@@ -822,14 +857,15 @@ function ThreadDetail({
               </Stack.Toolbar.MenuAction>
             ))}
           </Stack.Toolbar.Menu>
-          {menu.actions.map((action) => (
-            <Stack.Toolbar.MenuAction
-              key={action.label}
-              icon={glyphSymbol(action.symbol)}
-              onPress={action.onPress}
+          {toolbarMenuActions(menu)}
+          {(menu.submenus ?? []).map((submenu) => (
+            <Stack.Toolbar.Menu
+              key={submenu.label}
+              title={submenu.label}
+              icon={glyphSymbol(submenu.symbol)}
             >
-              {action.label}
-            </Stack.Toolbar.MenuAction>
+              {toolbarMenuActions(submenu)}
+            </Stack.Toolbar.Menu>
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
@@ -870,13 +906,13 @@ function ThreadNotDrawn({
  * pushed screen reads it, so a link to a thread of a workspace the list does
  * not show still opens it, and one still read, refused, or missing says so.
  */
-function ThreadColumn({
+export function ThreadColumn({
   id,
-  onRemind,
+  remindMenu,
   onOpen,
 }: {
   readonly id: string;
-  readonly onRemind: (item: InboxItem) => void;
+  readonly remindMenu: (item: InboxItem) => BarMenu;
   readonly onOpen: (id: string) => void;
 }) {
   const { listed, readerId, feed, retry } = useInboxThread(id);
@@ -887,7 +923,7 @@ function ThreadColumn({
     <ThreadDetail
       listed={listed}
       readerId={readerId}
-      place={{ inStack: false, onRemind, onOpen }}
+      place={{ inStack: false, remindMenu, onOpen }}
     />
   );
 }
@@ -899,9 +935,11 @@ type InboxSearch = { readonly search: string; readonly setSearch: (search: strin
 function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
+  // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
+  useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
-  const remind = useRemindSheet();
+  const remind = useRemind();
   const selecting = useInboxChoosing();
 
   const menu = moreMenu(listing.unread, acts.markAll, {
@@ -929,7 +967,18 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
       }
     : undefined;
 
-  return { show, search, setSearch, listing, acts, scopes, menu, remind, choosing };
+  return {
+    show,
+    search,
+    setSearch,
+    listing,
+    acts,
+    scopes,
+    menu,
+    remind,
+    choosing,
+    chooseStart: selecting.choose,
+  };
 }
 
 // A compact window: the list under its scopes' segmented control, the account's photo
@@ -942,7 +991,7 @@ function InboxStackList(words: InboxSearch) {
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
 
-  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing } =
+  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing, chooseStart } =
     useInboxScreen(words);
 
   const field = useRefilledSearchField(search);
@@ -970,16 +1019,7 @@ function InboxStackList(words: InboxSearch) {
           </Stack.Toolbar.Button>
         ) : (
           <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-            {menu.actions.map((action) => (
-              <Stack.Toolbar.MenuAction
-                key={action.label}
-                icon={glyphSymbol(action.symbol)}
-                disabled={action.disabled === true}
-                onPress={action.onPress}
-              >
-                {action.label}
-              </Stack.Toolbar.MenuAction>
-            ))}
+            {toolbarMenuActions(menu)}
           </Stack.Toolbar.Menu>
         )}
       </Stack.Toolbar>
@@ -988,15 +1028,22 @@ function InboxStackList(words: InboxSearch) {
           {choosing.acts.flatMap((act, at) => [
             ...(at === 0 ? [] : [<Stack.Toolbar.Spacer key={at} />]),
             // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass.
-            <Stack.Toolbar.Button
-              key={act.label}
-              accessibilityLabel={act.label}
-              onPress={act.onPress}
-            >
-              {act.symbol === undefined ? null : (
+            isBarMenu(act) ? (
+              <Stack.Toolbar.Menu key={act.label} accessibilityLabel={act.label}>
                 <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
-              )}
-            </Stack.Toolbar.Button>,
+                {toolbarMenuActions(act)}
+              </Stack.Toolbar.Menu>
+            ) : (
+              <Stack.Toolbar.Button
+                key={act.label}
+                accessibilityLabel={act.label}
+                onPress={act.onPress}
+              >
+                {act.symbol === undefined ? null : (
+                  <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
+                )}
+              </Stack.Toolbar.Button>
+            ),
           ])}
         </Stack.Toolbar>
       )}
@@ -1021,9 +1068,10 @@ function InboxStackList(words: InboxSearch) {
               }
               onRefresh={acts.refresh}
               onMark={acts.mark}
-              onRemind={remind.open}
+              remindMenu={(item) => remind.menu([item])}
               onResolve={acts.resolve}
               choosing={choosing?.rows}
+              onChooseStart={chooseStart}
             />
           )}
         </ScopePicker>
@@ -1051,10 +1099,8 @@ function InboxSplitScreen({
   readonly select: (id: string) => void;
   readonly words: InboxSearch;
 }) {
-  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing } = useInboxScreen(
-    words,
-    selected,
-  );
+  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing, chooseStart } =
+    useInboxScreen(words, selected);
 
   const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
@@ -1076,9 +1122,10 @@ function InboxSplitScreen({
         onSelect={select}
         onRefresh={acts.refresh}
         onMark={acts.mark}
-        onRemind={remind.open}
+        remindMenu={(item) => remind.menu([item])}
         onResolve={acts.resolve}
         choosing={choosing?.rows}
+        onChooseStart={chooseStart}
       />
     );
 
@@ -1109,7 +1156,12 @@ function InboxSplitScreen({
     selected === undefined ? (
       <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
     ) : (
-      <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
+      <ThreadColumn
+        key={selected}
+        id={selected}
+        remindMenu={(item) => remind.menu([item])}
+        onOpen={select}
+      />
     );
 
   // Note that with no thread picked the detail's bar keeps the thread's acts, dimmed, as Mail's bar stands over No Message Selected; a picked thread's page stands its own.
@@ -1118,7 +1170,9 @@ function InboxSplitScreen({
   const first = useListColumn(list);
   useHandColumns(
     SIDEBAR_PLACE.INBOX,
-    threeColumns ? { content: list.view, contentBar: list.bar, detail, detailBar } : undefined,
+    threeColumns
+      ? { content: list.view, contentBar: list.bar, detail, detailBar, root: selected }
+      : undefined,
   );
 
   return (

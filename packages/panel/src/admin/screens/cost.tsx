@@ -8,7 +8,6 @@ import {
   type AdminCostAccount,
   type AdminCostModel,
 } from "@repo/features/admin-cost-wire";
-import type { AdminMetricsWindow } from "@repo/features/admin-wire";
 import { formatCompact, formatCount, formatUsd } from "@repo/features/number-format";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { readFailedWords } from "@repo/features/words";
@@ -27,12 +26,17 @@ import { useMemo } from "react";
 import { AccountCell, AccountCellSkeleton } from "../accounts-table/accounts-table.js";
 import { useAdminDoors } from "../admin-doors.js";
 import { adminCostQuery, useAdminSignOut } from "../admin-queries.js";
-import { adminReadView } from "../admin-read-view.js";
+import {
+  type AdminRosterChoice,
+  type AdminScreenShell,
+  type AdminWindowChoice,
+  adminReadView,
+} from "../admin-read-view.js";
 import { CostChart, CostChartSkeleton } from "../charts/cost-chart.js";
 import { AdminSection, STAT_LAYOUT, StatCards, type StatSpec } from "../charts/stat-card.js";
 import { AdminViewOptions, windowWords } from "../chrome/controls.js";
 import { PageNote } from "../chrome/notes.js";
-import { AdminPage, type ViewerAccount } from "../chrome/page-header.js";
+import { AdminPage } from "../chrome/page-header.js";
 import { PageSkeleton } from "../chrome/page-skeleton.js";
 import { windowedReadQuery } from "../routing.js";
 
@@ -301,17 +305,11 @@ export function CostScreen({
   onSignOut,
   onOpenAccount,
   frame,
-}: {
-  hideAdmins: boolean;
-  onHideAdminsChange: (hide: boolean) => void;
-  windowDays: AdminMetricsWindow;
-  onWindowDaysChange: (windowDays: AdminMetricsWindow) => void;
-  account: ViewerAccount | undefined;
-  onSignOut: () => Promise<void>;
-  onOpenAccount: (id: string) => void;
-  /** Applied around every answer but the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
-}): React.JSX.Element {
+}: AdminScreenShell &
+  AdminRosterChoice &
+  AdminWindowChoice & {
+    onOpenAccount: (id: string) => void;
+  }): React.JSX.Element {
   const { reads, gate } = useAdminDoors();
   const query = windowedReadQuery(hideAdmins, windowDays);
   const read = useQuery({ ...adminCostQuery(reads, query), enabled: !gate.heldAtGate() });

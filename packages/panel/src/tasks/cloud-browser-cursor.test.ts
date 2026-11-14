@@ -16,7 +16,7 @@ import { CloudBrowserPane } from "./cloud-browser-pane.js";
 
 /**
  * The agent's pointer over a cloud Browser tab's live view: drawn at the
- * agent's point scaled onto the drawn page, out of the pointer's way; hidden while a member drives the tab, faded once the agent
+ * agent's point as a share of the drawn page, out of the pointer's way; hidden while a member drives the tab, faded once the agent
  * has stood idle, and held still where motion is reduced. A synthetic task
  * and tab throughout, the live view over a fake door, the clock pinned, and
  * the pane's body 640 by 600 pixels, which fits a 1280 by 800 page at half
@@ -126,20 +126,20 @@ async function paneOf(tab: AgentBrowserTab): Promise<{
 
 /** The agent's pointer as drawn, if it is. */
 function pointer(): HTMLElement | null {
-  return document.querySelector<HTMLElement>(".cloud-browser-cursor");
+  return document.querySelector<HTMLElement>(".ui-agent-pointer");
 }
 
-test("the agent's pointer stands at its point scaled onto the drawn page, out of the pointer's way, and moves with the agent", async () => {
+test("the agent's pointer stands at its point's share of the drawn page, out of the pointer's way, and moves with the agent", async () => {
   const { redraw } = await paneOf(CLICKED);
   const drawn = pointer();
   assert.ok(drawn, "the pointer is drawn over the page");
-  assert.equal(drawn.style.getPropertyValue("--cloud-browser-cursor-x"), "320px");
-  assert.equal(drawn.style.getPropertyValue("--cloud-browser-cursor-y"), "150px");
+  assert.equal(drawn.style.getPropertyValue("--ui-agent-pointer-x"), "0.5");
+  assert.equal(drawn.style.getPropertyValue("--ui-agent-pointer-y"), "0.375");
   assert.ok(drawn.hasAttribute("data-shown"), "shown while the agent is active");
   assert.equal(drawn.hasAttribute("data-flip-x") || drawn.hasAttribute("data-flip-y"), false);
-  assert.equal(drawn.getAttribute("aria-hidden"), "true");
+  assert.equal(drawn.closest("[aria-hidden]")?.getAttribute("aria-hidden"), "true");
   assert.equal(drawn.querySelector("canvas"), null, "never part of the frame");
-  assert.ok(drawn.querySelector(".cloud-browser-cursor-ripple"), "a click ripples at its point");
+  assert.ok(drawn.querySelector(".ui-agent-pointer-ripple"), "a click ripples at its point");
 
   await redraw({
     ...CLICKED,
@@ -148,14 +148,14 @@ test("the agent's pointer stands at its point scaled onto the drawn page, out of
   });
   const moved = pointer();
   assert.ok(moved);
-  assert.equal(moved.style.getPropertyValue("--cloud-browser-cursor-x"), "640px");
-  assert.equal(moved.style.getPropertyValue("--cloud-browser-cursor-y"), "400px");
+  assert.equal(moved.style.getPropertyValue("--ui-agent-pointer-x"), "1");
+  assert.equal(moved.style.getPropertyValue("--ui-agent-pointer-y"), "1");
   assert.equal(moved.dataset.kind, "type");
   assert.ok(
     moved.hasAttribute("data-flip-x") && moved.hasAttribute("data-flip-y"),
     "at the page's corner the arrow is mirrored about its tip, onto the page",
   );
-  assert.equal(moved.querySelector(".cloud-browser-cursor-ripple"), null, "typing ripples nothing");
+  assert.equal(moved.querySelector(".ui-agent-pointer-ripple"), null, "typing ripples nothing");
 });
 
 test("the agent's pointer hides while a member drives the tab, and fades once the agent has stood idle", async () => {
@@ -191,7 +191,7 @@ test.each(["1ms", "0s"])(
       assert.ok(drawn);
       assert.ok(drawn.hasAttribute("data-shown"), "still drawn where the agent points");
       assert.ok(drawn.hasAttribute("data-still"), "held still");
-      assert.equal(drawn.querySelector(".cloud-browser-cursor-ripple"), null, "no ripple");
+      assert.equal(drawn.querySelector(".ui-agent-pointer-ripple"), null, "no ripple");
     } finally {
       document.documentElement.style.removeProperty("--ui-duration-fast");
     }

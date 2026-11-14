@@ -70,6 +70,7 @@ export function AppAsk({
   expiresAt,
   noteMaxLength,
   onExited,
+  machineName,
 }: {
   /** Whether the ask stands; falling, the card fades out before it goes. */
   open: boolean;
@@ -86,6 +87,8 @@ export function AppAsk({
   noteMaxLength: number;
   /** Its fade has run and the card is gone, which its owner takes the ask down on. */
   onExited?: (() => void) | undefined;
+  /** The machine that asks, where it is not the one the window runs on, which the subtitle names. */
+  machineName?: string | undefined;
 }): React.JSX.Element {
   const deny = useRef<HTMLButtonElement | null>(null);
   const note = useAskNote();
@@ -100,7 +103,11 @@ export function AppAsk({
       role={DIALOG_ROLE.ALERT_DIALOG}
       size={DIALOG_SIZE.WIDE}
       title={`Let agents use ${app.name}?`}
-      subtitle={SUBTITLE}
+      subtitle={
+        machineName === undefined
+          ? SUBTITLE
+          : `An agent wants to see and control an app on ${machineName}.`
+      }
       initialFocus={deny}
       onDismiss={() => onDeny(undefined)}
       onExited={onExited}

@@ -1,4 +1,4 @@
-// pull-request-card.tsx -- a pull request as a transcript or a thread draws it: a compact bordered card of its state's glyph, its title, and its line counts, which opens its page, with its acts as small pills under it.
+// pull-request-card.tsx -- a pull request as a transcript or a thread draws it: a compact bordered card of its state's glyph, its title, and its line counts, which opens its page, with its acts as regular bordered buttons under it.
 
 import { Button, HStack, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -13,7 +13,7 @@ import {
   strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestMarkState } from "@repo/features/pull-request-model";
-import { Chip } from "./button.js";
+import { Button as Act, BUTTON_LOOK, BUTTON_SIZE } from "./button.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { ToneGlyph } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
@@ -38,7 +38,7 @@ type PullRequestCardProps = {
   /** The lines it adds and removes, in the complete green and the danger red. */
   readonly additions?: number | undefined;
   readonly deletions?: number | undefined;
-  /** Its acts, drawn as small pills under the card. */
+  /** Its acts, drawn as regular bordered buttons under the card. */
   readonly acts?: readonly PullRequestAct[] | undefined;
   /** Opens its own page, as a press on the card asks; none where it has no page to open. */
   readonly onOpen?: (() => void) | undefined;
@@ -55,7 +55,11 @@ function lineCount(sign: string, count: number): string {
  * A pull request on a page: its state's glyph in GitHub's color, the one
  * status tone the card carries, its number and title in 15 pt, and its added
  * and removed lines in green and red, on the surface inside a hairline; its
- * acts stand under it as small pills.
+ * acts stand under it as the system's regular bordered buttons in the ink.
+ * Note that they are regular rather than small capsules, because an act
+ * under a card is a press the reader came for, as Mail's Reply under a
+ * message is, and a small capsule's 28 pt fell short of Apple's 44 pt
+ * target.
  */
 export function PullRequestCard({
   state,
@@ -124,7 +128,13 @@ export function PullRequestCard({
       {acts.length === 0 ? null : (
         <HStack spacing={SPACE.TIGHT + 2}>
           {acts.map((act) => (
-            <Chip key={act.label} label={act.label} onPress={act.onPress} />
+            <Act
+              key={act.label}
+              label={act.label}
+              look={BUTTON_LOOK.BORDERED}
+              size={BUTTON_SIZE.REGULAR}
+              onPress={act.onPress}
+            />
           ))}
         </HStack>
       )}

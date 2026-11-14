@@ -1,15 +1,19 @@
+import type { ReactNode } from "react";
 import { MinimizeIcon } from "../../icons/lucide-glyphs.js";
 import { PICTURE_STATE, type PictureState } from "../../picture-read.js";
+import { AgentPointer, type AgentPointerKind } from "../agent-pointer/agent-pointer.js";
 import { APP_ICON_SIZE, AppIcon } from "../app-icon/app-icon.js";
 import { BUTTON_SIZE, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_LOOK, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
 import { CardPress } from "../card-press/card-press.js";
 import { CHIP_LOOK, CHIP_SIZE, Chip, ChipName, StaticChip } from "../chip/chip.js";
+import { MarkedWords, type WordsMark } from "../marked-words/marked-words.js";
 import { Menu, useMenu } from "../menu/menu.js";
 import { PictureStandIn } from "../picture-set/picture-set.js";
 import { PICTURE_TILE_FACE, PictureTile } from "../picture-tile/picture-tile.js";
 import { SPINNER_SIZE, SpinnerRing } from "../spinner/spinner.js";
 import { TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { Tooltip } from "../tooltip/hint.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
 
 /**
@@ -19,7 +23,8 @@ import { WorkingMark } from "../working-mark/working-mark.js";
  * the agent read of it. Every title in the stack, the front's and each one
  * behind it, says the same two things: the app, by its icon and name, and
  * the working mark where the agent is in it now. The front's name is a chip
- * that looks the same on every device; on the Mac the agent uses, where the
+ * that looks the same on every device and hangs the app's card where the
+ * caller hands one (`MacAppCard`); on the Mac the agent uses, where the
  * caller hands `onShowApp`, a press on it brings that app's own window
  * forward. The window stands in a frame of one size whatever its shape,
  * centered on a quiet ground, so the stack keeps still as the apps change,
@@ -28,6 +33,10 @@ import { WorkingMark } from "../working-mark/working-mark.js";
  * walk the other apps' windows too. A window not read yet holds the frame
  * with a spinner, one whose read did not land holds it with Retry and is no
  * press, and an app whose window the agent never read stands as its icon.
+ * Where the agent's cursor stands over the window in front, its pointer
+ * (`AgentPointer`) is drawn over the picture at that spot, gliding as the
+ * agent moves it, as its cursor does on the Mac; the picture may lag a press
+ * or two behind it, until the agent reads the window again.
  *
  * The other apps stand behind it as cards peeking out above it, stepping in
  * from the edge as a deck does, at most two: the one used last nearest as
@@ -69,14 +78,32 @@ const PILE_PLACE = [
 /** Each card behind the front window, by its depth from it: stepping in from the edge, the deeper the further. */
 const BEHIND_INSET = ["mx-app-window-peek", "mx-app-window-peek-twice"] as const;
 
-/** An app in the stack: what tells it apart from every other, such as its bundle id, its name, its icon's address, and its newest window, where the agent read one. Note that two apps may share a name, so the stack knows each by its id and only shows its name. */
+/** The agent's pointer over an app's window: where it stands as a share of the window from its top left, what it does there, the move it stands at, and whether it shows, as it does while the agent works. */
+export interface StackedPointer {
+  readonly x: number;
+  readonly y: number;
+  readonly kind: AgentPointerKind;
+  readonly move: string;
+  readonly shown: boolean;
+}
+
+/** An app in the stack: what tells it apart from every other, such as its bundle id, its name, its icon's address, and its newest window, where the agent read one, with the agent's pointer where it stands over that window. Note that two apps may share a name, so the stack knows each by its id and only shows its name. */
 export interface StackedApp {
   readonly id: string;
   readonly name: string;
   readonly iconSrc?: string | undefined;
   readonly window?:
-    | { readonly state: PictureState; readonly width: number; readonly height: number }
+    | {
+        readonly state: PictureState;
+        readonly width: number;
+        readonly height: number;
+        readonly pointer?: StackedPointer | undefined;
+      }
     | undefined;
+  /** The card its name's chip hangs (`MacAppCard`); none where the caller has none. */
+  readonly card?: ReactNode;
+  /** A mark set inside its name, before the part it marks: a teammate's face before their machine's name where its title names their machine ("Simulator on Theo's MacBook Pro"); none for the rest. */
+  readonly mark?: WordsMark | undefined;
 }
 
 /** Apps as a pile of their icons, at most four, each overlapping the one before it, the first on top. */
@@ -97,14 +124,28 @@ function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
   const window = app.window;
 
   if (window?.state.kind === PICTURE_STATE.READY) {
+    const pointer = window.pointer;
+
+    // Note that the pointer stands over the picture alone, which the tile's face hugs and positions.
     return (
-      <img
-        className="ui-app-window block h-auto max-h-app-window-tall w-auto max-w-full"
-        src={window.state.url}
-        width={window.width}
-        height={window.height}
-        alt=""
-      />
+      <>
+        <img
+          className="ui-app-window block h-auto max-h-app-window-tall w-auto max-w-full"
+          src={window.state.url}
+          width={window.width}
+          height={window.height}
+          alt=""
+        />
+        {pointer === undefined ? null : (
+          <AgentPointer
+            x={pointer.x}
+            y={pointer.y}
+            kind={pointer.kind}
+            move={pointer.move}
+            shown={pointer.shown}
+          />
+        )}
+      </>
     );
   }
 
@@ -126,7 +167,7 @@ function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
   );
 }
 
-/** The app's icon and name, the same chip on every device; a press brings its own window forward where the caller can. */
+/** The app's icon and name, the same chip on every device, hanging the app's card; a press brings its own window forward where the caller can. */
 function AppName({
   app,
   onShowApp,
@@ -137,27 +178,33 @@ function AppName({
   const face = (
     <>
       <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />
-      <ChipName>{app.name}</ChipName>
+      <ChipName>
+        <MarkedWords words={app.name} mark={app.mark} />
+      </ChipName>
     </>
   );
 
   if (onShowApp === undefined) {
     return (
-      <StaticChip look={CHIP_LOOK.TOOLBAR} size={CHIP_SIZE.COMPACT}>
-        {face}
-      </StaticChip>
+      <Tooltip label={app.name} card={app.card}>
+        <StaticChip look={CHIP_LOOK.TOOLBAR} size={CHIP_SIZE.COMPACT}>
+          {face}
+        </StaticChip>
+      </Tooltip>
     );
   }
 
   return (
-    <Chip
-      look={CHIP_LOOK.TOOLBAR}
-      size={CHIP_SIZE.COMPACT}
-      aria-label={WORDS.SHOW_ON_MAC(app.name)}
-      onClick={() => onShowApp(app.id)}
-    >
-      {face}
-    </Chip>
+    <Tooltip label={app.name} card={app.card}>
+      <Chip
+        look={CHIP_LOOK.TOOLBAR}
+        size={CHIP_SIZE.COMPACT}
+        aria-label={WORDS.SHOW_ON_MAC(app.name)}
+        onClick={() => onShowApp(app.id)}
+      >
+        {face}
+      </Chip>
+    </Tooltip>
   );
 }
 
@@ -204,7 +251,7 @@ function BehindTitle({
             tone={using ? TEXT_TONE.DEFAULT : TEXT_TONE.MUTED}
             truncate
           >
-            {app.name}
+            <MarkedWords words={app.name} mark={app.mark} />
           </Text>
           {using ? <WorkingMark /> : null}
         </span>

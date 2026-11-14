@@ -12,7 +12,7 @@ import {
   type DescriptionRevisionLine,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { UPDATE_STATUS } from "@repo/settings/update";
 import { createMemoryHistory } from "@tanstack/react-router";
@@ -227,7 +227,7 @@ test("the Inbox's list says its feed could not be read as the sidebar does, and 
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: () => {
-      deliver({ rows: { [INBOX_SCOPE_KIND.PLAN]: {} } });
+      deliver({ rows: { [INBOX_SCOPE_KIND.TASK]: {} } });
 
       return Promise.resolve(undefined);
     },
@@ -381,9 +381,9 @@ async function versionNotRead(sections: boolean, onRetryVersion: () => void): Pr
   };
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: DOCUMENT_TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     history,
   });
 
