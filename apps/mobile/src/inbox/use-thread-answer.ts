@@ -178,17 +178,21 @@ function hold(itemId: string, change: (was: ThreadHeld) => ThreadHeld): void {
  * closed by a send the app no longer has out.
  */
 function letGoCarriedCloses(items: readonly InboxItem[]): void {
-  const carried = items.filter(
-    (item) =>
-      item.status !== INBOX_STATUS.OPEN &&
-      [...(held.get(item.id)?.sending.values() ?? [])].some(
-        (sending) => sending.kind === INBOX_SENDING.CLOSE,
-      ),
-  );
+  const carried = items.filter((item) => {
+    const was = held.get(item.id);
 
+    return (
+      item.status !== INBOX_STATUS.OPEN &&
+      (was?.nodded !== undefined ||
+        [...(was?.sending.values() ?? [])].some((sending) => sending.kind === INBOX_SENDING.CLOSE))
+    );
+  });
+
+  // Note that a Got it a read carries is let go with the closes, so a thread opened again at the same revision, by an Undo on another client or a take-back of whoever settled it first, offers Got it again.
   for (const item of carried) {
     hold(item.id, (was) => ({
       ...was,
+      nodded: undefined,
       sending: new Map(
         [...was.sending].filter(([, sending]) => sending.kind !== INBOX_SENDING.CLOSE),
       ),
@@ -196,17 +200,21 @@ function letGoCarriedCloses(items: readonly InboxItem[]): void {
   }
 }
 
-/** The store with the thread's closes and its Got it let go, as its Undo asks, so the thread is drawn as the host draws the take-back rather than closed by a send taken back, Got it offered again. */
-function letGoCloses(itemId: string, revision: number): void {
-  if (held.get(itemId)?.sending.size === undefined) return;
+/** The store with the thread's closes let go, as its Undo asks, so the thread is drawn as the host draws the take-back rather than closed by a send taken back. */
+function letGoCloses(itemId: string): void {
+  if (!held.has(itemId)) return;
   hold(itemId, (was) => ({
     ...was,
-    // Note that only a Got it at the revision the Undo settled is let go, so a later one still out keeps its hold.
-    nodded: was.nodded === revision ? undefined : was.nodded,
     sending: new Map(
       [...was.sending].filter(([, sending]) => sending.kind !== INBOX_SENDING.CLOSE),
     ),
   }));
+}
+
+/** The store with the thread's Got it let go once its Undo was taken, only where it went at the revision taken back, so a later Got it still out keeps its hold, and a press before the take-back lands still sends nothing. */
+function letGoNod(itemId: string, revision: number): void {
+  if (held.get(itemId)?.nodded !== revision) return;
+  hold(itemId, (was) => ({ ...was, nodded: undefined }));
 }
 
 /** Holds a notification's action for its thread's box to send once it stands, in place of any held before it. */
@@ -297,7 +305,7 @@ export function useSettleUndo(): (
     (threads, settle, words) => {
       // Note that every take-back goes as one write, so several answer with one buzz and one notice rather than one each, and that Try again sends again only those no answer reached.
       const takeBack = () => {
-        for (const { item } of threads) letGoCloses(item.id, item.revision);
+        for (const { item } of threads) letGoCloses(item.id);
         let unreached = threads;
         // Note that what the service answered stays among the outcomes a Try again is read with, so a refusal it said is said again rather than hidden by a later take-back that went.
         let answered: readonly TookBack[] = [];
@@ -307,7 +315,13 @@ export function useSettleUndo(): (
               unreached.map(({ item, key }) =>
                 Promise.resolve(
                   acts[ACT_KIND.AGENTS_INBOX_TAKE_BACK]({ itemId: item.id, clientKey: key }),
-                ).then(tookBack, () => TOOK_BACK.UNREACHED),
+                )
+                  .then(tookBack, () => TOOK_BACK.UNREACHED)
+                  .then((outcome) => {
+                    if (outcome === TOOK_BACK.TAKEN) letGoNod(item.id, item.revision);
+
+                    return outcome;
+                  }),
               ),
             ).then((outcomes) => {
               unreached = unreached.filter((_, at) => outcomes[at] === TOOK_BACK.UNREACHED);
