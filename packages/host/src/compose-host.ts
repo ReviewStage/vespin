@@ -517,6 +517,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         inboxNamed: tasks.inboxNamed,
         pool,
         agentListed,
+        entities: () => entities?.store,
       }),
     );
 
