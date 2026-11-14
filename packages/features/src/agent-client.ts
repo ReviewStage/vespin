@@ -6,8 +6,8 @@ import {
   type AccountCallEffects,
   accountCall,
   type CallAnswer,
-  type CallCredential,
   callAnswered,
+  type HostedServiceOptions,
   jsonOf,
 } from "./account-call.js";
 import type { AccountPreferencesAnswerWire } from "./account-wire.js";
@@ -261,14 +261,6 @@ import { voiceSessionRequestSchema } from "./voice-wire.js";
  * call keeps the account call's usual one.
  */
 
-export interface HostedAgentClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-  requestTimeoutMs?: number;
-}
-
 const UNANSWERED = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 
 type Failed = {
@@ -509,7 +501,7 @@ export class HostedAgentClient {
 
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedAgentClientOptions) {
+  constructor(options: HostedServiceOptions) {
     const { credential } = options;
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,

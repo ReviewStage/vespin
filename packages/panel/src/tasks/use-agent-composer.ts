@@ -84,7 +84,7 @@ import { type BoxHeld, type HeldUpdate, heldUpdateOver, putBackRefused } from ".
  */
 
 /** A message as the box sends it: the request the service takes, and what the host draws it by while it goes. */
-export type OutgoingMessage = Omit<AgentMessageParams, "agentId">;
+type OutgoingMessage = Omit<AgentMessageParams, "agentId">;
 
 /** How one message is sent to an agent, answered as the view hears it; it fails where the host never heard it, so it drew nothing. */
 export type MessageSender = (agentId: string, message: OutgoingMessage) => Promise<AgentActAnswer>;

@@ -314,7 +314,7 @@ interface QueuedReply {
 }
 
 /** A new thread's first message as its start went: its words and files, and the key it went under. */
-export interface UndeliveredStart {
+interface UndeliveredStart {
   readonly text: string;
   readonly attachments: readonly AgentAttachment[];
   readonly clientKey: string;

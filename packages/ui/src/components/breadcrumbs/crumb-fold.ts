@@ -57,12 +57,12 @@ function foldable(crumb: Crumb): boolean {
 /** How many crumbs at the path's start may be folded: its leading foldable crumbs, never the last one drawn. */
 function foldableCount(crumbs: readonly Crumb[]): number {
   const last = crumbs.findLastIndex((crumb) => crumb.shown !== false);
-  let count = 0;
 
-  // SAFETY: `count` stays below `last`, the index of a crumb the path holds.
-  while (count < last && foldable(crumbs[count] as Crumb)) count += 1;
-
-  return count;
+  // Note that the first crumb at `last` or not foldable ends the run, and an empty path folds none.
+  return Math.max(
+    crumbs.findIndex((crumb, at) => at >= last || !foldable(crumb)),
+    0,
+  );
 }
 
 /** Whether a crumb of the path the caller wrote keeps its words legible: not the way back, and not one a press opens something from, which the caller folds as it sees fit. */
