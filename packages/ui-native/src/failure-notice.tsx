@@ -74,6 +74,9 @@ const ARRIVAL = 120;
 /** How long it takes to slide in or out, in milliseconds, as the system's own banners do. */
 const SLIDE_MS = 280;
 
+/** The banner's own room above and below its line, in points, which its press's 44 pt target reaches into. */
+const BANNER_INSET = SPACE.ROW + 2;
+
 /** How far a swipe down must carry the banner before it lets it go, in points. */
 const SWIPE_AWAY = 24;
 
@@ -156,7 +159,7 @@ function NoticeBody({
       <HStack
         spacing={SPACE.ROW}
         modifiers={[
-          padding({ leading: SPACE.EDGE, trailing: SPACE.ROW, vertical: SPACE.ROW + 2 }),
+          padding({ leading: SPACE.EDGE, trailing: SPACE.ROW, vertical: BANNER_INSET }),
           glassEffect({
             glass: { variant: "regular" },
             // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
@@ -181,13 +184,14 @@ function NoticeBody({
         </Text>
         <Spacer />
         {press === undefined ? null : (
-          // Note that the press takes its target's 44 pt on its label, not the button, since only a label's frame and shape answer a press; the word alone stood about 20 pt tall.
+          // Note that the press takes its target's 44 pt on its label, not the button, since only a label's frame and shape answer a press; the word alone stood about 20 pt tall. The button then gives back the banner's own vertical padding, so the target reaches into it rather than growing the banner.
           <SwiftUIButton
             onPress={onPress}
             modifiers={[
               buttonStyle("borderless"),
               tint(colors.TEXT),
               fixedSize(),
+              padding({ vertical: -BANNER_INSET }),
               accessibilityIdentifier(press.identifier),
             ]}
           >
