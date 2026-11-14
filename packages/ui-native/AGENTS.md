@@ -44,8 +44,8 @@ builds a control of its own.
   pictures and choices, `ComposeSheet` for a sheet that starts work (its
   words filling the page, and the + and `MenuChip` capsule menus in glass
   over the keyboard),
-  `SwitchRow` for an agent's options, `RenameAsk` (the system's alert a name is
-  typed in),
+  `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
+  typed in, its act preferred, for a task and an agent alike),
   `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
   write did not go: a banner of Liquid Glass sliding down from the top with
   the refusal's words and Try again, said aloud by VoiceOver, faded rather
@@ -272,8 +272,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   alone, the two stacked past the accessibility sizes; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
   card and prompting "Required" or "Optional" while empty, a number field's
-  pad standing one Done over it for the card, a select's menu picker at
-  the end of its label's row, a
+  pad standing one Done over it for the card, a select's menu picker
+  under its label, reading "None" until a pick, a
   boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because
   a `Form` scrolls on its own inside the thread's scroll; a card's hairlines
   start where its rows' words do, as iOS insets a list's separator) and the pull request

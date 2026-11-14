@@ -97,6 +97,7 @@ function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
   const rowOf = (row: SkillRow) => (
     <NoteRow
       key={row.skill.id}
+      symbol={SKILLS_SYMBOL}
       words={row.skill.name}
       detail={row.skill.description}
       line={row.line}
