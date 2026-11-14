@@ -144,6 +144,9 @@ const PATH_OPENS = { TASK: "Open task", AGENT: "Open agent" } as const;
 /** What ends Select mode, as the system's own Done does. */
 const SELECT_DONE = "Done";
 
+/** What Select mode's Mark menu is named at a list column's foot, as Mail's Edit bar names its own. */
+const MARK = "Mark";
+
 /** What a video the words draw in place is heard as, its file's name being the words' own alt. */
 const VIDEO_LABEL = "Video";
 
@@ -424,6 +427,11 @@ function dimmedWhile(dim: boolean, menu: BarMenu): BarMenu {
   return dim ? { ...menu, disabled: true } : menu;
 }
 
+/** Where Select mode's acts stand: a compact window's bottom bar, by their glyphs, or a list column's foot, by their words. */
+const CHOSEN_FOOT = { BAR: "bar", COLUMN: "column" } as const;
+
+type ChosenFoot = (typeof CHOSEN_FOOT)[keyof typeof CHOSEN_FOOT];
+
 /**
  * What the Inbox offers for the threads chosen in Select mode, as the panel's
  * selection does (`inbox-selection.tsx`): Mark as read while one is unread,
@@ -432,33 +440,75 @@ function dimmedWhile(dim: boolean, menu: BarMenu): BarMenu {
  * lets Select mode go, as Mail's do. Note that every act keeps its place,
  * dimmed while it would change nothing, as Mail's edit bar stands its acts
  * dimmed until a message is chosen, so the bar never pops in on the first
- * tick nor shifts as Resolve comes and goes.
+ * tick nor shifts as Resolve comes and goes. At a list column's foot, whose
+ * 320 pt holds the acts by their words, the read mark stands as one Mark
+ * menu of Mark as read and Mark as unread, each dimmed while it would change
+ * nothing, as Mail's Edit bar holds Mark beside Move and Trash, so its words
+ * fit and keep their width as the ticks change.
  */
 function chosenActs(
   chosen: readonly InboxItem[],
   acts: ReturnType<typeof useInboxActs>,
   remind: ReturnType<typeof useRemind>,
   stop: () => void,
+  foot: ChosenFoot,
 ): readonly BarFootItem[] {
   const none = chosen.length === 0;
   const unread = chosen.filter(isUnread);
+  const read = chosen.filter((item) => !isUnread(item));
   const open = chosen.filter((item) => item.status === INBOX_STATUS.OPEN);
-  const marking = unread.length > 0 ? unread : chosen;
+
+  const markRead = (): void => {
+    acts.markMany(
+      unread.map((item) => item.id),
+      false,
+    );
+    stop();
+  };
+
+  const markUnread = (): void => {
+    acts.markMany(
+      read.map((item) => item.id),
+      true,
+    );
+    stop();
+  };
+
+  const mark: BarFootItem =
+    foot === CHOSEN_FOOT.COLUMN
+      ? dimmedWhile(none, {
+          label: MARK,
+          symbol: GLYPH.MARK_READ,
+          choices: [],
+          actions: [
+            {
+              label: INBOX_READ_MARK.READ,
+              symbol: GLYPH.MARK_READ,
+              disabled: unread.length === 0,
+              onPress: markRead,
+            },
+            {
+              label: INBOX_READ_MARK.UNREAD,
+              symbol: GLYPH.MARK_UNREAD,
+              disabled: read.length === 0,
+              onPress: markUnread,
+            },
+          ],
+        })
+      : {
+          label: unread.length > 0 || none ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
+          symbol: unread.length > 0 || none ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+          disabled: none,
+          onPress: () => {
+            if (none) return;
+
+            if (unread.length > 0) markRead();
+            else markUnread();
+          },
+        };
 
   return [
-    {
-      label: unread.length > 0 || none ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-      symbol: unread.length > 0 || none ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
-      disabled: none,
-      onPress: () => {
-        if (none) return;
-        acts.markMany(
-          marking.map((item) => item.id),
-          unread.length === 0,
-        );
-        stop();
-      },
-    },
+    mark,
     dimmedWhile(none, remind.menu(chosen, stop)),
     {
       label: RESOLVE,
@@ -930,7 +980,8 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
         } satisfies RowChoosing,
         title:
           pickedItems.length === 0 ? SELECTION_WORDS.SELECT : selectedWords(pickedItems.length),
-        acts: chosenActs(pickedItems, acts, remind, selecting.stop),
+        acts: chosenActs(pickedItems, acts, remind, selecting.stop, CHOSEN_FOOT.BAR),
+        columnActs: chosenActs(pickedItems, acts, remind, selecting.stop, CHOSEN_FOOT.COLUMN),
         // Note that Select all takes every thread listed, and Select none lets them go once all are chosen, as Mail's edit bar leads with them.
         all: (pickedItems.length === listing.listed.length && pickedItems.length > 0
           ? { label: SELECTION_WORDS.SELECT_NONE, onPress: () => selecting.choose([]) }
@@ -1138,7 +1189,7 @@ function InboxSplitScreen({
             title: choosing.title,
             lead: [choosing.all],
             action: choosing.done,
-            foot: choosing.acts,
+            foot: choosing.columnActs,
           },
   };
 
