@@ -50,6 +50,7 @@ import { installedSkill } from "../schemas/installed-skill.js";
 import { integrationConnection } from "../schemas/integration.js";
 import { integrationInstallation } from "../schemas/integration-installation.js";
 import { machineCommand } from "../schemas/machine-command.js";
+import { machineCommandAsk } from "../schemas/machine-command-ask.js";
 import { memory, memoryRecall } from "../schemas/memory.js";
 import { personalWorkspace } from "../schemas/personal-workspace.js";
 import { accountPreference } from "../schemas/preferences.js";
@@ -445,6 +446,15 @@ export const taskReadSync = defineSyncTable(taskRead, {
 export const machineCommandSync = defineSyncTable(machineCommand, {
   topics: [{ kind: TOPIC.ACCOUNT, column: machineCommand.userId }],
   ignore: [machineCommand.recording],
+});
+
+/**
+ * An ask a machine holds for its owner's answer, on the owner's topic,
+ * which the owner's read of its machines' asks is woken on: an ask posted,
+ * answered, or taken down.
+ */
+export const machineCommandAskSync = defineSyncTable(machineCommandAsk, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: machineCommandAsk.userId }],
 });
 
 /**
@@ -902,6 +912,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   agentPinSync,
   taskReadSync,
   machineCommandSync,
+  machineCommandAskSync,
   accountPreferenceSync,
   accountSoundSync,
   accountSoundChoiceSync,

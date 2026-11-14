@@ -94,6 +94,9 @@
  * its own settings for agents' commands and apps; woken by a machine
  * joining, removed, its settings changed, or its app coming or going
  * (`machinesRead`).
+ * `GET /api/live/machine-asks` answers the asks the account's machines hold
+ * for its answer, each with the answer that stands on it, the account's own
+ * alone; woken by an ask posted, answered, or taken down (`machineAsksRead`).
  * `GET /api/live/installed-skills?workspaceId=` answers the skills the
  * account sees there, the workspace's and its own, each with whether it may
  * manage it, on the same membership check; woken by one of them installed,
@@ -227,6 +230,7 @@ import { hostsRead } from "./reads/hosts.js";
 import { inboxItemsRead } from "./reads/inbox-items.js";
 import { installedSkillsRead } from "./reads/installed-skills.js";
 import { integrationStatusesRead } from "./reads/integration-statuses.js";
+import { machineAsksRead } from "./reads/machine-asks.js";
 import { machineCommandsRead } from "./reads/machine-commands.js";
 import { machinesRead } from "./reads/machines.js";
 import { agentPagesRead, taskPagesRead } from "./reads/pages.js";
@@ -977,6 +981,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
 
     hosts: signedIn.hosts.effect(answerBoundRead(hostsRead)),
     machines: signedIn.machines.effect(answerBoundRead(machinesRead)),
+    machineAsks: signedIn.machineAsks.effect(answerBoundRead(machineAsksRead)),
     workspaceMemories: signedIn.workspaceMemories.effect(answerBoundRead(workspaceMemoriesRead)),
     installedSkills: signedIn.installedSkills.effect(answerBoundRead(installedSkillsRead)),
 

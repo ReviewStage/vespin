@@ -22,6 +22,12 @@ import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import {
+  machineAskClosedAnswerSchema,
+  machineAskCloseRequestSchema,
+  machineAskPostedAnswerSchema,
+  machineAskRequestSchema,
+} from "../machine-ask-wire.js";
+import {
   COMPUTER_RECORDING_BOUNDS,
   MACHINE_COMMAND_BOUNDS,
   machineCommandClaimAnswerSchema,
@@ -62,6 +68,9 @@ const DEVICE_BODY_BYTES = 64 * 1_024;
 
 /** A device's allowed apps' names and icons: at most every icon's characters, with the names and room to spare. */
 const APP_LOOKS_BODY_BYTES = MACHINE_COMMAND_BOUNDS.MAX_RESULT_BYTES;
+
+/** An ask's body: an app's icon at its bound, and room for the rest. */
+const ASK_BODY_BYTES = 128 * 1_024;
 
 export const machineCommandsContract = {
   waiting: declaredProcedure
@@ -123,4 +132,15 @@ export const machineCommandsContract = {
     )
     .input(exactInput(machineDeviceAppLooksRequestSchema))
     .output(EffectSchema.flip(machineDeviceSettingsAnswerSchema)),
+  ask: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(bodyCap(ASK_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_ASK }))
+    .input(exactInput(machineAskRequestSchema))
+    .output(EffectSchema.flip(machineAskPostedAnswerSchema)),
+  closeAsk: declaredProcedure
+    .meta(bodyCap(CLAIM_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_ASK_CLOSE }))
+    .input(exactInput(machineAskCloseRequestSchema))
+    .output(EffectSchema.flip(machineAskClosedAnswerSchema)),
 };

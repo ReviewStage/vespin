@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
+import { readAgentHeaderOfConversation } from "@repo/database/models/agent-store";
 import {
   claimMachineCommand,
   claimMachineCommands,
@@ -174,6 +175,7 @@ export type MachineCommandAsk =
   | {
       readonly kind: typeof MACHINE_COMMAND_KIND.SHELL;
       readonly command: string;
+      readonly agentId?: string;
       readonly timeoutSeconds?: number;
     }
   | {
@@ -361,7 +363,7 @@ export function askMacHeard(
 
     const heard = yield* Effect.gen(function* () {
       // A device no longer the account's queues nothing, and nothing would ever claim it.
-      if (!(yield* queueMachineCommand(userId, queued, deviceId))) return undefined;
+      if (!(yield* queueMachineCommand(userId, queued, deviceId, ask.agentId))) return undefined;
       const result = yield* awaitedResult(userId, queued);
 
       if (Option.isSome(result) && isRecorded(result.value)) {
@@ -470,7 +472,15 @@ export function runOnMacTool(
     // Note that a read that fails refuses, because a command run on a guess could land on the wrong Mac.
     if (Result.isFailure(route)) return machineCommandNotRun(MACHINE_COMMAND_REFUSAL.UNAVAILABLE);
 
-    return (yield* askMachine(route.success, ask)).answer;
+    // Note that the agent rides along so its owner's devices draw the command's ask on it; a read that fails leaves the ask on no agent.
+    const agent = yield* Effect.option(
+      readAgentHeaderOfConversation(target.userId, target.conversationId),
+    );
+
+    const agentId = Option.getOrUndefined(Option.flatten(agent))?.id;
+
+    return (yield* askMachine(route.success, agentId === undefined ? ask : { ...ask, agentId }))
+      .answer;
   });
 }
 

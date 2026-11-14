@@ -18,7 +18,9 @@
  * on. Each of the account's machines, enrolled or one whose app only
  * joined to take commands, has its own settings for agents' commands and
  * apps changed from any device of the member's, which the machine follows
- * live, and is removed the same way, as a host where it runs agents. Each host is
+ * live, and is removed the same way, as a host where it runs agents. An
+ * ask one of the account's machines holds is answered from any of its
+ * devices the same way, the first answer standing. Each host is
  * listed with whether its daemon is below the floor, where its setup
  * stands, where its update to a newer release stands, whether its program
  * has called in since it joined, and, for a Mac, the user it runs as, and
@@ -55,6 +57,7 @@ import {
   readHostPairing,
 } from "@repo/database/models/host-pairing-store";
 import { hostAgentConversations, hostsOf, removeHost } from "@repo/database/models/host-store";
+import { answerMachineAsk } from "@repo/database/models/machine-command-ask-store";
 import { HOST_WIRE, hostUserCodeOf, hostVersionMeets } from "@repo/features/host-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { Clock, Effect } from "effect";
@@ -218,6 +221,14 @@ export function hostsProcedures(seams: HostsProcedureSeams) {
       return yield* removedOrNotFound(
         yield* hostedStoreOrUnavailable(changeMachine(context.userId, id, change)),
       );
+    }),
+    // Note that the first answer stands, from whichever device, and a later one is answered with it.
+    answerMachineAsk: hosts.answerMachineAsk.effect(function* ({ context, input }) {
+      const standing = yield* hostedStoreOrUnavailable(answerMachineAsk(context.userId, input));
+
+      if (standing === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+      return standing;
     }),
     // Note that a machine that runs agents is removed as a host is, so its agents' running turns are settled lost with it; any other only stops being listed and routed to.
     removeMachine: hosts.removeMachine.effect(function* ({ context, input }) {

@@ -152,6 +152,7 @@ const QueuedRowSchema = Schema.Struct({
   kind: KindSchema,
   command: Schema.String,
   timeoutSeconds: Schema.Number,
+  agentId: Schema.NullOr(Schema.String),
   now: Schema.Date,
 });
 
@@ -166,6 +167,7 @@ const insertCommand = SqlSchema.void({
         kind: row.kind,
         command: row.command,
         timeoutSeconds: row.timeoutSeconds,
+        agentId: row.agentId,
         queuedAt: row.now,
       }),
     ),
@@ -188,6 +190,7 @@ const insertDeviceCommand = SqlSchema.findAll({
               kind: sql<MachineCommandKind>`${row.kind}`.as("kind"),
               command: sql<string>`${row.command}::text`.as("command"),
               timeoutSeconds: sql<number>`${row.timeoutSeconds}::integer`.as("timeout_seconds"),
+              agentId: sql<string | null>`${row.agentId}::uuid`.as("agent_id"),
               queuedAt: sql<Date>`${row.now}::timestamptz`.as("queued_at"),
             })
             .from(device)
@@ -739,7 +742,9 @@ export function commandMachinesOf(
 
 /**
  * Queues one command for the account's Mac, under the id its caller minted:
- * for the device given alone, or for any of its Macs where none is given.
+ * for the device given alone, or for any of its Macs where none is given,
+ * naming the agent whose call it is where there is one, which the ask its
+ * machine may post is drawn on.
  * Answers whether it was queued: a device that is not the account's, or
  * was removed, queues nothing, since no Mac could ever claim it, and its caller says so at once
  * rather than waiting out its result.
@@ -748,6 +753,7 @@ export function queueMachineCommand(
   userId: string,
   queued: MachineCommand,
   deviceId?: string,
+  agentId?: string,
 ): TaskStoreEffect<boolean> {
   return Effect.flatMap(DateTime.nowAsDate, (now) => {
     const row = {
@@ -756,6 +762,7 @@ export function queueMachineCommand(
       kind: queued.kind,
       command: storedMachineCommandText(queued),
       timeoutSeconds: queued.timeoutSeconds,
+      agentId: agentId ?? null,
       now,
     };
 
