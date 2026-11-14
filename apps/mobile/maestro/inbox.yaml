@@ -91,7 +91,15 @@ appId: dev.vespin.ios
       id: "video-player"
     timeout: 15000
 - assertNotVisible: ".*can't play here.*"
+# Until it is first played, the video stands its play mark and its length
+# over its first frame, as Messages marks one, so it never reads as a
+# picture; a press plays it in place and leaves the system's controls to it.
+- assertVisible: "invite-flow.*, \\d+:\\d\\d"
 - takeScreenshot: inbox-video
+- tapOn: "invite-flow.*, \\d+:\\d\\d"
+- waitForAnimationToEnd
+- assertNotVisible: "invite-flow.*, \\d+:\\d\\d"
+- takeScreenshot: inbox-video-playing
 # A file that is neither a picture nor a video, the test plan's PDF, stands
 # after its message as its chip, its name over its kind and size once read; a
 # press opens it full screen, its pages drawn in a web view under a bar with

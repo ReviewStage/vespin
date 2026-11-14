@@ -1,10 +1,14 @@
 // video.tsx -- a video a message carried, played in iOS's own player through expo-video, at its own shape held to the media's one rule, or saying so where its bytes did not land.
 
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
-import { useVideoPlayer, type VideoPlayerStatus, VideoView } from "expo-video";
+import { playheadText } from "@repo/features/time-format";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import { SymbolView } from "expo-symbols";
+import { useVideoPlayer, type VideoPlayer, type VideoPlayerStatus, VideoView } from "expo-video";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { useAccessibilitySize } from "./accessibility.js";
+import { useAccessibilitySize, useReduceTransparency } from "./accessibility.js";
+import { GLYPH, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
 import { MediaBox } from "./media-box.js";
@@ -12,7 +16,7 @@ import { MediaFailed } from "./media-failed.js";
 import { type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
-import { RADIUS, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
 
 /** What a video says where the system's player cannot play it, such as a WebM, which iOS's player has no reader for. */
@@ -20,6 +24,12 @@ const CANNOT_PLAY = "This video can't play here.";
 
 /** What the system's player stands as to a flow that drives the app, once it has read the video's file and can play it. */
 const VIDEO_PLAYER_ID = "video-player";
+
+/** What a video not yet played is heard to do, as a press on its play mark starts it in place. */
+const PLAYS_IN_PLACE = "Plays the video";
+
+/** How tall the play mark's capsule stands, a press target's height. */
+const PLAY_MARK_HEIGHT = 44;
 
 /** What Open in Safari is heard to do. */
 const OPENS_IN_SAFARI = "Opens the video in Safari";
@@ -36,9 +46,128 @@ const styles = StyleSheet.create({
     gap: SPACE.TIGHT,
   },
   spinner: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
+  playMark: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
+  playFace: {
+    height: PLAY_MARK_HEIGHT,
+    minWidth: PLAY_MARK_HEIGHT,
+    paddingHorizontal: SPACE.ROW,
+    borderRadius: PLAY_MARK_HEIGHT / 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACE.TIGHT,
+  },
   // Note that at an accessibility size an unplayable well grows with its words rather than holding the film's shape, which would cut them off.
   grown: { aspectRatio: undefined, minHeight: 120, overflow: "visible" },
 });
+
+/** How long the player's video runs, in seconds, once its file is read; none before then, or for a stream with no end. */
+function useVideoLength(player: VideoPlayer): number | undefined {
+  const [length, setLength] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    // Note that a file the player read before this listens is taken as it stands, since its load has already gone by.
+    setLength(player.duration > 0 ? player.duration : undefined);
+
+    const loaded = player.addListener("sourceLoad", ({ duration }) =>
+      setLength(duration > 0 ? duration : undefined),
+    );
+
+    return () => loaded.remove();
+  }, [player]);
+
+  return length;
+}
+
+/** Whether the player has ever played, so a video stands with its play mark until it is first played and leaves the system's controls to it after. */
+function usePlayedOnce(player: VideoPlayer): boolean {
+  const [played, setPlayed] = useState(player.playing);
+  useEffect(() => {
+    const listening = player.addListener("playingChange", ({ isPlaying }) => {
+      if (isPlaying) setPlayed(true);
+    });
+
+    return () => listening.remove();
+  }, [player]);
+
+  return played;
+}
+
+/**
+ * A video's play mark over its first frame until it is first played, as
+ * Messages and Photos mark a video so it never reads as a picture: the play
+ * glyph and how long it runs in one round glass, which starts it in place
+ * where the system's own controls take over. Where glass is off, the
+ * capsule stands in the raised surface with a hairline, as Jump to latest
+ * does.
+ */
+function PlayMark({
+  label,
+  length,
+  onPress,
+}: {
+  readonly label: string;
+  readonly length: number | undefined;
+  readonly onPress: () => void;
+}) {
+  const colors = useColors();
+  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
+  const runs = length === undefined ? undefined : playheadText(length * 1000);
+
+  const face = (
+    <>
+      <SymbolView
+        name={glyphSymbol(GLYPH.RUN)}
+        size={MARK_SIZE.GLYPH + 2}
+        weight="semibold"
+        tintColor={colors.TEXT}
+        accessibilityElementsHidden
+      />
+      {runs === undefined ? null : (
+        <Text
+          style={{
+            fontSize: TEXT_SIZE.FOOTNOTE,
+            fontWeight: "600",
+            fontVariant: ["tabular-nums"],
+            color: colors.TEXT,
+          }}
+        >
+          {runs}
+        </Text>
+      )}
+    </>
+  );
+
+  return (
+    <View style={styles.playMark} pointerEvents="box-none">
+      <Press
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={runs === undefined ? label : `${label}, ${runs}`}
+        accessibilityHint={PLAYS_IN_PLACE}
+        hitSlop={SPACE.TIGHT}
+      >
+        {solid ? (
+          <View
+            style={[
+              styles.playFace,
+              {
+                backgroundColor: colors.SURFACE,
+                borderColor: colors.TEXT_MUTED,
+                borderWidth: StyleSheet.hairlineWidth,
+              },
+            ]}
+          >
+            {face}
+          </View>
+        ) : (
+          <GlassView glassEffectStyle="regular" isInteractive style={styles.playFace}>
+            {face}
+          </GlassView>
+        )}
+      </Press>
+    </View>
+  );
+}
 
 type VideoProps = {
   /** The file the video plays from, such as one the thread wrote under the app's caches; none while its bytes are on their way, which stands its well alone, and `null` where they could not be read, which says so in its well. */
@@ -85,6 +214,8 @@ export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: V
     };
   }, [player]);
   const failed = status === "error";
+  const length = useVideoLength(player);
+  const played = usePlayedOnce(player);
 
   // Note that a tile fills its tile at the tile's shape, and any other video stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
   const frame = tileAspect === undefined ? mediaFrame(natural) : undefined;
@@ -178,6 +309,9 @@ export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: V
               <ActivityIndicator color={colors.TEXT_MUTED} />
             </View>
           )}
+          {status === "readyToPlay" && !played ? (
+            <PlayMark label={label} length={length} onPress={() => player.play()} />
+          ) : null}
         </View>
       </HeldMenu>
     </MediaBox>
