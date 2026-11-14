@@ -14,9 +14,10 @@ import {
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
+import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -29,8 +30,6 @@ const WORDS = {
   CREATING: "Creating",
   CANCEL: "Cancel",
   CLOSE: "Close",
-  /** What the sheet says once the workspace is made, while the account's list has yet to hold it. */
-  MADE: "Workspace created. It opens here as soon as your workspaces refresh.",
 } as const;
 
 /** What a flow finds the name field by. */
@@ -47,15 +46,14 @@ type Said = { words?: string };
  * list, because the act answers before the workspaces' follow carries the new
  * one, and the choice falls back to the first workspace until it does; and
  * that Create stays dimmed while it waits, so a second press makes no second
- * workspace, and the sheet says the workspace was made with Close in Cancel's
- * place, so a list slow to refresh never leaves it saying nothing. A refusal
+ * workspace, and Close stands in Cancel's place once it's made. A refusal
  * says why under the name and keeps the sheet. Its
  * teammates are invited from Workspace settings, as the panel's cards
  * invite them after the name.
  */
 export function NewWorkspaceScreen() {
   const colors = useColors();
-  const router = useRouter();
+  const close = useCloseSheet();
   const acts = useHostActs();
   const write = useWrite();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
@@ -66,8 +64,8 @@ export function NewWorkspaceScreen() {
   const [made, setMade] = useState<string | undefined>(undefined);
   const listed = made !== undefined && workspaces.some((workspace) => workspace.id === made);
   useEffect(() => {
-    if (listed) router.back();
-  }, [listed, router]);
+    if (listed) close();
+  }, [listed, close]);
   const waiting = create.running || made !== undefined;
 
   const make = () => {
@@ -104,7 +102,7 @@ export function NewWorkspaceScreen() {
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
+        <Stack.Toolbar.Button onPress={close}>
           {made === undefined ? WORDS.CANCEL : WORDS.CLOSE}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
@@ -115,15 +113,13 @@ export function NewWorkspaceScreen() {
           disabled={name.trim() === "" || waiting}
           onPress={make}
         >
-          {waiting ? WORDS.CREATING : WORDS.CREATE}
+          {/* Note that Creating stands only while the create is out; once it's made, Create stays dimmed beside Close until the list holds it. */}
+          {create.running ? WORDS.CREATING : WORDS.CREATE}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection
-            title={WORDS.WORKSPACE}
-            footer={create.refusal ?? (made === undefined ? undefined : WORDS.MADE)}
-          >
+          <ListSection title={WORDS.WORKSPACE} footer={create.refusal}>
             <WordsField
               placeholder={WORDS.TEAM_NAME}
               onWords={(words) => {

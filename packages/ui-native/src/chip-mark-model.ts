@@ -71,7 +71,7 @@ export function chipMarkOf(entity: Entity, held: ChipMarksHeld): ChipMark | unde
     case ENTITY_KIND.PLAN:
       return taskMark(held.taskStatus(entity.taskId));
     case ENTITY_KIND.VERSION:
-      return taskMark(held.taskStatus(entity.planId));
+      return taskMark(held.taskStatus(entity.taskId));
     case ENTITY_KIND.AGENT: {
       const model = held.agentModel(entity.agentId);
       const harness = model === undefined ? undefined : providerOf(model);

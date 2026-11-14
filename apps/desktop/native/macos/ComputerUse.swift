@@ -47,7 +47,10 @@ import UniformTypeIdentifiers
 /// while the agent thinks, until `release_cursor` says the agent's turn
 /// ended, so the developer sees where it works without losing their own
 /// cursor. It stands in no screenshot, since a read captures the app's
-/// window alone.
+/// window alone, so an action that moves it answers where it landed, and a
+/// read where it stands over the window it read, as `cursor`: its
+/// `x_fraction` and `y_fraction` of the last read window from its top left,
+/// which the app's preview draws its own pointer at over that read's picture.
 /// - `release_cursor`: puts the agent's cursor away, as its turn ends.
 ///
 /// Note that input is never posted to the system's event stream: an element
@@ -637,6 +640,12 @@ private struct AppSession {
         return CGPoint(x: bounds.midX, y: bounds.midY)
     }
 
+    /// Where a point on the screen stands as a share of the window this read captured, from its top left, which its
+    /// screenshots draw at any size, as an answer carries the agent's cursor; nothing where it stands outside the window.
+    func cursorShare(_ point: CGPoint) -> [String: Any]? {
+        cursorShareOf(point, in: windowFrame)
+    }
+
     /// Where the agent's cursor glides for an element: its center, or where it has no place of its own, the nearest
     /// ancestor's that has one. Note that this places the cursor alone, never a click, which lands only on the element's own center.
     func cursorPoint(_ index: Int) -> CGPoint? {
@@ -714,7 +723,11 @@ private func getAppState(_ request: [String: Any]) async throws -> [String: Any]
     await MainActor.run {
         agentCursor.appear(at: CGPoint(x: window.frame.midX, y: window.frame.midY), over: window.windowID)
     }
-    return [
+    // Note that the read says where the cursor stands only where that is over this window, as it is once its look brought it here, so the preview draws it over this window's picture at that spot.
+    let standing = cursorTrack.standing(at: ProcessInfo.processInfo.systemUptime).flatMap {
+        cursorShareOf($0, in: window.frame)
+    }
+    var state: [String: Any] = [
         "app": describe(app),
         "window": [
             "title": window.title ?? title ?? "",
@@ -725,15 +738,36 @@ private func getAppState(_ request: [String: Any]) async throws -> [String: Any]
         "truncated": walk.elements.count >= MAX_ELEMENTS,
         "shots": shots,
     ]
+    if let standing { state["cursor"] = standing }
+    return state
 }
 
 // MARK: - The agent's cursor
+
+/// How far past a window's edge, as a share of its size, a point may stand and still count as over it, so a point on its very edge is kept.
+private let CURSOR_SHARE_SLACK = 0.01
+
+/// A point on the screen as a share of a window's frame from its top left, as an answer carries the agent's cursor, held to the window; nothing where it stands outside it, or the window has no size.
+private func cursorShareOf(_ point: CGPoint, in frame: CGRect) -> [String: Any]? {
+    guard frame.width > 0, frame.height > 0 else { return nil }
+    let x = Double((point.x - frame.minX) / frame.width)
+    let y = Double((point.y - frame.minY) / frame.height)
+    let range = -CURSOR_SHARE_SLACK...(1 + CURSOR_SHARE_SLACK)
+    guard range.contains(x), range.contains(y) else { return nil }
+    return ["x_fraction": min(max(x, 0), 1), "y_fraction": min(max(y, 0), 1)]
+}
+
+/// An action's answer, with where the agent's cursor landed for it where it moved, so the app's preview can draw it there.
+private func actedAnswer(_ done: String, cursorAt point: CGPoint?, on session: AppSession) -> [String: Any] {
+    guard let point, let share = session.cursorShare(point) else { return ["done": done] }
+    return ["done": done, "cursor": share]
+}
 
 /// How long the cursor takes to glide to a point, and how long it rests there before the action lands.
 private let CURSOR_GLIDE_SECONDS = 0.25
 /// How long the cursor stands after the agent's last action where nothing says the agent's turn ended, as where the app quit mid-turn; the turn's end puts it away first (`release_cursor`).
 private let CURSOR_HOLD_SECONDS = 120.0
-/// How far the cursor turns about its tip either way while it rests, and how long one sway there and back takes, as the browser's pointer sways while the agent works (`cloud-browser-cursor`).
+/// How far the cursor turns about its tip either way while it rests, and how long one sway there and back takes, as the panel's pointer sways while the agent works (`@repo/ui`'s `AgentPointer`).
 private let CURSOR_SWAY_DEGREES = 4.5
 private let CURSOR_SWAY_SECONDS = 2.0
 /// How often the cursor's window redraws while it sways: 30 a second, which a sway of a few degrees over seconds needs no more than, so a cursor held a while costs little.
@@ -870,6 +904,14 @@ private final class CursorTrack: @unchecked Sendable {
         to = point
         glidedAt = now
         shownUntil = now + CURSOR_GLIDE_SECONDS + CURSOR_HOLD_SECONDS + CURSOR_GLIDE_SECONDS
+    }
+
+    /// Where the cursor comes to rest at the instant given, the end of the glide it is on, on the window server's points; nothing where it shows nowhere.
+    func standing(at now: TimeInterval) -> CGPoint? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let to, now < shownUntil else { return nil }
+        return to
     }
 
     /// The cursor kept where it stands for a hold more from the instant given, as a read while it shows keeps it; nothing where it shows nowhere.
@@ -1135,11 +1177,12 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
     let count = min(max(integer(request, "click_count") ?? 1, 1), MAX_CLICKS)
     if let index = integer(request, "element_index") {
         let element = try current.element(index)
-        if let point = current.cursorPoint(index) { await cursorTo(point, over: current.windowID) }
+        let cursorAt = current.cursorPoint(index)
+        if let point = cursorAt { await cursorTo(point, over: current.windowID) }
         // Note that a plain press goes through Accessibility, which needs no point and no focus, before an event is aimed at the element's center.
         if button == BUTTON.left, count == 1 {
             let pressed = AXUIElementPerformAction(element, kAXPressAction as CFString)
-            if pressed == .success { return ["done": "pressed"] }
+            if pressed == .success { return actedAnswer("pressed", cursorAt: cursorAt, on: current) }
             // Note that only an element that offers no press is clicked at its center instead; any other failure may have pressed it already, so it is answered rather than pressed twice.
             guard pressed == .actionUnsupported else {
                 throw HelperError(
@@ -1148,7 +1191,7 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
             }
         }
         clickPoint(try current.center(index), session: current, button: button, count: count)
-        return ["done": "clicked"]
+        return actedAnswer("clicked", cursorAt: cursorAt, on: current)
     }
     guard let x = number(request, "x"), let y = number(request, "y") else {
         throw HelperError(kind: ERROR_KIND.badRequest, message: "Give an element_index, or x and y.")
@@ -1156,7 +1199,7 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
     let point = current.point(x: x, y: y)
     await cursorTo(point, over: current.windowID)
     clickPoint(point, session: current, button: button, count: count)
-    return ["done": "clicked"]
+    return actedAnswer("clicked", cursorAt: point, on: current)
 }
 
 private func typeText(_ request: [String: Any]) async throws -> [String: Any] {
@@ -1248,7 +1291,7 @@ private func scroll(_ request: [String: Any]) async throws -> [String: Any] {
         wheel3: 0)
     event?.location = point
     post(event, to: current)
-    return ["done": "scrolled"]
+    return actedAnswer("scrolled", cursorAt: point, on: current)
 }
 
 private func drag(_ request: [String: Any]) async throws -> [String: Any] {
@@ -1273,7 +1316,7 @@ private func drag(_ request: [String: Any]) async throws -> [String: Any] {
         try await Task.sleep(nanoseconds: 10_000_000)
     }
     post(mouseEvent(types.up, at: to, session: current, clicks: 1), to: current)
-    return ["done": "dragged"]
+    return actedAnswer("dragged", cursorAt: to, on: current)
 }
 
 private func setValue(_ request: [String: Any]) async throws -> [String: Any] {
@@ -1283,12 +1326,13 @@ private func setValue(_ request: [String: Any]) async throws -> [String: Any] {
     let index = integer(request, "element_index") ?? -1
     let element = try current.element(index)
     let value = (request["value"] as? String) ?? ""
-    if let point = current.cursorPoint(index) { await cursorTo(point, over: current.windowID) }
+    let cursorAt = current.cursorPoint(index)
+    if let point = cursorAt { await cursorTo(point, over: current.windowID) }
     let result = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, value as CFString)
     guard result == .success else {
         throw HelperError(kind: ERROR_KIND.failed, message: "The element did not take the value (\(result.rawValue)).")
     }
-    return ["done": "set"]
+    return actedAnswer("set", cursorAt: cursorAt, on: current)
 }
 
 private func performSecondaryAction(_ request: [String: Any]) async throws -> [String: Any] {
@@ -1301,12 +1345,13 @@ private func performSecondaryAction(_ request: [String: Any]) async throws -> [S
     guard actions(element).contains(action) else {
         throw HelperError(kind: ERROR_KIND.badRequest, message: "The element offers no \(action) action.")
     }
-    if let point = current.cursorPoint(index) { await cursorTo(point, over: current.windowID) }
+    let cursorAt = current.cursorPoint(index)
+    if let point = cursorAt { await cursorTo(point, over: current.windowID) }
     let result = AXUIElementPerformAction(element, action as CFString)
     guard result == .success else {
         throw HelperError(kind: ERROR_KIND.failed, message: "The element refused \(action) (\(result.rawValue)).")
     }
-    return ["done": "performed"]
+    return actedAnswer("performed", cursorAt: cursorAt, on: current)
 }
 
 // MARK: - Recording

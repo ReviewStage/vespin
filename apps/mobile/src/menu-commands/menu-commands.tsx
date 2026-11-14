@@ -130,7 +130,7 @@ function useSubject(signedIn: boolean): Subject {
 
   const task =
     taskNamed ??
-    (agent === undefined ? undefined : view?.tasks?.find(({ id }) => id === agent.planId));
+    (agent === undefined ? undefined : view?.tasks?.find(({ id }) => id === agent.taskId));
 
   const workspaceId = thread?.holder.task.workspaceId ?? task?.workspaceId;
   const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
@@ -145,7 +145,7 @@ function useSubject(signedIn: boolean): Subject {
   if (thread !== undefined) {
     address = linked({
       kind: LINK_DESTINATION.INBOX_ITEM,
-      planId: thread.holder.task.id,
+      taskId: thread.holder.task.id,
       itemId: thread.item.id,
     });
     enabled.push(MENU_COMMAND.TOGGLE_READ, ...REMIND_PRESETS.keys());
@@ -157,12 +157,12 @@ function useSubject(signedIn: boolean): Subject {
     address = linked(
       task === undefined
         ? { kind: LINK_DESTINATION.AGENT, agentId: agent.id }
-        : { kind: LINK_DESTINATION.AGENT, planId: task.id, agentId: agent.id },
+        : { kind: LINK_DESTINATION.AGENT, taskId: task.id, agentId: agent.id },
     );
 
     if (task !== undefined) enabled.push(MENU_COMMAND.NEW_AGENT);
   } else if (task !== undefined) {
-    address = linked({ kind: LINK_DESTINATION.TASK, planId: task.id });
+    address = linked({ kind: LINK_DESTINATION.TASK, taskId: task.id });
     enabled.push(MENU_COMMAND.NEW_AGENT, MENU_COMMAND.TOGGLE_READ, MENU_COMMAND.PIN);
 
     if (task.status !== TASK_STATUS.DONE) enabled.push(MENU_COMMAND.MARK_DONE);
@@ -185,18 +185,19 @@ function useSubject(signedIn: boolean): Subject {
   };
 }
 
-/** Whether any agent of the task is starting or running, so marking it done stops them and asks first. */
-function useAgentsWorking(taskId: string | undefined): boolean {
-  const { data: working = false } = useQuery({
+/** How many agents of the task are starting or running, so marking it done stops them and asks first. */
+function useWorkingAgents(taskId: string | undefined): number {
+  const { data: working = 0 } = useQuery({
     ...appStateQuery,
     select: (state) =>
-      taskId !== undefined &&
-      (selectTasks(state).taskAgents ?? []).some(
-        (agent) =>
-          agent.planId === taskId &&
-          agent.archivedAt === undefined &&
-          agentStillWriting(agent.status),
-      ),
+      taskId === undefined
+        ? 0
+        : (selectTasks(state).taskAgents ?? []).filter(
+            (agent) =>
+              agent.taskId === taskId &&
+              agent.archivedAt === undefined &&
+              agentStillWriting(agent.status),
+          ).length,
   });
 
   return working;
@@ -248,7 +249,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const toggled =
     sidebarStands && !sidebar.shown ? [...subject.toggled, MENU_COMMAND.SIDEBAR] : subject.toggled;
 
-  const working = useAgentsWorking(subject.task?.id);
+  const working = useWorkingAgents(subject.task?.id);
   const [asking, setAsking] = useState<Ask>(ASK.NONE);
   // Note that the menu is told only as what it shows changes, since each telling rebuilds it.
   const told = useRef<string>(undefined);
@@ -340,7 +341,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       case MENU_COMMAND.SIDEBAR:
         return sidebar.toggle();
       case MENU_COMMAND.MARK_DONE:
-        if (working) setAsking(ASK.MARK_DONE);
+        if (working > 0) setAsking(ASK.MARK_DONE);
         else markDone();
 
         return;
@@ -419,7 +420,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     return () => listening?.remove();
   }, []);
 
-  const done = settleStopWords(TASK_STATUS.DONE);
+  const done = settleStopWords(TASK_STATUS.DONE, working);
   const dismiss = () => setAsking(ASK.NONE);
 
   return (

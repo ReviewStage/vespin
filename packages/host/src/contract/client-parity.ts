@@ -124,6 +124,7 @@ const IOS = {
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
   ),
   PINNED_TABS: byDesign("iOS pins no tab to a sidebar, so no pinned tab's task is read for one"),
+  MACHINE_ASKS: notYet("iOS doesn't draw a machine's asks on the agent's screen yet"),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
   MACHINE_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
@@ -146,7 +147,7 @@ const IOS = {
   SOUNDS: byDesign("The phone plays only its push sound, never the account's chosen sounds"),
   TASKS: notYet("iOS v1's Tasks tab and task page don't offer this yet"),
   ACTIVE_TASK: byDesign(
-    "iOS follows each open task's description by its id (TASKS_DOCUMENT_FOLLOW), so it has no one active task to select or leave",
+    "iOS follows each open task's description by its id (TASKS_HELD_FOLLOW), so it has no one active task to select or leave",
   ),
   CODE_COLOR: byDesign(
     "iOS's host colors no code (compose-mobile.ts answers plainCodeLines), so a fenced block draws plain in mono",
@@ -252,6 +253,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MACHINES_RETRY]: panel(IOS.MACHINE_SETTINGS),
   [PORT_ACT_KIND.MACHINES_CHANGE]: panel(IOS.MACHINE_SETTINGS),
   [PORT_ACT_KIND.MACHINES_REMOVE]: panel(IOS.MACHINE_SETTINGS),
+  [PORT_ACT_KIND.MACHINE_ASKS_FOLLOW]: panel(IOS.MACHINE_ASKS),
+  [PORT_ACT_KIND.MACHINE_ASKS_RETRY]: panel(IOS.MACHINE_ASKS),
+  [PORT_ACT_KIND.MACHINE_ASK_ANSWER]: panel(IOS.MACHINE_ASKS),
   [PORT_ACT_KIND.HOSTS_THIS_MAC_SET]: desktopOnly(
     byDesign("Runs agents on the Mac the app is on, which a tab is not"),
     byDesign("Runs agents on the Mac the app is on, which a phone is not"),
@@ -443,8 +447,8 @@ export const CLIENT_PARITY = {
     ios: YES,
   },
   [PORT_ACT_KIND.TASKS_PAGES_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_DOCUMENT_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_DOCUMENT_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_HELD_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_HELD_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PICTURE_READ]: EVERYWHERE,
