@@ -239,7 +239,7 @@ const ENTITY_NAME: EntityNames = {
   [ENTITY_KIND.VERSION]: {
     live: false,
     held: (version, known) => {
-      const taskName = known.tasks.get(version.planId);
+      const taskName = known.tasks.get(version.taskId);
 
       return taskName === undefined ? undefined : `${taskName}, version ${version.revision}`;
     },
@@ -384,15 +384,15 @@ type DestinationEntities = {
 
 /** The entity each kind of destination names. */
 const DESTINATION_ENTITY: DestinationEntities = {
-  [LINK_DESTINATION.TASK]: (place) => ({ kind: ENTITY_KIND.PLAN, taskId: place.planId }),
+  [LINK_DESTINATION.TASK]: (place) => ({ kind: ENTITY_KIND.PLAN, taskId: place.taskId }),
   [LINK_DESTINATION.SECTION]: (place) => ({
     kind: ENTITY_KIND.SECTION,
-    taskId: place.planId,
+    taskId: place.taskId,
     anchor: place.anchor,
   }),
   [LINK_DESTINATION.PAGE]: (place) =>
-    "planId" in place
-      ? { kind: ENTITY_KIND.PAGE, taskId: place.planId, pageId: place.pageId }
+    "taskId" in place
+      ? { kind: ENTITY_KIND.PAGE, taskId: place.taskId, pageId: place.pageId }
       : { kind: ENTITY_KIND.PAGE, agentId: place.agentId, pageId: place.pageId },
   // Note that an older link naming the agent under its task names the agent alone, as its mention does.
   [LINK_DESTINATION.AGENT]: (place) => ({ kind: ENTITY_KIND.AGENT, agentId: place.agentId }),

@@ -419,16 +419,10 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         const ownerList = yield* answerOf(request(owner, PATH.HOSTS));
         const otherList = yield* answerOf(request(other, PATH.HOSTS));
 
-        const published = publishedRelease();
-
-        // Note that a beat answers the launches the service holds the device to, none for a host with no agent, and the release published, which a host at the floor is below.
+        // Note that a beat answers the launches the service holds the device to, none for a host with no agent.
         assert.deepEqual(ownBeat, {
           status: HOSTED_HTTP_STATUS.OK,
-          body: {
-            done: true,
-            openLaunches: [],
-            release: { version: published.VERSION, sha256: published.SHA256 },
-          },
+          body: { done: true, openLaunches: [] },
         });
         assert.deepEqual(
           [otherDeviceBeat, followedByOther],

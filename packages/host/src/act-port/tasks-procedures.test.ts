@@ -71,7 +71,7 @@ type TasksKind = keyof typeof REFUSAL;
 type AnyPayload = PortActPayload<PortActKind>;
 
 const TASK = { taskId: TASK_ID };
-const PLAN = { planId: "plan-1" };
+const PLAN = { taskId: "plan-1" };
 
 /** One ask of every hand-written task kind, with a payload its schema admits. */
 const ACTS: readonly { kind: TasksKind; payload: AnyPayload }[] = [

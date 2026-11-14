@@ -32,7 +32,6 @@ export {
   TURN_TRIGGER,
   type TurnFailure,
   type TurnTrigger,
-  UI_PART_TYPE,
   userMessage,
   userMetadataOf,
 } from "@repo/features/turn-run";

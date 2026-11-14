@@ -61,7 +61,7 @@ export const SOUND_CLIP_BOUNDS = {
 } as const;
 
 /** A sound's name as the wire carries it: trimmed, and one to `MAX_NAME_CHARS` characters. */
-export const soundNameSchema = EffectSchema.Trim.check(
+const soundNameSchema = EffectSchema.Trim.check(
   EffectSchema.isMinLength(1),
   EffectSchema.isMaxLength(SOUND_CLIP_BOUNDS.MAX_NAME_CHARS),
 );
@@ -107,7 +107,7 @@ export const soundClipDataUrlSchema = EffectSchema.String.check(
 );
 
 /** A sound the account keeps, as the live read and a write answer it: its id, its name, and the hash of its bytes. */
-export const soundSchema = EffectSchema.Struct({
+const soundSchema = EffectSchema.Struct({
   id: EffectSchema.String,
   name: EffectSchema.String,
   sha256: EffectSchema.String,
@@ -122,12 +122,8 @@ export const soundAddRequestSchema = EffectSchema.Struct({
   slot: EffectSchema.optionalKey(soundClipSlotSchema),
 });
 
-export type SoundAddRequest = typeof soundAddRequestSchema.Type;
-
 /** A sound added, as the service answers: the sound kept. */
 export const soundAddAnswerSchema = EffectSchema.Struct({ sound: soundSchema });
-
-export type SoundAddAnswer = typeof soundAddAnswerSchema.Type;
 
 /** A sound of the account's renamed (PATCH). */
 export const soundRenameRequestSchema = EffectSchema.Struct({
@@ -135,12 +131,8 @@ export const soundRenameRequestSchema = EffectSchema.Struct({
   name: soundNameSchema,
 });
 
-export type SoundRenameRequest = typeof soundRenameRequestSchema.Type;
-
 /** A sound renamed or removed, as the service answers: the sound as it now stands, or null where the account keeps no such sound. */
 export const soundStateSchema = EffectSchema.Struct({ sound: EffectSchema.NullOr(soundSchema) });
-
-export type SoundState = typeof soundStateSchema.Type;
 
 /** Which of the account's sounds one of its two sounds plays (PUT), or none to let it go. */
 export const soundChoiceRequestSchema = EffectSchema.Struct({
@@ -148,15 +140,11 @@ export const soundChoiceRequestSchema = EffectSchema.Struct({
   id: EffectSchema.NullOr(soundIdSchema),
 });
 
-export type SoundChoiceRequest = typeof soundChoiceRequestSchema.Type;
-
 /** A choice as the service answers it: the sound the slot now plays, or null where none, a sound the account keeps no longer among it. */
 export const soundChoiceAnswerSchema = EffectSchema.Struct({
   slot: soundClipSlotSchema,
   id: EffectSchema.NullOr(EffectSchema.String),
 });
-
-export type SoundChoiceAnswer = typeof soundChoiceAnswerSchema.Type;
 
 /** A sound's clip as its read answers it (GET): its bytes in base64 under its type, with their SHA-256, or null where the account keeps no such sound. */
 export const soundClipAnswerSchema = EffectSchema.Struct({
@@ -168,5 +156,3 @@ export const soundClipAnswerSchema = EffectSchema.Struct({
     }),
   ),
 });
-
-export type SoundClipAnswer = typeof soundClipAnswerSchema.Type;

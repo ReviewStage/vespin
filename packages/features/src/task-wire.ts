@@ -62,10 +62,6 @@ import { trimmedText } from "./text-schema.js";
  * this wire does, so a body cannot smuggle an account or a task id past the
  * bearer and the path that name them. Declared directly with Effect's
  * `Schema.Struct` and exported under its own name.
- *
- * Note that `planId`, `plan`, and `plans` keep the wire's legacy spelling of a task, because a
- * released desktop sends and reads them; they are renamed with the wire in a
- * follow-up, with no alias.
  */
 
 export const TASK_BOUNDS = {
@@ -766,6 +762,15 @@ const taskSummaryFields = {
   runsOn: EffectSchema.optionalKey(taskRunsOnSchema),
   /** The task this one is a child of; absent for a task at the top, and from a service before child tasks. */
   parentTaskId: EffectSchema.optionalKey(wireUuidSchema),
+  /**
+   * How many of the task's direct children the reader reaches, and how many
+   * of them are finished (done or canceled), as the service counts them over
+   * every task, the ones a list does not hold among them; absent for a task
+   * with none, and from a service before it counted them.
+   */
+  subTasks: EffectSchema.optionalKey(
+    EffectSchema.Struct({ finished: countedNumber, total: countedNumber }),
+  ),
   /** How the task is worked; absent from a service before modes, where every task is worked by its agents. */
   mode: EffectSchema.optionalKey(taskModeSchema),
   /**
@@ -1043,7 +1048,7 @@ export type Task = typeof taskSchema.Type;
  * first, each with its agents counted.
  */
 const taskListAnswerSchema = EffectSchema.Struct({
-  plans: EffectSchema.Array(taskSummarySchema),
+  tasks: EffectSchema.Array(taskSummarySchema),
 });
 
 export type TaskListAnswer = typeof taskListAnswerSchema.Type;
@@ -1055,7 +1060,7 @@ export type TaskListAnswer = typeof taskListAnswerSchema.Type;
  * `planlessAgents`, which a released desktop reads as optional.
  */
 export const heldTaskListAnswerSchema = EffectSchema.Struct({
-  plans: EffectSchema.Array(heldTaskSummarySchema),
+  tasks: EffectSchema.Array(heldTaskSummarySchema),
 });
 
 export type HeldTaskListAnswer = typeof heldTaskListAnswerSchema.Type;
@@ -1069,14 +1074,10 @@ export const taskFollowerAddRequestSchema = EffectSchema.Struct({
   userId: taskAssigneeIdSchema,
 });
 
-export type TaskFollowerAddRequest = typeof taskFollowerAddRequestSchema.Type;
-
 /** The account's own switch (PUT): whether the task's agents may use its machines. */
 export const taskFollowerMachinesRequestSchema = EffectSchema.Struct({
   machines: EffectSchema.Boolean,
 });
-
-export type TaskFollowerMachinesRequest = typeof taskFollowerMachinesRequestSchema.Type;
 
 /**
  * The id of the transaction a write committed in, as Postgres counts it, in
@@ -1107,7 +1108,7 @@ export type TaskFollowersAnswer = typeof taskFollowersAnswerSchema.Type;
  * the member MCP server's `read_task` does; a write answers none.
  */
 export const taskAnswerSchema = EffectSchema.Struct({
-  plan: taskSchema,
+  task: taskSchema,
   txid: EffectSchema.optionalKey(taskTxidSchema),
   brief: EffectSchema.optionalKey(EffectSchema.String),
 });
@@ -1147,7 +1148,7 @@ export type TaskAgentRefusal = typeof taskAgentRefusalSchema.Type;
  * the agent the first start made, and starts neither again.
  */
 export const taskStartAnswerSchema = EffectSchema.Struct({
-  plan: taskSchema,
+  task: taskSchema,
   agent: EffectSchema.optionalKey(agentSummarySchema),
   agentRefusal: EffectSchema.optionalKey(taskAgentRefusalSchema),
   txid: EffectSchema.optionalKey(taskTxidSchema),

@@ -85,7 +85,7 @@ export function useSearchFound(typed: string): SearchFound {
       // Note that a blank query ranks nothing, so the Inbox's every item, which it lists with nothing typed, stays out.
       inbox: rankedBySearch(inbox.listed, query, inboxSearchSubject),
       agents: rankedBySearch(agents, query, (agent) =>
-        agentSearchSubject(agent, names.get(agent.planId)),
+        agentSearchSubject(agent, names.get(agent.taskId)),
       ).map((agent) => agentLine(agent, waiting.byAgent, view)),
     };
   }, [listing.found, inbox.listed, view, workspace, waiting, query]);

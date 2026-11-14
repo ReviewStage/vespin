@@ -70,6 +70,8 @@ import {
   hostDoneAnswerViewSchema,
   hostIdParamsSchema,
   machineAllowedAppsAnswerViewSchema,
+  machineAskAnsweredViewSchema,
+  machineAskAnswerParamsSchema,
   machineChangeParamsSchema,
   pullRequestPartParamsSchema,
   replyButtonAnswerViewSchema,
@@ -168,6 +170,14 @@ export const AGENT_ACTS = declaredActs({
     refusal: "Could not change the machine on this system.",
     panelOnly: true,
     door: ACT.ROW_WRITE,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  MACHINE_ASK_ANSWER: hostAct({
+    input: machineAskAnswerParamsSchema,
+    output: machineAskAnsweredViewSchema,
+    refusal: "Could not answer the machine's ask on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
     unanswered: AGENT_UNANSWERED,
   }),
   MACHINES_REMOVE: hostAct({
@@ -539,6 +549,16 @@ export const AGENT_FOLLOWS = liveFollows({
     retry: {
       name: "MACHINES_RETRY",
       refusal: "Could not read your machines again on this system.",
+    },
+  }),
+  MACHINE_ASKS_FOLLOW: liveFollow({
+    slice: LIVE_READ.MACHINE_ASKS,
+    hold: HOLD.ACCOUNT,
+    refusal: "Could not follow your machines' asks on this system.",
+    panelOnly: true,
+    retry: {
+      name: "MACHINE_ASKS_RETRY",
+      refusal: "Could not read your machines' asks again on this system.",
     },
   }),
   AGENTS_ORIGIN_FOLLOW: liveFollow({

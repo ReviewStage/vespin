@@ -32,6 +32,7 @@ class FakeChannel {
   readyState: RTCDataChannelState = "connecting";
   readonly sent: string[] = [];
   onmessage: ((message: { data: string }) => void) | null = null;
+  onopen: (() => void) | null = null;
   onclose: (() => void) | null = null;
   send(data: string) {
     this.sent.push(data);
@@ -43,6 +44,7 @@ class FakeChannel {
   /** The channel opening and the session saying it started, as GPT-Live does once the peer connects. */
   started() {
     this.readyState = "open";
+    this.onopen?.();
     this.onmessage?.({ data: JSON.stringify({ type: "session.started" }) });
   }
   /** What the call told the session, each event as it was sent. */
@@ -243,6 +245,28 @@ test("a call refused for want of an OpenAI key says to add one and lets the micr
   assert.ok(peer.closed, "the peer is dropped");
   assert.ok(microphone.stopped, "the microphone is let go");
   assert.ok(document.body.textContent?.includes(OPENAI_KEY_MISSING_NOTE));
+});
+
+test("a call ended while the service answers closes the session it answers with, once its channel opens", async () => {
+  let answer: (sdp: { callId: string; sdp: string }) => void = () => undefined;
+  fakeActPort({
+    [ACT_KIND.VOICE_OPEN]: () =>
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+  });
+  await mounted();
+  const peer = await called();
+
+  act(() => call.end());
+  assert.equal(call.call, undefined);
+  answer({ callId: CALL_ID, sdp: "v=0 answer" });
+  await settleQueries();
+  act(() => peer.channel.started());
+
+  assert.deepEqual(peer.channel.told(), [said("session.close")]);
+  assert.ok(peer.closed, "the peer is dropped once its channel closes");
+  assert.ok(microphone.stopped, "the microphone is let go");
 });
 
 test("the session closing from its side ends the call", async () => {

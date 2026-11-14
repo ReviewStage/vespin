@@ -70,6 +70,7 @@ import {
   AppIdentity,
   ComputerUseHelper,
   type Environment,
+  KeptListsDue,
   LoopbackListener,
   MirrorPlatform,
   Reporter,
@@ -279,6 +280,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const shutdownSignal = yield* ShutdownSignal;
     const { report } = yield* Reporter;
     const { tokenCipher } = yield* AccountSource;
+    const listsDue = yield* Effect.serviceOption(KeptListsDue);
     const fileSystemContext = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
 
     const settings = yield* composeSettings();
@@ -517,6 +519,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         inboxNamed: tasks.inboxNamed,
         pool,
         agentListed,
+        entities: () => entities?.store,
       }),
     );
 
@@ -743,6 +746,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         queueMoves: pool.queueMoves,
         refused: agents.refused.kept,
         refusedMoves: agents.refused.moves,
+        ...(Option.isSome(listsDue) ? { listsDue: listsDue.value } : undefined),
       }).pipe(Scope.provide(scope), Effect.provideContext(fileSystemContext));
 
       entities = { store, scope };
