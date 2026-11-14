@@ -18,7 +18,7 @@ import { cardTitle } from "./plain-words.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import { type SearchSubject, searchHit } from "./search-score.js";
 import type { TaskSummary } from "./task-wire.js";
-import { TERM } from "./words.js";
+import { countWords, type Noun, TERM } from "./words.js";
 import { taskKey } from "./workspace-key.js";
 
 /** The kinds a search finds, in the order their sections stand. */
@@ -73,6 +73,29 @@ export const SEARCH_FINDS = `Find a ${TERM.TASK.one}, an Inbox ${TERM.INBOX_ITEM
 /** What a search that found nothing says: "No results match “ledger”." */
 export function noResultsWords(query: string): string {
   return `No ${TERM.RESULT.many} match “${query.trim()}”.`;
+}
+
+/** What opens a kind's every row from under All, as the panel words a list it cut short (code cards' and the Inbox's Show all). */
+export const SHOW_ALL = "Show all";
+
+/** Each kind's rows as Show all is heard counting them. */
+const SEARCH_FOUND_NOUN = {
+  [SEARCH_FOUND_KIND.TASKS]: TERM.TASK,
+  [SEARCH_FOUND_KIND.INBOX]: {
+    one: `Inbox ${TERM.INBOX_ITEM.one}`,
+    many: `Inbox ${TERM.INBOX_ITEM.many}`,
+  },
+  [SEARCH_FOUND_KIND.AGENTS]: TERM.AGENT,
+} as const satisfies Record<SearchFoundKind, Noun>;
+
+/** What Show all is heard as: "Show all 12 Inbox items". */
+export function showAllHeard(kind: SearchFoundKind, total: number): string {
+  return `${SHOW_ALL} ${countWords(total, SEARCH_FOUND_NOUN[kind])}`;
+}
+
+/** What stands under a kind's own scope where it lists fewer than the search found, so the cut is said rather than silent: "Showing 50 of 132." */
+export function shownOfWords(shown: number, total: number): string {
+  return `Showing ${shown} of ${total}.`;
 }
 
 /** Each kind's rows a search found, best first. */
