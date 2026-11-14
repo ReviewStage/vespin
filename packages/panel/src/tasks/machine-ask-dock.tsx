@@ -31,6 +31,7 @@ import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { useHeldThroughExit } from "../use-held-through-exit.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { macAppIconAddress } from "./mac-apps.js";
+import { OnMachine } from "./transcript-blocks.js";
 
 /**
  * machine-ask-dock.tsx -- the asks one of the developer's other machines holds for this agent, docked over its box: what it wants to run or use, and where, the time the ask has left, and Review.
@@ -54,8 +55,8 @@ const ASK_DOCK_WORDS = {
   TIMED_OUT: "Timed out",
   /** A machine the account's read does not name, as one removed since. */
   SOME_MACHINE: "your machine",
-  shell: (machine: string) => `Run a command on ${machine}`,
-  app: (app: string, machine: string) => `Use ${app} on ${machine}`,
+  SHELL: "Run a command on",
+  app: (app: string) => `Use ${app} on`,
 } as const;
 
 /** The name of each of the account's machines, by its id. */
@@ -73,11 +74,14 @@ function AskRow({
   onReview,
 }: {
   ask: MachineAskLine;
-  machine: string;
+  machine: { id: string; name: string } | undefined;
   onReview: () => void;
 }): ReactNode {
   const { subject } = ask;
   const shell = "command" in subject;
+
+  const where =
+    machine === undefined ? ASK_DOCK_WORDS.SOME_MACHINE : <OnMachine machine={machine} />;
 
   return (
     <ListRow
@@ -88,7 +92,11 @@ function AskRow({
           <AppIcon src={macAppIconAddress(subject.app.iconPng)} size={APP_ICON_SIZE.LEAD} />
         )
       }
-      title={shell ? ASK_DOCK_WORDS.shell(machine) : ASK_DOCK_WORDS.app(subject.app.name, machine)}
+      title={
+        <>
+          {shell ? ASK_DOCK_WORDS.SHELL : ASK_DOCK_WORDS.app(subject.app.name)} {where}
+        </>
+      }
       description={shell ? subject.command : undefined}
       descriptionReplayMasked={shell}
       meta={
@@ -111,7 +119,12 @@ export function MachineAskDock({ agentId }: { agentId: string }): ReactNode {
   const { mutate: answerAsk } = useMutation(pressMutation(ACT_KIND.MACHINE_ASK_ANSWER));
   // Note that the card is drawn for the ask it opened over until its fade has run, so its words do not change under its own exit, as one answered on another device goes.
   const { held, onExited } = useHeldThroughExit(asks.find((ask) => ask.id === reviewing));
-  const machineOf = (ask: MachineAskLine) => names.get(ask.deviceId) ?? ASK_DOCK_WORDS.SOME_MACHINE;
+
+  const machineOf = (ask: MachineAskLine) => {
+    const name = names.get(ask.deviceId);
+
+    return name === undefined ? undefined : { id: ask.deviceId, name };
+  };
 
   const answered = (ask: MachineAskLine, decision: MachineAskDecision, note?: string) => {
     answerAsk(note === undefined ? { id: ask.id, decision } : { id: ask.id, decision, note });
@@ -138,7 +151,7 @@ export function MachineAskDock({ agentId }: { agentId: string }): ReactNode {
         <AskCard
           ask={held}
           open={reviewing === held.id && asks.some((ask) => ask.id === held.id)}
-          machine={machineOf(held)}
+          machine={machineOf(held)?.name ?? ASK_DOCK_WORDS.SOME_MACHINE}
           onAnswer={(decision, note) => answered(held, decision, note)}
           onExited={onExited}
         />
