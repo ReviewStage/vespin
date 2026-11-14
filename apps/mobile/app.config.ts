@@ -258,7 +258,14 @@ const SHARE_EXTENSION: AppExtension = {
       NSExtensionActivationSupportsImageWithMaxCount: 4,
     },
   },
-  COLORS: { AccentColor: "ACCENT" },
+  COLORS: {
+    AccentColor: "ACCENT",
+    Text: "TEXT",
+    DangerText: "DANGER_TEXT",
+    ChipHover: "CHIP_HOVER",
+    Sidebar: "SIDEBAR",
+    Raised: "OVERLAY",
+  },
   SYMBOLS: ["CircleCheck", "X"],
   ENTITLEMENTS: {
     ...APP_GROUP_ENTITLEMENTS,
