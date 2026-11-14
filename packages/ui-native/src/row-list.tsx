@@ -25,7 +25,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { Predicate } from "effect";
-import { type ReactElement, type ReactNode, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
@@ -78,6 +78,8 @@ type RowListProps = {
   readonly onRefresh?: (() => Promise<void>) | undefined;
   /** Its Select mode, while it stands in one; none for a list a tap opens rows in. */
   readonly choosing?: RowChoosing | undefined;
+  /** Called with the rows chosen when two fingers dragged down the list start Select mode, as in Mail; none for a list with no Select mode. */
+  readonly onChooseStart?: ((ids: readonly string[]) => void) | undefined;
   readonly children: ReactNode;
 };
 
@@ -106,12 +108,29 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
  * still scrolls from either edge. In Select mode the list stands in
  * SwiftUI's own edit mode, as Mail's Select does: a round check leads each
  * row, a tap ticks it rather than opening it, two fingers dragged down tick
- * a run, and the rows' swipes step aside, as the system's do.
+ * a run, and the rows' swipes step aside, as the system's do. A list that
+ * can start Select mode hands SwiftUI its edit mode as a binding, so two
+ * fingers dragged down it start Select mode as they do in Mail.
  */
-export function RowList({ look, selected, onSelect, onRefresh, choosing, children }: RowListProps) {
+export function RowList({
+  look,
+  selected,
+  onSelect,
+  onRefresh,
+  choosing,
+  onChooseStart,
+  children,
+}: RowListProps) {
   const colors = useColors();
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
+  // Whether a two-finger drag started Select mode before the list was drawn in it.
+  const dragged = useRef(false);
+  const chooses = choosing !== undefined;
+
+  useEffect(() => {
+    if (!chooses) dragged.current = false;
+  }, [chooses]);
 
   // Note that a list in Select mode draws no row as the open one and reads nothing on a pull, since its checks say what is chosen and a pull there would read the rows from under them.
   return (
@@ -119,9 +138,28 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
       selection={
         choosing !== undefined ? [...choosing.chosen] : selected === undefined ? [] : [selected]
       }
+      // Note that the edit mode stands as a binding only where a drag may start Select mode, so a list without one keeps the plain environment value below.
+      {...(onChooseStart === undefined
+        ? {}
+        : {
+            editing: chooses,
+            onEditingChange: (editing: boolean, selection: readonly (string | number)[]) => {
+              if (!editing || chooses) return;
+
+              dragged.current = true;
+              onChooseStart(selection.filter(Predicate.isString));
+            },
+          })}
       onSelectionChange={(selection) => {
         if (choosing !== undefined) {
           choosing.onChoose(selection.filter(Predicate.isString));
+
+          return;
+        }
+
+        // Note that the rows a drag ticks arrive before the list is drawn in Select mode, so they choose rather than open.
+        if (dragged.current) {
+          onChooseStart?.(selection.filter(Predicate.isString));
 
           return;
         }
@@ -140,7 +178,10 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
         scrollDismissesKeyboard("immediately"),
         ...(onRefresh === undefined || choosing !== undefined ? [] : [refreshable(onRefresh)]),
         // Note that a ticked check is what the reader chose, so Select mode tints it copper, as Mail's checks take its accent, where the screen's ink drew a pale disc in dark.
-        ...(choosing === undefined ? [] : [environment("editMode", "active"), tint(colors.ACCENT)]),
+        ...(choosing === undefined ? [] : [tint(colors.ACCENT)]),
+        ...(choosing === undefined || onChooseStart !== undefined
+          ? []
+          : [environment("editMode", "active")]),
       ]}
     >
       <RowOpenContext value={onSelect}>
