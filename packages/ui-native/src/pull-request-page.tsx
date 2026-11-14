@@ -12,10 +12,8 @@ import {
   useNativeState,
   VStack,
 } from "@expo/ui/swift-ui";
-import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   autocorrectionDisabled,
-  background,
   buttonStyle,
   controlSize,
   disabled,
@@ -29,9 +27,6 @@ import {
   listRowSeparator,
   menuIndicator,
   monospacedDigit,
-  opacity,
-  padding,
-  strokeBorder,
   textInputAutocapitalization,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -49,15 +44,6 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What joins a pull request's branches, the one it merges from after the one it merges into, as GitHub writes it. */
 const BRANCH_ARROW = "←";
-
-/** The margins around the merge's words where its row draws its own capsule, near the system's large button. */
-const ACT_PADDING = { horizontal: 20, vertical: 14 } as const;
-
-/** How thick the outlined capsule's edge is drawn: a hairline. */
-const ACT_EDGE = 0.5;
-
-/** How faint the drawn capsule stands while a change is out, as the system dims a disabled button. */
-const ACT_DIMMED_OPACITY = 0.45;
 
 type PullRequestHeadProps = {
   readonly title: string;
@@ -275,18 +261,19 @@ export interface MergeMethodChoice {
 /**
  * The merge's one press as a row of the page, where a regular window's bar
  * folds its acts out of sight, as GitHub's own app stands Merge under a
- * pull request's checks: a large capsule as wide as its words, filled in
- * the accent with its words in the brand's ink where it is the page's one
- * act, such as Squash and merge, and outlined otherwise, such as Remove
- * from queue. Where the repository merges more than one way it is the
- * system's split button, as the panel's merge box is: a tap merges the way
+ * pull request's checks: the system's large button, as wide as its words,
+ * filled in the accent with its words in the brand's ink where it is the
+ * page's one act, such as Squash and merge, and outlined in it otherwise,
+ * such as Remove from queue. Where the repository merges more than one way
+ * it is a split button, as the panel's merge box is: a tap merges the way
  * chosen, and a long press or its chevron opens the ways, the chosen one
  * checked. It is dimmed while a change is out, its words then saying what
- * is under way. Note that a single press is a borderless button drawing
- * its own capsule, because a bordered one is the whole row to SwiftUI's
- * list, heard across the row's width, and a `RowList` always has a
- * selection, so on a regular width a press anywhere on the row selects the
- * untagged row, which does nothing, instead of pressing the button.
+ * is under way. Note that a single press is the same menu with no ways and
+ * no chevron, rather than a bordered button, because a list takes a row
+ * holding the system's button as one row-wide button, and a `RowList`
+ * always keeps a selection, so on a regular width a press on the row went
+ * to selecting it, untagged, and did nothing; a menu takes its own press
+ * there, in the system's same bordered look.
  */
 export function MergeActRow({
   label,
@@ -315,7 +302,10 @@ export function MergeActRow({
     </Text>
   );
 
-  const placement = [
+  const look = [
+    buttonStyle(prominent ? "borderedProminent" : "bordered"),
+    controlSize("large"),
+    tint(prominent ? colors.ACCENT : colors.TEXT),
     disabled(dimmed),
     listRowBackground("clear"),
     listRowSeparator("hidden"),
@@ -327,44 +317,16 @@ export function MergeActRow({
     }),
   ];
 
-  // Note that a single way to merge leaves nothing to choose, so the press stands as a button with no chevron, borderless so it takes only its own press (see above).
-  if (methods.length < 2) {
-    return (
-      <SwiftUIButton onPress={onPress} modifiers={[buttonStyle("borderless"), ...placement]}>
-        <HStack
-          modifiers={[
-            padding(ACT_PADDING),
-            background(prominent ? colors.ACCENT : colors.SURFACE, SwiftModifiers.shapes.capsule()),
-            ...(prominent
-              ? []
-              : [
-                  strokeBorder({
-                    content: colors.CHIP_EDGE,
-                    // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-                    shape: "capsule",
-                    style: { lineWidth: ACT_EDGE },
-                  }),
-                ]),
-            SwiftModifiers.contentShape(SwiftModifiers.shapes.capsule()),
-            opacity(dimmed ? ACT_DIMMED_OPACITY : 1),
-          ]}
-        >
-          {words}
-        </HStack>
-      </SwiftUIButton>
-    );
-  }
-
-  const look = [
-    buttonStyle(prominent ? "borderedProminent" : "bordered"),
-    controlSize("large"),
-    tint(prominent ? colors.ACCENT : colors.TEXT),
-    ...placement,
-  ];
+  // Note that a single way to merge leaves nothing to choose, so the press stands with no chevron and nothing behind it.
+  const chooses = methods.length > 1;
 
   return (
-    <Menu label={words} onPrimaryAction={onPress} modifiers={[...look, menuIndicator("visible")]}>
-      {methods.map((method) => (
+    <Menu
+      label={words}
+      onPrimaryAction={onPress}
+      modifiers={[...look, menuIndicator(chooses ? "visible" : "hidden")]}
+    >
+      {(chooses ? methods : []).map((method) => (
         <Toggle
           key={method.label}
           label={method.label}
