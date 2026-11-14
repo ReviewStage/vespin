@@ -32,7 +32,7 @@ export default function StartAgentRoute() {
   return (
     <NewAgentScreen
       key={shown === undefined ? "draft" : "suggested"}
-      taskId={suggester?.planId ?? task}
+      taskId={suggester?.taskId ?? task}
       opened={shown}
     />
   );

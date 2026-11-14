@@ -112,9 +112,5 @@ export type AgentSharedPortAnswerView = typeof agentSharedPortAnswerViewSchema.T
 /** A port shared, its link, or why it was not. */
 export const agentPortShareAnswerViewSchema = answerView(agentPortsContract.share);
 
-export type AgentPortShareAnswerView = typeof agentPortShareAnswerViewSchema.Type;
-
 /** The shared port's link closed, or why it was not. */
 export const agentPortUnshareAnswerViewSchema = answerView(agentPortsContract.unshare);
-
-export type AgentPortUnshareAnswerView = typeof agentPortUnshareAnswerViewSchema.Type;

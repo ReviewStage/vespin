@@ -3,9 +3,8 @@
  *
  * The read runs on an installation token the App minted for the one
  * repository with issues read alone (`github-app.ts`'s
- * `repositoryIssueToken`), and composes over the App module's own kit
- * (`githubRead`, `send`, `readBody`) so a token leaves this module no more
- * than it leaves that one. GitHub answers a pull request's number on its
+ * `repositoryIssueToken`), on that token's `@repo/github` client, so a
+ * token leaves this module no more than it leaves that one. GitHub answers a pull request's number on its
  * issues path too, since every pull request is an issue to it, and that
  * answer is none here, because the link names an issue and a pull request's
  * own link reads it as one. A repository with its issues turned off answers
@@ -19,16 +18,13 @@ import {
   ISSUE_STATE,
   type IssueState,
 } from "@repo/features/github-repositories-wire";
-import { Effect, Option, type Redacted, Schema } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
-import {
-  GITHUB_HTTP_STATUS,
-  type GitHubUnavailable,
-  githubRead,
-  readBody,
-  send,
-} from "./github-app.js";
+import type { GitHubFailure } from "@repo/github";
+import { Effect, Option, Schema } from "effect";
+import { type GitHubBearer, githubRead, readOptional, repositoryParts } from "./github-app.js";
 import { GitHubOpenerSchema, openerFieldsOf } from "./pull-requests.js";
+
+/** What a repository with its issues turned off answers on its issues path. */
+const GONE = 410;
 
 /** GitHub's own word for a closed issue, and its reasons for closing one that read as not planned. */
 const GITHUB_CLOSED = "closed";
@@ -57,25 +53,28 @@ function stateOf(record: typeof IssueSchema.Type): IssueState {
 
 /** One issue of the repository by number; none where it holds no issue of that number, the number is a pull request's, or its issues are off. */
 export function issueByNumber(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
-): Effect.Effect<Option.Option<GitHubIssueSummary>, GitHubUnavailable, HttpClient.HttpClient> {
-  const [owner = "", name = ""] = fullName.split("/");
-  const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${number}`;
+): Effect.Effect<Option.Option<GitHubIssueSummary>, GitHubFailure> {
+  const read = githubRead(
+    bearer.client.request("GET /repos/{owner}/{repo}/issues/{issue_number}", {
+      ...repositoryParts(fullName),
+      issue_number: number,
+    }),
+    IssueSchema,
+  );
 
-  return Effect.scoped(
-    Effect.flatMap(send(githubRead(path, token)), (response) => {
-      if (
-        response.status === GITHUB_HTTP_STATUS.NOT_FOUND ||
-        response.status === GITHUB_HTTP_STATUS.GONE
-      ) {
-        return Effect.succeed(Option.none<GitHubIssueSummary>());
-      }
-
-      return Effect.map(readBody(response, IssueSchema), (record) =>
+  return readOptional(read).pipe(
+    Effect.catchTag("GitHubRejected", (rejected) =>
+      rejected.status === GONE
+        ? Effect.succeed(Option.none<typeof IssueSchema.Type>())
+        : Effect.fail(rejected),
+    ),
+    Effect.map(
+      Option.flatMap((record) =>
         record.pull_request === undefined
-          ? Option.some({
+          ? Option.some<GitHubIssueSummary>({
               number: record.number,
               title: record.title,
               url: record.html_url,
@@ -83,7 +82,7 @@ export function issueByNumber(
               ...openerFieldsOf(record.user),
             })
           : Option.none(),
-      );
-    }),
+      ),
+    ),
   );
 }

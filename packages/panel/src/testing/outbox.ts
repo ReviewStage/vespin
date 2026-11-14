@@ -55,7 +55,7 @@ export function onOutbox(listener: () => void): () => void {
 }
 
 /** The agent's messages on their way and refused. */
-export function outboxOf(agentId: string): readonly SendingMessage[] {
+function outboxOf(agentId: string): readonly SendingMessage[] {
   return record.get(agentId) ?? NONE;
 }
 

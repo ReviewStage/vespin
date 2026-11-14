@@ -1,5 +1,11 @@
 import { searchAnchorProps } from "@repo/settings/settings-anchors";
-import { SavedTick, SettingsRow, type SettingsRowDensity, Switch } from "@repo/ui";
+import {
+  SavedTick,
+  SettingsRow,
+  type SettingsRowDensity,
+  type SettingsRowIndent,
+  Switch,
+} from "@repo/ui";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { useEffect } from "react";
 import type { RowChange } from "./row-write.js";
@@ -25,6 +31,9 @@ export function SwitchRow({
   disabled,
   locked,
   density,
+  indent,
+  leading,
+  before,
   write,
   onChange,
 }: RowChange<boolean> & {
@@ -42,6 +51,12 @@ export function SwitchRow({
   locked?: string | undefined;
   /** How the row stands; in a settings card where none is named. */
   density?: SettingsRowDensity | undefined;
+  /** Whether the row stands inset under the row above, one of its things. */
+  indent?: SettingsRowIndent | undefined;
+  /** The glyph the row leads with, where what it sets has one. */
+  leading?: React.ReactNode;
+  /** What stands before the switch: the chevron of the rows it folds open, so the switch keeps its place whether one stands or not. */
+  before?: React.ReactNode;
 }): React.JSX.Element {
   const ahead = write?.ahead;
   const agreed = write !== undefined && !write.busy && ahead?.value === checked;
@@ -57,20 +72,25 @@ export function SwitchRow({
       adornment={<SavedTick saves={write?.savedAt ?? 0} />}
       description={detail}
       density={density}
+      indent={indent}
+      leading={leading}
       labelsControl
     >
       {(control) => (
-        <Switch
-          id={control.controlId}
-          {...(anchor === undefined ? undefined : searchAnchorProps(anchor))}
-          checked={ahead === undefined ? checked : ahead.value}
-          label={label}
-          describedBy={control["aria-describedby"]}
-          aria-invalid={control["aria-invalid"]}
-          disabled={disabled}
-          locked={locked}
-          onChange={(next) => run(next)}
-        />
+        <>
+          {before}
+          <Switch
+            id={control.controlId}
+            {...(anchor === undefined ? undefined : searchAnchorProps(anchor))}
+            checked={ahead === undefined ? checked : ahead.value}
+            label={label}
+            describedBy={control["aria-describedby"]}
+            aria-invalid={control["aria-invalid"]}
+            disabled={disabled}
+            locked={locked}
+            onChange={(next) => run(next)}
+          />
+        </>
       )}
     </SettingsRow>
   );

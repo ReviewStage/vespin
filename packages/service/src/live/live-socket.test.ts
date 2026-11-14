@@ -101,12 +101,12 @@ function listedTasks(answer: LiveSocketAnswer): readonly string[] {
   const listed = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(JSON.parse(answer.body));
 
   const rows = Schema.decodeUnknownSync(TASK_LIST_READ.rows)({
-    plans: listed.queries.plans.rows,
+    tasks: listed.queries.tasks.rows,
     agents: listed.queries.agents.rows,
     issues: listed.queries.issues?.rows,
   });
 
-  return rows.plans.map((plan) => plan.id);
+  return rows.tasks.map((task) => task.id);
 }
 
 it.layer(getTestDB())("the live socket", (it) => {

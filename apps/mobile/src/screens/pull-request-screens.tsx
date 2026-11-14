@@ -381,7 +381,7 @@ export function PullRequestScreen() {
           {
             agentId: id,
             workspaceId: agent.workspaceId,
-            taskId: agent.planId,
+            taskId: agent.taskId,
             number: key.number,
             title,
           },

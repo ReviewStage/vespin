@@ -24,10 +24,10 @@ function recording() {
 
 test("the route key picks the member and the request is restored to the route's own path", async () => {
   const task = recording();
-  const dispatcher = dispatchRoutes(new Map([["plans/plan", task.route]]));
+  const dispatcher = dispatchRoutes(new Map([["tasks/plan", task.route]]));
 
   const response = await dispatcher.fetch(
-    new Request(`https://app.test/api/default.js?${DISPATCH_QUERY.ROUTE}=plans/plan&id=t1&wait=1`, {
+    new Request(`https://app.test/api/default.js?${DISPATCH_QUERY.ROUTE}=tasks/plan&id=t1&wait=1`, {
       method: "POST",
       body: "hello",
       headers: { "content-type": "text/plain" },
@@ -39,7 +39,7 @@ test("the route key picks the member and the request is restored to the route's 
   const seen = task.requests[0];
   assert.ok(seen);
   const url = new URL(seen.url);
-  assert.equal(url.pathname, "/api/plans/plan");
+  assert.equal(url.pathname, "/api/tasks/plan");
   assert.deepEqual(
     [...url.searchParams.entries()],
     [
@@ -63,9 +63,9 @@ test("a request with no route key, the oRPC key, or a key the function does not 
   );
 
   for (const query of [
-    `${DISPATCH_QUERY.ROUTE}=${ORPC_ROUTE_KEY}&${DISPATCH_QUERY.PATH}=plans/p1/revisions&wait=1`,
-    `${DISPATCH_QUERY.ROUTE}=plans/revisions&${DISPATCH_QUERY.PATH}=plans/p1/revisions&wait=1`,
-    `${DISPATCH_QUERY.PATH}=plans/p1/revisions&wait=1`,
+    `${DISPATCH_QUERY.ROUTE}=${ORPC_ROUTE_KEY}&${DISPATCH_QUERY.PATH}=tasks/p1/revisions&wait=1`,
+    `${DISPATCH_QUERY.ROUTE}=tasks/revisions&${DISPATCH_QUERY.PATH}=tasks/p1/revisions&wait=1`,
+    `${DISPATCH_QUERY.PATH}=tasks/p1/revisions&wait=1`,
   ]) {
     await dispatcher.fetch(new Request(`https://app.test/api/default.js?${query}`));
   }
@@ -74,9 +74,9 @@ test("a request with no route key, the oRPC key, or a key the function does not 
   assert.deepEqual(
     orpc.requests.map((request) => request.url),
     [
-      "https://app.test/api/plans/p1/revisions?wait=1",
-      "https://app.test/api/plans/p1/revisions?wait=1",
-      "https://app.test/api/plans/p1/revisions?wait=1",
+      "https://app.test/api/tasks/p1/revisions?wait=1",
+      "https://app.test/api/tasks/p1/revisions?wait=1",
+      "https://app.test/api/tasks/p1/revisions?wait=1",
       "https://app.test/api/default.js?wait=1",
     ],
   );
@@ -172,9 +172,9 @@ test("every route that stays off the oRPC router is reached at its public URL by
       [],
     ],
     [
-      "/api/plans/p1/attachments/f1",
-      "plans/attachment",
-      "/api/plans/attachment",
+      "/api/tasks/p1/attachments/f1",
+      "tasks/attachment",
+      "/api/tasks/attachment",
       [
         ["id", "p1"],
         ["attachment", "f1"],

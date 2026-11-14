@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { unparsedWire } from "@repo/wire";
 import { test } from "vitest";
 import { taskPicturesIn } from "./description-attachment-link.js";
-import { descriptionSections } from "./description-document.js";
 import {
   applyNotesToText,
   type DescriptionNote,
@@ -12,6 +11,7 @@ import {
   readNotes,
   withAgentEdit,
 } from "./description-notes.js";
+import { descriptionSections } from "./description-sections.js";
 
 function add(section: string, text: string): DescriptionNote {
   return { kind: NOTE_KIND.ADD, section, text };

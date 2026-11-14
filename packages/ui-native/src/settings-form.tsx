@@ -18,15 +18,19 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityElement,
+  accessibilityHidden,
   accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
+  alignmentGuide,
+  aspectRatio,
   background,
   disabled,
   font,
   foregroundStyle,
   frame,
   listRowBackground,
+  resizable,
   scrollContentBackground,
   scrollDismissesKeyboard,
   tint,
@@ -36,8 +40,10 @@ import type { ReactElement, ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent } from "./glyph-label.js";
+import { actContent, GlyphImage } from "./glyph-label.js";
+import type { IntegrationMarkAsset } from "./integration-marks.js";
 import { Avatar } from "./marks.js";
+import { ProblemLine } from "./problem-line.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -492,13 +498,16 @@ export function ActionRow({
   const colors = useColors();
   const role = destructive ? "destructive" : "default";
 
+  const modifiers = [
+    listRowBackground(colors.RAISED),
+    disabled(off),
+    accessibilityLabel(heard),
+    ...(detail === undefined ? [] : [accessibilityValue(detail)]),
+  ];
+
   if (centered) {
     return (
-      <SwiftUIButton
-        role={role}
-        onPress={onPress}
-        modifiers={[accessibilityLabel(heard), listRowBackground(colors.RAISED), disabled(off)]}
-      >
+      <SwiftUIButton role={role} onPress={onPress} modifiers={modifiers}>
         <Text modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "center" })]}>
           {label}
         </Text>
@@ -506,40 +515,28 @@ export function ActionRow({
     );
   }
 
-  if (detail === undefined) {
-    return (
-      <SwiftUIButton
-        {...actContent(label, symbol)}
-        role={role}
-        onPress={onPress}
-        modifiers={[accessibilityLabel(heard), listRowBackground(colors.RAISED), disabled(off)]}
-      />
-    );
+  if (symbol === undefined && detail === undefined) {
+    return <SwiftUIButton label={label} role={role} onPress={onPress} modifiers={modifiers} />;
   }
 
+  // Note that the glyph and the words stand in a stack of our own rather than SwiftUI's `Label`, because a form's button draws a `Label` as one run of text, so its words, wrapped at a large text size, ran on under the glyph.
   return (
-    <SwiftUIButton
-      role={role}
-      onPress={onPress}
-      modifiers={[
-        listRowBackground(colors.RAISED),
-        disabled(off),
-        accessibilityLabel(heard),
-        accessibilityValue(detail),
-      ]}
-    >
-      <HStack spacing={SPACE.ROW}>
-        {symbol === undefined ? null : <Image {...glyphImage(symbol)} />}
+    <SwiftUIButton role={role} onPress={onPress} modifiers={modifiers}>
+      <HStack spacing={SPACE.ROW} alignment="firstTextBaseline">
+        {symbol === undefined ? null : <GlyphImage glyph={symbol} />}
         <VStack alignment="leading" spacing={1}>
-          <Text>{label}</Text>
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE }),
-              foregroundStyle(colors.TEXT_MUTED),
-            ]}
-          >
-            {detail}
-          </Text>
+          {/* Note that the separator starts at the words, not the glyph, as a `Label`'s does. */}
+          <Text modifiers={[alignmentGuide("listRowSeparatorLeading", 0)]}>{label}</Text>
+          {detail === undefined ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+              ]}
+            >
+              {detail}
+            </Text>
+          )}
         </VStack>
       </HStack>
     </SwiftUIButton>
@@ -974,7 +971,7 @@ type NoteRowProps = {
   readonly line: string;
   /** Where a press goes, such as a skill's file, the chevron at its end; a row with none takes no press. */
   readonly onPress?: (() => void) | undefined;
-  /** The act that opens its words to be changed, such as Edit, on a press of the row where it goes nowhere else, and first in the menu a long press opens; none where the reader may not. */
+  /** The act that opens its words to be changed on a page of their own, such as Edit, on a press of the row where it goes nowhere else, with the chevron at its end, and first in the menu a long press opens; none where the reader may not. */
   readonly edit?: NoteAct | undefined;
   /** The act that takes it away, such as Delete, behind a swipe from the trailing edge and in the menu a long press opens; none where the reader may not. */
   readonly remove?: NoteAct | undefined;
@@ -985,7 +982,8 @@ type NoteRowProps = {
  * where it has one, its words whole in the ink, what it is under them where
  * it says, and the chevron where a press opens it, then a
  * quiet line of whose they are. Where the reader may, a press that goes
- * nowhere else opens its words to be changed, as a note in Notes opens, and
+ * nowhere else opens its words to be changed on a page of their own, the
+ * chevron saying so, as a Settings row that goes on does, and
  * the act that takes it away stands behind a swipe from the trailing edge,
  * as Notes' rows carry Delete; a long press opens a menu of both, Edit
  * first. Note that a full swipe never runs Delete, since it asks first.
@@ -1014,6 +1012,9 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
     </VStack>
   );
 
+  // Note that a row a press takes somewhere, or opens to be changed on a page of its own, is the system's button with the chevron at its end, flashing the row's gray while held, its words keeping their own ink, as `PressedRow` draws one.
+  const pressed = onPress ?? edit?.onPress;
+
   const content = (
     <HStack
       spacing={SPACE.ROW}
@@ -1024,12 +1025,9 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
       )}
       {lines}
       <Spacer />
-      {onPress === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
+      {pressed === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
     </HStack>
   );
-
-  // Note that a row a press takes somewhere, or opens to be changed, is the system's button, flashing the row's gray while held, its words keeping their own ink, as `PressedRow` draws one.
-  const pressed = onPress ?? edit?.onPress;
 
   const drawn =
     pressed === undefined ? content : <SwiftUIButton onPress={pressed}>{content}</SwiftUIButton>;
@@ -1078,7 +1076,10 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
   );
 }
 
-/** A line under a connection's name: its words, and whether they say something went wrong, drawn in danger's ink. */
+/** A connection's mark in its row, in points, before Dynamic Type scales it: as large as a row's face, as iOS Settings' icons lead its rows. */
+const CONNECTION_MARK_SIZE = 24;
+
+/** A line under a connection's name: its words, and whether they say something went wrong, led by the alert glyph in the attention ink. */
 export interface ConnectionLine {
   readonly text: string;
   readonly problem?: boolean | undefined;
@@ -1087,6 +1088,8 @@ export interface ConnectionLine {
 type ConnectionRowProps = {
   /** The connection's name, such as "Notion · Acme". */
   readonly name: string;
+  /** The provider's own mark it leads with, as the panel's row does; none for a connection with no mark of its own. */
+  readonly mark?: IntegrationMarkAsset | undefined;
   /** Its lines under the name: where it stands, what it is for, or why it did not go. */
   readonly lines: readonly ConnectionLine[];
   /** The one act it offers at its end, such as Connect or Cancel, as a bordered button; none where it offers none there. */
@@ -1104,15 +1107,18 @@ type ConnectionRowProps = {
 
 /**
  * A connection of the account's, such as an integration or an app given
- * access: its name in the ink, its lines in the muted ink or a problem's in
- * danger's, and its one act at its end as the system's small bordered
+ * access: the provider's mark where it has one, as iOS Settings leads a row
+ * with its icon, its name in the ink, its lines in the muted ink, a
+ * problem's led by the alert glyph in the attention ink rather than in red,
+ * since its act says how to mend it, and its one act at its end as the system's small bordered
  * capsule, in the ink as a quiet act stands, as the App Store's Get and
  * Settings' Add stand in a row, so the row keeps a list row's height; the rest in the menu a long press opens, and
  * a destructive one, such as Disconnect, behind a swipe too, which a full
  * swipe never runs, since it asks first.
  */
-export function ConnectionRow({ name, lines, act, menu = [] }: ConnectionRowProps) {
+export function ConnectionRow({ name, mark, lines, act, menu = [] }: ConnectionRowProps) {
   const colors = useColors();
+  const markSize = useScaledSize(CONNECTION_MARK_SIZE);
   const said = lines.map((line) => line.text).join(", ");
 
   const drawn = (
@@ -1120,19 +1126,35 @@ export function ConnectionRow({ name, lines, act, menu = [] }: ConnectionRowProp
       spacing={SPACE.ROW}
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
     >
+      {mark === undefined ? null : (
+        <Image
+          assetName={mark}
+          modifiers={[
+            resizable(),
+            aspectRatio({ contentMode: "fit" }),
+            frame({ width: markSize, height: markSize }),
+            foregroundStyle(colors.TEXT),
+            accessibilityHidden(),
+          ]}
+        />
+      )}
       <VStack alignment="leading" spacing={SPACE.TIGHT}>
         <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
-        {lines.map((line) => (
-          <Text
-            key={line.text}
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE }),
-              foregroundStyle(line.problem === true ? colors.DANGER_TEXT : colors.TEXT_MUTED),
-            ]}
-          >
-            {line.text}
-          </Text>
-        ))}
+        {lines.map((line) =>
+          line.problem === true ? (
+            <ProblemLine key={line.text} text={line.text} />
+          ) : (
+            <Text
+              key={line.text}
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+              ]}
+            >
+              {line.text}
+            </Text>
+          ),
+        )}
       </VStack>
       <Spacer />
       {act === undefined ? null : (

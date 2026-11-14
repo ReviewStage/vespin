@@ -717,15 +717,13 @@ interface CarriedSession {
   readonly movedFrom: string | undefined;
 }
 
-/** Where agents on a machine keep their checkouts, by an agent's id, and whether their runners keep the CLI's transcript at the service. */
+/** Where agents on a machine keep their checkouts, by an agent's id. */
 interface MachineCheckouts {
-  readonly transcriptsKept: boolean;
   readonly checkoutPathOf: (agentId: string) => string;
 }
 
-/** A sandbox's: every agent's checkout at the one path, its transcript kept. */
+/** A sandbox's: every agent's checkout at the one path. */
 const SANDBOX_CHECKOUTS: MachineCheckouts = {
-  transcriptsKept: true,
   checkoutPathOf: () => CODER.CHECKOUT_PATH,
 };
 
@@ -770,8 +768,7 @@ const sessionCutOf = Effect.fnUntraced(function* (from: StartFrom) {
  * of a replay of its steps, cut where `sessionCutOf` cuts it: one the
  * service holds the transcript of from its first entry (`holdsSession`),
  * since the fork reads the copy alone, on the harness the new agent runs
- * (`runtime`), for an agent on a machine whose runner reads the transcript
- * back, the cloud or a Mac whose release keeps it, and from a source whose
+ * (`runtime`), for an agent on a machine still known, and from a source whose
  * checkout's place is still known, since a Mac keeps each agent's checkout
  * at a path of its own, which the copy re-keys the session to; none
  * wherever else, and for a fork its session cannot be cut for.
@@ -791,7 +788,7 @@ const carriedSessionOf = Effect.fnUntraced(function* (
     checkoutsOn(source.userId, sourceMachine, source.deviceId),
   ]);
 
-  if (Option.isNone(onto) || !onto.value.transcriptsKept || Option.isNone(off)) return undefined;
+  if (Option.isNone(onto) || Option.isNone(off)) return undefined;
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(source.userId, source.id));
   const read = Option.getOrUndefined(routing);
 

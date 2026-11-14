@@ -1,5 +1,6 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
-import type { KnownNames } from "@repo/features/entity-kind";
+import type { Entity, KnownNames } from "@repo/features/entity-kind";
+import type { LinkDestination } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { agentName, modelLabel } from "@repo/features/model-label";
@@ -8,10 +9,12 @@ import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { taskKey } from "@repo/features/workspace-key";
 import type { AppStateSnapshot } from "@repo/host/app-state";
+import { and, eq, isUndefined, not, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { useAutomation } from "../automation-directory.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { appStateQuery, memoizedSelect } from "../use-app-state.js";
 import { useMentionedPlace } from "./mentioned-place.js";
 
@@ -37,6 +40,11 @@ import { useMentionedPlace } from "./mentioned-place.js";
  * transcript of a hundred chips builds them once; and not at all for a
  * delivery that moved neither the tasks, the Inbox, nor the active task's
  * pages.
+ *
+ * A chip names one subject, so it reads the names of that subject alone
+ * (`useNamesOf`): its task and its agent by id from the task list's
+ * collections (`useTaskListRow`), so it is drawn again only when they move,
+ * never for a delivery that moved some other row of the list.
  */
 
 /** No people: what a caller outside a member directory names. */
@@ -212,6 +220,33 @@ const selectKeyTargets = memoizedSelect(
   },
 );
 
+/** The members and former members of the directory around the caller, by user id; none outside one. */
+function usePeople(): ReadonlyMap<string, string> {
+  const { members, former } = useMemberDirectory();
+
+  return useMemo(
+    () =>
+      members === undefined && former === undefined
+        ? NO_PEOPLE
+        : new Map([...(former ?? []), ...(members ?? [])].map((each) => [each.userId, each.name])),
+    [members, former],
+  );
+}
+
+/** `held`, with the automation `automationId` names as the directory around the caller lists it, where it does. */
+function useAutomationsNamed(
+  held: ReadonlyMap<string, string>,
+  automationId: string | undefined,
+): ReadonlyMap<string, string> {
+  const automation = useAutomation(automationId)?.automation;
+
+  // Note that the directory's automation is its name now, so it stands over the name the run that started an agent kept.
+  return useMemo(
+    () => (automation === undefined ? held : new Map([...held, [automation.id, automation.name]])),
+    [held, automation],
+  );
+}
+
 /**
  * The names words written with any among them are drawn with as a chip:
  * each listed task's key, by the link it names its task with
@@ -255,26 +290,9 @@ export function useAgentStatus(agentId: string): AgentStatus | undefined {
  */
 export function useKnownNames(automationId?: string): KnownNames {
   const held = useQuery({ ...appStateQuery, select: selectHeldNames }).data ?? NO_HELD_NAMES;
-  const { members, former } = useMemberDirectory();
   const agents = agentsNamedBy(held.agents, held.agentModels, useMentionedPlace().models);
-  const automation = useAutomation(automationId)?.automation;
-
-  const people = useMemo(
-    () =>
-      members === undefined && former === undefined
-        ? NO_PEOPLE
-        : new Map([...(former ?? []), ...(members ?? [])].map((each) => [each.userId, each.name])),
-    [members, former],
-  );
-
-  // Note that the directory's automation is its name now, so it stands over the name the run that started an agent kept.
-  const automations = useMemo(
-    () =>
-      automation === undefined
-        ? held.automations
-        : new Map([...held.automations, [automation.id, automation.name]]),
-    [held.automations, automation],
-  );
+  const people = usePeople();
+  const automations = useAutomationsNamed(held.automations, automationId);
 
   return useMemo(
     () =>
@@ -282,5 +300,117 @@ export function useKnownNames(automationId?: string): KnownNames {
         ? held
         : { ...held, agents, people, automations },
     [held, agents, people, automations],
+  );
+}
+
+/** The ids a subject names the window's rows by: its task (`taskId`, or a link's `taskId`), its agent, and its automation. */
+interface NamedIds {
+  readonly taskId: string | undefined;
+  readonly agentId: string | undefined;
+  readonly automationId: string | undefined;
+}
+
+/** The ids a mention, an entity, or a link's place names rows of the task list by. */
+function namedIdsOf(named: Entity | LinkDestination): NamedIds {
+  return {
+    taskId: "taskId" in named ? named.taskId : "taskId" in named ? named.taskId : undefined,
+    agentId: "agentId" in named ? named.agentId : undefined,
+    automationId: "automationId" in named ? named.automationId : undefined,
+  };
+}
+
+/** The names of the open task's pages and of the Inbox items waiting, none of the task list's rows among them. */
+interface PlaceNames {
+  readonly pages: ReadonlyMap<string, string>;
+  readonly pagesTaskId: string | undefined;
+  readonly inboxItems: ReadonlyMap<string, string>;
+}
+
+/** No names: what a subject the window holds none of is named from. */
+const NO_NAMES: ReadonlyMap<string, string> = new Map();
+
+/** The pages and Inbox items' names, built once per delivery that moved the open task, its pages, or the Inbox, and never for one that moved only the task list's rows. */
+const selectPlaceNames = memoizedSelect(
+  (state) => [state.tasks.activeTaskId, state.inbox, activePagesOf(state)],
+  (pagesTaskId, inbox, activePages): PlaceNames => ({
+    pages: new Map(activePages?.map((page) => [page.id, page.title])),
+    pagesTaskId,
+    inboxItems: new Map(
+      inbox.waiting.flatMap((task) => task.items).map((item) => [item.id, item.title]),
+    ),
+  }),
+);
+
+/** The names of a window before the first document arrives. */
+const NO_PLACE_NAMES: PlaceNames = {
+  pages: NO_NAMES,
+  pagesTaskId: undefined,
+  inboxItems: NO_NAMES,
+};
+
+/**
+ * The name the agents of the task list keep for the automation `automationId`
+ * names, the one the run that started any of them kept; none where no
+ * listed agent was started by it, or none is asked for. One query stands
+ * only for a chip naming an automation, which few words do.
+ */
+function useStartedByName(automationId: string | undefined): string | undefined {
+  const { agents } = useTaskListCollections();
+
+  // Note that the query's identity is the values it captures, as TanStack DB 1.0 derives it, so it is made again only for another automation.
+  const { data } = useLiveQuery({
+    query: (q) =>
+      automationId === undefined
+        ? undefined
+        : q
+            .from({ agent: agents })
+            .where(({ agent }) =>
+              and(eq(agent.automationId, automationId), not(isUndefined(agent.automationName))),
+            )
+            .findOne(),
+  });
+
+  return data?.automationName;
+}
+
+/**
+ * The names the window holds for the one subject `named` names, a
+ * mention's or a link's place, as `useKnownNames` holds them: its task's
+ * name, its agent's as its tab names it, the model it runs on, and the
+ * automation that started it, read by id from the task list's collections;
+ * the open task's pages, the Inbox items waiting, and the people around the
+ * caller beside them. It is drawn again when that task or agent moves, and
+ * never for any other row of the list.
+ */
+export function useNamesOf(named: Entity | LinkDestination): KnownNames {
+  const ids = namedIdsOf(named);
+  const { tasks, agents } = useTaskListCollections();
+  const task = useTaskListRow(tasks, ids.taskId);
+  const agent = useTaskListRow(agents, ids.agentId);
+  const startedBy = useStartedByName(ids.automationId);
+  const models = useMentionedPlace().models;
+  const place = useQuery({ ...appStateQuery, select: selectPlaceNames }).data ?? NO_PLACE_NAMES;
+  const people = usePeople();
+
+  const held = useMemo(
+    () =>
+      ids.automationId === undefined || startedBy === undefined
+        ? NO_NAMES
+        : new Map([[ids.automationId, startedBy]]),
+    [ids.automationId, startedBy],
+  );
+
+  const automations = useAutomationsNamed(held, ids.automationId);
+
+  return useMemo(
+    () => ({
+      ...place,
+      tasks: task === undefined ? NO_NAMES : new Map([[task.id, task.name]]),
+      agents: agent === undefined ? NO_NAMES : new Map([[agent.id, agentName(agent, models)]]),
+      agentModels: agent === undefined ? NO_NAMES : new Map([[agent.id, agent.model]]),
+      people,
+      automations,
+    }),
+    [place, task, agent, models, people, automations],
   );
 }

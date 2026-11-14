@@ -1,4 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
+import { readAgentHeaderOfConversation } from "@repo/database/models/agent-store";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
@@ -16,6 +17,7 @@ import {
   COMPUTER_RECORDING_BOUNDS,
   COMPUTER_SCROLL_DIRECTION,
   type ComputerApp,
+  type ComputerCursor,
   type ComputerOutcome,
   type ComputerShot,
   MACHINE_COMMAND_KIND,
@@ -53,8 +55,9 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  * (`machine-routing.ts`): the machine the call names, or else the agent's
  * default. One call is one action, queued as a computer command for that
  * machine (`machine-command.ts`'s `askMachine`): the Mac asks the developer
- * about the app the first time it is used, and the call waits for that
- * answer and the action within `COMPUTER_TOOL_TIMEOUT_SECONDS`.
+ * about the app the first time it is used, for as long as its ask stands
+ * (`machineAskSeconds`), and the action then runs within
+ * `COMPUTER_TOOL_TIMEOUT_SECONDS`.
  *
  * Reading an app answers its window twice, as the browser's screenshot
  * does: a copy at most `COMPUTER_SHOTS.MODEL.edge` pixels long, which the
@@ -75,8 +78,8 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  * where it has one, so the agent can post it. The model is never handed it.
  */
 
-/** How long one call waits for the developer to allow the app and for the action to run, together. */
-export const COMPUTER_TOOL_TIMEOUT_SECONDS = 120;
+/** How long one action may run once its app is allowed; the ask before it stands apart (`machineAskSeconds`). */
+const COMPUTER_TOOL_TIMEOUT_SECONDS = 120;
 
 /** The two screenshots a read asks for: the model's copy, and the one kept beside the transcript. */
 const COMPUTER_SHOTS = {
@@ -206,14 +209,10 @@ export const COMPUTER_TOOL = {
     "working: its window as numbered elements and a screenshot, and clicks, typing, keys, " +
     "scrolls, and drags on it. Start with list_apps or get_app_state; act on an element by the " +
     "number the app's last get_app_state gave it, or on a point in its screenshot's pixels, " +
-    "and read the app again after you act, since its numbers change with it. A press of an " +
-    "element by its number, or of a web page's button or link at a point, answers pressed " +
-    "once the window's elements changed after it, and pressed_unconfirmed where they did not, " +
-    "which may still have acted, so read the app again before pressing again. A ⌘ shortcut " +
-    "the app's menus hold is pressed through that menu item and answers the same way; any " +
-    "other key answers sent. A click at any " +
-    "other point answers only that it was sent, and an app in the background, a browser above " +
-    "all, may drop it, so press an element by its number where one serves. An app not " +
+    "and read the app again after you act, since its numbers change with it. A click answers " +
+    "that it was sent, not that the app took it: an app in the background, a browser above " +
+    "all, may drop a click at a point, so press an element by its number where one serves, " +
+    "and read the app again to see what a click did. An app not " +
     "running is opened behind the developer's windows. The developer's Mac asks them the " +
     "first time an agent uses each app, and they may decline, in which case the call answers " +
     "`not-run`; agents are never offered terminals, password managers, System Settings, or " +
@@ -324,6 +323,11 @@ type ActedOutcome = Exclude<
   { readonly recorded: unknown } | { readonly unrecorded: unknown }
 >;
 
+/** Where the agent's cursor stands once the action landed, as a share of the app's last read window, which the panel draws its pointer at; none where the Mac answered none. */
+function cursorOf(outcome: { readonly cursor?: ComputerCursor }): object | undefined {
+  return outcome.cursor === undefined ? undefined : { cursor: outcome.cursor };
+}
+
 /** What a call answers for what the action came to, its pictures kept or handed on; a recording started, how long it runs at most, as the browser's answers. */
 function answeredOutcome(
   transcript: ConversationTarget,
@@ -337,7 +341,7 @@ function answeredOutcome(
     const done =
       outcome.done === COMPUTER_ACTION.RECORD
         ? { done: outcome.done, maxSeconds: COMPUTER_RECORDING_BOUNDS.MAX_SECONDS }
-        : { done: outcome.done };
+        : { done: outcome.done, ...cursorOf(outcome) };
 
     if (acted === undefined) return Effect.succeed({ ...ran, ...done });
 
@@ -366,6 +370,7 @@ function answeredOutcome(
       window: outcome.window,
       elements: outcome.elements,
       truncated: outcome.truncated,
+      ...cursorOf(outcome),
       ...(shown === undefined
         ? undefined
         : {
@@ -510,12 +515,24 @@ export function runComputerTool(
     // Note that a read that fails refuses, because an action on a guess could land on the wrong Mac.
     if (Result.isFailure(route)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
 
-    const { answer, recording } = yield* askMachine(route.success, {
+    // Note that the agent rides along so the Mac puts its cursor away once that agent's turn ends; a read that fails leaves it to the helper's own clock.
+    const agent = yield* Effect.option(
+      readAgentHeaderOfConversation(target.userId, target.conversationId),
+    );
+
+    const agentId = Option.getOrUndefined(Option.flatten(agent))?.id;
+
+    const ask = {
       kind: MACHINE_COMMAND_KIND.COMPUTER,
       conversationId: target.conversationId,
       action,
       timeoutSeconds: COMPUTER_TOOL_TIMEOUT_SECONDS,
-    });
+    };
+
+    const { answer, recording } = yield* askMachine(
+      route.success,
+      agentId === undefined ? ask : { ...ask, agentId },
+    );
 
     if (!("computer" in answer)) return answer;
     const outcome = answer.computer;

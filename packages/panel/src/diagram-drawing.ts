@@ -52,14 +52,6 @@ const drawnStore = createStore<ReadonlyMap<DiagramAppearance, ReadonlyMap<string
 /** Each draw still running, by appearance and then by code, which a second figure of the same code joins. */
 const drawing = new Map<DiagramAppearance, Map<string, Promise<DiagramDrawing>>>();
 
-/** The drawing held for a code in an appearance; nothing before it has been drawn. */
-export function heldDrawing(
-  appearance: DiagramAppearance,
-  code: string,
-): DiagramDrawing | undefined {
-  return drawnStore.state.get(appearance)?.get(code);
-}
-
 /** A drawing kept, as the newest, the oldest past the bound let go. */
 function keep(appearance: DiagramAppearance, code: string, answer: DiagramDrawing): void {
   drawnStore.setState((now) => {

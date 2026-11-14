@@ -258,20 +258,26 @@ export const CLAUDE_CODE_UNRECORDED_TOOL = {
  */
 export const UNKNOWN_TOOL = "unknown_tool";
 
-/** The name our MCP server is registered under, in Claude Code (`mcpServers.workspace`) and Codex (`mcp_servers.workspace`) alike. */
-export const WORKSPACE_MCP_SERVER = "workspace";
+/**
+ * The name our MCP server is registered under, in Claude Code
+ * (`mcpServers.team`) and Codex (`mcp_servers.team`) alike. Note that it is
+ * not `workspace`, because Claude Code 2.1.322 reserves that name for a
+ * server of its own and drops an HTTP server registered under it.
+ */
+export const WORKSPACE_MCP_SERVER = "team";
 
 /**
- * Every name a stored call may give our MCP server: today's, then `luke`,
- * which it was registered under before, so a transcript stored then still
- * draws its calls as our tools.
+ * Every name a stored call may give our MCP server: today's, then
+ * `workspace` and `luke`, which it was registered under before, so a
+ * transcript stored then still draws its calls as our tools.
  */
 export const WORKSPACE_MCP_SERVER_NAMES: ReadonlySet<string> = new Set([
   WORKSPACE_MCP_SERVER,
+  "workspace",
   "luke",
 ]);
 
-/** Our tool's own name from a Claude Code call's, `mcp__workspace__read_thread` being our `read_thread`; none for a tool of any other server. */
+/** Our tool's own name from a Claude Code call's, `mcp__team__read_thread` being our `read_thread`; none for a tool of any other server. */
 export function claudeCodeWorkspaceTool(name: string): string | undefined {
   for (const server of WORKSPACE_MCP_SERVER_NAMES) {
     const prefix = `mcp__${server}__`;

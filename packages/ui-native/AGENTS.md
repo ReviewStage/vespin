@@ -25,7 +25,8 @@ builds a control of its own.
   detail alone, `detailOnly`) and compose,
   a path, a page's main acts as glyphs in the bar's one glass before its ⋯
   (two or three, dimmed rather than gone with nothing picked, the rest left
-  in ⋯ by `menuWithout`), a `BarMenu` such as the ⋯ menu, an
+  in ⋯ by `menuWithout`), a list's scopes as Mail's filter button
+  (`scopeMenu`, beside the app sidebar only), a `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says, and `SplitOverTabs`, the one split view a window wide enough
   for three columns stands over the hidden tabs, in front of a tab's root and
@@ -248,10 +249,18 @@ navigation, tab bar, swipes, menus, sheets and glass.
   system's default button, so it flashes the row's gray while held, as
   Settings' rows do; a choice among a few is `PickRows`, each a row with
   what it does under its name where it says and the picked one checked in
-  copper, the one pick look every form uses; a connection's one act is a
-  small bordered capsule at its end; and the Account page heads with the
+  copper, the one pick look every form uses; a connection leads with its
+  provider's own mark, the desktop's vector (`INTEGRATION_MARK_ASSET`), and
+  its one act is a small bordered capsule at its end; what went wrong is a
+  `ProblemLine`, muted words led by the alert glyph in the attention ink,
+  never red words, wherever a refusal stands under a row or a field; what a section means is said in its
+  footer, never in a line under a switch; a row that leaves the app ends in
+  the arrow out; and the Account page heads with the
   account's photo, name and address centered on the ground, closing with
-  Sign out and Delete account centered in red, as Apple Account's does.
+  Sign out and Delete account centered in red, as Apple Account's does. A
+  red row never shares a group with the page's other rows: it stands alone
+  at the page's foot, centered, as Leave does, or behind a menu, as a
+  photo's Delete stands under Change photo.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
   checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
@@ -309,7 +318,10 @@ here once, so a screen gets them by composing these pieces.
   (unread, needs you, its status, its time by `sinceHeard`). A row holding a
   button of its own, such as `AgentRow`'s pull request, stays apart instead.
   A group header, a page's heading, and a message's writer line are headings;
-  a glyph its words already say is hidden. What happens out of the reader's
+  a glyph its words already say is hidden. A message's `Video` that can play
+  is one element, its name, which opens the system's player full screen, as
+  Messages does, since the inline player's own views stood a thread's
+  video in an iPad's split view past the depth XCTest can read. What happens out of the reader's
   sight is told with `useAnnounced`: an agent's change of state,
   a held call, and a send refused (`AskNote`). A line of Markdown offers
   each chip and link it holds as one of its VoiceOver actions ("Open …"),
