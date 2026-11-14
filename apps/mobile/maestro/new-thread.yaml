@@ -16,9 +16,14 @@ appId: dev.vespin.ios
     direction: DOWN
     centerElement: true
 - waitForAnimationToEnd
-- tapOn:
-    text: "acceptInvite can add a member twice"
-    retryTapIfNoChange: true
+- tapOn: "acceptInvite can add a member twice"
+# Note that the row is tapped again while the Inbox's scopes still stand, the list alone showing them, because a tap right after the list draws, as at launch on the folded Duo, can leave the list in front.
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Questions.*"
+    commands:
+      - tapOn: "acceptInvite can add a member twice"
 - assertVisible: "Reply"
 - waitForAnimationToEnd
 # New thread, from the composer's +: a switch named for the agent, which has

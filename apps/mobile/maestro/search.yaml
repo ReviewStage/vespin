@@ -54,8 +54,6 @@ appId: dev.vespin.ios
     element: "Ledger rounding"
     direction: UP
 - waitForAnimationToEnd
-- tapOn:
-    text: "Ledger rounding"
-    retryTapIfNoChange: true
+- tapOn: "Ledger rounding"
 - assertVisible: "Created by .*"
 - takeScreenshot: search-opened
