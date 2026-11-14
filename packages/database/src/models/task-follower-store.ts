@@ -18,9 +18,10 @@ import { reachableTask, taskReachableBy } from "./workspace-store.js";
  * follower is a member of the task's workspace: one who left reads as no
  * follower, and a member of no other workspace is ever added. Any member who
  * reaches the task may add another member as a follower, as an assignment
- * or a mention does, but `machines`, whether the task's agents may use a
- * follower's machines, is switched by that follower alone, and a member
- * unfollows for themself alone, the task's assignee never while assigned.
+ * or a mention does, and take any follower away again, but `machines`,
+ * whether the task's agents may use a follower's machines, is switched by
+ * that follower alone, and the task's assignee never stops following while
+ * assigned.
  * Following again keeps the row as it stands, its switch among it, but for
  * an assignment, which turns the new assignee's switch on and the previous
  * assignee's off. Each write answers the task's followers as they then
@@ -374,14 +375,16 @@ export function followTask(
 }
 
 /**
- * Stops the account following the task, and answers the task's followers
- * as they then stand; one not following stays so. Nothing where the account
- * does not reach the task; its assignee is refused with
- * `TaskFollowerIsAssignee`, since they follow it while assigned.
+ * Stops the follower following the task, the account itself where it names
+ * no one else, and answers the task's followers as they then stand; one not
+ * following stays so. Nothing where the account does not reach the task;
+ * its assignee is refused with `TaskFollowerIsAssignee`, since they follow
+ * it while assigned.
  */
 export function unfollowTask(
   userId: string,
   taskId: string,
+  followerId: string = userId,
 ): TaskFollowerEffect<Option.Option<TaskFollowersWritten>, TaskFollowerIsAssignee> {
   return transaction(
     Effect.gen(function* () {
@@ -389,8 +392,8 @@ export function unfollowTask(
 
       if (Option.isNone(reached)) return Option.none();
 
-      if (reached.value.assigneeId === userId) return yield* new TaskFollowerIsAssignee();
-      const written = yield* deleteFollower({ taskId, userId });
+      if (reached.value.assigneeId === followerId) return yield* new TaskFollowerIsAssignee();
+      const written = yield* deleteFollower({ taskId, userId: followerId });
 
       return Option.some(yield* writtenOf(taskId, written));
     }),

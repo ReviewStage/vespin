@@ -15,7 +15,7 @@ import {
 } from "@repo/features/conversation-picture-wire";
 import { INBOX_IMAGE_TYPE } from "@repo/features/inbox-wire";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
-import { pngBytes, webmBytes } from "@repo/wire/testing";
+import { mp4Bytes, pngBytes, webmBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { ACTION_RESULT_STATUS } from "../../core.js";
@@ -31,7 +31,7 @@ import { runShowImage, SHOW_IMAGE_REFUSAL, type ShowImageBinding } from "./show-
  *
  * Synthetic files throughout: a picture is a PNG's signature and header,
  * which states its size, and nothing more; a video is a WebM's EBML header
- * and a track that states its size.
+ * or an MP4's boxes, and a track that states its size.
  */
 
 const CHECKOUT = "/vercel/sandbox/repository";
@@ -258,6 +258,35 @@ it.layer(getTestDB())("show_image", (it) => {
           Option.map(read, (stored) => [stored.contentType, [...stored.bytes]]),
           Option.some([CONVERSATION_MEDIA_TYPE.WEBM, [...recording]]),
           "it is served back as the WebM it was",
+        );
+      }),
+  );
+
+  it.effect(
+    "an H.264 MP4 the computer tool recorded is kept as an MP4 of the size its track states",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const recording = mp4Bytes(1280, 800);
+        const sandbox = sandboxWith({ "/tmp/recordings/simulator.mp4": recording });
+
+        const answer = readShown(
+          yield* show(
+            { target, sandbox, checkout: CHECKOUT },
+            { images: [{ path: "/tmp/recordings/simulator.mp4", caption: "Signing in" }] },
+          ),
+        );
+
+        assert.deepEqual(
+          answer.pictures.map(({ mediaType, width, height }) => [mediaType, width, height]),
+          [[CONVERSATION_MEDIA_TYPE.MP4, 1280, 800]],
+        );
+        const [video] = answer.pictures;
+        assert.ok(video);
+        const read = yield* readConversationPicture(target.conversationId, video.id);
+        assert.deepEqual(
+          Option.map(read, (stored) => [stored.contentType, [...stored.bytes]]),
+          Option.some([CONVERSATION_MEDIA_TYPE.MP4, [...recording]]),
         );
       }),
   );

@@ -1,4 +1,5 @@
 import { RUNNER_END, RUNNER_EVENT, type RunnerEnd } from "@repo/agent-runner/protocol";
+import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { TurnFilesSummarySchema, type TurnFilesSummaryView } from "@repo/features/turn-files-wire";
 import {
@@ -149,18 +150,9 @@ const readConnectionRestored = Schema.decodeUnknownOption(
 /** A move of the agent's goal the runner read where the harness's own stream says none (`claude-goals.ts`), its fields the goal notice's own. */
 const readGoal = Schema.decodeUnknownOption(GoalNoticeSchema);
 
-/**
- * The end a runner posted where it let a wait on wakeups go so its sandbox
- * could stop, read as a turn that ended, the wakeups it named dropped. A
- * host bundles its own runner, so this is read until the host version floor
- * (`HOST_VERSION.FLOOR`) reaches 0.25.0, the first release whose runner
- * holds such a wait rather than ending on it.
- */
-const LEGACY_RELEASED = "released";
-
 const readEnd = Schema.decodeUnknownOption(
   Schema.Struct({
-    reason: Schema.Literals([...Object.values(RUNNER_END), LEGACY_RELEASED]),
+    reason: Schema.Literals(Object.values(RUNNER_END)),
     detail: Schema.optionalKey(Schema.String),
   }),
 );
@@ -186,8 +178,7 @@ function endMoments(message: WireValue): readonly NativeMoment[] {
   const read = readEnd(message);
 
   if (Option.isNone(read)) return [];
-  const { detail } = read.value;
-  const reason = read.value.reason === LEGACY_RELEASED ? RUNNER_END.TURN_ENDED : read.value.reason;
+  const { reason, detail } = read.value;
   const said = detail === undefined ? reason : `${reason} ${detail}`;
 
   return [
@@ -288,16 +279,25 @@ export function runnerMoments(message: WireValue): Option.Option<readonly Native
   }
 }
 
+/** Our tools that run on a machine, whose `not-run` answer says nothing ran there rather than that the call failed. */
+const MACHINE_TOOLS: ReadonlySet<string> = new Set([AGENT_TOOL.RUN_ON_MAC, AGENT_TOOL.COMPUTER]);
+
+/** The status a machine tool answers when nothing ran (`MACHINE_COMMAND_STATUS.NOT_RUN`). */
+const MACHINE_NOT_RUN = "not-run";
+
 /**
  * A tool's answer as the transcript settles its call: an error the harness
  * flagged is a refusal carrying the text, and any other answer is available.
  * Our own tool's answer is read as the JSON it answers, so its status word
  * counts as the retired runtime's relay counted it; any other tool's is kept as `output`,
- * the text the model read or what the harness reported of the call.
+ * the text the model read or what the harness reported of the call. Note
+ * that a machine tool's `not-run` is kept as its answer though the harness
+ * flags it an error, because its row reads the machine, why, and the
+ * missing grants from it, and nothing ran to fail.
  */
 export function toolAnswerSettlement(
   answer:
-    | { readonly workspaceTool: true; readonly text: string }
+    | { readonly workspaceTool: true; readonly name: string; readonly text: string }
     | { readonly workspaceTool: false; readonly text: string; readonly output: UnparsedWireValue },
   isError: boolean,
 ): ToolCallSettlement {
@@ -305,7 +305,12 @@ export function toolAnswerSettlement(
     ? withoutNul(valueFromJsonText(answer.text))
     : answer.output;
 
-  if (isError) {
+  const status = isRecord(output) && isWireString(output.status) ? output.status : undefined;
+
+  const notRun =
+    answer.workspaceTool && MACHINE_TOOLS.has(answer.name) && status === MACHINE_NOT_RUN;
+
+  if (isError && !notRun) {
     return {
       state: TOOL_CALL_SETTLEMENT.OUTPUT_ERROR,
       output,
@@ -315,7 +320,6 @@ export function toolAnswerSettlement(
   }
 
   if (!answer.workspaceTool) return toolCallSettlementOf(JSON.stringify(answer.output), undefined);
-  const status = isRecord(output) && isWireString(output.status) ? output.status : undefined;
 
   // Note that the settlement is handed the answer as read, since it reads its JSON again and would make its NUL anew.
   return toolCallSettlementOf(JSON.stringify(output), status);

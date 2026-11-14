@@ -1,13 +1,12 @@
-/* block-list.css -- a box of blocks: one hairline and corner round them all,
-   a hairline between each, and each block's parts one under another. */
+/* block-list.css -- a box of blocks in a `Card` (`block-list.tsx`), which draws
+   the one hairline and corner round them all: a hairline between each, and
+   each block's parts one under another. */
 
 @layer components {
   .ui-block-list {
     min-width: 0;
     margin: 0;
     padding: 0;
-    border: 1px solid var(--ui-color-border);
-    border-radius: var(--ui-control-radius);
     list-style: none;
   }
 

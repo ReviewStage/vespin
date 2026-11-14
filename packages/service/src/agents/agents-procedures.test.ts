@@ -7,7 +7,6 @@ import { recordRepositoryReads } from "@repo/database/models/github-repository-r
 import { readGitHubTokenRow } from "@repo/database/models/github-token-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask } from "@repo/database/models/task-store";
-import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import {
   readRunActions,
   setRunActions,
@@ -24,7 +23,6 @@ import {
 import { RUN_ACTION_AVAILABILITY } from "@repo/features/workspace-sandbox-setup-wire";
 import { SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { EXPERIMENT } from "@repo/settings";
 import { noNetwork } from "@repo/wire/testing";
 import { Clock, type Context, Effect, Layer, Option, Result } from "effect";
 import { SqlClient } from "effect/sql";
@@ -52,8 +50,8 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * a sandbox that answers from a script: the agent is reached by the one rule
  * every agent route keeps, so another account reads it as none, an archived
  * agent is gone, and a list answers the sandbox's shells and where it
- * stands; a shell is refused in a stopped sandbox, and only the resume path
- * wakes one; and a sandbox that did not answer is the upstream's
+ * stands; a list never wakes a stopped sandbox, and a shell started in one
+ * resumes it first and opens there; and a sandbox that did not answer is the upstream's
  * failure, apart from the service's own. An agent on its starter's own
  * GitHub token gives its sandbox to its starter alone: a teammate who sees it
  * is refused, and one who does not reads it as none. Synthetic accounts,
@@ -76,19 +74,21 @@ const PORTS = [3000, 5173];
 /** A sandbox standing as given, keeping what it was asked: lists, starts, and resumes, by session. */
 function scriptedSandbox(state: SandboxState) {
   const asked: { readonly what: string; readonly sessionId: string }[] = [];
-  const shells = state === SANDBOX_STATE.RUNNING ? [SHELL] : [];
+  // Note that a resume runs the sandbox, as the real one does once it answers.
+  let standing = state;
+  const shells = () => (standing === SANDBOX_STATE.RUNNING ? [SHELL] : []);
 
   const service: AgentSandboxService = {
     terminals: (sessionId) =>
       Effect.sync(() => {
         asked.push({ what: "terminals", sessionId });
 
-        return { sandbox: state, terminals: shells };
+        return { sandbox: standing, terminals: shells() };
       }),
     listeningPorts: (sessionId) =>
       Effect.sync(() => {
         asked.push({ what: "ports", sessionId });
-        const running = state === SANDBOX_STATE.RUNNING;
+        const running = standing === SANDBOX_STATE.RUNNING;
 
         return { running, ports: running ? PORTS : [] };
       }),
@@ -100,9 +100,9 @@ function scriptedSandbox(state: SandboxState) {
       Effect.sync(() => {
         asked.push({ what: "start", sessionId });
 
-        return state === SANDBOX_STATE.RUNNING
+        return standing === SANDBOX_STATE.RUNNING
           ? Result.succeed({ ...SHELL, id: terminalId })
-          : Result.fail({ kind: SHELL_REFUSAL.NOT_RUNNING, sandbox: state });
+          : Result.fail({ kind: SHELL_REFUSAL.NOT_RUNNING, sandbox: standing });
       }),
     rename: () => Effect.succeed(Result.succeed(undefined)),
     kill: () => Effect.succeed(Result.succeed(undefined)),
@@ -111,8 +111,9 @@ function scriptedSandbox(state: SandboxState) {
     resume: (sessionId) =>
       Effect.sync(() => {
         asked.push({ what: "resume", sessionId });
+        standing = SANDBOX_STATE.RUNNING;
 
-        return SANDBOX_STATE.RUNNING;
+        return standing;
       }),
     attach: () => Effect.die("the routes attach nothing"),
     open: () => Effect.die("the routes open nothing"),
@@ -352,7 +353,7 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
   );
 
   it.effect(
-    "a shell is refused in a stopped sandbox, the list never wakes it, and only the resume path does",
+    "a list never wakes a stopped sandbox, and a shell started in one resumes it first and opens there",
     () =>
       Effect.gen(function* () {
         const { userId, agent, sessionId } = yield* openAgent;
@@ -360,22 +361,21 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
         const call = yield* standing(new Map([["Bearer owner", userId]]), sandbox.layer);
 
         const listed = yield* call(terminalsOf(agent.id), "Bearer owner");
+        const wokenByList = sandbox.asked.some((asked) => asked.what === "resume");
 
         const started = yield* call(terminalsOf(agent.id), "Bearer owner", {
           method: "POST",
           body: {},
         });
 
-        const woken = sandbox.asked.some((asked) => asked.what === "resume");
-        const resumed = yield* call(resumeOf(agent.id), "Bearer owner", { method: "POST" });
-
         assert.deepEqual(listed.body, { sandbox: SANDBOX_STATE.STOPPED, terminals: [] });
-        assert.equal(started.status, 409);
-        assert.deepEqual(started.body, { error: HOSTED_API_ERROR.SANDBOX_STOPPED });
-        assert.equal(woken, false, "nothing but the resume path wakes the sandbox");
-        assert.deepEqual(toolsCounted(userId), [], "a shell refused is not counted");
-        assert.deepEqual(resumed.body, { sandbox: SANDBOX_STATE.RUNNING });
-        assert.deepEqual(sandbox.asked.at(-1), { what: "resume", sessionId });
+        assert.equal(wokenByList, false, "a list never wakes the sandbox");
+        assert.equal(started.status, 201);
+        assert.deepEqual(
+          sandbox.asked.map((asked) => asked.what),
+          ["terminals", "start", "resume", "start"],
+        );
+        assert.deepEqual(sandbox.asked.at(-2), { what: "resume", sessionId });
       }),
   );
 
@@ -424,13 +424,6 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
     Effect.gen(function* () {
       const { userId, agent } = yield* openAgent;
       const workspaceId = agent.organizationId;
-
-      yield* setWorkspaceExperiment({
-        organizationId: workspaceId,
-        experiment: EXPERIMENT.RUN_ACTIONS,
-        on: true,
-        by: userId,
-      });
 
       yield* setRunActions(
         workspaceId,

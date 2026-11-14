@@ -9,6 +9,7 @@
 import { DESCRIPTION_MARKDOWN_MAX_CHARS } from "@repo/features/description-markdown";
 import { type FeedbackSubmission, feedbackSubmission } from "@repo/features/feedback";
 import { handoffActivitySchema } from "@repo/features/ios-system-activity";
+import { standingCallSchema, voiceCallPressSchema } from "@repo/features/voice-wire";
 import {
   LID_STATE,
   MICROPHONE_STATUS,
@@ -213,6 +214,14 @@ export const windowSurfaceActsContract = {
         }),
       ),
     )
+    .output(EffectSchema.Void),
+  [WINDOW_SURFACE_ACT_KIND.WINDOW_VOICE_CALL]: actProcedure(
+    "Could not tell the Mac about this window's call.",
+  )
+    .input(exactInput(EffectSchema.Struct({ call: EffectSchema.NullOr(standingCallSchema) })))
+    .output(EffectSchema.Void),
+  [WINDOW_SURFACE_ACT_KIND.VOICE_CALL_PRESS]: actProcedure("Could not reach the call.")
+    .input(exactInput(EffectSchema.Struct({ press: voiceCallPressSchema })))
     .output(EffectSchema.Void),
   [WINDOW_SURFACE_ACT_KIND.FEEDBACK_SEND]: actProcedure("Could not send that on this system.")
     .input(exactInput(EffectSchema.Struct({ submission: feedbackSubmissionSchema })))

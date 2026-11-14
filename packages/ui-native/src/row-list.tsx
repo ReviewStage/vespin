@@ -32,7 +32,7 @@ import { dropLink } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
 import { RowOpenContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** Whether a foldable section stands open, in VoiceOver's own words for a disclosure. */
@@ -44,8 +44,8 @@ const FOLD_HINT = "Shows or hides the rows it holds";
 /** The fold chevron's size, a little under the header's words. */
 const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
 
-/** The least a section's + answers a press across, in points, wider than it draws so a finger finds it beside the header's small words. */
-const ADD_TARGET = { WIDTH: 36, HEIGHT: 28 } as const;
+/** The least a section's + answers a press across, in points: Apple's least target, wider than it draws so a finger finds it beside the header's small words. */
+const ADD_TARGET = { WIDTH: PRESS_SIZE, HEIGHT: PRESS_SIZE } as const;
 
 /**
  * How a list stands: plain rows on a screen of its own, as the panel's lists
@@ -78,6 +78,13 @@ type RowListProps = {
   readonly onRefresh?: (() => Promise<void>) | undefined;
   /** Its Select mode, while it stands in one; none for a list a tap opens rows in. */
   readonly choosing?: RowChoosing | undefined;
+  /**
+   * Starts its Select mode with the rows the system ticked, where it has one:
+   * iPadOS lets a list whose selection is a set tick several rows with no
+   * edit mode of ours, by a two-finger drag, a pointer's ⌘ or Shift click,
+   * or the keyboard. None for a list with no Select mode.
+   */
+  readonly onChooseStart?: ((ids: readonly string[]) => void) | undefined;
   readonly children: ReactNode;
 };
 
@@ -108,7 +115,15 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
  * row, a tap ticks it rather than opening it, two fingers dragged down tick
  * a run, and the rows' swipes step aside, as the system's do.
  */
-export function RowList({ look, selected, onSelect, onRefresh, choosing, children }: RowListProps) {
+export function RowList({
+  look,
+  selected,
+  onSelect,
+  onRefresh,
+  choosing,
+  onChooseStart,
+  children,
+}: RowListProps) {
   const colors = useColors();
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
@@ -122,6 +137,15 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
       onSelectionChange={(selection) => {
         if (choosing !== undefined) {
           choosing.onChoose(selection.filter(Predicate.isString));
+
+          return;
+        }
+
+        const ids = selection.filter(Predicate.isString);
+
+        // Note that several rows ticked at once by the system start Select mode with them, as Mail's do, rather than read as a tap on the first, which drew them in the system's own ink and fill and then cleared them as the single selection was laid back.
+        if (ids.length > 1 && onChooseStart !== undefined) {
+          onChooseStart(ids);
 
           return;
         }
@@ -307,15 +331,20 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
 
   if (only === undefined) return null;
 
+  // Note that the target's frame and shape stand on the glyph, the button's label, since a borderless button or a menu answers only where its label is hit.
   const glyph = (
-    <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
+    <Image
+      {...glyphImage(GLYPH.ADD)}
+      size={MARK_SIZE.GLYPH}
+      color={colors.TEXT_MUTED}
+      modifiers={[
+        frame({ minWidth: ADD_TARGET.WIDTH, minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+      ]}
+    />
   );
 
-  const target = [
-    buttonStyle("borderless"),
-    frame({ minWidth: ADD_TARGET.WIDTH, minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),
-    SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-  ];
+  const target = [buttonStyle("borderless")];
 
   if (rest.length === 0) {
     return (
@@ -355,12 +384,14 @@ export function ListSection({
   children,
 }: ListSectionProps) {
   const [folded, setFolded] = useState(false);
+  // Note that a header holding none shows no count, as Mail's groups stand, rather than a 0 beside its title.
+  const shown = count === 0 ? undefined : count;
 
   const label =
     title === undefined ? undefined : (
       <GroupHeader
         title={title}
-        count={count}
+        count={shown}
         progress={progress}
         mark={mark}
         folded={foldable ? folded : undefined}
@@ -376,7 +407,7 @@ export function ListSection({
         modifiers={[
           buttonStyle("plain"),
           accessibilityAddTraits(["isHeader"]),
-          accessibilityLabel(`${title}${count === undefined ? "" : `, ${count}`}`),
+          accessibilityLabel(`${title}${shown === undefined ? "" : `, ${shown}`}`),
           accessibilityValue(folded ? FOLD_HEARD.SHUT : FOLD_HEARD.OPEN),
           accessibilityHint(FOLD_HINT),
         ]}

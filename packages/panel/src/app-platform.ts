@@ -17,6 +17,7 @@
 import type { ProductEventPropertiesFor, ProductSurfaceEventName } from "@repo/features/analytics";
 import type { HandoffActivity } from "@repo/features/ios-system-activity";
 import type { FramedPage } from "@repo/features/page-frame";
+import type { StandingCall } from "@repo/features/voice-wire";
 import {
   type AppCommand,
   COMMAND_KEY,
@@ -155,6 +156,13 @@ export interface AppPlatform {
    * iPhone. A browser tab cannot advertise one, so the web leaves this out.
    */
   handoff?(activity: HandoffActivity | null): void;
+  /**
+   * Hears the voice call the window holds, as its card draws it, or none once
+   * it ends, each time that changes, so a shell on a Mac floats the card
+   * over other apps while no window of its own is in front. A browser tab
+   * cannot float a window, so the web leaves this out.
+   */
+  voiceCall?(call: StandingCall | null): void;
   /**
    * Ends a maintainer's sign-in as the member signed in (`impersonated` on
    * the account) and takes them back to that member's page of the admin

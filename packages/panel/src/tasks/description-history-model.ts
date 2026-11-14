@@ -1,9 +1,9 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { type WordChange, wordChanges } from "@repo/features/description-diff";
-import { type DescriptionSection, descriptionSections } from "@repo/features/description-document";
+import { type DescriptionSection, descriptionSections } from "@repo/features/description-sections";
 import {
   DESCRIPTION_ACTOR,
-  type DescriptionDocument,
+  type Description,
   type DescriptionEditor,
   type DescriptionRevisionLine,
 } from "@repo/features/task-wire";
@@ -337,11 +337,8 @@ function unitsAgainst(
  * nothing, as the first version is: every unit of either, each marked by
  * how it stands.
  */
-export function versionDiff(
-  base: DescriptionDocument | null,
-  shown: DescriptionDocument,
-): VersionDiff {
-  const sectionsOf = (document: DescriptionDocument) => descriptionSections(document.body);
+export function versionDiff(base: Description | null, shown: Description): VersionDiff {
+  const sectionsOf = (document: Description) => descriptionSections(document.body);
 
   const units =
     base === null

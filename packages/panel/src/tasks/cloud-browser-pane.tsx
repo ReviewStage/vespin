@@ -481,8 +481,8 @@ function paint(canvas: HTMLCanvasElement | null, image: HTMLImageElement | undef
 
 /**
  * The relative luminance (WCAG 2, linear light) under which the page beneath
- * the agent's pointer reads as dark, which draws it in `--agent-pointer-on-dark`,
- * the dark mode's brighter amber, rather than `--agent-pointer`; its white edge
+ * the agent's pointer reads as dark, which draws it in `--ui-color-agent-pointer-on-dark`,
+ * the dark mode's brighter amber, rather than `--ui-color-agent-pointer`; its white edge
  * holds it apart from the page on either side of the line.
  */
 const DARK_PAGE_LUMA = 0.32;
@@ -811,7 +811,6 @@ export function CloudBrowserPane({
             <CloudBrowserCursor
               cursor={tab.cursor}
               lastActedAt={tab.lastActedAt}
-              frame={size}
               hidden={driven || notice !== undefined}
               onDarkPage={onDarkPage}
             />

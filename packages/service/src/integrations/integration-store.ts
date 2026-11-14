@@ -24,6 +24,7 @@ import {
 import { InstantColumnSchema } from "@repo/database/models/columns";
 import { integrationConnection } from "@repo/database/schemas/integration";
 import {
+  INTEGRATION_PROVIDER_LIST,
   INTEGRATION_STATUS,
   type IntegrationProvider,
   integrationProviderSchema,
@@ -156,7 +157,13 @@ const findAllByUser = SqlSchema.findAll({
       db
         .select(ROW_COLUMNS)
         .from(integrationConnection)
-        .where(eq(integrationConnection.userId, userId))
+        // Note that a row at a provider this build no longer offers is left out, because one undecodable row would fail the whole read.
+        .where(
+          and(
+            eq(integrationConnection.userId, userId),
+            inArray(integrationConnection.provider, INTEGRATION_PROVIDER_LIST),
+          ),
+        )
         .orderBy(integrationConnection.provider, integrationConnection.connectionName),
     ),
 });
@@ -207,7 +214,7 @@ export function storedStatusWord(issuedSince: Date) {
   end`;
 }
 
-/** Every row the account holds, one per account it connected or is signing in to, by provider and then by name. */
+/** Every row the account holds at a provider this build knows, one per account it connected or is signing in to, by provider and then by name. */
 export function readIntegrationConnections(
   userId: string,
 ): IntegrationStoreEffect<readonly IntegrationConnectionRow[]> {

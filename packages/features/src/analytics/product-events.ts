@@ -50,6 +50,8 @@ export const PRODUCT_EVENT = {
   MIRROR_FAIL: "mirror:fail",
   /** A cloud agent's mirror on this Mac heard its first header since the host started keeping it. */
   MIRROR_READY: "mirror:ready",
+  /** A launch drew its first Inbox rows, counted once a launch by how long that took from the app's start, on a rung. */
+  APP_READY: "app:ready",
 } as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT)[keyof typeof PRODUCT_EVENT];
@@ -70,6 +72,7 @@ export const PRODUCT_SURFACE_EVENT = {
   SETTINGS_VIEW_OPEN: PRODUCT_EVENT.SETTINGS_VIEW_OPEN,
   SEARCH_OPEN: PRODUCT_EVENT.SEARCH_OPEN,
   SURFACE_OPEN: PRODUCT_EVENT.SURFACE_OPEN,
+  APP_READY: PRODUCT_EVENT.APP_READY,
 } as const;
 
 export type ProductSurfaceEventName =
@@ -106,6 +109,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   MIRROR_FAILURE: "mirror_failure",
   ATTEMPT: "attempt",
   ELAPSED_SECONDS: "elapsed_seconds",
+  LAUNCH_SECONDS: "launch_seconds",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -321,14 +325,17 @@ export const PRODUCT_EXPERIMENT = {
   PLANS: "plans",
   /** Removed with Chat on the right, so no build sends it now; kept because an older build's batch still may, and one unread value refuses the batch. */
   CHAT_ON_THE_RIGHT: "chat-on-the-right",
+  /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   RUN_ACTIONS: "run-actions",
   MERGE_QUEUE: "merge-queue",
   TURN_CHANGES: "turn-changes",
   REPLY_BUTTONS: "reply-buttons",
+  /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   FOLLOWING: "following",
   COMPUTER_USE: "computer-use",
   VOICE: "voice",
   GOALS: "goals",
+  MOVE_AGENTS: "move-agents",
 } as const;
 
 export type ProductExperiment = (typeof PRODUCT_EXPERIMENT)[keyof typeof PRODUCT_EXPERIMENT];
@@ -413,6 +420,39 @@ export function productElapsedSeconds(milliseconds: number): ProductElapsedSecon
   return PRODUCT_ELAPSED_LADDER.find((rung) => seconds >= rung) ?? PRODUCT_ELAPSED_SECONDS.NONE;
 }
 
+/**
+ * The rungs a launch travels on, in seconds from the app's start to its
+ * first Inbox rows, each the shortest launch that reaches it: fine near a
+ * second, where a launch feels quick or slow, and coarse past it, for the
+ * reason a wait travels on rungs.
+ */
+const PRODUCT_LAUNCH_SECONDS = {
+  UNDER_ONE: 0,
+  ONE: 1,
+  TWO: 2,
+  THREE: 3,
+  FIVE: 5,
+  EIGHT: 8,
+  THIRTEEN: 13,
+  TWENTY: 20,
+} as const;
+
+export type ProductLaunchSeconds =
+  (typeof PRODUCT_LAUNCH_SECONDS)[keyof typeof PRODUCT_LAUNCH_SECONDS];
+
+const PRODUCT_LAUNCH_LADDER: readonly ProductLaunchSeconds[] = Object.values(
+  PRODUCT_LAUNCH_SECONDS,
+).sort((left, right) => right - left);
+
+/** The highest rung a launch in milliseconds reaches; anything under a second, or a time that is no number, is the first. */
+export function productLaunchSeconds(milliseconds: number): ProductLaunchSeconds {
+  const seconds = milliseconds / 1000;
+
+  if (!Number.isFinite(seconds)) return PRODUCT_LAUNCH_SECONDS.UNDER_ONE;
+
+  return PRODUCT_LAUNCH_LADDER.find((rung) => seconds >= rung) ?? PRODUCT_LAUNCH_SECONDS.UNDER_ONE;
+}
+
 interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_VERSION]: string;
   [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT]: ProductSessionCountBucket;
@@ -433,6 +473,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: MirrorFailure;
   [PRODUCT_EVENT_PROPERTY.ATTEMPT]: ProductSessionCountBucket;
   [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: ProductElapsedSeconds;
+  [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: ProductLaunchSeconds;
 }
 
 /**
@@ -448,6 +489,7 @@ type EnumeratedProductEventProperty = Exclude<
   | typeof PRODUCT_EVENT_PROPERTY.EXPERIMENT_SCOPE
   | typeof PRODUCT_EVENT_PROPERTY.ATTEMPT
   | typeof PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS
+  | typeof PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS
 >;
 
 /** Every value each enumerable property may ever hold. */
@@ -510,6 +552,7 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.ATTEMPT,
     PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS,
   ],
+  [PRODUCT_EVENT.APP_READY]: [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS],
 } as const satisfies { [Name in ProductEventName]: readonly ProductEventProperty[] };
 
 /** Exactly the properties one event carries, each with its own value type. */
@@ -626,6 +669,12 @@ function elapsedReader(value: UnparsedWireValue): ProductElapsedSeconds | undefi
   return isProductElapsedSeconds(value) ? value : undefined;
 }
 
+const isProductLaunchSeconds = Schema.is(Schema.Literals(Object.values(PRODUCT_LAUNCH_SECONDS)));
+
+function launchReader(value: UnparsedWireValue): ProductLaunchSeconds | undefined {
+  return isProductLaunchSeconds(value) ? value : undefined;
+}
+
 function bucketReader(value: UnparsedWireValue): ProductSessionCountBucket | undefined {
   return isProductSessionCountBucket(value) ? value : undefined;
 }
@@ -649,7 +698,7 @@ const DEPLOYMENT_COMMIT_PATTERN = /^[0-9a-f]{40}$/;
  * Either shape has no room for a word, which is what keeps the property out
  * of free text.
  */
-export function isProductBuildVersion(value: string): boolean {
+function isProductBuildVersion(value: string): boolean {
   return parseReleaseVersion(value) !== undefined || DEPLOYMENT_COMMIT_PATTERN.test(value);
 }
 
@@ -669,6 +718,7 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT]: bucketReader,
   [PRODUCT_EVENT_PROPERTY.ATTEMPT]: bucketReader,
   [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: elapsedReader,
+  [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.EXPERIMENT_SCOPE]: experimentScopeReader,
 };
 

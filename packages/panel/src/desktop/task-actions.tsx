@@ -1,5 +1,6 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { FOLLOWING_WORDS } from "@repo/features/task-followers-model";
 import { type ChildTaskCount, repositoryLabel, taskFinished } from "@repo/features/task-list-model";
 import type { TaskRelationSubject } from "@repo/features/task-relation-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
@@ -11,12 +12,12 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import {
-  DOCUMENT_REGION,
   deleteTaskWords,
   RENAME_FAILED_NOTE,
   SETTLED_STATUS,
   settleOffered,
   TASK_MARK,
+  TASK_REGION,
   type TaskMark,
 } from "@repo/features/tasks-model";
 import { EXPERIMENT } from "@repo/settings";
@@ -100,6 +101,7 @@ import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import { lastEditOf } from "../tasks/description-body.js";
 import { EditedBy, type EditPlace, useEditReader } from "../tasks/edit-ref.js";
 import { useTaskSendFailed } from "../tasks/failed-lines.js";
+import { useFollowerWrites } from "../tasks/following-chip.js";
 import { CHOOSE_LABEL, RepositoryMenuPanel } from "../tasks/repository-chip.js";
 import { PlanGlyph } from "../tasks/tab-look.js";
 import { useTaskDelete } from "../tasks/task-delete.js";
@@ -311,7 +313,7 @@ export function openedTaskOf(
 ): OpenedTask | undefined {
   const { region } = tasks;
 
-  return region.kind === DOCUMENT_REGION.READY
+  return region.kind === TASK_REGION.READY
     ? { task: region.task, agents: tasks.agents }
     : undefined;
 }
@@ -378,6 +380,33 @@ function pinAction(
   const { item, onSelect } = pinMark(pins, task);
 
   return [commandAction(item, onSelect, subject)];
+}
+
+/**
+ * Follow or Unfollow, offered as whichever way the reader does not stand
+ * yet, as the Following chip's foot offers it, while the task carries its
+ * followers; Unfollow dimmed for the assignee, who follows while assigned.
+ */
+function followAction(
+  task: TaskSummary | undefined,
+  readerId: string | undefined,
+  following: { readonly follow: () => void; readonly unfollow: () => void },
+): MenuAction[] {
+  if (task?.followers === undefined || readerId === undefined) return [];
+  const reader = task.followers.find((each) => each.userId === readerId);
+
+  if (reader === undefined) {
+    return [{ label: FOLLOWING_WORDS.FOLLOW, icon: <GLYPH.SHOW />, onSelect: following.follow }];
+  }
+
+  return [
+    {
+      label: FOLLOWING_WORDS.UNFOLLOW,
+      icon: <GLYPH.HIDE />,
+      onSelect: following.unfollow,
+      ...(reader.assignee ? { disabled: true, detail: FOLLOWING_WORDS.ASSIGNEE_STAYS } : undefined),
+    },
+  ];
 }
 
 /** The keys the open task's page offers on it, which every menu of the open task prints. */
@@ -704,8 +733,8 @@ function moveToEntries(
  * Rename, Version history, and Mark as unread or read; then Status,
  * Priority, and Assignee; then Task relation, the add menu as the menu's
  * panel, and Remove parent where the task has one, New sub-task being the
- * add menu's and ⌘K's; then Pin, Move to section, and Move to workspace
- * where the task may be moved; then Change repository, which says Choose a
+ * add menu's and ⌘K's; then Pin, Follow or Unfollow, Move to section, and Move to workspace where the task
+ * may be moved; then Change repository, which says Choose a
  * repository on a task with none. Permanently delete is last and alone.
  * Each item prints its chord where the chord acts on `subject`, the task
  * as the menu draws it (`shortcut-target.ts`): the open task's, and a
@@ -728,6 +757,8 @@ function taskActionGroups(
     section: MenuEntry | undefined;
     /** The task's pin, which Pin and Unpin ask. */
     pins: Pick<PinWrites, "onMarkTask">;
+    /** Follow or Unfollow, offered beside Pin. */
+    follow: MenuAction[];
     /** Status, Priority, and Assignee as a row's submenus, where the task has them; none for a task from a service before statuses. */
     standing: readonly MenuSubmenu[];
     /** The id Task relation's search stands under while its panel is drawn. */
@@ -810,7 +841,7 @@ function taskActionGroups(
     [rename, ...versions, ...read],
     [...doors.standing],
     [...relate, ...unparent],
-    [...pinAction(doors.pins, task, subject), ...move],
+    [...pinAction(doors.pins, task, subject), ...doors.follow, ...move],
     [repository],
     [remove],
   ];
@@ -987,6 +1018,7 @@ export function useTaskMenuItems(
   const writes = useTaskRelationWrites();
   const descriptions = useWorkspaceExperiment(task?.workspaceId, EXPERIMENT.DESCRIPTIONS);
   const assignees = useAssigneeRows(task?.assignee);
+  const follow = followAction(task, tasks.me, useFollowerWrites(taskId));
 
   const standing =
     task !== undefined
@@ -1003,6 +1035,7 @@ export function useTaskMenuItems(
         subject,
         section,
         pins,
+        follow,
         standing,
         relationId,
         opened,

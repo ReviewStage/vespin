@@ -43,7 +43,7 @@ import type { HostedContext } from "./base.js";
 import { encodeHostedError, HOSTED_ERROR_STATUS, hostedRefusalWrap } from "./errors.js";
 
 /** A hosted router, whatever its contract: every procedure taking the hosted context. */
-type HostedRouter = Router<HostedContext>;
+export type HostedRouter = Router<HostedContext>;
 
 /** One request answered, with the web runtime's services it runs on. */
 export type HostedFetch = (
@@ -85,7 +85,7 @@ export const HOSTED_BODY_CEILING_BYTES = FUNCTION_BODY_LIMIT_BYTES;
  * a way a build before the move cannot read. A request that names no
  * version, a build from before the headers, is served.
  */
-const HOSTED_API_FLOOR = 1;
+const HOSTED_API_FLOOR = 2;
 
 const HTTP_METHOD_HEAD = "HEAD";
 

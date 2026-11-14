@@ -100,6 +100,8 @@ import { FIND_SKIP_ATTRIBUTE } from "@repo/ui/find-skip";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import {
   COMPLETED_WINDOW,
+  mayHoldSettled,
+  settledRowsDrawn,
   TASK_PROPERTY,
   TASKS_GROUP,
   type TaskProperty,
@@ -736,6 +738,7 @@ function TaskBoardColumnView({
   onSelect,
   onStanding,
   onShowOlder,
+  onSettledEnd,
 }: {
   tasks: TasksControl;
   /** What a card reads of the tab (`useTaskRowTab`). */
@@ -768,6 +771,8 @@ function TaskBoardColumnView({
   onStanding: (task: TaskSummary, standing: TaskStanding) => void;
   /** Shows every settled task, as the column's "+ N older" line asks. */
   onShowOlder: () => void;
+  /** Hears the column come to its end, where it may hold settled tasks, which reads the next page of them (`use-settled-pages.ts`). */
+  onSettledEnd: ((atEnd: boolean) => void) | undefined;
 }): React.JSX.Element {
   // Note that a card is carried by its press alone, so a press on one of its chips, its ⋯, or a menu they drop stays that control's.
   const drag = useTaskDrag(undefined, {
@@ -916,6 +921,7 @@ function TaskBoardColumnView({
                   handle={run}
                   measurements={measured?.get(columnValue(column.head))}
                   onMeasurements={(rows) => measured?.set(columnValue(column.head), rows)}
+                  onAtEnd={onSettledEnd}
                 >
                   {(index, place) => {
                     const task = cards[index]?.value;
@@ -1035,6 +1041,14 @@ export function TasksBoard({
     ? columns.filter((column) => columnValue(column.head) === shown)
     : columns;
 
+  // Note that a view drawing no row a settled task may stand in has no run to come to its end, a narrow board's one column alone counted,, so it tells the paging so, which reads on until one draws or the last is read (`use-settled-pages.ts`).
+  const drawsSettled = settledRowsDrawn(drawnColumns);
+  const onDrawn = frame.settledPages?.onDrawn;
+
+  useEffect(() => {
+    onDrawn?.(drawsSettled);
+  }, [drawsSettled, drawnColumns, onDrawn]);
+
   // Each drawn column's tasks, in the order drawn down it, those its run leaves undrawn among them.
   const order = drawnColumns.map((column) => column.tasks.map(taskIdOf));
   const runs = useVirtualRuns();
@@ -1150,6 +1164,9 @@ export function TasksBoard({
                 onSelect={tasks.onSelect}
                 onStanding={setStanding}
                 onShowOlder={() => frame.onDisplay({ ...display, completed: COMPLETED_WINDOW.ALL })}
+                onSettledEnd={
+                  mayHoldSettled(column.head) ? frame.settledPages?.onRunEnd : undefined
+                }
               />
             ))}
           </div>
