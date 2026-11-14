@@ -12,6 +12,7 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityHidden,
   accessibilityHint,
   accessibilityIdentifier,
   accessibilityLabel,
@@ -453,9 +454,10 @@ type FailedReadRowProps = {
 
 /**
  * A row saying a part of a page could not be read: the failed glyph in the
- * attention ink, the words muted, and its one act at the line's end as the
- * system's small bordered capsule in the ink, as Mail says a message could
- * not be loaded. Note that only the capsule takes a press, so the row reads
+ * danger ink, as the panel's error state and an agent's failed mark draw it,
+ * hidden from VoiceOver since the words say it, the words muted, and its one
+ * act at the line's end as the system's small bordered capsule in the ink, as
+ * Mail says a message could not be loaded. Note that only the capsule takes a press, so the row reads
  * as a line that says, with the act beside it.
  */
 export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
@@ -466,7 +468,13 @@ export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
       <RowHead
         unread={false}
         faded={false}
-        lead={<LeadGlyph symbol={GLYPH.FAILED} ink={colors.ATTENTION} />}
+        lead={
+          <Image
+            {...glyphImage(GLYPH.FAILED)}
+            color={colors.DANGER}
+            modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), accessibilityHidden(true)]}
+          />
+        }
         title={label}
         ink={colors.TEXT_MUTED}
         end={
