@@ -30,3 +30,12 @@ iphone-iphone-dark wrap-settings.yaml: fails 0 shots 11
 iphone-iphone-light wrap-inbox.yaml: fails 2 shots 11   Tap on "Inbox"... FAILED
 iphone-iphone-dark wrap-inbox.yaml: fails 2 shots 11   Tap on "Inbox"... FAILED
   ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-task-relations.yaml: fails 0 shots 5 
+iphone-iphone-dark wrap-task-relations.yaml: fails 0 shots 5 
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-answer.yaml: fails 2 shots 13   Tap on "More", Index: -1... FAILED
+iphone-iphone-dark wrap-answer.yaml: fails 2 shots 13   Tap on "More", Index: -1... FAILED
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-navigation.yaml: fails 3 shots 4     Tap on "Tasks"... FAILED
+iphone-iphone-dark wrap-navigation.yaml: fails 3 shots 4     Tap on "Tasks"... FAILED
+  ax none on iphone: contrast disabled transparency-key 
