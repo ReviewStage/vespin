@@ -86,6 +86,7 @@ function useKeyboardHeight(moves = true): number {
   const [height, setHeight] = useState(() =>
     Keyboard.isVisible() ? (Keyboard.metrics()?.height ?? 0) : 0,
   );
+
   useEffect(() => {
     const rising = Keyboard.addListener("keyboardWillShow", (event) => {
       if (moves) moveWithKeyboard(event);
@@ -97,9 +98,13 @@ function useKeyboardHeight(moves = true): number {
       setHeight(0);
     });
 
+    // Note that the keyboard's height is also let go once it has gone, since a piece mounted while it fell read the height it fell from, which React Native holds until then.
+    const gone = Keyboard.addListener("keyboardDidHide", () => setHeight(0));
+
     return () => {
       rising.remove();
       falling.remove();
+      gone.remove();
     };
   }, [moves]);
 
