@@ -30,7 +30,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { Predicate } from "effect";
 import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
-import { useReduceMotion } from "./accessibility.js";
+import { useReduceMotion, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
@@ -255,6 +255,7 @@ function GroupHeader({
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
+  const chevron = useScaledSize(CHEVRON_SIZE);
 
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
@@ -270,9 +271,9 @@ function GroupHeader({
       {folded === undefined ? null : (
         <Image
           {...glyphImage(folded ? GLYPH.FOLDED : GLYPH.UNFOLDED)}
-          size={CHEVRON_SIZE}
+          size={chevron}
           color={colors.TEXT_MUTED}
-          modifiers={[frame({ width: CHEVRON_SIZE + 2 })]}
+          modifiers={[frame({ width: chevron + 2 })]}
         />
       )}
       <Text
@@ -322,6 +323,7 @@ function GroupHeader({
  */
 function SectionAddButton({ add }: { readonly add: SectionAdd }) {
   const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
   const [only, ...rest] = add.acts;
 
   if (only === undefined) return null;
@@ -330,7 +332,7 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
   const glyph = (
     <Image
       {...glyphImage(GLYPH.ADD)}
-      size={MARK_SIZE.GLYPH}
+      size={size}
       color={colors.TEXT_MUTED}
       modifiers={[
         frame({ minWidth: ADD_TARGET.WIDTH, minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),

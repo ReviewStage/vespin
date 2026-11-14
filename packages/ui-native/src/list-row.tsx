@@ -798,7 +798,11 @@ const FOLD_TARGET = 44;
  */
 function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPress: () => void }) {
   const colors = useColors();
-  const overhang = { across: (FOLD_TARGET - MARK_SIZE.LEAD) / 2, down: FOLD_TARGET / 2 };
+  // Note that the chevron and the column it lays out grow with the reader's text, as the ring beside it does, so it stands no speck beside large words.
+  const lead = useScaledSize(MARK_SIZE.LEAD);
+  const glyph = useScaledSize(MARK_SIZE.GLYPH - 4);
+  const target = Math.max(FOLD_TARGET, lead);
+  const overhang = { across: (target - lead) / 2, down: target / 2 };
 
   return (
     <Button
@@ -810,10 +814,10 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
     >
       <Image
         {...glyphImage(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
-        size={MARK_SIZE.GLYPH - 4}
+        size={glyph}
         color={colors.TEXT_MUTED}
         modifiers={[
-          frame({ width: FOLD_TARGET, height: FOLD_TARGET }),
+          frame({ width: target, height: target }),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
           padding({
             leading: -overhang.across,
