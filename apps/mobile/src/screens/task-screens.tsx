@@ -185,6 +185,8 @@ const WORDS = {
   NEW_AGENT: "New agent",
   PAGES: "Pages",
   DESCRIPTION: "Description",
+  /** What a task's page says under Description where the task has none, rather than leaving the page blank under its headers. */
+  NO_DESCRIPTION: "No description yet",
   CREATED_BY: "Created by",
   SUB_TASKS: "Sub-tasks",
   TASK_RELATIONS: "Task relations",
@@ -887,9 +889,12 @@ function TasksTree({
       {tree.following === undefined ? null : (
         <GroupSection group={tree.following} listing={listing} />
       )}
-      {tree.sections.map((group) => (
-        <GroupSection key={group.key} group={group} listing={listing} />
-      ))}
+      {/* Note that a section holding no task stands only in the app sidebar, where a task is dropped onto it, as Reminders keeps an empty list off a grouped view. */}
+      {tree.sections
+        .filter((group) => group.rows.length > 0)
+        .map((group) => (
+          <GroupSection key={group.key} group={group} listing={listing} />
+        ))}
       {tree.tasks.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} />
       ))}
@@ -1758,7 +1763,11 @@ function OverviewPage({
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
-      ) : document === undefined || document.description.body.trim() === "" ? null : (
+      ) : document === undefined ? null : document.description.body.trim() === "" ? (
+        <ListSection title={WORDS.DESCRIPTION} footer={WORDS.NO_DESCRIPTION}>
+          {null}
+        </ListSection>
+      ) : (
         <OverviewDescription overview={overview} body={document.description.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
