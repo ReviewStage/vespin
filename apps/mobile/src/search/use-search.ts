@@ -59,7 +59,7 @@ export function useSearchFound(typed: string): SearchFound {
   const workspace = listing.workspace;
   const waiting = useWaiting(workspace?.id);
 
-  return useMemo(() => {
+  const ranked = useMemo(() => {
     const names = new Map((view?.tasks ?? []).map((task) => [task.id, task.name]));
 
     // Note that an archived agent is left out, as a task's page leaves it out of its Agents.
@@ -80,8 +80,10 @@ export function useSearchFound(typed: string): SearchFound {
       ).map((agent) => agentLine(agent, waiting.byAgent, view)),
       listing,
       readerId: inbox.readerId,
-      current: query === typed,
       inboxReading: inbox.feed === INBOX_FEED.READING,
     };
-  }, [listing, inbox, view, workspace, waiting, query, typed]);
+  }, [listing, inbox, view, workspace, waiting, query]);
+
+  // Note that whether the finding has caught up is joined after the ranking, so a key typed, which only moves `typed`, never ranks again.
+  return useMemo(() => ({ ...ranked, current: query === typed }), [ranked, query, typed]);
 }

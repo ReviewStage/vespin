@@ -186,6 +186,10 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
   const shown = scopedFound(found, scope);
   const none = shown.tasks.length + shown.inbox.length + shown.agents.length === 0;
 
+  // Note that only a scope that lists Inbox items waits on the Inbox's first read; Tasks and Agents say they found nothing at once.
+  const inboxReading =
+    found.inboxReading && (scope === SEARCH_SCOPE.ALL || scope === SEARCH_SCOPE.INBOX);
+
   const scopes = SCOPES.map((each) => ({
     label: SEARCH_SCOPE_TITLE[each],
     selected: each === scope,
@@ -198,7 +202,7 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
       <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
     ) : (
       <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-        {none && found.inboxReading ? (
+        {none && inboxReading ? (
           <EmptyState title={READING_INBOX} symbol={GLYPH.SEARCH} loading />
         ) : none && found.current ? (
           <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
