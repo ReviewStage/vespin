@@ -57,7 +57,6 @@ import {
   type MarkdownVideo,
   menuWithout,
   NoSelection,
-  PATH_PART,
   previewMessages,
   ROW_ACTION_TONE,
   type RowChoosing,
@@ -766,7 +765,6 @@ function ThreadDetail({
       {...(inStack
         ? {}
         : {
-            pathInHead: true,
             acts,
             menu: menuWithout(menu, acts),
             foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
@@ -778,10 +776,11 @@ function ThreadDetail({
 
   return (
     <>
+      {/* Note that the stack's bar names the thread in the ink, as Messages names a conversation and the agent page names its agent, since the thread opens at its newest message with its heading out of sight; its path leads the ⋯ menu. */}
       <Stack.Screen
         options={{
-          title: path.join(PATH_PART),
-          headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
+          title: cardTitle(item.title),
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         }}
       />
       <Stack.Toolbar placement="right">

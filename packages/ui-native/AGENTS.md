@@ -172,15 +172,14 @@ navigation, tab bar, swipes, menus, sheets and glass.
   small and inline, since its bar also holds the switcher, compose, ⋯ and
   the sidebar button. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
-  under it; a split view's detail column draws the same path in its bar, but
-  for a thread's, which heads the page over its title (`pathInHead`), so the
-  column's narrow bar holds the thread's acts and the path's words stand uncut.
-  A thread's path opens its task and its agent, as the panel's crumbs do: in a
-  split view the path is a menu of them under a small chevron, as iOS's
-  title menus stand (`PathTitle`'s `actions`), and in a compact window, whose
-  stack's title holds no menu, they lead its ⋯ menu. An
-  agent's page names the agent in the bar in the ink instead, as Messages
-  names a conversation, since its transcript opens at its newest row.
+  under it; a split view's detail column draws the same path in its bar. A
+  thread and an agent's page name themselves in the bar in the ink instead,
+  as Messages names a conversation, since each opens at its newest message
+  with its heading out of sight (`PathTitle`'s `name`). A thread's name opens
+  its task and its agent, as the panel's crumbs do: in a split view's bar it
+  is a menu of them under a small chevron, as iOS's title menus stand
+  (`PathTitle`'s `actions`), and in a compact window, whose stack's title
+  holds no menu, they lead its ⋯ menu.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back

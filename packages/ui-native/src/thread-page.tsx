@@ -128,8 +128,6 @@ type ThreadPageProps = {
   readonly status?: TaskStatus | undefined;
   /** What the path opens, such as its task and its agent, as the panel's crumbs open them, which a press on the path offers as a menu; none leaves it words alone. */
   readonly pathActions?: BarMenu["actions"] | undefined;
-  /** Whether the path heads the page over its title rather than standing in the bar's middle, as in a split view's detail column, whose bar is left to the page's acts. */
-  readonly pathInHead?: boolean | undefined;
   /** The thread's title, which heads the page. */
   readonly title: string;
   readonly messages: readonly ThreadMessage[];
@@ -157,12 +155,8 @@ type ThreadPageProps = {
   readonly foot?: ReactNode | undefined;
 };
 
-/** A thread's heading under its bar: its path where it heads the page, its title in 20 pt semibold, and how it ended under it, 13 pt muted, once it is settled. */
-function ThreadHead({
-  title,
-  standing,
-  path,
-}: Pick<ThreadPageProps, "title" | "standing"> & { readonly path?: ReactNode | undefined }) {
+/** A thread's heading under its bar: its title in 20 pt semibold, and how it ended under it, 13 pt muted, once it is settled. */
+function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standing">) {
   const colors = useColors();
 
   return (
@@ -171,7 +165,6 @@ function ThreadHead({
       spacing={SPACE.TIGHT}
       modifiers={[padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT })]}
     >
-      {path}
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
@@ -198,27 +191,36 @@ function ThreadHead({
 /**
  * A split view's detail column's bar: a page's path, small and muted after
  * its task's ring, in the bar's middle, as a compact window's stack draws it
- * in its own bar. Given what it opens, the path is a menu of them under a
- * small chevron, as iOS's own title menus stand, so a thread leads to its
- * task and its agent as the panel's crumbs do.
+ * in its own bar; or, for a page that names itself, as a thread does, its
+ * name in the ink, as Messages names a conversation, since a thread opens at
+ * its newest message with its heading out of sight. Given what it opens, it
+ * is a menu of them under a small chevron, as iOS's own title menus stand,
+ * so a thread leads to its task and its agent as the panel's crumbs do.
  */
 export function PathTitle({
   path,
   status,
+  name,
   actions = [],
 }: Pick<ThreadPageProps, "path" | "status"> & {
+  /** The page's own name, which the bar shows in the path's place. */
+  readonly name?: string | undefined;
   readonly actions?: BarMenu["actions"] | undefined;
 }) {
   const colors = useColors();
-  const words = path.join(PATH_PART);
+  const words = name ?? path.join(PATH_PART);
 
   const title = (
     <HStack spacing={SPACE.TIGHT + 2}>
-      {status === undefined ? null : <TaskStatusMark status={status} />}
+      {status === undefined || name !== undefined ? null : <TaskStatusMark status={status} />}
       <Text
         modifiers={[
-          font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
-          foregroundStyle(colors.TEXT_MUTED),
+          font(
+            name === undefined
+              ? { textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }
+              : { textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" },
+          ),
+          foregroundStyle(name === undefined ? colors.TEXT_MUTED : colors.TEXT),
           lineLimit(1),
         ]}
       >
@@ -315,7 +317,7 @@ function MessageView({
   now,
 }: Omit<
   ThreadPageProps,
-  "path" | "status" | "pathActions" | "pathInHead" | "title" | "messages" | "ask" | "menu" | "foot"
+  "path" | "status" | "pathActions" | "title" | "messages" | "ask" | "menu" | "foot"
 > & {
   readonly message: ThreadMessage;
 }) {
@@ -391,11 +393,11 @@ function MessageView({
  * scrolls it and draws its heading and each message's writer, and each
  * message's words and files stand in a React Native host as wide as the
  * page and as tall as they are, since SwiftUI has no piece that draws the
- * panel's Markdown. A compact window's stack names the path as the screen's
- * title; elsewhere the page draws it, in the bar's middle or, where it asks,
- * over its title, as a split view's detail column does, so its narrow bar
- * holds the thread's acts with the path's words uncut. It opens at its
- * newest message, as Messages and the panel's board do. A message that lands while it is open is drawn at its foot, as the
+ * panel's Markdown. The bar names the thread in the ink, as Messages names
+ * a conversation: a compact window's stack sets it as the screen's title,
+ * and a split view's detail column draws it here, with the path's task and
+ * agent in its menu. It opens at its newest message, as Messages and the
+ * panel's board do. A message that lands while it is open is drawn at its foot, as the
  * thread's document moves, and the open ask's card stands under the last.
  */
 export function ThreadPage(props: ThreadPageProps) {
@@ -403,7 +405,6 @@ export function ThreadPage(props: ThreadPageProps) {
     path,
     status,
     pathActions,
-    pathInHead = false,
     title,
     messages,
     ask,
@@ -416,7 +417,6 @@ export function ThreadPage(props: ThreadPageProps) {
 
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
-  const pathTitle = <PathTitle path={path} status={status} actions={pathActions} />;
 
   // Note that a thread opens at its newest message and keeps to its foot as it grows or the keyboard rises, as Messages does and the panel's board does, while one too short to scroll stands under its heading.
   return (
@@ -440,11 +440,7 @@ export function ThreadPage(props: ThreadPageProps) {
               padding({ bottom: SPACE.PAGE + footRoom }),
             ]}
           >
-            <ThreadHead
-              title={title}
-              standing={standing}
-              path={pathInHead ? pathTitle : undefined}
-            />
+            <ThreadHead title={title} standing={standing} />
             {messages.map((message) => (
               <MessageView key={message.id} message={message} {...drawing} />
             ))}
@@ -458,7 +454,9 @@ export function ThreadPage(props: ThreadPageProps) {
         {foot}
       </VStack>
       <BarContent>
-        {pathInHead ? null : <ToolbarItem placement="principal">{pathTitle}</ToolbarItem>}
+        <ToolbarItem placement="principal">
+          <PathTitle path={path} status={status} name={title} actions={pathActions} />
+        </ToolbarItem>
         {barActItems(acts)}
         {menu === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
