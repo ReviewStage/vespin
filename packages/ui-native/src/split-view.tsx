@@ -24,6 +24,7 @@ import {
   disabled,
   frame,
   hidden,
+  ignoreSafeArea,
   type ModifierConfig,
   menuIndicator,
   menuStyle,
@@ -389,8 +390,14 @@ function Column({
     >
       {ruled ? (
         <HStack spacing={0}>
-          {view}
-          <Divider modifiers={[overlay({ color: colors.CHIP_EDGE })]} />
+          <ZStack>{view}</ZStack>
+          {/* Note that the rule runs the column's whole height, under its bar and over the home indicator, as the column's ground does and Mail's rule does. */}
+          <Divider
+            modifiers={[
+              overlay({ color: colors.CHIP_EDGE }),
+              ignoreSafeArea({ edges: "vertical" }),
+            ]}
+          />
         </HStack>
       ) : (
         view
