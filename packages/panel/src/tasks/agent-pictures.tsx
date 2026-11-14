@@ -84,7 +84,11 @@ const AgentPicturesContext = createContext<AgentPictureDoor | undefined>(undefin
 /** Hands the transcript under it the door its pictures are read through. */
 export const AgentPicturesProvider = AgentPicturesContext.Provider;
 
-const NO_COMPUTER_APPS: ComputerApps = { byCall: new Map(), bySpelling: new Map() };
+const NO_COMPUTER_APPS: ComputerApps = {
+  byCall: new Map(),
+  bySpelling: new Map(),
+  byMachine: new Map(),
+};
 
 const ComputerAppsContext = createContext(NO_COMPUTER_APPS);
 
