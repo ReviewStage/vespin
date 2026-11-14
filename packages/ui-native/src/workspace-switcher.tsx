@@ -38,13 +38,13 @@ import { Avatar } from "./marks.js";
 import { ActionRow, SettingsForm } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
-import { TYPE_ROLE } from "./tokens/type.js";
+import { TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 
 /** The tile in a bar, beside the workspace's name. */
 const BAR_TILE_SIZE = 22;
 
-/** The widest the name stands at the default text size, so a long one is cut short rather than crowding the sidebar's head; it grows with the name. */
+/** The widest the name stands in a bar, so a long one is cut short rather than pushing the bar's other buttons off it. */
 const NAME_MAX_WIDTH = 180;
 
 /** The check on the chosen workspace's row. */
@@ -330,10 +330,6 @@ function SwitcherFace({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
-  // Note that the name's tile, chevron and widest width grow with the reader's text size, as the name does, so the row keeps its proportions at the larger sizes.
-  const nameTile = useScaledSize(BAR_TILE_SIZE);
-  const chevron = useScaledSize(CHEVRON_SIZE);
-  const nameWidth = useScaledSize(NAME_MAX_WIDTH);
 
   return (
     <SwiftUIButton
@@ -351,20 +347,20 @@ function SwitcherFace({
           spacing={SPACE.TIGHT + 2}
           modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
         >
-          <WorkspaceTile workspace={chosen} size={nameTile} />
+          <WorkspaceTile workspace={chosen} size={BAR_TILE_SIZE} />
           <Text
             modifiers={[
-              font({ textStyle: TYPE_ROLE.SCREEN_TITLE, weight: "semibold" }),
+              font({ size: TEXT_SIZE.HEADLINE, weight: "semibold" }),
               foregroundStyle(colors.TEXT),
               lineLimit(1),
-              frame({ maxWidth: nameWidth, alignment: "leading" }),
+              frame({ maxWidth: NAME_MAX_WIDTH, alignment: "leading" }),
             ]}
           >
             {chosen.name}
           </Text>
           <Image
             {...glyphImage(GLYPH.UNFOLDED)}
-            size={chevron}
+            size={CHEVRON_SIZE}
             color={colors.TEXT_BODY}
             modifiers={[accessibilityHidden()]}
           />
