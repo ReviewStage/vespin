@@ -47,7 +47,7 @@ export const MACHINE_SETTINGS_WORDS = {
   appsAllowed: (count: number) => `${count} ${count === 1 ? "app" : "apps"} always allowed`,
   CHANGE_FAILED: "Could not change this machine. Try again.",
   /** The row that picks the member's default machine, atop the list. */
-  DEFAULT: "Default machine",
+  DEFAULT: "Terminal and computer use",
   DEFAULT_DETAIL: "Where agents run terminal commands and use apps.",
   DEFAULT_FAILED: "Could not change your default machine. Try again.",
 } as const;

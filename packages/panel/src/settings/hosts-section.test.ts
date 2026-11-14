@@ -586,7 +586,7 @@ test("the default machine stands atop the list, and picking another sends it as 
 
   const row =
     [...document.querySelectorAll<HTMLElement>(".ui-settings-row")].find(
-      (each) => each.textContent?.includes("Default machine") ?? false,
+      (each) => each.textContent?.includes("Terminal and computer use") ?? false,
     ) ?? assert.fail("the default machine's row is drawn");
 
   const chip =
