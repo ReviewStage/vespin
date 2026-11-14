@@ -7,6 +7,7 @@ import {
   Animation,
   accessibilityAddTraits,
   accessibilityElement,
+  accessibilityHidden,
   accessibilityHint,
   accessibilityLabel,
   accessibilityValue,
@@ -205,6 +206,8 @@ type ListSectionProps = {
   readonly count?: number | undefined;
   /** A glyph in its tone before the count, saying how what it counts went, such as checks failing. */
   readonly mark?: MarkLook | undefined;
+  /** What the group is, before its title in the muted ink, as the panel's sidebar leads a section with its icon and a repository with its own mark; none where the words say it alone. */
+  readonly glyph?: Glyph | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
   readonly foldable?: boolean | undefined;
   /** A line under the section, in the system's footnote. */
@@ -246,16 +249,19 @@ function GroupHeader({
   count,
   progress,
   mark,
+  glyph,
   folded,
 }: {
   readonly title: string;
   readonly count: number | undefined;
   readonly progress: SectionProgress | undefined;
   readonly mark: MarkLook | undefined;
+  readonly glyph: Glyph | undefined;
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
   const chevron = useScaledSize(CHEVRON_SIZE);
+  const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
 
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
@@ -274,6 +280,14 @@ function GroupHeader({
           size={chevron}
           color={colors.TEXT_MUTED}
           modifiers={[frame({ width: chevron + 2 })]}
+        />
+      )}
+      {glyph === undefined ? null : (
+        <Image
+          {...glyphImage(glyph)}
+          size={glyphSize}
+          color={colors.TEXT_MUTED}
+          modifiers={[accessibilityHidden()]}
         />
       )}
       <Text
@@ -378,6 +392,7 @@ export function ListSection({
   count,
   progress,
   mark,
+  glyph,
   foldable = false,
   footer,
   onDropLink,
@@ -397,6 +412,7 @@ export function ListSection({
         count={shown}
         progress={progress}
         mark={mark}
+        glyph={glyph}
         folded={foldable ? folded : undefined}
       />
     );

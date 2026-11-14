@@ -791,6 +791,7 @@ function GroupSection({
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
+      glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
       count={group.rows.length}
       foldable
       onDropLink={dropOnto(group, listing)}
@@ -895,6 +896,25 @@ function TasksTree({
       ))}
     </RowList>
   );
+}
+
+/**
+ * What a Tasks list group's header leads with, as the panel's sidebar
+ * heads each: a section with its own icon, a repository with the
+ * repository's mark (the panel draws its owner's picture there, and this
+ * mark where none loads), the tasks with none with no-repository's; and
+ * nothing for Pinned and Following, whose words say what they are.
+ */
+function groupHeadGlyph(group: TaskTreeGroup): Glyph | undefined {
+  switch (group.kind) {
+    case TASK_TREE_GROUP.SECTION:
+      return sectionGlyph(group.icon);
+    case TASK_TREE_GROUP.REPOSITORY:
+      return group.key === "" ? GLYPH.NO_REPOSITORY : GLYPH.REPOSITORY;
+    case TASK_TREE_GROUP.PINNED:
+    case TASK_TREE_GROUP.FOLLOWING:
+      return undefined;
+  }
 }
 
 /** The glyph a collection's sidebar row leads with: Pinned's pin, Following's eye, and a section's own icon, as the panel's sidebar draws it (`sectionGlyph`). */
