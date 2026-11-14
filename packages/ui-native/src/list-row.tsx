@@ -48,7 +48,7 @@ import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent, menuLabel } from "./glyph-label.js";
+import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink } from "./interactions.js";
 import {
@@ -122,7 +122,10 @@ export type RowActionTone = (typeof ROW_ACTION_TONE)[keyof typeof ROW_ACTION_TON
 export type RowAction = {
   /** The act's name, as the panel's menu names it: Mark done, Mark unread. */
   readonly label: string;
-  readonly symbol: Glyph;
+  /** Its glyph; none for an act that stands as words alone, such as a reminder's time. */
+  readonly symbol?: Glyph | undefined;
+  /** What a menu says under its words, such as when a reminder's time comes due. */
+  readonly detail?: string | undefined;
   readonly tone: RowActionTone;
   readonly onPress: () => void;
 };
@@ -184,7 +187,7 @@ type ListRowProps = RowActs & {
   readonly line?: InboxLineKind | undefined;
   /** The thread's last line: an ask's options or steps, or the last message's words. */
   readonly summary?: string | undefined;
-  /** Whether the thread is unread, which carries the dot and sets its title in medium. */
+  /** Whether the thread is unread, which carries the dot and sets its title in semibold. */
   readonly unread?: boolean | undefined;
   /** Whether the thread is done, which mutes its words. */
   readonly done?: boolean | undefined;
@@ -207,7 +210,7 @@ type TaskRowProps = RowActs & {
   readonly status: TaskStatus;
   /** Its priority, whose mark leads the line before its status, as the panel's List row leads with it; none where the list draws no priority. */
   readonly priority?: TaskPriority | undefined;
-  /** Whether the task has news unread, which carries the dot and sets its name in medium. */
+  /** Whether the task has news unread, which carries the dot and sets its name in semibold. */
   readonly unread?: boolean | undefined;
   /** Whether the task is done or canceled, which mutes its name, as a search finds one. */
   readonly finished?: boolean | undefined;
@@ -230,7 +233,7 @@ export function actionButton(action: RowAction, colors: BrandColors) {
   return (
     <Button
       key={action.label}
-      {...actContent(action.label, action.symbol)}
+      {...menuActContent(action.label, action.symbol, action.detail)}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
       modifiers={destructive ? [] : [tint(colors.TEXT_MUTED)]}
@@ -539,7 +542,7 @@ export function RowHead({
   const words = (
     <Text
       modifiers={[
-        font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "medium" : "regular" }),
+        font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "semibold" : "regular" }),
         foregroundStyle(ink),
         lineLimit(lines.title),
       ]}

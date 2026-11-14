@@ -37,6 +37,7 @@ import {
   AgentTranscript,
   AskNote,
   AttachedPictures,
+  askForName,
   BAR_TITLE,
   CallCardRow,
   Composer,
@@ -58,7 +59,6 @@ import {
   openCuts,
   PickRows,
   QueuedLines,
-  RenameAsk,
   Screen,
   SettingsForm,
   SkillSuggestions,
@@ -157,11 +157,10 @@ const ADD_WORDS = {
   OPTIONS: "Options",
 } as const;
 
-/** What Rename asks, as the system's alert asks for a name. */
+/** What Rename asks, in the system's alert a task's Rename asks in too (`askForName`). */
 const RENAME_WORDS = {
   TITLE: "Rename agent",
   ACT: "Rename",
-  PLACEHOLDER: "Agent name",
 } as const;
 
 /** The options sheet's words: its name, its rows, its close, and when a change reaches the agent, as the panel's chip applies one. */
@@ -171,7 +170,6 @@ const OPTIONS_WORDS = {
   EFFORT: "Effort",
   FAST: "Fast",
   DONE: "Done",
-  APPLIES: "Takes effect from the agent's next step.",
   READING_SERVERS: "Reading your MCP servers",
   NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
   MORE_SERVERS: "Connect another in Settings.",
@@ -639,8 +637,7 @@ export function AgentScreen() {
   useWarmAgent(id);
   const hasPorts = useAgentHasPorts(id);
   const openPorts = () => router.push({ pathname: "/agent-ports", params: { agent: id } });
-  // Whether Rename's alert, or Archive's or Permanently delete's question, stands over the page.
-  const [renaming, setRenaming] = useState(false);
+  // Whether Archive's or Permanently delete's question stands over the page.
   const [archiving, setArchiving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const deleteQuestion = actions.deleteQuestion(title);
@@ -706,7 +703,7 @@ export function AgentScreen() {
                 {COPY_TRANSCRIPT_WORDS.FULL}
               </Stack.Toolbar.MenuAction>
               <Stack.Toolbar.MenuAction
-                icon="square.and.arrow.up"
+                icon={glyphSymbol(GLYPH.SHARE)}
                 onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
               >
                 {COPY_TRANSCRIPT_WORDS.SHARE}
@@ -717,7 +714,14 @@ export function AgentScreen() {
             <Stack.Toolbar.Menu inline>
               <Stack.Toolbar.MenuAction
                 icon={glyphSymbol(GLYPH.RENAME)}
-                onPress={() => setRenaming(true)}
+                onPress={() =>
+                  askForName({
+                    title: RENAME_WORDS.TITLE,
+                    act: RENAME_WORDS.ACT,
+                    name: actions.title,
+                    onName: actions.rename,
+                  })
+                }
               >
                 {MENU_WORDS.RENAME}
               </Stack.Toolbar.MenuAction>
@@ -747,7 +751,7 @@ export function AgentScreen() {
                     <Stack.Toolbar.MenuAction
                       key={offered.action.id}
                       icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
-                      subtitle={offered.action.command}
+                      subtitle={offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command}
                       onPress={offered.onPress}
                     >
                       {runActionMenuLabel(offered.action, offered.runs)}
@@ -759,11 +763,7 @@ export function AgentScreen() {
           )}
           {agent === undefined || barActs ? null : (
             <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(GLYPH.ARCHIVE)}
-                destructive
-                onPress={askArchive}
-              >
+              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
                 {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
             </Stack.Toolbar.Menu>
@@ -853,24 +853,11 @@ export function AgentScreen() {
       {asked === undefined ? null : (
         <CardMergeAsk agentId={id} pullRequest={asked} onDone={() => setMerging(undefined)} />
       )}
-      <RenameAsk
-        title={RENAME_WORDS.TITLE}
-        act={RENAME_WORDS.ACT}
-        name={actions.title}
-        placeholder={RENAME_WORDS.PLACEHOLDER}
-        presented={renaming}
-        onRename={(name) => {
-          setRenaming(false);
-          actions.rename(name);
-        }}
-        onDismiss={() => setRenaming(false)}
-      />
       <ConfirmAsk destructive {...talk.switching} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}
         act={actions.archiveAsk.question.act}
-        destructive
         presented={archiving}
         onAct={() => {
           setArchiving(false);
@@ -970,7 +957,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection footer={pick.note ?? OPTIONS_WORDS.APPLIES}>
+          <ListSection footer={pick.note}>
             <MenuPickRow
               label={OPTIONS_WORDS.MODEL}
               options={pick.models}
