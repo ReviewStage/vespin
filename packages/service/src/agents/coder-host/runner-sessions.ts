@@ -3306,29 +3306,30 @@ const stoppedHolding = (machine: MachineLifecycle, unheld: UnheldSandbox) =>
     const bearer = retired.value;
 
     // The runner is told of no longer before the sandbox stops, its launch kept for a late END, so
-    // the next message relaunches it rather than writing to a runner the stop ended. Note that a
-    // stop that fails puts the runner and its bearer back, because the runner may still run, and a
-    // launch beside it would read the same lines twice.
-    yield* machine.recordRunner(
-      place,
-      launch === undefined
-        ? { kind: RUNNER_RECORD.NONE }
-        : { kind: RUNNER_RECORD.LAUNCHED, mark: launch },
-    );
-    yield* machine
-      .stop(running)
-      .pipe(
-        Effect.tapError(() =>
-          Effect.ignore(
-            Effect.all([
-              runner === undefined
-                ? Effect.void
-                : machine.recordRunner(place, { kind: RUNNER_RECORD.RUNNING, runner }),
-              bearer === null ? Effect.void : restoreAgentRunnerToken(userId, agentId, bearer),
-            ]),
-          ),
+    // the next message relaunches it rather than writing to a runner the stop ended. Note that
+    // anything short of a stop made, a write or the stop failing or the call interrupted, puts the
+    // runner and its bearer back, because the runner may still run, and a launch beside it would
+    // read the same lines twice.
+    yield* Effect.andThen(
+      machine.recordRunner(
+        place,
+        launch === undefined
+          ? { kind: RUNNER_RECORD.NONE }
+          : { kind: RUNNER_RECORD.LAUNCHED, mark: launch },
+      ),
+      machine.stop(running),
+    ).pipe(
+      Effect.onError(() =>
+        Effect.ignore(
+          Effect.all([
+            runner === undefined
+              ? Effect.void
+              : machine.recordRunner(place, { kind: RUNNER_RECORD.RUNNING, runner }),
+            bearer === null ? Effect.void : restoreAgentRunnerToken(userId, agentId, bearer),
+          ]),
         ),
-      );
+      ),
+    );
     yield* recordedSandboxStopped(sandboxName);
 
     return true;
