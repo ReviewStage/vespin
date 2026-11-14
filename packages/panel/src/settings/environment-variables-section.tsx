@@ -17,7 +17,8 @@ import {
   BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
-  Checkbox,
+  CHOICE_BAR_LOOK,
+  ChoiceBar,
   CONFIRM_LOSS,
   COPY_CHIP_LOOK,
   COPY_LOOK,
@@ -54,6 +55,7 @@ import {
   TEXT_FIELD_FONT,
   TEXT_FONT,
   TEXT_TONE,
+  TEXT_VARIANT,
   Text,
   TextField,
   TIME_LOOK,
@@ -112,11 +114,12 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
  *
  * Over the rows stand a search, a Filter by who last changed each, and
  * View options ordering them, as Memory's do. An owner or admin adds
- * several at once (Add variables), a `.env` imported or pasted into a Name
- * spread a pair to a line, each line saying what is wrong with its name or
- * that it replaces one saved; edits one from its row's ⋯ (Edit: a new name,
- * a new value, a config made secret, never the other way); and deletes
- * one, which asks first. Each write answers the variables as they then
+ * several at once (Add variables), secrets or configs as the choice heading
+ * the dialog says, a `.env` imported or pasted into a Name spread a pair to
+ * a line, each line saying what is wrong with its name or that it replaces
+ * one saved; edits one from its row's ⋯ (Edit: a new name, a new value);
+ * makes a config secret from the same ⋯, which asks first since it is never
+ * undone; and deletes one, which asks first too. Each write answers the variables as they then
  * stand, which the section draws at once, the rows it wrote lit once.
  */
 
@@ -145,8 +148,8 @@ const WORDS = {
   ORDER_BY: "Order by",
   NONE: "No variables yet.",
   NO_MATCH: "No variables match.",
-  SECRET: "Secret",
-  SECRET_DETAIL: "Can't be viewed once saved.",
+  KIND: "Type",
+  MAKE_SECRET: "Make secret",
   NAME_SPELLING: "Use letters, digits, and _, not starting with a digit.",
   NO_NAME: "A variable needs a name.",
   ADDED: "Added",
@@ -154,6 +157,23 @@ const WORDS = {
   BY: "by",
   MASKED: "••••••••",
 } as const;
+
+/** What a variable is: a secret, whose value no one reads once it is saved, or a config, whose value every member reads. */
+const KIND = { SECRET: "secret", CONFIG: "config" } as const;
+
+type Kind = (typeof KIND)[keyof typeof KIND];
+
+/** Each kind's name in Add's choice, and the one line under it saying what the kind chosen does. */
+const KIND_SHOWN = {
+  [KIND.SECRET]: {
+    label: "Secret",
+    detail: "Its value is hidden once it's saved. Agents still get it.",
+  },
+  [KIND.CONFIG]: {
+    label: "Config",
+    detail: "Its value stays visible to everyone in the workspace.",
+  },
+} as const satisfies Record<Kind, { label: string; detail: string }>;
 
 /** How the rows are ordered. */
 const ORDER = { NAME: "name", UPDATED: "updated", CREATED: "created" } as const;
@@ -350,6 +370,27 @@ function VariableRow({
     confirmFailure(FAILURE_SURFACE.WORKSPACE_VARIABLE_DELETE),
   );
 
+  const sealing = useMutation({
+    mutationFn: () =>
+      sendAct(ACT_KIND.WORKSPACE_ENVIRONMENT_EDIT, { workspaceId, name, secret: true }),
+    onSuccess: async (answer) => {
+      await drawAnswer(queries, workspaceId, answer);
+      onWritten([name]);
+    },
+  });
+
+  const sealAct = useConfirmAct(sealing, {
+    send: () => sealing.mutateAsync(),
+    answered: () => ACCEPTED,
+    failed: rejected,
+  });
+
+  const seal = useConfirmDialog(
+    { subject: true, surfaceOpen: true },
+    sealAct,
+    confirmFailure(FAILURE_SURFACE.WORKSPACE_VARIABLE_SAVE),
+  );
+
   const copyName: MenuAction = {
     label: "Copy name",
     icon: <CopyIcon />,
@@ -365,9 +406,17 @@ function VariableRow({
           { label: "Copy value", icon: <CopyIcon />, onSelect: () => void copyThroughShell(value) },
         ];
 
+  const editing: MenuAction = { label: "Edit", icon: <PencilIcon />, onSelect: edit.ask };
+
+  // Note that a config may become a secret and a secret never a config, so only a config's row offers it.
+  const changes: readonly MenuAction[] =
+    value === undefined
+      ? [editing]
+      : [editing, { label: WORDS.MAKE_SECRET, icon: <GLYPH.SECRET />, onSelect: seal.ask }];
+
   const actions: readonly (readonly MenuAction[])[] = manages
     ? [
-        [{ label: "Edit", icon: <PencilIcon />, onSelect: edit.ask }, ...copies],
+        [...changes, ...copies],
         [{ label: "Delete", icon: <TrashIcon />, danger: true, onSelect: deletion.ask }],
       ]
     : [copies];
@@ -404,6 +453,19 @@ function VariableRow({
           {edit.dialog}
           <ConfirmDialog
             open
+            confirm={seal}
+            question={{
+              title: `Make ${name} secret?`,
+              body: "Its value will be hidden from everyone in the workspace, for good. Agents still get it.",
+              verb: WORDS.MAKE_SECRET,
+              running: "Saving",
+              loss: CONFIRM_LOSS.IRREVERSIBLE,
+              replayUnmasked: true,
+              titleReplayMasked: true,
+            }}
+          />
+          <ConfirmDialog
+            open
             confirm={deletion}
             question={{
               title: `Delete ${name}?`,
@@ -421,9 +483,9 @@ function VariableRow({
 }
 
 /**
- * A variable's Edit: its name, which renames it; its value, a secret's left
- * empty to keep what is saved, a config's shown to change in place; and,
- * for a config, Secret, which once saved cannot be taken back.
+ * A variable's Edit: its name, which renames it, and its value, a secret's
+ * left empty to keep what is saved, a config's shown to change in place.
+ * What it is stays as it is: a config is made secret from its row's ⋯.
  */
 function useEditDialog(
   workspaceId: string,
@@ -435,7 +497,6 @@ function useEditDialog(
   const wasSecret = variable.secret !== false;
   const [name, setName] = useState(variable.name);
   const [value, setValue] = useState(variable.value ?? "");
-  const [secret, setSecret] = useState(wasSecret);
   const typed = name.trim();
   const renamed = typed !== variable.name;
 
@@ -449,7 +510,6 @@ function useEditDialog(
           : undefined;
 
   const valueChanged = wasSecret ? value !== "" : value !== (variable.value ?? "");
-  const madeSecret = !wasSecret && secret;
 
   /** The edit as it is sent: what changed, and nothing that did not. */
   const editAsked = (): WorkspaceVariableEditRequest => {
@@ -458,8 +518,6 @@ function useEditDialog(
     if (renamed) asked.rename = typed;
 
     if (valueChanged) asked.value = value;
-
-    if (madeSecret) asked.secret = true;
 
     return asked;
   };
@@ -487,15 +545,14 @@ function useEditDialog(
   const form = useFormDialog(
     confirm,
     problem === undefined &&
-      (renamed || valueChanged || madeSecret) &&
-      (secret || value !== "") &&
+      (renamed || valueChanged) &&
+      (wasSecret || value !== "") &&
       value.length <= WORKSPACE_ENVIRONMENT_BOUNDS.MAX_VALUE_CHARS,
   );
 
   const reset = () => {
     setName(variable.name);
     setValue(variable.value ?? "");
-    setSecret(wasSecret);
   };
 
   const dialog = (
@@ -542,10 +599,10 @@ function useEditDialog(
             </ReplayMask>
           )}
         </FormField>
-        {secret ? (
+        {wasSecret ? (
           <SecretField
             label="Value"
-            saved={wasSecret}
+            saved
             error={replayMaskedError(form.refusal)}
             disabled={form.settling}
             value={value}
@@ -569,20 +626,6 @@ function useEditDialog(
               </ReplayMask>
             )}
           </FormField>
-        )}
-        {wasSecret ? null : (
-          <Checkbox
-            checked={secret}
-            disabled={form.settling}
-            onChange={setSecret}
-            detail={
-              <Text as="span" tone={TEXT_TONE.MUTED}>
-                {WORDS.SECRET_DETAIL}
-              </Text>
-            }
-          >
-            {WORDS.SECRET}
-          </Checkbox>
         )}
       </Stack>
     </Dialog>
@@ -615,7 +658,8 @@ function useAddDialog(
 ) {
   const queries = useQueryClient();
   const [drafts, setDrafts] = useState<readonly Draft[]>(() => [blankDraft()]);
-  const [secret, setSecret] = useState(true);
+  const [kind, setKind] = useState<Kind>(KIND.SECRET);
+  const secret = kind === KIND.SECRET;
   const typedNames = drafts.map((draft) => draft.name.trim());
   const filled = drafts.filter((draft) => draft.name.trim() !== "" && draft.value !== "");
 
@@ -694,7 +738,7 @@ function useAddDialog(
 
   const reset = () => {
     setDrafts([blankDraft()]);
-    setSecret(true);
+    setKind(KIND.SECRET);
   };
 
   const count = filled.length;
@@ -738,6 +782,25 @@ function useAddDialog(
       }
     >
       <Stack>
+        {/* Note that the kind is chosen first, since it says whether the values typed under it are masked. */}
+        <Stack gap={GAP.TIGHT}>
+          <div>
+            <ChoiceBar<Kind>
+              label={WORDS.KIND}
+              look={CHOICE_BAR_LOOK.SEGMENTED}
+              value={kind}
+              disabled={form.settling}
+              onChange={setKind}
+              items={Object.values(KIND).map((each) => ({
+                value: each,
+                label: KIND_SHOWN[each].label,
+              }))}
+            />
+          </div>
+          <Text as="span" variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+            {KIND_SHOWN[kind].detail}
+          </Text>
+        </Stack>
         <ReplayMask>
           <NameValueRows
             rows={rows}
@@ -760,18 +823,6 @@ function useAddDialog(
             {WORDS.ADD_ANOTHER}
           </Button>
         </div>
-        <Checkbox
-          checked={secret}
-          disabled={form.settling}
-          onChange={setSecret}
-          detail={
-            <Text as="span" tone={TEXT_TONE.MUTED}>
-              {WORDS.SECRET_DETAIL}
-            </Text>
-          }
-        >
-          {WORDS.SECRET}
-        </Checkbox>
         <ErrorLine level={ANNOUNCE.ALERT} error={replayMaskedError(form.refusal)} />
       </Stack>
     </Dialog>
