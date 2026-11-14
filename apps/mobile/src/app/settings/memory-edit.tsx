@@ -24,9 +24,10 @@ import {
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
+import { useCloseSheet } from "../../close-sheet.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
@@ -76,7 +77,7 @@ function MemoryEditor({
   readonly memoryId: string | undefined;
 }) {
   const colors = useColors();
-  const router = useRouter();
+  const close = useCloseSheet();
   const acts = useHostActs();
   const write = useWrite();
   const notices = useFailureNotices();
@@ -161,7 +162,7 @@ function MemoryEditor({
 
       if (!standing.current) return;
       kept.release();
-      router.back();
+      close();
     });
   };
 
