@@ -773,6 +773,8 @@ function ToolCallView({
         provider={view.provider}
         appIcon={appIcon}
         server={server}
+        connection={view.connection}
+        account={view.account}
         machine={view.machine}
         subject={view.subject}
         description={view.description}

@@ -1253,12 +1253,15 @@ function nativeMcpView(
   const call = nativeMcpCall(tool);
 
   if (call === undefined) return undefined;
+  // Note that a server that is an integration's connection wears its provider's mark, as a call of the integration's own tool does.
+  const provider = integrationConnectionOf(call.connection)?.provider;
 
   return {
     kind: CALL_KIND.MCP_TOOL,
     subject: call.name,
     server: call.server,
     connection: call.connection,
+    ...(provider === undefined ? undefined : { provider }),
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: output === undefined ? undefined : jsonBlock(output),
   };
