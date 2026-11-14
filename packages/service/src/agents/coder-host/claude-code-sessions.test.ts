@@ -2400,6 +2400,74 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       }),
   );
 
+  it.effect(
+    "a turn's-end stop interrupted before Vercel answered keeps its runner's bearer standing, so the runner reads the next message at once",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const target = { userId, conversationId: agent.conversationId };
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* runnerTook(agent.id);
+        yield* settleRunnerLostTurns(writer, agent.conversationId, yield* Clock.currentTimeMillis);
+        const bearer = launchBearer(api, api.commands[0], SERVICE_HOST);
+        assert.ok(bearer !== undefined);
+        const { config } = yield* launchRead(api.commands[0], readClaudeCodeConfig);
+
+        // Vercel holds the stop, its runner retired by then, until the call gives up.
+        let reached: () => void = () => undefined;
+
+        const stopping = new Promise<void>((settle) => {
+          reached = settle;
+        });
+
+        api.hooks.onStop = () => {
+          reached();
+
+          return new Promise<void>(() => undefined);
+        };
+
+        const idling = yield* Effect.forkChild(
+          runnerIdled({ target, sessionId: opened.sessionId, sequence: 41 }).pipe(
+            Effect.provide(api.layer),
+          ),
+        );
+
+        yield* Effect.promise(() => stopping);
+        yield* Fiber.interrupt(idling);
+        api.hooks.onStop = undefined;
+
+        const sent = yield* sessions.send(
+          opened.sessionId,
+          yield* writtenLine(agent, "Now the emails."),
+        );
+
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+
+        const read = yield* runnerLinesPast(userId, agent.id, {
+          launch: config.firstSequence,
+          after: 0,
+          limit: 50,
+          runnerTokenHash: runnerTokenDigest(bearer),
+        });
+
+        assert.ok(read.some((line) => line.text.includes("Now the emails.")));
+        assert.equal(api.commands.length, 1);
+      }),
+  );
+
   it.effect("a turn's end stops a sandbox nothing holds, and the next message resumes it", () =>
     Effect.gen(function* () {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());

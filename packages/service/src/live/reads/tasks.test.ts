@@ -69,6 +69,7 @@ import {
   type SettledPageCursor,
   settledPageCursorOf,
   TASK_LIST_READ,
+  TASK_LIVE_WINDOW_MILLIS,
   TASK_PAGE_READ,
   TASK_RELATIONS_READ,
   TASK_ROWS_READ,
@@ -123,6 +124,12 @@ import {
 
 /** The instant the list is read at. */
 const NOW = Date.parse("2026-10-15T09:00:00Z");
+
+/** The instant the service binds the list's live window from at `NOW`. */
+const LIVE_SINCE = String(NOW - TASK_LIVE_WINDOW_MILLIS);
+
+/** A live window holding every task, as the test clock writes each at its epoch: what a list read whole by the held read's rule reads. */
+const EVERY_TASK = "0";
 
 const openUser = Effect.gen(function* () {
   const db = yield* Database;
@@ -226,9 +233,9 @@ const runLive = (statement: LiveStatement) =>
   Effect.flatMap(SqlClient.SqlClient, (sql) => sql.unsafe(statement.sql, [...statement.params]));
 
 /** The rows the live statements deliver to the account, decoded as the desktop decodes them. */
-const liveRowsOf = (userId: string) =>
+const liveRowsOf = (userId: string, liveSince = EVERY_TASK) =>
   Effect.gen(function* () {
-    const statements = Option.getOrThrow(tasksRead.statements({ userId }));
+    const statements = Option.getOrThrow(tasksRead.statements({ userId, liveSince }));
 
     return yield* Schema.decodeUnknownEffect(TASK_LIST_READ.rows)({
       plans: yield* runLive(statements.plans),
@@ -559,7 +566,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
-    "follow a task the reader pinned, and the task of an agent it pinned, however long ago it was done",
+    "follow every task under way, each Done one touched within the window, and each pinned or with an agent pinned however long ago it was done, with their agents alone",
     () =>
       Effect.gen(function* () {
         const owner = yield* openUser;
@@ -567,29 +574,52 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         yield* openWorkspace(outsider);
         const pinned = yield* startTask(owner, { name: "Teammate invitations" });
         const ofAgent = yield* startTask(owner, { name: "Billing export" });
-        const agent = yield* openAgent(owner, { taskId: ofAgent.id }, 60_000);
+        const pinnedAgent = yield* openAgent(owner, { taskId: ofAgent.id }, 60_000);
+        const underWay = yield* startTask(owner, { name: "Audit log" });
+        const recent = yield* startTask(owner, { name: "Onboarding" });
+        const old = yield* startTask(owner, { name: "Payroll" });
+        yield* openAgent(owner, { taskId: old.id }, 60_000);
         yield* updateTask(owner, pinned.id, { pinned: true });
-        yield* pinAgent(owner, agent.id, true);
-        // Both were finished a year before the list is read, well past any recent window.
+        yield* pinAgent(owner, pinnedAgent.id, true);
         const db = yield* Database;
+        // One finished a day inside the window, and the rest a year before the list is read.
+        const lately = new Date(Number(LIVE_SINCE) + Duration.toMillis(Duration.days(1)));
         const yearAgo = new Date(NOW - Duration.toMillis(Duration.days(365)));
         yield* db
           .update(task)
           .set({ status: TASK_STATUS.DONE, completedAt: yearAgo, updatedAt: yearAgo })
-          .where(inArray(task.id, [pinned.id, ofAgent.id]));
+          .where(inArray(task.id, [pinned.id, ofAgent.id, old.id]));
+        yield* db
+          .update(task)
+          .set({ status: TASK_STATUS.IN_PROGRESS, updatedAt: yearAgo })
+          .where(eq(task.id, underWay.id));
+        yield* db
+          .update(task)
+          .set({ status: TASK_STATUS.CANCELED, completedAt: lately, updatedAt: lately })
+          .where(eq(task.id, recent.id));
 
         const followedBy = (reader: string) =>
-          Effect.map(liveRowsOf(reader), (rows) => rows.plans.map((plan) => plan.id).toSorted());
+          Effect.map(liveRowsOf(reader, LIVE_SINCE), (rows) => ({
+            plans: rows.plans.map((plan) => plan.id).toSorted(),
+            agents: rows.agents.map((agent) => agent.id).toSorted(),
+          }));
 
-        assert.deepEqual(yield* followedBy(owner), [pinned.id, ofAgent.id].toSorted());
-        assert.deepEqual(yield* followedBy(outsider), [], "no other account's list holds them");
+        assert.deepEqual(yield* followedBy(owner), {
+          plans: [pinned.id, ofAgent.id, underWay.id, recent.id].toSorted(),
+          agents: [pinnedAgent.id],
+        });
+        assert.deepEqual(
+          yield* followedBy(outsider),
+          { plans: [], agents: [] },
+          "no other account's list holds them",
+        );
       }),
   );
 
   it.effect("call only functions Postgres marks immutable, as Realtime requires", () =>
     Effect.gen(function* () {
       const { plans, agents, issues } = Option.getOrThrow(
-        tasksRead.statements({ userId: "user-immutable" }),
+        tasksRead.statements({ userId: "user-immutable", liveSince: LIVE_SINCE }),
       );
 
       assert.deepEqual(yield* mutableFunctionsOf(plans), []);
@@ -1337,7 +1367,10 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
 
         const { delta } = tasksRead;
         assert.ok(delta !== undefined, "the list answers deltas");
-        const statements = Option.getOrThrow(delta.statements({ userId: teammate }, moved));
+
+        const statements = Option.getOrThrow(
+          delta.statements({ userId: teammate, liveSince: EVERY_TASK }, moved),
+        );
 
         const rows = yield* Schema.decodeUnknownEffect(
           Schema.Array(TASK_LIST_READ.parts.plans.row),

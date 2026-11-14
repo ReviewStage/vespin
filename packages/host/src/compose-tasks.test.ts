@@ -3216,6 +3216,54 @@ function agentRow(planId: string, ago: number) {
 }
 
 it.effect(
+  "a Done task untouched since the live set's instant leaves the list with its agents, one touched at it stays, opening the one let go draws it, and an edit brings it back",
+  () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(LIVE_NOW);
+      const since = LIVE_NOW - 1_000;
+
+      const service = fakeService([
+        task(BILLING, "Billing export", "# Billing", 10),
+        task(INVITES, "Teammate invitations", "# Invites", 20),
+      ]);
+
+      const { call, last, openTask } = yield* subject(service);
+      const done = { status: TASK_STATUS.DONE, completedAt: since - 1 };
+      const billing = { ...planRow(BILLING, "Billing export"), ...done, updatedAt: since - 1 };
+      const invites = { ...planRow(INVITES, "Teammate invitations"), ...done, updatedAt: since };
+
+      const listed = () =>
+        last()
+          ?.tasks.map((each) => each.name)
+          .toSorted();
+
+      // Both stand live at the instant the first answer was bound at.
+      service.liveSince = since - 1;
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, {
+        plans: [billing, invites],
+        agents: [agentRow(BILLING, 60_000)],
+        issues: [],
+      });
+      assert.deepEqual(listed(), ["Billing export", "Teammate invitations"]);
+
+      // The next answer is bound a moment later and carries no row, as a task only ages out.
+      service.liveSince = since;
+      yield* listAnswers(service, { plans: [billing, invites] });
+      assert.deepEqual(listed(), ["Teammate invitations"], "the task touched at the instant stays");
+      assert.deepEqual(last()?.taskAgents ?? [], [], "the agents of the one let go leave with it");
+
+      yield* openTask(BILLING);
+      assert.deepEqual(listed(), ["Billing export", "Teammate invitations"], "opened, it is drawn");
+
+      // An edit moves it, which the follow answers as it touches it.
+      const edited = { ...billing, name: "Billing export, monthly", updatedAt: LIVE_NOW };
+      yield* listAnswers(service, { plans: [edited, invites] });
+      assert.deepEqual(listed(), ["Billing export, monthly", "Teammate invitations"]);
+    }),
+);
+
+it.effect(
   "a list that could not be read says so beside what it drew and is read again, and a read refused as signed out ends the follow",
   () =>
     Effect.gen(function* () {

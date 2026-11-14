@@ -103,6 +103,8 @@ export const RUN_PROFILE = {
   TASKS_COMMENTS: "tasks-comments",
   /** A synthetic account signed in, its tasks holding Inbox items: an ask of each kind, a form, a notice with code, a long thread, an answered item, and a closed one. */
   INBOX: "inbox",
+  /** The same account, its Inbox holding about as many threads as a busy real account (600 beside the staged ones), so launch and a workspace switch are timed at a real account's size. */
+  INBOX_LARGE: "inbox-large",
   /** The same account and items, its tasks assigned to it and its agents at work, which its own page lists. */
   PERSON: "person",
   /** The same task on its coding agent, its Pull request tab beside it: checks, reviews, and a merge queued. */

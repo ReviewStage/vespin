@@ -44,10 +44,18 @@
  * hold it, so a write draws over a cold task as over any, and a cold task
  * the follow comes to answer, as one edited or reopened does, is the list's
  * again and no longer cold.
+ *
+ * The follow answers a task deleted and one that only left its set alike,
+ * as gone, so a cold read that answers a task the follow let go while it
+ * was out cannot say which it was. Such a task is read again
+ * (`readAgain`), asked after the let-go, and that answer settles it: a task
+ * deleted answers nothing, one that left lands. A task let go again while
+ * that read is out is read again a few times at most (`RECHECKS`), then
+ * left undrawn.
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
-import { agentGraceEnd, type TaskListLiveRows } from "@repo/features/task-list-live";
+import { agentGraceEnd, standsLive, type TaskListLiveRows } from "@repo/features/task-list-live";
 import type {
   ListedPullRequest,
   TaskAgentPin,
@@ -68,13 +76,16 @@ import {
   createLiveQueryCollection,
   localOnlyCollectionOptions,
 } from "@tanstack/db";
-import { Effect, type Scope } from "effect";
+import { Effect, FiberSet, type Scope } from "effect";
 import { drawnRows } from "./drawn-rows.js";
 import { drawnAtEdges, drawnPerTick } from "./live-collection.js";
 import { confirmWrite, type SyncStanding, syncIdOf, type TxWait } from "./live-follow.js";
 import { taskListContinuations } from "./task-list-continuations.js";
 import { taskListPullRequests } from "./task-list-pull-requests.js";
 import { taskListTasks } from "./task-list-tasks.js";
+
+/** How many times a task the follow let go while a cold read of it was out is read again before it is left undrawn. */
+const RECHECKS = 3;
 
 /** A plan's row as the list's statement answers it. */
 export type PlanRow = TaskListLiveRows["plans"][number];
@@ -111,6 +122,8 @@ export interface TaskListDependencies {
   readonly draw: (read: LiveTaskList) => void;
   /** The followed list's wait for a write's transaction; none while the follow hands none. */
   readonly txWait: () => TxWait | undefined;
+  /** The task or the agent `id` names read again from the service with the task's agents, as a cold read reads it; none where the service did not answer. */
+  readonly readAgain: (id: string) => Effect.Effect<TaskListLiveRows | undefined>;
 }
 
 /** The account's task list standing in the pool, for as long as its scope stands. */
@@ -118,10 +131,16 @@ export interface TaskListCollections {
   /**
    * Takes one answer of the list's follow, both its parts, whole or past a
    * sync id, and draws it, answering whether a row the list holds moved, or
-   * it took one up or let one go. One past a sync id that carries no row and
+   * it took one up or let one go. Where it names the `liveSince` the service
+   * bound it at, each task that no longer stands live by it (`standsLive`)
+   * is let go with its agents. One past a sync id that carries no row and
    * lets none go is neither taken nor drawn.
    */
-  readonly answer: (rows: TaskListLiveRows, standing?: SyncStanding) => Effect.Effect<boolean>;
+  readonly answer: (
+    rows: TaskListLiveRows,
+    standing?: SyncStanding,
+    liveSince?: number,
+  ) => Effect.Effect<boolean>;
   /** The plans and agents the list holds as the service answered them, with no write drawn over them, as the entity store keeps them. */
   readonly synced: () => TaskListLiveRows;
   /** Whether the list draws the task or the agent `id` names, from its follow or as a cold one. */
@@ -132,8 +151,9 @@ export interface TaskListCollections {
    * Takes one task read outside the list, its plan and its agents, as cold
    * rows drawn beside the list's, and draws it, the read asked at `mark`;
    * each the follow holds is the follow's alone, each it let go since
-   * `mark` is gone, not drawn back by an answer read before it went, and
-   * each a read asked later already drew stands as that one drew it.
+   * `mark` is read again rather than drawn from an answer read before it
+   * went, and each a read asked later already drew stands as that one drew
+   * it.
    */
   readonly cold: (rows: TaskListLiveRows, mark: ColdMark) => Effect.Effect<void>;
 }
@@ -175,6 +195,37 @@ function joined(
   const gone = new Set(standing.gone);
 
   return [...new Set([...held, ...answered])].filter((id) => !gone.has(id));
+}
+
+/**
+ * The tasks of `planIds` that no longer stand live as of `liveSince`
+ * (`standsLive`), each read as `planOf` shows it, a task pinned through
+ * one of `agentIds`'s agents standing by that pin.
+ */
+function agedOut(
+  planIds: readonly string[],
+  agentIds: readonly string[],
+  planOf: (id: string) => PlanRow | undefined,
+  agentOf: (id: string) => AgentRow | undefined,
+  liveSince: number,
+): ReadonlySet<string> {
+  const pinnedThroughAgent = new Set(
+    agentIds.flatMap((id) => {
+      const agent = agentOf(id);
+
+      return agent === undefined || agent.pinnedAt === null || agent.planId === null
+        ? []
+        : [agent.planId];
+    }),
+  );
+
+  return new Set(
+    planIds.filter((id) => {
+      const plan = planOf(id);
+
+      return plan !== undefined && !standsLive(plan, pinnedThroughAgent.has(id), liveSince);
+    }),
+  );
 }
 
 /** The account's task list, empty until its follow first answers. */
@@ -371,11 +422,123 @@ export function taskListCollections(
 
     const ticks = yield* drawnPerTick(drawn);
 
+    const mark = (): ColdMark => {
+      coldAsked += 1;
+
+      return { answers, asked: coldAsked };
+    };
+
+    /** The reads again of tasks the follow let go while a cold read of them was out, each drawn by its own mark as any cold read is. */
+    const rechecks = yield* FiberSet.make<void>();
+
+    /** Reads the task `id` names again, marked before it is asked, and draws its answer as the `tries`th read again. */
+    const recheck = (id: string, tries: number): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        const at = mark();
+        const rows = yield* dependencies.readAgain(id);
+
+        if (rows !== undefined && open) yield* drawnCold(rows, at, tries);
+      });
+
+    /** Draws one cold read's answer, asked at `at`, which is the `tries`th read again of its tasks; none for a first read. */
+    const drawnCold = (rows: TaskListLiveRows, at: ColdMark, tries: number): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        const letGoSince = (id: string) => (letGoAt.get(id) ?? 0) > at.answers;
+        // Note that two reads outside the list may answer one row, a task's and one of its agents', so a row a later-asked read drew is not drawn back as an earlier one read it.
+        const drawnLater = (id: string) => (coldDrawnBy.get(id) ?? 0) > at.asked;
+
+        const standing = (row: { readonly id: string }) =>
+          !letGoSince(row.id) && !drawnLater(row.id);
+
+        // Note that the follow answers a task deleted and one that only left its set alike, as gone, so one it let go while this read was out is neither drawn nor dropped but read again, asked after the let-go, whose answer settles which it was.
+        const letGo = new Set([
+          ...rows.plans
+            .filter((row) => !plans.holds(row.id) && letGoSince(row.id) && !drawnLater(row.id))
+            .map((row) => row.id),
+          ...rows.agents
+            .filter(
+              (row) =>
+                !agents.holds(row.id) &&
+                !drawnLater(row.id) &&
+                (letGoSince(row.id) || (row.planId !== null && letGoSince(row.planId))),
+            )
+            .map((row) => row.planId ?? row.id),
+        ]);
+
+        if (tries < RECHECKS) {
+          for (const id of letGo) yield* FiberSet.run(rechecks, recheck(id, tries + 1));
+        }
+
+        const planRows = rows.plans.filter((row) => !plans.holds(row.id) && standing(row));
+
+        // Note that an agent stands only where its task's snapshot does, so an earlier read draws back no agent a later one of its task left out.
+        const agentRows = rows.agents.filter(
+          (row) =>
+            !agents.holds(row.id) &&
+            standing(row) &&
+            (row.planId === null || standing({ id: row.planId })),
+        );
+
+        if (planRows.length + agentRows.length === 0) return;
+
+        // Note that a task's snapshot answers every agent of it, so a cold agent of a task drawn here that it leaves out is gone, and marked so an earlier read draws it not back.
+        const tasksDrawn = new Set(planRows.map((row) => row.id));
+        const answered = new Set(agentRows.map((row) => row.id));
+        const inSnapshot = new Set(rows.agents.map((row) => row.id));
+
+        const omitted = coldAgentKeys.filter(
+          (id) => !inSnapshot.has(id) && tasksDrawn.has(coldAgents.row(id)?.planId ?? ""),
+        );
+
+        for (const id of [...tasksDrawn, ...answered, ...omitted]) {
+          coldDrawnBy.set(id, at.asked);
+        }
+
+        const gone = new Set(omitted);
+        coldPlanKeys = [...new Set([...coldPlanKeys, ...tasksDrawn])];
+        coldAgentKeys = [...new Set([...coldAgentKeys, ...answered])].filter((id) => !gone.has(id));
+        yield* coldPlans.answer(planRows, { held: coldPlanKeys });
+        yield* coldAgents.answer(agentRows, { held: coldAgentKeys });
+        plansDrawn([...tasksDrawn]);
+        agentsDrawn([...answered, ...omitted]);
+        yield* redraw();
+      });
+
     return {
-      answer: (rows, standing) =>
+      answer: (answeredRows, standing, liveSince) =>
         Effect.suspend(() => {
-          const nextPlans = joined(planKeys, rows.plans, standing);
-          const nextAgents = joined(agentKeys, rows.agents, standing);
+          const joinedPlans = joined(planKeys, answeredRows.plans, standing);
+          const joinedAgents = joined(agentKeys, answeredRows.agents, standing);
+          const answeredPlans = new Map(answeredRows.plans.map((row) => [row.id, row]));
+          const answeredAgents = new Map(answeredRows.agents.map((row) => [row.id, row]));
+          const agentOf = (id: string) => answeredAgents.get(id) ?? agents.row(id);
+
+          // Note that a task only ages out of the set, which logs nothing, so the list lets it go itself, at the instant the service bound, and its agents with it.
+          const left =
+            liveSince === undefined
+              ? new Set<string>()
+              : agedOut(
+                  joinedPlans,
+                  joinedAgents,
+                  (id) => answeredPlans.get(id) ?? plans.row(id),
+                  agentOf,
+                  liveSince,
+                );
+
+          const standsHere = (row: { readonly id: string }) => !left.has(row.id);
+          const ofStanding = (row: AgentRow) => row.planId === null || !left.has(row.planId);
+          const nextPlans = joinedPlans.filter((id) => !left.has(id));
+
+          const nextAgents = joinedAgents.filter((id) => {
+            const agent = agentOf(id);
+
+            return agent === undefined || ofStanding(agent);
+          });
+
+          const rows = {
+            plans: answeredRows.plans.filter(standsHere),
+            agents: answeredRows.agents.filter(ofStanding),
+          };
 
           // Note that an answer past a sync id carrying no row and letting none go moves nothing, as most of a busy service's do, so neither the pool nor the list is walked: the edge armed stands, and a write settles on the follow's wait.
           const still =
@@ -417,54 +580,8 @@ export function taskListCollections(
       synced: () => ({ plans: plans.synced(), agents: agents.synced() }),
       holds: (id) =>
         plans.holds(id) || agents.holds(id) || coldPlans.holds(id) || coldAgents.holds(id),
-      mark: () => {
-        coldAsked += 1;
-
-        return { answers, asked: coldAsked };
-      },
-      cold: (rows, mark) =>
-        Effect.gen(function* () {
-          // Note that two reads outside the list may answer one row, a task's and one of its agents', so a row a later-asked read drew is not drawn back as an earlier one read it.
-          const standing = (row: { readonly id: string }) =>
-            (letGoAt.get(row.id) ?? 0) <= mark.answers &&
-            (coldDrawnBy.get(row.id) ?? 0) <= mark.asked;
-
-          const planRows = rows.plans.filter((row) => !plans.holds(row.id) && standing(row));
-
-          // Note that an agent stands only where its task's snapshot does, so an earlier read draws back no agent a later one of its task left out.
-          const agentRows = rows.agents.filter(
-            (row) =>
-              !agents.holds(row.id) &&
-              standing(row) &&
-              (row.planId === null || standing({ id: row.planId })),
-          );
-
-          if (planRows.length + agentRows.length === 0) return;
-
-          // Note that a task's snapshot answers every agent of it, so a cold agent of a task drawn here that it leaves out is gone, and marked so an earlier read draws it not back.
-          const tasksDrawn = new Set(planRows.map((row) => row.id));
-          const answered = new Set(agentRows.map((row) => row.id));
-          const inSnapshot = new Set(rows.agents.map((row) => row.id));
-
-          const omitted = coldAgentKeys.filter(
-            (id) => !inSnapshot.has(id) && tasksDrawn.has(coldAgents.row(id)?.planId ?? ""),
-          );
-
-          for (const id of [...tasksDrawn, ...answered, ...omitted]) {
-            coldDrawnBy.set(id, mark.asked);
-          }
-
-          const gone = new Set(omitted);
-          coldPlanKeys = [...new Set([...coldPlanKeys, ...tasksDrawn])];
-          coldAgentKeys = [...new Set([...coldAgentKeys, ...answered])].filter(
-            (id) => !gone.has(id),
-          );
-          yield* coldPlans.answer(planRows, { held: coldPlanKeys });
-          yield* coldAgents.answer(agentRows, { held: coldAgentKeys });
-          plansDrawn([...tasksDrawn]);
-          agentsDrawn([...answered, ...omitted]);
-          yield* redraw();
-        }),
+      mark,
+      cold: (rows, at) => drawnCold(rows, at, 0),
     };
   });
 }

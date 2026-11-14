@@ -108,6 +108,7 @@ import {
   type CHAPTERS_ACTS,
   CHAPTERS_FOLLOWS,
 } from "./contract/index.js";
+import type { EntityStore } from "./entity-store.js";
 import type { HostMethodTable } from "./gateway-door.js";
 import { type AccountHeld, accountHeld, type HeldFetch, heldFetch } from "./held-fetch.js";
 import { type HostActTable, liveTold } from "./host-acts.js";
@@ -303,6 +304,8 @@ export interface AgentsDependencies extends AccountGateDependencies {
   openedOutside?: (agentId: string) => Effect.Effect<void>;
   /** Reads the tasks the account's Inbox holds items of into the task list where it holds them not (`TasksComposer.inboxNamed`); none reads nothing. */
   inboxNamed?: (taskIds: readonly string[]) => Effect.Effect<void>;
+  /** The signed-in account's lists kept on disk (`entity-store.ts`), which the Inbox is kept among and drawn from at a launch; none keeps nothing. */
+  entities?: () => EntityStore | undefined;
 }
 
 /** The tasks an account inbox answer holds items of, once each: those with an item waiting on the reader first, as they are counted, then every other holding one. */
@@ -534,6 +537,9 @@ export function composeAgents(
             ),
           pool: dependencies.pool,
           accountWide,
+          ...(dependencies.entities === undefined
+            ? undefined
+            : { entities: dependencies.entities }),
         },
         userId,
         tellItems,

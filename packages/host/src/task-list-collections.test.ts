@@ -48,6 +48,7 @@ it.effect(
             drawings.push(read);
           },
           txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
         });
 
         // Note that this test takes about two seconds, since its point is an account's size.
@@ -126,6 +127,7 @@ it.effect(
             drawings.push(read);
           },
           txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
         });
 
         const invites = planListRow(INVITES, "Teammate invitations");
@@ -186,6 +188,7 @@ it.effect(
             drawings.push(read);
           },
           txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
         });
 
         // The invites agent started at 0 and has no turn yet; the billing task has no agent.
@@ -231,6 +234,7 @@ it.effect(
             drawings.push(read);
           },
           txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
         });
 
         const plans = [
@@ -299,6 +303,7 @@ it.effect(
             drawings.push(read);
           },
           txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
         });
 
         // The list holds the billing task alone, so the invites task is read outside it.
@@ -340,6 +345,58 @@ it.effect(
     ),
 );
 
+it.effect.each([
+  { case: "only left the list's set", service: "answers it still", drawn: true },
+  { case: "was deleted", service: "answers it no more", drawn: false },
+])(
+  "a task the list lets go while a read of it is out, which $case, is drawn from that read only where the service $service",
+  ({ drawn }) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const drawings: LiveTaskList[] = [];
+        const invites = planListRow(INVITES, "Teammate invitations");
+        const agent = { ...agentListRow(INVITES, 1_000), id: "agent-invites" };
+        const billing = planListRow(BILLING, "Billing");
+        const standing = { plans: [invites], agents: [agent] };
+
+        const collections = yield* taskListCollections({
+          pool: yield* entityPool(),
+          draw: (read) => {
+            drawings.push(read);
+          },
+          txWait: () => undefined,
+          readAgain: () => Effect.succeed(drawn ? standing : { plans: [], agents: [] }),
+        });
+
+        yield* collections.answer({ plans: [invites, billing], agents: [agent] });
+
+        // A search is out when the list lets the invites task go, and answers it as it stood before.
+        const answered = yield* Deferred.make<void>();
+        const mark = collections.mark();
+
+        const read = yield* Effect.forkChild(
+          Effect.andThen(Deferred.await(answered), collections.cold(standing, mark)),
+        );
+
+        yield* collections.answer({ plans: [billing], agents: [] });
+        yield* Deferred.succeed(answered, undefined);
+        yield* Fiber.join(read);
+        yield* settled;
+
+        const last = drawings.at(-1);
+
+        assert.deepEqual(
+          last?.list.plans.map((plan) => plan.id).toSorted(),
+          drawn ? [INVITES, BILLING].toSorted() : [BILLING],
+        );
+        assert.deepEqual(
+          last?.taskAgents.map((each) => each.id),
+          drawn ? [agent.id] : [],
+        );
+      }),
+    ),
+);
+
 it.effect(
   "an agent started from another lists it under its source, first started first, and every other agent's continuations are the object drawn before",
   () =>
@@ -353,6 +410,7 @@ it.effect(
             drawings.push(read);
           },
           txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
         });
 
         const plans = [

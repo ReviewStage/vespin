@@ -66,6 +66,10 @@
         "pages": ["index", "install", "quickstart"]
       },
       {
+        "group": "Concepts",
+        "pages": ["tasks", "inbox"]
+      },
+      {
         "group": "Guides",
         "pages": ["vespin-mcp", "cli", "automations", "slack"]
       },

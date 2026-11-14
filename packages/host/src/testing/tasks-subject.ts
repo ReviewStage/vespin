@@ -170,6 +170,8 @@ export interface FakeService extends TasksClient, WorkspacesClient {
   agents: Record<string, TaskAgentsSummary>;
   /** How many times the list's live read was first asked, its polls apart. */
   liveListReads: number;
+  /** The instant the list's live set is bound at, which each answer carries beside its rows; none, as a service before the set was narrowed. */
+  liveSince: number | undefined;
   /** Whether a delete is refused, as a service that did not answer refuses it. */
   deleteFails: boolean;
   /** Whether a read of one task outside the list, or of its relations, goes unanswered, as a service that did not answer leaves it. */
@@ -669,6 +671,7 @@ export function fakeService(tasks: Task[]): FakeService {
       ),
     agents: {},
     liveListReads: 0,
+    liveSince: undefined,
     deleteFails: false,
     taskRowsFail: false,
     deleteAnswered: Effect.void,
@@ -1385,17 +1388,20 @@ export function fakeService(tasks: Task[]): FakeService {
       Effect.suspend((): Effect.Effect<unknown> => {
         if (sync === undefined) return Effect.succeed(live.list.first());
 
+        const beside = () =>
+          service.liveSince === undefined ? undefined : { liveSince: service.liveSince };
+
         if (sync === "") {
           service.liveListReads += 1;
           const whole = live.list.first();
 
           return Effect.succeed(
-            "failure" in whole ? whole : listBySyncId(whole, undefined, listAt),
+            "failure" in whole ? whole : { ...listBySyncId(whole, undefined, listAt), ...beside() },
           );
         }
 
         return Effect.map(live.list.poll(sync), (answer) =>
-          "failure" in answer ? answer : listBySyncId(answer, sync, listAt),
+          "failure" in answer ? answer : { ...listBySyncId(answer, sync, listAt), ...beside() },
         );
       }),
     open: (taskId) =>

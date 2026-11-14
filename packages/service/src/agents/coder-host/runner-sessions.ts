@@ -3299,36 +3299,51 @@ const stoppedHolding = (machine: MachineLifecycle, unheld: UnheldSandbox) =>
       return false;
     }
 
-    const retired = yield* runnerRetiredIfIdle(userId, agentId);
-
-    if (Option.isNone(retired)) return false;
     const place = recordOf(found.value, userId, agentId);
-    const bearer = retired.value;
 
     // The runner is told of no longer before the sandbox stops, its launch kept for a late END, so
-    // the next message relaunches it rather than writing to a runner the stop ended. Note that a
-    // stop that fails puts the runner and its bearer back, because the runner may still run, and a
-    // launch beside it would read the same lines twice.
-    yield* machine.recordRunner(
-      place,
-      launch === undefined
-        ? { kind: RUNNER_RECORD.NONE }
-        : { kind: RUNNER_RECORD.LAUNCHED, mark: launch },
-    );
-    yield* machine
-      .stop(running)
-      .pipe(
-        Effect.tapError(() =>
-          Effect.ignore(
-            Effect.all([
+    // the next message relaunches it rather than writing to a runner the stop ended. Note that
+    // anything short of a stop made, a write or the stop failing or the call interrupted, puts the
+    // runner and its bearer back, each apart from the other, because the runner may still run, and
+    // a launch beside it would read the same lines twice. The retire and the restore's arming run
+    // uninterruptibly, so no interruption falls between them.
+    const stopped = yield* Effect.uninterruptibleMask((interruptible) =>
+      Effect.gen(function* () {
+        const retired = yield* runnerRetiredIfIdle(userId, agentId);
+
+        if (Option.isNone(retired)) return false;
+        const bearer = retired.value;
+
+        yield* interruptible(
+          Effect.andThen(
+            machine.recordRunner(
+              place,
+              launch === undefined
+                ? { kind: RUNNER_RECORD.NONE }
+                : { kind: RUNNER_RECORD.LAUNCHED, mark: launch },
+            ),
+            machine.stop(running),
+          ),
+        ).pipe(
+          Effect.onError(() =>
+            Effect.andThen(
               runner === undefined
                 ? Effect.void
-                : machine.recordRunner(place, { kind: RUNNER_RECORD.RUNNING, runner }),
-              bearer === null ? Effect.void : restoreAgentRunnerToken(userId, agentId, bearer),
-            ]),
+                : Effect.ignore(
+                    machine.recordRunner(place, { kind: RUNNER_RECORD.RUNNING, runner }),
+                  ),
+              bearer === null
+                ? Effect.void
+                : Effect.ignore(restoreAgentRunnerToken(userId, agentId, bearer)),
+            ),
           ),
-        ),
-      );
+        );
+
+        return true;
+      }),
+    );
+
+    if (!stopped) return false;
     yield* recordedSandboxStopped(sandboxName);
 
     return true;
