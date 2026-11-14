@@ -4,6 +4,7 @@ import {
   BUTTON_CORNERS,
   BUTTON_VARIANT,
   ButtonLink,
+  DownloadIcon,
   IconButtonLink,
   MARK_PROVIDER,
   ProductMark,
@@ -144,7 +145,7 @@ export function SiteDownload(): React.JSX.Element {
     <ButtonLink
       variant={BUTTON_VARIANT.PRIMARY}
       href={DMG_URL}
-      icon={<ProviderMark provider={MARK_PROVIDER.APPLE} />}
+      endIcon={<DownloadIcon />}
       onClick={() => captureSiteEvent(SITE_EVENT.DOWNLOAD_PRESS)}
     >
       Download for macOS

@@ -101,14 +101,14 @@ import { MINUTE, STORY_NOW, still, useNarrowPage, useStory } from "./landing-sto
  * log, folded calls and all, starting another agent and trading messages
  * with it, the plan's sub-tasks beside it; an automation's page fires a run;
  * the phone holds the same Inbox; and Settings › Agents connects Claude on
- * its plan and Codex on an API key. None is pressed: each plays its story on a clock that
+ * its plan and Codex on an API key, standing still. None is pressed: each other scene plays its story on a clock that
  * runs only while it is on screen (`landing-story.ts`). On a page too narrow
  * for a whole window, the Inbox and the task play only from their telling
  * moment, the ask and the hand-off, which is all their crop shows.
  */
 
 /** How long each scene holds a step, in milliseconds. */
-const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700, KEYS: 1500 } as const;
+const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700 } as const;
 
 /**
  * A window's story: how many steps it plays, the last it draws (held for the
@@ -1142,14 +1142,13 @@ function DevicesScene(): React.JSX.Element {
 /** What a scene is handed: Codex's picture, where the page has one to draw its mark from. */
 type SceneProps = { readonly codexArt?: CodexArt | undefined };
 
-/** A harness's row in Settings › Agents: its mark, its name, the credential it connects with, and the step of the story it connects at. */
+/** A harness's row in Settings › Agents: its mark, its name, and the credential it is connected with. */
 type KeyRow = {
   readonly id: string;
   readonly name: string;
   /** Its mark, or none for Codex's, which is drawn from the page's `codexArt`. */
   readonly mark: ReactNode;
   readonly connected: string;
-  readonly at: number;
 };
 
 const KEY_ROWS: readonly KeyRow[] = [
@@ -1158,14 +1157,12 @@ const KEY_ROWS: readonly KeyRow[] = [
     name: "Claude",
     mark: <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />,
     connected: "Claude plan",
-    at: 0,
   },
   {
     id: "codex",
     name: "Codex",
     mark: null,
     connected: "OpenAI API key",
-    at: 2,
   },
 ];
 
@@ -1175,22 +1172,16 @@ const KEY_ROWS: readonly KeyRow[] = [
  * are inert, since none of them is ever pressed.
  */
 function KeysScene({ codexArt }: SceneProps): React.JSX.Element {
-  const ref = useRef<HTMLDivElement>(null);
-  const step = useStory(ref, 5, BEAT.KEYS);
-
   return (
     <div
-      ref={ref}
       className="ui-landing-scene ui-landing-keys"
       role="img"
-      aria-label="Settings › Agents: Claude connected on its Claude plan, and Codex connecting with an OpenAI API key"
+      aria-label="Claude connected on its Claude plan, and Codex on an OpenAI API key"
       {...DESKTOP_SURFACE}
     >
       <div inert>
-        <SettingsSection title="Agents">
+        <SettingsSection>
           {KEY_ROWS.map((row) => {
-            const connected = step >= row.at;
-
             return (
               <SettingsRow
                 key={row.id}
@@ -1204,16 +1195,14 @@ function KeysScene({ codexArt }: SceneProps): React.JSX.Element {
                 }
                 label={row.name}
                 description={
-                  <SettingsRowStateLine
-                    state={connected ? SETTINGS_ROW_STATE.CONNECTED : SETTINGS_ROW_STATE.PLAIN}
-                  >
-                    {connected ? row.connected : "Not connected"}
+                  <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
+                    {row.connected}
                   </SettingsRowStateLine>
                 }
               >
                 {() => (
                   <Button variant={BUTTON_VARIANT.OUTLINE} onClick={still}>
-                    {connected ? "Manage" : "Connect"}
+                    Manage
                   </Button>
                 )}
               </SettingsRow>

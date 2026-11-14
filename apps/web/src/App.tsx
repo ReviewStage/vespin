@@ -55,13 +55,7 @@ export function App(): React.JSX.Element {
         </>
       }
       close={{
-        title: (
-          <>
-            Open Source.
-            <br />
-            Try {PRODUCT_NAME} today.
-          </>
-        ),
+        title: `Try ${PRODUCT_NAME} today.`,
         actions: (
           <>
             <SiteDownload />

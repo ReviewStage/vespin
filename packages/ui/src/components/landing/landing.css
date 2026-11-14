@@ -237,6 +237,30 @@
     padding-bottom: 24px;
   }
 
+  /* A faint ground behind the window, so its black stands off the page's:
+     a lifted band across the page's whole width, fading in over the room
+     above the window so it has no edge across the page, with a low copper
+     light where the window's top meets it, both fading out toward the foot. */
+  .ui-landing-hero-stage::before {
+    content: "";
+    position: absolute;
+    /* off-scale: the band starts well above the window and runs to the page's edges */
+    inset: -200px calc(20px - var(--ui-landing-gutter)) 0;
+    background:
+      radial-gradient(
+        50% 260px at 50% 200px,
+        color-mix(in srgb, var(--ui-color-accent) 14%, transparent),
+        transparent
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--ui-color-text) 5%, transparent) 200px,
+        transparent 85%
+      );
+    mask-image: linear-gradient(to bottom, transparent, black 200px);
+    pointer-events: none;
+  }
+
   .ui-landing-hero-app {
     position: relative;
     z-index: 1;
