@@ -9,8 +9,8 @@
  * now that no agent shows code. Each statement reads what its held read
  * reads (`listPages`), the account joined through its membership of the
  * task's workspace and held to the task's GitHub access, so a task the
- * account does not reach is no rows. None reads the clock, as Realtime
- * requires.
+ * account does not reach is no rows. None reads the clock, as a live read
+ * must (`live-statement.ts`).
  *
  * It is woken by a save of the task and a page shown on it, both of which
  * name the task, and by what admits the reader to it.
@@ -36,7 +36,7 @@ import { Effect, Option } from "effect";
 import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import { bindLiveRead, liveRowsStatement } from "../live-read-binding.js";
 
-/** The account's membership of the task's workspace, which a live read joins rather than asks, as Neon's guide authorizes one. */
+/** The account's membership of the task's workspace, which a live read joins rather than asks. */
 function memberOfTask(userId: string) {
   return and(eq(member.organizationId, task.organizationId), eq(member.userId, userId));
 }

@@ -302,7 +302,7 @@ test("words selected raise the format toolbar, its marks alone, and a message bo
 const TAKEN: AgentAgentAnswer = {
   agent: {
     id: "agent-1",
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,

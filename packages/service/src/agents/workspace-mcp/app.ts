@@ -103,8 +103,8 @@ export function workspaceIntegrationMcpUrl(origin: string, connection: string): 
 
 /** The function the server is deployed as. */
 export const WORKSPACE_MCP_FUNCTION = {
-  /** The duration its bundle declares: the longest `run_on_mac` a call may wait on, and two minutes for the store and the Mac's answer around it. */
-  MAX_DURATION_SECONDS: MACHINE_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS + 120,
+  /** The duration its bundle declares: the longest ask and run a `run_on_mac` call may wait on, and 80 seconds for the claim, the store, and the Mac's answer around them; the platform's longest. */
+  MAX_DURATION_SECONDS: MACHINE_COMMAND_BOUNDS.ASK_AND_RUN_SECONDS + 80,
 } as const;
 
 /**

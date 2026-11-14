@@ -36,6 +36,8 @@ import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { TOPIC } from "@repo/database/sync/notification";
+import { taskSync } from "@repo/database/sync/tables";
 import {
   DEVICE_LAYOUT,
   getTestDB,
@@ -67,6 +69,7 @@ import {
   type SettledPageCursor,
   settledPageCursorOf,
   TASK_LIST_READ,
+  TASK_LIVE_WINDOW_MILLIS,
   TASK_PAGE_READ,
   TASK_RELATIONS_READ,
   TASK_ROWS_READ,
@@ -100,6 +103,7 @@ import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/code
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
 import { withTaskAgents } from "../../agents/task-agents.js";
 import { TURN_FAILURE } from "../../core.js";
+import type { SyncMoved } from "../../sync/live-query.js";
 import {
   personPageRead,
   taskPageRead,
@@ -111,7 +115,7 @@ import {
 
 /**
  * The plan list's live statements against the held read it stands in for:
- * run as raw SQL as Realtime runs them, decoded as the desktop decodes the
+ * run as raw SQL, decoded as the desktop decodes the
  * rows, and built into the list at the instant the held read was read, they
  * answer what the held read answers, for every member and for no one else.
  *
@@ -120,6 +124,12 @@ import {
 
 /** The instant the list is read at. */
 const NOW = Date.parse("2026-10-15T09:00:00Z");
+
+/** The instant the service binds the list's live window from at `NOW`. */
+const LIVE_SINCE = String(NOW - TASK_LIVE_WINDOW_MILLIS);
+
+/** A live window holding every task, as the test clock writes each at its epoch: what a list read whole by the held read's rule reads. */
+const EVERY_TASK = "0";
 
 const openUser = Effect.gen(function* () {
   const db = yield* Database;
@@ -223,12 +233,12 @@ const runLive = (statement: LiveStatement) =>
   Effect.flatMap(SqlClient.SqlClient, (sql) => sql.unsafe(statement.sql, [...statement.params]));
 
 /** The rows the live statements deliver to the account, decoded as the desktop decodes them. */
-const liveRowsOf = (userId: string) =>
+const liveRowsOf = (userId: string, liveSince = EVERY_TASK) =>
   Effect.gen(function* () {
-    const statements = Option.getOrThrow(tasksRead.statements({ userId }));
+    const statements = Option.getOrThrow(tasksRead.statements({ userId, liveSince }));
 
     return yield* Schema.decodeUnknownEffect(TASK_LIST_READ.rows)({
-      plans: yield* runLive(statements.plans),
+      tasks: yield* runLive(statements.tasks),
       agents: yield* runLive(statements.agents),
     });
   });
@@ -239,12 +249,12 @@ const taskRowsOf = (userId: string, id: string) =>
     const statements = Option.getOrThrow(taskRowsRead.statements({ userId, id }));
 
     const rows = yield* Schema.decodeUnknownEffect(TASK_ROWS_READ.rows)({
-      plans: yield* runLive(statements.plans),
+      tasks: yield* runLive(statements.tasks),
       agents: yield* runLive(statements.agents),
     });
 
     return {
-      plans: rows.plans.map((plan) => plan.id),
+      plans: rows.tasks.map((plan) => plan.id),
       agents: rows.agents.map((agent) => agent.id).toSorted(),
     };
   });
@@ -255,12 +265,12 @@ const relatedOf = (userId: string, id: string) =>
     const statements = Option.getOrThrow(taskRelationsRead.statements({ userId, id }));
 
     const rows = yield* Schema.decodeUnknownEffect(TASK_RELATIONS_READ.rows)({
-      plans: yield* runLive(statements.plans),
+      tasks: yield* runLive(statements.tasks),
       agents: yield* runLive(statements.agents),
     });
 
     return {
-      plans: rows.plans.map((plan) => plan.id).toSorted(),
+      plans: rows.tasks.map((plan) => plan.id).toSorted(),
       agents: rows.agents.map((agent) => agent.id).toSorted(),
     };
   });
@@ -271,12 +281,12 @@ const searchedOf = (userId: string, query: string) =>
     const statements = Option.getOrThrow(taskSearchRead.statements({ userId, query }));
 
     const rows = yield* Schema.decodeUnknownEffect(TASK_SEARCH_READ.rows)({
-      plans: yield* runLive(statements.plans),
+      tasks: yield* runLive(statements.tasks),
       agents: yield* runLive(statements.agents),
     });
 
     return {
-      plans: rows.plans.map((plan) => plan.id).toSorted(),
+      plans: rows.tasks.map((plan) => plan.id).toSorted(),
       agents: rows.agents.map((agent) => agent.id).toSorted(),
     };
   });
@@ -294,11 +304,11 @@ const settledPageOf = (userId: string, workspaceId: string, before?: SettledPage
     );
 
     const rows = yield* Schema.decodeUnknownEffect(TASK_PAGE_READ.rows)({
-      plans: yield* runLive(statements.plans),
+      tasks: yield* runLive(statements.tasks),
       agents: yield* runLive(statements.agents),
     });
 
-    const plans = rows.plans.toSorted(
+    const plans = rows.tasks.toSorted(
       (a, b) =>
         (b.completedAt ?? b.updatedAt) - (a.completedAt ?? a.updatedAt) || (a.id < b.id ? 1 : -1),
     );
@@ -307,7 +317,7 @@ const settledPageOf = (userId: string, workspaceId: string, before?: SettledPage
       plans: plans.map((plan) => plan.id),
       names: plans.map((plan) => plan.name),
       agents: rows.agents.map((agent) => agent.id).toSorted(),
-      next: settledPageCursorOf(rows.plans),
+      next: settledPageCursorOf(rows.tasks),
     };
   });
 
@@ -320,13 +330,13 @@ const personPageOf = (userId: string, workspaceId: string, personId: string) =>
 
     const rows = yield* Schema.decodeUnknownEffect(PERSON_PAGE_READ.rows)({
       counts: yield* runLive(statements.counts),
-      plans: yield* runLive(statements.plans),
+      tasks: yield* runLive(statements.tasks),
       agents: yield* runLive(statements.agents),
     });
 
     return {
       counts: rows.counts.map(({ assigned, created, agents }) => ({ assigned, created, agents })),
-      plans: rows.plans.map((plan) => plan.id).toSorted(),
+      plans: rows.tasks.map((plan) => plan.id).toSorted(),
       agents: rows.agents.map((agent) => agent.id).toSorted(),
     };
   });
@@ -405,16 +415,35 @@ function countedOf(plan: HeldTaskSummary): TaskSummary {
   return { ...rest, agents: counts };
 }
 
-/** The held list with each plan's followers as the store reads them, which the held read leaves to the live one. */
+/** Each listed task's direct children among `tasks`, the finished ones apart, by the parent's id, as the live row counts them over the tasks its reader reaches. */
+function subTasksAmong(
+  tasks: readonly { readonly parentTaskId?: string; readonly status?: string }[],
+): ReadonlyMap<string, { readonly finished: number; readonly total: number }> {
+  const counts = new Map<string, { finished: number; total: number }>();
+
+  for (const { parentTaskId, status } of tasks) {
+    if (parentTaskId === undefined) continue;
+    const count = counts.get(parentTaskId) ?? { finished: 0, total: 0 };
+    count.total += 1;
+    count.finished += status === TASK_STATUS.DONE || status === TASK_STATUS.CANCELED ? 1 : 0;
+    counts.set(parentTaskId, count);
+  }
+
+  return counts;
+}
+
+/** The held list with each plan's followers as the store reads them, which the held read leaves to the live one, and its sub-tasks counted over the held list itself, which the held read carries no count of. */
 const heldList = (userId: string) =>
   Effect.gen(function* () {
     const tasks = yield* listTasks(userId);
     const ids = tasks.map((each) => each.id);
     const followers = yield* listTasksFollowersNamed(userId, ids);
+    const subTasks = subTasksAmong(tasks);
 
     return {
-      plans: (yield* withTaskAgents(userId, tasks)).map((plan) => ({
+      tasks: (yield* withTaskAgents(userId, tasks)).map((plan) => ({
         ...countedOf(plan),
+        ...(subTasks.has(plan.id) ? { subTasks: subTasks.get(plan.id) } : undefined),
         followers: (followers.get(plan.id) ?? []).map(({ userId, assignee, machines }) => ({
           userId,
           assignee,
@@ -537,7 +566,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
-    "follow a task the reader pinned, and the task of an agent it pinned, however long ago it was done",
+    "follow every task under way, each Done one touched within the window, and each pinned or with an agent pinned however long ago it was done, with their agents alone",
     () =>
       Effect.gen(function* () {
         const owner = yield* openUser;
@@ -545,29 +574,56 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         yield* openWorkspace(outsider);
         const pinned = yield* startTask(owner, { name: "Teammate invitations" });
         const ofAgent = yield* startTask(owner, { name: "Billing export" });
-        const agent = yield* openAgent(owner, { taskId: ofAgent.id }, 60_000);
+        const pinnedAgent = yield* openAgent(owner, { taskId: ofAgent.id }, 60_000);
+        const underWay = yield* startTask(owner, { name: "Audit log" });
+        const recent = yield* startTask(owner, { name: "Onboarding" });
+        const old = yield* startTask(owner, { name: "Payroll" });
+        yield* openAgent(owner, { taskId: old.id }, 60_000);
         yield* updateTask(owner, pinned.id, { pinned: true });
-        yield* pinAgent(owner, agent.id, true);
-        // Both were finished a year before the list is read, well past any recent window.
+        yield* pinAgent(owner, pinnedAgent.id, true);
         const db = yield* Database;
+        // One finished a day inside the window, and the rest a year before the list is read.
+        const lately = new Date(Number(LIVE_SINCE) + Duration.toMillis(Duration.days(1)));
         const yearAgo = new Date(NOW - Duration.toMillis(Duration.days(365)));
         yield* db
           .update(task)
           .set({ status: TASK_STATUS.DONE, completedAt: yearAgo, updatedAt: yearAgo })
-          .where(inArray(task.id, [pinned.id, ofAgent.id]));
+          .where(inArray(task.id, [pinned.id, ofAgent.id, old.id]));
+        yield* db
+          .update(task)
+          .set({ status: TASK_STATUS.IN_PROGRESS, updatedAt: yearAgo })
+          .where(eq(task.id, underWay.id));
+        yield* db
+          .update(task)
+          .set({ status: TASK_STATUS.CANCELED, completedAt: lately, updatedAt: lately })
+          .where(eq(task.id, recent.id));
 
         const followedBy = (reader: string) =>
-          Effect.map(liveRowsOf(reader), (rows) => rows.plans.map((plan) => plan.id).toSorted());
+          Effect.map(liveRowsOf(reader, LIVE_SINCE), (rows) => ({
+            plans: rows.tasks.map((task) => task.id).toSorted(),
+            agents: rows.agents.map((agent) => agent.id).toSorted(),
+          }));
 
-        assert.deepEqual(yield* followedBy(owner), [pinned.id, ofAgent.id].toSorted());
-        assert.deepEqual(yield* followedBy(outsider), [], "no other account's list holds them");
+        assert.deepEqual(yield* followedBy(owner), {
+          plans: [pinned.id, ofAgent.id, underWay.id, recent.id].toSorted(),
+          agents: [pinnedAgent.id],
+        });
+        assert.deepEqual(
+          yield* followedBy(outsider),
+          { plans: [], agents: [] },
+          "no other account's list holds them",
+        );
       }),
   );
 
   it.effect("call only functions Postgres marks immutable, as Realtime requires", () =>
     Effect.gen(function* () {
-      const { plans, agents, issues } = Option.getOrThrow(
-        tasksRead.statements({ userId: "user-immutable" }),
+      const {
+        tasks: plans,
+        agents,
+        issues,
+      } = Option.getOrThrow(
+        tasksRead.statements({ userId: "user-immutable", liveSince: LIVE_SINCE }),
       );
 
       assert.deepEqual(yield* mutableFunctionsOf(plans), []);
@@ -723,7 +779,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
 
         assert.equal(helperRow?.startedByAgentId, local.id);
         const read = yield* liveListOf(owner, NOW);
-        const originOf = (taskId: string) => read.plans.find((each) => each.id === taskId)?.origin;
+        const originOf = (taskId: string) => read.tasks.find((each) => each.id === taskId)?.origin;
         assert.deepEqual(
           [originOf(plan.id), originOf(followUp.id), originOf(fromCall.id)],
           [
@@ -734,15 +790,15 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         );
 
         const parentOf = (taskId: string) =>
-          read.plans.find((each) => each.id === taskId)?.parentTaskId;
+          read.tasks.find((each) => each.id === taskId)?.parentTaskId;
 
         assert.deepEqual([parentOf(plan.id), parentOf(followUp.id)], [undefined, plan.id]);
-        const agents = read.plans.find((each) => each.id === plan.id)?.agents;
+        const agents = read.tasks.find((each) => each.id === plan.id)?.agents;
         assert.deepEqual(
           [agents?.total, agents?.working, agents?.failed, agents?.pullRequestTotal],
           [8, 2, 1, 1],
         );
-        assert.equal(read.plans.find((each) => each.id === shelved.id)?.agents?.failed, 0);
+        assert.equal(read.tasks.find((each) => each.id === shelved.id)?.agents?.failed, 0);
         const rows = yield* liveRowsOf(owner);
         const pullRequests = pullRequestsOfTask(taskPullRequestsOfLiveRows(rows), plan.id);
         assert.equal(pullRequests[0]?.queued, true, "a queued pull request says so");
@@ -773,7 +829,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           ],
           "each summary carries its newest turn as the row records it, a Stop asked and why it failed among it",
         );
-        assert.deepEqual((yield* liveListOf(outsider, NOW)).plans, []);
+        assert.deepEqual((yield* liveListOf(outsider, NOW)).tasks, []);
       }),
   );
 
@@ -799,9 +855,9 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           const marked = (plans: readonly { id: string; blocked?: true }[]) =>
             plans.flatMap((plan) => (plan.blocked === true ? [plan.id] : []));
 
-          assert.deepEqual(marked(live.plans), marked(held.plans), "live as held");
+          assert.deepEqual(marked(live.tasks), marked(held.tasks), "live as held");
 
-          return marked(live.plans);
+          return marked(live.tasks);
         });
 
         assert.deepEqual(yield* blocked, [waiting.id], "both blockers open");
@@ -823,7 +879,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           });
 
         assert.deepEqual(
-          blocksOf(live.plans),
+          blocksOf(live.tasks),
           [
             { blockedBy: [shipped.id, cut.id], blocks: [] },
             { blockedBy: [], blocks: [waiting.id] },
@@ -831,7 +887,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           ],
           "each row names its blockers, the earliest first, and what it blocks",
         );
-        assert.deepEqual(blocksOf(held.plans), blocksOf(live.plans), "live as held");
+        assert.deepEqual(blocksOf(held.tasks), blocksOf(live.tasks), "live as held");
         yield* updateTask(owner, shipped.id, { status: TASK_STATUS.DONE });
         assert.deepEqual(yield* blocked, [waiting.id], "one blocker still open");
         yield* updateTask(owner, cut.id, { status: TASK_STATUS.CANCELED });
@@ -866,7 +922,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         yield* archiveAgent(owner, archived.id, true);
 
         const rows = yield* liveRowsOf(owner);
-        const row = taskListOfLiveRows(rows, NOW).plans.find((each) => each.id === plan.id);
+        const row = taskListOfLiveRows(rows, NOW).tasks.find((each) => each.id === plan.id);
         const every = taskPullRequestsOfLiveRows(rows).find((each) => each.taskId === plan.id);
         assert.equal(row?.agents?.pullRequestTotal, 5);
         assert.deepEqual(
@@ -1254,6 +1310,91 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         const none = { plans: [], names: [], agents: [], next: undefined };
         assert.deepEqual(yield* settledPageOf(outsider, workspaceId), none);
         assert.deepEqual(yield* settledPageOf(outsider, workspaceId, page.next), none);
+      }),
+  );
+  it.effect(
+    "count a task's direct children the reader reaches, the finished apart, and send both parents of a child moved between them past a sync id to a member and no one else",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const parent = yield* startTask(owner, { name: "Teammate invitations" });
+        const other = yield* startTask(owner, { name: "Billing export" });
+        yield* joinWorkspace(parent.workspaceId, teammate);
+        const shipped = yield* startTask(owner, { name: "Invitation emails" });
+        const working = yield* startTask(owner, { name: "Invitation links" });
+        const hidden = yield* startTask(owner, { name: "Invitation audit" });
+        const grandchild = yield* startTask(owner, { name: "Link expiry" });
+        const db = yield* Database;
+
+        for (const child of [shipped, working, hidden]) {
+          yield* db.update(task).set({ parentTaskId: parent.id }).where(eq(task.id, child.id));
+        }
+
+        yield* db.update(task).set({ parentTaskId: working.id }).where(eq(task.id, grandchild.id));
+        yield* updateTask(owner, shipped.id, { status: TASK_STATUS.DONE });
+        // A child on its owner's own token, which the teammate does not reach, and so does not count.
+        yield* db
+          .update(task)
+          .set({ githubAccess: GITHUB_ACCESS.TOKEN, repository: "acme/side" })
+          .where(eq(task.id, hidden.id));
+
+        const countsOf = (reader: string) =>
+          Effect.map(liveListOf(reader, NOW), (list) =>
+            [parent, working, other].map(
+              ({ id }) => list.tasks.find((task) => task.id === id)?.subTasks,
+            ),
+          );
+
+        assert.deepEqual(yield* countsOf(owner), [
+          { finished: 1, total: 3 },
+          { finished: 0, total: 1 },
+          undefined,
+        ]);
+        assert.deepEqual(yield* countsOf(teammate), [
+          { finished: 1, total: 2 },
+          { finished: 0, total: 1 },
+          undefined,
+        ]);
+        assert.deepEqual(yield* countsOf(outsider), [undefined, undefined, undefined]);
+
+        // The finished child moves to the other parent, which the log names as both of its parents (`TOPIC.TASK_PARENT`).
+        yield* db.update(task).set({ parentTaskId: other.id }).where(eq(task.id, shipped.id));
+
+        const moved: SyncMoved = {
+          keys: (table) => (table === taskSync ? [shipped.id] : []),
+          topics: (table, kind) =>
+            table === taskSync && kind === TOPIC.TASK_PARENT ? [parent.id, other.id] : [],
+        };
+
+        const { delta } = tasksRead;
+        assert.ok(delta !== undefined, "the list answers deltas");
+
+        const statements = Option.getOrThrow(
+          delta.statements({ userId: teammate, liveSince: EVERY_TASK }, moved),
+        );
+
+        const rows = yield* Schema.decodeUnknownEffect(
+          Schema.Array(TASK_LIST_READ.parts.tasks.row),
+        )(yield* runLive(statements.tasks));
+
+        assert.deepEqual(
+          rows
+            .map(({ id, subTaskCount, finishedSubTaskCount }) => ({
+              id,
+              subTaskCount,
+              finishedSubTaskCount,
+            }))
+            .toSorted((a, b) => a.id.localeCompare(b.id)),
+          [
+            { id: parent.id, subTaskCount: 1, finishedSubTaskCount: 0 },
+            { id: other.id, subTaskCount: 1, finishedSubTaskCount: 1 },
+            { id: shipped.id, subTaskCount: 0, finishedSubTaskCount: 0 },
+          ].toSorted((a, b) => a.id.localeCompare(b.id)),
+          "the child and both its parents are sent, each counted anew",
+        );
       }),
   );
 

@@ -61,7 +61,7 @@ import { MESSAGE_CHANNEL, TURN_FAILURE, TURN_STATUS } from "../../core.js";
 import type { GitHubApp } from "../../github/github-app.js";
 import { afterResponse } from "../../http/after-response.js";
 import { agentLogIds } from "./agent-log.js";
-import type { QueueSessions } from "./agent-queue.js";
+import type { QueueSessions } from "./runtime-sessions.js";
 import { hostLostOf } from "./status.js";
 import { STEER_DELIVERY, steerAgentWritten } from "./steer.js";
 import { CODER_TOOL_SET } from "./tool-set.js";

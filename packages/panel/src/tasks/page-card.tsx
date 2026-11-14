@@ -98,7 +98,7 @@ function useShowerDoor(shower: Actor | undefined): (() => void) | undefined {
   return () =>
     openPlace({
       kind: LINK_DESTINATION.AGENT,
-      ...(taskId === undefined ? undefined : { planId: taskId }),
+      ...(taskId === undefined ? undefined : { taskId: taskId }),
       agentId,
     });
 }

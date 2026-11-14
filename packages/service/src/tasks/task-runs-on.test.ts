@@ -138,7 +138,7 @@ it.layer(getTestDB())("where a task runs its agents", (it) => {
         });
 
         assert.equal(toLaptop.status, 200, JSON.stringify(toLaptop.body));
-        assert.equal(toLaptop.body.plan.runsOn?.deviceId, studio);
+        assert.equal(toLaptop.body.task.runsOn?.deviceId, studio);
 
         const toDevice = yield* patch(empty.id, "Bearer owner", {
           machine: AGENT_MACHINE.DEVICE,
@@ -146,7 +146,7 @@ it.layer(getTestDB())("where a task runs its agents", (it) => {
         });
 
         assert.equal(toDevice.status, 200, JSON.stringify(toDevice.body));
-        assert.equal(toDevice.body.plan.runsOn, undefined);
+        assert.equal(toDevice.body.task.runsOn, undefined);
 
         // An account outside the workspace reaches no such task.
         const byStranger = yield* patch(task.id, "Bearer stranger", {

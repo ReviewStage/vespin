@@ -317,3 +317,33 @@ test("a parent counts its direct child tasks that are done or canceled, of all i
   expect(counts.get("working")).toEqual({ finished: 1, total: 1 });
   expect(counts.has("shipped")).toBe(false);
 });
+
+test("a parent counts the finished sub-task the service counted outside the list, its own children where the list holds every one, and the service's where the list holds one more", () => {
+  const withStatus = (name: string, parent: string | undefined, status: TaskStatus) => ({
+    ...childTask(name, 1, parent),
+    status,
+  });
+
+  const counts = childTaskCounts([
+    // The list holds the open child alone; the service counted a finished one beside it.
+    {
+      ...withStatus("parent", undefined, TASK_STATUS.IN_PROGRESS),
+      subTasks: { finished: 1, total: 2 },
+    },
+    withStatus("working", "parent", TASK_STATUS.IN_PROGRESS),
+    // The list holds the child, just marked done, which the service has not counted yet.
+    { ...withStatus("other", undefined, TASK_STATUS.TODO), subTasks: { finished: 0, total: 1 } },
+    withStatus("shipped", "other", TASK_STATUS.DONE),
+    // The service counted a child the list holds none of.
+    { ...withStatus("lone", undefined, TASK_STATUS.TODO), subTasks: { finished: 1, total: 1 } },
+    // The list still holds a child read outside it that has since moved to another parent.
+    { ...withStatus("left", undefined, TASK_STATUS.TODO), subTasks: { finished: 0, total: 1 } },
+    withStatus("staying", "left", TASK_STATUS.TODO),
+    withStatus("moved", "left", TASK_STATUS.DONE),
+  ]);
+
+  expect(counts.get("parent")).toEqual({ finished: 1, total: 2 });
+  expect(counts.get("other")).toEqual({ finished: 1, total: 1 });
+  expect(counts.get("lone")).toEqual({ finished: 1, total: 1 });
+  expect(counts.get("left")).toEqual({ finished: 0, total: 1 });
+});
