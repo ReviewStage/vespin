@@ -33,6 +33,7 @@ import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glas
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
+import { useNoticeLift } from "./notice-lift.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -40,6 +41,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The send button's round, in points. */
 const SEND_SIZE = 32;
+
+/** How tall a column's composer stands at its foot with its gap, a bare field's, which the app's notice stands over, in points. */
+const COMPOSER_FOOT_ROOM = SEND_SIZE + 2 * (SPACE.ROW + 2) + SPACE.ROW;
 
 /**
  * A press's frame in the composer's row: Apple's least target, its mark
@@ -395,6 +399,8 @@ export function Composer(props: ComposerProps) {
  * system's own glass, rounded as the bar is.
  */
 export function ComposerFoot(props: ComposerProps) {
+  useNoticeLift(COMPOSER_FOOT_ROOM);
+
   const glass = [
     padding({ all: BAR_EDGE }),
     glassEffect({

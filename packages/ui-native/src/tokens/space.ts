@@ -47,6 +47,13 @@ export const MARK_SIZE = {
   SIDEBAR_LEAD: 28,
 } as const;
 
+/**
+ * The room the system's tab bar floats over at a compact window's foot, past
+ * the safe area, which what stands at the foot, such as a transcript's newest
+ * row or the app's notice, stands clear of.
+ */
+export const TAB_BAR_ROOM = 64;
+
 /** The least a press stands as, in points, as Apple's guidelines ask of a target, whatever size its mark is drawn at. */
 export const PRESS_SIZE = 44;
 

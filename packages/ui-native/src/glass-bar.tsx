@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceTransparency } from "./accessibility.js";
+import { useNoticeLift } from "./notice-lift.js";
 import { useColors } from "./tokens/colors.js";
 import { READING_WIDTH, SPACE } from "./tokens/space.js";
 
@@ -82,7 +83,7 @@ function moveWithKeyboard({ duration, easing }: KeyboardEvent) {
 }
 
 /** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. */
-function useKeyboardHeight(): number {
+export function useKeyboardHeight(): number {
   const [height, setHeight] = useState(0);
   useEffect(() => {
     const rising = Keyboard.addListener("keyboardWillShow", (event) => {
@@ -252,6 +253,7 @@ export function GlassDock({
   // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
   const keyboard = useKeyboardHeight();
   const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
+  useNoticeLift(room);
   // Note that the column holds the window's side safe areas too, which the bar's own safe area view pads inside it, so its glass spans the reading width.
   const { left, right } = useSafeAreaInsets();
 

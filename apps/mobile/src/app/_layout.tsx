@@ -3,7 +3,12 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeLayer, FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
+import {
+  FailureNoticeLayer,
+  FailureNoticeProvider,
+  KeepingProvider,
+  TAB_BAR_ROOM,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import type { ReactNode } from "react";
@@ -171,9 +176,12 @@ function KeptScreens() {
 
 /** The root: the host, the one notice of a write that did not go, and the screens under both. */
 export default function RootLayout() {
+  // Note that a compact window's tab bar floats at its foot, which the notice stands over; a regular window's tabs stand at its top or its side.
+  const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
+
   return (
     <HostProvider>
-      <FailureNoticeProvider>
+      <FailureNoticeProvider footRoom={compact ? TAB_BAR_ROOM : 0}>
         <KeptScreens />
       </FailureNoticeProvider>
     </HostProvider>

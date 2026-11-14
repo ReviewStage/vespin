@@ -1,4 +1,4 @@
-// failure-notice.tsx -- the app's one notice: a banner of Liquid Glass that slides down from the top with a refusal's words and a Try again, a write that went with its Undo, or says once that the phone is offline, read aloud by VoiceOver and let go on its own.
+// failure-notice.tsx -- the app's one notice: a banner of Liquid Glass that rises at the window's foot, over its bars, with a refusal's words and a Try again, a write that went with its Undo, or says once that the phone is offline, read aloud by VoiceOver and let go on its own.
 
 import { Host, HStack, Image, Spacer, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
 import {
@@ -25,7 +25,7 @@ import {
   useState,
 } from "react";
 import { AccessibilityInfo, Animated, PanResponder, StyleSheet, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceMotion } from "./accessibility.js";
 import {
   NO_NOTICE,
@@ -37,9 +37,10 @@ import {
   noticeOnline,
   type ShownNotice,
 } from "./failure-notice-model.js";
-import { BAR_RADIUS } from "./glass-bar.js";
+import { BAR_RADIUS, useKeyboardHeight } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";
+import { NoticeLift, type NoticeLifts } from "./notice-lift.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -55,13 +56,13 @@ const STANDS_FOR = {
   SCREEN_READER: 10_000,
 } as const;
 
-/** How far the banner travels in from above the screen's top as it arrives, in points. */
+/** How far the banner travels up from below the window's foot as it arrives, in points. */
 const ARRIVAL = 120;
 
 /** How long it takes to slide in or out, in milliseconds, as the system's own banners do. */
 const SLIDE_MS = 280;
 
-/** How far a swipe up must carry the banner before it lets it go, in points. */
+/** How far a swipe down must carry the banner before it lets it go, in points. */
 const SWIPE_AWAY = 24;
 
 /** The glyph each notice leads with. */
@@ -72,9 +73,9 @@ const NOTICE_SYMBOL = {
 } as const satisfies Record<ShownNotice["kind"], Glyph>;
 
 const styles = StyleSheet.create({
-  // The banner's column, over the whole window and taking no touch outside the banner itself.
-  edge: { position: "absolute", top: 0, left: 0, right: 0 },
-  lane: { paddingHorizontal: SPACE.ROW + 2, paddingTop: SPACE.TIGHT, alignItems: "center" },
+  // The banner's column, across the window's foot and taking no touch outside the banner itself.
+  edge: { position: "absolute", left: 0, right: 0 },
+  lane: { paddingHorizontal: SPACE.ROW + 2, paddingBottom: SPACE.TIGHT, alignItems: "center" },
   banner: { width: "100%", maxWidth: 560 },
   // A sheet's own frame, which its banner stands over.
   layer: { flex: 1 },
@@ -92,10 +93,11 @@ export interface FailureNotices {
 
 const Notices = createContext<FailureNotices | undefined>(undefined);
 
-/** Where the one notice stands: the notice itself, the layer drawn last (the sheet on top), and how a layer comes and goes. */
+/** Where the one notice stands: the notice itself, the layer drawn last (the sheet on top), how tall the bar drawn last at a screen's foot stands, and how a layer comes and goes. */
 interface NoticeStage {
   readonly shown: ShownNotice | undefined;
   readonly top: string | undefined;
+  readonly lift: number | undefined;
   readonly gone: (serial: number) => void;
   readonly enter: (layer: string) => () => void;
 }
@@ -184,9 +186,12 @@ function NoticeBody({
 }
 
 /**
- * The banner: slides down under the status bar as a notice arrives, or
- * fades in where the reader reduces motion, stands until its time is up,
- * a swipe up, or its Try again or Undo, and slides away. Note that it stands over the
+ * The banner: rises at the window's foot as a notice arrives, over the
+ * composer or the tab bar there, as Mail and Messages stand Undo over their
+ * bars, so it never covers the heading or the search field it speaks of; or
+ * fades in where the reader reduces motion. It stands until its time is up,
+ * a swipe down, or its Try again or Undo, and sinks away. With the keyboard
+ * up it stands over the keyboard, and over a bar riding it. Note that it stands over the
  * app's root view, above the tabs, and passes every touch outside it
  * through to the screen under it; it does not stand in a window of its own
  * (`FullWindowOverlay`), because on iOS 27.2 that window never drew, so no
@@ -197,11 +202,19 @@ function NoticeBody({
 function NoticeBanner({
   notice,
   onGone,
+  lift,
+  footRoom,
 }: {
   readonly notice: ShownNotice | undefined;
   readonly onGone: (serial: number) => void;
+  /** How tall the bar drawn last at a screen's foot stands, which the banner stands over; none where none stands. */
+  readonly lift: number | undefined;
+  /** The room the window's own bar takes at its foot where no screen's bar stands, such as a compact window's tab bar. */
+  readonly footRoom: number;
 }) {
   const reduceMotion = useReduceMotion();
+  const keyboard = useKeyboardHeight();
+  const { bottom: safeBottom } = useSafeAreaInsets();
   const [place] = useState(() => new Animated.Value(0));
   const [drawn, setDrawn] = useState<ShownNotice | undefined>(notice);
 
@@ -268,9 +281,9 @@ function NoticeBanner({
   const swipe = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (_, { dy }) => dy < -4,
+        onMoveShouldSetPanResponder: (_, { dy }) => dy > 4,
         onPanResponderRelease: (_, { dy }) => {
-          if (dy < -SWIPE_AWAY && drawn !== undefined) leave(drawn.serial);
+          if (dy > SWIPE_AWAY && drawn !== undefined) leave(drawn.serial);
         },
       }),
     [drawn, leave],
@@ -289,12 +302,15 @@ function NoticeBanner({
     : {
         opacity: place,
         transform: [
-          { translateY: place.interpolate({ inputRange: [0, 1], outputRange: [-ARRIVAL, 0] }) },
+          { translateY: place.interpolate({ inputRange: [0, 1], outputRange: [ARRIVAL, 0] }) },
         ],
       };
 
+  // Note that the keyboard covers the bottom safe area and the tab bar alike, so with it up the banner stands on the keyboard, under a bar only where one rides it.
+  const foot = keyboard > 0 ? keyboard + (lift ?? 0) : safeBottom + (lift ?? footRoom);
+
   return (
-    <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.edge}>
+    <View pointerEvents="box-none" style={[styles.edge, { bottom: foot }]}>
       <Animated.View
         style={[styles.lane, arriving]}
         pointerEvents="box-none"
@@ -303,7 +319,7 @@ function NoticeBanner({
       >
         <NoticeBody notice={drawn} onPress={press} />
       </Animated.View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -316,9 +332,17 @@ function NoticeBanner({
  * and in the sheet on top while one does (`FailureNoticeLayer`), since a
  * sheet is a view of its own over the root, which would hide it.
  */
-export function FailureNoticeProvider({ children }: { readonly children: ReactNode }) {
+export function FailureNoticeProvider({
+  children,
+  footRoom = 0,
+}: {
+  readonly children: ReactNode;
+  /** The room the window's own bar takes at its foot, such as a compact window's tab bar, which the notice stands over where no screen pins a bar of its own. */
+  readonly footRoom?: number;
+}) {
   const [state, setState] = useState(NO_NOTICE);
   const [layers, setLayers] = useState<readonly string[]>([]);
+  const [bars, setBars] = useState<ReadonlyArray<readonly [string, number]>>([]);
 
   const notices = useMemo<FailureNotices>(
     () => ({
@@ -338,19 +362,41 @@ export function FailureNoticeProvider({ children }: { readonly children: ReactNo
     return () => setLayers((were) => were.filter((was) => was !== layer));
   }, []);
 
+  // Note that a bar that grows keeps its place among the bars, and the one drawn last is the one in front.
+  const lifts = useMemo<NoticeLifts>(
+    () => ({
+      raise: (bar, room) =>
+        setBars((were) =>
+          were.some(([was]) => was === bar)
+            ? were.map((was) => (was[0] === bar ? ([bar, room] as const) : was))
+            : [...were, [bar, room] as const],
+        ),
+      drop: (bar) => setBars((were) => were.filter(([was]) => was !== bar)),
+    }),
+    [],
+  );
+
   const top = layers.at(-1);
+  const lift = bars.at(-1)?.[1];
 
   const stage = useMemo<NoticeStage>(
-    () => ({ shown: state.shown, top, gone, enter }),
-    [state.shown, top, gone, enter],
+    () => ({ shown: state.shown, top, lift, gone, enter }),
+    [state.shown, top, lift, gone, enter],
   );
 
   return (
     <Notices.Provider value={notices}>
-      <Stage.Provider value={stage}>
-        {children}
-        <NoticeBanner notice={top === undefined ? state.shown : undefined} onGone={gone} />
-      </Stage.Provider>
+      <NoticeLift.Provider value={lifts}>
+        <Stage.Provider value={stage}>
+          {children}
+          <NoticeBanner
+            notice={top === undefined ? state.shown : undefined}
+            onGone={gone}
+            lift={lift}
+            footRoom={footRoom}
+          />
+        </Stage.Provider>
+      </NoticeLift.Provider>
     </Notices.Provider>
   );
 }
@@ -366,14 +412,19 @@ export function FailureNoticeLayer({ children }: { readonly children: ReactNode 
 
   if (stage === undefined) throw new Error("A sheet drew a notice layer outside its provider.");
 
-  const { enter, top, shown, gone } = stage;
+  const { enter, top, shown, gone, lift } = stage;
 
   useEffect(() => enter(layer), [enter, layer]);
 
   return (
     <View style={styles.layer}>
       {children}
-      <NoticeBanner notice={top === layer ? shown : undefined} onGone={gone} />
+      <NoticeBanner
+        notice={top === layer ? shown : undefined}
+        onGone={gone}
+        lift={lift}
+        footRoom={0}
+      />
     </View>
   );
 }

@@ -1,4 +1,4 @@
-# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice sliding down with the refusal's words and Try again, Try again refused once more, and the notice swiped away.
+# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice rising at the window's foot with the refusal's words and Try again, Try again refused once more, and the notice swiped away.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -19,7 +19,7 @@ appId: dev.vespin.ios
 # the notice says why, with Try again.
 - longPressOn: "Weekly digest email"
 - tapOn: "Unpin"
-- assertVisible: "The task could not be unpinned. Try again."
+- assertVisible: "The task could not be unpinned\\..*"
 - assertVisible:
     id: "failure-notice-retry"
 - takeScreenshot: failure-notice
@@ -27,15 +27,15 @@ appId: dev.vespin.ios
 # notice comes back in the same words.
 - tapOn:
     id: "failure-notice-retry"
-- assertVisible: "The task could not be unpinned. Try again."
+- assertVisible: "The task could not be unpinned\\..*"
 - assertVisible: "Pinned"
-# A swipe up puts the notice away before its time is up.
+# A swipe down puts the notice away before its time is up.
 - swipe:
     from:
       id: "failure-notice"
-    direction: UP
+    direction: DOWN
 - waitForAnimationToEnd
-- assertNotVisible: "The task could not be unpinned. Try again."
+- assertNotVisible: "The task could not be unpinned\\..*"
 # Mark done from the same menu asks first in the system's alert, since the
 # task's agent is at work and only the person can decide to stop it; once
 # confirmed, it is refused too: the task stays in the list and the notice
