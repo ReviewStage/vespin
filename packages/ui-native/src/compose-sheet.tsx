@@ -42,7 +42,7 @@ import { GlassBar, GlassDock, useDockRoom } from "./glass-bar.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
-import { choiceColor, type MenuChoice } from "./list-row.js";
+import { choiceContent, type MenuChoice } from "./list-row.js";
 import { HarnessMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
@@ -135,7 +135,7 @@ export function MenuChip({ label, symbol, harness, menu, testId }: MenuChipProps
           {group.choices.map((choice) => (
             <Toggle
               key={choice.label}
-              {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
+              {...choiceContent(choice, colors)}
               isOn={choice.on}
               onIsOnChange={() => choice.onPress()}
             />

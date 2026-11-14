@@ -1,8 +1,8 @@
 diff --git a/build/swift-ui/Image/index.d.ts b/build/swift-ui/Image/index.d.ts
-index f1aeaae3b55fd5cb2d30b952c096b086391575a6..c78a6397b9dfb3195c25a0153129dc73b28e0f87 100644
+index f1aeaae3b55fd5cb2d30b952c096b086391575a6..a4c7845d5604e78a36dfae1a67599654892f837a 100644
 --- a/build/swift-ui/Image/index.d.ts
 +++ b/build/swift-ui/Image/index.d.ts
-@@ -28,6 +28,11 @@ export interface ImageProps extends CommonViewModifierProps {
+@@ -28,6 +28,22 @@ export interface ImageProps extends CommonViewModifierProps {
       * Can be a color name like '#ff00ff', 'red', 'blue', etc.
       */
      color?: ColorValue;
@@ -11,23 +11,38 @@ index f1aeaae3b55fd5cb2d30b952c096b086391575a6..c78a6397b9dfb3195c25a0153129dc73
 +     * system menu, which templates an icon tinted by `color`, keeps it.
 +     */
 +    originalColor?: ColorValue;
++    /**
++     * How faint a layered symbol's second layer is drawn beside
++     * `originalColor`, between 0 and 1, painted as a palette of the two.
++     */
++    originalSecondaryOpacity?: number;
++    /**
++     * The side, in points, of a photo a system menu draws: `uiImage`, a
++     * `file://` address alone, drawn into its circle at that size with its
++     * rendering kept original. Any other address draws nothing.
++     */
++    photoSize?: number;
      /**
       * The variable value that alters the symbol's appearance.
       * A number between 0.0 and 1.0.
 diff --git a/ios/ImageView.swift b/ios/ImageView.swift
-index 170de73445439a3ba4e5495643ee5f7c3eb332ab..8578f82e55be76c860b1557aa81fe55dbfd3343d 100644
+index 170de73445439a3ba4e5495643ee5f7c3eb332ab..c78347146acb72f741d29c8bd4c841fbbd6bfd5e 100644
 --- a/ios/ImageView.swift
 +++ b/ios/ImageView.swift
-@@ -8,6 +8,8 @@ public final class ImageViewProps: UIBaseViewProps {
+@@ -8,6 +8,12 @@ public final class ImageViewProps: UIBaseViewProps {
    @Field var systemName: String?
    @Field var assetName: String?
    @Field var variableValue: Double?
 +  // A color drawn into the symbol itself, which a system menu keeps where it templates an icon tinted by a modifier.
 +  @Field var originalColor: Color?
++  // How faint a layered symbol's second layer stands beside `originalColor`, as a priority's unlit bars, painted as a palette of the two.
++  @Field var originalSecondaryOpacity: Double?
++  // The side, in points, a photo stands at where a system menu draws it: drawn into its circle at that size, read only from a file on this device.
++  @Field var photoSize: Double?
    @Field var useTapGesture: Bool?
    var onTap = EventDispatcher()
  }
-@@ -19,7 +21,22 @@ public struct ImageView: ExpoSwiftUI.View {
+@@ -19,7 +25,49 @@ public struct ImageView: ExpoSwiftUI.View {
      self.props = props
    }
  
@@ -37,10 +52,37 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..8578f82e55be76c860b1557aa81fe55d
 +      return nil
 +    }
 +    let symbol = props.systemName.flatMap { UIImage(systemName: $0) } ?? props.assetName.flatMap { UIImage(named: $0) }
-+    guard let tinted = symbol?.withTintColor(UIColor(color), renderingMode: .alwaysOriginal) else {
++    let ink = UIColor(color)
++    // A layered symbol is painted as a palette, its second layer the same ink made faint, as the panel draws a priority's unlit bars.
++    if let opacity = props.originalSecondaryOpacity,
++       let painted = symbol?.applyingSymbolConfiguration(
++         UIImage.SymbolConfiguration(paletteColors: [ink, ink.withAlphaComponent(CGFloat(opacity))])
++       ) {
++      return Image(uiImage: painted.withRenderingMode(.alwaysOriginal))
++    }
++    guard let tinted = symbol?.withTintColor(ink, renderingMode: .alwaysOriginal) else {
 +      return nil
 +    }
 +    return Image(uiImage: tinted)
++  }
++
++  // A photo already drawn into its circle at its size, its rendering kept original, so a system menu, which templates an image and takes it at its own size, keeps it. Note that it reads only a file on this device, never the network, since the read is synchronous.
++  private var photoImage: Image? {
++    guard let side = props.photoSize, side > 0,
++          let path = props.uiImage, let url = URL(string: path), url.isFileURL,
++          let photo = UIImage(contentsOfFile: url.path),
++          photo.size.width > 0, photo.size.height > 0 else {
++      return nil
++    }
++    let size = CGSize(width: side, height: side)
++    let round = UIGraphicsImageRenderer(size: size).image { _ in
++      UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).addClip()
++      // The photo fills the circle, its longer side cropped about its center.
++      let scale = max(side / photo.size.width, side / photo.size.height)
++      let drawn = CGSize(width: photo.size.width * scale, height: photo.size.height * scale)
++      photo.draw(in: CGRect(origin: CGPoint(x: (side - drawn.width) / 2, y: (side - drawn.height) / 2), size: drawn))
++    }
++    return Image(uiImage: round.withRenderingMode(.alwaysOriginal))
 +  }
 +
    private var symbolImage: Image? {
@@ -50,3 +92,16 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..8578f82e55be76c860b1557aa81fe55d
      if let systemName = props.systemName {
        if #available(iOS 16.0, tvOS 16.0, *) {
          return Image(systemName: systemName, variableValue: props.variableValue)
+@@ -41,6 +89,12 @@ public struct ImageView: ExpoSwiftUI.View {
+       symbolImage
+         .applyImageModifiers(props.modifiers, appContext: props.appContext)
+         .applyOnTapGesture(useTapGesture: props.useTapGesture, eventDispatcher: props.onTap)
++    } else if props.photoSize != nil {
++      if let photoImage {
++        photoImage
++          .applyImageModifiers(props.modifiers, appContext: props.appContext)
++          .applyOnTapGesture(useTapGesture: props.useTapGesture, eventDispatcher: props.onTap)
++      }
+     } else if let url = props.uiImage,
+               let url = URL(string: url),
+               let data = try? Data(contentsOf: url),

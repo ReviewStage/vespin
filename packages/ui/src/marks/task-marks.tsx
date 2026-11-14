@@ -1,4 +1,10 @@
-import { TASK_MARK_ELEMENT, TASK_MARK_ROLE, TASK_STATUS_MARK } from "@repo/brand/task-status-marks";
+import {
+  TASK_MARK_ELEMENT,
+  TASK_MARK_LAYER,
+  TASK_MARK_ROLE,
+  TASK_PRIORITY_MARK,
+  TASK_STATUS_MARK,
+} from "@repo/brand/task-status-marks";
 import { TASK_STATUS_TONE } from "@repo/features/task-standing-words";
 import {
   TASK_PRIORITY,
@@ -18,42 +24,16 @@ void React;
  * A status is a ring that fills as work moves through it: dashed while it
  * is filed for later, an empty ring to do, half filled under way, and a
  * filled disc once settled, with a check for done and a cross for
- * canceled, drawn from `@repo/brand`'s one table, which the iOS app's
- * status symbols are cut from too. A priority is three bars, as many lit as it matters, an
+ * canceled. A priority is three bars, as many lit as it matters, an
  * attention square for urgent, and three dashes for one no one weighed.
+ * Both are drawn from `@repo/brand`'s one table, which the iOS app's
+ * symbols are cut from too.
  * A status draws in its status tone's ink, under way in the working blue
  * and done in the green every other done wears, and a priority in its own
  * (`task-marks.css`), each at the glyph cell of
  * whatever leads with it, which sizes it, and says nothing of its own: the
  * words beside it, or the caller's label, are what a reader hears.
  */
-
-/** The bars a priority lights, of three: none for an unweighed task, whose mark is dashes instead, and urgent's its square. */
-const LIT_BARS = {
-  [TASK_PRIORITY.NONE]: 0,
-  [TASK_PRIORITY.URGENT]: 3,
-  [TASK_PRIORITY.HIGH]: 3,
-  [TASK_PRIORITY.MEDIUM]: 2,
-  [TASK_PRIORITY.LOW]: 1,
-} as const satisfies Record<TaskPriority, number>;
-
-/**
- * The square a priority's mark spans within its 14 units: about the area of
- * a status's disc (0.75 to 13.25), centered on it, rather than its width,
- * because a square as wide as a circle reads larger beside it. So a
- * priority stands inside the same room around it a status does.
- */
-const MARK_EDGE = { start: 1.5, end: 12.5 } as const;
-
-/** How wide each of a priority's bars is drawn. */
-const BAR_WIDTH = 2.6;
-
-/** The three bars, each its left edge, its top, and its height, rising left to right across the mark's square to its foot. */
-const BARS = [
-  { x: MARK_EDGE.start, y: 8.5, height: 4 },
-  { x: 7 - BAR_WIDTH / 2, y: 5, height: 7.5 },
-  { x: MARK_EDGE.end - BAR_WIDTH, y: MARK_EDGE.start, height: 11 },
-] as const;
 
 /** Each status's mark, from `@repo/brand`'s table. */
 const STATUS_MARK = {
@@ -109,59 +89,38 @@ export function TaskStatusMark({ status }: { status: TaskStatus }): React.JSX.El
   );
 }
 
-/** What a priority draws inside its 14-unit box. */
-function priorityBody(priority: TaskPriority): React.JSX.Element {
-  if (priority === TASK_PRIORITY.URGENT) {
-    return (
-      <>
-        <rect
-          className="ui-task-mark-fill"
-          x={MARK_EDGE.start}
-          y={MARK_EDGE.start}
-          width={MARK_EDGE.end - MARK_EDGE.start}
-          height={MARK_EDGE.end - MARK_EDGE.start}
-          rx="2.5"
-        />
-        <path className="ui-task-mark-cut" d="M7 4v3.6M7 9.6v.2" />
-      </>
-    );
-  }
+/** Each priority's mark, from `@repo/brand`'s table. */
+const PRIORITY_MARK = {
+  [TASK_PRIORITY.NONE]: TASK_PRIORITY_MARK.NONE,
+  [TASK_PRIORITY.URGENT]: TASK_PRIORITY_MARK.URGENT,
+  [TASK_PRIORITY.HIGH]: TASK_PRIORITY_MARK.HIGH,
+  [TASK_PRIORITY.MEDIUM]: TASK_PRIORITY_MARK.MEDIUM,
+  [TASK_PRIORITY.LOW]: TASK_PRIORITY_MARK.LOW,
+} as const satisfies Record<
+  TaskPriority,
+  (typeof TASK_PRIORITY_MARK)[keyof typeof TASK_PRIORITY_MARK]
+>;
 
-  if (priority === TASK_PRIORITY.NONE) {
-    return (
-      <>
-        {BARS.map(({ x }) => (
-          <rect
-            key={x}
-            className="ui-task-mark-fill"
-            x={x}
-            y="6.25"
-            width={BAR_WIDTH}
-            height="1.5"
-            rx=".6"
-          />
-        ))}
-      </>
-    );
-  }
+type PriorityPart = (typeof PRIORITY_MARK)[TaskPriority][number];
 
-  const lit = LIT_BARS[priority];
+/** One part of a priority's mark: a bar, lit or not where it stands on a layer, urgent's square, or the "!" cut from it. */
+function priorityPart(part: PriorityPart, index: number): React.JSX.Element {
+  const className = PART_CLASS[part.role];
+
+  if (part.element === TASK_MARK_ELEMENT.PATH)
+    return <path key={index} className={className} d={part.d} />;
 
   return (
-    <>
-      {BARS.map(({ x, y, height }, index) => (
-        <rect
-          key={x}
-          className="ui-task-mark-fill"
-          data-lit={index < lit}
-          x={x}
-          y={y}
-          width={BAR_WIDTH}
-          height={height}
-          rx=".75"
-        />
-      ))}
-    </>
+    <rect
+      key={index}
+      className={className}
+      data-lit={"layer" in part ? part.layer === TASK_MARK_LAYER.LIT : undefined}
+      x={part.x}
+      y={part.y}
+      width={part.width}
+      height={part.height}
+      rx={part.rx}
+    />
   );
 }
 
@@ -174,7 +133,7 @@ export function TaskPriorityMark({ priority }: { priority: TaskPriority }): Reac
       viewBox="0 0 14 14"
       aria-hidden="true"
     >
-      {priorityBody(priority)}
+      {PRIORITY_MARK[priority].map(priorityPart)}
     </svg>
   );
 }

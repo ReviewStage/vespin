@@ -33,7 +33,7 @@ import { BarContent } from "./bar-content.js";
 import type { Scope } from "./button.js";
 import { GLYPH, type Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
-import { choiceColor, type MenuChoice } from "./list-row.js";
+import { choiceContent, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 import { useColors } from "./tokens/colors.js";
 
@@ -174,7 +174,7 @@ export function BarMenuButton({
       {menu.choices.map((choice) => (
         <Toggle
           key={choice.label}
-          {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
+          {...choiceContent(choice, colors)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />

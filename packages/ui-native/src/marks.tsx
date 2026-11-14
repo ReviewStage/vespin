@@ -24,14 +24,22 @@ import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-pictu
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
-import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import type { TaskStatus } from "@repo/features/task-wire";
+import {
+  TASK_PRIORITY_WORDS,
+  TASK_STATUS_TONE,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
+import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { useState } from "react";
 import { Image as Photo, PixelRatio, View } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { monogramOf } from "./monogram.js";
-import { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
+import {
+  PRIORITY_MARK_SYMBOL,
+  PRIORITY_MARK_TONE,
+  STATUS_MARK_SYMBOL,
+} from "./status-mark-model.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -113,6 +121,26 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
       size={size}
       color={toneColor(colors, TASK_STATUS_TONE[status])}
       modifiers={[accessibilityLabel(TASK_STATUS_WORDS[status])]}
+    />
+  );
+}
+
+/**
+ * A task's priority as its bars, as the panel marks it: the lit bars in its
+ * ink and the rest faint, urgent's square in the attention ink, heard as the
+ * priority's name. Note that its ink is drawn into the symbol's own image
+ * (`originalColor`), since a foreground style paints both of its layers alike.
+ */
+export function TaskPriorityMark({ priority }: { readonly priority: TaskPriority }) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+
+  return (
+    <Image
+      {...glyphImage(PRIORITY_MARK_SYMBOL[priority])}
+      size={size}
+      originalColor={toneColor(colors, PRIORITY_MARK_TONE[priority])}
+      modifiers={[accessibilityLabel(TASK_PRIORITY_WORDS[priority])]}
     />
   );
 }

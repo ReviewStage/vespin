@@ -35,7 +35,7 @@ import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import type { TaskStatus } from "@repo/features/task-wire";
+import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
@@ -150,8 +150,7 @@ function RowLine({ children }: { readonly children: ReactNode }) {
 type TaskHeadProps = {
   readonly name: string;
   readonly status: TaskStatus | undefined;
-  /** Its priority's name. */
-  readonly priority: string | undefined;
+  readonly priority: TaskPriority | undefined;
   /** Who it is assigned to, or the words for no one. */
   readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */

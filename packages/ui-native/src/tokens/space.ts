@@ -34,6 +34,8 @@ export const MARK_SIZE = {
   AVATAR: 28,
   /** A teammate's face among a row's end marks, and on a chip. */
   FACE: 16,
+  /** A person's photo in a system menu's glyph place, as the glyphs beside it stand. */
+  MENU_PHOTO: 20,
   /** The account's photo in a bar, inside the round glass the bar's other buttons stand in. */
   BAR_FACE: 32,
   /**

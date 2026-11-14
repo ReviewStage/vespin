@@ -12,10 +12,10 @@ committed copy from them, and what those copies are.
   the desktop's packaging reads.
 - `src/` holds geometry and the generated mark art, brand palette, motion
   tokens, provider-mark paths, Lucide symbol templates, and a task's status
-  marks with their symbol templates the apps draw from; the templates are
+  and priority marks with their symbol templates the apps draw from; the templates are
   outlined by `scripts/lucide-symbols.mjs`, Lucide's from the `lucide-react`
-  `@repo/ui` resolves and the status marks from `scripts/task-status-marks.mjs`,
-  which `@repo/ui`'s `TaskStatusMark` draws as SVG too.
+  `@repo/ui` resolves and the status and priority marks from `scripts/task-status-marks.mjs`,
+  which `@repo/ui`'s `TaskStatusMark` and `TaskPriorityMark` draw as SVG too.
 
 Regenerate the generated files (under `src/generated/`, `assets/`, and
 `@repo/ui`'s `src/tokens/geist.css`, `brand.css`, `identity.css`, and

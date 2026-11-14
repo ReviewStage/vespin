@@ -4,6 +4,7 @@ import { Image, Label } from "@expo/ui/swift-ui";
 import { font } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { type Glyph, glyphImage } from "./glyph.js";
+import { MARK_SIZE } from "./tokens/space.js";
 
 /** The text style a glyph stands at beside an act's words, as SwiftUI sizes a symbol by its text. */
 type GlyphTextStyle = "body" | "callout" | "subheadline" | "footnote" | "caption";
@@ -33,6 +34,15 @@ export function GlyphImage({
 }
 
 /**
+ * A person's photo as a system menu draws it: a file on this device, drawn
+ * round at a menu glyph's size and kept as it is (`photoSize`, from the app's
+ * `@expo/ui` patch), because a menu templates any other image in its ink.
+ */
+function MenuPhoto({ photo }: { readonly photo: string }) {
+  return <Image uiImage={photo} photoSize={MARK_SIZE.MENU_PHOTO} />;
+}
+
+/**
  * An act's words beside its glyph, as SwiftUI's own Label. Note that it
  * stands where a button or a menu would take `systemImage`, because that
  * reads an SF Symbol alone, and the app's glyphs are Lucide's custom symbols.
@@ -55,16 +65,20 @@ export function GlyphLabel({
 }
 
 /**
- * What a SwiftUI button holds: its words alone, or its words beside its glyph,
- * which `@expo/ui`'s `Button` draws from its children where it is given no
- * label of its own.
+ * What a SwiftUI button holds: its words alone, its words beside a person's
+ * photo where it has one, or its words beside its glyph, which `@expo/ui`'s
+ * `Button` draws from its children where it is given no label of its own.
  */
 export function actContent(
   label: string,
   glyph: Glyph | undefined,
   textStyle?: GlyphTextStyle,
   color?: string,
+  photo?: string,
 ): { readonly label: string } | { readonly children: ReactElement } {
+  if (photo !== undefined)
+    return { children: <Label title={label} icon={<MenuPhoto photo={photo} />} /> };
+
   return glyph === undefined
     ? { label }
     : {
