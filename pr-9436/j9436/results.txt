@@ -1,0 +1,4 @@
+iphone r9436a: fails 0 shots 2 | pasteboard: https://vespin.dev/personal/task/42
+iphone r9436b: fails 0 shots 2 | pasteboard: https://vespin.dev/personal/task/42
+ipad26p r9436a: fails 0 shots 2 | pasteboard: https://vespin.dev/personal/task/42
+ipad26p r9436b: fails 0 shots 2 | pasteboard: https://vespin.dev/personal/task/42
