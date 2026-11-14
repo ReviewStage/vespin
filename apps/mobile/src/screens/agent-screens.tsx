@@ -641,7 +641,9 @@ export function AgentScreen() {
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
   // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
-  const copyable = address !== undefined || transcript !== undefined;
+  // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
+  const copiable = held !== undefined;
+  const copyable = address !== undefined || copiable;
   const openable = address !== undefined || openOptions !== undefined;
 
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
@@ -683,7 +685,7 @@ export function AgentScreen() {
                     {MENU_WORDS.COPY_LINK}
                   </Stack.Toolbar.MenuAction>
                 )}
-                {transcript === undefined ? null : (
+                {copiable ? (
                   <Stack.Toolbar.Menu
                     icon={glyphSymbol(GLYPH.COPY)}
                     title={COPY_TRANSCRIPT_WORDS.COPY}
@@ -703,7 +705,7 @@ export function AgentScreen() {
                       {COPY_TRANSCRIPT_WORDS.SHARE}
                     </Stack.Toolbar.MenuAction>
                   </Stack.Toolbar.Menu>
-                )}
+                ) : null}
               </Stack.Toolbar.Menu>
             ) : null}
             {agent === undefined ? null : (
