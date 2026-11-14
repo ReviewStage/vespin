@@ -51,6 +51,7 @@ import {
   SettingsRowsSkeleton,
   SettingsRowValue,
   SettingsSection,
+  STATUS_TONE,
   Stack,
   TEXT_FIELD_FONT,
   TEXT_FONT,
@@ -96,6 +97,7 @@ import { useFormDialog } from "../desktop/use-form-dialog.js";
 import { confirmFailure } from "../failure-report.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { QUERY_ROOT } from "../query-keys.js";
+import { showToast } from "../toast.js";
 import { parseDotenv } from "./dotenv.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
@@ -150,6 +152,8 @@ const WORDS = {
   NO_MATCH: "No variables match.",
   KIND: "Type",
   MAKE_SECRET: "Make secret",
+  /** What a save or an edit says once it lands: when the agents already running take it. */
+  SAVED: "Saved. Agents pick it up from their next message.",
   NAME_SPELLING: "Use letters, digits, and _, not starting with a digit.",
   NO_NAME: "A variable needs a name.",
   ADDED: "Added",
@@ -157,6 +161,9 @@ const WORDS = {
   BY: "by",
   MASKED: "••••••••",
 } as const;
+
+/** The one toast saves stand under, so saves one after another take its place rather than stack. */
+const SAVED_TOAST = "workspace-variables-saved";
 
 /** What a variable is: a secret, whose value no one reads once it is saved, or a config, whose value every member reads. */
 const KIND = { SECRET: "secret", CONFIG: "config" } as const;
@@ -527,6 +534,12 @@ function useEditDialog(
     onSuccess: async (answer) => {
       await drawAnswer(queries, workspaceId, answer);
       onWritten([typed]);
+      showToast({
+        words: WORDS.SAVED,
+        tone: STATUS_TONE.COMPLETE,
+        subject: SAVED_TOAST,
+        replayUnmasked: true,
+      });
     },
   });
 
@@ -699,6 +712,12 @@ function useAddDialog(
     onSuccess: async (answer) => {
       await drawAnswer(queries, workspaceId, answer);
       onWritten(filled.map((draft) => draft.name.trim()));
+      showToast({
+        words: WORDS.SAVED,
+        tone: STATUS_TONE.COMPLETE,
+        subject: SAVED_TOAST,
+        replayUnmasked: true,
+      });
     },
   });
 
