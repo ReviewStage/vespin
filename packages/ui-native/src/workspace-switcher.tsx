@@ -85,6 +85,8 @@ export type SwitcherAccount = {
   readonly name: string;
   /** The account's sign-in picture, which its row leads with; its letters where it has none. */
   readonly picture?: string | undefined;
+  /** The account's email address, which its row is named by where it has one, as Mail and Notes name an account, so it never reads as a personal workspace of the same name and face. */
+  readonly address?: string | undefined;
   readonly onPress: () => void;
 };
 
@@ -234,10 +236,9 @@ function SwitcherRow({
  * tile or photo, its name, and who shares it, the chosen one checked in
  * copper; then the acts, such as New workspace, and Workspace settings, in
  * the panel's two groups and its words (`workspaceMenuGroups`); and last,
- * where a caller hands one, the account by its photo and name, opening
- * Settings. Each row closes the list and says
- * what it does through `closed`, which runs a choice at once and an act that
- * opens a screen once the list has gone.
+ * where a caller hands one, the account by its photo and address, opening
+ * Settings. Each row closes the list and says what it does through
+ * `closed`, which runs it once the list has gone.
  */
 function SwitcherList({
   props,
@@ -245,7 +246,7 @@ function SwitcherList({
   onContentHeight,
 }: {
   readonly props: WorkspaceSwitcherProps;
-  readonly closed: (then: () => void, presents: boolean) => void;
+  readonly closed: (then: () => void) => void;
   /** Told the height its rows stand in, for the popover to fit them; none in a sheet. */
   readonly onContentHeight?: ((height: number) => void) | undefined;
 }) {
@@ -262,7 +263,7 @@ function SwitcherList({
             name={workspace.name}
             line={workspace.line}
             checked={workspace.id === chosen.id}
-            onPress={() => closed(() => onChoose(workspace.id), false)}
+            onPress={() => closed(() => onChoose(workspace.id))}
           />
         ))}
       </Section>
@@ -273,14 +274,14 @@ function SwitcherList({
               key={action.label}
               label={action.label}
               symbol={action.symbol}
-              onPress={() => closed(action.onPress, true)}
+              onPress={() => closed(action.onPress)}
             />
           ))}
           {onWorkspaceSettings === undefined ? null : (
             <ActionRow
               label={WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS}
               symbol={GLYPH.SETTINGS}
-              onPress={() => closed(onWorkspaceSettings, true)}
+              onPress={() => closed(onWorkspaceSettings)}
             />
           )}
         </Section>
@@ -289,9 +290,9 @@ function SwitcherList({
         <Section>
           <SwitcherRow
             mark={<Avatar name={account.name} picture={account.picture} size={markSize} />}
-            name={account.name}
+            name={account.address ?? account.name}
             line={SETTINGS}
-            onPress={() => closed(account.onPress, true)}
+            onPress={() => closed(account.onPress)}
           />
         </Section>
       )}
@@ -360,9 +361,10 @@ function SwitcherFace({
  * window and in a sheet from the screen's foot in a compact one, half the
  * screen tall and dragged to its whole height. It replaced the system's menu,
  * which draws its rows' images as templates in one ink, so no workspace's
- * photo or the account's showed in it. Note that an act that opens a screen,
- * such as Settings, runs only once the list has gone, since a screen
- * presented while the popover or the sheet is still leaving is refused.
+ * photo or the account's showed in it. Note that a row's act, a workspace
+ * chosen or Settings, runs only once the list has gone, since a screen
+ * presented while the popover or the sheet is still leaving is refused, and
+ * a choice redrawing every screen as it left made it stutter.
  */
 export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
   const {
@@ -389,10 +391,9 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
     after?.act();
   };
 
-  const closed = (then: () => void, presents: boolean) => {
-    if (presents) setAfter({ act: then });
-    else then();
-
+  // Note that every row's act, a workspace chosen among them, runs once the list has gone, because a choice redraws every screen that reads the workspace, which made the list's leaving stutter, and a screen presented while it leaves is refused.
+  const closed = (then: () => void) => {
+    setAfter({ act: then });
     setPresented(false);
   };
 

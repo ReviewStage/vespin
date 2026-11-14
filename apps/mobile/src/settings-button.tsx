@@ -61,6 +61,7 @@ export function useSettingsAccount(): BarAccount | undefined {
   return {
     name: account.name ?? account.email,
     picture: account.pictureUrl,
+    address: account.email,
     label: SETTINGS,
     onPress: () => open(),
   };

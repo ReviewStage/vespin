@@ -92,7 +92,12 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     account:
       account === undefined
         ? undefined
-        : { name: account.name, picture: account.picture, onPress: account.onPress },
+        : {
+            name: account.name,
+            picture: account.picture,
+            address: account.address,
+            onPress: account.onPress,
+          },
     actions: [newWorkspaceAction(() => router.push("/new-workspace"))],
     onWorkspaceSettings: () => openSettings(SETTINGS_ROUTE.WORKSPACE),
     // Note that a phone turned on its side is wide enough for a regular window but too short for the popover's list, so the popover takes a window regular both ways, as an iPad's is.
