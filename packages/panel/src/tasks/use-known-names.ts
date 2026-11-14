@@ -11,7 +11,7 @@ import { taskKey } from "@repo/features/workspace-key";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { and, eq, isUndefined, not, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { useAutomation } from "../automation-directory.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
@@ -138,24 +138,6 @@ const selectHeldNames = memoizedSelect(
   heldNamesOf,
 );
 
-/** Each listed task's status, by its id, built once per delivery that moved the slices the names are read from, as the names are. */
-const selectHeldStatuses = memoizedSelect(
-  (state) => [state.tasks],
-  (planning): ReadonlyMap<string, TaskStatus> =>
-    new Map(
-      planning.tasks.flatMap((task) =>
-        task.status === undefined ? [] : [[task.id, task.status] as const],
-      ),
-    ),
-);
-
-/** Each listed agent's status by its id, built as the task statuses are. */
-const selectHeldAgentStatuses = memoizedSelect(
-  (state) => [state.tasks],
-  (planning): ReadonlyMap<string, AgentStatus> =>
-    new Map((planning.taskAgents ?? []).map((agent) => [agent.id, agent.status] as const)),
-);
-
 /** No keys: what a window listing no numbered task holds, one object for every reader. */
 const NO_KEY_TARGETS: ReadonlyMap<string, string> = new Map();
 
@@ -262,23 +244,12 @@ export function useWordTargets(): ReadonlyMap<string, string> {
  * none for a task the window does not list, or none asked for.
  */
 export function useTaskStatus(taskId: string | undefined): TaskStatus | undefined {
-  const select = useCallback(
-    (state: AppStateSnapshot) =>
-      taskId === undefined ? undefined : selectHeldStatuses(state).get(taskId),
-    [taskId],
-  );
-
-  return useQuery({ ...appStateQuery, select }).data;
+  return useTaskListRow(useTaskListCollections().tasks, taskId)?.status;
 }
 
 /** The status of the agent the window lists by `agentId`; none where it lists no such agent. */
 export function useAgentStatus(agentId: string): AgentStatus | undefined {
-  const select = useCallback(
-    (state: AppStateSnapshot) => selectHeldAgentStatuses(state).get(agentId),
-    [agentId],
-  );
-
-  return useQuery({ ...appStateQuery, select }).data;
+  return useTaskListRow(useTaskListCollections().agents, agentId)?.status;
 }
 
 /**
