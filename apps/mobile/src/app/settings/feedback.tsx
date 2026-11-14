@@ -12,6 +12,7 @@ import {
   type FeedbackImage,
   type FeedbackKind,
   feedbackSignature,
+  isFeedbackImageType,
   signatureLine,
 } from "@repo/features/feedback";
 import { ACT_KIND } from "@repo/host/acts";
@@ -68,11 +69,11 @@ const NO_WORDS: Readonly<Record<FeedbackKind, string>> = {
   [FEEDBACK_KIND.PROMPT]: "",
 };
 
-/** The screenshots a note carries, as the endpoint takes them: each a JPEG under the name it was attached as. */
+/** The screenshots a note carries, as the endpoint takes them: each as it was attached, a PNG kept a PNG, under the name it was attached as. */
 function screenshotsOf(pictures: AttachedPictures): readonly FeedbackImage[] {
   return (pictures.files ?? []).map((file) => ({
     name: file.name,
-    mediaType: FEEDBACK_IMAGE_TYPE.JPEG,
+    mediaType: isFeedbackImageType(file.mediaType) ? file.mediaType : FEEDBACK_IMAGE_TYPE.JPEG,
     base64: file.data,
   }));
 }

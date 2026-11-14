@@ -123,8 +123,9 @@ appId: dev.vespin.ios
           index: 0
           optional: true
 - tapOn: "Add|Done"
+# Note that a picture stands as its thumbnail, heard as its × ("Remove Picture 1").
 - extendedWaitUntil:
-    visible: "Picture 1"
+    visible: "Remove Picture 1"
     timeout: 5000
 - waitForAnimationToEnd
 - takeScreenshot: new-task-picture
