@@ -38,6 +38,7 @@ import { readingWords, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   askForName,
+  BUTTON_LOOK,
   ConfirmAsk,
   type ConnectionLine,
   ConnectionRow,
@@ -175,7 +176,7 @@ export default function IntegrationsScreen() {
         <EmptyState
           title={INTEGRATIONS_PAGE_WORDS.READ_FAILED}
           symbol={GLYPH.FAILED}
-          action={{ label: VERB.RETRY, onPress: page.retry }}
+          action={{ label: VERB.TRY_AGAIN, look: BUTTON_LOOK.BORDERED, onPress: page.retry }}
         />
       ) : (
         <EmptyState title={READING} symbol={INTEGRATIONS_SYMBOL} loading />
@@ -241,12 +242,12 @@ export default function IntegrationsScreen() {
 /**
  * What each row offers, and why its last act did not go: a grant (Connect,
  * Reconnect, or Try again) at its end, which opens the sign-in and waits on
- * it; Retry at the end of a connected one whose tools couldn't be read;
+ * it; Try again at the end of a connected one whose tools couldn't be read;
  * Cancel at the end of one waited on, Reopen in its menu; and, on one
  * connected, Rename where the provider holds several accounts, Add another
  * account where the provider offers it, and Disconnect, which asks first
  * (`onAsk`). A server that rides the account's GitHub sign-in offers only its
- * Retry here, as the desktop and the web connect it.
+ * Try again here, as the desktop and the web connect it.
  */
 function useIntegrationActs(
   statuses: IntegrationStatuses,
@@ -386,7 +387,7 @@ function useIntegrationActs(
       row.kind === SERVER_ROW.SWITCH &&
       healthOf(row.connection).kind === CONNECTION_HEALTH.FAILED
     ) {
-      return { label: VERB.RETRY, disabled: false, onPress: () => tools.retry(row.connection) };
+      return { label: VERB.TRY_AGAIN, disabled: false, onPress: () => tools.retry(row.connection) };
     }
 
     if (bySignIn(row.provider)) return undefined;

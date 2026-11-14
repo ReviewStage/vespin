@@ -20,6 +20,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount } from "@repo/host/app-state-reads";
 import {
+  BUTTON_LOOK,
   ConfirmAsk,
   EmptyState,
   GLYPH,
@@ -123,7 +124,8 @@ function MachinesPage({ accountId }: { readonly accountId: string }) {
           title={READ_WORDS.FAILED}
           symbol={GLYPH.FAILED}
           action={{
-            label: VERB.RETRY,
+            label: VERB.TRY_AGAIN,
+            look: BUTTON_LOOK.BORDERED,
             onPress: () =>
               void acts[ACT_KIND.HOSTS_RETRY]().catch((cause: unknown) =>
                 console.error("Reading the machines again did not go.", cause),

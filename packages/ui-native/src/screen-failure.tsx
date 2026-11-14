@@ -1,6 +1,7 @@
-// screen-failure.tsx -- what a screen draws in its place once drawing it threw: that something went wrong, and Retry.
+// screen-failure.tsx -- what a screen draws in its place once drawing it threw: that something went wrong, and Try again.
 
 import { useEffect } from "react";
+import { BUTTON_LOOK } from "./button.js";
 import { EmptyState } from "./empty-state.js";
 import { GLYPH } from "./glyph.js";
 import { Screen } from "./screen.js";
@@ -9,12 +10,12 @@ import { Screen } from "./screen.js";
 const FAILURE_WORDS = {
   TITLE: "Something went wrong",
   DESCRIPTION: "This screen could not be drawn.",
-  RETRY: "Retry",
+  TRY_AGAIN: "Try again",
 } as const;
 
 /**
  * A screen whose drawing threw, in its place: the system's empty state
- * saying so, with Retry, which draws the screen again. It is shaped as
+ * saying so, with Try again in the ink, which draws the screen again. It is shaped as
  * expo-router's `ErrorBoundaryProps`, so a route exports it as its
  * `ErrorBoundary` and the router catches the screen's throw rather than
  * letting it reach React Native's fatal handler, which in a Release build
@@ -37,7 +38,11 @@ export function ScreenFailure({
         title={FAILURE_WORDS.TITLE}
         symbol={GLYPH.FAILED}
         description={FAILURE_WORDS.DESCRIPTION}
-        action={{ label: FAILURE_WORDS.RETRY, onPress: () => void retry() }}
+        action={{
+          label: FAILURE_WORDS.TRY_AGAIN,
+          look: BUTTON_LOOK.BORDERED,
+          onPress: () => void retry(),
+        }}
       />
     </Screen>
   );

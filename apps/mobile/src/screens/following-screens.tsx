@@ -11,6 +11,7 @@ import {
   EmptyState,
   FollowerRow,
   GLYPH,
+  glyphSymbol,
   ListSection,
   type PageFollowing,
   Screen,
@@ -132,9 +133,11 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
-          {SHEET_WORDS.DONE}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={SHEET_WORDS.DONE}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
     </>
   );

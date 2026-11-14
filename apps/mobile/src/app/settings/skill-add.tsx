@@ -292,7 +292,7 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
           verbatim
         />
         {failed !== undefined && previewRetries(failed) ? (
-          <ActionRow label={VERB.RETRY} onPress={() => void previewed.refetch()} />
+          <ActionRow label={VERB.TRY_AGAIN} onPress={() => void previewed.refetch()} />
         ) : null}
       </ListSection>
       {line === undefined ? textFields : null}

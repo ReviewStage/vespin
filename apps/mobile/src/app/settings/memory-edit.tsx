@@ -11,6 +11,7 @@ import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaceMemories, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  BUTTON_LOOK,
   BUZZ,
   ConfirmAsk,
   EmptyState,
@@ -198,7 +199,8 @@ function MemoryEditor({
             title={MEMORY_PAGE_WORDS.FAILED}
             symbol={GLYPH.FAILED}
             action={{
-              label: VERB.RETRY,
+              label: VERB.TRY_AGAIN,
+              look: BUTTON_LOOK.BORDERED,
               onPress: () => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost),
             }}
           />

@@ -59,7 +59,15 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { provenanceText } from "@repo/features/time-format";
-import { countWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
+import {
+  countWords,
+  NO_RESULTS_HINT,
+  noResultsForWords,
+  readFailedWords,
+  readingWords,
+  TERM,
+  VERB,
+} from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -118,7 +126,6 @@ import { useInboxActs } from "../inbox/use-inbox.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
-import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
@@ -220,11 +227,6 @@ const LINE_PART = " · ";
 
 /** No parent's sub-tasks stand open, as a section opens. */
 const NONE_OPEN: ReadonlySet<string> = new Set();
-
-/** What the list's search says where it finds nothing. */
-function noMatchWords(search: string): string {
-  return `No tasks match “${search}”.`;
-}
 
 /** A destination on vespin.dev in the workspace, opened in Safari, since the app draws no page for it yet. */
 function openOnWeb(destination: LinkDestination, workspace: Workspace | undefined): void {
@@ -854,7 +856,13 @@ function TasksTree({
 
   if (search.trim() !== "") {
     if (found.length === 0) {
-      return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
+      return (
+        <EmptyState
+          title={noResultsForWords(search)}
+          symbol={GLYPH.SEARCH}
+          description={NO_RESULTS_HINT}
+        />
+      );
     }
 
     return (
@@ -1660,7 +1668,7 @@ function ReadFailedRow({
     <LinkRow
       symbol={GLYPH.FAILED}
       label={words}
-      detail={VERB.RETRY}
+      detail={VERB.TRY_AGAIN}
       tone={LINK_ROW_TONE.ATTENTION}
       onPress={onRetry}
     />
@@ -1770,6 +1778,9 @@ function OverviewPage({
 /** The tree's search words and how to change them, held by the tab's root screen above its two layouts. */
 type TasksSearch = { readonly search: string; readonly setSearch: (search: string) => void };
 
+/** The compact tree's search, which it never narrows by: the Search tab finds tasks there. */
+const UNSEARCHED_TASKS: TasksSearch = { search: "", setSearch: () => {} };
+
 /**
  * The list screens' search, the listing under it, its status set asking
  * first where it stops agents and its delete asking always, with the
@@ -1784,27 +1795,21 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
 }
 
 // A compact window: the tree, the account's photo opening Settings and the
-// workspace switcher beside it at the bar's leading edge and its search a round glass button at its trailing one, each
-// row pushing its task as the Stack's next screen.
-function TasksStackList(words: TasksSearch) {
+// workspace switcher beside it at the bar's leading edge, each row pushing its
+// task as the Stack's next screen. Note that it stands no search of its own,
+// since a compact window's tab bar, or the folded Duo's rail, always stands
+// the Search tab beside it, whose Tasks scope finds the same tasks, as Music
+// and the App Store keep one search; a regular window's list column keeps its
+// field, and the words typed there wait over a fold.
+function TasksStackList() {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
-  const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
-  const field = useRefilledSearchField(search);
+  const { search, listing, status, deletion, refreshTasks } = useTasksScreen(UNSEARCHED_TASKS);
 
   return (
     <>
-      <Stack.Screen options={{ title: TASKS_TITLE }}>
-        <Stack.SearchBar
-          ref={field}
-          placeholder={SEARCH_TASKS}
-          placement="integratedButton"
-          allowToolbarIntegration={false}
-          onChangeText={(event) => setSearch(event.nativeEvent.text)}
-          onCancelButtonPress={() => setSearch("")}
-        />
-      </Stack.Screen>
+      <Stack.Screen options={{ title: TASKS_TITLE }} />
       <SettingsBarButton switcher={switcher} />
       <Screen>
         <TasksTree
@@ -1946,7 +1951,7 @@ export function TasksListScreen() {
   return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
     <TasksSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
   ) : (
-    <TasksStackList search={search} setSearch={setSearch} />
+    <TasksStackList />
   );
 }
 

@@ -1,4 +1,4 @@
-# inbox.yaml -- the Inbox's list under its scopes' segmented control (a menu picker in a regular window's list column), the workspace's button in its bar, its ⋯ menu, its search, a row's swipes and its long press preview, a thread with a picture opened full screen, a video in the system's player, and a PDF's chip opening its viewer, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
+# inbox.yaml -- the Inbox's list under its scopes' segmented control (a menu picker in a regular window's list column), the workspace's button in its bar, its ⋯ menu, its search in a regular window, a row's swipes and its long press preview, a thread with a picture opened full screen, a video in the system's player, and a PDF's chip opening its viewer, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -229,21 +229,16 @@ appId: dev.vespin.ios
       - tapOn: "Reminders"
 - tapOn: "Open.*"
 - waitForAnimationToEnd
-# The search, a round glass button in the bar, narrows the list to
-# the threads whose words hold every word typed. It comes last, since its
-# keyboard stands over the rows.
-# A compact window's search is the bar's round button, named as the Search
-# tab is, so the one above the tab bar is pressed; a split view's sidebar
-# holds the field itself.
+# A split view's list column holds a search field, which narrows the list
+# to the threads whose words hold every word typed. It comes last, since its
+# keyboard stands over the rows. A compact window stands no search of its
+# own, since its tab bar holds the Search tab (search.yaml).
 - runFlow:
     when:
-      notVisible: "Search inbox"
+      visible: "Search inbox"
     commands:
-      - tapOn:
-          text: "Search"
-          above: "Tab Bar"
-- tapOn: "Search inbox"
-- inputText: "digest"
-- assertVisible: "Verify the digest's sender domain"
-- assertNotVisible: "Invite limits"
-- takeScreenshot: inbox-search
+      - tapOn: "Search inbox"
+      - inputText: "digest"
+      - assertVisible: "Verify the digest's sender domain"
+      - assertNotVisible: "Invite limits"
+      - takeScreenshot: inbox-search

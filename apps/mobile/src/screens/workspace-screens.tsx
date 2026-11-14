@@ -6,6 +6,8 @@ import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
+  GLYPH,
+  glyphSymbol,
   ListSection,
   Screen,
   SettingsForm,
@@ -104,9 +106,11 @@ export function NewWorkspaceScreen() {
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
-          {made === undefined ? WORDS.CANCEL : WORDS.CLOSE}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={made === undefined ? WORDS.CANCEL : WORDS.CLOSE}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button

@@ -1,4 +1,4 @@
-// screen-boundary.tsx -- the boundaries the routes export as their `ErrorBoundary`: a screen whose drawing threw, said in its place with Retry and reported to Sentry, under a bar with no title.
+// screen-boundary.tsx -- the boundaries the routes export as their `ErrorBoundary`: a screen whose drawing threw, said in its place with Try again and reported to Sentry, under a bar with no title.
 
 import { ScreenFailure } from "@repo/ui-native";
 import { type ErrorBoundaryProps, Stack } from "expo-router";

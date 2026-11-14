@@ -23,6 +23,7 @@ import {
   BUZZ,
   EmptyState,
   GLYPH,
+  glyphSymbol,
   ListSection,
   Screen,
   SettingsForm,
@@ -148,9 +149,12 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button disabled={moving} onPress={() => router.back()}>
-          {WORDS.CANCEL}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={WORDS.CANCEL}
+          disabled={moving}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button disabled={chosen === undefined || moving} onPress={move}>

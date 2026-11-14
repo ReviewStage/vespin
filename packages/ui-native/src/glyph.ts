@@ -44,7 +44,7 @@ const system = (name: SfSymbol): Glyph => name as Glyph;
  * icons are the desktop's), written into the asset catalog as a custom
  * symbol by `@repo/brand`, so it sizes with Dynamic Type and weighs with its
  * words as an SF Symbol does. An SF Symbol stays only where iOS draws the
- * thing its own way (Share) or where the panel draws a mark of its own rather
+ * thing its own way (Share, and a sheet's close) or where the panel draws a mark of its own rather
  * than a Lucide glyph (a check box, a face, an MCP server, and the panel's
  * product mark), whose drawings are SF Symbols' nearest. A task's status
  * ring is the panel's own mark, written into the asset catalog from the
@@ -186,8 +186,9 @@ export const GLYPH = {
   JUMP_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   FOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_RIGHT),
   UNFOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
-  // iOS's own: Share is the system's act, a Settings row's chevron is the one iOS draws at a row that goes on, and the composer's Stop is the panel's filled square.
+  // iOS's own: Share is the system's act, a sheet closes with the system's round ✕ (its close role, as Calendar and Reminders close one), a Settings row's chevron is the one iOS draws at a row that goes on, and the composer's Stop is the panel's filled square.
   SHARE: system("square.and.arrow.up"),
+  CLOSE: system("xmark"),
   // A split view's expand, which stands the page alone across the window and back, is the system's own, as Mail draws it.
   EXPAND: system("arrow.up.left.and.arrow.down.right"),
   COLLAPSE: system("arrow.down.right.and.arrow.up.left"),
