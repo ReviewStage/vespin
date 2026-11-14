@@ -321,23 +321,34 @@ interface MintedTask {
   readonly id: string;
 }
 
-/** What a New task start came to after its sheet closed, which its task's page hears. */
+/** What a New task or New agent start came to after its sheet closed, which its task's page hears. */
 export const START_LANDED = {
   /** Its agent started, which the task's page opens while it still stands in front. */
   AGENT: "agent",
-  /** The start was refused, so the task the page opened on was never made. */
+  /** A New task start was refused, so the task the page opened on was never made. */
   REFUSED: "refused",
+  /** A New agent start was refused, so the task's page opens New agent again on its words. */
+  AGENT_REFUSED: "agent-refused",
 } as const;
+
+export type StartLandedKind = (typeof START_LANDED)[keyof typeof START_LANDED];
 
 export type StartLanded =
   | { readonly kind: typeof START_LANDED.AGENT; readonly agentId: string }
-  | { readonly kind: typeof START_LANDED.REFUSED };
+  | { readonly kind: typeof START_LANDED.REFUSED }
+  | { readonly kind: typeof START_LANDED.AGENT_REFUSED };
 
-/** The page of each task that stands, by its task, which hears what its start came to. */
-const hearing = new Map<string, (landed: StartLanded) => void>();
+/** One of a task's standing pieces that hears what a start came to, and the outcomes it acts on. */
+interface Hearer {
+  readonly kinds: readonly StartLandedKind[];
+  readonly hear: (landed: StartLanded) => void;
+}
+
+/** What hears each task's starts while its page stands, by its task: the route its page stands on, and the overview every layout draws. */
+const hearing = new Map<string, Set<Hearer>>();
 
 /** The tasks a start opened whose answer is still on its way. */
-const awaiting = new Set<string>();
+const awaiting = new Map<string, number>();
 
 /**
  * How long an answer that found no page standing is kept for one that
@@ -350,51 +361,100 @@ const UNHEARD_FOR_MS = 5000;
 /** What a start came to while no page of its task stood to hear it, by its task, and when it landed. */
 const unheard = new Map<string, { readonly landed: StartLanded; readonly at: number }>();
 
-/** Marks the task a start just opened as awaiting what the start comes to. */
+/** Marks the task a start just opened, or started an agent on, as awaiting what the start comes to. */
 export function awaitStart(taskId: string): void {
-  awaiting.add(taskId);
+  awaiting.set(taskId, (awaiting.get(taskId) ?? 0) + 1);
 }
 
 /**
- * Tells the page of the task a New task start opened what the start came
- * to, or keeps it a moment for a page about to mount. Note that it is kept
- * only for a page that mounts soon after, so a later visit to the task never
- * opens its agent or steps back.
+ * Tells the page of the task a start opened or started an agent on what the
+ * start came to, or keeps it a moment for the piece of the page about to
+ * mount that acts on it. Note that it is kept only for a piece that mounts
+ * soon after, so a later visit to the task never opens its agent or steps
+ * back.
  */
 export function startLanded(taskId: string, landed: StartLanded): void {
-  if (!awaiting.delete(taskId)) return;
-  const hear = hearing.get(taskId);
+  const waits = awaiting.get(taskId);
 
-  if (hear === undefined) unheard.set(taskId, { landed, at: Date.now() });
-  else hear(landed);
+  if (waits === undefined) return;
+
+  if (waits > 1) awaiting.set(taskId, waits - 1);
+  else awaiting.delete(taskId);
+
+  const hearers = [...(hearing.get(taskId) ?? [])].filter(({ kinds }) =>
+    kinds.includes(landed.kind),
+  );
+
+  if (hearers.length === 0) {
+    unheard.set(taskId, { landed, at: Date.now() });
+
+    return;
+  }
+
+  for (const { hear } of hearers) hear(landed);
 }
 
 /**
  * Hears what the start of the task `taskId` came to while its page stands,
- * including an answer that landed a moment before the page mounted, as an
- * answer to a start refused at once does, or one landing while a task's
- * page hands itself to the iPad's split view.
+ * those of `kinds` alone, including an answer that landed a moment before
+ * this piece mounted, as an answer to a start refused at once does, or one
+ * landing while a task's page hands itself to the iPad's split view.
  */
 export function useStartLanded(
   taskId: string | undefined,
+  kinds: readonly StartLandedKind[],
   hear: (landed: StartLanded) => void,
 ): void {
   const heard = useEffectEvent(hear);
+  const [heardKinds] = useState(kinds);
 
   useEffect(() => {
     if (taskId === undefined) return;
-    const listener = (landed: StartLanded) => heard(landed);
-    hearing.set(taskId, listener);
+
+    const hearer: Hearer = { kinds: heardKinds, hear: (landed) => heard(landed) };
+    const hearers = hearing.get(taskId) ?? new Set<Hearer>();
+    hearers.add(hearer);
+    hearing.set(taskId, hearers);
     const waiting = unheard.get(taskId);
-    unheard.delete(taskId);
 
-    if (waiting !== undefined && Date.now() - waiting.at < UNHEARD_FOR_MS) listener(waiting.landed);
+    if (waiting !== undefined && Date.now() - waiting.at >= UNHEARD_FOR_MS) unheard.delete(taskId);
+    else if (waiting !== undefined && heardKinds.includes(waiting.landed.kind)) {
+      unheard.delete(taskId);
+      hearer.hear(waiting.landed);
+    }
 
-    // Note that a page leaving leaves its start awaited, so a page standing again in its place, as the split view's detail does, still hears it.
+    // Note that a piece leaving drops nothing it was told, so a piece standing again in its place within the moment, as the split view's detail does, still hears it.
     return () => {
-      if (hearing.get(taskId) === listener) hearing.delete(taskId);
+      hearers.delete(hearer);
+
+      if (hearers.size === 0 && hearing.get(taskId) === hearers) hearing.delete(taskId);
     };
-  }, [taskId]);
+  }, [taskId, heardKinds]);
+}
+
+/** New agent as it pressed Start, which a start refused after the sheet closed opens New agent again on, with why it was refused. */
+export interface RefusedAgentStart {
+  readonly prompt: string;
+  readonly picked: ModelChoice | undefined;
+  readonly runsOn: string;
+  readonly pictures: readonly HeldPicture[];
+  readonly note: string;
+}
+
+/** The New agent start refused after its sheet closed, by its task, which that task's next New agent opens on. */
+const refusedAgentStarts = new Map<string, RefusedAgentStart>();
+
+/** Keeps a New agent start refused after its sheet closed for the task's next New agent, whether or not its page still stands. */
+export function keepRefusedAgentStart(taskId: string, refused: RefusedAgentStart): void {
+  refusedAgentStarts.set(taskId, refused);
+}
+
+/** The New agent start refused on the task that its next New agent opens on, taken once. */
+export function takeRefusedAgentStart(taskId: string): RefusedAgentStart | undefined {
+  const refused = refusedAgentStarts.get(taskId);
+  refusedAgentStarts.delete(taskId);
+
+  return refused;
 }
 
 /** New task as it pressed Start, which a start refused after the sheet closed opens New task again on, with why it was refused. */
@@ -431,7 +491,7 @@ export function forgetRefusedStart(refused: RefusedStart | undefined): void {
 /* ----- The starts ----- */
 
 /** The words, pictures, and choices a start carries. */
-interface StartAsk {
+export interface StartAsk {
   readonly prompt: string;
   /** The pictures attached, in the order attached; none where nothing is. */
   readonly attachments: readonly AgentAttachment[] | undefined;
@@ -525,13 +585,13 @@ export function useStartTask(
     if ("failure" in answer) return { refused: startFailureNote(answer.failure) };
     const started = answer.agentStart;
 
-    if (started === undefined) return { taskId: answer.planId };
+    if (started === undefined) return { taskId: answer.taskId };
 
     if ("failure" in started) {
-      return { taskId: answer.planId, note: startRefusalWords(started) };
+      return { taskId: answer.taskId, note: startRefusalWords(started) };
     }
 
-    return { agentId: started.agent.id, taskId: answer.planId };
+    return { agentId: started.agent.id, taskId: answer.taskId };
   };
 }
 
@@ -558,6 +618,6 @@ export function useFileTask(
 
     if ("failure" in answer) return { refused: startFailureNote(answer.failure) };
 
-    return { taskId: answer.planId };
+    return { taskId: answer.taskId };
   };
 }

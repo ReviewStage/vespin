@@ -13,7 +13,7 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import type { Task } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import type { AppHostRead, AppInboxItems } from "@repo/host/app-state";
 import { DRAFT_WORD } from "@repo/ui";
 import { agentTab, draftTab, sameTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
@@ -82,12 +82,12 @@ function task(id: string, name: string, agentId: string) {
     createdAt: 1,
     updatedAt: 2,
     repository: null,
-    document: { body: `# ${name}`, assumptions: [] },
+    description: { body: `# ${name}`, assumptions: [] },
   };
 
   const agent: AgentSummary = {
     id: agentId,
-    planId: id,
+    taskId: id,
     model: "openai/gpt-5.6-sol",
     effort: "high",
     title: `${name} agent`,
@@ -192,10 +192,10 @@ function openWindow() {
     const openTab = agentTab(open.agent.id);
 
     const tasks = tasksControl({
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       tasks: [INVITES.plan, BILLING.plan],
       activeTaskId: open.plan.id,
-      region: { kind: DOCUMENT_REGION.READY, task: open.plan },
+      region: { kind: TASK_REGION.READY, task: open.plan },
       mainTabs: {
         ...tasksControl().mainTabs,
         tabs: [openTab],
@@ -590,7 +590,7 @@ test("the drafts an account kept under its address are its own still once its id
 
 /** A draft as storage keeps it: an agent's words on a plan, by the account that wrote them. */
 function keptEntry(accountId: string, taskId: string, agentId: string, text: string) {
-  return { accountId, place: { kind: "agent", planId: taskId, agentId }, text };
+  return { accountId, place: { kind: "agent", taskId: taskId, agentId }, text };
 }
 
 test("past the most drafts kept, the oldest written goes, whosever it is, and the window lets go of it as storage does", async () => {
@@ -673,7 +673,7 @@ test("the files attached to a draft while only the account's address was known s
 test("an inbox answer's picture moves with it as the id lands before its words reach storage, its unset steps and press read as storage leaves them out", async () => {
   const place = {
     kind: DRAFT_PLACE.INBOX,
-    planId: INVITES.plan.id,
+    taskId: INVITES.plan.id,
     agentId: INVITES.agent.id,
     itemId: "item-1",
   } as const;
@@ -799,7 +799,7 @@ async function sidebarOn(open: typeof INVITES, pinned: boolean) {
   });
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     tasks: [INVITES.plan, BILLING.plan],
     activeTaskId: open.plan.id,
     chosenPin: pinned ? pin : undefined,
@@ -852,7 +852,7 @@ const DRAFT_KEY = "draft-invites";
 
 /** The account's feed holding each plan's items as given, which the window's inboxes draw first. */
 function feedOf(plans: Record<string, readonly InboxItem[]>): AppHostRead<AppInboxItems> {
-  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans } };
+  return { rows: { [INBOX_SCOPE_KIND.TASK]: plans } };
 }
 
 /**
@@ -871,10 +871,10 @@ async function columnOn(
   handInboxItems(feedOf({ [INVITES.plan.id]: [approval(1)] }));
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     tasks: [INVITES.plan],
     activeTaskId: INVITES.plan.id,
-    region: { kind: DOCUMENT_REGION.READY, task: INVITES.plan },
+    region: { kind: TASK_REGION.READY, task: INVITES.plan },
     mainTabs: {
       ...tasksControl().mainTabs,
       tabs,
@@ -948,7 +948,7 @@ test("a draft agent's first message marks its tab while another is chosen, never
     JSON.stringify([
       {
         accountId: null,
-        place: { kind: "newAgent", planId: INVITES.plan.id, draftId: DRAFT_KEY },
+        place: { kind: "newAgent", taskId: INVITES.plan.id, draftId: DRAFT_KEY },
         text: "Write the expiry job",
       },
     ]),
@@ -1018,15 +1018,15 @@ function approval(revision: number): InboxItem {
 }
 
 /** A task of the window's, and the agent its items are posted by. */
-type HeldTask = typeof INVITES;
+type InvitedTask = typeof INVITES;
 
 /** One item of the task's agent's, open and asking for an approval, at `revision`. */
-function itemOn(held: HeldTask, id: string, revision: number): InboxItem {
+function itemOn(held: InvitedTask, id: string, revision: number): InboxItem {
   return { ...approval(revision), id, agentId: held.agent.id };
 }
 
 /** The task's inbox as `useTaskInbox` holds it for the task, its agent among its own. */
-function useTaskInboxOf(held: HeldTask): TaskInboxControl {
+function useTaskInboxOf(held: InvitedTask): TaskInboxControl {
   return useTaskInbox({
     taskId: held.plan.id,
     shown: true,
@@ -1043,7 +1043,7 @@ function useTaskInboxOf(held: HeldTask): TaskInboxControl {
 }
 
 /** A task's own inbox, followed as the Inbox page follows it, pushed as `items`. */
-async function taskInbox(held: HeldTask, items: readonly InboxItem[]) {
+async function taskInbox(held: InvitedTask, items: readonly InboxItem[]) {
   // Another window opening takes the focus from those before it.
   leaveWindow();
   handInboxItems(feedOf({ [held.plan.id]: items }));
@@ -1096,7 +1096,7 @@ test("a pick kept by a build that stored its revision in the place still stands 
         accountId: null,
         place: {
           kind: "inbox",
-          planId: INVITES.plan.id,
+          taskId: INVITES.plan.id,
           agentId: INVITES.agent.id,
           itemId: mine.id,
           revision: 1,
@@ -1153,7 +1153,7 @@ test("a draft on an item the account's feed leaves out stands while the feed dra
 
   await act(async () =>
     reads.deliverHolders({
-      [INBOX_SCOPE_KIND.PLAN]: { [INVITES.plan.id]: { rows: [mine] } },
+      [INBOX_SCOPE_KIND.TASK]: { [INVITES.plan.id]: { rows: [mine] } },
     }),
   );
   await vi.waitFor(() =>
@@ -1206,7 +1206,7 @@ test("an account's drafts moved from its address reach a window that read its id
 test("words another window writes for a box this window let go a moment before stand, in its box and in storage", async () => {
   const place = {
     kind: DRAFT_PLACE.AGENT,
-    planId: INVITES.plan.id,
+    taskId: INVITES.plan.id,
     agentId: INVITES.agent.id,
   } as const;
 
@@ -1265,8 +1265,8 @@ test("files attached in this window stay as its draft when another window lets t
   roots.push(root);
   await act(async () => root.render(windowRouter().provide(withQueryClient(createElement(Box)))));
   const box = () => composer ?? assert.fail("the box is drawn");
-  act(() => box().setDraft("Review this"));
-  act(() => box().setAttachments((held) => [...held, notes]));
+  act(() => box().updateHeld((now) => ({ ...now, text: "Review this" })));
+  act(() => box().updateHeld((now) => ({ ...now, attachments: [...now.attachments, notes] })));
 
   // The other window, where the developer went, let the words go, which is all of the draft storage holds.
   leaveWindow();
@@ -1275,5 +1275,5 @@ test("files attached in this window stay as its draft when another window lets t
     window.dispatchEvent(new StorageEvent("storage", { key: "app.composerDrafts" }));
   });
   await settle();
-  assert.deepEqual([box().draft, box().attachments], ["", [notes]]);
+  assert.deepEqual([box().held.text, box().held.attachments], ["", [notes]]);
 });

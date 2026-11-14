@@ -859,7 +859,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         const api = runnerSandboxApi();
         const openai = openAi();
         const { userId, agent } = yield* openAgent;
-        // Past the store's own ten-minute margin, and past the old launch margin of fifteen, but short of forty-five.
+        // Past the store's own ten-minute margin, but short of forty-five.
         yield* signIn(userId, 40);
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
 

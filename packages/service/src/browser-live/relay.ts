@@ -44,15 +44,15 @@
  * only until the last write lapses, and the tab's screencast is stopped as
  * the view ends.
  *
- * The view never holds its sandbox up: only agent or terminal activity
- * does, and an agent open in a focused window is that (`@repo/sandbox`'s
- * `SANDBOX_IDLE`), so a sandbox the view reaches stops on that rule alone.
- * The panel says it is watching while it is shown, and a viewport counts
- * only where it resizes the view, since an older panel sends the same size
- * again whether shown or not. The socket closes as idle once the panel has
- * sent nothing that counts for the idle bound, or nothing but that it is
- * watching for `INPUT_IDLE`, since a pane left shown on a window nobody uses
- * says it is watching for good; the sandbox then stops on its own idle stop.
+ * The view holds its sandbox up for as long as it stands, whether or not
+ * the member acts on it: once its sandbox's session is read, it beats a
+ * hold of its own on the sandbox every `HOLD_EVERY` (`holdSandbox`), which
+ * the minute sweep keeps up, and lets go of it as it closes, however it
+ * closes (`releaseSandbox`), any other view's hold standing. The
+ * panel says it is watching while it is shown, and a viewport counts only
+ * where it resizes the view, since an older panel sends the same size again
+ * whether shown or not. The socket closes as idle once the panel has sent
+ * nothing that counts for the idle bound.
  */
 
 import type { ReachedBrowserTab } from "@repo/database/models/agent-browser-tabs";
@@ -154,6 +154,10 @@ export interface BrowserLiveDependencies {
   readonly handBack: (tabId: string, userId: string) => Effect.Effect<boolean, unknown>;
   /** Counts a takeover or hand-back the member made, in the agent's workspace, once the request that made it has answered; never fails. */
   readonly counted: (userId: string, agentId: string, tool: ServerAgentTool) => Effect.Effect<void>;
+  /** Beats this view's hold on the sandbox the session names, under the view's own id, which keeps it up while the view stands; a beat the store did not take is logged, for the next to write. */
+  readonly holdSandbox: (sessionId: string, holder: string) => Effect.Effect<void>;
+  /** Lets go of this view's hold at once as it closes, every other holder's standing; one the store did not take lapses on its own. */
+  readonly releaseSandbox: (sessionId: string, holder: string) => Effect.Effect<void>;
   /** Keeps the tab's page as the view saw it move, on the target named alone, so a browser that starts afresh reopens it there; a write the store did not take is logged, for the next move to try again. */
   readonly notePage: (
     tabId: string,
@@ -354,17 +358,13 @@ function commandOf(
   return { command: { method: CDP_METHOD.MOUSE, params }, move };
 }
 
-/** Ends once the panel has sent nothing that counts as watching for the idle bound, or no input for the input bound. */
+/** Ends once the panel has sent nothing that counts as watching for the idle bound. */
 function idleWatch(view: LiveView): Effect.Effect<LiveEnd> {
   const activeLately = Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
     const watched = now - (yield* Ref.get(view.lastActive));
-    const touched = now - (yield* Ref.get(view.lastInput));
 
-    return (
-      watched < Duration.toMillis(BROWSER_LIVE_BOUNDS.IDLE) &&
-      touched < Duration.toMillis(BROWSER_LIVE_BOUNDS.INPUT_IDLE)
-    );
+    return watched < Duration.toMillis(BROWSER_LIVE_BOUNDS.IDLE);
   });
 
   return Effect.as(
@@ -400,8 +400,6 @@ interface LiveView {
   /** The browser's target for the tab, read again once the browser is reached, since a fresh start reopens the tab on a new one. */
   readonly targetId: Ref.Ref<string>;
   readonly lastActive: Ref.Ref<number>;
-  /** The instant the member last acted on the view: anything that counts as watching but the panel saying it is. */
-  readonly lastInput: Ref.Ref<number>;
   readonly lastFrame: Ref.Ref<number | undefined>;
   readonly inputs: Queue.Queue<QueuedInput, Cause.Done>;
   /** How the browser's side ended, where an event ended it. */
@@ -450,7 +448,6 @@ function openView(
       live: yield* Ref.make<LiveTarget | undefined>(undefined),
       targetId: yield* Ref.make(tab.targetId),
       lastActive: yield* Ref.make(startedAt.getTime()),
-      lastInput: yield* Ref.make(startedAt.getTime()),
       lastFrame: yield* Ref.make<number | undefined>(undefined),
       inputs: yield* Queue.make<QueuedInput, Cause.Done>(),
       browserEnded: yield* Deferred.make<LiveEnd>(),
@@ -754,9 +751,8 @@ function resizes(view: LiveView, size: PixelSize): Effect.Effect<boolean> {
  * Note that a viewport counts as someone watching only where it resizes the
  * view, because an older panel sends the same size again every minute to keep
  * the socket open, shown or not, and a pane nobody looks at would hold its
- * sandbox for good; a panel that is shown says so with its own message,
- * which alone is no input, since a shown pane says it whether or not anyone
- * is at the window.
+ * view, and with it its sandbox, for good; a panel that is shown says so with
+ * its own message.
  */
 function onMessage(view: LiveView, message: BrowserLiveClientMessage): Effect.Effect<void> {
   return Effect.gen(function* () {
@@ -766,9 +762,6 @@ function onMessage(view: LiveView, message: BrowserLiveClientMessage): Effect.Ef
       message.type !== BROWSER_LIVE_CLIENT.VIEWPORT || (yield* resizes(view, message));
 
     if (watching) yield* Ref.set(view.lastActive, at.getTime());
-
-    if (watching && message.type !== BROWSER_LIVE_CLIENT.WATCHING)
-      yield* Ref.set(view.lastInput, at.getTime());
 
     switch (message.type) {
       case BROWSER_LIVE_CLIENT.TAKE_OVER:
@@ -1029,6 +1022,15 @@ function watchBrowser(view: LiveView): Effect.Effect<LiveEnd, never, Scope.Scope
     if (Result.isFailure(session)) return BROWSER_LIVE_CLOSE_REASON.UNAVAILABLE;
 
     if (Option.isNone(session.success)) return BROWSER_LIVE_CLOSE_REASON.NOT_OPENED;
+    // Note that the view holds its sandbox from here to its close, whether or not the member acts on it.
+    const sessionId = session.success.value;
+    const holder = crypto.randomUUID();
+    yield* Effect.addFinalizer(() => deps.releaseSandbox(sessionId, holder));
+    yield* Effect.forkScoped(
+      Effect.repeat(deps.holdSandbox(sessionId, holder), {
+        schedule: Schedule.spaced(BROWSER_LIVE_BOUNDS.HOLD_EVERY),
+      }),
+    );
 
     const connected = yield* Effect.result(
       deps.browser.connect(session.success.value, view.reached.tab.conversationId),

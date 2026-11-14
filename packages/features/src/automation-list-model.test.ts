@@ -44,8 +44,8 @@ const SCHEDULE = {
 function automation(id: string, extra: Partial<AutomationSummary> = {}): AutomationSummary {
   return {
     id,
-    planId: null,
-    planName: null,
+    taskId: null,
+    taskName: null,
     workspaceId: "workspace-1",
     name: `Automation ${id}`,
     enabled: true,

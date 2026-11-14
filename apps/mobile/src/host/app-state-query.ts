@@ -10,6 +10,11 @@
  * drawn, so it is never stale and never read again; its `queryFn` answers
  * what the client already holds, and stands only for a reader on a client
  * nothing follows into, which refuses.
+ *
+ * Every reading is handed on in the same breath to the task list's
+ * collections (`@repo/host/task-list-following`), the panel's own, so a
+ * list that reads its rows through a live query is told only the rows that
+ * moved, and the two never disagree.
  */
 
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -17,8 +22,10 @@ import {
   type AppStateBridgeReads,
   type FollowedAppState,
   followAppStateOver,
+  selectTasks,
   shareAppState,
 } from "@repo/host/app-state-reads";
+import { type TaskListCollections, taskListFollowing } from "@repo/host/task-list-following";
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
 
 /** The one key the document is held under in the app's client. */
@@ -38,19 +45,28 @@ export const appStateQuery = queryOptions({
   retry: false,
 });
 
+/** The document followed into the client, and the task list's collections fed from the same readings. */
+export interface FollowedAppStateInto extends FollowedAppState {
+  readonly taskList: TaskListCollections;
+}
+
 /**
  * Writes every reading of the document into `client`, from the moment it
  * is called until it is stopped, as the panel's root does for its window:
- * the first whole read, then each delivery laid over what is held.
+ * the first whole read, then each delivery laid over what is held. Each is
+ * written into the task list's collections beside it, under its version.
  */
 export function followAppStateInto(
   bridge: AppStateBridgeReads,
   client: QueryClient,
-): FollowedAppState {
-  return followAppStateOver(
+): FollowedAppStateInto {
+  const taskList = taskListFollowing();
+
+  const followed = followAppStateOver(
     bridge,
     (state) => {
       client.setQueryData(appStateQuery.queryKey, state);
+      taskList.write(state.version, selectTasks(state));
 
       return undefined;
     },
@@ -58,4 +74,13 @@ export function followAppStateInto(
       console.error(message, cause);
     },
   );
+
+  return {
+    ...followed,
+    taskList: taskList.collections,
+    stop: () => {
+      followed.stop();
+      taskList.stop();
+    },
+  };
 }

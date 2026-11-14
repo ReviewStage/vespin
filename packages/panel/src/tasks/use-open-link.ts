@@ -228,8 +228,8 @@ const PAGE_BESIDE: Readonly<Partial<Record<LinkDestinationName, PagePlaceBeside>
     // Note that a task named by a number no one found the task for is no place a page reads on, so the window finds it on the service.
     if (at.kind !== LINK_DESTINATION.PAGE || taskNumberOf(at) !== undefined) return NOTHING;
 
-    if (!("planId" in at) || at.planId === here.taskId) return NOTHING;
-    const place: PagePlace = { taskId: at.planId };
+    if (!("taskId" in at) || at.taskId === here.taskId) return NOTHING;
+    const place: PagePlace = { taskId: at.taskId };
 
     return beside({ kind: THING.PAGE, pageId: at.pageId, place });
   },
@@ -294,8 +294,8 @@ export function openPullRequestsHere(
 /** The place a mention of a plan, or of one of its sections, names. */
 export function placeOfMention(mention: DescriptionMention): LinkDestination {
   return mention.kind === MENTION_KIND.TASK
-    ? { kind: LINK_DESTINATION.TASK, planId: mention.taskId }
-    : { kind: LINK_DESTINATION.SECTION, planId: mention.taskId, anchor: mention.anchor };
+    ? { kind: LINK_DESTINATION.TASK, taskId: mention.taskId }
+    : { kind: LINK_DESTINATION.SECTION, taskId: mention.taskId, anchor: mention.anchor };
 }
 
 /**
@@ -347,7 +347,7 @@ export function throughWindow(
 
   const changes: ReadLink = {
     workspace: "",
-    place: { kind: LINK_DESTINATION.CHANGES, planId: opened.taskId, agentId: opened.agentId },
+    place: { kind: LINK_DESTINATION.CHANGES, taskId: opened.taskId, agentId: opened.agentId },
   };
 
   // Note that the window goes to the Pull request tab's place as its route reads it, as a link to it would.

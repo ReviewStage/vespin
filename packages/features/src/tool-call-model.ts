@@ -39,8 +39,11 @@ import { LINK_DESTINATION, type LinkDestination, linkOf } from "./link-grammar.j
 import {
   COMPUTER_PERMISSION,
   type ComputerPermission,
+  computerPermissionsNamed,
+  MACHINE_REFUSAL,
   MACHINE_UNREACHED,
   type MachineUnreached,
+  machineRefusalSchema,
 } from "./machine-command-wire.js";
 import type { MentionHolder } from "./mention-holder.js";
 import type { ModelChoice } from "./models-wire.js";
@@ -53,6 +56,8 @@ import {
   type CallKind,
   commandDescription,
   computerCallWords,
+  computerNotRunWords,
+  MACHINE_NOT_RUN_WORDS,
   pageName,
 } from "./turn-rows.js";
 
@@ -104,8 +109,12 @@ export interface ToolCallView {
   readonly machine?: CallMachine;
   /** For a call of an MCP server's tool, or a search of its tools, the server's name as its card gives it, which the row says it ran on. */
   readonly server?: string;
+  /** For a call of an integration's own tool, the name of the account it ran on as its owner called it, where they held more than one at the provider, which every reader is shown; absent for the rest. */
+  readonly account?: string;
   /** For the same calls, the connection they ran on, which the window names by the account's own name where it holds more than one (`connection-names.tsx`); `server` stands where it does not know it. */
   readonly connection?: string;
+  /** For a terminal command or an action on an app that ran nothing on its machine, how it came to run nothing, which its row says quietly in place of a failure; absent for the rest. */
+  readonly notRun?: MachineNotRun;
 }
 
 /** The escape every terminal color and cursor sequence starts with. */
@@ -216,6 +225,106 @@ export function computerCallRefused(output: WireValue | undefined): boolean {
   return stringAt(output, "status") === MACHINE_COMMAND_NOT_RUN;
 }
 
+/** How a terminal command or an action on an app came to run nothing on its machine, as data its answer carries, never read off the words the model read. */
+export const NOT_RUN_OUTCOME = {
+  /** The developer denied the ask. */
+  DECLINED: MACHINE_REFUSAL.DECLINED,
+  /** No one answered the ask in time. */
+  UNANSWERED: MACHINE_REFUSAL.UNANSWERED,
+  /** The machine never said what the call came to. */
+  NO_ANSWER: MACHINE_REFUSAL.NO_ANSWER,
+  /** The Mac lacked a grant the action needs. */
+  MISSING_PERMISSIONS: "missing-permissions",
+  /** Routing found no machine that could take it (`why`). */
+  UNREACHED: "unreached",
+  /** Any other refusal, as an app agents are never offered. */
+  OTHER: "other",
+} as const;
+
+/** A machine call that ran nothing: how, and the words the model read of why. */
+export type MachineNotRun =
+  | {
+      readonly outcome:
+        | typeof NOT_RUN_OUTCOME.DECLINED
+        | typeof NOT_RUN_OUTCOME.UNANSWERED
+        | typeof NOT_RUN_OUTCOME.NO_ANSWER
+        | typeof NOT_RUN_OUTCOME.OTHER;
+      readonly reason: string;
+    }
+  | {
+      readonly outcome: typeof NOT_RUN_OUTCOME.MISSING_PERMISSIONS;
+      readonly reason: string;
+      readonly permissions: readonly ComputerPermission[];
+    }
+  | {
+      readonly outcome: typeof NOT_RUN_OUTCOME.UNREACHED;
+      readonly reason: string;
+      readonly why: MachineUnreached;
+    };
+
+const isMachineRefusal = Schema.is(machineRefusalSchema);
+
+/**
+ * How a `run_on_mac` or `computer` call's answer says it ran nothing: a
+ * route that reached no machine by its `why`, a Mac that lacked a grant by
+ * the grants it names, and an ask declined or unanswered, or no word back,
+ * by its `outcome`; none for an answer that ran.
+ */
+export function machineNotRunOf(output: WireValue | undefined): MachineNotRun | undefined {
+  if (stringAt(output, "status") !== MACHINE_COMMAND_NOT_RUN || !isRecord(output)) return undefined;
+  const reason = stringAt(output, "reason") ?? "";
+  const { why, outcome } = output;
+
+  if (isMachineUnreached(why)) return { outcome: NOT_RUN_OUTCOME.UNREACHED, reason, why };
+  const missing = computerPermissionsMissing(output);
+
+  if (missing !== undefined) {
+    return {
+      outcome: NOT_RUN_OUTCOME.MISSING_PERMISSIONS,
+      reason,
+      permissions: missing.permissions,
+    };
+  }
+
+  return { outcome: isMachineRefusal(outcome) ? outcome : NOT_RUN_OUTCOME.OTHER, reason };
+}
+
+/** What a call that reached no machine says at its line's end, by why, after the chip of the machine it was meant for. */
+const UNREACHED_LABEL = {
+  [MACHINE_UNREACHED.OFFLINE]: "Offline",
+  [MACHINE_UNREACHED.NOT_LET]: "Not allowed",
+  [MACHINE_UNREACHED.COMMANDS_NEVER]: "Commands off",
+  [MACHINE_UNREACHED.APPS_OFF]: "Apps off",
+  [MACHINE_UNREACHED.DEFAULT_GONE]: "No default machine",
+  [MACHINE_UNREACHED.UNKNOWN_MACHINE]: "Unknown machine",
+  [MACHINE_UNREACHED.NO_MACHINE]: "No machine",
+  [MACHINE_UNREACHED.OWN_SHELL]: "Use own shell",
+} as const satisfies Record<MachineUnreached, string>;
+
+/** What a call that ran nothing says at its line's end, by how. */
+const NOT_RUN_LABEL = {
+  [NOT_RUN_OUTCOME.DECLINED]: "Declined",
+  [NOT_RUN_OUTCOME.UNANSWERED]: "Not answered",
+  [NOT_RUN_OUTCOME.NO_ANSWER]: "No answer back",
+  [NOT_RUN_OUTCOME.OTHER]: "Not run",
+} as const;
+
+/**
+ * The one quiet label a call that ran nothing wears at its line's end,
+ * after the chip of the machine it was meant for: "Not answered",
+ * "Declined", "Offline", or "Needs Screen Recording".
+ */
+export function machineNotRunLabel(notRun: MachineNotRun): string {
+  switch (notRun.outcome) {
+    case NOT_RUN_OUTCOME.MISSING_PERMISSIONS:
+      return `Needs ${computerPermissionsNamed(notRun.permissions)}`;
+    case NOT_RUN_OUTCOME.UNREACHED:
+      return UNREACHED_LABEL[notRun.why];
+    default:
+      return NOT_RUN_LABEL[notRun.outcome];
+  }
+}
+
 /** Why a computer call ran nothing because the Mac lacked a grant it needed, in the Mac's own words, with those grants; none for any other answer. */
 export function computerPermissionsMissing(
   output: WireValue | undefined,
@@ -274,6 +383,24 @@ export function computerAppIcon(output: WireValue | undefined): string | undefin
   if (!isRecord(output) || !isRecord(output.app) || !isRecord(output.app.icon)) return undefined;
 
   return stringAt(output.app.icon.picture, "id");
+}
+
+/**
+ * Where a computer call's answer says the agent's cursor stands on the Mac,
+ * as a share of the app's last read window from its top left, and whether
+ * it pressed there, as every action that moves it does, rather than resting
+ * there as a read leaves it; none where the answer names none, as an action
+ * that moves no cursor, or an answer from before it named one.
+ */
+export function computerCursor(
+  output: WireValue | undefined,
+): { readonly x: number; readonly y: number; readonly pressed: boolean } | undefined {
+  if (!isRecord(output) || !isRecord(output.cursor)) return undefined;
+  const { xFraction, yFraction } = output.cursor;
+
+  if (!isWireNumber(xFraction) || !isWireNumber(yFraction)) return undefined;
+
+  return { x: xFraction, y: yFraction, pressed: isWireString(output.done) };
 }
 
 /** The one file a call's `filePath` names, as a list; none where it names none. */
@@ -1077,8 +1204,12 @@ function remoteToolView(
   return {
     kind: CALL_KIND.MCP_TOOL,
     subject: remote.call.remoteTool,
-    server: connectionName(remote.call.connection ?? remote.provider),
+    server:
+      remote.call.account === undefined
+        ? connectionName(remote.call.connection ?? remote.provider)
+        : `${INTEGRATION_NAME[remote.provider]} · ${remote.call.account}`,
     connection: remote.call.connection ?? remote.provider,
+    ...(remote.call.account === undefined ? undefined : { account: remote.call.account }),
     provider: remote.provider,
     input: jsonBlock(remote.call.input),
     output: output === undefined ? undefined : jsonBlock(output),
@@ -1176,6 +1307,12 @@ const READ_SEARCH: ToolReader = ({ input, output }) => ({
   input: input === undefined ? textBlock("") : jsonBlock(input),
   output: output === undefined ? undefined : wordsOutput(output, "content"),
 });
+
+/** What a search of files by their names says in place of the search's verb, since it finds files rather than words in them. */
+const FOUND_FILES = "Found files";
+
+/** A search of files by their names: a search, which says it found files before the pattern. */
+const READ_GLOB: ToolReader = (call) => ({ ...READ_SEARCH(call), description: FOUND_FILES });
 
 const READ_WEB_SEARCH: ToolReader = ({ input, output }) => ({
   kind: CALL_KIND.WEB_SEARCH,
@@ -1338,7 +1475,14 @@ const AGENT_TOOL_VIEWS = {
   }),
   [AGENT_TOOL.RUN_ON_MAC]: ({ input, output }) => {
     const command = stringAt(input, "command") ?? "";
-    const description = commandDescription(stringAt(input, "description"));
+    const notRun = machineNotRunOf(output);
+
+    // Note that a command that never ran says so in its verb's place, over what the model said it was for; one the Mac never answered for may have run, so it keeps its words.
+    const description =
+      notRun === undefined || notRun.outcome === NOT_RUN_OUTCOME.NO_ANSWER
+        ? commandDescription(stringAt(input, "description"))
+        : MACHINE_NOT_RUN_WORDS.COMMAND;
+
     const machine = callMachineOf(output);
 
     return {
@@ -1346,12 +1490,21 @@ const AGENT_TOOL_VIEWS = {
       subject: command,
       ...(description === undefined ? undefined : { description }),
       ...(machine === undefined ? undefined : { machine }),
+      ...(notRun === undefined ? undefined : { notRun }),
       input: { kind: TOOL_BLOCK.COMMAND, text: command },
       output: output === undefined ? undefined : machineCommandOutput(output),
     };
   },
   [AGENT_TOOL.COMPUTER]: ({ input, output }) => {
-    const description = computerCallWords(stringAt(input, "action"));
+    const action = stringAt(input, "action");
+    const notRun = machineNotRunOf(output);
+
+    // Note that an action the Mac never answered for may have run, so it keeps its words.
+    const description =
+      notRun === undefined || notRun.outcome === NOT_RUN_OUTCOME.NO_ANSWER
+        ? computerCallWords(action)
+        : computerNotRunWords(action);
+
     const icon = computerAppIcon(output);
     const machine = callMachineOf(output);
 
@@ -1360,6 +1513,7 @@ const AGENT_TOOL_VIEWS = {
       subject: computerAppName(input, output) ?? "",
       ...(description === undefined ? undefined : { description }),
       ...(machine === undefined ? undefined : { machine }),
+      ...(notRun === undefined ? undefined : { notRun }),
       ...(icon === undefined ? undefined : { appIcon: icon }),
       input: jsonBlock(input ?? {}),
       output: output === undefined ? undefined : computerOutput(output),
@@ -1406,7 +1560,7 @@ const AGENT_TOOL_VIEWS = {
     input: textBlock(stringAt(input, "content") ?? ""),
     output: output === undefined ? undefined : wordsOutput(output, "path"),
   }),
-  [AGENT_TOOL.GLOB]: READ_SEARCH,
+  [AGENT_TOOL.GLOB]: READ_GLOB,
   [AGENT_TOOL.GREP]: READ_SEARCH,
   [AGENT_TOOL.APPLY_PATCH]: ({ input, output }) => {
     const patchText = stringAt(input, "patchText") ?? "";
@@ -1674,8 +1828,8 @@ export function placeOfTaskTarget(
   target: Extract<ToolTarget, { readonly kind: typeof TOOL_TARGET.TASK }>,
 ): LinkDestination {
   return target.agent === undefined
-    ? { kind: LINK_DESTINATION.TASK, planId: target.task }
-    : { kind: LINK_DESTINATION.AGENT, planId: target.task, agentId: target.agent };
+    ? { kind: LINK_DESTINATION.TASK, taskId: target.task }
+    : { kind: LINK_DESTINATION.AGENT, taskId: target.task, agentId: target.agent };
 }
 
 /** What the hover over a row says it opens, by its target's kind. */
@@ -1725,6 +1879,23 @@ function namedThread(call: TargetedCall): ToolTarget {
   return item === undefined
     ? { kind: TOOL_TARGET.INBOX, key }
     : { kind: TOOL_TARGET.INBOX, key, item };
+}
+
+/**
+ * The thread a read of one answered, by its id and key, which its chip is
+ * linked by; the whole Inbox for a read that answered none, or one of another
+ * agent's threads, which this agent's Inbox does not hold.
+ */
+function readThread(call: TargetedCall): ToolTarget {
+  const thread = isRecord(call.output) ? call.output.thread : undefined;
+  const item = stringAt(thread, "id");
+  const key = stringAt(thread, "key");
+
+  if (item === undefined || key === undefined || stringAt(thread, "agentId") !== undefined) {
+    return INBOX_TARGET;
+  }
+
+  return { kind: TOOL_TARGET.INBOX, key, item };
 }
 
 /** The agent a call names in its input, as a read of or a message to one does. */
@@ -1879,7 +2050,7 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
   [AGENT_TOOL.WITHDRAW_ASK, namedThread],
   [RETIRED_TOOL.CLOSE_INBOX_ITEM, () => INBOX_TARGET],
   [AGENT_TOOL.LIST_THREADS, () => INBOX_TARGET],
-  [AGENT_TOOL.READ_THREAD, () => INBOX_TARGET],
+  [AGENT_TOOL.READ_THREAD, readThread],
   [RETIRED_TOOL.READ_THREADS, () => INBOX_TARGET],
   [RETIRED_TOOL.READ_INBOX, () => INBOX_TARGET],
   [RETIRED_TOOL.REPLY_INBOX, () => INBOX_TARGET],
@@ -1934,13 +2105,13 @@ export function targetLink(target: ToolTarget, place: TargetPlace): string | und
 
   switch (target.kind) {
     case TOOL_TARGET.TASK:
-      return linked({ kind: LINK_DESTINATION.TASK, planId: target.task });
+      return linked({ kind: LINK_DESTINATION.TASK, taskId: target.task });
     case TOOL_TARGET.DESCRIPTION: {
       const taskId = place.holder?.taskId;
 
       return taskId === undefined
         ? undefined
-        : linked({ kind: LINK_DESTINATION.TASK, planId: taskId });
+        : linked({ kind: LINK_DESTINATION.TASK, taskId: taskId });
     }
 
     case TOOL_TARGET.PAGE: {
@@ -1948,7 +2119,7 @@ export function targetLink(target: ToolTarget, place: TargetPlace): string | und
 
       return taskId === undefined
         ? undefined
-        : linked({ kind: LINK_DESTINATION.PAGE, planId: taskId, pageId: target.page });
+        : linked({ kind: LINK_DESTINATION.PAGE, taskId: taskId, pageId: target.page });
     }
 
     case TOOL_TARGET.INBOX:

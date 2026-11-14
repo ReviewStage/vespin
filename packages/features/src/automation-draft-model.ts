@@ -580,7 +580,7 @@ export function automationDraft(
 
 /** Whether the automation a draft opened as needs no repository chosen: one on a task, whose repository is its task's. */
 export function repositoryHeld(automation: AutomationSummary | undefined): boolean {
-  return automation !== undefined && automation.planId !== null;
+  return automation !== undefined && automation.taskId !== null;
 }
 
 /**
@@ -799,7 +799,7 @@ export function changeOf(
     !sameSet(draft.disabledServers, was.disabledServers);
 
   const targetMoved = draft.target !== was.target || landingAgent(draft) !== landingAgent(was);
-  const repositoryMoved = automation.planId === null && draft.repository !== was.repository;
+  const repositoryMoved = automation.taskId === null && draft.repository !== was.repository;
   const change: ChangeDraft = {};
 
   if (draft.name.trim() !== was.name) change.name = draft.name.trim();

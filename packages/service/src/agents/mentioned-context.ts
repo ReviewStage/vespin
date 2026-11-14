@@ -1,7 +1,7 @@
 import { MENTIONED_HEADING } from "@repo/database/models/attached-file-parts";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import { descriptionSections } from "@repo/features/description-document";
 import { descriptionMarkdown } from "@repo/features/description-markdown";
+import { descriptionSections } from "@repo/features/description-sections";
 import {
   INTEGRATION_NAME,
   INTEGRATION_PROVIDER,
@@ -21,6 +21,7 @@ import {
   handedMentionsIn,
   linkChipOf,
   type MacAppMention,
+  type MachineMention,
   MENTION_KIND,
   type Mention,
   mentionName,
@@ -98,6 +99,11 @@ import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wir
  * needs them. Their email is not handed, since nothing the agent does needs
  * it. Someone the send did not find among the members, who left or was never
  * in it, is named as not a member.
+ *
+ * A machine of the workspace is named by its id, which `run_on_mac` and
+ * `computer` take as `machine`, and handed as its name and that id, so a
+ * call the message asks for goes to it; a mention lets no call through that
+ * routing would refuse (`machine-routing.ts`).
  */
 
 export const MENTIONED_BOUNDS = {
@@ -228,9 +234,9 @@ function excerptOf({ mention, name }: NamedMention, task: Task): string {
     // Note that a section is left out by where it starts, past the cut, never by its heading's words, which earlier text may quote.
     const bodyKept =
       keptLength(whole, MENTIONED_BOUNDS.DESCRIPTION_CHARS) -
-      (whole.length - task.document.body.trimEnd().length - 1);
+      (whole.length - task.description.body.trimEnd().length - 1);
 
-    const headings = descriptionSections(task.document.body)
+    const headings = descriptionSections(task.description.body)
       .filter((section) => section.heading !== "" && section.from >= bodyKept)
       .map((section) => section.heading);
 
@@ -239,7 +245,7 @@ function excerptOf({ mention, name }: NamedMention, task: Task): string {
     return `The whole description, cut short:\n\n${cutOnLine(whole, MENTIONED_BOUNDS.DESCRIPTION_CHARS)}${rest}`;
   }
 
-  const sections = descriptionSections(task.document.body);
+  const sections = descriptionSections(task.description.body);
   const anchors = sectionAnchors(sections.map((section) => section.heading));
   const section = sections[anchors.indexOf(mention.anchor)];
 
@@ -275,6 +281,7 @@ type Handed =
   | PersonMention
   | MacAppMention
   | ComputerMention
+  | MachineMention
   | NumberedTask;
 
 /**
@@ -373,6 +380,17 @@ function macAppNoteOf({ app }: MacAppMention, name: string): string {
 /** What a mention of the developer's Mac as a whole is handed as: that `computer` is welcome on it for this message, ahead of the routing its description gives, and how to start. */
 const COMPUTER_NOTE = `The developer pointed you at their Mac for this message: \`${AGENT_TOOL.COMPUTER}\` is welcome on it, ahead of the other routes its description puts first. Start with \`list_apps\`, and use the app the message is about; their Mac may still ask them to allow each app.`;
 
+/**
+ * What a mention of a machine of the workspace is handed as: its name and
+ * the id `run_on_mac` and `computer` take as `machine`, so a call the
+ * message asks for goes there. Note that it makes nothing reachable: a
+ * machine whose owner does not let the task's agents use it, or that is
+ * away, refuses the call, and the refusal names the machines that can.
+ */
+function machineNoteOf({ machineId }: MachineMention, name: string): string {
+  return `The developer pointed you at the machine "${name}" (id \`${machineId}\`) for this message: where it asks for a terminal command or an app there, pass \`machine: "${machineId}"\` to \`${AGENT_TOOL.RUN_ON_MAC}\` or \`${AGENT_TOOL.COMPUTER}\`. A machine its owner doesn't let this task's agents use, or that is offline, refuses the call, naming the machines that can take it.`;
+}
+
 /** What a mention of a file's lines is handed as: the lines, the commit they were read at, and how to read just those; nothing for a whole file. */
 function linesNoteOf({ path, lines }: LinesMention): string {
   if (lines === undefined) return "";
@@ -435,7 +453,7 @@ function numberedTaskOf(
   const number = read === undefined ? undefined : taskNumberOf(read.place);
 
   if (read === undefined || number === undefined) return undefined;
-  const link = linkOf({ kind: LINK_DESTINATION.TASK, planId: String(number) }, read.workspace);
+  const link = linkOf({ kind: LINK_DESTINATION.TASK, taskId: String(number) }, read.workspace);
 
   return { kind: HANDED_KIND.NUMBERED_TASK, taskId: mention.taskId, link };
 }
@@ -462,6 +480,7 @@ function handedMention(
     case MENTION_KIND.TOOL:
     case MENTION_KIND.MAC_APP:
     case MENTION_KIND.COMPUTER:
+    case MENTION_KIND.MACHINE:
       return mention;
     // A well-known site's page has no server to read it through, and its address is in the words already, unless an integration reads it.
     case MENTION_KIND.LINK: {
@@ -528,6 +547,8 @@ function sameMention(first: Handed, second: Handed): boolean {
       return second.kind === MENTION_KIND.MAC_APP && first.app === second.app;
     case MENTION_KIND.COMPUTER:
       return second.kind === MENTION_KIND.COMPUTER;
+    case MENTION_KIND.MACHINE:
+      return second.kind === MENTION_KIND.MACHINE && first.machineId === second.machineId;
     case HANDED_KIND.NUMBERED_TASK:
       return second.kind === HANDED_KIND.NUMBERED_TASK && first.taskId === second.taskId;
   }
@@ -559,6 +580,8 @@ function handedAs(
       return macAppNoteOf(mention, name);
     case MENTION_KIND.COMPUTER:
       return COMPUTER_NOTE;
+    case MENTION_KIND.MACHINE:
+      return machineNoteOf(mention, name);
     case HANDED_KIND.NUMBERED_TASK:
       return numberedTaskNoteOf(mention);
   }

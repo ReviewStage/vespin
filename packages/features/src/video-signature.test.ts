@@ -1,14 +1,21 @@
 import assert from "node:assert/strict";
 import { mp4Bytes } from "@repo/wire/testing";
 import { test } from "vitest";
-import { mp4Dimensions, startsLikeWebm, streamableMp4, webmDimensions } from "./video-signature.js";
+import {
+  mp4Dimensions,
+  recordingHasSound,
+  startsLikeWebm,
+  streamableMp4,
+  webmDimensions,
+} from "./video-signature.js";
 
 /**
  * video-signature.test.ts -- a WebM told from its own bytes and its size
  * read off its video track: the head of a real recording Playwright's
  * `recordVideo` wrote at 800 by 600, cut before its first cluster as a
  * reader may hold it, and headers written by hand for the shapes a muxer
- * may leave, each against the size it states.
+ * may leave, each against the size it states, and a sound track told from
+ * the track types a header names.
  */
 
 /** Playwright's `recordVideo` at 800 by 600, up to its first cluster: the EBML header, then the segment's seek head, info, tracks, and tags. */
@@ -142,4 +149,25 @@ test("an MP4 copy streams only with its H.264 index ahead of its media, as +fast
 test("an H.264 MP4 a Mac recorded states the size its track's header shows, only with its index ahead of its media", () => {
   assert.deepEqual(mp4Dimensions(mp4Bytes(1206, 2622)), { width: 1206, height: 2622 });
   assert.equal(mp4Dimensions(mp4Bytes(1206, 2622, true)), undefined);
+});
+
+test("a recording carries sound only where a track says so: a WebM's audio entry, or an MP4 track handled as sound", () => {
+  // A track entry of type 2, audio, beside the video's (`83 81 02`).
+  const audioTrack = element([0xae], [...element([0xd7], [2]), ...element([0x83], [2])]);
+
+  const webm = (tracks: readonly number[]) =>
+    new Uint8Array([...ebmlHeader("webm"), ...liveSegment(element([...TRACKS], tracks))]);
+
+  // A handler box: version and flags, four zero bytes, then the handler's type.
+  const handled = (handler: string) =>
+    box("trak", box("mdia", box("hdlr", [0, 0, 0, 0, 0, 0, 0, 0, ...ascii(handler)])));
+
+  const mp4 = (tracks: readonly number[]) =>
+    Uint8Array.from([...box("ftyp", ascii("isom")), ...box("moov", tracks), ...box("mdat", [0])]);
+
+  assert.equal(recordingHasSound(webm([...videoTrack(640, 480), ...audioTrack])), true);
+  assert.equal(recordingHasSound(webm(videoTrack(640, 480))), false);
+  assert.equal(recordingHasSound(decoded(PLAYWRIGHT_800_BY_600)), false);
+  assert.equal(recordingHasSound(mp4([...handled("vide"), ...handled("soun")])), true);
+  assert.equal(recordingHasSound(mp4(handled("vide"))), false);
 });

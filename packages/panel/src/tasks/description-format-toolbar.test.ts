@@ -66,7 +66,7 @@ const TEXT = [
   "",
 ].join("\n\n");
 
-const PLAN: Task = { ...DOCUMENT_TASK, document: { body: TEXT, assumptions: [] } };
+const PLAN: Task = { ...DOCUMENT_TASK, description: { body: TEXT, assumptions: [] } };
 
 /** The plan's own page's links, which say the page is the plan's own and so takes comments. */
 const PAGE_LINKS = { workspace: "acme", onOpen: () => undefined, reveal: undefined };
@@ -108,7 +108,7 @@ async function opened() {
   const palette: string[] = [];
 
   const control: DescriptionCommentsControl = {
-    planId: PLAN.id,
+    taskId: PLAN.id,
     threads: [],
     read: true,
     failed: false,

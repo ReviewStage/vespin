@@ -93,7 +93,7 @@ async function drawn(element: ReactElement): Promise<HTMLElement> {
 
 /** A plan of its own id, so the window's pictures read for one test stand apart from another's. */
 function taskOf(id: string, body: string): Task {
-  return { ...DOCUMENT_TASK, id, document: { body, assumptions: [] } };
+  return { ...DOCUMENT_TASK, id, description: { body, assumptions: [] } };
 }
 
 const picture = (taskId: string, id: string) =>
@@ -256,7 +256,7 @@ test("a version draws the picture it struck and the one it wrote in, each in its
         current: false,
         read: {
           kind: HISTORY_READ.READY,
-          document: { body: after, assumptions: [] },
+          description: { body: after, assumptions: [] },
           previous: { body: before, assumptions: [] },
         },
       },
