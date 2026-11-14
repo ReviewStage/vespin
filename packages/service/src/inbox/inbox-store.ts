@@ -1425,7 +1425,7 @@ export function accountInboxLiveStatements(userId: string) {
       columns: {
         id: inboxItem.id,
         // Note that a waiting item stands on a task (`accountWaiting`).
-        planId: sql<string>`${inboxItem.taskId}`,
+        taskId: sql<string>`${inboxItem.taskId}`,
         agentId: inboxItem.agentId,
         agentTitle: agentTable.title,
         agentModel: agentTable.model,
@@ -1491,7 +1491,7 @@ export function accountInboxLiveStatements(userId: string) {
       ordered: false,
       columns: {
         // Note that a grouped item stands on a task (`isNotNull` below).
-        planId: columnAs<string>(inboxItem.taskId),
+        taskId: columnAs<string>(inboxItem.taskId),
         items: LIVE_COUNT,
         toDo: toDoCount(userId),
       },
@@ -1751,7 +1751,7 @@ function accountItemsOf(userId: string, settledSince: Date, narrowed: SQL, chang
       ordered: false,
       columns: {
         id: inboxItem.id,
-        planId: inboxItem.taskId,
+        taskId: inboxItem.taskId,
         agentId: inboxItem.agentId,
         revision: inboxItem.revision,
         version: inboxItem.version,
@@ -1873,7 +1873,7 @@ const findItemHome = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, itemId: Schema.String }),
   Result: Schema.Struct({
     agentId: Schema.String,
-    planId: Schema.String,
+    taskId: Schema.String,
     workspaceId: Schema.String,
   }),
   execute: ({ userId, itemId }) =>
@@ -1881,7 +1881,7 @@ const findItemHome = SqlSchema.findOneOption({
       db
         .select({
           agentId: inboxItem.agentId,
-          planId: inboxItem.taskId,
+          taskId: inboxItem.taskId,
           workspaceId: inboxItem.organizationId,
         })
         .from(inboxItem)
@@ -4166,7 +4166,7 @@ export function accountWaitingItems(
       ...row,
       // Note that the reminder is carried under `snoozedUntil` too, as `liveReminderFor` carries it.
       snoozedUntil: row.remindAt,
-      planId: taskId,
+      taskId: taskId,
       postedAt: row.postedAt.getTime(),
       updatedAt: row.updatedAt.getTime(),
     })),
@@ -4241,7 +4241,7 @@ export function accountInboxTasks(userId: string): InboxStoreEffect<readonly Acc
   return Effect.map(findTasksWithItems({ userId }), (rows) =>
     rows.map(({ taskId, ...row }) => ({
       ...row,
-      planId: taskId,
+      taskId: taskId,
       updatedAt: row.updatedAt.getTime(),
     })),
   );

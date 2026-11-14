@@ -71,7 +71,7 @@ function threadsOf(
 ): readonly ListedThread[] {
   return read.items
     .flatMap((entry) => {
-      const task = tasks.get(entry.planId);
+      const task = tasks.get(entry.taskId);
 
       if (task === undefined) return [];
 
@@ -83,7 +83,7 @@ function threadsOf(
           asking: entry.asking !== false,
           agentId: entry.agentId,
           agent: entry.agentTitle ?? entry.agentModel,
-          taskId: entry.planId,
+          taskId: entry.taskId,
           task,
           updatedAt: entry.updatedAt,
         },

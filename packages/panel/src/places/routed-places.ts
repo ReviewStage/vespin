@@ -227,10 +227,10 @@ function versionLinks({ tasks, at }: PlaceLinks): readonly LinkAtHand[] {
   const { task: drawn } = region;
   const workspace = slugOf(tasks.workspaces, drawn.workspaceId);
   // Note that the task's links name it by its number, where it has one, as every link to it is written.
-  const planId = taskLinkStep(drawn);
+  const taskId = taskLinkStep(drawn);
 
   const task: LinkAtHand = {
-    link: { workspace, place: { kind: LINK_DESTINATION.TASK, planId } },
+    link: { workspace, place: { kind: LINK_DESTINATION.TASK, taskId } },
     thing: LINK_THING.TASK,
     name: drawn.name,
   };
@@ -242,7 +242,7 @@ function versionLinks({ tasks, at }: PlaceLinks): readonly LinkAtHand[] {
   if (revision === undefined || listedAlone) return [{ ...task, step: true }];
 
   return [
-    stepLink({ kind: LINK_DESTINATION.VERSION, planId, revision }, LINK_THING.VERSION, workspace),
+    stepLink({ kind: LINK_DESTINATION.VERSION, taskId, revision }, LINK_THING.VERSION, workspace),
     task,
   ];
 }
@@ -634,7 +634,7 @@ export const ROUTED_PLACE = {
       const inboxPlace: LinkDestination =
         at.inboxTask === undefined
           ? { kind: LINK_DESTINATION.INBOX }
-          : { kind: LINK_DESTINATION.INBOX, planId: at.inboxTask };
+          : { kind: LINK_DESTINATION.INBOX, taskId: at.inboxTask };
 
       const inbox = stepLink(inboxPlace, LINK_THING.INBOX, listed);
       const chosen = listedInboxChoice(views.inbox.chosen, tasks);

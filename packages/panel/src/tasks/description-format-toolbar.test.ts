@@ -108,7 +108,7 @@ async function opened() {
   const palette: string[] = [];
 
   const control: DescriptionCommentsControl = {
-    planId: PLAN.id,
+    taskId: PLAN.id,
     threads: [],
     read: true,
     failed: false,

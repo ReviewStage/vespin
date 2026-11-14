@@ -89,7 +89,7 @@ export const ACCOUNT_INBOX_READ = liveRead({
   parts: {
     items: liveRows({ row: accountInboxEntrySchema, key: "id", order: latestOrder("id") }),
     planless: liveRows({ row: tasklessLiveRowSchema, key: "id", order: latestOrder("id") }),
-    plans: liveRows({ row: accountInboxTaskSchema, key: "planId", order: latestOrder("planId") }),
+    plans: liveRows({ row: accountInboxTaskSchema, key: "taskId", order: latestOrder("taskId") }),
     automations: liveRows({
       row: accountInboxAutomationSchema,
       key: "automationId",
@@ -199,7 +199,7 @@ export function accountInboxOfLiveRows(
 ): AccountInboxAnswer {
   const answer = {
     items: rows.items.toSorted(latestFirst((item) => item.id)),
-    plans: rows.plans.toSorted(latestFirst((plan) => plan.planId)),
+    plans: rows.plans.toSorted(latestFirst((plan) => plan.taskId)),
     planless: rows.planless
       .map(({ workspaceId, ...item }) => (workspaceId === null ? item : { ...item, workspaceId }))
       .toSorted(latestFirst((item) => item.id)),
@@ -510,7 +510,7 @@ export function inboxOfLiveRows(rows: ScopeInboxLiveRows): readonly InboxItem[] 
  */
 const inboxItemStampRowSchema = EffectSchema.Struct({
   id: EffectSchema.String,
-  planId: EffectSchema.String,
+  taskId: EffectSchema.String,
   agentId: EffectSchema.String,
   revision: countedNumber,
   version: countedNumber,

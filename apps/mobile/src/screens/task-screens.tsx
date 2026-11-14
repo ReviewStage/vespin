@@ -245,7 +245,7 @@ function shareTaskLink(task: TaskSummary, workspace: Workspace | undefined): voi
   if (workspace === undefined) return;
   shareLink(
     linkOf(
-      { kind: LINK_DESTINATION.TASK, planId: taskLinkStep(task) },
+      { kind: LINK_DESTINATION.TASK, taskId: taskLinkStep(task) },
       workspace.slug ?? workspace.id,
     ),
   );
@@ -482,7 +482,7 @@ function rowActs(
         symbol: GLYPH.OPEN_EXTERNALLY,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () =>
-          openOnWeb({ kind: LINK_DESTINATION.TASK, planId: task.id }, listing.workspace),
+          openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
       },
       {
         label: WORDS.DELETE,
@@ -586,7 +586,7 @@ export function TaskListRow({
         listing.workspace === undefined
           ? undefined
           : linkOf(
-              { kind: LINK_DESTINATION.TASK, planId: task.id },
+              { kind: LINK_DESTINATION.TASK, taskId: task.id },
               listing.workspace.slug ?? listing.workspace.id,
             )
       }
@@ -625,7 +625,7 @@ function droppedTask(tree: TaskTree, url: string): TaskSummary | undefined {
     .flatMap((group) => group.rows)
     .map(({ task }) => task);
 
-  return listed.find((task) => task.id === place.planId || String(task.number) === place.planId);
+  return listed.find((task) => task.id === place.taskId || String(task.number) === place.taskId);
 }
 
 /** Each task's drops, counted as they are made, and the newest of them the service took, so an older drop's follow-up never undoes a newer one. */
@@ -1012,7 +1012,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         label: VERB.OPEN_IN_BROWSER,
         symbol: GLYPH.OPEN_EXTERNALLY,
         onPress: () =>
-          openOnWeb({ kind: LINK_DESTINATION.TASK, planId: task.id }, overview.workspace),
+          openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, overview.workspace),
       },
       {
         label: WORDS.DELETE,
@@ -1789,7 +1789,7 @@ function OverviewPage({
   // A related task opens on its own Overview, and an agent on its page, where its transcript and its composer stand.
   const open = (id: string) => {
     if (related.has(id))
-      router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id })));
+      router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })));
     else if (agents.has(id) && !toDetail({ kind: PUSHED_PAGE.AGENT, agentId: id }))
       router.push(onTab(iosAgentRoute(id)));
   };
@@ -1859,7 +1859,7 @@ function TasksStackList(words: TasksSearch) {
           look={LIST_LOOK.PLAIN}
           search={search}
           onSelect={(id) =>
-            router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id })))
+            router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })))
           }
           onRefresh={refreshTasks}
         />
@@ -2061,7 +2061,7 @@ export function TasksListScreen() {
 function numberedIn(id: string, workspace: string | undefined): boolean {
   return (
     workspace !== undefined &&
-    taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: id }) !== undefined
+    taskNumberOf({ kind: LINK_DESTINATION.TASK, taskId: id }) !== undefined
   );
 }
 

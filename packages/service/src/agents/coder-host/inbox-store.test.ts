@@ -529,11 +529,11 @@ it.layer(getTestDB())("the inbox store", (it) => {
 
         const shelvedRead = yield* liveAnswerOf(onTask.agent.userId, 0);
         assert.ok(
-          shelvedRead.plans.some((plan) => plan.planId === shelved.id),
+          shelvedRead.plans.some((plan) => plan.taskId === shelved.id),
           "the settled task is listed",
         );
         assert.ok(
-          shelvedRead.items.some((item) => item.planId === shelved.id),
+          shelvedRead.items.some((item) => item.taskId === shelved.id),
           "its item waits like any other",
         );
         const read = yield* accountInboxPast(teammate, INBOX_CURSOR_START);
@@ -993,7 +993,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
           "the teammate's read names who started the agent, whom it asks",
         );
         assert.deepEqual(
-          (yield* accountInboxTasks(teammate)).map((each) => each.planId),
+          (yield* accountInboxTasks(teammate)).map((each) => each.taskId),
           [agent.taskId],
         );
         assert.deepEqual(yield* accountWaitingItems(stranger), []);
@@ -1808,7 +1808,7 @@ it.layer(getTestDB())("an inbox item's read state", (it) => {
         yield* postedId(shelvedAgent, "shelved");
 
         const toDoOf = (answer: { readonly plans: readonly AccountInboxTask[] }) =>
-          new Map(answer.plans.map((plan) => [plan.planId, plan.toDo]));
+          new Map(answer.plans.map((plan) => [plan.taskId, plan.toDo]));
 
         for (const reader of [owner, teammate, stranger]) {
           const held = yield* accountInboxPast(reader, INBOX_CURSOR_START);
@@ -1973,7 +1973,7 @@ it.layer(getTestDB())("who an inbox item waits on", (it) => {
           const account = yield* accountInboxPast(teammate, INBOX_CURSOR_START);
 
           const toDoOf = (tasks: readonly AccountInboxTask[]) =>
-            tasks.find((each) => each.planId === taskId)?.toDo;
+            tasks.find((each) => each.taskId === taskId)?.toDo;
 
           assert.deepEqual(yield* liveTaskInbox(teammate, taskId), [item]);
           const live = yield* liveAnswerOf(teammate, account.readAt);
@@ -2040,7 +2040,7 @@ it.layer(getTestDB())("who an inbox item waits on", (it) => {
 
         const left = {
           waitsOn: owners.items.find((each) => each.id === itemId)?.waitsOn,
-          toDo: owners.plans.find((each) => each.planId === taskId)?.toDo,
+          toDo: owners.plans.find((each) => each.taskId === taskId)?.toDo,
         };
 
         assert.deepEqual(left, { waitsOn: owner, toDo: 1 }, "an assignee who left hands it back");

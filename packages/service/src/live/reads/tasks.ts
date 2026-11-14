@@ -108,8 +108,7 @@ import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-bindi
  * because a released desktop follows it. Every column stands
  * under the key `@repo/features/task-list-live` reads it by and every
  * instant as epoch milliseconds. Nothing here reads the clock: an agent's
- * status, which turns on it, is the reader's to read, and so is the order,
- * since Realtime keeps none.
+ * status, which turns on it, is the reader's to read, and so is the order.
  *
  * A reader past a sync id is read the same statements narrowed to the rows
  * what moved could move (`taskListDeltaStatements`): a plan whose own row,
@@ -347,7 +346,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
       ordered: false,
       columns: {
         id: agentTable.id,
-        planId: agentTable.taskId,
+        taskId: agentTable.taskId,
         workspaceId: agentTable.organizationId,
         model: agentTable.model,
         effort: agentTable.effort,
@@ -465,7 +464,7 @@ const SANDBOX_RUNS_UNTIL_OF_AGENT = sql<number | null>`case
 /**
  * The asks the agent's runner holds for a member's answer, the oldest first,
  * each as its row keeps it in the wire's shape (`agent_approval.ask`), so
- * the statement calls no function Realtime refuses. Note that the input is
+ * the statement calls only immutable functions. Note that the input is
  * carried as its row keeps it, the agent's transcript content, to the
  * members who see the agent alone.
  */

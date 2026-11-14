@@ -954,7 +954,7 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
     link: linkOf(
       {
         kind: LINK_DESTINATION.TASK,
-        planId: taskLinkStep({ id: agent.taskId, number: context.taskNumber }),
+        taskId: taskLinkStep({ id: agent.taskId, number: context.taskNumber }),
       },
       context.workspace,
     ),

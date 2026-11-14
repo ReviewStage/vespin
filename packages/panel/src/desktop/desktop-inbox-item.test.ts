@@ -407,7 +407,7 @@ test("once the item's heading scrolls out of the thread's view, its title joins 
 
 test("an image that lands before its item's own read does is drawn all the same", async () => {
   const shot = inboxAttachmentAddress(
-    { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+    { kind: LINK_DESTINATION.INBOX_ITEM, taskId: BILLING.id, itemId: THRESHOLD.id },
     "5e8d2c1a-7b3f-4a6e-9c2d-1f4b6a8e3c71",
     "acme",
   );
@@ -436,7 +436,7 @@ test("an item's Markdown draws its own pictures, read once its item's own read l
 
   const picture = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, taskId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -520,7 +520,7 @@ test("a picture of an item opens a viewer the arrow keys walk across every pictu
 
   const picture = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, taskId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -579,7 +579,7 @@ test("a recording an agent's words draw plays where it stands, and its Expand op
 
   const address = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, taskId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -712,7 +712,7 @@ test("a thread draws a comment's files over its words: an agent's pictures stand
 
   const picture = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, taskId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );

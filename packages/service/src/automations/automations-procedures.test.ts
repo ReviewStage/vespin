@@ -338,7 +338,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
 
         const { automation } = made;
         assert.deepEqual(
-          [automation.planId, automation.planName, automation.workspaceId, automation.repositories],
+          [automation.taskId, automation.planName, automation.workspaceId, automation.repositories],
           [null, null, task.workspaceId, [relay]],
           "no plan, the workspace, and the repository as GitHub spells it",
         );
@@ -395,7 +395,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
         // Note that a released desktop may still name the plan it made an automation on, on which none stands now.
         const onPlan = yield* post(owner, {
           ...weekdays(task.workspaceId, [relay]),
-          planId: task.id,
+          taskId: task.id,
         });
 
         const { repositories: _none, ...bare } = weekdays(task.workspaceId, [relay]);
@@ -511,7 +511,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
         const onPlan = readAnswer(
           automationListAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
-          yield* ask(`${HOSTED_SERVICE_PATH.AUTOMATIONS}?planId=${task.id}`, owner),
+          yield* ask(`${HOSTED_SERVICE_PATH.AUTOMATIONS}?taskId=${task.id}`, owner),
         );
 
         assert.deepEqual(onPlan.automations, []);
@@ -1536,7 +1536,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
           }),
         );
 
-        const malformed = yield* ask(`${HOSTED_SERVICE_PATH.AUTOMATIONS}?planId=not-a-plan`, owner);
+        const malformed = yield* ask(`${HOSTED_SERVICE_PATH.AUTOMATIONS}?taskId=not-a-plan`, owner);
 
         assert.equal(
           resent.automation.nextRunAt,
@@ -1573,7 +1573,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
         });
 
         const twice = yield* ask(
-          `${HOSTED_SERVICE_PATH.AUTOMATIONS}?planId=${task.id}&planId=${task.id}`,
+          `${HOSTED_SERVICE_PATH.AUTOMATIONS}?taskId=${task.id}&taskId=${task.id}`,
           owner,
         );
 
