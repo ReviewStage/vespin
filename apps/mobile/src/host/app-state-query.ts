@@ -54,7 +54,8 @@ export interface FollowedAppStateInto extends FollowedAppState {
  * Writes every reading of the document into `client`, from the moment it
  * is called until it is stopped, as the panel's root does for its window:
  * the first whole read, then each delivery laid over what is held. Each is
- * written into the task list's collections beside it, under its version.
+ * written into the task list's collections beside it: a whole read as its
+ * list, and a delivery as the rows it moved.
  */
 export function followAppStateInto(
   bridge: AppStateBridgeReads,
@@ -64,9 +65,11 @@ export function followAppStateInto(
 
   const followed = followAppStateOver(
     bridge,
-    (state) => {
+    (state, delivery) => {
       client.setQueryData(appStateQuery.queryKey, state);
-      taskList.write(state.version, selectTasks(state));
+
+      if (delivery === undefined) taskList.write(state.version, selectTasks(state));
+      else taskList.deliver(delivery);
 
       return undefined;
     },
