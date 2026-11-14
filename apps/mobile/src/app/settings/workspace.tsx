@@ -245,6 +245,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             {manages && !personal ? (
               <ActionRow
                 label={RENAME_WORDS.ROW}
+                symbol={GLYPH.RENAME}
                 onPress={() => setAsking({ kind: ASKING.RENAME })}
               />
             ) : null}
@@ -309,6 +310,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             >
               <ActionRow
                 label={INVITATION_WORDS.INVITE}
+                symbol={GLYPH.ADD}
                 onPress={() => setAsking({ kind: ASKING.INVITE })}
               />
               {(invitations ?? []).map((invitation) => (

@@ -196,6 +196,9 @@ export const GLYPH = {
   FILTER: system("line.3.horizontal.decrease.circle"),
   FILTERED: system("line.3.horizontal.decrease.circle.fill"),
   DISCLOSURE: system("chevron.forward"),
+  // A Settings row that leaves the app ends in iOS's own small arrow out, and a row that opens a menu in its up-and-down chevron, as a menu picker's value does.
+  GOES_OUT: system("arrow.up.forward"),
+  MENU_OPENS: system("chevron.up.chevron.down"),
   STOP_TURN: system("stop.fill"),
   // A task's status ring, the panel's own mark.
   STATUS_BACKLOG: statusMark(TASK_STATUS_SYMBOL.BACKLOG),
