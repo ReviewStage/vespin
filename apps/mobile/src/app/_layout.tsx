@@ -96,7 +96,7 @@ function GuardedScreens() {
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
-      {/* Note that a sheet's bar takes the ink here, since an option a sheet sets itself never reached its bar: its title stood in the system's black on the dark ground. */}
+      {/* Note that every sheet's bar takes the ink here as its default, so a sheet that sets no ink of its own never stands its title in the system's black on the dark ground; a sheet's own options still win, key by key. */}
       <Stack
         screenOptions={{
           headerShown: false,
