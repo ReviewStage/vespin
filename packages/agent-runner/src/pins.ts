@@ -123,7 +123,7 @@ export const CLAUDE_EXECUTABLE = `${CLAUDE_CODE_PIN.DIRECTORY}/${CLAUDE_CODE_PIN
  * the threads it keeps there outlive a stop.
  */
 export const CODEX_PIN = {
-  VERSION: "0.167.2",
+  VERSION: "0.168.0",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/codex`,
   /** Where the image links the binary as `codex`. */
   LINK: "/usr/local/bin/codex",
@@ -235,7 +235,7 @@ export const NODE_MAC_PIN: AgentToolPin = {
  * repository check (`tools/oxlint/vespin/guards/agent-pins.ts`) until each
  * pin's address, size, and digests are read off the new release too.
  */
-const HOST_CLI_VERSION = { CLAUDE_CODE: "0.3.323", CODEX: "0.167.2", GH: "2.103.3" } as const;
+const HOST_CLI_VERSION = { CLAUDE_CODE: "0.3.323", CODEX: "0.168.0", GH: "2.103.3" } as const;
 
 /**
  * Claude Code on a Mac host, This Mac's among them: the macOS arm64 build of
@@ -265,16 +265,16 @@ export const CODEX_MAC_PIN: AgentToolPin = {
   NAME: "codex",
   VERSION: HOST_CLI_VERSION.CODEX,
   ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-darwin-arm64.tgz`,
-  SHA256: "7dd03256d9c38110e8b5d26bb8f177cc938fa9603ee2f509a2c9fdb877fb363e",
-  BYTES: 148_633_178,
+  SHA256: "085d6ea222b80c8942b8c726b7ec2e8411d8e0ae2f7d011f36a45241fbd1d7b8",
+  BYTES: 150_498_365,
   ROOT: "package/vendor/aarch64-apple-darwin",
   MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
   BINARY: "bin/codex",
   TEAM: "2DC432GLL2",
   FILES: {
-    "bin/codex": "97bc82fd46f117cf10efb95e6ff0c81dc4784f5797bcdc2cb75093ba09e4def0",
-    "bin/codex-code-mode-host": "45acdb759c3ac0a6b30a5107329b364b7ac1579f2cdf270997f03bc8d6365ef6",
-    "codex-path/rg": "0cf872126b9094deda77f5e1710c6514c06dded7ea9abc0765c876d36ba3e9e9",
+    "bin/codex": "1b7ee0f02650f3e2d31f50232699f667a1cbe60f431a57e118f2e785fe372c4b",
+    "bin/codex-code-mode-host": "4c0cdf9c6e826ab3e17eae26cf132a6b8686448a5ae51b3466365da5e041f7e6",
+    "codex-path/rg": "2e66df03a6a9edf67f6092d1b69e945fc6b5edbe2a88e46a17c75bd1f608d47d",
   },
 };
 
@@ -328,34 +328,34 @@ export const CODEX_LINUX_PINS: LinuxToolPins = {
     NAME: "codex",
     VERSION: HOST_CLI_VERSION.CODEX,
     ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-linux-x64.tgz`,
-    SHA256: "637bf17e7a3082b62f8cbd11ed1936601014af4dedac7ce78f8e3614c6e4adf6",
-    BYTES: 173_786_277,
+    SHA256: "de415213cf1ca175f5fb2f24131066f940a3a347dd39d812f3026de55425dc59",
+    BYTES: 176_590_533,
     ROOT: "package/vendor/x86_64-unknown-linux-musl",
     MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
     BINARY: "bin/codex",
     FILES: {
-      "bin/codex": "a9672d0fa0dd8fcf8cad136fa0d056b914bc046f5ac3d78f4a5cf390655af56b",
+      "bin/codex": "a8cb58c528c76e7313d4a70294ec614757b0f4c7bf9683e11c88ecad8c3d421b",
       "bin/codex-code-mode-host":
-        "007c62795a7215c27ee85486ecb95e714b33118a2d18c6d7b09b0d9793c72ff4",
+        "e1a56831a087bfeb1a91d43b7265fd1c38b898396b09ab357dc751d641ad25bd",
       "codex-path/rg": "e62198eb19b136b88c330af83647b5a962cb99b6b1f066758568f12de1974849",
-      "codex-resources/bwrap": "7df960565a0dece99240ea4b9d0e011307817f9f3b73176c7b71fda44fe84765",
+      "codex-resources/bwrap": "77360cb751ccedc5971391444ac86a8a33c15b04d6b4a6fe45f5d25496e62c4c",
     },
   },
   arm64: {
     NAME: "codex",
     VERSION: HOST_CLI_VERSION.CODEX,
     ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-linux-arm64.tgz`,
-    SHA256: "cf2827197edee6a430485b68979fb2b8f27cf97e30f71a6334fe02b0e6e73e11",
-    BYTES: 165_987_253,
+    SHA256: "d547077288175d2ee05bc23ed9c7b3eada231cff89ff9f59b3412e66fddeba57",
+    BYTES: 168_916_591,
     ROOT: "package/vendor/aarch64-unknown-linux-musl",
     MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
     BINARY: "bin/codex",
     FILES: {
-      "bin/codex": "b581df3989da98e36fccd7d40cc980727a9ee87bcf0e6ef52ffb2544d6a5302f",
+      "bin/codex": "6fbce31b3288c1515af48c4ad53f1e66c1579626459413c84b57e7c7d76c63ad",
       "bin/codex-code-mode-host":
-        "7614c7d46f4f6cdfc09d7c741c8a48f8d23cc37469c738ed01d349dcffd7868e",
+        "48e5742ae4544cc7188520f7fcddbc4ef1f401e603e92eefeba214f941d5d033",
       "codex-path/rg": "e36d0eb52e70696bdf1781392722e05a21bb91d3b7b762ef5ec20e5df2ec687b",
-      "codex-resources/bwrap": "0f543a7356ab343b4827222f910461d4196778f328b28acd6c126ef18e9557ab",
+      "codex-resources/bwrap": "c547cbdc762a70ed216789ffaa4c6c0e7d2beabe32245a498f8e365a9fc8dab4",
     },
   },
 };
