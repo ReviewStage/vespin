@@ -26,6 +26,7 @@ import {
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { COMMENT_SUBJECT } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -113,10 +114,16 @@ export function threadOpen(thread: DescriptionCommentThread): boolean {
   return thread.status === DESCRIPTION_COMMENT_STATUS.OPEN;
 }
 
+/** An agent on the task as a comment's writer line names it: its name, and the harness whose mark its tile wears, where its model says. */
+export interface CommentAgent {
+  readonly name: string;
+  readonly harness: ModelProvider | undefined;
+}
+
 /** Who wrote an entry, as the panel's thread names them: a member by their name and picture, the app by its own, and a coding agent by the name its task lists it under. */
 function writerOf(
   entry: DescriptionCommentEntry,
-  agentNames: ReadonlyMap<string, string>,
+  agents: ReadonlyMap<string, CommentAgent>,
   pictureOf: PictureOf,
 ): ThreadMessage["writer"] {
   const { writer } = entry;
@@ -124,9 +131,9 @@ function writerOf(
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) return { name: PRODUCT_NAME, agent: true };
 
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT) {
-    const named = writer.agentId === undefined ? undefined : agentNames.get(writer.agentId);
+    const known = writer.agentId === undefined ? undefined : agents.get(writer.agentId);
 
-    return { name: named ?? PRODUCT_NAME, agent: true };
+    return { name: known?.name ?? PRODUCT_NAME, agent: true, harness: known?.harness };
   }
 
   return { name: writer.by?.name ?? SOMEONE, agent: false, picture: pictureOf(writer.by?.userId) };
@@ -135,12 +142,12 @@ function writerOf(
 /** A thread's comments as its page draws them, each by its writer, its words typed line by line; the files a comment carries are left to the desktop and the web. */
 export function threadMessages(
   thread: DescriptionCommentThread,
-  agentNames: ReadonlyMap<string, string>,
+  agents: ReadonlyMap<string, CommentAgent>,
   pictureOf: PictureOf,
 ): readonly ThreadMessage[] {
   return threadComments(thread).map((entry) => ({
     id: entry.id,
-    writer: writerOf(entry, agentNames, pictureOf),
+    writer: writerOf(entry, agents, pictureOf),
     at: entry.at,
     words: entry.words ?? "",
     typed: entry.writer.actor === DESCRIPTION_COMMENT_ACTOR.MEMBER,

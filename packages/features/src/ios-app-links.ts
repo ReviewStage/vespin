@@ -67,6 +67,7 @@ const IOS_ROUTE = {
   INBOX: "/inbox",
   TASKS: "/tasks",
   AGENT: "/tasks/agent",
+  COMMENTS: "/tasks/comments",
   PULL_REQUEST: "pull",
 } as const;
 
@@ -208,15 +209,18 @@ export function iosRouteOnTab(route: string, standing: IosTab | undefined): stri
 /**
  * Whether the route is a conversation, which a compact window's tab bar
  * steps aside for, as Messages hides its tabs in a chat so the composer
- * stands alone at the foot: a thread (`/inbox/<id>`), an agent's page, or
- * a pull request it opened. A list, a task, and a page the agent showed keep
- * the bar.
+ * stands alone at the foot: a thread (`/inbox/<id>`), an agent's page, a
+ * pull request it opened, or a comment's thread on a task's description or a
+ * new comment, each ending in its reply field. A list, a task, and a page the
+ * agent showed keep the bar.
  */
 export function iosRouteHidesTabs(pathname: string): boolean {
   const [tab, first, second, third] = pathname.split("/").filter((segment) => segment !== "");
   const route = `/${tab ?? ""}`;
 
   if (route === IOS_ROUTE.INBOX) return first !== undefined;
+
+  if (`${route}/${first ?? ""}` === IOS_ROUTE.COMMENTS) return second !== undefined;
 
   if (`${route}/${first ?? ""}` !== IOS_ROUTE.AGENT || second === undefined) return false;
 
