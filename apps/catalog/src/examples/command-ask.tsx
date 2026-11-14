@@ -1,5 +1,14 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { BUTTON_VARIANT, Button, CommandAsk, Inline } from "@repo/ui";
+import {
+  AskDeadline,
+  AskNoteField,
+  BUTTON_VARIANT,
+  Button,
+  CommandAsk,
+  Inline,
+  Stack,
+  useAskNote,
+} from "@repo/ui";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -8,7 +17,9 @@ import { CatalogSection } from "../section";
  * command-ask.tsx -- a command an agent asks to run on this Mac, put to the
  * developer over the window: a short one, a long one that scrolls
  * inside its card, and one carrying a base64 payload, each opened from its button and put away by any of its
- * answers, Escape, or a press on the dimmed window, fading out as it goes.
+ * answers, Escape, or a press on the dimmed window, fading out as it goes;
+ * and the two parts every machine ask shares, drawn alone: the time it has
+ * left, counting down, and the field for the words a Deny hands the agent.
  */
 
 const copyToClipboard = (text: string): Promise<void> => navigator.clipboard.writeText(text);
@@ -66,15 +77,33 @@ function Asking({ label, command }: { label: string; command: string }): React.J
   );
 }
 
+/** The time an ask has left and its note field, as every machine ask draws them. */
+function AskParts(): React.JSX.Element {
+  const [expiresAt] = useState(() => Date.now() + ASK_LEFT_MS);
+  const note = useAskNote();
+
+  return (
+    <CatalogSection id="command-ask-parts" title="Its deadline and note">
+      <Stack>
+        <AskDeadline expiresAt={expiresAt} />
+        <AskNoteField note={note} maxLength={NOTE_MAX_LENGTH} onDeny={() => undefined} />
+      </Stack>
+    </CatalogSection>
+  );
+}
+
 function CommandAsks(): React.JSX.Element {
   return (
-    <CatalogSection id="command-ask-states" title="A command asked">
-      <Inline>
-        <Asking label="Short command…" command={SHORT_COMMAND} />
-        <Asking label="Long command…" command={LONG_COMMAND} />
-        <Asking label="Encoded payload…" command={PAYLOAD_COMMAND} />
-      </Inline>
-    </CatalogSection>
+    <>
+      <CatalogSection id="command-ask-states" title="A command asked">
+        <Inline>
+          <Asking label="Short command…" command={SHORT_COMMAND} />
+          <Asking label="Long command…" command={LONG_COMMAND} />
+          <Asking label="Encoded payload…" command={PAYLOAD_COMMAND} />
+        </Inline>
+      </CatalogSection>
+      <AskParts />
+    </>
   );
 }
 
