@@ -56,7 +56,7 @@ struct CallContentView: View {
     HStack(spacing: 12) {
       CallTitle(state: state)
       Spacer(minLength: 8)
-      CallPresses(agentId: context.attributes.agentId, state: state)
+      CallPresses(agentId: agentId, state: state)
     }
   }
 }
@@ -106,7 +106,8 @@ struct CallPresses: View {
   var body: some View {
     HStack(spacing: 10) {
       CallPressButton(
-        intent: CallPressIntent(state.speakerMuted ? .unmuteSpeaker : .muteSpeaker, agentId: agentId),
+        intent: CallPressIntent(
+          state.speakerMuted ? .unmuteSpeaker : .muteSpeaker, agentId: agentId),
         symbol: state.speakerMuted ? "VolumeOff" : "Volume2",
         label: state.speakerMuted ? "Unmute speaker" : "Mute speaker",
         lit: state.speakerMuted)
