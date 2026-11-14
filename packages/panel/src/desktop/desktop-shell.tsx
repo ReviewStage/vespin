@@ -857,8 +857,10 @@ export function DesktopShell({
   // While the service refuses this build, the sign-in and setup give way to the update screen in the work's place
   // (`ShellPlaces`), since every call either would make is refused until the build is updated.
   const updateNeeded = useUpdateNeeded();
+
   const gated =
     !updateNeeded && gates.accountRequired && account.status !== ACCOUNT_STATUS.SIGNED_IN;
+
   // A new account is set up once, in the window before the app, until it finishes on any machine.
   const signedInId = account.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined;
   const [finishedHere, setFinishedHere] = useState<string>();
@@ -890,7 +892,7 @@ export function DesktopShell({
   const setToggleRoom = usePanelToggleRoom();
   // Note that setup standing before the app holds the places' chords too, so none lands behind it, as New workspace's cards do.
   const newWorkspace = useNewWorkspace(tasks.placeLeave);
-  const founding = !gated && newWorkspace.open;
+  const founding = !gated && !updateNeeded && newWorkspace.open;
   usePlaceCommands(
     !gated && setup === SETUP_GATE.NONE && !founding,
     tab,
@@ -951,9 +953,9 @@ export function DesktopShell({
   useWindowTitle(titleSubject(tab, tasks, namedTask, place, inAutomations));
 
   // The plan is looked at the moment it is on screen, whichever of its column's tabs is chosen,
-  // from the mark and the agents' activity its row in the list carries.
+  // from the mark and the agents' activity its row in the list carries; not while the update screen stands in its place.
   const looks = useTaskLooks(
-    shownTask,
+    updateNeeded ? undefined : shownTask,
     tasks.me,
     shownTask === undefined
       ? undefined
