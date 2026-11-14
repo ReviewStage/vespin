@@ -74,6 +74,21 @@ export function newestValue<Value>(
 }
 
 /**
+ * Whether a write's answer takes its row back to what is stored: refused,
+ * and still the row's newest write. Note that a refused write a later one on
+ * the same row has passed takes nothing back, because the later write's pick
+ * is what the row now shows and its own answer decides it.
+ */
+export function takesRowBack<Refusal, Value>(
+  book: WritesBook<Refusal, Value>,
+  row: string,
+  write: number,
+  said: Refusal | undefined,
+): boolean {
+  return said !== undefined && write === book.sent.get(row);
+}
+
+/**
  * The book once a row's write is answered, refused with `said` or gone with
  * none. Note that only the row's newest write says its refusal and gives up
  * its value, so writes to one row follow each other, while another row's
