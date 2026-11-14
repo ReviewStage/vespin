@@ -129,9 +129,14 @@
     padding: 160px var(--ui-landing-gutter) 0;
   }
 
-  /* off-scale: the line's measure, wide enough to keep it to two lines */
+  /* The line takes the row's whole width, balanced over two lines of
+     even length rather than a long one over a short one. */
   .ui-landing-hero-words .ui-landing-title {
-    max-width: 900px;
+    max-width: none;
+    /* off-scale: the hero's line grows with the page, so its two lines
+       span most of the row on any desktop width */
+    font-size: clamp(var(--ui-display-landing-title-size), 5.6cqw, 5.25rem);
+    text-wrap: balance;
   }
 
   /* The sentence at the left and the calls at the right, on one row under
@@ -1725,7 +1730,8 @@
       padding: 44px var(--ui-landing-gutter) 0;
     }
 
-    .ui-landing-title {
+    .ui-landing-title,
+    .ui-landing-hero-words .ui-landing-title {
       font-size: var(--ui-display-landing-size-narrow);
     }
 
