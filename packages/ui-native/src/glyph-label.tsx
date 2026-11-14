@@ -10,9 +10,11 @@ type GlyphTextStyle = "body" | "callout" | "subheadline" | "footnote" | "caption
 
 /**
  * A glyph on its own, sized by a text style as a symbol beside words is,
- * and drawn in `color` where one is given. Note that the color is drawn into
- * the symbol's own image (`originalColor`, from the app's `@expo/ui` patch),
- * because a system menu draws an icon tinted any other way in its own ink.
+ * and drawn in `color` where one is given. Note that the color is handed
+ * twice: drawn into the symbol's own image (`originalColor`, from the app's
+ * `@expo/ui` patch), because a system menu draws an icon tinted any other way
+ * in its own ink, and as its foreground (`color`), because outside a menu
+ * SwiftUI still draws a symbol as a template in the ink around it.
  */
 export function GlyphImage({
   glyph,
@@ -26,7 +28,7 @@ export function GlyphImage({
   return (
     <Image
       {...glyphImage(glyph)}
-      {...(color === undefined ? {} : { originalColor: color })}
+      {...(color === undefined ? {} : { originalColor: color, color })}
       modifiers={[font({ textStyle })]}
     />
   );
