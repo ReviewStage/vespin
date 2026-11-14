@@ -996,7 +996,12 @@ export function composeMachineCommands(
         // Note that the cursor is the agent's from the moment its action is handed to the helper, since the action may move it though it then fails.
         if (!STILL_CURSOR.has(action.op)) yield* heldBy({ userId, agentId: command.agentId });
 
-        const answer = yield* computer.helper.ask(request, Duration.millis(left), stillLet);
+        // Note that the action gets its own time to run and no more, which is all that is left of the deadline only where it was allowed late.
+        const answer = yield* computer.helper.ask(
+          request,
+          Duration.millis(Math.min(runs, left)),
+          stillLet,
+        );
 
         if ("recording" in answer)
           return yield* settled(command.id, yield* posted(command.id, answer.recording));
