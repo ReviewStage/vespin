@@ -239,8 +239,9 @@ function SwitcherRow({
  * copper; then the acts, such as New workspace, and Workspace settings, in
  * the panel's two groups and its words (`workspaceMenuGroups`); and last,
  * where a caller hands one, the row into Settings, led by the account's
- * photo with its address under it. Each row closes the list and says what it does through
- * `closed`, which runs it once the list has gone.
+ * photo with its address, or its name, under it. Each row closes the list
+ * and says what it does through `closed`, which runs it once the list has
+ * gone.
  */
 function SwitcherList({
   props,

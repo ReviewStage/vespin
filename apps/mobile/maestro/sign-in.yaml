@@ -30,7 +30,7 @@ appId: dev.vespin.ios
 - assertVisible: "Inbox"
 - assertNotVisible: "Sign in to Vespin"
 # The workspace switcher leads the Inbox's bar, and its menu's account,
-# heard as its name and Settings, opens it.
+# heard as Settings and its address, opens it.
 - assertVisible:
     id: "workspace-switcher"
 - waitForAnimationToEnd
