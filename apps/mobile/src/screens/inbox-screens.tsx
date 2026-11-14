@@ -766,6 +766,7 @@ function ThreadDetail({
       {...(inStack
         ? {}
         : {
+            pathInHead: true,
             acts,
             menu: menuWithout(menu, acts),
             foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
