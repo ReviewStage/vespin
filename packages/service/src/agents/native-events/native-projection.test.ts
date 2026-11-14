@@ -8,7 +8,6 @@ import {
   projectMoments,
   turnProgressed,
   withCallAccounts,
-  withTurnAccounts,
 } from "./native-projection.js";
 import { toolAnswerSettlement } from "./runner-moments.js";
 
@@ -55,53 +54,51 @@ test("an unknown tool's call settled with a new input, as Codex settles one, kee
   );
 });
 
-test("a turn's call of an integration's tool names the account it ran on, as the owner called it when the turn started; a call on an account the turn names none for is left as it was", () => {
-  const opened = projectMoments(
-    heldProjection(null),
-    [{ kind: NATIVE_MOMENT.TOOL_STARTED, callId: "call_ls", name: "Bash", input: {} }],
-    {
-      conversationId: "c_accounts",
-      sequence: 0,
-      now: 0,
-      attempt: 1,
-      queuedTurnId: undefined,
-      model: undefined,
-      ownKey: false,
-      registered: () => false,
-      report: () => undefined,
-    },
-  );
+test("a call of an integration's tool names the account it ran on, even in the event that opens its turn or as it starts and settles in one event; a call on an account no name stands for is left as it was", () => {
+  const accounts = { "linear-2": "Acme" };
 
-  const enqueued = opened.writes.find((write) => write.kind === NATIVE_WRITE.ENQUEUE);
-  assert.ok(enqueued?.kind === NATIVE_WRITE.ENQUEUE, "the call opens a turn");
-  const state = withTurnAccounts(opened.state, enqueued.turnId, { "linear-2": "Acme" });
-
-  const call = (callId: string, name: string, connection: string | undefined) => ({
-    kind: NATIVE_MOMENT.TOOL_STARTED,
-    callId,
-    name,
-    input: {
-      remoteTool: "save_issue",
-      parentCallId: callId,
-      input: {},
-      ...(connection === undefined ? undefined : { connection }),
-    },
+  const envelope = (callId: string, connection: string | undefined) => ({
+    remoteTool: "save_issue",
+    parentCallId: callId,
+    input: {},
+    ...(connection === undefined ? undefined : { connection }),
   });
 
-  assert.deepEqual(
-    withCallAccounts(state, [
-      call("call_acme", "linear_remote", "linear-2"),
-      call("call_notion", "notion_remote", undefined),
-    ]).map((moment) => (moment.kind === NATIVE_MOMENT.TOOL_STARTED ? moment.input : undefined)),
+  const stamped = withCallAccounts(
+    heldProjection(null),
     [
       {
-        remoteTool: "save_issue",
-        parentCallId: "call_acme",
-        input: {},
-        connection: "linear-2",
-        account: "Acme",
+        kind: NATIVE_MOMENT.TOOL_STARTED,
+        callId: "call_acme",
+        name: "linear_remote",
+        input: envelope("call_acme", "linear-2"),
       },
-      { remoteTool: "save_issue", parentCallId: "call_notion", input: {} },
+      {
+        kind: NATIVE_MOMENT.TOOL_SETTLED,
+        callId: "call_acme",
+        settlement: toolAnswerSettlement({ workspaceTool: false, text: "ok", output: "ok" }, false),
+        input: envelope("call_acme", "linear-2"),
+      },
+      {
+        kind: NATIVE_MOMENT.TOOL_STARTED,
+        callId: "call_notion",
+        name: "notion_remote",
+        input: envelope("call_notion", undefined),
+      },
+    ],
+    accounts,
+  );
+
+  assert.deepEqual(
+    stamped.map((moment) =>
+      moment.kind === NATIVE_MOMENT.TOOL_STARTED || moment.kind === NATIVE_MOMENT.TOOL_SETTLED
+        ? moment.input
+        : undefined,
+    ),
+    [
+      { ...envelope("call_acme", "linear-2"), account: "Acme" },
+      { ...envelope("call_acme", "linear-2"), account: "Acme" },
+      envelope("call_notion", undefined),
     ],
   );
 });
