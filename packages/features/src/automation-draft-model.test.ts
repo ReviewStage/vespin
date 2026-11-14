@@ -49,7 +49,7 @@ const NOW = new Date("2026-01-14T12:00:00Z");
 const SAVED: AutomationSummary = {
   id: "3f0e6f5c-7d1a-4f6e-9a55-1b2c3d4e5f60",
   taskId: null,
-  planName: null,
+  taskName: null,
   workspaceId: "workspace-acme",
   name: "Nightly flaky-test sweep",
   enabled: true,

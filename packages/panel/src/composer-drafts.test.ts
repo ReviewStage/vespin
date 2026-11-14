@@ -13,7 +13,7 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import type { Task } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import type { AppHostRead, AppInboxItems } from "@repo/host/app-state";
 import { DRAFT_WORD } from "@repo/ui";
 import { agentTab, draftTab, sameTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
@@ -192,10 +192,10 @@ function openWindow() {
     const openTab = agentTab(open.agent.id);
 
     const tasks = tasksControl({
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       tasks: [INVITES.plan, BILLING.plan],
       activeTaskId: open.plan.id,
-      region: { kind: DOCUMENT_REGION.READY, task: open.plan },
+      region: { kind: TASK_REGION.READY, task: open.plan },
       mainTabs: {
         ...tasksControl().mainTabs,
         tabs: [openTab],
@@ -799,7 +799,7 @@ async function sidebarOn(open: typeof INVITES, pinned: boolean) {
   });
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     tasks: [INVITES.plan, BILLING.plan],
     activeTaskId: open.plan.id,
     chosenPin: pinned ? pin : undefined,
@@ -852,7 +852,7 @@ const DRAFT_KEY = "draft-invites";
 
 /** The account's feed holding each plan's items as given, which the window's inboxes draw first. */
 function feedOf(plans: Record<string, readonly InboxItem[]>): AppHostRead<AppInboxItems> {
-  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans } };
+  return { rows: { [INBOX_SCOPE_KIND.TASK]: plans } };
 }
 
 /**
@@ -871,10 +871,10 @@ async function columnOn(
   handInboxItems(feedOf({ [INVITES.plan.id]: [approval(1)] }));
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     tasks: [INVITES.plan],
     activeTaskId: INVITES.plan.id,
-    region: { kind: DOCUMENT_REGION.READY, task: INVITES.plan },
+    region: { kind: TASK_REGION.READY, task: INVITES.plan },
     mainTabs: {
       ...tasksControl().mainTabs,
       tabs,
@@ -1018,15 +1018,15 @@ function approval(revision: number): InboxItem {
 }
 
 /** A task of the window's, and the agent its items are posted by. */
-type HeldTask = typeof INVITES;
+type InvitedTask = typeof INVITES;
 
 /** One item of the task's agent's, open and asking for an approval, at `revision`. */
-function itemOn(held: HeldTask, id: string, revision: number): InboxItem {
+function itemOn(held: InvitedTask, id: string, revision: number): InboxItem {
   return { ...approval(revision), id, agentId: held.agent.id };
 }
 
 /** The task's inbox as `useTaskInbox` holds it for the task, its agent among its own. */
-function useTaskInboxOf(held: HeldTask): TaskInboxControl {
+function useTaskInboxOf(held: InvitedTask): TaskInboxControl {
   return useTaskInbox({
     taskId: held.plan.id,
     shown: true,
@@ -1043,7 +1043,7 @@ function useTaskInboxOf(held: HeldTask): TaskInboxControl {
 }
 
 /** A task's own inbox, followed as the Inbox page follows it, pushed as `items`. */
-async function taskInbox(held: HeldTask, items: readonly InboxItem[]) {
+async function taskInbox(held: InvitedTask, items: readonly InboxItem[]) {
   // Another window opening takes the focus from those before it.
   leaveWindow();
   handInboxItems(feedOf({ [held.plan.id]: items }));
@@ -1153,7 +1153,7 @@ test("a draft on an item the account's feed leaves out stands while the feed dra
 
   await act(async () =>
     reads.deliverHolders({
-      [INBOX_SCOPE_KIND.PLAN]: { [INVITES.plan.id]: { rows: [mine] } },
+      [INBOX_SCOPE_KIND.TASK]: { [INVITES.plan.id]: { rows: [mine] } },
     }),
   );
   await vi.waitFor(() =>

@@ -407,14 +407,14 @@ const NO_HOME_GROUPS: readonly InboxGroup[] = [];
 function useHomeGroups(taskId: string | undefined): HomeGroups {
   const acts = useHostActs();
   useLiveFollow(taskId, (id) =>
-    acts[ACT_KIND.AGENTS_INBOX_FOLLOW]({ kind: INBOX_SCOPE_KIND.PLAN, id }),
+    acts[ACT_KIND.AGENTS_INBOX_FOLLOW]({ kind: INBOX_SCOPE_KIND.TASK, id }),
   );
 
   const heldRead = useCallback(
     (state: AppStateSnapshot) =>
       taskId === undefined
         ? undefined
-        : state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.PLAN][taskId],
+        : state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.TASK][taskId],
     [taskId],
   );
 
@@ -448,7 +448,7 @@ function useHomeGroups(taskId: string | undefined): HomeGroups {
     read: stands,
     again: () => {
       if (taskId === undefined) return;
-      acts[ACT_KIND.AGENTS_INBOX_RETRY]({ kind: INBOX_SCOPE_KIND.PLAN, id: taskId }).catch(
+      acts[ACT_KIND.AGENTS_INBOX_RETRY]({ kind: INBOX_SCOPE_KIND.TASK, id: taskId }).catch(
         refused("Reading the thread's task inbox again"),
       );
     },

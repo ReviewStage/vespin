@@ -56,7 +56,7 @@ function newest(items: readonly InboxItem[]): number {
 const NOTHING_HELD: InboxReads = new Map();
 
 /** The tasks the feed holds, by id; none until it first answers. */
-type Fed = AppInboxItems[typeof INBOX_SCOPE_KIND.PLAN] | undefined;
+type Fed = AppInboxItems[typeof INBOX_SCOPE_KIND.TASK] | undefined;
 
 /**
  * The tasks as the account's feed stands: each it holds with its items, and
@@ -109,7 +109,7 @@ export function useHolderInboxItems(holdings: readonly InboxHolding[]): HolderIn
   const feed = useQuery(inboxItemsQuery());
   const { mutate: retry } = useMutation(inboxItemsRetryMutation());
   const onRetry = useCallback(() => retry(), [retry]);
-  const fed = feed.data?.[INBOX_SCOPE_KIND.PLAN];
+  const fed = feed.data?.[INBOX_SCOPE_KIND.TASK];
 
   // Note that a task the feed holds nothing of is current with none, since the feed stands for every task whole.
   const read = useMemo(() => {

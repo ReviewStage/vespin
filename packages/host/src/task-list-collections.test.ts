@@ -54,7 +54,7 @@ function documentOf(drawn: LiveTaskList, version: number): AppStateSnapshot {
     ...idle,
     tasks: {
       ...idle.tasks,
-      tasks: drawn.list.plans,
+      tasks: drawn.list.tasks,
       taskAgents: drawn.taskAgents,
       taskPullRequests: drawn.taskPullRequests,
       agentPullRequests: drawn.agentPullRequests,
@@ -137,7 +137,7 @@ it.effect(
             : undefined),
         }));
 
-        yield* collections.answer({ plans, agents }, undefined, liveSince);
+        yield* collections.answer({ tasks: plans, agents }, undefined, liveSince);
         const before = drawings.at(-1);
 
         // Only one agent moved, one nothing was started from and started from none, as the follow answers past a sync id: a teammate sent it a line, so it runs again.
@@ -155,7 +155,7 @@ it.effect(
         work.keysHeld = 0;
 
         yield* collections.answer(
-          { plans: [], agents: [running] },
+          { tasks: [], agents: [running] },
           { past: "1", next: "2", gone: [] },
           liveSince,
         );
@@ -167,10 +167,10 @@ it.effect(
         assert.equal(work.keysHeld, 0);
         assert.ok(before !== undefined && after !== undefined && after !== before);
         assert.equal(after.taskAgents.length, agents.length);
-        assert.equal(after.list.plans.length, plans.length);
+        assert.equal(after.list.tasks.length, plans.length);
 
         const newAgents = after.taskAgents.filter((agent, at) => agent !== before.taskAgents[at]);
-        const newTasks = after.list.plans.filter((task, at) => task !== before.list.plans[at]);
+        const newTasks = after.list.tasks.filter((task, at) => task !== before.list.tasks[at]);
 
         assert.deepEqual(
           newAgents.map((agent) => [agent.id, agent.status]),
@@ -186,7 +186,7 @@ it.effect(
         let reads = 0;
         const drawnAgain = new Set<object>([...newAgents, ...newTasks]);
 
-        for (const row of [...after.taskAgents, ...after.list.plans]) {
+        for (const row of [...after.taskAgents, ...after.list.tasks]) {
           if (drawnAgain.has(row)) continue;
           const { id } = row;
 
@@ -218,7 +218,7 @@ it.effect(
         );
 
         yield* collections.answer(
-          { plans: [], agents: [] },
+          { tasks: [], agents: [] },
           { past: "2", next: "3", gone: [] },
           liveSince + 500,
         );
@@ -227,7 +227,7 @@ it.effect(
         assert.deepEqual(
           drawings
             .at(-1)
-            ?.list.plans.map((plan) => plan.id)
+            ?.list.tasks.map((plan) => plan.id)
             .toSorted(),
           stays.map((plan) => plan.id).toSorted(),
         );
@@ -254,23 +254,23 @@ it.effect(
 
         const invites = planListRow(INVITES, "Teammate invitations");
         const billing = planListRow(BILLING, "Billing");
-        yield* collections.answer({ plans: [invites, billing], agents: [] });
+        yield* collections.answer({ tasks: [invites, billing], agents: [] });
         assert.equal(drawings.length, 1);
 
         // Three answers land 30 ms apart, as a busy account's agents answer.
         const past = (at: number) => ({ past: `${at}`, next: `${at + 1}`, gone: [] });
         yield* collections.answer(
-          { plans: [{ ...invites, name: "Invites" }], agents: [] },
+          { tasks: [{ ...invites, name: "Invites" }], agents: [] },
           past(1),
         );
         yield* TestClock.adjust("30 millis");
         yield* collections.answer(
-          { plans: [{ ...billing, name: "CSV export" }], agents: [] },
+          { tasks: [{ ...billing, name: "CSV export" }], agents: [] },
           past(2),
         );
         yield* TestClock.adjust("30 millis");
         yield* collections.answer(
-          { plans: [{ ...billing, name: "Invoices" }], agents: [] },
+          { tasks: [{ ...billing, name: "Invoices" }], agents: [] },
           past(3),
         );
         assert.equal(drawings.length, 1);
@@ -281,7 +281,7 @@ it.effect(
         assert.deepEqual(
           drawings
             .at(-1)
-            ?.list.plans.map((plan) => plan.name)
+            ?.list.tasks.map((plan) => plan.name)
             .toSorted(),
           ["Invites", "Invoices"],
         );
@@ -292,7 +292,7 @@ it.effect(
         );
         yield* Effect.yieldNow;
         assert.equal(drawings.length, 3);
-        assert.ok(drawings.at(-1)?.list.plans.some((plan) => plan.name === "Seat invites"));
+        assert.ok(drawings.at(-1)?.list.tasks.some((plan) => plan.name === "Seat invites"));
       }),
     ),
 );
@@ -319,10 +319,10 @@ it.effect(
           planListRow(BILLING, "Billing"),
         ];
 
-        yield* collections.answer({ plans, agents: [agentListRow(INVITES, 0)] });
+        yield* collections.answer({ tasks: plans, agents: [agentListRow(INVITES, 0)] });
         yield* settled;
         const statusOf = () => drawings.at(-1)?.taskAgents.map((agent) => agent.status);
-        const billingOf = () => drawings.at(-1)?.list.plans.find((plan) => plan.id === BILLING);
+        const billingOf = () => drawings.at(-1)?.list.tasks.find((plan) => plan.id === BILLING);
         const billing = billingOf();
         assert.deepEqual(statusOf(), [AGENT_STATUS.STARTING]);
 
@@ -334,7 +334,7 @@ it.effect(
         yield* settled;
         assert.deepEqual(statusOf(), [AGENT_STATUS.FAILED]);
         assert.equal(
-          drawings.at(-1)?.list.plans.find((plan) => plan.id === INVITES)?.agents?.working,
+          drawings.at(-1)?.list.tasks.find((plan) => plan.id === INVITES)?.agents?.working,
           0,
         );
         assert.equal(billingOf(), billing);
@@ -376,12 +376,15 @@ it.effect(
           published: openPullRequest(8),
         };
 
-        yield* collections.answer({ plans, agents: [invites, billing] });
+        yield* collections.answer({ tasks: plans, agents: [invites, billing] });
         const before = drawings.at(-1);
 
         // Only billing's pull request moved: it merged.
         const merged = { ...openPullRequest(8), state: PULL_REQUEST_STATE.MERGED };
-        yield* collections.answer({ plans, agents: [invites, { ...billing, published: merged }] });
+        yield* collections.answer({
+          tasks: plans,
+          agents: [invites, { ...billing, published: merged }],
+        });
         const after = drawings.at(-1);
 
         const ofAgent = (drawing: LiveTaskList | undefined, agentId: string) =>
@@ -429,7 +432,7 @@ it.effect(
         });
 
         // The list holds the billing task alone, so the invites task is read outside it.
-        yield* collections.answer({ plans: [planListRow(BILLING, "Billing")], agents: [] });
+        yield* collections.answer({ tasks: [planListRow(BILLING, "Billing")], agents: [] });
         const invites = planListRow(INVITES, "Teammate invitations");
         const kept = { ...agentListRow(INVITES, 1_000), id: "agent-kept" };
         const deleted = { ...agentListRow(INVITES, 2_000), id: "agent-deleted" };
@@ -443,14 +446,14 @@ it.effect(
         const earlierRead = yield* Effect.forkChild(
           Effect.andThen(
             Deferred.await(earlier),
-            collections.cold({ plans: [invites], agents: [kept, deleted] }, earlierMark),
+            collections.cold({ tasks: [invites], agents: [kept, deleted] }, earlierMark),
           ),
         );
 
         const laterRead = yield* Effect.forkChild(
           Effect.andThen(
             Deferred.await(later),
-            collections.cold({ plans: [invites], agents: [kept] }, laterMark),
+            collections.cold({ tasks: [invites], agents: [kept] }, laterMark),
           ),
         );
 
@@ -479,7 +482,7 @@ it.effect.each([
         const invites = planListRow(INVITES, "Teammate invitations");
         const agent = { ...agentListRow(INVITES, 1_000), id: "agent-invites" };
         const billing = planListRow(BILLING, "Billing");
-        const standing = { plans: [invites], agents: [agent] };
+        const standing = { tasks: [invites], agents: [agent] };
 
         const collections = yield* taskListCollections({
           pool: yield* entityPool(),
@@ -487,10 +490,10 @@ it.effect.each([
             drawings.push(read);
           },
           txWait: () => undefined,
-          readAgain: () => Effect.succeed(drawn ? standing : { plans: [], agents: [] }),
+          readAgain: () => Effect.succeed(drawn ? standing : { tasks: [], agents: [] }),
         });
 
-        yield* collections.answer({ plans: [invites, billing], agents: [agent] });
+        yield* collections.answer({ tasks: [invites, billing], agents: [agent] });
 
         // A search is out when the list lets the invites task go, and answers it as it stood before.
         const answered = yield* Deferred.make<void>();
@@ -500,7 +503,7 @@ it.effect.each([
           Effect.andThen(Deferred.await(answered), collections.cold(standing, mark)),
         );
 
-        yield* collections.answer({ plans: [billing], agents: [] });
+        yield* collections.answer({ tasks: [billing], agents: [] });
         yield* Deferred.succeed(answered, undefined);
         yield* Fiber.join(read);
         yield* settled;
@@ -508,7 +511,7 @@ it.effect.each([
         const last = drawings.at(-1);
 
         assert.deepEqual(
-          last?.list.plans.map((plan) => plan.id).toSorted(),
+          last?.list.tasks.map((plan) => plan.id).toSorted(),
           drawn ? [INVITES, BILLING].toSorted() : [BILLING],
         );
         assert.deepEqual(
@@ -558,7 +561,7 @@ it.effect(
         };
 
         const agents = [invites, billing, invitesAgain, billingAgain];
-        yield* collections.answer({ plans, agents });
+        yield* collections.answer({ tasks: plans, agents });
         const before = drawings.at(-1);
 
         // A teammate forks billing's agent at a message.
@@ -569,7 +572,7 @@ it.effect(
           startedFrom: { agentId: billing.id, messageId: "message-7", steps: 2, totalSteps: 4 },
         };
 
-        yield* collections.answer({ plans, agents: [...agents, billingFork] });
+        yield* collections.answer({ tasks: plans, agents: [...agents, billingFork] });
         const after = drawings.at(-1);
 
         const agentOf = (drawing: LiveTaskList | undefined, id: string) =>

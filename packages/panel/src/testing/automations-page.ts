@@ -80,7 +80,7 @@ export function automation(n: number, patch: Partial<AutomationSummary> = {}): A
   return {
     id: `3f0e6f5c-7d1a-4f6e-9a55-${String(n).padStart(12, "0")}`,
     taskId: null,
-    planName: null,
+    taskName: null,
     workspaceId: WORKSPACE.id,
     name: `Automation ${n}`,
     enabled: true,

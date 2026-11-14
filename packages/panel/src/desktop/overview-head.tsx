@@ -3,15 +3,15 @@ import type { ReactNode } from "react";
 import type { DescriptionRoom } from "../tasks/description-body.js";
 import type { TaskRelationDoor } from "../tasks/task-relation-menu.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { PlanRelations } from "./plan-relations.js";
+import { OverviewRelations } from "./overview-relations.js";
 import { useQuickAdd } from "./quick-add.js";
 
 /**
- * plan-head.tsx -- the head of a task's description: its sub-tasks and relations, its agents, and its pages.
+ * overview-head.tsx -- the head of a task's description: its sub-tasks and relations, its agents, and its pages.
  *
  * Each group of the head offers its own add on its head, a + at rest that
  * works folded too, and Sub-tasks and Agents stand even before they hold a
- * row (`plan-relations.tsx`, `plan-agents.tsx`), so a fresh task's head
+ * row (`overview-relations.tsx`, `overview-agents.tsx`), so a fresh task's head
  * has the shape it keeps rather than a band of starts that leaves once
  * the groups arrive. The head holds the sub-tasks' quick add (`useQuickAdd`
  * into the task, in its repository), which Sub-tasks' + opens, and its
@@ -23,7 +23,7 @@ import { useQuickAdd } from "./quick-add.js";
  * The head of the open task's description: its Sub-tasks and Task
  * relations groups, then `agents` and `pages`, the groups its owner draws.
  */
-export function PlanHead({
+export function OverviewHead({
   task,
   tasks,
   door,
@@ -37,9 +37,9 @@ export function PlanHead({
   door: TaskRelationDoor;
   /** Where the description's head stands, whose scroller its lists draw only the rows near the view of. */
   room: DescriptionRoom;
-  /** The Agents group (`PlanAgents`). */
+  /** The Agents group (`OverviewAgents`). */
   agents: ReactNode;
-  /** The Pages group (`PlanPages`). */
+  /** The Pages group (`OverviewPages`). */
   pages: ReactNode;
   /** Opens a related row's task, as the description's head opens a task. */
   onOpenTask: (taskId: string) => void;
@@ -51,7 +51,7 @@ export function PlanHead({
 
   return (
     <>
-      <PlanRelations
+      <OverviewRelations
         task={task}
         tasks={tasks}
         door={door}

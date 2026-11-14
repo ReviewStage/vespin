@@ -1256,13 +1256,13 @@ export type LiveActivityEndedAnswerView = typeof liveActivityEndedAnswerViewSche
 
 /** Whose inbox is followed: a plan's, or one agent's. */
 export const INBOX_SCOPE_KIND = {
-  PLAN: "plan",
+  TASK: "task",
 } as const;
 
-/** The kind of holder an inbox item is on: a plan. */
+/** The kind of holder an inbox item is on: a task. */
 export type InboxScopeKind = (typeof INBOX_SCOPE_KIND)[keyof typeof INBOX_SCOPE_KIND];
 
-/** One plan's inbox, as the window follows it: which kind, and the plan's id. */
+/** One task's inbox, as the window follows it: which kind, and the task's id. */
 export const agentInboxScopeSchema = EffectSchema.Struct({
   kind: EffectSchema.Literals(Object.values(INBOX_SCOPE_KIND)),
   id: EffectSchema.NonEmptyString,

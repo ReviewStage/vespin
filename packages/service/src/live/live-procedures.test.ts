@@ -427,8 +427,8 @@ it.layer(getTestDB())("the account's live reads", (it) => {
         "automations",
         "failedRuns",
         "items",
-        "planless",
-        "plans",
+        "taskless",
+        "tasks",
       ]);
 
       for (const [part, sealed] of Object.entries(answer.queries)) {
@@ -452,16 +452,16 @@ it.layer(getTestDB())("the account's live reads", (it) => {
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
         const answer = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(answered.body);
         assert.equal(answer.url, LIVE_POLL_URL);
-        assert.deepEqual(Object.keys(answer.queries).toSorted(), ["agents", "issues", "plans"]);
+        assert.deepEqual(Object.keys(answer.queries).toSorted(), ["agents", "issues", "tasks"]);
 
         const rows = Schema.decodeUnknownSync(TASK_LIST_READ.rows)({
-          plans: answer.queries.plans.rows,
+          tasks: answer.queries.tasks.rows,
           agents: answer.queries.agents.rows,
           issues: answer.queries.issues?.rows,
         });
 
         assert.deepEqual(
-          rows.plans.map((plan) => plan.id),
+          rows.tasks.map((task) => task.id),
           [started.id],
         );
       }),
@@ -2403,8 +2403,8 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         const agentId = yield* openTaskAgent(dana, kept.workspaceId, kept.id);
         const erinsGone = yield* startTask(erin, { name: "Billing" });
         const whole = yield* askTasks(dana, "");
-        const past = whole.plans.sync?.next;
-        assert.ok(past !== undefined && whole.plans.sync?.past === undefined);
+        const past = whole.tasks.sync?.next;
+        assert.ok(past !== undefined && whole.tasks.sync?.past === undefined);
 
         const added = yield* startTask(dana, { name: "Onboarding" });
         yield* deleteTask(dana, deleted.id);
@@ -2413,17 +2413,17 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         yield* deleteTask(erin, erinsGone.id);
         const moved = yield* askTasks(dana, past);
 
-        assert.deepEqual(idsOf(moved.plans), [added.id]);
-        assert.deepEqual(moved.plans.gone, [deleted.id]);
+        assert.deepEqual(idsOf(moved.tasks), [added.id]);
+        assert.deepEqual(moved.tasks.gone, [deleted.id]);
         assert.deepEqual(idsOf(moved.agents), [agentId]);
-        assert.equal(moved.plans.sync?.past, past);
+        assert.equal(moved.tasks.sync?.past, past);
         const erins = new Set([erinsGone.id, erinsAdded.id]);
 
         for (const part of Object.values(moved)) {
           assert.ok(![...idsOf(part), ...(part.gone ?? [])].some((id) => erins.has(id)));
         }
 
-        const next = moved.plans.sync?.next;
+        const next = moved.tasks.sync?.next;
         assert.ok(next !== undefined);
         const quiet = yield* Effect.forkChild(askTasks(dana, next));
         yield* TestClock.adjust(Duration.seconds(25));
@@ -2433,7 +2433,7 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
           [],
           "a hold nothing moved ends with nothing",
         );
-        assert.equal(held.plans.sync?.past, next);
+        assert.equal(held.tasks.sync?.past, next);
       }),
   );
 
@@ -2454,18 +2454,18 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         // The list is read years after the rows were written, so the task stands only by its pins.
         yield* TestClock.setTime(Date.parse("2040-01-01T00:00:00Z"));
         const whole = yield* askTasks(dana, "");
-        assert.deepEqual(idsOf(whole.plans), [shipped.id]);
+        assert.deepEqual(idsOf(whole.tasks), [shipped.id]);
         assert.deepEqual(idsOf(whole.agents), [agentId]);
 
         yield* updateTask(dana, shipped.id, { pinned: false });
         yield* pinAgent(dana, agentId, false);
-        const unpinned = yield* askTasks(dana, whole.plans.sync?.next);
-        assert.deepEqual(unpinned.plans.gone, [shipped.id]);
+        const unpinned = yield* askTasks(dana, whole.tasks.sync?.next);
+        assert.deepEqual(unpinned.tasks.gone, [shipped.id]);
         assert.deepEqual(unpinned.agents.gone, [agentId]);
 
         yield* updateTask(dana, shipped.id, { pinned: true });
-        const repinned = yield* askTasks(dana, unpinned.plans.sync?.next);
-        assert.deepEqual(idsOf(repinned.plans), [shipped.id]);
+        const repinned = yield* askTasks(dana, unpinned.tasks.sync?.next);
+        assert.deepEqual(idsOf(repinned.tasks), [shipped.id]);
         assert.deepEqual(idsOf(repinned.agents), [agentId]);
       }),
   );
@@ -2536,7 +2536,7 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         yield* startTask(dana, { name: "Teammate invitations" });
         const erins = yield* startTask(erin, { name: "Billing" });
         const erinsAgent = yield* openTaskAgent(erin, erins.workspaceId, erins.id);
-        const past = (yield* askTasks(dana, "")).plans.sync?.next;
+        const past = (yield* askTasks(dana, "")).tasks.sync?.next;
         assert.ok(past !== undefined);
         const looking = yield* Queue.unbounded<void>();
 
@@ -2560,9 +2560,9 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         yield* TestClock.adjust(Duration.seconds(1));
         const moved = yield* Fiber.join(asked);
 
-        assert.deepEqual(idsOf(moved.plans), [added.id]);
+        assert.deepEqual(idsOf(moved.tasks), [added.id]);
         assert.deepEqual(idsOf(moved.agents), []);
-        assert.equal(moved.plans.sync?.past, past);
+        assert.equal(moved.tasks.sync?.past, past);
       }),
   );
 
@@ -2573,16 +2573,16 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
     Effect.gen(function* () {
       const dana = yield* openUser;
       const started = yield* startTask(dana, { name: "Teammate invitations" });
-      const past = (yield* askTasks(dana, "")).plans.sync?.next;
+      const past = (yield* askTasks(dana, "")).tasks.sync?.next;
       assert.ok(past !== undefined);
 
       if (joins) yield* joinWorkspace(yield* openWorkspace(yield* openUser), dana);
 
       const answered = yield* askTasks(dana, joins ? past : "1");
 
-      assert.deepEqual(idsOf(answered.plans), [started.id]);
-      assert.equal(answered.plans.sync?.past, undefined);
-      assert.ok(answered.plans.sync?.next !== undefined);
+      assert.deepEqual(idsOf(answered.tasks), [started.id]);
+      assert.equal(answered.tasks.sync?.past, undefined);
+      assert.ok(answered.tasks.sync?.next !== undefined);
     }),
   );
 });
