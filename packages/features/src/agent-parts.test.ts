@@ -99,3 +99,60 @@ test("an app is one however a call spells it, the Mac's name in any case or its 
   assert.equal(new Set(apps.byCall.values()).size, 1);
   assert.equal(computerAppNamed(apps, "COM.APPLE.CALCULATOR")?.name, "Calculator");
 });
+
+test("the same app on two machines is two apps, each keeping its machine, and a spelling on a machine finds that machine's", () => {
+  const on = (id: string, name: string) => ({
+    id,
+    name,
+    owner: { userId: "user-1", name: "Ada" },
+  });
+
+  const simulator = (callId: string, machine: ReturnType<typeof on>): WireRecord =>
+    computer(
+      callId,
+      { action: "get_app_state", app: "Simulator" },
+      {
+        status: "ran",
+        app: { name: "Simulator", bundleId: "com.apple.iphonesimulator", refused: false },
+        machine,
+      },
+    );
+
+  const apps = computerAppsOf([
+    turn("turn-1", [
+      simulator("read-1", on("mac-1", "Studio")),
+      simulator("read-2", on("mac-2", "Laptop")),
+    ]),
+  ]);
+
+  const one = apps.byCall.get("read-1");
+  const other = apps.byCall.get("read-2");
+
+  assert.equal(one?.machine?.name, "Studio");
+  assert.equal(other?.machine?.name, "Laptop");
+  assert.notEqual(one?.id, other?.id);
+  assert.equal(computerAppNamed(apps, "simulator", "mac-1"), one);
+  assert.equal(computerAppNamed(apps, "com.apple.iphonesimulator", "mac-2"), other);
+});
+
+test("one name that is two apps on two machines finds each machine's own app by that name", () => {
+  const editor = (callId: string, bundleId: string, machine: string): WireRecord =>
+    computer(
+      callId,
+      { action: "get_app_state", app: "Editor" },
+      {
+        status: "ran",
+        app: { name: "Editor", bundleId, refused: false },
+        machine: { id: machine, name: machine, owner: { userId: "user-1", name: "Ada" } },
+      },
+    );
+
+  const apps = computerAppsOf([
+    turn("turn-1", [
+      editor("read-1", "com.one.editor", "mac-1"),
+      editor("read-2", "com.two.editor", "mac-2"),
+    ]),
+  ]);
+
+  assert.equal(computerAppNamed(apps, "editor", "mac-2")?.bundleId, "com.two.editor");
+});
