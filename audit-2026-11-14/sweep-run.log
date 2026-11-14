@@ -66,3 +66,7 @@ pushed iphone      306 files 09:32:31
 duo-folded-duo-light wrap-new-task.yaml: fails 2 shots 3   Hide Keyboard... FAILED
 duo-folded-duo-dark wrap-new-task.yaml: fails 2 shots 3   Hide Keyboard... FAILED
   ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-failure-notice.yaml: fails 2 shots 2   Assert that "The task could not be unpinned. Try again." is visible... FAILED
+duo-folded-duo-dark wrap-failure-notice.yaml: fails 2 shots 2   Assert that "The task could not be unpinned. Try again." is visible... FAILED
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-agent.yaml: fails 2 shots 6   Assert that "Invites sent in the staging workspace.*" is visible... FAILED
