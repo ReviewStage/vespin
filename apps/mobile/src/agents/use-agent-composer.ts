@@ -60,6 +60,13 @@ import { useWrite } from "../use-write.js";
 /** What the field says before anything is typed, as the panel's box says it to a started agent. */
 const PLACEHOLDER = "Send a follow-up";
 
+/**
+ * Each agent's words typed and not yet sent, by the agent, so they outlive
+ * the page that drew them, as a widening window hands a page from its tab's
+ * stack to a split view's detail, each drawing its own.
+ */
+const unsentWords = new Map<string, string>();
+
 /** A send out on the act port: what it carries, so a refusal hands it back. */
 interface Sent {
   readonly id: string;
@@ -144,7 +151,13 @@ export function useAgentComposer(
   });
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const [words, setWords] = useState("");
+  const [words, setWords] = useState(() => unsentWords.get(agentId) ?? "");
+  // Note that the words are kept beside the agent as they change, so a page drawn anew for it opens on them.
+  useEffect(() => {
+    if (words === "") unsentWords.delete(agentId);
+    else unsentWords.set(agentId, words);
+  }, [agentId, words]);
+
   // The suggestion whose words the box last laid in, so each is laid in once.
   const [laidFor, setLaidFor] = useState<string | undefined>(undefined);
 
