@@ -908,7 +908,7 @@ const OFF_THAT_MAC = {
 } as const;
 
 test.each(Object.values(OFF_THAT_MAC))(
-  "off the Mac the agent's calls go to, in %s, an @ in the box offers the apps the reader's machines always allow, one row for each machine that allows an app, each by the name its machine posted and saying its machine, a pick of an app on two sent as the app's mention by its bundle id on that machine, its chip naming the machine",
+  "off the Mac the agent's calls go to, in %s, an @ in the box offers the apps the reader's machines always allow, one row for each machine that allows an app, grouped by machine with the window's own first, each by the name its machine posted and saying its machine, a pick of an app on two sent as the app's mention by its bundle id on that machine, its chip naming the machine",
   async (window) => {
     const sent: string[] = [];
 
@@ -975,14 +975,25 @@ test.each(Object.values(OFF_THAT_MAC))(
     pressInComposer(container, "Enter");
     await settle();
 
-    assert.deepEqual(rows, [
-      ["Computer", ""],
-      ["Notes", "Laptop"],
+    // Note that the rows are grouped by machine, the window's own Mac first where it is one of the reader's.
+    const onStudio = [
       ["Notes", "Studio"],
       ["Slack", "Studio"],
+    ];
+
+    const onLaptop = [["Notes", "Laptop"]];
+    const studioFirst = window === OFF_THAT_MAC.ANOTHER_MACHINE;
+
+    const first = studioFirst
+      ? { machine: STUDIO_ID, written: "Notes on Studio" }
+      : { machine: LAPTOP_ID, written: "Notes on Laptop" };
+
+    assert.deepEqual(rows, [
+      ["Computer", ""],
+      ...(studioFirst ? [...onStudio, ...onLaptop] : [...onLaptop, ...onStudio]),
     ]);
     assert.deepEqual(sent, [
-      `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.Notes", machine: LAPTOP_ID }, "Notes on Laptop", PLACE)}`,
+      `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.Notes", machine: first.machine }, first.written, PLACE)}`,
     ]);
   },
 );

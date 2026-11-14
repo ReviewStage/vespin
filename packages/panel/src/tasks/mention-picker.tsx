@@ -946,9 +946,10 @@ interface AppSources {
 }
 
 /**
- * Every app the list offers, one per app on each machine: this Mac's own as
- * its host lists them, those running first, then each app the reader's other
- * machines always allow, by name. An app a machine allows is named as that
+ * Every app the list offers, one per app on each machine, grouped by
+ * machine: this Mac's own as its host lists them, those running first and
+ * then by name, then each other machine of the reader's by its name, its
+ * always-allowed apps by name. An app a machine allows is named as that
  * machine posted it, else as a `computer` call in the conversation named it,
  * else by its bundle id. This Mac's allowed apps are its host's rows, which
  * already say so.
@@ -996,13 +997,26 @@ function machineAppsOf({
     );
   });
 
+  // Note that rows are grouped by machine: This Mac's first, its running apps leading, then each other machine by name, its apps by name.
+  const here = (each: MachineApp) => (each.machine === thisDevice ? 0 : 1);
+
   return [
-    ...ownRows,
+    ...ownRows.toSorted(
+      (one, other) => Number(other.running) - Number(one.running) || byName(one, other),
+    ),
     ...others.toSorted(
       (one, other) =>
-        one.name.localeCompare(other.name) || one.machineName.localeCompare(other.machineName),
+        here(one) - here(other) ||
+        one.machineName.localeCompare(other.machineName) ||
+        (one.machine ?? "").localeCompare(other.machine ?? "") ||
+        byName(one, other),
     ),
   ];
+}
+
+/** Two apps in name order. */
+function byName(one: MachineApp, other: MachineApp): number {
+  return one.name.localeCompare(other.name);
 }
 
 /** What the list calls one of the reader's machines that allows apps: This Mac, or its name. */
