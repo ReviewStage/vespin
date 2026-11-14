@@ -1,5 +1,5 @@
 /**
- * live-activity-module.ts -- the app's native Live Activity module (`modules/live-activity/`) as JavaScript reads it: the tokens it hands on, an activity's end, the Stop button's requests, the phone it sends a background token beside, a fixture's activity, and the Inbox widget drawn again.
+ * live-activity-module.ts -- the app's native Live Activity module (`modules/live-activity/`) as JavaScript reads it: the tokens it hands on, an activity's end, the Stop button's requests, the phone it sends a background token beside, a fixture's activity, a voice call's activity and its presses, and the Inbox widget drawn again.
  *
  * The module is the app's own, autolinked from `modules/`, so it stands in
  * every build of the app. It is optional here all the same, so a build
@@ -27,6 +27,8 @@ type LiveActivityEvents = {
   readonly onActivityEnded: (event: { readonly token?: string | null }) => void;
   /** Stop was pressed on an agent's row; `answerStop` with its request once the stop is answered. */
   readonly onStop: (event: { readonly request: string; readonly agentId: string }) => void;
+  /** A press on the voice call's activity, named as `CALL_PRESS` names it. */
+  readonly onCallPress: (event: { readonly press: string }) => void;
 };
 
 declare class LiveActivityModule extends NativeModule<LiveActivityEvents> {
@@ -38,6 +40,12 @@ declare class LiveActivityModule extends NativeModule<LiveActivityEvents> {
   keepPhone(phone: string | null): void;
   /** Ends every activity of the app's at once. */
   endAll(): Promise<void>;
+  /** Starts the voice call's activity from its attributes' JSON and its first state's, ending one left from an earlier call. */
+  startCall(attributes: string, contentState: string): Promise<void>;
+  /** Sets the voice call's activity to a state, from its JSON. */
+  updateCall(contentState: string): Promise<void>;
+  /** Ends the voice call's activity at once. */
+  endCall(): Promise<void>;
   /** Has WidgetKit draw the Inbox widget again, from the snapshot the app just kept in the App Group. */
   reloadInboxWidget(): void;
 }

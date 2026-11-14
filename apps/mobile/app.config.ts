@@ -198,23 +198,30 @@ const NOTIFICATION_SERVICE: AppExtension = {
   ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
 };
 
-// The Stop button's intent, which iOS runs in the app's process, so the app
-// builds it too, beside the widget that draws it.
+// The Live Activities' button intents, Stop on an agent's row and a voice
+// call's presses, which iOS runs in the app's process, so the app builds
+// them too, beside the widget that draws them.
 const STOP_AGENT_INTENT: ExtensionFile = { FROM: "live-activity", NAME: "StopAgentIntent.swift" };
+const CALL_PRESS_INTENT: ExtensionFile = { FROM: "live-activity", NAME: "CallPressIntent.swift" };
+const LIVE_ACTIVITY_INTENTS = [STOP_AGENT_INTENT, CALL_PRESS_INTENT] as const;
 
 // The widget extension that draws the member's running agents as a Live
-// Activity, and the Inbox widget from the snapshot the app keeps in the App
-// Group. Its attributes are the app's module's own file, since ActivityKit
-// matches the app's activity to the widget's by the type's name. Its glyphs
-// are the panel's own Lucide ones, as the app's are: the Inbox's, and the
-// asks' Split, SquareCheck and PenLine, as the app's Inbox row leads them.
+// Activity, a voice call as one of its own, and the Inbox widget from the
+// snapshot the app keeps in the App Group. Each activity's attributes are
+// the app's module's own file, since ActivityKit matches the app's activity
+// to the widget's by the type's name. Its glyphs are the panel's own Lucide
+// ones, as the app's are: the Inbox's, the asks' Split, SquareCheck and
+// PenLine, as the app's Inbox row leads them, and a call's waveform, mutes,
+// and hang-up, as its card draws them, End call in the danger red.
 const LIVE_ACTIVITY: AppExtension = {
   TARGET: "AgentsLiveActivity",
   BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.AgentsLiveActivity`,
   SOURCES: [
     { FROM: "live-activity", NAME: "AgentsLiveActivity.swift" },
-    STOP_AGENT_INTENT,
+    { FROM: "live-activity", NAME: "CallLiveActivity.swift" },
+    ...LIVE_ACTIVITY_INTENTS,
     { FROM: "modules/live-activity/ios", NAME: "AgentsActivityAttributes.swift" },
+    { FROM: "modules/live-activity/ios", NAME: "CallActivityAttributes.swift" },
     { FROM: "live-activity", NAME: "InboxWidget.swift" },
     INBOX_WIDGET_SNAPSHOT,
   ],
@@ -226,8 +233,20 @@ const LIVE_ACTIVITY: AppExtension = {
     Ground: "GROUND",
     Text: "TEXT",
     TextMuted: "TEXT_MUTED",
+    Danger: "DANGER_FILL",
   },
-  SYMBOLS: ["Inbox", "Split", "SquareCheck", "PenLine"],
+  SYMBOLS: [
+    "Inbox",
+    "Split",
+    "SquareCheck",
+    "PenLine",
+    "AudioLines",
+    "Mic",
+    "MicOff",
+    "Volume2",
+    "VolumeOff",
+    "PhoneOff",
+  ],
   ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
 };
 
@@ -668,33 +687,39 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
   });
 };
 
-// The Stop button's intent built into the app's own target as well, since
-// iOS runs a Live Activity's intent in the app's process: copied beside the
-// app's sources and added to its target.
-const withStopAgentIntent = (config: ExpoConfig): ExpoConfig => {
+// The Live Activities' intents built into the app's own target as well,
+// since iOS runs a Live Activity's intent in the app's process: copied
+// beside the app's sources and added to its target.
+const withLiveActivityIntents = (config: ExpoConfig): ExpoConfig => {
   const written = withDangerousMod(config, [
     "ios",
     (modConfig) => {
       const { projectRoot } = modConfig.modRequest;
-      copyFileSync(
-        join(projectRoot, STOP_AGENT_INTENT.FROM, STOP_AGENT_INTENT.NAME),
-        join(IOSConfig.Paths.getSourceRoot(projectRoot), STOP_AGENT_INTENT.NAME),
-      );
+
+      for (const intent of LIVE_ACTIVITY_INTENTS) {
+        copyFileSync(
+          join(projectRoot, intent.FROM, intent.NAME),
+          join(IOSConfig.Paths.getSourceRoot(projectRoot), intent.NAME),
+        );
+      }
 
       return modConfig;
     },
   ]);
 
   return withXcodeProject(written, (modConfig) => {
-    const project = modConfig.modResults;
     const projectName = IOSConfig.XcodeUtils.getProjectName(modConfig.modRequest.projectRoot);
-    const app = IOSConfig.XcodeUtils.getApplicationNativeTarget({ project, projectName });
-    modConfig.modResults = IOSConfig.XcodeUtils.addBuildSourceFileToGroup({
-      filepath: `${projectName}/${STOP_AGENT_INTENT.NAME}`,
-      groupName: projectName,
-      project,
-      targetUuid: app.uuid,
-    });
+
+    for (const intent of LIVE_ACTIVITY_INTENTS) {
+      const project = modConfig.modResults;
+      const app = IOSConfig.XcodeUtils.getApplicationNativeTarget({ project, projectName });
+      modConfig.modResults = IOSConfig.XcodeUtils.addBuildSourceFileToGroup({
+        filepath: `${projectName}/${intent.NAME}`,
+        groupName: projectName,
+        project,
+        targetUuid: app.uuid,
+      });
+    }
 
     return modConfig;
   });
@@ -903,7 +928,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
 const config = (context?: ConfigContext): ExpoConfig =>
   [NOTIFICATION_SERVICE, LIVE_ACTIVITY, SHARE_EXTENSION].reduce(
     withAppExtension,
-    withStopAgentIntent(withMarketingIcon(withImageSets(baseConfig(context)))),
+    withLiveActivityIntents(withMarketingIcon(withImageSets(baseConfig(context)))),
   );
 
 export default config;
