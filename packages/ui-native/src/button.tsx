@@ -72,6 +72,9 @@ const HAIRLINE = 0.5;
 /** A capsule's inner margins, around its words. */
 const CAPSULE_PADDING = { horizontal: 12, vertical: 6 } as const;
 
+/** How far past its top and bottom edges a pressable capsule takes a press, in points: a 28 pt capsule then answers across Apple's least target of 44. */
+const CAPSULE_REACH = 8;
+
 type ButtonProps = {
   readonly label: string;
   readonly symbol?: Glyph | undefined;
@@ -139,6 +142,22 @@ function capsuleModifiers(colors: BrandColors, filled: boolean) {
             style: { lineWidth: HAIRLINE },
           }),
         ]),
+  ];
+}
+
+/**
+ * A pressable capsule's press reach: its shape padded out by
+ * `CAPSULE_REACH` above and below, then the padding given back, so the
+ * capsule takes a press across 44 pt while it lays out, and stands beside
+ * its neighbors, at its drawn height. Note that the shape stands on the
+ * label, since a borderless button or a menu answers only where its label
+ * is hit.
+ */
+function capsuleReach() {
+  return [
+    padding({ vertical: CAPSULE_REACH }),
+    SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+    padding({ vertical: -CAPSULE_REACH }),
   ];
 }
 
@@ -356,7 +375,7 @@ export function FieldChip(props: FieldChipProps) {
         ...capsuleModifiers(colors, false),
         ...(menu === undefined
           ? [accessibilityElement("ignore"), accessibilityLabel(props.label)]
-          : []),
+          : capsuleReach()),
       ]}
     >
       {fieldMark(props, colors, glyphSize)}
@@ -479,7 +498,10 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
         accessibilityHint(hint),
       ]}
     >
-      <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, false)}>
+      <HStack
+        spacing={SPACE.TIGHT + 2}
+        modifiers={[...capsuleModifiers(colors, false), ...capsuleReach()]}
+      >
         {faces.length === 0 ? null : (
           <HStack spacing={-FACE_OVERLAP}>
             {faces.map((face, at) => (
