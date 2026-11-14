@@ -59,6 +59,8 @@ export function NewWorkspaceScreen() {
   const create = useAsyncAction(() => ACT_UNREACHED_WORDS);
   // Whether the sheet still stands, so a create answered after Cancel or a swipe down closes nothing else.
   const open = useRef(true);
+  // Note that Create stays dimmed while the sheet leaves, since the create is done but the name still stands typed.
+  const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     open.current = true;
@@ -71,6 +73,7 @@ export function NewWorkspaceScreen() {
   const close = () => {
     if (!open.current) return;
     open.current = false;
+    setClosing(true);
     router.back();
   };
 
@@ -82,6 +85,8 @@ export function NewWorkspaceScreen() {
       return write(
         () =>
           acts[ACT_KIND.WORKSPACE_CREATE]({ name: name.trim() }).then((workspace) => {
+            // Note that a create answered after Cancel leaves the workspace the member works in, since they turned away from it; the new one stands in the switcher.
+            if (!open.current) return;
             choose(workspace.id);
             close();
           }),
@@ -114,7 +119,7 @@ export function NewWorkspaceScreen() {
         <Stack.Toolbar.Button
           variant="prominent"
           tintColor={colors.ACCENT}
-          disabled={name.trim() === "" || create.running}
+          disabled={name.trim() === "" || create.running || closing}
           onPress={make}
         >
           {create.running ? WORDS.CREATING : WORDS.CREATE}
