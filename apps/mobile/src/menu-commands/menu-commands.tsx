@@ -36,6 +36,7 @@ import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
+import { popDetailFront, useDetailFrontPushed } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
@@ -239,10 +240,20 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const sidebarStands = signedIn && regular;
 
+  // Note that Back pops a page pushed over the detail in front, else a page pushed over the window, as a stack's own Back does; never a sheet, which closes with its own Done or Cancel.
+  const detailPushed = useDetailFrontPushed();
+
+  const overSheet = Object.values(SHEET_ROUTE).some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+
+  const backs = signedIn && (detailPushed || (!overSheet && router.canGoBack()));
+
   const enabled = [
     ...subject.enabled,
     ...(workspaces.length > 0 ? [MENU_COMMAND.SWITCH_WORKSPACE] : []),
     ...(sidebarStands ? [MENU_COMMAND.SIDEBAR] : []),
+    ...(backs ? [MENU_COMMAND.BACK] : []),
   ];
 
   const toggled =
@@ -339,6 +350,11 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         return router.navigate("/search");
       case MENU_COMMAND.SIDEBAR:
         return sidebar.toggle();
+      case MENU_COMMAND.BACK:
+        if (detailPushed) popDetailFront();
+        else router.back();
+
+        return;
       case MENU_COMMAND.MARK_DONE:
         if (working) setAsking(ASK.MARK_DONE);
         else markDone();

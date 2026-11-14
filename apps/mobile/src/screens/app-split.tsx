@@ -15,6 +15,7 @@ import {
   type HeldPage,
   keepDetailPath,
   PageKeyProvider,
+  standDetailFront,
   useDetailStack,
 } from "../detail-stack.js";
 import { InFrontProvider, type PlaceColumns, usePlaceColumns } from "../place-columns.js";
@@ -151,6 +152,12 @@ export function AppSplit({
     if (stale) clearDetail(standing);
   }, [stale, standing]);
   const pages = stale ? [] : stack.pages;
+  // Note that the menu bar's Back pops this place's pages only while the split view stands in front, so it never acts on a detail the reader can't see.
+  useEffect(() => {
+    standDetailFront(front ? standing : undefined);
+
+    return () => standDetailFront(undefined);
+  }, [front, standing]);
 
   return (
     <Screen>

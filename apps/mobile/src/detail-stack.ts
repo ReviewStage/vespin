@@ -350,6 +350,33 @@ export function useDetailCovered(): boolean {
   });
 }
 
+/** The place whose detail a three-column window stands in front, as its split view says; none while no split view stands in front. */
+let front: SidebarPlace | undefined;
+
+/** Names the place whose detail stands in front, so the menu bar's Back pops its pages; none as the split view steps behind the tabs or leaves. */
+export function standDetailFront(place: SidebarPlace | undefined): void {
+  if (front === place) return;
+  front = place;
+
+  for (const listener of listeners) listener();
+}
+
+/** Whether a page stands pushed over the detail in front, which the menu bar's Back pops, as the column's own Back would. */
+export function useDetailFrontPushed(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => front !== undefined && stackOf(front).pages.length > 0,
+  );
+}
+
+/** Pops the top page off the detail in front, as its column's Back does; nothing where none is pushed. */
+export function popDetailFront(): void {
+  if (front === undefined) return;
+  const top = stackOf(front).pages.at(-1);
+
+  if (top !== undefined) popDetail(front, top.key);
+}
+
 /** Whether a tab's route (its segments under the tab's group) is a page the detail's stack stands, as an agent's or a pull request's. */
 export function isStackedRoute(segments: readonly string[]): boolean {
   const [first, second] = segments;

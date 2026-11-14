@@ -20,7 +20,7 @@ let menuCommandPosted = Notification.Name("dev.vespin.menu-commands.command")
 
 /// The menu each command of Vespin's own stands in.
 private enum Place {
-  case application, file, view, sidebar, subject, remind, help
+  case application, file, view, navigate, sidebar, subject, remind, help
 }
 
 /// One of Vespin's commands: its id, which JavaScript routes it by, and how the menu draws it.
@@ -65,6 +65,7 @@ private let commands: [Command] = [
   Command(id: "inbox", place: .view, title: "Inbox", symbol: "Inbox", input: "1"),
   Command(id: "tasks", place: .view, title: "Tasks", symbol: "ListTodo", input: "2"),
   Command(id: "search", place: .view, title: "Search", symbol: "Search", input: "3"),
+  Command(id: "back", place: .navigate, title: "Back", symbol: nil, input: "["),
   Command(
     id: "sidebar", place: .sidebar, title: "Hide Sidebar", toggledTitle: "Show Sidebar",
     symbol: "PanelLeft", input: "s", modifiers: [.command, .control]),
@@ -176,7 +177,8 @@ enum MenuBar {
 
     insert(elements(.file), atStartOf: .file, title: "File", after: .application, into: builder)
     insert(
-      [inline(elements(.view)), inline(elements(.sidebar))], atStartOf: .view, title: "View",
+      [inline(elements(.view)), inline(elements(.navigate)), inline(elements(.sidebar))],
+      atStartOf: .view, title: "View",
       after: .edit, into: builder)
 
     let remind = UIMenu(
