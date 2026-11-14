@@ -101,7 +101,7 @@ const SEARCH_PICK = {
   AGENT: "agent",
 } as const;
 
-/** A row a wide window's Search picked, by its kind and its id, with the route its own tab opens it on, which a narrower window pushes in its place; none for a thread a pick's box started. */
+/** A row a wide window's Search picked, by its kind and its id, with the route its own tab opens it on, which a narrower window pushes in its place; none where no route names it. */
 type SearchPick = {
   readonly kind: (typeof SEARCH_PICK)[keyof typeof SEARCH_PICK];
   readonly id: string;
@@ -388,7 +388,13 @@ function useSearchDetail(
             key={picked.id}
             id={picked.id}
             remindMenu={remindMenu}
-            onOpen={(id) => choose({ kind: SEARCH_PICK.THREAD, id, route: undefined })}
+            onOpen={(id) =>
+              choose({
+                kind: SEARCH_PICK.THREAD,
+                id,
+                route: iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id }),
+              })
+            }
           />
         ),
         asks: null,
