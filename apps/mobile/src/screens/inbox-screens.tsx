@@ -170,6 +170,8 @@ type InboxRowsProps = {
   readonly onResolve: (item: InboxItem) => void;
   /** The list's Select mode, while it stands in one. */
   readonly choosing?: RowChoosing | undefined;
+  /** Starts Select mode with the threads the system ticked at once, such as by a two-finger drag. */
+  readonly onChooseStart: (ids: readonly string[]) => void;
 };
 
 /**
@@ -191,6 +193,7 @@ function InboxRows({
   onRemind,
   onResolve,
   choosing,
+  onChooseStart,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
   const pictureOf = useMemberPictures();
@@ -202,6 +205,7 @@ function InboxRows({
       onSelect={onSelect}
       onRefresh={onRefresh}
       choosing={choosing}
+      onChooseStart={onChooseStart}
     >
       <InboxItemRows
         listed={listed}
@@ -905,7 +909,18 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
       }
     : undefined;
 
-  return { show, search, setSearch, listing, acts, scopes, menu, remind, choosing };
+  return {
+    show,
+    search,
+    setSearch,
+    listing,
+    acts,
+    scopes,
+    menu,
+    remind,
+    choosing,
+    chooseStart: selecting.choose,
+  };
 }
 
 // A compact window: the list under its scopes' segmented control, the account's photo
@@ -918,7 +933,7 @@ function InboxStackList(words: InboxSearch) {
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
 
-  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing } =
+  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing, chooseStart } =
     useInboxScreen(words);
 
   const field = useRefilledSearchField(search);
@@ -1000,6 +1015,7 @@ function InboxStackList(words: InboxSearch) {
               onRemind={remind.open}
               onResolve={acts.resolve}
               choosing={choosing?.rows}
+              onChooseStart={chooseStart}
             />
           )}
         </ScopePicker>
@@ -1027,10 +1043,8 @@ function InboxSplitScreen({
   readonly select: (id: string) => void;
   readonly words: InboxSearch;
 }) {
-  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing } = useInboxScreen(
-    words,
-    selected,
-  );
+  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing, chooseStart } =
+    useInboxScreen(words, selected);
 
   const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
@@ -1055,6 +1069,7 @@ function InboxSplitScreen({
         onRemind={remind.open}
         onResolve={acts.resolve}
         choosing={choosing?.rows}
+        onChooseStart={chooseStart}
       />
     );
 

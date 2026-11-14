@@ -78,6 +78,13 @@ type RowListProps = {
   readonly onRefresh?: (() => Promise<void>) | undefined;
   /** Its Select mode, while it stands in one; none for a list a tap opens rows in. */
   readonly choosing?: RowChoosing | undefined;
+  /**
+   * Starts its Select mode with the rows the system ticked, where it has one:
+   * iPadOS lets a list whose selection is a set tick several rows with no
+   * edit mode of ours, by a two-finger drag, a pointer's ⌘ or Shift click,
+   * or the keyboard. None for a list with no Select mode.
+   */
+  readonly onChooseStart?: ((ids: readonly string[]) => void) | undefined;
   readonly children: ReactNode;
 };
 
@@ -108,7 +115,15 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
  * row, a tap ticks it rather than opening it, two fingers dragged down tick
  * a run, and the rows' swipes step aside, as the system's do.
  */
-export function RowList({ look, selected, onSelect, onRefresh, choosing, children }: RowListProps) {
+export function RowList({
+  look,
+  selected,
+  onSelect,
+  onRefresh,
+  choosing,
+  onChooseStart,
+  children,
+}: RowListProps) {
   const colors = useColors();
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
@@ -122,6 +137,15 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
       onSelectionChange={(selection) => {
         if (choosing !== undefined) {
           choosing.onChoose(selection.filter(Predicate.isString));
+
+          return;
+        }
+
+        const ids = selection.filter(Predicate.isString);
+
+        // Note that several rows ticked at once by the system start Select mode with them, as Mail's do, rather than read as a tap on the first, which drew them in the system's own ink and fill and then cleared them as the single selection was laid back.
+        if (ids.length > 1 && onChooseStart !== undefined) {
+          onChooseStart(ids);
 
           return;
         }
