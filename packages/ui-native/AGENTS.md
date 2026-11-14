@@ -138,8 +138,10 @@ builds a control of its own.
   takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
   items, which expo-router types as plain names, take `GLYPH.X` too
   (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
-  where iOS draws the thing its own way (Share, and the chevron at the end of
-  a Settings row that goes on) or where the panel draws a
+  where iOS draws the thing its own way (Share, the chevron at the end of a
+  Settings row that goes on, the small arrow out at the end of one that
+  leaves the app, and the up-and-down chevron at the end of one whose press
+  opens a menu) or where the panel draws a
   mark of its own rather than a Lucide glyph (a check box, a face, an MCP
   server, the panel's product mark). A task's status ring is the panel's own
   mark, cut into the asset catalog from `@repo/brand`'s table
@@ -157,7 +159,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
 
 - **Type scale** (`tokens/type.ts`'s `TYPE_ROLE`), each role a Dynamic Type
   text style, never a fixed size: a row's title 15 pt (`subheadline`),
-  medium while unread and regular once read, over a 13 pt muted line
+  semibold while unread and regular once read, over a 13 pt muted line
   (`footnote`); a time 12 pt (`caption`); a group header 13 pt muted; a
   screen's title 17 pt semibold, inline in its bar; and a page's heading,
   a thread's or a task's title, 20 pt semibold (`title3`, the style nearest
@@ -207,7 +209,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   is handed a hover effect: the system draws its own on each style, where
   an added highlight drew a second platter on iPadOS 26.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
-  unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
+  unread dot in the margin, at 9 pt the strongest mark a row carries as
+  Mail's is, a 14 pt leading mark in an 18 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from
   `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
   words. An Inbox thread stands roomier, as Mail's message rows do
