@@ -1550,6 +1550,7 @@ const INVITES_DESCRIPTION = [
   "",
   "- Task: [@Usage alerts](https://vespin.dev/personal/task/45)",
   "- Pull request: [@#128 Invite a teammate by email](https://github.com/ada/relay/pull/128)",
+  "- Follow-up: [@#131 Let an owner resend an invite that expired from the members page, with a fresh link](https://github.com/ada/relay/pull/131)",
   "- File: [@invite.ts](https://github.com/ada/relay/blob/HEAD/src/members/invite.ts)",
   "- Date: [@Nov 16, 2026](mention://date/2026-11-16)",
   "",
