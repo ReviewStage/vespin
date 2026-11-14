@@ -2003,7 +2003,8 @@ export function TaskScreen() {
   // Note that a number a link names in its workspace is handed to the split view only once found, as the task's id, since the split view's selection names no workspace; one not found stays here to say so.
   const handing = numberedIn(id, workspace) ? found.taskId : id;
   const handed = useHandToSplit(SPLIT_TAB.TASKS, handing) && handing !== undefined;
-  useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);
+  // Note that the open is told apart by the task's id, as the split view's is, so a number found and handed over on an unfold carries the same open; a number not yet found shows no task to count.
+  useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
 
   if (handed) return null;
