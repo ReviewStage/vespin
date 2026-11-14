@@ -56,7 +56,7 @@ export interface AgentPorts {
   readonly share: (port: number | null) => void;
   /** Copies a shared port's link. */
   readonly copy: (url: string) => void;
-  /** Why the last copy of a link did not go; none while none failed. A refused share or close is said in the app's failure notice, as the panel says it in a toast. */
+  /** Why the last share, its close, or a copy did not go; none while none failed. */
   readonly note: string | undefined;
 }
 
@@ -122,6 +122,7 @@ export function useAgentPorts(agentId: string): AgentPorts {
         {
           refused: (answer) => ("shared" in answer ? undefined : AGENT_PORTS_WORDS.NOT_UNSHARED),
           unanswered: AGENT_PORTS_WORDS.NOT_UNSHARED,
+          inPlace: setNote,
           went: BUZZ.SUCCESS,
         },
       ).finally(settled);
@@ -139,6 +140,7 @@ export function useAgentPorts(agentId: string): AgentPorts {
       {
         refused: (answer) => ("url" in answer ? undefined : AGENT_PORTS_WORDS.NOT_SHARED),
         unanswered: AGENT_PORTS_WORDS.NOT_SHARED,
+        inPlace: setNote,
         went: BUZZ.SUCCESS,
       },
     ).finally(settled);
