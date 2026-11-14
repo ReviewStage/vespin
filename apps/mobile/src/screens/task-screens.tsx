@@ -80,6 +80,8 @@ import {
   BAR_TITLE,
   type BarAction,
   type BarMenu,
+  BUZZ,
+  buzz,
   type ColumnBar,
   ConfirmAsk,
   DetailPage,
@@ -108,7 +110,6 @@ import {
   STATUS_MARK_SYMBOL,
   type StandingMenus,
   sectionGlyph,
-  shareLink,
   type TaskFold,
   TaskHead,
   TaskPreview,
@@ -118,6 +119,7 @@ import {
   WordsRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
@@ -245,15 +247,20 @@ function openOnWeb(destination: LinkDestination, workspace: Workspace | undefine
   openInSafari(linkOf(destination, workspace.slug ?? workspace.id));
 }
 
-/** A task's address on vespin.dev, as the panel's Copy link copies it, raised in the share sheet whose first row copies it. */
-function shareTaskLink(task: TaskSummary, workspace: Workspace | undefined): void {
+/** Copies a task's address on vespin.dev to the pasteboard at once, as the panel's Copy link and Safari's and Notes' do, with the system's tap of success, or says on the console why it could not. */
+function copyTaskLink(task: TaskSummary, workspace: Workspace | undefined): void {
   if (workspace === undefined) return;
-  shareLink(
+  setStringAsync(
     linkOf(
       { kind: LINK_DESTINATION.TASK, taskId: taskLinkStep(task) },
       workspace.slug ?? workspace.id,
     ),
-  );
+  )
+    .then(() => buzz(BUZZ.SUCCESS))
+    .catch((cause: unknown) => {
+      console.error("The task's link could not be copied.", cause);
+      buzz(BUZZ.ERROR);
+    });
 }
 
 /** Asks for a task's new name in the system's alert, opened on the name it has, and renames it to the name typed. */
@@ -468,7 +475,7 @@ function rowActs(
         label: WORDS.COPY_LINK,
         symbol: GLYPH.LINK,
         tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => shareTaskLink(task, listing.workspace),
+        onPress: () => copyTaskLink(task, listing.workspace),
       },
       {
         label: WORDS.RENAME,
@@ -994,7 +1001,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
       {
         label: WORDS.COPY_LINK,
         symbol: GLYPH.LINK,
-        onPress: () => shareTaskLink(task, overview.workspace),
+        onPress: () => copyTaskLink(task, overview.workspace),
       },
       {
         label: WORDS.RENAME,
