@@ -69,6 +69,7 @@ export {
 export { EmptyState, NoSelection } from "./empty-state.js";
 
 export {
+  FailureNoticeLayer,
   FailureNoticeProvider,
   type FailureNotices,
   useFailureNotices,
