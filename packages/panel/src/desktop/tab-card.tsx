@@ -221,7 +221,7 @@ export function tabCard(subject: CardSubject): React.JSX.Element | null {
       return (
         <PullRequestCard
           pullRequest={pullRequest}
-          place={{ taskId: subject.subject.agent.planId }}
+          place={{ taskId: subject.subject.agent.taskId }}
           lines={pullRequest}
           files={pullRequest.changedFiles}
           opener={people?.author ?? openerOf(pullRequest)}

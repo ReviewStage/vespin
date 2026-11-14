@@ -27,7 +27,26 @@ export function useHomeNewTask(box: RefObject<HTMLElement | null>, asks: number)
   }, [box, asks]);
 }
 
-/** Whether the welcome stands: an account signed in whose task list landed holding no task in any workspace. */
+/**
+ * Whether the account has ever had a task in the workspace named, or in any
+ * while none is: the service's word where it has said
+ * (`TasksControl.taskWorkspaces`), since the list may hold none of a
+ * workspace's old and finished tasks, else whether the list holds one.
+ */
+export function hadTasks(tasks: TasksControl, workspaceId: string | undefined): boolean {
+  const said = tasks.taskWorkspaces;
+
+  const listed =
+    workspaceId === undefined
+      ? tasks.tasks.length > 0
+      : tasks.tasks.some((task) => task.workspaceId === workspaceId);
+
+  if (listed || said === undefined) return listed;
+
+  return workspaceId === undefined ? said.length > 0 : said.includes(workspaceId);
+}
+
+/** Whether the welcome stands: an account signed in whose task list landed, never having had a task in any workspace. */
 export function welcomed(tasks: TasksControl): boolean {
-  return tasks.signedIn && tasks.listRead && tasks.tasks.length === 0;
+  return tasks.signedIn && tasks.listRead && !hadTasks(tasks, undefined);
 }

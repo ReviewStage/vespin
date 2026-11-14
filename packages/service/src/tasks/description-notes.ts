@@ -13,7 +13,6 @@ import {
   type StoredTask,
   saveDescriptionText,
 } from "@repo/database/models/task-store";
-import { changedSections } from "@repo/features/description-document";
 import { applyDocumentEdit, type DescriptionEditRequest } from "@repo/features/description-edit";
 import {
   applyNotesToText,
@@ -22,9 +21,10 @@ import {
   type NoteMiss,
   withAgentEdit,
 } from "@repo/features/description-notes";
+import { changedSections } from "@repo/features/description-sections";
 import {
   DESCRIPTION_ACTOR,
-  type DescriptionDocument,
+  type Description,
   type DescriptionLastEdit,
   type DescriptionSectionEdit,
   TASK_BOUNDS,
@@ -38,7 +38,7 @@ import { logStoreFailure } from "../http/store-failure.js";
 /**
  * description-notes.ts -- the description's one write: take an agent's notes, the developer's edit of the text, or their restore of a revision, into a description and read back what was saved.
  *
- * A description is one Markdown text (`@repo/features/description-document`). Its caller
+ * A description is one Markdown text (`@repo/features/description-sections`). Its caller
  * is a coding agent's `edit_description` (`coder-host/description-edit.ts`), whose model
  * answers with
  * notes (`@repo/features/description-notes`): a point added under a heading, a
@@ -81,7 +81,7 @@ import { logStoreFailure } from "../http/store-failure.js";
  */
 
 /** The account and task a task call writes, as the service bound them. */
-export interface DescriptionDocumentBinding {
+export interface DescriptionBinding {
   readonly userId: string;
   readonly taskId: string;
 }
@@ -110,7 +110,7 @@ export type DescriptionSaveResult =
   | {
       readonly status: typeof DESCRIPTION_SAVE_STATUS.SAVED;
       /** The document exactly as it now stands saved. */
-      readonly document: DescriptionDocument;
+      readonly description: Description;
       /** Epoch milliseconds of the save. */
       readonly savedAt: number;
       /** Whether the notes changed the description's words, which is when the save is a revision of its writer's. */
@@ -191,7 +191,7 @@ interface DescriptionConflict {
  * saved.
  */
 function savedUnderLock<T extends TextTaken, F>(
-  binding: DescriptionDocumentBinding,
+  binding: DescriptionBinding,
   writer: DescriptionWriter,
   take: (
     stored: StoredTask,
@@ -284,7 +284,7 @@ const DEVELOPER: DescriptionWriter = { actor: DESCRIPTION_ACTOR.DEVELOPER };
 
 /** Notes already read under the notes' schema, taken into the description the service bound, kept as a revision under their writer, the notetaker where none is named. */
 export function saveNotes(
-  binding: DescriptionDocumentBinding,
+  binding: DescriptionBinding,
   notes: readonly DescriptionNote[],
   writer: DescriptionWriter = NOTETAKER,
 ): Effect.Effect<DescriptionSaveResult, never, DatabaseServices> {
@@ -324,7 +324,7 @@ export function saveNotes(
 
       return {
         status: DESCRIPTION_SAVE_STATUS.SAVED,
-        document: task.document,
+        description: task.description,
         sectionEdits: task.sectionEdits ?? [],
         savedAt: task.updatedAt,
         moved: result.moved,
@@ -358,7 +358,7 @@ function conflictWriter(
   edit: DescriptionEditRequest,
   current: string,
 ): DescriptionLastEdit | undefined {
-  const { base, value } = edit.document;
+  const { base, value } = edit.description;
   const mine = new Set(changedSections(base, value));
   const contested = new Set(changedSections(base, current).filter((heading) => mine.has(heading)));
   const writers = (stored.task.sectionEdits ?? []).filter(({ section }) => contested.has(section));
@@ -393,7 +393,9 @@ function takeDocumentEdit(
   }
 
   const anchors =
-    edit.comments === undefined ? undefined : { text: edit.document.value, anchors: edit.comments };
+    edit.comments === undefined
+      ? undefined
+      : { text: edit.description.value, anchors: edit.comments };
 
   return Result.succeed({
     text: outcome.applied,
@@ -410,7 +412,7 @@ function takeDocumentEdit(
  * with nothing saved, where it cannot be (`@repo/features/description-edit`).
  */
 export function saveDeveloperEdit(
-  binding: DescriptionDocumentBinding,
+  binding: DescriptionBinding,
   edit: DescriptionEditRequest,
 ): Effect.Effect<DescriptionEditSaveResult, never, DatabaseServices> {
   const take = (stored: StoredTask) =>
@@ -449,7 +451,7 @@ export type TaskRestoreResult =
  * changes.
  */
 export function restoreRevision(
-  binding: DescriptionDocumentBinding,
+  binding: DescriptionBinding,
   seq: number,
 ): Effect.Effect<TaskRestoreResult, never, DatabaseServices> {
   const restored = Effect.gen(function* (): Effect.fn.Return<

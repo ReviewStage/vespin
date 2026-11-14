@@ -158,7 +158,7 @@ function mount(
       ? { failed: true }
       : {
           rows: {
-            [INBOX_SCOPE_KIND.PLAN]: items.length === 0 ? {} : { [RETRIES.id]: items },
+            [INBOX_SCOPE_KIND.TASK]: items.length === 0 ? {} : { [RETRIES.id]: items },
           },
         },
     inbox: {

@@ -379,7 +379,7 @@ const STRIP_TAB_KINDS = {
     surface: surfaceOf(PRODUCT_SURFACE.PAGE),
     link: (tab, holder) => ({
       kind: LINK_DESTINATION.PAGE,
-      planId: holder.taskId,
+      taskId: holder.taskId,
       pageId: tab.page,
     }),
     // A task's pages not read yet pass over no tab, and once read, a page gone since is passed over.

@@ -1,10 +1,11 @@
 // choice-media.tsx -- what one option of a decide ask carries, under its row on the choice card: every picture, recording, page, and address as an equal tile with its caption, in React Native views SwiftUI hosts.
 
 import { SymbolView } from "expo-symbols";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { Picture } from "./markdown.js";
+import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -77,7 +78,7 @@ function SymbolTile({ piece }: { readonly piece: ChoiceMedia }) {
   if (symbol === undefined) return null;
 
   return (
-    <Pressable
+    <Press
       onPress={() => piece.onOpen?.()}
       accessibilityRole={piece.kind === CHOICE_MEDIA.PAGE ? "button" : "link"}
       accessibilityLabel={`${TILE_WORD[piece.kind] ?? ""}: ${piece.title}`}
@@ -85,7 +86,7 @@ function SymbolTile({ piece }: { readonly piece: ChoiceMedia }) {
       style={[styles.symbol, { backgroundColor: colors.WELL }]}
     >
       <SymbolView name={glyphSymbol(symbol)} size={MARK_SIZE.LEAD} tintColor={colors.TEXT_MUTED} />
-    </Pressable>
+    </Press>
   );
 }
 

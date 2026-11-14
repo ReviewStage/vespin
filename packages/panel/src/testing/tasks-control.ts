@@ -10,7 +10,7 @@ import {
   type ListedAgent,
 } from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import type {
   AppHostRead,
@@ -305,7 +305,7 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     onDraftChange: ignore,
     onHandDraft: ignore,
     onTaskStarted: ignore,
-    onDraftAttachments: ignore,
+    onDraftHeld: ignore,
     onDiscardDraft: ignore,
     startPrompt: () => Promise.resolve(undefined),
     startFork: () => Promise.resolve(undefined),
@@ -495,6 +495,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     signedIn: true,
     me: undefined,
     tasks: [],
+    typedNames: new Map(),
     listed: {
       tasks: overrides.tasks ?? [],
     },
@@ -512,7 +513,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     onPointTask: () => {},
     listFailed: false,
     listRead: true,
-    region: { kind: DOCUMENT_REGION.NONE },
+    region: { kind: TASK_REGION.NONE },
     copy: { onPress: ignore },
     mainTabs: {
       tabs: [MAIN_TAB.OVERVIEW],

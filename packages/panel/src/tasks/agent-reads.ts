@@ -56,8 +56,8 @@ export function agentMessagesQueryOptions(params: AgentMessagesParams) {
 export function repositorySkillsQueryOptions(params: TasksSkillsParams) {
   return queryOptions({
     queryKey:
-      "planId" in params
-        ? [QUERY_ROOT.REPOSITORY_SKILLS, params.planId, null, null]
+      "taskId" in params
+        ? [QUERY_ROOT.REPOSITORY_SKILLS, params.taskId, null, null]
         : [QUERY_ROOT.REPOSITORY_SKILLS, null, params.workspaceId, params.repository ?? null],
     queryFn: () => askAct(ACT_KIND.TASKS_SKILLS, params),
     retry: false,

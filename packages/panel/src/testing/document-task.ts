@@ -29,5 +29,5 @@ export const DOCUMENT_TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: null,
-  document: { body: `${DOCUMENT_TEXT}\n`, assumptions: [] },
+  description: { body: `${DOCUMENT_TEXT}\n`, assumptions: [] },
 };

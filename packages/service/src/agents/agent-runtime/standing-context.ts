@@ -204,7 +204,7 @@ export function standingContext(
   const description = descriptionsOn
     ? [
         DOCUMENT_MARKER,
-        JSON.stringify(task.document),
+        JSON.stringify(task.description),
         ...staleText(stored, descriptionsOnSince, clock.timeZone),
         ...agentEditsText(stored.agentEdits),
         ...openThreadsText(comments),

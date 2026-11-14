@@ -984,7 +984,7 @@ function inlineCommentsOf(
   const { repository } = told.on;
 
   return agentPullRequestReach(told.userId, told.agent, repository).pipe(
-    Effect.flatMap(({ token }) => reviewLineComments(token, repository, pullRequest, reviewId)),
+    Effect.flatMap(({ bearer }) => reviewLineComments(bearer, repository, pullRequest, reviewId)),
     Effect.map(Option.some),
     // The kind alone: nothing of the review or the token rides the line.
     Effect.catch((failure) =>
@@ -1038,7 +1038,7 @@ function renderingOfWake(
   const { repository } = told.on;
 
   return agentPullRequestReach(told.userId, told.agent, repository).pipe(
-    Effect.flatMap(({ token }) => renderedBody(token, repository, body)),
+    Effect.flatMap(({ bearer }) => renderedBody(bearer, repository, body)),
     // The kind alone: nothing of the words or the token rides the line.
     Effect.catch((failure) =>
       Effect.as(
@@ -1096,7 +1096,7 @@ function headChecksFor(
   const { repository } = told.on;
 
   return agentPullRequestReach(told.userId, told.agent, repository).pipe(
-    Effect.flatMap(({ token }) => headChecksOf(token, repository, sha)),
+    Effect.flatMap(({ bearer }) => headChecksOf(bearer, repository, sha)),
     Effect.map(Option.some),
     // The kind alone: nothing of the checks or the token rides the line.
     Effect.catch((failure) =>

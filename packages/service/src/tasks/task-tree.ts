@@ -97,7 +97,7 @@ export function readRepositoryTree(
   if (withinSecret(request.path)) return Effect.succeed(refused(TASK_FILE_REFUSAL.SECRET));
 
   return readFolder(workspaceId, repository, member, request).pipe(
-    Effect.catchTag("GitHubUnavailable", (failure) =>
+    Effect.catch((failure) =>
       Effect.as(logGitHubReadFailure(failure), refused(TASK_FILE_REFUSAL.UNAVAILABLE)),
     ),
   );
@@ -113,10 +113,10 @@ const readFolder = /* @__PURE__ */ Effect.fn("web/taskTreeFolder")(function* (
   const reach = yield* reachTaskRepository(organizationId, repository, member);
 
   if ("refused" in reach) return reach.refused;
-  const { token, repository: confirmed, access } = reach.reached;
+  const { bearer, repository: confirmed, access } = reach.reached;
   const recursive = request.recursive === true;
 
-  const folder = yield* readRepositoryFolder(token, confirmed, request.path, recursive).pipe(
+  const folder = yield* readRepositoryFolder(bearer, confirmed, request.path, recursive).pipe(
     markRefusedToken(access),
   );
 

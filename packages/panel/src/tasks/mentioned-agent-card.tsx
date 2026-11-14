@@ -123,7 +123,7 @@ function useTaskFoot(agent: AgentSummary | undefined): string | undefined {
   const tasks = useKnownNames().tasks;
 
   if (agent === undefined) return undefined;
-  const task = tasks.get(agent.planId);
+  const task = tasks.get(agent.taskId);
 
   return task === undefined ? TASK_WORDS.UNKNOWN : `On ${task}`;
 }
@@ -231,7 +231,7 @@ function OwnedPullRequestCard({
     onOpenAgent: () =>
       openPlace?.({
         kind: LINK_DESTINATION.AGENT,
-        ...(taskId === undefined ? undefined : { planId: taskId }),
+        ...(taskId === undefined ? undefined : { taskId: taskId }),
         agentId,
       }),
   });

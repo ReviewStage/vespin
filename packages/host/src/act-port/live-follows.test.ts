@@ -257,13 +257,13 @@ const FOLLOWS = [
     at: ["task", TASK_ID],
   },
   {
-    follow: TASKS_ACT_KIND.TASKS_DOCUMENT_FOLLOW,
+    follow: TASKS_ACT_KIND.TASKS_HELD_FOLLOW,
     followRefusal: "Could not follow that task's description on this system.",
-    retry: TASKS_ACT_KIND.TASKS_DOCUMENT_RETRY,
+    retry: TASKS_ACT_KIND.TASKS_HELD_RETRY,
     retryRefusal: "Could not read that task's description again on this system.",
     key: { taskId: TASK_ID },
     path: HOSTED_SERVICE_PATH.LIVE_TASK_RECORD,
-    slice: LIVE_READ.DESCRIPTION_DOCUMENT,
+    slice: LIVE_READ.HELD_TASK,
     at: [TASK_ID],
   },
   {
@@ -345,10 +345,10 @@ const FOLLOWS = [
     followRefusal: "Could not follow the inbox on this system.",
     retry: AGENT_INBOX_ACT_KIND.AGENTS_INBOX_RETRY,
     retryRefusal: "Could not read the inbox again on this system.",
-    key: { kind: INBOX_SCOPE_KIND.PLAN, id: TASK_ID },
+    key: { kind: INBOX_SCOPE_KIND.TASK, id: TASK_ID },
     path: HOSTED_SERVICE_PATH.LIVE_TASK_INBOX,
     slice: LIVE_READ.HOLDER_INBOX,
-    at: [INBOX_SCOPE_KIND.PLAN, TASK_ID],
+    at: [INBOX_SCOPE_KIND.TASK, TASK_ID],
   },
 ] as const satisfies readonly {
   readonly follow: PortActKind;

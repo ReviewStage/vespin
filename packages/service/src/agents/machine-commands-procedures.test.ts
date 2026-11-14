@@ -21,7 +21,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
-import { registerDevice } from "@repo/database/models/device-store";
+import { changeMachine, registerDevice } from "@repo/database/models/device-store";
 import {
   claimMachineCommands,
   machineCommandResult,
@@ -31,10 +31,13 @@ import {
   queueMachineCommand,
   settleMachineCommand,
 } from "@repo/database/models/machine-command-store";
+import { createTask } from "@repo/database/models/task-store";
+import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
+import { device } from "@repo/database/schemas/device";
 import { conversations } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
-import { DEVICE_LAYOUT, getTestDB } from "@repo/database/testing";
+import { DEVICE_LAYOUT, getTestDB, openTaskAgent, openWorkspace } from "@repo/database/testing";
 import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import {
   COMPUTER_ACTION,
@@ -51,6 +54,7 @@ import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { mp4Bytes, pngBytes } from "@repo/wire/testing";
+import { eq } from "drizzle-orm";
 import { Clock, type Context, Effect, Fiber, Layer, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
@@ -254,9 +258,11 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
       Effect.gen(function* () {
         yield* account("user-no-mac");
 
+        // An agent's call names its agent, which the command's wire leaves out.
         const answer = yield* askMac("user-no-mac", {
           kind: MACHINE_COMMAND_KIND.SHELL,
           command: COMMAND.command,
+          agentId: "55555555-5555-4555-8555-555555555555",
         });
 
         const read = yield* emptyRead(request({ userId: "user-no-mac" }));
@@ -571,6 +577,11 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
                 row.id,
                 "the command names the conversation that asked",
               );
+              assert.equal(
+                claimed.agentId,
+                undefined,
+                "a conversation that is no agent's names none",
+              );
               yield* settleMachineCommand("user-computer", claimed.id, {
                 computer: {
                   app: {
@@ -744,12 +755,17 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
             [studio, "Studio"],
           ] as const) {
             yield* registerDevice(userId, { id, name, ...DEVICE_LAYOUT });
+
+            yield* db
+              .update(device)
+              .set({ commandMode: MACHINE_COMMAND_MODE.ASK })
+              .where(eq(device.id, id));
+
+            yield* markMachineListening(userId, id);
           }
 
-          // The Studio listened last, so a call naming no machine goes to it.
-          yield* markMachineListening(userId, laptop);
-          yield* TestClock.adjust("1 second");
-          yield* markMachineListening(userId, studio);
+          // The Studio is the account's default, so a call naming no machine goes to it.
+          yield* changeMachine(userId, studio, { makeDefault: true });
 
           const answeredOn = (
             deviceId: string,
@@ -785,6 +801,52 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           assert.match(
             reason(missed.answered).reason,
             /runs on Studio: if you started one on another machine/u,
+          );
+        }),
+      ),
+  );
+
+  it.effect(
+    "a computer action names the agent whose conversation asked, whose turn's end puts its cursor away",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const userId = "user-computer-agent";
+          yield* account(userId);
+
+          const workspace = yield* openWorkspace(userId);
+
+          const { id: taskId } = yield* createTask(userId, {
+            organizationId: workspace,
+            name: "Release",
+          });
+
+          const agentId = yield* openTaskAgent(userId, workspace, taskId);
+
+          const [row] = yield* Database.use((db) =>
+            db
+              .select({ conversationId: agentTable.conversationId })
+              .from(agentTable)
+              .where(eq(agentTable.id, agentId)),
+          );
+
+          assert.ok(row !== undefined);
+          yield* markMachineListening(userId);
+
+          yield* wokenOnHub(
+            runComputerTool(
+              { userId, conversationId: row.conversationId },
+              { action: COMPUTER_ACTION.CLICK, app: "Simulator", element_index: 3 },
+            ),
+            Effect.gen(function* () {
+              const [claimed] = yield* claimMachineCommands(userId, new Date(0), [
+                MACHINE_COMMAND_KIND.COMPUTER,
+              ]);
+
+              assert.ok(claimed !== undefined && claimed.kind === MACHINE_COMMAND_KIND.COMPUTER);
+              assert.equal(claimed.agentId, agentId);
+              yield* settleMachineCommand(userId, claimed.id, { computer: { done: "pressed" } });
+            }),
           );
         }),
       ),

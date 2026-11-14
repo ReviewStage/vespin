@@ -1,0 +1,57 @@
+---
+title: "Cloud environment"
+description: "Variables, software, setup scripts, and run actions for your cloud agents"
+---
+
+Each cloud agent works in its own sandbox: a Linux machine with a checkout of the task's repository. **Settings › Cloud environment** sets up what every sandbox in the workspace starts with. Owners and admins edit it. Members can read the scripts and see variable names.
+
+<Frame>
+  <img src="/images/cloud-environment.png" alt="Settings, Cloud environment: three variables listed by name, the install script, and setup scripts for acme/ledger and acme/relay, each saying when it last ran and that it exited 0" />
+</Frame>
+
+## Variables
+
+Variables are set in every cloud agent's sandbox, in every repository. Use them for the keys your tests and dev server need. Once saved, a value is never shown again. Use **Replace value** in its row's menu to change it.
+
+The agent can read a variable's value, so anything it prints may reach its model and transcript. Agents on a Mac don't get these variables; they use the Mac's own environment.
+
+## Install software
+
+The install script runs as root each time a sandbox boots, including when a stopped one starts again, before the repository's setup script. If it fails, the setup script is skipped. Use it for system packages:
+
+```sh
+apt-get install -y postgresql-client
+```
+
+## Setup scripts
+
+A repository's setup script runs once in each agent's checkout, after it's cloned, with the workspace's variables. Use it to install dependencies:
+
+```sh
+pnpm install
+cp .env.example .env
+```
+
+The agent starts while the script runs. Its output goes to `/tmp/vespin-setup.log`, which ends with `--- exit N` when it finishes, and the agent reads that log before relying on the setup. A script that fails stops at the failed command and runs again the next time the sandbox is made.
+
+## Run actions
+
+A run action is a named command for a repository, such as a dev server or a test suite. It runs from the **Run** button at the end of the agent's tab row, which runs the default action, or stops it while it runs. <kbd>⌘K</kbd> lists every action too. In the Mac app, <kbd>⌥⌘R</kbd> runs the default.
+
+<Frame>
+  <img src="/images/run-actions.png" alt="The Run button reading Dev server, its menu open: Dev server marked Default with ⌥⌘R, Members tests, Seed pending invites, Email previews, each with its command, and Edit run actions… at the foot" />
+</Frame>
+
+An action's output shows in a read-only Terminal tab beside the agent. Each action can run for cloud agents, agents on a Mac, or both. A repository holds up to 20.
+
+## The sandbox
+
+| | |
+| --- | --- |
+| Size | 2 vCPUs and 4 GB of memory |
+| Base | Ubuntu with Node 24, pnpm, Python, Docker, Playwright with Chromium, `gh`, and the agent CLIs. The agent has passwordless `sudo`. |
+| Network | Open internet |
+| Stops | After 5 minutes idle, or 24 hours after it starts. The next message starts it again, with the checkout and any unpushed work as they were. |
+| Deleted | After 7 days unused, with its checkout. Push work you want to keep. |
+
+From a terminal, `vespin env` manages variables and `vespin setup` manages setup scripts and run actions. See [Workspace](/cli/workspace).

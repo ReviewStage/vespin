@@ -7,6 +7,7 @@ import {
   installEditorLayout,
   pressInComposer,
   typeInComposer,
+  typeKeysInComposer,
 } from "../testing/composer.js";
 import { mountComposer } from "./composer-editor.js";
 import {
@@ -109,22 +110,6 @@ function mounted(text: string, overrides: Partial<ComposerEditorProps> = {}) {
     /** Selects every word, as ⌘A does. */
     selectAll: () => editor.commands.selectAll(),
   };
-}
-
-/** The words typed one key at a time, as the browser's text input hands each to the editor, so a Markdown rule a key completes runs. */
-function typeKeys(host: HTMLElement, text: string): void {
-  const view = composerEditor(host).editor?.view ?? assert.fail("the editor is running");
-
-  for (const character of text) {
-    const { from, to } = view.state.selection;
-    const typed = () => view.state.tr.insertText(character, from, to);
-
-    const ruled = view.someProp("handleTextInput", (handle) =>
-      handle(view, from, to, character, typed),
-    );
-
-    if (ruled !== true) view.dispatch(typed());
-  }
 }
 
 /** A chord pressed in the box, ⌘ with the letter, Shift where asked, as a Mac keyboard spells it; answers whether anything outside the editor heard it. */
@@ -239,9 +224,9 @@ test("on a coarse pointer Enter is a new line, ⌘ or Ctrl with Enter sends, and
 test("Markdown typed in a fenced block stands as the words typed, and outside one is still read into marks", () => {
   const fenced = mounted("```\n");
   fenced.caretAt(6);
-  typeKeys(fenced.host, "` a ` _y_ ");
+  typeKeysInComposer(fenced.host, "` a ` _y_ ");
   const outside = mounted("plain ");
-  typeKeys(outside.host, "_y_ ");
+  typeKeysInComposer(outside.host, "_y_ ");
 
   assert.equal(fenced.drafts.at(-1), "```\n` a ` _y_ ");
   assert.equal(outside.drafts.at(-1), "plain *y* ");
@@ -648,20 +633,20 @@ test("words laid in with quotes set apart hold them as blocks, and hand the same
 
 test("a quote is typed with `> `, edited like any words, Backspace at its start turns its line back into words, and Shift with Enter on its empty last line leaves it", () => {
   const box = mounted("");
-  typeKeys(box.host, "> Option A ships today.");
+  typeKeysInComposer(box.host, "> Option A ships today.");
   assert.deepEqual(quotesIn(box.host), ["Option A ships today."]);
   assert.equal(box.drafts.at(-1), "> Option A ships today.");
 
   // The quote's line starts past the quote's and the line's openings.
   const line = 2;
   box.caretAt(line + "Option A ships today".length);
-  typeKeys(box.host, ", surely");
+  typeKeysInComposer(box.host, ", surely");
   assert.equal(box.drafts.at(-1), "> Option A ships today, surely.");
 
   box.caretAt(line + "Option A ships today, surely.".length);
   pressInComposer(box.host, "Enter", { shiftKey: true });
   pressInComposer(box.host, "Enter", { shiftKey: true });
-  typeKeys(box.host, "Why?");
+  typeKeysInComposer(box.host, "Why?");
   assert.equal(box.drafts.at(-1), "> Option A ships today, surely.\n\nWhy?");
 
   box.caretAt(line);
@@ -719,7 +704,7 @@ test("each mark's chord lays it on the words selected and takes it off again, th
 test("a mark's Markdown typed becomes the mark, its delimiters gone from the words shown", () => {
   const box = mounted("");
 
-  typeKeys(box.host, "a **bold** and *slanted* and ~~struck~~ and `code` word");
+  typeKeysInComposer(box.host, "a **bold** and *slanted* and ~~struck~~ and `code` word");
 
   assert.deepEqual(marked(box.host), {
     strong: ["bold"],
@@ -784,7 +769,7 @@ test("words in code take no other mark, and a mark's Markdown typed there stays 
   assert.deepEqual(box.drafts, [], "the words are as they were, so none are handed back");
 
   box.caretAt(1 + "Run make".length);
-  typeKeys(box.host, " **x**");
+  typeKeysInComposer(box.host, " **x**");
   assert.deepEqual(marked(box.host), { code: ["make **x** it"] });
 });
 

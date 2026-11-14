@@ -489,6 +489,29 @@ function inWindow(completed: CompletedWindow, at: number, now: number): boolean 
   }
 }
 
+/**
+ * Whether the view shows settled tasks in full, past those finished lately:
+ * its completed window at All, or its Status filter naming Done or
+ * Canceled, which the window holds none of back.
+ */
+export function showsSettledInFull(filter: TasksFilter, display: TasksDisplay): boolean {
+  return (
+    display.completed === COMPLETED_WINDOW.ALL ||
+    namedByFilter(filter, TASK_STATUS.DONE) ||
+    namedByFilter(filter, TASK_STATUS.CANCELED)
+  );
+}
+
+/** Whether a group may hold settled tasks: any group but one of a status still open. */
+export function mayHoldSettled(head: TasksGroupHead): boolean {
+  return head.kind !== TASKS_GROUP.STATUS || isTaskSettled(head.status);
+}
+
+/** Whether any group that may hold settled tasks draws one row, whose run has an end to scroll to. */
+export function settledRowsDrawn(groups: readonly TasksGroup[]): boolean {
+  return groups.some((group) => mayHoldSettled(group.head) && group.tasks.length > 0);
+}
+
 /** What the filter and the display leave of the tasks: those that stand, and the settled the window leaves out as finished before it. */
 interface StandingTasks {
   readonly standing: readonly TaskSummary[];
