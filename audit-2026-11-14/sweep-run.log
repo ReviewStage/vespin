@@ -163,3 +163,13 @@ ipad26-landscape-ipad26-dark wrap-task-relations.yaml: fails 0 shots 5
 ipad26-landscape-ipad26-light wrap-answer.yaml: fails 2 shots 13   Assert that "Resolve" is visible... FAILED
 ipad26-landscape-ipad26-dark wrap-answer.yaml: fails 0 shots 3 
   ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-navigation.yaml: fails 0 shots 7 
+ipad26-landscape-ipad26-dark wrap-navigation.yaml: fails 0 shots 7 
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-markdown.yaml: fails 2 shots 2   Scrolling DOWN until "Goal" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+ipad26-landscape-ipad26-dark wrap-markdown.yaml: fails 2 shots 2   Scrolling DOWN until "Goal" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-description-comment.yaml: fails 2 shots 2   Scrolling DOWN until "Goal" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+ipad26-landscape-ipad26-dark wrap-description-comment.yaml: fails 2 shots 2   Scrolling DOWN until "Goal" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-undo.yaml: fails 2 shots 5   Scrolling DOWN until "What the expired invite page says" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... FAILED
