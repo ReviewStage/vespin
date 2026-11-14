@@ -1160,8 +1160,9 @@ export function ShellPlaces(): React.JSX.Element {
   const drawerOver = room === SHELL_ROOM.NARROW && sidebar.overlay !== SIDEBAR_OVERLAY.CLOSED;
   // A phone goes between its places by a bar at the screen's foot, standing on their lists alone (`mobile-bar.tsx`).
   const barShown = mobileBarShown(room, tasks, bar);
-  // A phone's Tasks page is the sidebar's tree, pinned in the work's place rather than floating in as a drawer (`mobile-bar.tsx`).
-  const phoneTasks = barShown && boardOpen;
+  // A phone's Tasks page is the sidebar's tree, pinned in the work's place rather than floating in as a drawer (`mobile-bar.tsx`),
+  // but for while the update screen stands there, which the tree would cover and leave inert.
+  const phoneTasks = barShown && boardOpen && !updateNeeded;
 
   const placed = phoneTasks
     ? { ...sidebar, collapsed: false, overlay: SIDEBAR_OVERLAY.CLOSED }
