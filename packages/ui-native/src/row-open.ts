@@ -16,3 +16,11 @@ export const RowOpenContext = createContext<((id: string) => void) | undefined>(
  * list keeps no selection.
  */
 export const RowSelectedContext = createContext<string | undefined>(undefined);
+
+/**
+ * The words a search typed, read into the words each row's title marks in
+ * bold where they stand in it, as ⌘K marks in each row what found it and
+ * Mail's search results set the words searched in bold. None outside a
+ * list of what a search found.
+ */
+export const RowSearchedContext = createContext<readonly string[]>([]);

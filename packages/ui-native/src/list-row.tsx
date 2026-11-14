@@ -30,6 +30,7 @@ import {
   listRowInsets,
   listRowSeparator,
   listRowSeparatorTint,
+  type ModifierConfig,
   monospacedDigit,
   padding,
   tag,
@@ -61,7 +62,8 @@ import {
   UnreadDot,
   WorkingMark,
 } from "./marks.js";
-import { RowOpenContext, RowSelectedContext } from "./row-open.js";
+import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
+import { searchedTitleMarkdown } from "./searched-title-model.js";
 import {
   type BrandColors,
   STATUS_TONE,
@@ -488,6 +490,31 @@ export function RowFrame({
 }
 
 /**
+ * A row's title, the words a search typed set in bold where they stand in
+ * it, as Mail's search results set them, and plain outside a search. Note
+ * that a marked title is one Markdown string in one native text, never texts
+ * nested in it, so a key typed redraws the words in place rather than
+ * building the row's text anew.
+ */
+function TitleWords({
+  title,
+  modifiers,
+}: {
+  readonly title: string;
+  readonly modifiers: readonly ModifierConfig[];
+}) {
+  const marked = searchedTitleMarkdown(title, useContext(RowSearchedContext));
+
+  return marked === undefined ? (
+    <Text modifiers={[...modifiers]}>{title}</Text>
+  ) : (
+    <Text markdownEnabled modifiers={[...modifiers]}>
+      {marked}
+    </Text>
+  );
+}
+
+/**
  * A row's first line: the unread dot in the margin, the leading mark in its
  * column, the title, and what ends the line. The line centers its pieces,
  * so the mark stands on the title at any Dynamic Type size, and at an
@@ -517,15 +544,14 @@ export function RowHead({
   const leadWidth = useScaledSize(MARK_SIZE.LEAD);
 
   const words = (
-    <Text
+    <TitleWords
+      title={title}
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "medium" : "regular" }),
         foregroundStyle(ink),
         lineLimit(lines.title),
       ]}
-    >
-      {title}
-    </Text>
+    />
   );
 
   // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line.

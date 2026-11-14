@@ -93,6 +93,7 @@ type SearchWords = {
  */
 function FoundList({
   found,
+  query,
   scope,
   listing,
   onOpen,
@@ -100,6 +101,8 @@ function FoundList({
   onArchiveAgent,
 }: {
   readonly found: SearchFound;
+  /** What was typed, whose words each row's title sets in bold. */
+  readonly query: string;
   readonly scope: SearchScope;
   /** The Tasks listing a task's row acts through, its status asking first where it stops agents. */
   readonly listing: TasksListing;
@@ -118,6 +121,7 @@ function FoundList({
   return (
     <RowList
       look={LIST_LOOK.PLAIN}
+      searched={query}
       onSelect={onOpen}
       onRefresh={async () => {
         await Promise.all([refresh(), refreshTasks()]);
@@ -207,6 +211,7 @@ function useSearchScreen({ query, scope, setScope }: SearchWords) {
       ) : (
         <FoundList
           found={found}
+          query={query}
           scope={scope}
           listing={listing}
           onOpen={open}
@@ -241,7 +246,8 @@ function SearchStackFound(words: SearchWords) {
  * anything is typed, and that nothing matches where nothing does. The field
  * is focused each time the tab opens on nothing typed, as the system's
  * Search tab does, so a query is typed at once; one left typed stands with
- * its results instead.
+ * its results instead. The keyboard's Search key lowers the keyboard, as
+ * Mail's does, so the results stand whole under the field.
  */
 function SearchStackScreen(words: SearchWords) {
   const { query, setQuery, scope } = words;
@@ -269,6 +275,7 @@ function SearchStackScreen(words: SearchWords) {
           ref={field}
           placeholder={placeholder}
           onChangeText={(event) => setQuery(event.nativeEvent.text)}
+          onSearchButtonPress={() => field.current?.blur()}
           onCancelButtonPress={() => setQuery("")}
         />
       </Stack.Screen>
