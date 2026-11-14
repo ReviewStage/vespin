@@ -10,6 +10,8 @@ import {
   BAR_TITLE,
   BUTTON_LOOK,
   Composer,
+  ComposerFoot,
+  DetailPage,
   EmptyState,
   GLYPH,
   GlassDock,
@@ -21,12 +23,12 @@ import {
   useFailureNotices,
 } from "@repo/ui-native";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { PUSHED_PAGE, useDetailLeave, useHandToDetail } from "../detail-stack.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
 import {
-  type RefusedStart,
   threadMessages,
   threadOpen,
   useCommentReply,
@@ -47,6 +49,12 @@ const WORDS = {
 /** What the description is called while it is first read. */
 const READING_DESCRIPTION = readingWords("the description");
 
+/** What the page says where the description could not be read, beside Try again. */
+const DESCRIPTION_UNREAD = readFailedWords("the description");
+
+/** What a failed read offers. */
+const TRY_AGAIN = "Try again";
+
 /**
  * The threads whose page stands in front, by their ids. Note that a new
  * thread opens before the service has taken it, so a refusal reopens its
@@ -55,27 +63,21 @@ const READING_DESCRIPTION = readingWords("the description");
  */
 const standingThreads = new Set<string>();
 
-/** A start the service refused, kept for the field it reopens: what was sent, and the block and the description's text it was measured in. */
-interface HeldRefusal {
-  readonly start: RefusedStart;
+/** The block a refused start was measured on, with the description's text it was measured in, kept for the field it reopens. */
+interface MeasuredBlock {
   readonly text: string;
   readonly block: DescriptionBlock;
 }
 
 /**
- * The refused starts a reopened field takes up, by the thread id each went
- * under, which the route names. Note that the field takes the block and text
- * the send was measured in rather than finding the block again in the
- * description as it now stands, which an edit since may have moved, and that
- * the text is too large for a route to carry.
+ * The blocks refused starts were measured on, by the thread id each went
+ * under, which the reopened field's route names. Note that the field takes
+ * the block and text the send was measured in rather than finding the block
+ * again in the description as it now stands, which an edit since may have
+ * moved, and that the text is too large for a route to carry. The words,
+ * their key and why are kept with the block's draft (`useCommentStart`).
  */
-const refusedStarts = new Map<string, HeldRefusal>();
-
-/** What the page says where the description could not be read, beside Try again. */
-const DESCRIPTION_UNREAD = readFailedWords("the description");
-
-/** What a failed read offers. */
-const TRY_AGAIN = "Try again";
+const refusedBlocks = new Map<string, MeasuredBlock>();
 
 /**
  * What a new comment's page shows where it has no block to answer: the
@@ -126,10 +128,28 @@ function quoteOf(quote: string, anchored: boolean): string {
  * field docked over its foot, which answers it whether it stands open or
  * resolved, as the panel's thread does, what a reply that did not land
  * said standing in the field's head. The task's path stands small in
- * the bar, as a page of the task's does.
+ * the bar, as a page of the task's does. In a window wide enough for three
+ * columns it stands pushed over the split view's detail instead.
  */
 export function CommentThreadScreen() {
   const { id = "", task: taskId = "" } = useLocalSearchParams<{ id: string; task: string }>();
+  const handed = useHandToDetail({ kind: PUSHED_PAGE.COMMENTS, threadId: id, taskId });
+
+  if (handed) return null;
+
+  return <CommentThread threadId={id} taskId={taskId} />;
+}
+
+/** One thread of a task's description, as `CommentThreadScreen` describes it; `inColumn` pushed over a split view's detail, its reply field at the column's foot. */
+export function CommentThread({
+  threadId: id,
+  taskId,
+  inColumn = false,
+}: {
+  readonly threadId: string;
+  readonly taskId: string;
+  readonly inColumn?: boolean | undefined;
+}) {
   const colors = useColors();
   const openLink = useOpenLink();
   const overview = useTaskOverview(taskId);
@@ -156,6 +176,40 @@ export function CommentThreadScreen() {
   const task = overview?.task;
   const path = commentPath(overview);
 
+  const composer = {
+    placeholder: WORDS.REPLY,
+    words: reply.words,
+    onWords: reply.onWords,
+    sendable: reply.sendable,
+    onSend: reply.send,
+    head: reply.note === undefined ? undefined : <AskNote words={reply.note} />,
+  };
+
+  const page = (foot?: ReactNode) =>
+    thread === undefined ? undefined : (
+      <ThreadPage
+        path={path}
+        status={task?.status}
+        title={quoteOf(thread.quote, thread.anchor !== undefined)}
+        messages={threadMessages(thread, agentNames, pictureOf)}
+        repository={task?.repository}
+        onOpenLink={openLink}
+        standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
+        foot={foot}
+      />
+    );
+
+  // Note that the thread's page draws its own path in a column's bar, so the column's bar names it only while no thread stands.
+  if (inColumn) {
+    return (
+      <DetailPage bar={thread === undefined ? { path: { path, status: task?.status } } : {}}>
+        {page(<ComposerFoot {...composer} />) ?? (
+          <EmptyState title={WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
+        )}
+      </DetailPage>
+    );
+  }
+
   return (
     <>
       <Stack.Screen
@@ -169,29 +223,8 @@ export function CommentThreadScreen() {
           <EmptyState title={WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         </Screen>
       ) : (
-        <GlassDock
-          bar={
-            <Composer
-              placeholder={WORDS.REPLY}
-              words={reply.words}
-              onWords={reply.onWords}
-              sendable={reply.sendable}
-              onSend={reply.send}
-              head={reply.note === undefined ? undefined : <AskNote words={reply.note} />}
-            />
-          }
-        >
-          <Screen>
-            <ThreadPage
-              path={path}
-              status={task?.status}
-              title={quoteOf(thread.quote, thread.anchor !== undefined)}
-              messages={threadMessages(thread, agentNames, pictureOf)}
-              repository={task?.repository}
-              onOpenLink={openLink}
-              standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
-            />
-          </Screen>
+        <GlassDock bar={<Composer {...composer} />}>
+          <Screen>{page()}</Screen>
         </GlassDock>
       )}
     </>
@@ -210,10 +243,18 @@ export function CommentThreadScreen() {
  * notice anywhere else. The block is kept as it stood
  * when the screen first found it, so an edit elsewhere in the description
  * never takes the field away; where the route names no block of the
- * description as read, it says so.
+ * description as read, it says so. In a window wide enough for three
+ * columns it stands pushed over the split view's detail instead, and the
+ * thread it starts takes its place there.
  */
 export function NewCommentScreen() {
-  const params = useLocalSearchParams<{
+  const {
+    task: taskId = "",
+    from = "",
+    to = "",
+    quote = "",
+    again,
+  } = useLocalSearchParams<{
     task: string;
     from: string;
     to: string;
@@ -221,9 +262,39 @@ export function NewCommentScreen() {
     again?: string;
   }>();
 
-  const { task: taskId = "", from = "", to = "", quote = "" } = params;
+  const handed = useHandToDetail({
+    kind: PUSHED_PAGE.NEW_COMMENT,
+    taskId,
+    from,
+    to,
+    quote,
+    again,
+  });
 
+  if (handed) return null;
+
+  return <NewComment taskId={taskId} from={from} to={to} quote={quote} again={again} />;
+}
+
+/** A new thread on one block of a task's description, as `NewCommentScreen` describes it; `inColumn` pushed over a split view's detail, its field at the column's foot. */
+export function NewComment({
+  taskId,
+  from,
+  to,
+  quote,
+  again,
+  inColumn = false,
+}: {
+  readonly taskId: string;
+  readonly from: string;
+  readonly to: string;
+  readonly quote: string;
+  /** The thread id a refused start went under, whose field this opens again on the block it was measured on. */
+  readonly again?: string | undefined;
+  readonly inColumn?: boolean | undefined;
+}) {
   const router = useRouter();
+  const detail = useDetailLeave();
   const onOwnTab = useOnOwnTab();
   const colors = useColors();
   const openLink = useOpenLink();
@@ -240,25 +311,14 @@ export function NewCommentScreen() {
   );
 
   // Note that the block is kept as it stood when first found, with the text it was measured in, because an edit elsewhere moves its offsets while it is being commented on, and the service carries a span measured in that text over to the text as it stands.
-  const [kept] = useState(() =>
-    params.again === undefined ? undefined : refusedStarts.get(params.again),
+  const [held, setHeld] = useState<MeasuredBlock | undefined>(() =>
+    again === undefined ? undefined : refusedBlocks.get(again),
   );
-
-  const [held, setHeld] = useState<
-    { readonly text: string; readonly block: DescriptionBlock } | undefined
-  >(kept === undefined ? undefined : { text: kept.text, block: kept.block });
 
   if (held === undefined && found !== undefined) setHeld({ text: body, block: found });
   const block = held?.block;
   const notices = useFailureNotices();
-
-  const start = useCommentStart(
-    overview?.task.id ?? taskId,
-    held?.text ?? body,
-    block,
-    kept?.start,
-  );
-
+  const start = useCommentStart(overview?.task.id ?? taskId, held?.text ?? body, block);
   const path = commentPath(overview);
   const task = overview?.task.id ?? taskId;
 
@@ -274,16 +334,67 @@ export function NewCommentScreen() {
         return;
       }
 
-      refusedStarts.set(refused.threadId, { start: refused, ...measured });
+      refusedBlocks.set(refused.threadId, measured);
+      const again = refused.threadId;
+
+      if (detail !== undefined) {
+        detail.replace({ kind: PUSHED_PAGE.NEW_COMMENT, taskId: task, from, to, quote, again });
+
+        return;
+      }
+
       router.replace({
         pathname: onOwnTab("/tasks/comments/new"),
-        params: { task, from, to, quote, again: refused.threadId },
+        params: { task, from, to, quote, again },
       });
     });
 
     if (threadId === undefined) return;
+
+    if (detail !== undefined) {
+      detail.replace({ kind: PUSHED_PAGE.COMMENTS, threadId, taskId: task });
+
+      return;
+    }
+
     router.replace({ pathname: onOwnTab("/tasks/comments/[id]"), params: { id: threadId, task } });
   };
+
+  const composer = {
+    placeholder: WORDS.ADD_COMMENT,
+    autoFocus: true,
+    words: start.words,
+    onWords: start.onWords,
+    sendable: start.sendable,
+    onSend: send,
+    head: start.note === undefined ? undefined : <AskNote words={start.note} />,
+  };
+
+  const empty = <BlockState overview={overview} />;
+
+  const page = (foot?: ReactNode) =>
+    block === undefined ? undefined : (
+      <ThreadPage
+        path={path}
+        status={overview?.task.status}
+        title={quoteOf(block.quote ?? "", true)}
+        messages={[]}
+        repository={overview?.task.repository}
+        onOpenLink={openLink}
+        foot={foot}
+      />
+    );
+
+  // Note that the thread's page draws its own path in a column's bar, so the column's bar names it only while no block stands.
+  if (inColumn) {
+    return (
+      <DetailPage
+        bar={block === undefined ? { path: { path, status: overview?.task.status } } : {}}
+      >
+        {page(<ComposerFoot {...composer} />) ?? empty}
+      </DetailPage>
+    );
+  }
 
   return (
     <>
@@ -294,33 +405,10 @@ export function NewCommentScreen() {
         }}
       />
       {block === undefined ? (
-        <Screen>
-          <BlockState overview={overview} />
-        </Screen>
+        <Screen>{empty}</Screen>
       ) : (
-        <GlassDock
-          bar={
-            <Composer
-              placeholder={WORDS.ADD_COMMENT}
-              autoFocus
-              words={start.words}
-              onWords={start.onWords}
-              sendable={start.sendable}
-              onSend={send}
-              head={start.note === undefined ? undefined : <AskNote words={start.note} />}
-            />
-          }
-        >
-          <Screen>
-            <ThreadPage
-              path={path}
-              status={overview?.task.status}
-              title={quoteOf(block.quote ?? "", true)}
-              messages={[]}
-              repository={overview?.task.repository}
-              onOpenLink={openLink}
-            />
-          </Screen>
+        <GlassDock bar={<Composer {...composer} />}>
+          <Screen>{page()}</Screen>
         </GlassDock>
       )}
     </>

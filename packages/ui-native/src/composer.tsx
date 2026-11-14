@@ -419,9 +419,12 @@ export function Composer(props: ComposerProps) {
 /**
  * The same composer at the foot of a SwiftUI column, such as a split view's
  * detail, where no React Native bar can stand: its pieces in a row of the
- * system's own glass, rounded as the bar is.
+ * system's own glass, rounded as the bar is, taking pictures dropped on it
+ * as the bar does.
  */
 export function ComposerFoot(props: ComposerProps) {
+  const { onDropPictures } = props;
+
   const glass = [
     padding({ all: BAR_EDGE }),
     glassEffect({
@@ -431,6 +434,7 @@ export function ComposerFoot(props: ComposerProps) {
       cornerRadius: BAR_RADIUS,
     }),
     padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
+    ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
   ];
 
   if (props.head === undefined) {

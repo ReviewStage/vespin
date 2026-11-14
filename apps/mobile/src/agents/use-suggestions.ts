@@ -45,6 +45,7 @@ import {
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
+import { PUSHED_PAGE, useDetailPush } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useOnTab } from "../tab-route.js";
@@ -146,6 +147,7 @@ export function useSuggestionLooks(
   const acts = useHostActs();
   const router = useRouter();
   const onTab = useOnTab();
+  const toDetail = useDetailPush();
   const accountId = useAccountId();
 
   const experimentSelect = useMemo(
@@ -193,7 +195,10 @@ export function useSuggestionLooks(
         look: SUGGESTION_LOOK.REACHED,
         suggests: action.kind,
         name: reached.title,
-        onPress: () => router.push(onTab(iosAgentRoute(reached.id))),
+        onPress: () => {
+          if (!toDetail({ kind: PUSHED_PAGE.AGENT, agentId: reached.id }))
+            router.push(onTab(iosAgentRoute(reached.id)));
+        },
       };
     }
 

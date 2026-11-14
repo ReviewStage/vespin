@@ -32,7 +32,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { BUZZ, type ThreadMessage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -44,6 +44,51 @@ const NO_THREADS: readonly DescriptionCommentThread[] = [];
 
 /** What an entry says of who wrote it where its writer's account is gone. */
 const SOMEONE = "Someone";
+
+/**
+ * A new thread's draft kept beside its block: the words typed, the start
+ * sent under them that the service refused or never answered, so the same
+ * words sent again go under the same key, and why it did not go.
+ */
+type StartDraft = {
+  readonly words: string;
+  readonly sent: SentStart | undefined;
+  readonly note?: string | undefined;
+};
+
+/**
+ * Each new thread's draft, by the task, then the block's start and end, so
+ * it outlives the screen that drew it, as a rotation hands a new comment
+ * between a split view's detail and its tab's stack, each drawing its own
+ * screen.
+ */
+const startDrafts = new Map<string, Map<number, Map<number, StartDraft>>>();
+
+/** The draft kept toward a new thread on one block of a task; none kept, or no block yet read. */
+function startDraftOf(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
+  if (block === undefined) return undefined;
+
+  return startDrafts.get(taskId)?.get(block.from)?.get(block.to);
+}
+
+/** Keeps a new thread's draft on one block of a task, or lets it go at none. */
+function keepStartDraft(
+  taskId: string,
+  block: DescriptionBlock,
+  draft: StartDraft | undefined,
+): void {
+  const spans = startDrafts.get(taskId) ?? new Map<number, Map<number, StartDraft>>();
+  const ends = spans.get(block.from) ?? new Map<number, StartDraft>();
+
+  if (draft === undefined) ends.delete(block.to);
+  else ends.set(block.to, draft);
+
+  if (ends.size === 0) spans.delete(block.from);
+  else spans.set(block.from, ends);
+
+  if (spans.size === 0) startDrafts.delete(taskId);
+  else startDrafts.set(taskId, spans);
+}
 
 /**
  * A task's description threads, followed while `taskId` is named, the
@@ -168,24 +213,26 @@ interface SentReply {
  * once under a key kept for as long as they stand, so the same words sent
  * again after a lost answer are taken once, and other words go under a key
  * of their own; the field is emptied as they go and given them back where
- * the service refused them, with why.
+ * the service refused them, with why. Note that a reply out holds back no
+ * other, since each is a declared write the host draws at once under its own
+ * key, so a second reply goes while the first is still unanswered, as the
+ * panel's does.
  */
 export function useCommentReply(taskId: string, threadId: string): CommentReply {
   const acts = useHostActs();
   const write = useWrite();
   const [words, setWords] = useState("");
-  const [sent, setSent] = useState<SentReply | undefined>(undefined);
-  const [sending, setSending] = useState(false);
+  // Note that the last reply sent is held outside render, so a second tap before the next render reuses its key and the service takes the reply once.
+  const sent = useRef<SentReply | undefined>(undefined);
   const [note, setNote] = useState<string | undefined>(undefined);
 
   return useMemo(() => {
     const send = () => {
       const kept = words.trim();
 
-      if (kept === "" || sending) return;
-      const key = sent?.words === kept ? sent.key : randomUUID();
-      setSent({ words: kept, key });
-      setSending(true);
+      if (kept === "") return;
+      const key = sent.current?.words === kept ? sent.current.key : randomUUID();
+      sent.current = { words: kept, key };
       setNote(undefined);
       setWords("");
       // Note that a reply refused says why under the box, where its words go back, rather than in the notice.
@@ -206,21 +253,20 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
           },
           went: BUZZ.SUCCESS,
         },
-      )
-        .then((went) => {
-          if (went) setSent(undefined);
-        })
-        .finally(() => setSending(false));
+      ).then((went) => {
+        // Note that a reply answered after a later one went lets go of its key only while it is still the one held.
+        if (went && sent.current?.key === key) sent.current = undefined;
+      });
     };
 
     return {
       words,
       onWords: setWords,
-      sendable: words.trim() !== "" && !sending,
+      sendable: words.trim() !== "",
       send,
       note,
     };
-  }, [acts, write, taskId, threadId, words, sent, sending, note]);
+  }, [acts, write, taskId, threadId, words, note]);
 }
 
 /** The open threads standing on each block of a description, by the block's start, the oldest started first. */
@@ -270,22 +316,52 @@ export interface RefusedStart extends SentStart {
  * under an id minted here, so the host draws the thread at once and the
  * send answers that id before the service does, and under a key kept for as
  * long as the words stand, so the same words sent again after a lost answer
- * start one thread. A refusal is handed to `refused` with the words, key and
- * id it went under, which a field opened again on them (`again`) keeps.
+ * start one thread. The words typed are kept for the block until they are
+ * sent, so a new comment handed to another screen by a rotation opens on
+ * them; a refusal keeps them again with its key and why, for the field it
+ * reopens, and is handed to `refused` with the id it went under.
  */
 export function useCommentStart(
   taskId: string,
   text: string,
   block: DescriptionBlock | undefined,
-  again?: RefusedStart,
 ): CommentStart {
   const acts = useHostActs();
   const write = useWrite();
-  const [words, setWords] = useState(again?.words ?? "");
-  const [sent, setSent] = useState<SentStart | undefined>(again);
-  // Note that a second tap before the screen has gone would start the thread twice, so the send is held here.
+  const [words, setLocal] = useState(() => startDraftOf(taskId, block)?.words ?? "");
+  const [sent, setSentLocal] = useState(() => startDraftOf(taskId, block)?.sent);
+  const [note, setNote] = useState(() => startDraftOf(taskId, block)?.note);
+  // Note that a second tap before the screen has gone would start the thread twice, so the send in flight is held here.
   const inFlight = useRef(false);
   const quote = block?.quote;
+
+  // Note that a block read after the first draw takes up the draft kept for it, where nothing was typed meanwhile.
+  useEffect(() => {
+    const kept = startDraftOf(taskId, block);
+
+    if (kept === undefined) return;
+    setLocal((was) => (was === "" ? kept.words : was));
+    setSentLocal((was) => was ?? kept.sent);
+    setNote((was) => was ?? kept.note);
+  }, [taskId, block]);
+
+  const setWords = useCallback(
+    (next: string) => {
+      setLocal(next);
+
+      if (block === undefined) return;
+      const was = startDraftOf(taskId, block);
+
+      keepStartDraft(
+        taskId,
+        block,
+        next === "" && was?.sent === undefined
+          ? undefined
+          : { words: next, sent: was?.sent, note: was?.note },
+      );
+    },
+    [taskId, block],
+  );
 
   return useMemo(() => {
     const send = (refused: (start: RefusedStart) => void): string | undefined => {
@@ -304,7 +380,10 @@ export function useCommentStart(
         threadId: repeated?.threadId ?? randomUUID(),
       };
 
-      setSent(start);
+      setSentLocal(start);
+      setNote(undefined);
+      // Note that the draft goes as the send does, since the thread opens in the field's place; a refusal keeps it again below, so whichever field opens next, on this block, after a rotation or in a split view's detail, opens on the words under the same key.
+      keepStartDraft(taskId, block, undefined);
 
       void write(
         () =>
@@ -329,7 +408,10 @@ export function useCommentStart(
                 ? commentRefusalNote(answer.refused)
                 : COMMENT_NOTE.NOT_POSTED,
           unanswered: COMMENT_NOTE.NOT_POSTED,
-          inPlace: (note) => refused({ ...start, note }),
+          inPlace: (why) => {
+            keepStartDraft(taskId, block, { words: kept, sent: start, note: why });
+            refused({ ...start, note: why });
+          },
           went: BUZZ.SUCCESS,
         },
       ).finally(() => {
@@ -344,7 +426,7 @@ export function useCommentStart(
       onWords: setWords,
       sendable: words.trim() !== "" && quote !== undefined,
       send,
-      note: again?.note,
+      note,
     };
-  }, [acts, write, taskId, text, block, quote, words, sent, again]);
+  }, [acts, write, taskId, text, block, quote, words, setWords, sent, note]);
 }
