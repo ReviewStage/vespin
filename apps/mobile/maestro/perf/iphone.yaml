@@ -1,4 +1,4 @@
-# iphone.yaml -- MEASUREMENT ONLY: each tap path five times on the Inbox fixture, each timed tap labeled "T:<path>".
+# iphone.yaml -- MEASUREMENT ONLY: three cold launches, then each tap path five times on the fixture FIXTURE names (inbox, or inbox-large for a real account's size), each timed step labeled "T:<path>".
 appId: dev.vespin.ios
 onFlowComplete:
   - setOrientation: PORTRAIT
@@ -6,8 +6,21 @@ onFlowComplete:
 - launchApp:
     clearState: true
     arguments:
-      fixture: inbox
+      fixture: ${FIXTURE}
 - assertVisible: "Recorded the invite flow"
+# Cold launch to the Inbox's first thread drawn, the app stopped before each.
+- repeat:
+    times: 3
+    commands:
+      - stopApp
+      - launchApp:
+          stopApp: true
+          arguments:
+            fixture: ${FIXTURE}
+          label: "T:cold-launch"
+      - assertVisible: "Recorded the invite flow"
+      - waitForAnimationToEnd:
+          timeout: 5000
 - waitForAnimationToEnd:
     timeout: 5000
 # Inbox row to its thread.
@@ -169,7 +182,7 @@ onFlowComplete:
 # Send on an agent's page, whose turn runs, so each wait is capped.
 - launchApp:
     arguments:
-      fixture: inbox
+      fixture: ${FIXTURE}
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
 - assertVisible: "Stop"
 - waitForAnimationToEnd:

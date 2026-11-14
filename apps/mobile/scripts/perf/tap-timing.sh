@@ -9,7 +9,7 @@ xcrun simctl uninstall $U dev.vespin.ios 2>/dev/null; xcrun simctl install $U $A
 # The recording's start, on the wall clock, timestamps its first frame.
 ( xcrun simctl io $U recordVideo --codec=h264 --force $O/screen.mp4 2>&1 | while IFS= read -r l; do print -r -- "$(python3 -c 'import time;print(f"{time.time()*1000:.0f}")') $l"; done > $O/record.log ) &
 for i in {1..20}; do grep -q "Recording started" $O/record.log 2>/dev/null && break; sleep 0.5; done
-maestro --device $U test --debug-output $O/debug --flatten-debug-output $F > $O/maestro.raw 2>&1; echo "maestro exit $?" > $O/status
+maestro --device $U test -e FIXTURE=${FIXTURE:-inbox} --debug-output $O/debug --flatten-debug-output $F > $O/maestro.raw 2>&1; echo "maestro exit $?" > $O/status
 pkill -INT -f "recordVideo.*$O/screen.mp4"; sleep 3
 C=$(xcrun simctl get_app_container $U dev.vespin.ios data 2>/dev/null)
 cat $C/Documents/perf-probe-*.jsonl > $O/probe.jsonl 2>/dev/null; echo >> $O/probe.jsonl
