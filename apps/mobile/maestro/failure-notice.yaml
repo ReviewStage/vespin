@@ -29,7 +29,12 @@ appId: dev.vespin.ios
       ROW: Weekly digest email
       ITEM: Unpin
 - tapOn: "Unpin"
-- assertVisible: "The task could not be unpinned. Try again."
+# Note that the notice's words drop their closing "Try again." where its own
+# Try again button stands (`failure-notice-model.ts`, #9218), and that the
+# notice is checked at once, since it stands six seconds.
+- extendedWaitUntil:
+    visible: "The task could not be unpinned."
+    timeout: 5000
 - assertVisible:
     id: "failure-notice-retry"
 - takeScreenshot: failure-notice
@@ -46,7 +51,7 @@ appId: dev.vespin.ios
       id: "failure-notice"
     direction: UP
 - waitForAnimationToEnd
-- assertNotVisible: "The task could not be unpinned. Try again."
+- assertNotVisible: "The task could not be unpinned."
 - assertVisible: "Pinned"
 # Mark done from the same menu asks first in the system's alert, since the
 # task's agent is at work and only the person can decide to stop it; once
@@ -59,6 +64,8 @@ appId: dev.vespin.ios
       ITEM: Mark done
 - tapOn: "Mark done"
 - tapOn: "Stop agents"
-- assertVisible: "The task could not be marked done. Try again."
+- extendedWaitUntil:
+    visible: "The task could not be marked done."
+    timeout: 5000
 - assertVisible: "Weekly digest email"
 - takeScreenshot: failure-notice-mark-done
