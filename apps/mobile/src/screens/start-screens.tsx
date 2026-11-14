@@ -130,7 +130,7 @@ function SheetBar({
   readonly kept: KeptWords;
 }) {
   const colors = useColors();
-  const close = useCloseSheet();
+  const close = useCloseSheet(kept);
 
   return (
     <>
