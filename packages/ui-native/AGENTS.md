@@ -212,7 +212,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
   words. An Inbox thread stands roomier, as Mail's message rows do
   (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
-  its lines), while a task's row keeps the list's tighter inset.
+  its lines), while a task's row keeps the list's tighter inset. A row a
+  split view's list keeps selected stands on a rounded `SELECTED` fill set in
+  from the column's edges (`ROW_INSET.FILL`), its hairlines stepping aside, as
+  Mail's selected message does; its words don't move.
 - **Select mode** (`RowList`'s `choosing`) is SwiftUI's own edit mode, as
   Mail's Select: a round check leads each row, a tap ticks it, two fingers
   dragged down tick a run, and the swipes step aside. Its screen names the
