@@ -27,14 +27,16 @@ import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { useState } from "react";
-import { Image as Photo, PixelRatio, View } from "react-native";
+import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { monogramOf } from "./monogram.js";
 import { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
+import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+import { tileHue } from "./workspace-tile-model.js";
 
 /** The share of an avatar's width its letters stand at. */
 const MONOGRAM_SCALE = 0.42;
@@ -182,7 +184,9 @@ export function AvatarPhoto({
  * given, from a host `@repo/features/account-picture` lets a picture load
  * from and asked for at the size it is drawn, and their letters otherwise.
  * An App, or its bot, stands in a rounded square rather than a circle, as
- * the panel and GitHub tell one from a person. Note that the letters stand
+ * the panel and GitHub tell one from a person. The letters stand on the
+ * name's identity hue, as the panel's `Avatar` draws a person's letter, so
+ * a face holds its edge on the dark ground too. Note that the letters stand
  * only until the photo has drawn, so they show while it loads and once it
  * fails, which takes the photo away, but never through a photo's
  * transparent pixels.
@@ -197,7 +201,7 @@ export function Avatar({
   readonly picture?: string | undefined;
   readonly kind?: FaceKind | undefined;
 }) {
-  const colors = useColors();
+  const dark = useColorScheme() === "dark";
   const pinned = pinnedPictureUrl(picture);
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const [drawn, setDrawn] = useState<string | undefined>(undefined);
@@ -210,12 +214,12 @@ export function Avatar({
         <>
           <RoundedRectangle
             cornerRadius={corner}
-            modifiers={[foregroundStyle(colors.AVATAR_TILE)]}
+            modifiers={[foregroundStyle(tileHue(name, dark))]}
           />
           <Text
             modifiers={[
               font({ size: size * MONOGRAM_SCALE, weight: "semibold", design: "rounded" }),
-              foregroundStyle(colors.AVATAR_INK),
+              foregroundStyle(ON_IDENTITY),
               accessibilityHidden(),
             ]}
           >
