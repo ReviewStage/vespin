@@ -28,6 +28,7 @@ import {
   foregroundStyle,
   frame,
   listRowBackground,
+  listSectionSpacing,
   scrollContentBackground,
   scrollDismissesKeyboard,
   tint,
@@ -43,6 +44,16 @@ import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
+
+/** How far apart a form's sections stand, and how far its first stands under the bar. */
+export const FORM_SPACING = {
+  /** The system's grouped spacing, as a page of Settings stands. */
+  REGULAR: "regular",
+  /** Close under the bar and between sections, as a short sheet of a few rows stands, Reminders' Details and Mail's options among them. */
+  COMPACT: "compact",
+} as const;
+
+export type FormSpacing = (typeof FORM_SPACING)[keyof typeof FORM_SPACING];
 
 /** An account's face in its row, larger than a list's. */
 const ACCOUNT_FACE_SIZE = 36;
@@ -146,8 +157,11 @@ function PressedRow({
  */
 export function SettingsForm({
   onContentHeight,
+  spacing = FORM_SPACING.REGULAR,
   children,
 }: {
+  /** How far apart its sections stand; a short sheet's stand close, so its first section doesn't sit under an empty band. */
+  readonly spacing?: FormSpacing;
   /** Told the height its rows stand in, as they lay out, for a popover that fits it; none where the form fills its place. */
   readonly onContentHeight?: ((height: number) => void) | undefined;
   readonly children: ReactNode;
@@ -164,6 +178,7 @@ export function SettingsForm({
     <Form
       modifiers={[
         ...(measured === null ? [] : [measured]),
+        ...(spacing === FORM_SPACING.COMPACT ? [listSectionSpacing("compact")] : []),
         scrollContentBackground("hidden"),
         scrollDismissesKeyboard("immediately"),
         background(colors.GROUPED),

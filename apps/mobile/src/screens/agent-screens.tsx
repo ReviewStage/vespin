@@ -45,6 +45,7 @@ import {
   ConfirmAsk,
   DeniesWaiting,
   drawnCallIds,
+  FORM_SPACING,
   GLYPH,
   GlassDock,
   type Glyph,
@@ -972,7 +973,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
         />
       </Stack.Toolbar>
       <Screen>
-        <SettingsForm>
+        <SettingsForm spacing={FORM_SPACING.COMPACT}>
           <ListSection footer={pick.note ?? OPTIONS_WORDS.APPLIES}>
             <MenuPickRow
               label={OPTIONS_WORDS.MODEL}
@@ -1102,7 +1103,7 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
         />
       </Stack.Toolbar>
       <Screen>
-        <SettingsForm>
+        <SettingsForm spacing={FORM_SPACING.COMPACT}>
           <ListSection
             footer={ports.note ?? (ports.rows.length === 0 ? ports.none : ports.linkNote)}
           >
