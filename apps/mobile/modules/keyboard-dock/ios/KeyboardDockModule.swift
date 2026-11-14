@@ -6,8 +6,13 @@
 // still while a drag pulls the keyboard down under the finger, then jumps.
 // UIKit's keyboard layout guide follows the keyboard through that drag, the
 // suggestion strip's growth and a form sheet's own lift, so the lift is read
-// here at each layout pass and set on the bar as a transform, which React
-// Native's layout leaves alone, inside the keyboard's own animation. JavaScript
+// here at each layout pass, inside the keyboard's own animation, after it
+// settles, and on each frame drawn while the keyboard stands, and set on the
+// bar as a transform, which React Native's layout leaves alone. A view that
+// stops being the bar, as a page goes back with the keyboard up, is set down
+// before Fabric can draw it anew elsewhere still lifted. Note that the display
+// link holds this view while it runs, so it stops as the view leaves its
+// window, which it does before it goes. JavaScript
 // hears the same overlap, so the content under the bar leaves room for it.
 //
 // Note that the overlap is read against this view, which stands still, and
@@ -38,23 +43,75 @@ final class KeyboardDockView: ExpoView {
   /// The overlap last told to JavaScript; none yet.
   private var told: CGFloat?
 
+  /// The view the dock last lifted, so a view that stops being the bar, as a page goes Back with the keyboard up, is set down before Fabric draws it anew elsewhere.
+  private weak var lifted: UIView?
+
+  /// Follows the keyboard each frame while it stands, since a drag that pulls it down moves the layout guide without asking this view for a layout pass.
+  private var frames: CADisplayLink?
+
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     keyboardLayoutGuide.followsUndockedKeyboard = false
     // Note that the guide's top then stands at this view's foot while the keyboard is down, rather than at the safe area's, so no keyboard reads as no overlap.
     keyboardLayoutGuide.usesBottomSafeArea = false
-    NotificationCenter.default.addObserver(
-      self, selector: #selector(keyboardWillMove), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
+    let center = NotificationCenter.default
+    center.addObserver(self, selector: #selector(keyboardWillMove), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
+    center.addObserver(self, selector: #selector(keyboardDidMove), name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
+    center.addObserver(self, selector: #selector(keyboardDidShow), name: UIResponder.keyboardDidShowNotification, object: nil)
+    center.addObserver(self, selector: #selector(keyboardDidHide), name: UIResponder.keyboardDidHideNotification, object: nil)
   }
 
   deinit {
     NotificationCenter.default.removeObserver(self)
+    frames?.invalidate()
   }
 
   /// Lays the view out inside the keyboard's announced move, so the bar's lift rides the keyboard's own curve rather than landing after it.
   @objc private func keyboardWillMove() {
     setNeedsLayout()
     layoutIfNeeded()
+  }
+
+  /// Reads the overlap again once the keyboard has settled, since a form sheet lifts itself after the keyboard's announced move, which only moves this view's place, not its size.
+  @objc private func keyboardDidMove() {
+    follow()
+  }
+
+  /// Follows the keyboard frame by frame while it stands.
+  @objc private func keyboardDidShow() {
+    guard frames == nil, window != nil else { return }
+    let link = CADisplayLink(target: self, selector: #selector(frameDrawn))
+    link.add(to: .main, forMode: .common)
+    frames = link
+  }
+
+  @objc private func keyboardDidHide() {
+    frames?.invalidate()
+    frames = nil
+    follow()
+  }
+
+  @objc private func frameDrawn() {
+    follow()
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    guard window == nil else { return }
+    frames?.invalidate()
+    frames = nil
+    setDown()
+  }
+
+  override func willRemoveSubview(_ subview: UIView) {
+    super.willRemoveSubview(subview)
+    if subview === lifted { setDown() }
+  }
+
+  /// Sets the lifted view back where its layout stands it.
+  private func setDown() {
+    lifted?.transform = .identity
+    lifted = nil
   }
 
   override func layoutSubviews() {
@@ -68,8 +125,10 @@ final class KeyboardDockView: ExpoView {
     let overlap = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY)
     let lift = max(0, overlap - safeAreaInsets.bottom)
 
-    if let bar = subviews.last {
+    if let bar = subviews.last, subviews.count > 1 {
+      if bar !== lifted { setDown() }
       bar.transform = lift > 0 ? CGAffineTransform(translationX: 0, y: -lift) : .identity
+      lifted = bar
     }
 
     if let was = told, abs(was - overlap) < overlapStep { return }

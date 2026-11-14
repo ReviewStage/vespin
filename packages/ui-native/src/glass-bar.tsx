@@ -287,7 +287,8 @@ function NativeDock({
       <DockKeyboard.Provider value={overlap}>
         <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
       </DockKeyboard.Provider>
-      <View style={styles.docked}>
+      {/* Note that the docked view is never flattened away, since the native dock lifts its last child, which must be this view and not whatever the bar mounts first. */}
+      <View style={styles.docked} collapsable={false}>
         <DockLifted.Provider value={true}>
           <DockColumn bar={bar} onRoom={setRoom} />
         </DockLifted.Provider>
