@@ -1735,7 +1735,7 @@ function absentOn(held: HeldState, choices: TaskTabs, tab: SidePanelTab): boolea
 }
 
 /**
- * The state with the tab written at the end of the order of `planId`, a
+ * The state with the tab written at the end of the order of `taskId`, a
  * task whose strip is not drawn here, where that strip is sure not to draw
  * it: a fixed tab closed there, a Changes tab not open there, or a file with
  * no tab open. Every other

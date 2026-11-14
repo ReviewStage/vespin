@@ -35,8 +35,9 @@
  * topics reach (`reach`, its own topics where it names none) or of a table
  * it takes whatever they name, narrow each part's statement to the rows
  * they could move (`statements`), and a part's own row (`own`, by its
- * declared key) a write the reader's topics reach moved, and the narrowed
- * read no longer finds, is answered gone. A write to one of its `whole`
+ * declared key, or by a column of a table beside it, such as a pin's) a
+ * write the reader's topics reach moved, and the narrowed read no longer
+ * finds, is answered gone. A write to one of its `whole`
  * tables that names the reader's account, what admits it to the rows,
  * answers it whole, as a reader too far behind is; one that names no sync
  * id is answered as a snapshot's reader is. Every table such a read reads
@@ -77,6 +78,7 @@ import {
   type SQLWrapper,
   sql,
 } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import { Duration, type Effect, Option, type Schema } from "effect";
 import type { HostedRefusal } from "../http/http-effect.js";
 import type { WebServices } from "../runtime.js";
@@ -88,7 +90,6 @@ export const WATCHED_LOOK = Duration.seconds(1);
 /** A selection's columns: each a column or a typed expression, under the key its row names it by. */
 type LiveColumns = Readonly<Record<string, SQLWrapper>>;
 
-/** No instants. */
 type NoInstants = Readonly<Record<never, SQLWrapper>>;
 
 /** What a selection's rows answer, by key. */
@@ -254,6 +255,21 @@ interface LiveCursorBinding<Read extends AnyLiveRead> {
   ): Effect.Effect<LiveCursorStanding, StoreFailure, DatabaseServices>;
 }
 
+/** A table whose moved rows name a part's own rows: the part's own table, or another with the column its log rows name the part's key under. */
+type OwnSource = SyncTable | { readonly table: SyncTable; readonly column: PgColumn };
+
+/** A table whose moved rows name a part's own rows, with the column of its log rows that names them. */
+interface OwnKeyed {
+  readonly table: SyncTable;
+  readonly column: string;
+}
+
+/** A part's own rows as a delta read answers them gone: the key its rows are named by, and the tables whose moved rows name them. */
+interface OwnPart {
+  readonly key: string;
+  readonly sources: readonly OwnKeyed[];
+}
+
 /** How a read in `LIVE_MODE.DELTA` answers a reader past a sync id. */
 interface LiveDeltaBinding<Read extends AnyLiveRead> {
   /** The tables a write to which naming the reader's account answers the read whole: what admits it to the rows. */
@@ -262,8 +278,14 @@ interface LiveDeltaBinding<Read extends AnyLiveRead> {
   readonly anyTopic: readonly SyncTable[];
   /** The topics a moved row must name to be taken, where they are wider than those the read is woken on; those where left out. */
   reach?(params: LiveReadParams<Read>): LiveTopics;
-  /** The table each part's own rows are read from, of the parts whose rows can leave it, each keyed by its declared key, which a log row names it by; a part not named answers none gone. */
-  readonly own: Readonly<Partial<Record<PartOf<Read>, SyncTable>>>;
+  /**
+   * The tables whose moved rows can take each part's own rows out of it, of
+   * the parts whose rows can leave it: the part's own table, keyed by its
+   * declared key, which a log row names it by, or a table beside it with the
+   * column its log rows name the part's key under, such as a pin's. A part
+   * not named answers none gone.
+   */
+  readonly own: Readonly<Partial<Record<PartOf<Read>, OwnSource | readonly OwnSource[]>>>;
   /** The read's statements, each narrowed to the rows what moved could move. */
   statements(params: LiveReadParams<Read>, moved: SyncMoved): PartStatements<Read>;
 }
@@ -308,12 +330,12 @@ export interface LiveReadBinding<Read extends AnyLiveRead, Topics extends LiveTo
   readonly delta?: LiveDeltaBinding<Read>;
 }
 
-/** A delta read's statements and own rows as the procedures read them: every part built, and each own part's table under its declared key. */
+/** A delta read's statements and own rows as the procedures read them: every part built, and each own part's tables, each under the column its log rows name the part's key by. */
 interface BoundDelta<Read extends AnyLiveRead> {
   readonly whole: readonly SyncTable[];
   readonly anyTopic: readonly SyncTable[];
   reach?(params: LiveReadParams<Read>): LiveTopics;
-  readonly own: ReadonlyMap<PartOf<Read>, { readonly table: SyncTable; readonly key: string }>;
+  readonly own: ReadonlyMap<PartOf<Read>, OwnPart>;
   statements(
     params: LiveReadParams<Read>,
     moved: SyncMoved,
@@ -372,25 +394,37 @@ function allBuilt<Read extends AnyLiveRead>(
   return Option.all(statements) as Option.Option<Readonly<Record<PartOf<Read>, LiveStatement>>>;
 }
 
-/** A delta read's own parts, each with its table and the key its part declares; fails where a table's log names its rows by no such key, since none of its rows could be answered gone. */
+/** A delta read's own parts, each with its tables and the column each names the part's key by; fails where a table's log names its rows by no such column, since none of its rows could be answered gone. */
 function ownParts<Read extends AnyLiveRead>(
   read: Read,
   own: LiveDeltaBinding<Read>["own"],
 ): BoundDelta<Read>["own"] {
-  const parts = new Map<PartOf<Read>, { readonly table: SyncTable; readonly key: string }>();
+  const parts = new Map<PartOf<Read>, OwnPart>();
 
-  // SAFETY: `own`'s keys are parts of the read, each naming its table or none.
-  for (const [part, table] of Object.entries(own) as [PartOf<Read>, SyncTable | undefined][]) {
-    if (table === undefined) continue;
+  // SAFETY: `own`'s keys are parts of the read, each naming its tables or none.
+  for (const [part, named] of Object.entries(own) as [
+    PartOf<Read>,
+    OwnSource | readonly OwnSource[] | undefined,
+  ][]) {
+    if (named === undefined) continue;
     const key = read.parts[part]?.key ?? "";
+    // SAFETY: a part names one source or a list of them, and `Array.isArray` does not narrow a readonly list away.
+    const sources: readonly OwnSource[] = Array.isArray(named) ? named : [named as OwnSource];
 
-    if (!table.log?.key.includes(key)) {
-      throw new Error(
-        `the live read ${read.name}'s ${part} is keyed by ${key}, which ${table.name}'s log names no row by`,
-      );
-    }
+    const keyed = sources.map((source): OwnKeyed => {
+      const table = "table" in source ? source.table : source;
+      const column = "table" in source ? source.column.name : key;
 
-    parts.set(part, { table, key });
+      if (!table.log?.key.includes(column)) {
+        throw new Error(
+          `the live read ${read.name}'s ${part} is keyed by ${column}, which ${table.name}'s log names no row by`,
+        );
+      }
+
+      return { table, column };
+    });
+
+    parts.set(part, { key, sources: keyed });
   }
 
   return parts;

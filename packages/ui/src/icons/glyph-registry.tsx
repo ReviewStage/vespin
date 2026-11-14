@@ -70,6 +70,7 @@ import {
   CircleCheckIcon,
   CloseIcon,
   CommentsIcon,
+  ComputerUseIcon,
   CopyIcon,
   DocumentIcon,
   EllipsisIcon,
@@ -181,6 +182,8 @@ export const GLYPH = {
   CLOUD: lucideGlyph(Cloud),
   DESKTOP: LaptopIcon,
   HOST: lucideGlyph(Server),
+  // Agents using a machine's apps, as Settings › Machines names it: the Computer chip, a call on an app no icon is known for yet, and the switch that lets it.
+  COMPUTER_USE: ComputerUseIcon,
   // A run action that may run wherever its agent does, in the cloud or on a member's Mac.
   CLOUD_AND_LOCAL: lucideGlyph(MonitorCloud),
   // A cloud sandbox's state, its processors, and its memory, as its Cloud chip's popover lists them.

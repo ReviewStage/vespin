@@ -5,24 +5,6 @@
   "private": true,
   "description": "Vespin desktop application",
   "main": "dist/main.js",
-  "imports": {
-    "#main/*": [
-      "./src/main/*.ts",
-      "./src/main/*"
-    ],
-    "#preload/*": [
-      "./src/preload/*.ts",
-      "./src/preload/*"
-    ],
-    "#renderer/*": [
-      "./src/renderer/*.ts",
-      "./src/renderer/*"
-    ],
-    "#shared/*": [
-      "./src/shared/*.ts",
-      "./src/shared/*"
-    ]
-  },
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:native": "node scripts/build-native.mjs",

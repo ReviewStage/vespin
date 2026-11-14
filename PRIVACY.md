@@ -128,7 +128,10 @@ for your account, encrypted, and we keep the connection's state and a display
 name. While connected, your agents can read and change whatever your grant at
 that service allows, without asking you first, and everything the service
 answers, which can include other people's messages or credentials it hands
-out, goes to the agent's model and into its transcript. If your workspace
+out, goes to the agent's model and into its transcript. Where you connect more
+than one account at a service, a call your agent makes keeps the display name
+of the account it ran on (which can be an email address), and anyone who can
+open the task sees it beside the call. If your workspace
 connects Vespin's Slack bot, we store your Slack user id, and messages you send
 the bot, with the earlier messages of that Slack thread, are handed to an
 agent. If you allow an app such as Claude Code or Cursor to connect to our MCP
@@ -174,6 +177,15 @@ installed on that Mac so you can point the agent at one. The list is read on
 your Mac and never leaves it; only an app you pick is sent, by its name and
 bundle id, as part of your message, which the agent and anyone who can open
 the task can read.
+
+When one of your Macs asks you whether to run an agent's command or let it
+use an app, we also keep the ask on our servers so you can answer it from the
+web app, the iOS app, or another of your machines: the command's text, or the
+app's name, bundle id, and icon, with which agent asked, and your answer. Only
+you can see or answer it, never a teammate, though a note you give with a Deny
+is handed to the agent and stays in its transcript as its other results do. We
+delete the ask once that Mac takes your answer, or about an hour after it was
+asked.
 
 The apps you always allow on a Mac are kept with that Mac's settings on our
 servers, by bundle id, with each app's name and icon as the Mac shows them,
@@ -223,7 +235,9 @@ The Vespin iOS app sends the same kind of counts while you are signed in:
 when it opens, each day you use it, sign-ins and sign-outs, and the kind of
 screen you open (the Inbox, a thread, a task, an agent, a page, a pull
 request, or Settings) and whether the window showed one column or two, never
-which thread, task, or agent it was. They go through the Service, as the Mac
+which thread, task, or agent it was, and, once each time it opens, how long
+it took to show your Inbox, rounded down to a step (under a second, then 1,
+2, 3, 5, 8, 13, or 20 seconds or more), never how many threads it held. They go through the Service, as the Mac
 app's do, and the app holds no PostHog key of its own.
 
 While you are signed in, the Mac app and the web app record how you use
@@ -393,15 +407,21 @@ anything you write beside "Other", with your account. We also record them in
 PostHog under your account's name and email, whether or not you share usage
 data, and post them to our team's Slack.
 
-### Information stored on your Mac
+### Information stored on your Mac and iPhone
 
 The Mac app keeps its window layout and the drafts of messages you have not
 sent. While you are signed in, it also keeps a copy of your workspaces' lists,
-changes you made offline, and the words of messages to agents that were not
-delivered, with the names of their files, in one file, `entities.sealed`,
-encrypted under a key in the macOS Keychain and deleted when you sign out. Your sign-in
-tokens are kept encrypted the same way. Transcripts and pictures you
-open are held in memory only.
+changes you made offline, the words of messages to agents that were not
+delivered, with the names of their files, and **your Inbox's newest threads**,
+up to about 150 KB of them: each thread's title, who it waits on, and its
+messages' words and the names of their files (never a file itself), as the
+Inbox last showed them, so it can draw your Inbox at once when it opens. All
+of it is in one file, `entities.sealed`, encrypted under a key in the macOS
+Keychain and deleted when you sign out. Your sign-in tokens are kept
+encrypted the same way. The Vespin iOS app keeps the same file on your
+iPhone, encrypted under a key it keeps in the iPhone's Keychain, which never
+leaves that iPhone, and deletes it when you sign out. Transcripts and
+pictures you open are held in memory only.
 
 ### Spotlight and Handoff on your iPhone
 
