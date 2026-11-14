@@ -49,10 +49,13 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-# Note that this row is the Open list's last, which fits without scrolling, so it is scrolled to without centering, which a list that cannot scroll never reaches.
+# Note that this row is the Open list's last, which fits without scrolling, so it is scrolled to without centering, which a list that cannot scroll never reaches. A last row rests under the floating tab bar, which took the tap, so the list is lifted from 70% to 40% first, as far as it scrolls.
 - scrollUntilVisible:
     element: "What the expired invite page says"
     direction: DOWN
+- swipe:
+    start: 50%, 70%
+    end: 50%, 40%
 - waitForAnimationToEnd
 - tapOn: "What the expired invite page says"
 - waitForAnimationToEnd
