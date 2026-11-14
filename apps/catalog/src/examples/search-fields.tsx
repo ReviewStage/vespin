@@ -1,11 +1,14 @@
 import {
   GAP,
+  IconButton,
   SEARCH_FIELD_LOOK,
   SearchField,
   type SearchFieldLook,
+  SearchLine,
   type SearchTally,
   Stack,
 } from "@repo/ui";
+import { ListFilterIcon } from "@repo/ui/icons";
 import { type ReactNode, useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -14,7 +17,7 @@ import { CatalogSection } from "../section";
  * search-fields.tsx -- a SearchField empty with its chord, holding a query
  * with its clear, with a tally of its results and of none, its tally folded
  * as a narrow bar folds it, in a narrow column with a long query, and as a
- * menu's head row.
+ * menu's head row, and on a list's search line beside its Filter.
  */
 
 /** A search the example holds the query of, as a caller would. */
@@ -72,6 +75,14 @@ function SearchFields(): React.JSX.Element {
               clears
             />
           </Stack>
+        </div>
+      </CatalogSection>
+      <CatalogSection id="search-line" title="On a list's search line">
+        <div className="catalog-column">
+          <SearchLine>
+            <Held start="" label="Search variables" placeholder="Search variables" clears />
+            <IconButton icon={<ListFilterIcon />} label="Filter" />
+          </SearchLine>
         </div>
       </CatalogSection>
       <CatalogSection id="search-tally" title="With a tally">

@@ -16,6 +16,7 @@ import {
   Cloud,
   CornerDownRight,
   Cpu,
+  DollarSign,
   Eraser,
   Eye,
   EyeOff,
@@ -42,6 +43,7 @@ import {
   ListTodo,
   ListTree,
   Lock,
+  LockKeyhole,
   MemoryStick,
   MessageSquareHeart,
   MessagesSquare,
@@ -161,6 +163,10 @@ export const GLYPH = {
   PRIVATE_CHANNEL: lucideGlyph(Lock),
   // A provider's API key, pasted from its console, beside a plan that signs in.
   API_KEY: lucideGlyph(KeyRound),
+  // An environment variable, as a shell names one by its `$`.
+  VARIABLE: lucideGlyph(DollarSign),
+  // A value no one can read back once it is saved, as a secret variable's.
+  SECRET: lucideGlyph(LockKeyhole),
   // A thread, the Inbox's item, where no ask of its own says more.
   THREAD: lucideGlyph(MessagesSquare),
   TERMINAL: TerminalIcon,

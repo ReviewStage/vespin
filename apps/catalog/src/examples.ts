@@ -86,6 +86,7 @@ import { MENU_EXAMPLE } from "./examples/menu";
 import { MENU_SECTIONS_EXAMPLE } from "./examples/menu-sections";
 import { MESSAGES_EXAMPLE } from "./examples/messages";
 import { MORE_BUTTONS_EXAMPLE } from "./examples/more-buttons";
+import { NAME_VALUE_ROWS_EXAMPLE } from "./examples/name-value-rows";
 import { NAV_ITEMS_EXAMPLE } from "./examples/nav-items";
 import { NOTE_LINES_EXAMPLE } from "./examples/note-lines";
 import { ONE_LINE_EXAMPLE } from "./examples/one-line";
@@ -312,6 +313,7 @@ export const EXAMPLES: readonly Example[] = [
   SEARCH_MATCHES_EXAMPLE,
   SEARCHABLE_MENU_EXAMPLE,
   SECRET_FIELDS_EXAMPLE,
+  NAME_VALUE_ROWS_EXAMPLE,
   SETTINGS_PAGE_EXAMPLE,
   SETTINGS_SECTION_EXAMPLE,
   SPINNERS_EXAMPLE,

@@ -174,6 +174,8 @@ export type CopyButtonProps = CopyButtonBase &
         lead: () => React.JSX.Element;
         /** The chip's face, the compact pill's where none is named. */
         face?: CopyChipLook | undefined;
+        /** Whether it stands out by its face's inset at its start, so its glyph lines up with the words under it, as a row's name does. */
+        flush?: boolean | undefined;
       }
   );
 
@@ -273,7 +275,7 @@ export function CopyButton(props: CopyButtonProps): React.JSX.Element {
   if (props.look === COPY_LOOK.CHIP) {
     const face = CHIP_FACE[props.face ?? COPY_CHIP_LOOK.PILL];
 
-    return (
+    const chip = (
       <Tooltip label={state === COPY_STATE.IDLE ? text : COPY_ANSWER[state]}>
         <Chip
           look={face.look}
@@ -288,6 +290,12 @@ export function CopyButton(props: CopyButtonProps): React.JSX.Element {
           </ChipName>
         </Chip>
       </Tooltip>
+    );
+
+    return props.flush === true ? (
+      <span className="ui-copy-chip-flush inline-flex min-w-0 -ms-chip-inset">{chip}</span>
+    ) : (
+      chip
     );
   }
 

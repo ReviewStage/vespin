@@ -38,26 +38,19 @@ import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
   BUTTON_VARIANT,
   Button,
-  CHIP_LOOK,
   CHOICE_BAR_LOOK,
   Checkbox,
-  Chip,
-  ChipName,
   ChoiceBar,
   CONFIRM_LOSS,
   type ComposerNote,
   ConfirmDialog,
-  CornerDot,
   DIALOG_SIZE,
   Dialog,
   type DialogHandle,
   EmptyState,
   GAP,
-  IconButton,
   Inline,
   JUSTIFY,
-  LIST_MOTION_WAY,
-  ListMotion,
   PlusIcon,
   SETTINGS_ROW_ALIGN,
   SETTINGS_ROW_CONTROLS,
@@ -66,6 +59,7 @@ import {
   SETTINGS_SKELETON_CONTROL,
   SearchField,
   SearchIcon,
+  SearchLine,
   type SelectionAct,
   SelectionBar,
   SettingsLine,
@@ -81,36 +75,26 @@ import {
   Text,
   TIME_LOOK,
   Time,
-  Tooltip,
   TrashIcon,
   useConfirmDialog,
-  useLeaving,
-  useMenu,
 } from "@repo/ui";
-import {
-  ACTOR_KIND,
-  type Actor,
-  actorName,
-  DELETED_ACCOUNT_ACTOR,
-  personActor,
-} from "@repo/ui/actor-model";
-import { GLYPH, ListFilterIcon } from "@repo/ui/icons";
+import { ACTOR_KIND, type Actor, DELETED_ACCOUNT_ACTOR, personActor } from "@repo/ui/actor-model";
+import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useIsMutating, useMutation, useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
-import { type ReactNode, type RefObject, useId, useMemo, useRef, useState } from "react";
+import { type RefObject, useId, useMemo, useRef, useState } from "react";
 import { actFailureWords, sendAct } from "../act.js";
-import { ACTOR_SIZE, ActorLine, ActorMark, ActorRef } from "../actor-ref.js";
+import { ActorLine, ActorRef } from "../actor-ref.js";
 import { ANSWER_ACCEPTED, sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
-import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
+import type { MenuAction } from "../desktop/action-menu.js";
 import { confirmFailure } from "../failure-report.js";
 import { memoriesQuery, memoriesRetryMutation } from "../live-reads.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
-import { PEOPLE_FILTER_WORDS } from "../member-rows.js";
 import { linkChip } from "../tasks/mention-chip.js";
 import { MessageBox, useMessageBox } from "../tasks/message-box.js";
 import { useMentionDoors } from "../tasks/task-mentions.js";
@@ -119,6 +103,14 @@ import { useOpenPlace } from "../tasks/use-open-link.js";
 import { useHeldThroughExit } from "../use-held-through-exit.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
+import {
+  type FilterPerson,
+  FORMER_PEOPLE_KEY,
+  filterPeople,
+  PeopleFilter,
+  PeopleFilterChips,
+  toggled,
+} from "./people-filter.js";
 
 /**
  * memory-page.tsx -- Settings › Memory: the facts and conventions the workspace's coding agents kept, listed a row each under views for reading, reviewing, and pruning them, edited and added in place, and forgotten one at a time or several at once.
@@ -194,8 +186,7 @@ const PAGE_LINE = {
   CLEAR: "Clear search and filter",
 } as const;
 
-/** What the Filter is called, on its tooltip and its menu, and its one field. */
-const FILTER = "Filter";
+/** The Filter's one field. */
 const KEPT_BY = "Saved by";
 
 /** What the views are called to a reader. */
@@ -212,21 +203,11 @@ const MEMORY_ROW_SKELETON: SettingsRowSkeletonLayout = {
 /** How many rows stand while the memories are read. */
 const SKELETON_ROWS = [MEMORY_ROW_SKELETON, MEMORY_ROW_SKELETON, MEMORY_ROW_SKELETON] as const;
 
-/** The key the Kept by filter keeps everyone who left the workspace under, together. */
-const FORMER_KEY = "former";
-
-/** What everyone who left is called in the filter. */
-const FORMER_WORDS = "Former members";
-
 /** What the skeletons say to a reader who cannot see them. */
 const READING_LABEL = {
   MEMORY: MEMORY_PAGE_WORDS.READING,
   WORKSPACES: readingWords("your workspaces"),
 } as const;
-
-/** The search's line: the field taking the room the Filter and Add memory beside it leave. */
-const SEARCH_LINE =
-  "memory-search flex items-center gap-control-gap [&>:first-child]:min-w-0 [&>:first-child]:flex-1";
 
 /** Where the selection bar floats: at the foot of the page, over the rows, as the Tasks list's does. */
 const SELECTION_FOOT =
@@ -254,7 +235,7 @@ function plainWords(text: string): string {
 
 /** Whom the Kept by filter files a memory under: its keeper, or everyone who left as one. */
 function keeperKey(memory: MemorySummary, actor: Actor): string {
-  if (memory.keptBy === null || actor.kind !== ACTOR_KIND.PERSON) return FORMER_KEY;
+  if (memory.keptBy === null || actor.kind !== ACTOR_KIND.PERSON) return FORMER_PEOPLE_KEY;
 
   return memory.keptBy.userId;
 }
@@ -502,168 +483,10 @@ function rowMenuOf(
   };
 }
 
-/** One keeper the Kept by filter offers: whom it files under, their name and face, and how many they kept. */
-interface Keeper {
-  readonly key: string;
-  readonly label: string;
-  readonly face: ReactNode;
-  readonly count: number;
-  /** Whether the label is a member's name rather than Me or the former members' words, kept masked in a screen recording. */
-  readonly named: boolean;
-}
-
-/** The keepers of `listed`, the reader first as Me, then each by name, everyone who left last. */
-function keepersOf(listed: readonly ShownMemory[]): readonly Keeper[] {
-  const byKey = new Map<string, Keeper>();
-
-  for (const { memory, actor } of listed) {
-    const key = keeperKey(memory, actor);
-    const known = byKey.get(key);
-
-    if (known !== undefined) {
-      byKey.set(key, { ...known, count: known.count + 1 });
-      continue;
-    }
-
-    const former = key === FORMER_KEY;
-    const you = actor.kind === ACTOR_KIND.PERSON && actor.you;
-    const label = former ? FORMER_WORDS : you ? PEOPLE_FILTER_WORDS.ME : actorName(actor);
-    const face = former ? <GLYPH.PEOPLE /> : <ActorMark actor={actor} size={ACTOR_SIZE.INLINE} />;
-    byKey.set(key, { key, label, face, count: 1, named: !former && !you });
-  }
-
-  const rank = (keeper: Keeper) =>
-    keeper.label === PEOPLE_FILTER_WORDS.ME ? 0 : keeper.key === FORMER_KEY ? 2 : 1;
-
-  return [...byKey.values()].sort(
-    (one, other) => rank(one) - rank(other) || one.label.localeCompare(other.label),
-  );
-}
-
-/** Puts `key` in the set or takes it out. */
-function toggled(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
-  const next = new Set(set);
-
-  if (!next.delete(key)) next.add(key);
-
-  return next;
-}
-
-/** The Tasks page's Filter: its glyph alone, named by its tooltip, a dot at its corner while it keeps anything, and Kept by its one field, its keepers listed under it in the menu itself. */
-function KeptByFilter({
-  keepers,
-  kept,
-  onKept,
-}: {
-  keepers: readonly Keeper[];
-  kept: ReadonlySet<string>;
-  onKept: (kept: ReadonlySet<string>) => void;
-}): React.JSX.Element {
-  const menu = useMenu(true);
-
-  const people: MenuAction[] = keepers.map((keeper) => ({
-    label: keeper.label,
-    replayMasked: keeper.named,
-    icon: <>{keeper.face}</>,
-    detail: String(keeper.count),
-    checked: kept.has(keeper.key),
-    stays: true,
-    onSelect: () => onKept(toggled(kept, keeper.key)),
-  }));
-
-  return (
-    <>
-      <CornerDot shown={kept.size > 0}>
-        <Tooltip label={FILTER}>
-          <IconButton icon={<ListFilterIcon />} label={FILTER} {...menu.trigger()} />
-        </Tooltip>
-      </CornerDot>
-      {menu.drawn === undefined ? null : (
-        <ActionMenu
-          label={FILTER}
-          menu={menu.drawn}
-          // Note that Kept by is the filter's one field, so its keepers stand in the menu itself under its heading rather than behind a submenu of their own.
-          heading={KEPT_BY}
-          groups={[people]}
-          replayUnmasked
-          onClose={menu.close}
-        />
-      )}
-    </>
-  );
-}
-
-/** The keeper a chip stands for, by which its chip leaves. */
-const keeperChipKey = (keeper: Keeper): string => keeper.key;
-
-/** The filter's chips and Clear, a chip lifted scaling out where it stood. */
-function KeptByLine({
-  line,
-  keepers,
-  kept,
-  onKept,
-}: {
-  line: React.RefObject<HTMLElement | null>;
-  keepers: readonly Keeper[];
-  kept: ReadonlySet<string>;
-  onKept: (kept: ReadonlySet<string>) => void;
-}): React.JSX.Element | null {
-  // Note that the keepers are read again on every render, so the list the chips leave by is kept until another keeper is kept.
-  const listed = keepers.filter((keeper) => kept.has(keeper.key));
-  const [stable, setStable] = useState(listed);
-
-  const same =
-    stable.length === listed.length &&
-    stable.every(
-      (keeper, at) => keeper.key === listed[at]?.key && keeper.label === listed[at]?.label,
-    );
-
-  if (!same) setStable(listed);
-  const drawn = useLeaving(same ? stable : listed, keeperChipKey);
-
-  if (drawn.length === 0) return null;
-
-  return (
-    <Inline gap={GAP.TIGHT} ref={line} moves>
-      {drawn.map(({ key, value: keeper, leaving }) => {
-        const name = `${KEPT_BY} ${keeper.label === PEOPLE_FILTER_WORDS.ME ? "me" : keeper.label}`;
-
-        return (
-          <Chip
-            key={key}
-            look={CHIP_LOOK.FILTER}
-            motionKey={key}
-            removeLabel={`Remove filter: ${name}`}
-            onRemove={() => {
-              if (!leaving) onKept(toggled(kept, keeper.key));
-            }}
-          >
-            {keeper.face}
-            <ChipName>{name}</ChipName>
-          </Chip>
-        );
-      })}
-      {kept.size === 0 ? null : (
-        <Button variant={BUTTON_VARIANT.QUIET} onClick={() => onKept(new Set())}>
-          Clear
-        </Button>
-      )}
-    </Inline>
-  );
-}
-
-/** What the filter keeps, a chip for each keeper, its × lifting them, and Clear, under a motion that scales a chip in and out (`ListMotion`). */
-function KeptByChips(props: {
-  keepers: readonly Keeper[];
-  kept: ReadonlySet<string>;
-  onKept: (kept: ReadonlySet<string>) => void;
-}): React.JSX.Element {
-  const line = useRef<HTMLElement | null>(null);
-
-  return (
-    <ListMotion root={line} way={LIST_MOTION_WAY.SCALE}>
-      <KeptByLine line={line} {...props} />
-    </ListMotion>
+/** The keepers of `listed` the Saved by filter offers. */
+function keepersOf(listed: readonly ShownMemory[]): readonly FilterPerson[] {
+  return filterPeople(
+    listed.map(({ memory, actor }) => ({ key: keeperKey(memory, actor), actor })),
   );
 }
 
@@ -1115,7 +938,7 @@ function MemoryList({
     <SettingsSection anchor={SETTINGS_SEARCH_ROW.MEMORY} frame={SETTINGS_SECTION_FRAME.NONE}>
       <Stack gap={GAP.SECTION}>
         <Stack gap={GAP.CONTROL}>
-          <div className={SEARCH_LINE}>
+          <SearchLine>
             <SearchField
               label={MEMORY_PAGE_WORDS.SEARCH}
               placeholder="Search memories"
@@ -1125,12 +948,12 @@ function MemoryList({
               onEscape={() => setQuery("")}
               {...(found.length === 0 ? {} : { tally: { count: listed.length } })}
             />
-            <KeptByFilter keepers={keepers} kept={kept} onKept={setKept} />
+            <PeopleFilter field={KEPT_BY} people={keepers} kept={kept} onKept={setKept} />
             <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={editor.add}>
               {ADD_MEMORY}
             </Button>
-          </div>
-          <KeptByChips keepers={keepersOf(all)} kept={kept} onKept={setKept} />
+          </SearchLine>
+          <PeopleFilterChips field={KEPT_BY} people={keepersOf(all)} kept={kept} onKept={setKept} />
           {memories.length === 0 ? null : (
             <Inline justify={JUSTIFY.BETWEEN}>
               <ChoiceBar
