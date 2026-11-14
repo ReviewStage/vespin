@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
+
 /**
- * task-list-collections.test.ts -- the task list's collections fill from the window's first read and take only the rows a delivery moved.
+ * task-list-collections.test.ts -- the task list's collections fill from the window's first read and take only the rows a delivery moved, and a surface reading them by id holds across a delivery moving another task.
  */
 
 import { AGENT_STATUS } from "@repo/features/agent-wire";
@@ -11,7 +13,14 @@ import {
   appStateDelivery,
 } from "@repo/host/app-state";
 import { QueryClient } from "@tanstack/react-query";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  TaskListCollectionsProvider,
+  useNamedTask,
+  useTaskListRows,
+} from "./task-list-collections.js";
 import { fakeAppBridge } from "./testing/app-bridge.js";
 import { stateWith } from "./testing/app-state.js";
 import { listedAgent } from "./testing/tasks-control.js";
@@ -92,6 +101,59 @@ function deliveryBetween(sent: AppStateSnapshot, next: AppStateSnapshot): AppSta
 
 const stops: (() => void)[] = [];
 
+declare global {
+  var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
+}
+
+beforeAll(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+/** What a surface reading the task list by id last drew: the task by its id, the rows' lookup, and the task through it. */
+interface ReadById {
+  readonly named: TaskSummary | undefined;
+  readonly rows: ReturnType<typeof useTaskListRows>;
+  readonly looked: TaskSummary | undefined;
+}
+
+/** Draws a surface over `window`'s collections reading `taskId` by its id, as the shell, the palette, and the Inbox do, `typed` the names being typed; answers what it last drew. */
+async function readingById(
+  window: AppStateFollowing,
+  taskId: string,
+  typed: ReadonlyMap<string, string>,
+): Promise<() => ReadById> {
+  let latest: ReadById | undefined;
+
+  function Surface(): null {
+    const named = useNamedTask(taskId, typed);
+    const rows = useTaskListRows(typed);
+    latest = { named, rows, looked: rows.task(taskId) };
+
+    return null;
+  }
+
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  act(() =>
+    root.render(
+      createElement(TaskListCollectionsProvider, {
+        collections: window.taskList,
+        children: createElement(Surface),
+      }),
+    ),
+  );
+  // Note that the lookup follows the ids it was asked once committed, which the live query then answers.
+  await act(async () => {
+    for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
+  });
+  stops.push(() => act(() => root.unmount()));
+
+  return () => {
+    if (latest === undefined) throw new Error("the surface has not drawn");
+
+    return latest;
+  };
+}
+
 afterEach(() => {
   for (const stop of stops.splice(0)) stop();
 });
@@ -151,5 +213,50 @@ describe("the task list's collections", () => {
     push(deliveryBetween(renamed, documentAt(3, { ...renamed.tasks, tasks: [INVITES, SEARCH] })));
 
     expect(told).toEqual([{ type: "delete", key: BILLING.id }]);
+  });
+});
+
+describe("a surface reading the task list by id", () => {
+  it("is handed the same objects while a delivery moves another task, and the moved row once its own moves", async () => {
+    const first = documentAt(1, LISTED);
+    const { window, push } = await following(first);
+    stops.push(window.stop);
+    const read = await readingById(window, INVITES.id, new Map());
+    const before = read();
+
+    const billingRenamed = documentAt(2, {
+      ...LISTED,
+      tasks: [INVITES, { ...BILLING, name: "Billing" }, SEARCH],
+    });
+
+    await act(async () => push(deliveryBetween(first, billingRenamed)));
+
+    expect(read().named).toBe(before.named);
+    expect(read().rows).toBe(before.rows);
+    expect(read().looked).toBe(before.looked);
+
+    await act(async () =>
+      push(
+        deliveryBetween(
+          billingRenamed,
+          documentAt(3, {
+            ...LISTED,
+            tasks: [{ ...INVITES, name: "Invitations" }, { ...BILLING, name: "Billing" }, SEARCH],
+          }),
+        ),
+      ),
+    );
+
+    expect(read().named?.name).toBe("Invitations");
+    expect(read().looked?.name).toBe("Invitations");
+  });
+
+  it("draws a name being typed over the one listed", async () => {
+    const { window } = await following(documentAt(1, LISTED));
+    stops.push(window.stop);
+    const read = await readingById(window, INVITES.id, new Map([[INVITES.id, "Invites, typed"]]));
+
+    expect(read().named?.name).toBe("Invites, typed");
+    expect(read().looked?.name).toBe("Invites, typed");
   });
 });
