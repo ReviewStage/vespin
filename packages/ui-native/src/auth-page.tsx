@@ -21,6 +21,12 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** The mark's size over the title, in points. */
 const AUTH_MARK_SIZE = 56;
 
+/** How tall the page stands at most, centered on a taller window such as an iPad's, so its buttons stay near its title, as iPadOS's own first screens keep them. */
+const AUTH_TALLEST = 640;
+
+/** A window at least this wide, in points, an iPad's or the open Duo's, holds the page to AUTH_TALLEST; a phone's keeps its buttons at its foot. */
+const WIDE_WINDOW = 700;
+
 /** A window shorter than this, in points, scrolls the page rather than squeezing it between its spacers. */
 const SHORT_WINDOW = 520;
 
@@ -109,7 +115,7 @@ function AuthFoot({
  */
 export function AuthPage({ title, children, error, footnote }: AuthPageProps) {
   // Note that the page scrolls at an accessibility size and on a window too short for it, such as a landscape iPhone's or the folded Duo's, so its foot is never cut off.
-  const { height } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const large = useAccessibilitySize() || height < SHORT_WINDOW;
   useAnnounced(error);
 
@@ -138,15 +144,25 @@ export function AuthPage({ title, children, error, footnote }: AuthPageProps) {
     );
   }
 
+  // Note that the page fills a phone's height, its buttons at the foot, and stands at most AUTH_TALLEST high, centered, on a wide window.
   return (
     <VStack
-      spacing={SPACE.PAGE}
-      modifiers={[...column, frame({ maxHeight: Number.POSITIVE_INFINITY })]}
+      modifiers={[
+        frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+      ]}
     >
-      <Spacer />
-      {head}
-      <Spacer />
-      {foot}
+      <VStack
+        spacing={SPACE.PAGE}
+        modifiers={[
+          ...column,
+          frame({ maxHeight: width >= WIDE_WINDOW ? AUTH_TALLEST : Number.POSITIVE_INFINITY }),
+        ]}
+      >
+        <Spacer />
+        {head}
+        <Spacer />
+        {foot}
+      </VStack>
     </VStack>
   );
 }
