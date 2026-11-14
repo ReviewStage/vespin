@@ -361,12 +361,22 @@ export function standDetailFront(place: SidebarPlace | undefined): void {
   for (const listener of listeners) listener();
 }
 
-/** Whether a page stands pushed over the detail in front, which the menu bar's Back pops, as the column's own Back would. */
-export function useDetailFrontPushed(): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => front !== undefined && stackOf(front).pages.length > 0,
-  );
+/** How the detail in front stands, for the menu bar's Back: no split view in front, its own page alone, or a page pushed over it. */
+export const DETAIL_FRONT = {
+  NONE: "none",
+  ROOT: "root",
+  PUSHED: "pushed",
+} as const;
+
+export type DetailFront = (typeof DETAIL_FRONT)[keyof typeof DETAIL_FRONT];
+
+/** How the detail in front stands, which the menu bar's Back pops only while a page is pushed over it, as the column's own Back would. */
+export function useDetailFront(): DetailFront {
+  return useSyncExternalStore(subscribe, () => {
+    if (front === undefined) return DETAIL_FRONT.NONE;
+
+    return stackOf(front).pages.length > 0 ? DETAIL_FRONT.PUSHED : DETAIL_FRONT.ROOT;
+  });
 }
 
 /** Pops the top page off the detail in front, as its column's Back does; nothing where none is pushed. */
