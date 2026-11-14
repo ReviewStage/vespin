@@ -115,10 +115,15 @@ export function MacAppMentionCard({
   const onMachine = used?.machine?.id === machineId ? used?.machine : undefined;
   const machineName = onMachine?.name ?? listed.find((each) => each.id === machineId)?.name;
 
+  // Note that a chip the `@` list wrote as "<app> on <machine>" heads its card with the app's name alone, the Machine row saying where.
+  const placed = machineName === undefined ? undefined : ` on ${machineName}`;
+
+  const own = placed !== undefined && name.endsWith(placed) ? name.slice(0, -placed.length) : name;
+
   return (
     <MacAppChipCard
-      name={used?.name ?? name}
-      bundleId={used?.bundleId ?? (app === name ? undefined : app)}
+      name={used?.name ?? own}
+      bundleId={used?.bundleId ?? (app === own ? undefined : app)}
       iconSrc={iconSrc}
       machine={
         machineId === undefined || machineName === undefined

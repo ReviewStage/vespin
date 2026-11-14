@@ -6,6 +6,7 @@ import {
 } from "@repo/features/agent-parts";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
+import { machineName, type ThisMac } from "@repo/features/machine-name";
 import { computerCallRefused, computerCursor } from "@repo/features/tool-call-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { AGENT_POINTER_KIND, AppStackPill, AppWindowStack } from "@repo/ui";
@@ -14,6 +15,7 @@ import { MESSAGE_ROLE } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pressMutation } from "../act-mutations.js";
+import { useThisMac } from "../machine-name.js";
 import { useKeptPicture, useKeptPictures, useKeptPictureViewer } from "./agent-pictures.js";
 import { useOnThatMac } from "./computer-permission-note.js";
 import { MacAppChipCard } from "./mac-app-card.js";
@@ -152,6 +154,21 @@ export function appsInUse(
   return { apps, using };
 }
 
+/** What an app's title says: its name, and the machine it is on where another app in use shares its name on another machine ("Simulator on Mac mini"), so the two never read alike. */
+function titleOf(app: ComputerApp, apps: readonly ComputerApp[], thisMac: ThisMac): string {
+  const machine = app.machine;
+  const folded = app.name.toLowerCase();
+
+  const twinned = apps.some(
+    (other) =>
+      other !== app && other.name.toLowerCase() === folded && other.machine?.id !== machine?.id,
+  );
+
+  if (!twinned || machine === undefined) return app.name;
+
+  return `${app.name} on ${machineName({ deviceId: machine.id, name: machine.name }, [], thisMac)}`;
+}
+
 /** Every agent whose stack the reader put down while it worked, this window's session, so it stays down as the tab comes back. */
 const STACKS_DOWN = new Set<string>();
 
@@ -251,6 +268,7 @@ function AppsFloat({
   const float = useRoomTaken(onRoom);
   const { open, viewer } = useKeptPictureViewer();
   const onThatMac = useOnThatMac(agentId);
+  const thisMac = useThisMac();
   const { mutate: showApp } = useMutation(pressMutation(ACT_KIND.MAC_APP_SHOW));
   const [putDown, setPutDown] = useState(() => STACKS_DOWN.has(agentId));
   // Note that the stack is drawn anew as the agent works again (`ComputerDock`), so one the reader brought back once it was done stands only until then.
@@ -286,6 +304,7 @@ function AppsFloat({
   const apps = inUse.apps.map((each, at) => {
     const icon = icons[at];
     const iconSrc = icon?.kind === PICTURE_STATE.READY ? icon.url : undefined;
+    const name = titleOf(each, inUse.apps, thisMac);
 
     const card = (
       <MacAppChipCard
@@ -300,7 +319,7 @@ function AppsFloat({
     return each === front && front.window !== undefined
       ? {
           id: each.id,
-          name: each.name,
+          name,
           iconSrc,
           card,
           window: {
@@ -310,7 +329,7 @@ function AppsFloat({
             pointer: cursor?.app === each.id ? pointer : undefined,
           },
         }
-      : { id: each.id, name: each.name, iconSrc, card };
+      : { id: each.id, name, iconSrc, card };
   });
 
   const putAway = () => {

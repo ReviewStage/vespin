@@ -908,7 +908,7 @@ const OFF_THAT_MAC = {
 } as const;
 
 test.each(Object.values(OFF_THAT_MAC))(
-  "off the Mac the agent's calls go to, in %s, an @ in the box offers the apps the reader's machines always allow, each by the name its machine posted and saying the machines it is allowed on, a pick sent as the app's mention by its bundle id on the one machine that allows it",
+  "off the Mac the agent's calls go to, in %s, an @ in the box offers the apps the reader's machines always allow, one row for each machine that allows an app, each by the name its machine posted and saying its machine, a pick of an app on two sent as the app's mention by its bundle id on that machine, its chip naming the machine",
   async (window) => {
     const sent: string[] = [];
 
@@ -968,7 +968,7 @@ test.each(Object.values(OFF_THAT_MAC))(
       row.querySelector(".ui-combobox-option-detail")?.textContent ?? "",
     ]);
 
-    typeInComposer(container, "slack");
+    typeInComposer(container, "notes");
     await settle();
     pressInComposer(container, "Enter");
     await settle();
@@ -977,11 +977,12 @@ test.each(Object.values(OFF_THAT_MAC))(
 
     assert.deepEqual(rows, [
       ["Computer", ""],
-      ["Notes", "Always allowed on Studio, Laptop"],
-      ["Slack", "Always allowed on Studio"],
+      ["Notes", "Laptop"],
+      ["Notes", "Studio"],
+      ["Slack", "Studio"],
     ]);
     assert.deepEqual(sent, [
-      `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.tinyspeck.slackmacgap", machine: STUDIO_ID }, "Slack", PLACE)}`,
+      `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.Notes", machine: LAPTOP_ID }, "Notes on Laptop", PLACE)}`,
     ]);
   },
 );
