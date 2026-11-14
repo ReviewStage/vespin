@@ -658,6 +658,7 @@ function ThreadDetail({
     ...message,
     writer: {
       ...message.writer,
+      id: message.writer.userId,
       picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
       harness: message.writer.agent ? harness : undefined,
     },
