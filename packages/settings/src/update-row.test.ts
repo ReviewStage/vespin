@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { type RunningBuild, UPDATE_FAILURE, UPDATE_STATUS, type UpdateSnapshot } from "./update.js";
-import { UPDATE_ROW_ACTION, updateInSidebar, updateRow } from "./update-row.js";
+import { UPDATE_ROW_ACTION, updateInSidebar, updateNeededRow, updateRow } from "./update-row.js";
 
 const RELEASE: RunningBuild = { packaged: true };
 
@@ -177,5 +177,13 @@ test("a packaged build that cannot install itself keeps the way to the releases 
   const row = updateRow(UNINSTALLABLE_IDLE, RELEASE);
   assert.equal(row.title, "Version 0.11.0");
   assert.equal(row.action, UPDATE_ROW_ACTION.GET);
+  assert.equal(row.current, false);
+});
+
+test("while the service refuses the build, one the updater found current says no newer release is out and offers to check again", () => {
+  const row = updateNeededRow(supported({ status: UPDATE_STATUS.IDLE, upToDate: true }), RELEASE);
+
+  assert.equal(row.detail, "No newer release is out yet");
+  assert.equal(row.action, UPDATE_ROW_ACTION.CHECK);
   assert.equal(row.current, false);
 });

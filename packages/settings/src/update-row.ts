@@ -224,3 +224,16 @@ export function updateRow(update: UpdateSnapshot, build: RunningBuild): UpdateRo
 
   return { title: versionTitle(update, build), ...releaseRow(update) };
 }
+
+/**
+ * What the update row says where the service refuses this build as older
+ * than it serves (`network.updateNeeded`): the same row, but that a build the
+ * updater found current is no news there, since the service refuses it all
+ * the same. No release newer than it is out yet, so the row says so and
+ * offers to check again.
+ */
+export function updateNeededRow(update: UpdateSnapshot, build: RunningBuild): UpdateRow {
+  const row = updateRow(update, build);
+
+  return row.current ? { ...row, detail: "No newer release is out yet", current: false } : row;
+}

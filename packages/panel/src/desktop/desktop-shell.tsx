@@ -107,6 +107,7 @@ import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
 import { homeTaskCardOf } from "./task-card.js";
 import { awayBack } from "./task-pane-switcher.js";
 import { TasksPagesHeld } from "./tasks-page-held.js";
+import { UpdateNeeded, useUpdateNeeded } from "./update-needed.js";
 import { useWindowTitle } from "./window-title.js";
 
 /** What stands while the Tasks page's chunk loads: its frame and title over quiet blocks, and its own way out, so Escape closes the page rather than reaching the plan behind it. */
@@ -1145,6 +1146,8 @@ export function ShellPlaces(): React.JSX.Element {
   const inboxOpen = bar.inbox.open;
   const boardOpen = bar.place === ROUTED_PLACE.BOARD;
   const inboxItemShown = bar.inbox.chosen !== undefined;
+  // While the service refuses this build, the work's place says so and offers the update; Settings stays, to reach the account and the build.
+  const updateNeeded = useUpdateNeeded() && tab !== PANEL_TAB.SETTINGS;
 
   // A phone's task is headed by a row of its own, whose ⋯ stands for the panel's toggle (`task-pane-switcher.tsx`).
   const panelToggle =
@@ -1193,15 +1196,19 @@ export function ShellPlaces(): React.JSX.Element {
         data-inbox-shown={String(inboxOpen)}
       >
         {/* A chip of an agent off its task's page names its model and its starter as the agent's tab does. */}
-        <MentionedAgents value={mentionedAgents}>
-          <ChipCards value={chipCards}>
-            <Outlet />
-          </ChipCards>
-        </MentionedAgents>
+        {updateNeeded ? (
+          <UpdateNeeded updates={settings.updates} />
+        ) : (
+          <MentionedAgents value={mentionedAgents}>
+            <ChipCards value={chipCards}>
+              <Outlet />
+            </ChipCards>
+          </MentionedAgents>
+        )}
         {/* Note that the Inbox kept stands after the place shown, so a lookup of the place's first box finds the place's,
             and beside every place's route rather than in one, so another place standing, Admin, the Board, or a person's
             page, lets go of nothing it held; its own route draws nothing in the `Outlet` (`InboxPlace`). */}
-        {inboxOpen || inboxKept ? (
+        {!updateNeeded && (inboxOpen || inboxKept) ? (
           <KeptPage shown={inboxOpen} chipCards={chipCards} mentionedAgents={mentionedAgents}>
             <DesktopInbox tasks={tasks} room={room} phoneStart={phoneAccount} />
           </KeptPage>
