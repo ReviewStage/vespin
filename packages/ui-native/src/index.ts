@@ -119,6 +119,7 @@ export {
 export {
   NO_WRITES,
   newestValue,
+  takesRowBack,
   type WriteSent,
   type WritesBook,
   writeSent,
