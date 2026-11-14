@@ -5,6 +5,7 @@ import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { VERB } from "@repo/features/words";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  BUTTON_LOOK,
   DetailPage,
   EmptyState,
   GLYPH,
@@ -27,6 +28,7 @@ const PAGE_WORDS = {
   READING: "Reading the page",
   FAILED: "The page could not be read.",
   MORE: "More",
+  TRY_AGAIN: "Try again",
 } as const;
 
 /** The page's address on vespin.dev, under its workspace and its task; none until both are read. */
@@ -74,7 +76,7 @@ export function PageScreen({
   readonly inColumn?: boolean | undefined;
 }) {
   useSurfaceOpen(PRODUCT_SURFACE.PAGE, pageId);
-  const read = usePageHtml(taskId, pageId, version);
+  const { read, again } = usePageHtml(taskId, pageId, version);
   const address = usePageAddress(workspaceId, taskId, pageId);
   const named = "title" in read && read.title !== "" ? read.title : title;
 
@@ -83,6 +85,11 @@ export function PageScreen({
       title={"failed" in read ? PAGE_WORDS.FAILED : PAGE_WORDS.READING}
       symbol={"failed" in read ? GLYPH.FAILED : GLYPH.PAGE}
       loading={!("failed" in read)}
+      action={
+        "failed" in read
+          ? { label: PAGE_WORDS.TRY_AGAIN, onPress: again, look: BUTTON_LOOK.BORDERED }
+          : undefined
+      }
     />
   );
 
