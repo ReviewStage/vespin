@@ -54,6 +54,8 @@ export const PRESS_SIZE = 44;
 export const RADIUS = {
   CARD: 14,
   TAG: 6,
+  /** A message's picture, recording, file chip, and a decide option's tile, one corner for all of them, as Messages rounds every photo and attachment alike. */
+  MEDIA: 12,
   /** A sidebar row's selection, a rounded fill set in from the sidebar's edges, as Mail's selected mailbox stands. */
   SIDEBAR_ROW: 10,
 } as const;

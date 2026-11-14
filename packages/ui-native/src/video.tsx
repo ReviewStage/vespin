@@ -12,7 +12,7 @@ import { MediaFailed } from "./media-failed.js";
 import { type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
-import { SPACE } from "./tokens/space.js";
+import { RADIUS, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
 
 /** What a video says where the system's player cannot play it, such as a WebM, which iOS's player has no reader for. */
@@ -28,7 +28,7 @@ const OPENS_IN_SAFARI = "Opens the video in Safari";
 const OPEN_IN_SAFARI = "Open in Safari";
 
 const styles = StyleSheet.create({
-  frame: { width: "100%", borderRadius: 8, overflow: "hidden" },
+  frame: { width: "100%", borderRadius: RADIUS.MEDIA, overflow: "hidden" },
   unplayable: {
     alignItems: "center",
     justifyContent: "center",
