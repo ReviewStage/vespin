@@ -1,4 +1,4 @@
-== bundle A base 8670821380
+== bundle A base 2beab692c4
 Auto-merging apps/mobile/src/screens/start-screens.tsx
 CONFLICT (content): Merge conflict in apps/mobile/src/screens/start-screens.tsx
 Auto-merging apps/mobile/src/screens/task-screens.tsx
@@ -8,6 +8,7 @@ Automatic merge failed; fix conflicts and then commit the result.
 Auto-merging apps/mobile/src/app/_layout.tsx
 Auto-merging packages/ui-native/AGENTS.md
 Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/workspace-switcher.tsx
   merged #8992 b160d51ae9
 Auto-merging packages/ui-native/src/transcript.tsx
   merged #9007 6f116e0409
@@ -52,7 +53,7 @@ Auto-merging packages/ui-native/src/composer.tsx
   merged #9066 8d5cac158b
   merged #9080 b18b2728d6
   merged #8694 4ad87091d1
-  built f720e911d6
+  built 078183288c2
   install 0
   export 0
   signed 0
