@@ -18,13 +18,7 @@
  * caches for its chip to open.
  */
 
-import {
-  ATTACHMENT_VIEW,
-  attachmentText,
-  attachmentView,
-  linesLabel,
-  sizeLabel,
-} from "@repo/features/attachment-model";
+import { ATTACHMENT_VIEW, attachmentView, chipSize } from "@repo/features/attachment-model";
 import type { DescriptionBlock } from "@repo/features/description-blocks";
 import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
 import {
@@ -37,9 +31,10 @@ import {
   type DescriptionCommentFile,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
+import { markersAsNames } from "@repo/features/file-marker";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { COMMENT_SUBJECT } from "@repo/features/tasks-view";
+import { COMMENT_SUBJECT, TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { BUZZ, THREAD_MEDIA, type ThreadMedia, type ThreadMessage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -61,10 +56,11 @@ const SOMEONE = "Someone";
 /** The prefix a comment's file is written under in the app's caches. */
 const COMMENT_MEDIA_PREFIX = "comment";
 
-/** One file of a comment as read: what it is drawn from, or `null` where it could not be read, and its size in words once read. */
+/** One file of a comment as read: what it is drawn from, or `null` where it could not be read, its size in words once read, and whether it is gone for good, which no Try again brings back. */
 interface CommentFileRead {
   readonly source: string | null;
   readonly size: string | undefined;
+  readonly gone?: boolean | undefined;
 }
 
 /** A thread's files as read, by the attachment each is kept under. */
@@ -85,21 +81,6 @@ function pictured(file: DescriptionCommentFile): boolean {
     attachmentView({ name: file.name, mediaType: file.mediaType, url: "" }) ===
     ATTACHMENT_VIEW.IMAGE
   );
-}
-
-/** A text file's count of lines, as the panel's chip says it, or its bytes where they are no text the system reads, as the panel's says then. */
-function sizeOf(file: DescriptionCommentFile, base64: string): string {
-  if (
-    attachmentView({ name: file.name, mediaType: file.mediaType, url: "" }) !== ATTACHMENT_VIEW.TEXT
-  ) {
-    return sizeLabel(base64);
-  }
-
-  try {
-    return linesLabel(attachmentText(base64));
-  } catch {
-    return sizeLabel(base64);
-  }
 }
 
 /** What a comment's file is drawn from once its bytes land: a picture's `data:` address, or any other file's address under the app's caches. */
@@ -210,7 +191,9 @@ function commentMedia(entry: DescriptionCommentEntry, media: CommentMedia): read
   return (entry.files ?? []).map((file): ThreadMedia => {
     const key = file.attachmentId;
     const read = media.readOf(key);
-    const onRetry = read?.source === null ? () => media.retry(key) : undefined;
+
+    const onRetry =
+      read?.source === null && read.gone !== true ? () => media.retry(key) : undefined;
 
     return pictured(file)
       ? { kind: THREAD_MEDIA.PICTURE, key, source: read?.source, alt: file.name, onRetry }
@@ -237,7 +220,8 @@ export function threadMessages(
     id: entry.id,
     writer: writerOf(entry, agentNames, pictureOf),
     at: entry.at,
-    words: entry.words ?? "",
+    // Note that a marker naming one of its files is said as the file's name, since the file stands as its own picture or chip after the words.
+    words: markersAsNames(entry.words ?? ""),
     typed: entry.writer.actor === DESCRIPTION_COMMENT_ACTOR.MEMBER,
     media: commentMedia(entry, media),
   }));
@@ -248,8 +232,10 @@ export function threadMessages(
  * the page stands, as the panel reads a comment's (`TASKS_PICTURE_READ`):
  * a picture drawn from its bytes, any other file written under the app's
  * caches, which its chip opens and shares. One the service answers is not
- * there, or that got no answer, stands unread with Try again, which asks
- * for it anew. Note that a read that lands once the page left is dropped.
+ * there stands unread for good, as a description's picture does
+ * (`useDescriptionPictures`), and one that got no answer stands unread with
+ * Try again, which asks for it anew. Note that a read that lands once the
+ * page left is dropped.
  */
 export function useCommentMedia(
   taskId: string | undefined,
@@ -285,8 +271,16 @@ export function useCommentMedia(
 
       acts[ACT_KIND.TASKS_PICTURE_READ]({ planId: taskId, attachmentId: id })
         .then(async (answer) => {
+          // Note that a file the service says is not there stays so, while one that got no answer offers Try again.
+          if (!("base64" in answer) && answer.failure === TASK_CALL_FAILURE.NOT_FOUND) {
+            landed(id, { source: null, size: undefined, gone: true });
+
+            return;
+          }
+
           if (!("base64" in answer)) throw new Error(`The file was not read: ${answer.failure}.`);
-          landed(id, { source: await sourceOf(file, answer), size: sizeOf(file, answer.base64) });
+          const chip = { name: file.name, mediaType: file.mediaType, url: "" };
+          landed(id, { source: await sourceOf(file, answer), size: chipSize(chip, answer.base64) });
         })
         .catch((cause: unknown) => {
           console.error("A comment's file was not read.", cause);
