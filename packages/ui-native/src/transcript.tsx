@@ -447,6 +447,8 @@ function OriginFrom({
 /** A webhook call's body under the prompt it rode in with, folded under its own line, as the caller sent it. */
 function OriginBody({ body }: { readonly body: string }) {
   const colors = useColors();
+  const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const column = useScaledSize(MARK_SIZE.GLYPH);
   const [open, setOpen] = useState(false);
 
   return (
@@ -461,9 +463,9 @@ function OriginBody({ body }: { readonly body: string }) {
       >
         <SymbolView
           name={open ? "chevron.down" : "chevron.right"}
-          size={MARK_SIZE.GLYPH - 3}
+          size={chevron}
           tintColor={colors.TEXT_MUTED}
-          style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
+          style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
         <Text style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
@@ -484,6 +486,8 @@ function FoldRow({
   readonly onToggle: (item: TranscriptItem) => void;
 }) {
   const colors = useColors();
+  const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const column = useScaledSize(MARK_SIZE.GLYPH);
   const large = useAccessibilitySize();
 
   const heard = [
@@ -505,9 +509,9 @@ function FoldRow({
       >
         <SymbolView
           name={glyphSymbol(item.open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
-          size={MARK_SIZE.GLYPH - 3}
+          size={chevron}
           tintColor={colors.TEXT_MUTED}
-          style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
+          style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
         <Text
@@ -564,6 +568,8 @@ function TranscriptRow({
 }) {
   const colors = useColors();
   const large = useAccessibilitySize();
+  const pageMark = useScaledSize(MARK_SIZE.WRITER);
+  const pageChevron = useScaledSize(MARK_SIZE.GLYPH - 3);
 
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID:
@@ -681,7 +687,7 @@ function TranscriptRow({
           >
             <SymbolView
               name={glyphSymbol(GLYPH.PAGE)}
-              size={MARK_SIZE.WRITER}
+              size={pageMark}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
@@ -698,7 +704,7 @@ function TranscriptRow({
             </View>
             <SymbolView
               name={glyphSymbol(GLYPH.FOLDED)}
-              size={MARK_SIZE.GLYPH - 3}
+              size={pageChevron}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
@@ -764,6 +770,9 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
     .filter((each) => each !== undefined && each !== "")
     .join(" · ");
 
+  const failedMark = useScaledSize(MARK_SIZE.GLYPH);
+  const modelChevron = useScaledSize(MARK_SIZE.GLYPH - 4);
+
   // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Finished or Failed, since the reader may stand anywhere in the transcript.
   useAnnounced(words);
 
@@ -777,7 +786,7 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
       ) : state === GLYPH_STATE.FAILED ? (
         <SymbolView
           name={glyphSymbol(GLYPH.FAILED)}
-          size={MARK_SIZE.GLYPH}
+          size={failedMark}
           tintColor={colors.DANGER}
           accessibilityElementsHidden
         />
@@ -797,7 +806,7 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
           <Text style={ink}>{model}</Text>
           <SymbolView
             name={glyphSymbol(GLYPH.UNFOLDED)}
-            size={MARK_SIZE.GLYPH - 4}
+            size={modelChevron}
             weight="semibold"
             tintColor={colors.TEXT_MUTED}
             accessibilityElementsHidden

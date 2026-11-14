@@ -13,7 +13,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { APPROVAL_PRESS_WORDS, DENIES_WAITING } from "@repo/features/agent-approval-model";
 import { APPROVAL_ANSWER } from "@repo/features/agent-approval-wire";
-import { useAccessibilitySize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { AskNote } from "./ask-card.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, glyphImage } from "./glyph.js";
@@ -179,13 +179,14 @@ type HeldCallBannerProps = Pick<HeldCall, "answering" | "note" | "onAnswer"> & {
 export function HeldCallBanner({ waiting, asks, answering, note, onAnswer }: HeldCallBannerProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
+  const hand = useScaledSize(MARK_SIZE.GLYPH);
 
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       <HStack spacing={SPACE.ROW}>
         <Image
           {...glyphImage(GLYPH.ASK_FIRST)}
-          size={MARK_SIZE.GLYPH}
+          size={hand}
           color={colors.ATTENTION}
           modifiers={[accessibilityHidden()]}
         />
