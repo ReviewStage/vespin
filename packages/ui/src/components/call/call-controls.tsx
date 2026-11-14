@@ -1,5 +1,5 @@
 /**
- * call-controls.tsx -- a call's controls: Talk, which starts one; its two mutes; Stop, while the agent works; the one red End call; the composer's row of them; and the bar that lays the mutes and End call out beside the call's status.
+ * call-controls.tsx -- a call's controls: Talk, which starts one; its two mutes; the one red End call; the composer's row of them; and the bar that lays the mutes and End call out beside the call's status.
  *
  * Every place a call is steered from draws these, so a mute and the way to
  * hang up wear the same words, glyphs, and colors wherever they stand. Each
@@ -8,10 +8,10 @@
  * voice are the owner's. End call is the one red control, on the danger fill
  * with the hang-up glyph (`GLYPH.END_CALL`), because ending a call cannot be
  * undone; a mute is quiet while off and lit in neutral gray while on, its
- * glyph struck through, since muting is no failure. Stop, which stops the
- * agent's turn and leaves the call up, is quiet, wearing Stop's glyph as the
- * composer's Stop does. No mute names a chord, since the app has no chord
- * for one.
+ * glyph struck through, since muting is no failure. No call control stops
+ * the agent's turn: End call hangs up and leaves the agent working, and the
+ * agent's own Stop stops it. No mute names a chord, since the app has no
+ * chord for one.
  */
 
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -57,7 +57,6 @@ export const CALL_CONTROL_LABEL = {
   UNMUTE_MICROPHONE: "Unmute microphone",
   MUTE_SPEAKER: "Mute speaker",
   UNMUTE_SPEAKER: "Unmute speaker",
-  STOP_AGENT: "Stop",
   END_CALL: "End call",
 } as const;
 
@@ -233,25 +232,6 @@ export function CallMute({
   );
 }
 
-/**
- * Stop: stops the agent's turn, the call staying up; quiet and round,
- * wearing Stop's glyph. Only the call bar draws it, since an agent's
- * composer has its own Stop in Send's place.
- */
-export function StopAgentButton({ onPress }: { onPress: () => void }): React.JSX.Element {
-  return (
-    <Tooltip label={CALL_CONTROL_LABEL.STOP_AGENT}>
-      <IconButton
-        variant={BUTTON_VARIANT.QUIET}
-        corners={BUTTON_CORNERS.ROUND}
-        icon={<GLYPH.STOP />}
-        label={CALL_CONTROL_LABEL.STOP_AGENT}
-        onClick={onPress}
-      />
-    </Tooltip>
-  );
-}
-
 /** End call: the one red control, round, wearing the hang-up glyph, wherever a call is steered from. */
 export function EndCallButton({ onPress }: { onPress: () => void }): React.JSX.Element {
   return (
@@ -394,8 +374,8 @@ function CallStatusLine({
 
 /**
  * The strip of a call's controls, laid out the way a composer's own are:
- * the call's line at the left, and at the right Stop while the agent works,
- * then the speaker and microphone mutes, round, each struck through and lit
+ * the call's line at the left, and at the right the speaker and
+ * microphone mutes, round, each struck through and lit
  * while on, and End call beside them, apart from both so muting never hangs
  * up. A narrow bar stacks its line over its controls (`STATUS`).
  */
@@ -404,7 +384,6 @@ export function CallBar({
   microphone,
   speaker,
   levels,
-  onStop,
   onEnd,
   titled = false,
 }: {
@@ -414,8 +393,6 @@ export function CallBar({
   speaker: CallMuteState;
   /** The call's levels, which ring the mutes as each voice speaks; none draws them still. */
   levels?: CallLevels | undefined;
-  /** Stops the agent's turn; drawn only while the status says the agent works. */
-  onStop: () => void;
   onEnd: () => void;
   /** Whether the agent's command carries its whole words as the system's hint, where no tooltip fits. */
   titled?: boolean | undefined;
@@ -424,7 +401,6 @@ export function CallBar({
     <footer className={BAR}>
       <CallStatusLine status={status} titled={titled} />
       <div className={CONTROLS}>
-        {status?.agent === undefined ? null : <StopAgentButton onPress={onStop} />}
         <div className={MUTES}>
           <CallMute
             device={CALL_DEVICE.SPEAKER}

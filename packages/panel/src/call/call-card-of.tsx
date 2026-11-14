@@ -19,7 +19,6 @@ import { ActorMark } from "../actor-ref.js";
 export interface CallCardPresses {
   readonly setMicrophoneMuted: (muted: boolean) => void;
   readonly setSpeakerMuted: (muted: boolean) => void;
-  readonly stop: () => void;
   readonly end: () => void;
   /** Opens the call's agent. */
   readonly open: () => void;
@@ -72,7 +71,6 @@ export function callCardOf(call: StandingCall, presses: CallCardPresses): CallCa
       onPress: () => presses.setSpeakerMuted(!call.speakerMuted),
     },
     onReturn: presses.open,
-    onStop: presses.stop,
     onEnd: presses.end,
   };
 }
