@@ -2715,6 +2715,7 @@ it.effect(
         pool,
         draw: ({ taskAgents }) => void drawn.push(taskAgents),
         txWait: () => undefined,
+        readAgain: () => Effect.succeed(undefined),
       });
 
       yield* list.answer({ plans: [], agents: [{ ...agentListRow(TASK_ID, NOW), id: AGENT_ID }] });
