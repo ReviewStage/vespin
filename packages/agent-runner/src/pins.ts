@@ -105,8 +105,8 @@ export const RUNNER_UNIT = {
  * sandbox's architecture.
  */
 export const CLAUDE_CODE_PIN = {
-  SDK_VERSION: "0.3.322",
-  VERSION: "2.1.322",
+  SDK_VERSION: "0.3.323",
+  VERSION: "2.1.323",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/claude-agent-sdk`,
   /** The binary, under `DIRECTORY`. */
   BINARY: "node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude",
@@ -235,7 +235,7 @@ export const NODE_MAC_PIN: AgentToolPin = {
  * repository check (`tools/oxlint/vespin/guards/agent-pins.ts`) until each
  * pin's address, size, and digests are read off the new release too.
  */
-const HOST_CLI_VERSION = { CLAUDE_CODE: "0.3.322", CODEX: "0.167.2", GH: "2.103.3" } as const;
+const HOST_CLI_VERSION = { CLAUDE_CODE: "0.3.323", CODEX: "0.167.2", GH: "2.103.3" } as const;
 
 /**
  * Claude Code on a Mac host, This Mac's among them: the macOS arm64 build of
@@ -246,13 +246,13 @@ export const CLAUDE_CODE_MAC_PIN: AgentToolPin = {
   NAME: "claude",
   VERSION: HOST_CLI_VERSION.CLAUDE_CODE,
   ARCHIVE: `https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-darwin-arm64/-/claude-agent-sdk-darwin-arm64-${HOST_CLI_VERSION.CLAUDE_CODE}.tgz`,
-  SHA256: "7b0c90817ff94002578389efd5280337cde9ecfc43115fc0f76d64ac4e6db128",
-  BYTES: 147_737_860,
+  SHA256: "d29b6cb2f55f6badf5329e681981e870ebad6b88fa0d8f825398d4c49a671ee5",
+  BYTES: 156_510_393,
   ROOT: "package",
   MEMBERS: ["claude"],
   BINARY: "claude",
   TEAM: "Q6L2SF6YDW",
-  FILES: { claude: "a9d237949db816a0b7afd88a9a8e1df36b3a597a30f5a41d1c0539eb180a3450" },
+  FILES: { claude: "5432918d904a9b6afef7bb79d20df24d76052eabc1f41bceb84091d21f8889a7" },
 };
 
 /**
@@ -298,23 +298,23 @@ export const CLAUDE_CODE_LINUX_PINS: LinuxToolPins = {
     NAME: "claude",
     VERSION: HOST_CLI_VERSION.CLAUDE_CODE,
     ARCHIVE: `https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-x64/-/claude-agent-sdk-linux-x64-${HOST_CLI_VERSION.CLAUDE_CODE}.tgz`,
-    SHA256: "cc294a64eacb94472983ba3912612ceecf97c0bf9372027fc94485c89e4594e2",
-    BYTES: 159_262_449,
+    SHA256: "48792c334671859b1252b2b481e5589cf9b19c4a691017effe10565325f27d00",
+    BYTES: 167_493_942,
     ROOT: "package",
     MEMBERS: ["claude"],
     BINARY: "claude",
-    FILES: { claude: "bfb3703ad5380242328459bc62ada4bde8ae7ba57c6e1eeadb9c00e08874c478" },
+    FILES: { claude: "604d29a6869409106b6a1110bdadcc8b72e8654a5a865d23258f938a696e348e" },
   },
   arm64: {
     NAME: "claude",
     VERSION: HOST_CLI_VERSION.CLAUDE_CODE,
     ARCHIVE: `https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-arm64/-/claude-agent-sdk-linux-arm64-${HOST_CLI_VERSION.CLAUDE_CODE}.tgz`,
-    SHA256: "5344081b93b8e03ca2a9af70eedae3319e4752460f00b5868c657c61e1b15385",
-    BYTES: 160_278_104,
+    SHA256: "2633c50e24d73d9f58f46a7991a16afa49d6407490610c28e9500bd5a983e342",
+    BYTES: 168_540_565,
     ROOT: "package",
     MEMBERS: ["claude"],
     BINARY: "claude",
-    FILES: { claude: "f220ca50ea4f3222043ff83cc224a1262e0196e9897acc0871efa94235b0c1fd" },
+    FILES: { claude: "452dddff140b5caf00a5410333a3d6db82c73ea2dec74b1541fae18e97d47dca" },
   },
 };
 
