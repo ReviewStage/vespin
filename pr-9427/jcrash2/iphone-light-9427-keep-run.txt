@@ -1,0 +1,32 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow rkeep
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Tap on "New task", Index: 0... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on id: new-task-words... COMPLETED
+Input text draft... COMPLETED
+Take screenshot ${P}-1-drafted...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Tap on "Cancel"... COMPLETED
+Assert that "Discard draft" is visible... COMPLETED
+Take screenshot ${P}-2-ask... COMPLETED
+Tap on "Cancel", Left of "Discard draft"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Discard draft" is not visible... COMPLETED
+Assert that "draft" is visible... COMPLETED
+Take screenshot ${P}-3-kept... COMPLETED
+Tap on "Cancel"... COMPLETED
+Assert that "Discard draft" is visible... COMPLETED
+Take screenshot ${P}-4-ask-again... COMPLETED
+Tap on "Discard draft"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Assert that id: new-task-words is not visible... COMPLETED
+Take screenshot ${P}-5-inbox... COMPLETED
