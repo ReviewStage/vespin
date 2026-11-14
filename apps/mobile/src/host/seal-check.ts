@@ -150,15 +150,25 @@ function runSealCheck(): void {
     }),
   ];
 
-  const big = rows(TIMED_BYTES);
-  const size = megabytes(new TextEncoder().encode(big).length);
-  const [nobleSealed, nobleSeal] = timed(() => Base64.encode(noble.encrypt(big)));
-  const [, nobleOpen] = timed(() => noble.decrypt(Result.getOrThrow(Base64.decode(nobleSealed))));
-  const [nativeSealed, nativeSeal] = timed(() => sealText?.(big) ?? "");
-  const [, nativeOpen] = timed(() => openText?.(nativeSealed));
-  logLine(`${size} MB seal: noble and Base64 ${nobleSeal} ms, native ${nativeSeal} ms`);
-  logLine(`${size} MB open: noble and Base64 ${nobleOpen} ms, native ${nativeOpen} ms`);
+  // Note that a timing that throws is logged as a failure rather than stopping the launch, so the check's key is still deleted.
+  const timings = checked("1 MB sealed and opened both ways for the timings", () => {
+    const big = rows(TIMED_BYTES);
+    const size = megabytes(new TextEncoder().encode(big).length);
+    const [nobleSealed, nobleSeal] = timed(() => Base64.encode(noble.encrypt(big)));
 
+    const [nobleOpened, nobleOpen] = timed(() =>
+      noble.decrypt(Result.getOrThrow(Base64.decode(nobleSealed))),
+    );
+
+    const [nativeSealed, nativeSeal] = timed(() => sealText?.(big) ?? "");
+    const [nativeOpened, nativeOpen] = timed(() => openText?.(nativeSealed));
+    logLine(`${size} MB seal: noble and Base64 ${nobleSeal} ms, native ${nativeSeal} ms`);
+    logLine(`${size} MB open: noble and Base64 ${nobleOpen} ms, native ${nativeOpen} ms`);
+
+    return nobleOpened === big && nativeOpened === big;
+  });
+
+  results.push(timings);
   const failed = results.filter((passed) => !passed).length;
   SecureStore.deleteItemAsync(CHECK_KEY_ITEM, KEYCHAIN_OPTIONS).then(
     () => logLine(`DONE ${results.length - failed} passed, ${failed} failed; check key deleted`),
