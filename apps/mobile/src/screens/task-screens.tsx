@@ -85,6 +85,7 @@ import {
   type ListLook,
   ListSection,
   menuWithout,
+  NoSelection,
   PATH_PART,
   RelationRow,
   ROW_ACTION_TONE,
@@ -154,7 +155,7 @@ import {
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, type SidebarTasks, useListColumn, useListLook } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, type SidebarTasks, useListColumn } from "./app-sidebar.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -1757,8 +1758,8 @@ function OverviewPage({
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
-      ) : document === undefined || document.document.body.trim() === "" ? null : (
-        <OverviewDescription overview={overview} body={document.document.body} />
+      ) : document === undefined || document.description.body.trim() === "" ? null : (
+        <OverviewDescription overview={overview} body={document.description.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
     </RowList>
@@ -1849,7 +1850,6 @@ function TasksSplitScreen({
   const read = useTasksRead();
   const archiveAsk = useAgentArchiveAsk();
   const threeColumns = useThreeColumns();
-  const look = useListLook();
   const picked = useTasksCollection();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
@@ -1862,7 +1862,7 @@ function TasksSplitScreen({
     view: (
       <TasksTree
         listing={listing}
-        look={look}
+        look={LIST_LOOK.PLAIN}
         search={search}
         collection={collection}
         selected={selected}
@@ -1885,7 +1885,7 @@ function TasksSplitScreen({
         onArchiveAgent={archiveAsk.archive}
       />
     ) : selected === undefined ? (
-      <EmptyState title={SELECT_A_TASK} symbol={GLYPH.TASK} />
+      <NoSelection title={SELECT_A_TASK} />
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (

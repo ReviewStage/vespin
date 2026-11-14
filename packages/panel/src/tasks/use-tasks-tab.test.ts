@@ -166,7 +166,7 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: null,
-  document: { body: "# Teammate invitations", assumptions: [] },
+  description: { body: "# Teammate invitations", assumptions: [] },
 };
 
 const OPEN: TasksView = {
@@ -3617,7 +3617,7 @@ test("an agent profile opens its task on the agent it stages, beside the agent's
 
 /** The task as the list names it. */
 function listed(): TasksView["tasks"][number] {
-  const { document: _document, ...summary } = TASK;
+  const { description: _document, ...summary } = TASK;
 
   return summary;
 }
@@ -4828,7 +4828,7 @@ test("a task opened is timed from the press to its document drawn ready, and one
       {
         name: PANEL_SPAN.TASK_OPEN,
         waited: 650,
-        attributes: { [PANEL_SPAN_ATTRIBUTE.DESCRIPTION_CHARS]: TASK.document.body.length },
+        attributes: { [PANEL_SPAN_ATTRIBUTE.DESCRIPTION_CHARS]: TASK.description.body.length },
       },
     ],
   );

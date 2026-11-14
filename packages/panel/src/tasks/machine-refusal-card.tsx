@@ -32,8 +32,8 @@ import { workspaceToolsQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { showToast } from "../toast.js";
-import { MachineGlyph } from "./agent-machines.js";
 import { TranscriptAgent } from "./line-cards.js";
+import { MachineGlyph } from "./workspace-machines.js";
 
 /**
  * machine-refusal-card.tsx -- why a terminal command or an action on an app reached no machine, said under its row, with each machine that could take it offered as the agent's new default.
@@ -119,6 +119,8 @@ function WhyWords({
       );
     case MACHINE_UNREACHED.COMMANDS_NEVER:
       return <>{name ?? "The machine"} doesn't let agents run terminal commands.</>;
+    case MACHINE_UNREACHED.APPS_OFF:
+      return <>{name ?? "The machine"} doesn't let agents use apps.</>;
     case MACHINE_UNREACHED.DEFAULT_GONE:
       return "This agent's default machine was removed, or its owner no longer lets this task's agents use it.";
     case MACHINE_UNREACHED.UNKNOWN_MACHINE:
@@ -235,7 +237,9 @@ export function MachineRefusalCard({
             variant={BUTTON_VARIANT.OUTLINE}
             icon={
               <MachineGlyph
-                online={listing?.find((listed) => listed.id === machine.id)?.online ?? true}
+                machine={{
+                  online: listing?.find((listed) => listed.id === machine.id)?.online ?? true,
+                }}
               />
             }
             {...(pressed?.id === machine.id && !pressed.moved

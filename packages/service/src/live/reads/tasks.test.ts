@@ -21,6 +21,7 @@ import {
 import { devicesNamed, registerDevice } from "@repo/database/models/device-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { addTaskBlock } from "@repo/database/models/task-block-store";
+import { listTasksFollowersNamed } from "@repo/database/models/task-follower-store";
 import {
   assignUnassignedTaskCommitted,
   beginTaskWorkCommitted,
@@ -60,7 +61,13 @@ import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { agentsOfTask, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import {
   agentPullRequestsOfLiveRows,
+  SETTLED_PAGE_SIZE,
+  type SettledPageCursor,
+  settledPageCursorOf,
   TASK_LIST_READ,
+  TASK_PAGE_READ,
+  TASK_ROWS_READ,
+  TASK_SEARCH_READ,
   taskAgentPinsOfLiveRows,
   taskAgentsOfLiveRows,
   taskListOfLiveRows,
@@ -81,7 +88,7 @@ import {
   TURN_STATUS,
   type TurnStatus,
 } from "@repo/wire";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { Clock, Duration, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
@@ -90,7 +97,7 @@ import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/code
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
 import { withTaskAgents } from "../../agents/task-agents.js";
 import { TURN_FAILURE } from "../../core.js";
-import { tasksRead } from "./tasks.js";
+import { taskPageRead, taskRowsRead, taskSearchRead, tasksRead } from "./tasks.js";
 
 /**
  * The plan list's live statements against the held read it stands in for:
@@ -216,6 +223,68 @@ const liveRowsOf = (userId: string) =>
     });
   });
 
+/** The rows one task's read delivers to the account, by the task or the agent `id` names, decoded as the desktop decodes them. */
+const taskRowsOf = (userId: string, id: string) =>
+  Effect.gen(function* () {
+    const statements = Option.getOrThrow(taskRowsRead.statements({ userId, id }));
+
+    const rows = yield* Schema.decodeUnknownEffect(TASK_ROWS_READ.rows)({
+      plans: yield* runLive(statements.plans),
+      agents: yield* runLive(statements.agents),
+    });
+
+    return {
+      plans: rows.plans.map((plan) => plan.id),
+      agents: rows.agents.map((agent) => agent.id).toSorted(),
+    };
+  });
+
+/** The tasks and agents a search delivers to the account, decoded as the desktop decodes them. */
+const searchedOf = (userId: string, query: string) =>
+  Effect.gen(function* () {
+    const statements = Option.getOrThrow(taskSearchRead.statements({ userId, query }));
+
+    const rows = yield* Schema.decodeUnknownEffect(TASK_SEARCH_READ.rows)({
+      plans: yield* runLive(statements.plans),
+      agents: yield* runLive(statements.agents),
+    });
+
+    return {
+      plans: rows.plans.map((plan) => plan.id).toSorted(),
+      agents: rows.agents.map((agent) => agent.id).toSorted(),
+    };
+  });
+
+/** One page of the workspace's settled tasks the account reads past `before`, decoded as the desktop decodes them: its tasks in the order a reader lists them, newest finished first, their names, its agents, and the cursor the next page reads past. */
+const settledPageOf = (userId: string, workspaceId: string, before?: SettledPageCursor) =>
+  Effect.gen(function* () {
+    const statements = Option.getOrThrow(
+      taskPageRead.statements({
+        userId,
+        workspaceId,
+        beforeAt: before === undefined ? "" : String(before.finishedAt),
+        beforeId: before?.taskId ?? "",
+      }),
+    );
+
+    const rows = yield* Schema.decodeUnknownEffect(TASK_PAGE_READ.rows)({
+      plans: yield* runLive(statements.plans),
+      agents: yield* runLive(statements.agents),
+    });
+
+    const plans = rows.plans.toSorted(
+      (a, b) =>
+        (b.completedAt ?? b.updatedAt) - (a.completedAt ?? a.updatedAt) || (a.id < b.id ? 1 : -1),
+    );
+
+    return {
+      plans: plans.map((plan) => plan.id),
+      names: plans.map((plan) => plan.name),
+      agents: rows.agents.map((agent) => agent.id).toSorted(),
+      next: settledPageCursorOf(rows.plans),
+    };
+  });
+
 /** An agent on a plan as the plan's own list names it, the workspace and repository the live list keeps beside it left out. */
 const summaryOf = ({
   workspaceId: _workspaceId,
@@ -290,11 +359,23 @@ function countedOf(plan: HeldTaskSummary): TaskSummary {
   return { ...rest, agents: counts };
 }
 
+/** The held list with each plan's followers as the store reads them, which the held read leaves to the live one. */
 const heldList = (userId: string) =>
   Effect.gen(function* () {
     const tasks = yield* listTasks(userId);
+    const ids = tasks.map((each) => each.id);
+    const followers = yield* listTasksFollowersNamed(userId, ids);
 
-    return { plans: (yield* withTaskAgents(userId, tasks)).map(countedOf) };
+    return {
+      plans: (yield* withTaskAgents(userId, tasks)).map((plan) => ({
+        ...countedOf(plan),
+        followers: (followers.get(plan.id) ?? []).map(({ userId, assignee, machines }) => ({
+          userId,
+          assignee,
+          machines,
+        })),
+      })),
+    };
   });
 
 const PUBLISHED = {
@@ -406,6 +487,34 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         ]);
         assert.deepEqual(yield* pinsOf(owner), []);
         assert.deepEqual(yield* pinsOf(outsider), []);
+      }),
+  );
+
+  it.effect(
+    "follow a task the reader pinned, and the task of an agent it pinned, however long ago it was done",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const pinned = yield* startTask(owner, { name: "Teammate invitations" });
+        const ofAgent = yield* startTask(owner, { name: "Billing export" });
+        const agent = yield* openAgent(owner, { taskId: ofAgent.id }, 60_000);
+        yield* updateTask(owner, pinned.id, { pinned: true });
+        yield* pinAgent(owner, agent.id, true);
+        // Both were finished a year before the list is read, well past any recent window.
+        const db = yield* Database;
+        const yearAgo = new Date(NOW - Duration.toMillis(Duration.days(365)));
+        yield* db
+          .update(task)
+          .set({ status: TASK_STATUS.DONE, completedAt: yearAgo, updatedAt: yearAgo })
+          .where(inArray(task.id, [pinned.id, ofAgent.id]));
+
+        const followedBy = (reader: string) =>
+          Effect.map(liveRowsOf(reader), (rows) => rows.plans.map((plan) => plan.id).toSorted());
+
+        assert.deepEqual(yield* followedBy(owner), [pinned.id, ofAgent.id].toSorted());
+        assert.deepEqual(yield* followedBy(outsider), [], "no other account's list holds them");
       }),
   );
 
@@ -948,6 +1057,126 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           !seen.some((line) => line.id === hidden.id),
           "the teammate's list leaves out the agent they do not see",
         );
+      }),
+  );
+
+  it.effect(
+    "deliver one task and its agents, by the task or one of its agents, to a member and to no one else",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const plan = yield* startTask(owner, { name: "Teammate invitations" });
+        const other = yield* startTask(owner, { name: "Billing export" });
+        yield* joinWorkspace(plan.workspaceId, teammate);
+        const first = yield* openAgent(owner, { taskId: plan.id }, 60_000);
+        const second = yield* openAgent(owner, { taskId: plan.id }, 30_000);
+        yield* openAgent(owner, { taskId: other.id }, 30_000);
+        const whole = { plans: [plan.id], agents: [first.id, second.id].toSorted() };
+
+        assert.deepEqual(yield* taskRowsOf(teammate, plan.id), whole);
+        assert.deepEqual(yield* taskRowsOf(teammate, second.id), whole);
+        assert.deepEqual(yield* taskRowsOf(outsider, plan.id), { plans: [], agents: [] });
+        assert.deepEqual(yield* taskRowsOf(outsider, first.id), { plans: [], agents: [] });
+      }),
+  );
+
+  it.effect(
+    "find a task by every word of its name or by its key, with its agents, for a member and no one else",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const plan = yield* startTask(owner, { name: "Teammate invitations" });
+        const other = yield* startTask(owner, { name: "Billing export" });
+        yield* joinWorkspace(plan.workspaceId, teammate);
+        const agent = yield* openAgent(owner, { taskId: plan.id }, 60_000);
+        yield* openAgent(owner, { taskId: other.id }, 30_000);
+        const found = { plans: [plan.id], agents: [agent.id] };
+        const db = yield* Database;
+
+        const [numbered] = yield* db
+          .select({ number: task.number })
+          .from(task)
+          .where(eq(task.id, plan.id));
+
+        assert.deepEqual(yield* searchedOf(teammate, "INVITATIONS team"), found);
+        assert.deepEqual(yield* searchedOf(teammate, `ACME-${numbered?.number}`), found);
+        assert.deepEqual(yield* searchedOf(teammate, "invitations billing"), {
+          plans: [],
+          agents: [],
+        });
+        assert.deepEqual(yield* searchedOf(outsider, "invitations"), { plans: [], agents: [] });
+      }),
+  );
+
+  it.effect(
+    "page a workspace's settled tasks, newest finished first, past the cursor, to a member and to no one else",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const open = yield* startTask(owner, { name: "Teammate invitations" });
+        const elsewhere = yield* startTask(outsider, { name: "Billing export" });
+        const { workspaceId } = open;
+        yield* joinWorkspace(workspaceId, teammate);
+
+        // Two more settled tasks than a page holds, a minute apart, the newest first; the last two finished in the same millisecond, and the one before kept no finish, so its last save stands for it.
+        const finished = Array.from({ length: SETTLED_PAGE_SIZE + 2 }, (_, index) => ({
+          id: randomUUID(),
+          at: new Date(NOW - (Math.min(index, SETTLED_PAGE_SIZE) + 1) * 60_000),
+          index,
+        }));
+
+        yield* db.insert(task).values(
+          finished.map(({ id, at, index }) => ({
+            id,
+            organizationId: workspaceId,
+            userId: owner,
+            name: `Shipped ${index}`,
+            number: 1000 + index,
+            description: "",
+            status: index % 2 === 0 ? TASK_STATUS.DONE : TASK_STATUS.CANCELED,
+            completedAt: index === SETTLED_PAGE_SIZE - 1 ? null : at,
+            updatedAt: at,
+          })),
+        );
+
+        yield* db
+          .update(task)
+          .set({ status: TASK_STATUS.DONE, completedAt: new Date(NOW) })
+          .where(eq(task.id, elsewhere.id));
+
+        const first = finished[0]?.id ?? "";
+        const agent = yield* openAgent(owner, { taskId: first }, 30_000);
+        // Note that the two finished in one millisecond stand by id, the greater first.
+        const tied = finished.slice(SETTLED_PAGE_SIZE).toSorted((a, b) => (a.id < b.id ? 1 : -1));
+        const order = [...finished.slice(0, SETTLED_PAGE_SIZE), ...tied].map(({ id }) => id);
+
+        const page = yield* settledPageOf(teammate, workspaceId);
+        assert.deepEqual(page.plans, order.slice(0, SETTLED_PAGE_SIZE));
+        assert.deepEqual(page.agents, [agent.id]);
+        assert.notEqual(page.next, undefined);
+
+        // A task of the first page reopened, and one of the next renamed, while the reader pages: the next page reads past where the first ended, the rename with it.
+        yield* updateTask(owner, first, { status: TASK_STATUS.TODO });
+        yield* updateTask(owner, order[SETTLED_PAGE_SIZE] ?? "", { name: "Shipped, renamed" });
+        const next = yield* settledPageOf(teammate, workspaceId, page.next);
+        assert.deepEqual(next.plans, order.slice(SETTLED_PAGE_SIZE));
+        assert.deepEqual(next.names[0], "Shipped, renamed");
+        assert.deepEqual(next.agents, []);
+        assert.equal(next.next, undefined);
+
+        const none = { plans: [], names: [], agents: [], next: undefined };
+        assert.deepEqual(yield* settledPageOf(outsider, workspaceId), none);
+        assert.deepEqual(yield* settledPageOf(outsider, workspaceId, page.next), none);
       }),
   );
 });

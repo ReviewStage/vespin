@@ -205,14 +205,14 @@ export class Sandbox extends Context.Service<Sandbox, SandboxService>()("@repo/s
 
 /**
  * How long a sandbox runs past its last touch: what every open and create
- * runs for, and how far ahead of now each touch puts its end, so this alone
- * decides when an idle sandbox stops. Five minutes with no agent or
- * terminal activity, the one rule every sandbox follows, with no
- * exceptions: activity is an agent's turn running, a terminal typed in or
- * printing, or the agent open in a focused window of the app
- * (`use-warm-agent.ts`), and nothing else touches a sandbox. A run also
- * ends at the provider's longest, 24 hours from its start, however active
- * (`vercel/vercel-sdk.ts`'s `TOUCH`).
+ * runs for, and how far ahead of now each touch puts its end. Five minutes
+ * with no agent or terminal activity, the bound every sandbox stops by:
+ * activity is an agent's turn running, a terminal typed in or printing, or
+ * the agent open in a focused window of the app (`use-warm-agent.ts`), and
+ * nothing else touches a sandbox. Its caller may stop one sooner: an agent's
+ * sandbox stops as its turn ends where nothing holds it open (`@repo/service`'s
+ * `sandboxStoppedIfUnheld`). A run also ends at the provider's longest, 24
+ * hours from its start, however active (`vercel/vercel-sdk.ts`'s `TOUCH`).
  */
 export const SANDBOX_IDLE = Duration.minutes(5);
 

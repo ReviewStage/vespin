@@ -563,7 +563,7 @@ export const tasksSetParentAnswerSchema = EffectSchema.Union([
 
 export type TasksSetParentAnswer = typeof tasksSetParentAnswerSchema.Type;
 
-/** Why a follower write wrote nothing: the service did not answer, the task is out of reach or its workspace has Following off, or, for an unfollow, the account is its assignee. */
+/** Why a follower write wrote nothing: the service did not answer, the task is out of reach, or, for an unfollow, the account is its assignee. */
 export const FOLLOWER_CALL_FAILURE = failureSetOf(taskFollowersContract);
 
 const FOLLOWER_CALL_FAILURES = Object.values(FOLLOWER_CALL_FAILURE);
@@ -764,6 +764,42 @@ export const tasksFindParamsSchema = EffectSchema.Struct({
 /** The task a link names by its number, as the window hears it: its id, or that none was found or the service did not answer. */
 export const tasksFindAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString }),
+  EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
+]);
+
+/** The most characters a task search sends the service. */
+export const TASK_SEARCH_QUERY_MAX_CHARS = 200;
+
+/** How long typing pauses before a task search's words are asked of the host, so a word typed out reads once rather than once a letter. */
+export const TASK_SEARCH_PAUSE_MILLIS = 250;
+
+/** The words a task search typed as `typed` asks of the service (`TASKS_SEARCH`): trimmed and cut to what it sends, or none where nothing is typed. */
+export function serviceTaskSearchQuery(typed: string): string | undefined {
+  const words = typed.trim().slice(0, TASK_SEARCH_QUERY_MAX_CHARS);
+
+  return words.length === 0 ? undefined : words;
+}
+
+/** A search of the account's tasks the window asks the host to read past the list it holds: the words typed. */
+export const tasksSearchParamsSchema = EffectSchema.Struct({
+  query: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(TASK_SEARCH_QUERY_MAX_CHARS)),
+});
+
+/** Where a page of a workspace's settled tasks ends, which the next page reads past (`SettledPageCursor`). */
+const settledPageCursorSchema = EffectSchema.Struct({
+  finishedAt: EffectSchema.Finite,
+  taskId: EffectSchema.NonEmptyString,
+});
+
+/** A page of a workspace's settled tasks, as a list that shows finished work asks the host for it: the workspace, and the cursor the page reads past where it is not the first. */
+export const tasksSettledPageParamsSchema = EffectSchema.Struct({
+  workspaceId: EffectSchema.NonEmptyString,
+  before: EffectSchema.optionalKey(settledPageCursorSchema),
+});
+
+/** A page of settled tasks read into the task list, as the window hears it: the cursor the next page reads past, none after the last, or that the service did not answer. */
+export const tasksSettledPageAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({ next: EffectSchema.optionalKey(settledPageCursorSchema) }),
   EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
 ]);
 

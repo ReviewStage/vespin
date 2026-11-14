@@ -81,6 +81,7 @@ import {
   type LiveActivityTokenAnswerView,
   type LiveActivityTokenParams,
   type MachineAllowedAppsAnswerView,
+  type MachineChangeParams,
   type MemoriesAnswerView,
   type MemoryForgetParams,
   type MemorySaveAnswerView,
@@ -549,6 +550,18 @@ export class HostedAgentClient {
   /** One of the account's hosts removed, its secret refused at once, answering the transaction it was removed in. */
   removeHost(id: string): Effect.Effect<HostDoneAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.hosts.remove, { id });
+  }
+
+  /** One of the account's machines changed from this device: each setting named, or an app taken back from those it always allows, answering the transaction it was written in. */
+  changeMachine(
+    change: MachineChangeParams,
+  ): Effect.Effect<HostDoneAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.hosts.changeMachine, change);
+  }
+
+  /** One of the account's machines removed, as a host where it runs agents, answering the transaction it was removed in. */
+  removeMachine(id: string): Effect.Effect<HostDoneAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.hosts.removeMachine, { id });
   }
 
   /** A box's pending pairing by the code its link named, as the approve screen shows it: the box and the address its start came from. */

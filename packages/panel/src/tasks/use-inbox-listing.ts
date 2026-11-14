@@ -259,9 +259,8 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   const agents = useAgents({
     taskId,
     repository: chosenTask?.repository ?? null,
-    listedAgents: tasks.liveAgents,
+    agentsFollowed: tasks.liveAgents !== undefined,
     list: { failed: tasks.listFailed, onRetry: tasks.onRetryList },
-    listedPullRequests: tasks.listedPullRequests,
     // The Inbox draws no agent's composer, so nothing here opens Settings.
     onOpenIntegrations: () => undefined,
     onOpenApiKeys: () => undefined,

@@ -60,6 +60,7 @@ import {
   type RepositoryCredential,
   sandboxFirewall,
 } from "../sandbox-firewall.js";
+import { recordedTerminalOpened } from "../sandbox-use.js";
 import { listeningPortsOf, readSocketTables } from "./listening-ports.js";
 import {
   FORGET_RECORD,
@@ -122,7 +123,7 @@ export type ShellRefusal =
 
 type ShellEffect<A> = Effect.Effect<Result.Result<A, ShellRefusal>, SandboxError>;
 
-/** What an attach finds: a running sandbox's PTY, minted for one connection, with the sandbox's name, its session, and whether the shell is a run action's, which takes nothing typed; where the sandbox stands instead; or no such shell in it. */
+/** What an attach finds: a running sandbox's PTY, minted for one connection, with the sandbox's name, its session, and whether the shell is a run action's, which takes nothing typed; or where the sandbox stands instead, one never opened or still starting. */
 type SandboxAttach =
   | {
       readonly state: typeof SANDBOX_STATE.RUNNING;
@@ -131,8 +132,7 @@ type SandboxAttach =
       readonly shell: InteractiveShell;
       readonly readOnly: boolean;
     }
-  | { readonly state: typeof SANDBOX_STATE.STOPPED | typeof SANDBOX_STATE.STARTING }
-  | { readonly state: typeof SANDBOX_STATE.RUNNING; readonly gone: true };
+  | { readonly state: typeof SANDBOX_STATE.STOPPED | typeof SANDBOX_STATE.STARTING };
 
 /** What an open finds: a running sandbox's PTY, minted for one connection, or where the sandbox stands instead. */
 export type SandboxOpen =
@@ -203,7 +203,13 @@ export interface AgentSandboxService {
   readonly kill: (sessionId: string, terminalId: string) => ShellEffect<void>;
   /** The agent's sandbox opened again, as its next turn opens it, answering where it stands after; one never opened stays starting, as does one made again on an image still being prepared, opened after the answer. */
   readonly resume: (sessionId: string) => Effect.Effect<SandboxState, SandboxError>;
-  /** A connection to the running sandbox's PTY, or where the sandbox stands; a stopped sandbox is never woken here. */
+  /**
+   * A Terminal tab's connection to its shell: the sandbox resumed first where
+   * it stopped, as its Resume does, the tab's hold on it recorded, and the
+   * sandbox's PTY minted, whose attach makes the tab's tmux session afresh
+   * where it is not there, as after a stop (`attachTerminal`); where the
+   * sandbox stands instead, where it was never opened or is still starting.
+   */
   readonly attach: (
     sessionId: string,
     terminalId: string,
@@ -266,6 +272,25 @@ function agentSandboxOver(
           : { name: sandbox.name, running: sandboxSessionId };
 
       return { sandbox, state, sandboxSessionId, running };
+    });
+
+  /** The session's sandbox opened again where it is not running, answering where it stands after. */
+  const resumed = (sessionId: string) =>
+    Effect.gen(function* () {
+      const { sandbox, state } = yield* standing(sessionId);
+
+      if (sandbox === undefined || state === SANDBOX_STATE.RUNNING) return state;
+
+      // A sandbox made again on an image still being prepared is opened after the answer, which says it is starting.
+      const opened = yield* Effect.flatMap(reopenedOf(sessionId, sandbox), (of) =>
+        openAgentSandboxPromptly(of),
+      ).pipe(
+        Effect.provideService(AgentImage, image),
+        Effect.provideService(Sandbox, api),
+        Effect.catchTag("ImageNotReady", () => Effect.succeed(undefined)),
+      );
+
+      return opened === undefined ? SANDBOX_STATE.STARTING : stateOf(opened.sandbox);
     });
 
   /** A command run in the running sandbox; a sandbox not running is refused as it stands. */
@@ -477,28 +502,35 @@ function agentSandboxOver(
     kill: (sessionId, terminalId) => onShell(sessionId, killTerminal(terminalId)),
     attach: (sessionId, terminalId) =>
       Effect.gen(function* () {
-        const { sandbox, state, sandboxSessionId, running } = yield* standing(sessionId);
+        // Note that a tab connecting to a stopped sandbox wakes it, as its Resume does.
+        const found = yield* standing(sessionId);
+
+        const woken =
+          found.sandbox !== undefined && found.state === SANDBOX_STATE.STOPPED
+            ? yield* Effect.andThen(resumed(sessionId), standing(sessionId))
+            : found;
+
+        const { sandbox, state, sandboxSessionId, running } = woken;
 
         if (sandbox === undefined || running === undefined || sandboxSessionId === undefined) {
           return {
-            state:
-              state === SANDBOX_STATE.STARTING ? SANDBOX_STATE.STARTING : SANDBOX_STATE.STOPPED,
+            state: state === SANDBOX_STATE.STOPPED ? SANDBOX_STATE.STOPPED : SANDBOX_STATE.STARTING,
           };
         }
 
-        // A shell that is not there was ended elsewhere, or never started: no PTY is minted for it.
         const held = yield* api.run(running, holdsTerminal(terminalId));
 
-        if (held.exitCode === TMUX_EXIT.NO_SESSION) {
-          return { state: SANDBOX_STATE.RUNNING, gone: true } as const;
+        // A tmux that could not be started or asked is an outage the tab may retry; a shell not there is made afresh below.
+        if (held.exitCode !== 0 && held.exitCode !== TMUX_EXIT.NO_SESSION) {
+          return yield* Effect.fail(new SandboxUnavailable({}));
         }
 
-        // A tmux that could not be started or asked is an outage the tab may retry, never a shell gone.
-        if (held.exitCode !== 0) return yield* Effect.fail(new SandboxUnavailable({}));
+        // Note that the tab holds its sandbox while it stands, whether its shell was made here or before a stop forgot it.
+        yield* Effect.provideContext(recordedTerminalOpened(sandbox.name, terminalId), context);
         // The run's own PTY, which never resumes the sandbox.
         const shell = yield* api.openInteractive(running);
         // A shell the check names a run action for is that action's, which nothing typed reaches.
-        const readOnly = held.stdout.trim() !== "";
+        const readOnly = held.exitCode === 0 && held.stdout.trim() !== "";
 
         return {
           state: SANDBOX_STATE.RUNNING,
@@ -526,23 +558,7 @@ function agentSandboxOver(
       }),
     setCredential: (session, credential) =>
       Effect.provideContext(firewall.write(session, { github: credential }), context),
-    resume: (sessionId) =>
-      Effect.gen(function* () {
-        const { sandbox, state } = yield* standing(sessionId);
-
-        if (sandbox === undefined || state === SANDBOX_STATE.RUNNING) return state;
-
-        // A sandbox made again on an image still being prepared is opened after the answer, which says it is starting.
-        const opened = yield* Effect.flatMap(reopenedOf(sessionId, sandbox), (of) =>
-          openAgentSandboxPromptly(of),
-        ).pipe(
-          Effect.provideService(AgentImage, image),
-          Effect.provideService(Sandbox, api),
-          Effect.catchTag("ImageNotReady", () => Effect.succeed(undefined)),
-        );
-
-        return opened === undefined ? SANDBOX_STATE.STARTING : stateOf(opened.sandbox);
-      }),
+    resume: resumed,
   };
 }
 

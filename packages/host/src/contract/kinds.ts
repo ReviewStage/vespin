@@ -226,6 +226,19 @@ export const AGENT_ACT_KIND = {
   /** The beats a window holds asked again now, as the window comes back online. */
   HOSTS_PRESENCE_REFRESH: "hosts.presenceRefresh",
   HOSTS_REMOVE: "hosts.remove",
+  /**
+   * The account's machines as Settings › Machines reads and changes them,
+   * each with its own settings for agents' commands and apps: held for the
+   * window while it holds the stream open and a while after, read again at
+   * once as Try again asks, one changed, and one removed. The hold's stream
+   * carries nothing: what it holds reaches the panel on app state
+   * (`LIVE_READ.MACHINES`), where a change is drawn over its machine, and a
+   * removal drawn gone, the moment it is asked.
+   */
+  MACHINES_FOLLOW: "machines.follow",
+  MACHINES_RETRY: "machines.retry",
+  MACHINES_CHANGE: "machines.change",
+  MACHINES_REMOVE: "machines.remove",
   /** Run agents on this Mac turned on or off, from This Mac's row in Settings › Hosts; only the desktop answers it. */
   HOSTS_THIS_MAC_SET: "hosts.thisMacSet",
   HOSTS_PAIRING_READ: "hosts.pairingRead",
@@ -583,6 +596,10 @@ export const TASKS_ACT_KIND = {
   TASKS_COLOR_CODE: "tasks.colourCode",
   /** The id of the task a link names by its workspace and its number, found on the service before the link opens; answered to the window, never on the document. */
   TASKS_FIND: "tasks.find",
+  /** The tasks a search's words find on the service, read into the task list as cold tasks where it holds them not, so the window's own search finds them; answered once asked, never on the document. */
+  TASKS_SEARCH: "tasks.search",
+  /** A page of a workspace's settled tasks, the newest finished first, read from the service into the task list as cold tasks (`task-list-collections.ts`); the cursor the next page reads past is answered to the list that asked, never on the document. */
+  TASKS_SETTLED_PAGE: "tasks.settledPage",
   /** A page of a description's history, read from the service and answered to the view; an older page is laid on the task's held history too (`LIVE_READ.HISTORY`) where it is held. */
   TASKS_REVISIONS: "tasks.revisions",
   /** A revision of the open description beside the one before it for its version history, read from the service; answered to the view, never on the document. */
@@ -1051,6 +1068,10 @@ export const PORT_ACT_USE = {
   HOSTS_PRESENCE_FOLLOW: ACT_USE.READ,
   HOSTS_PRESENCE_REFRESH: ACT_USE.READ,
   HOSTS_REMOVE: ACT_USE.WRITE,
+  MACHINES_FOLLOW: ACT_USE.READ,
+  MACHINES_RETRY: ACT_USE.READ,
+  MACHINES_CHANGE: ACT_USE.WRITE,
+  MACHINES_REMOVE: ACT_USE.WRITE,
   HOSTS_THIS_MAC_SET: ACT_USE.WRITE,
   HOSTS_PAIRING_READ: ACT_USE.FETCH,
   HOSTS_ALLOWED_APPS: ACT_USE.FETCH,
@@ -1224,6 +1245,8 @@ export const PORT_ACT_USE = {
   TASKS_BROWSER_TABS_FOLLOW: ACT_USE.READ,
   TASKS_COLOR_CODE: ACT_USE.FETCH,
   TASKS_FIND: ACT_USE.FETCH,
+  TASKS_SEARCH: ACT_USE.FETCH,
+  TASKS_SETTLED_PAGE: ACT_USE.FETCH,
   TASKS_REVISIONS: ACT_USE.FETCH,
   TASKS_REVISION: ACT_USE.FETCH,
   TASKS_RESTORE: ACT_USE.WRITE,

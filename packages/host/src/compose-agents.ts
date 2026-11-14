@@ -1,4 +1,5 @@
 import type { HostedAgentClient, HostedAgentPortsClient } from "@repo/features";
+import type { AccountInboxAnswer } from "@repo/features/account-inbox-wire";
 import { ACCOUNT_PREFERENCES_READ } from "@repo/features/account-preferences-live";
 import { AGENT_ORIGIN_READ } from "@repo/features/agent-origin-live";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
@@ -298,6 +299,20 @@ export interface AgentsDependencies extends AccountGateDependencies {
   pool: EntityPool;
   /** The agent as the task list shows it now, which a rename or a pin waiting for the service answers its caller with; none where the list shows no such agent. */
   agentListed?: (agentId: string) => AgentSummary | undefined;
+  /** Reads an agent a window opens into the task list with its task where the list holds neither (`TasksComposer.openedOutside`); none reads nothing. */
+  openedOutside?: (agentId: string) => Effect.Effect<void>;
+  /** Reads the tasks the account's Inbox holds items of into the task list where it holds them not (`TasksComposer.inboxNamed`); none reads nothing. */
+  inboxNamed?: (taskIds: readonly string[]) => Effect.Effect<void>;
+}
+
+/** The tasks an account inbox answer holds items of, once each: those with an item waiting on the reader first, as they are counted, then every other holding one. */
+function inboxTaskIds(answer: AccountInboxAnswer): readonly string[] {
+  return [
+    ...new Set([
+      ...answer.items.map((item) => item.planId),
+      ...answer.plans.map((plan) => plan.planId),
+    ]),
+  ];
 }
 
 /** The acts this composer answers: the Inbox's, every agent act but This Mac's and the hosts', which their own concerns answer, and a pull request's chapters generated; and every agent's live follow but the hosts' and their beats', the Inbox's, and a pull request's chapters. */
@@ -1226,7 +1241,12 @@ function composed(
     },
     // A transcript is held for a window while its tab shows it.
     AGENTS_TRANSCRIPT: {
-      hold: (transcript) => transcriptSlice.hold(transcriptKeyOf(transcript)),
+      // An agent a window opens that the task list does not hold is read into it beside its transcript.
+      hold: (transcript) =>
+        Effect.andThen(
+          dependencies.openedOutside?.(transcript.agentId) ?? Effect.void,
+          transcriptSlice.hold(transcriptKeyOf(transcript)),
+        ),
       retry: (transcript) => transcriptSlice.retry(transcriptKeyOf(transcript)),
     },
     // A Pull request tab's parts are held for the windows while the tab shows.
@@ -1259,11 +1279,18 @@ function composed(
         const tell = (answer: AgentAccountInboxAnswerView) =>
           Effect.sync(() => kernel.emit(GATEWAY_EVENT.ACCOUNT_INBOX_CHANGED, carried(answer)));
 
+        // Note that the tasks an answer names are read into the list where it holds them not, so the Inbox lists and counts their items.
+        const told = (answer: AccountInboxAnswer) =>
+          Effect.andThen(
+            dependencies.inboxNamed?.(inboxTaskIds(answer)) ?? Effect.void,
+            tell(answer),
+          );
+
         const userId = dependencies.accountId();
 
         const follow =
           gate() && userId !== undefined
-            ? followAccountInbox(accounts, userId, tell)
+            ? followAccountInbox(accounts, userId, told)
             : tell(gateKept());
 
         yield* FiberHandle.run(accountFollow, follow);

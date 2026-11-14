@@ -28,10 +28,11 @@ export function listedRows(
   };
 }
 
-/** The tasks and agents a test lists; none of the agents where it lists none. */
+/** The tasks, agents, and agents' pull requests a test lists; none of the agents where it lists none. */
 interface ListedTasks {
   readonly tasks: TasksView["tasks"];
   readonly taskAgents?: TasksView["taskAgents"] | undefined;
+  readonly agentPullRequests?: TasksView["agentPullRequests"] | undefined;
 }
 
 /** The window's task-list collections over what a test lists: `stand` writes its tasks and agents as the window's follow writes a document, and `provide` hands them to a tree. */
@@ -45,14 +46,14 @@ export function standingTaskList(initial: ListedTasks): StandingTaskList {
   const following = taskListFollowing();
   let version = 0;
 
-  const stand = ({ tasks, taskAgents }: ListedTasks) => {
+  const stand = ({ tasks, taskAgents, agentPullRequests }: ListedTasks) => {
     version += 1;
-    following.write(
-      version,
-      taskAgents === undefined
-        ? { ...IDLE_TASKS_VIEW, tasks }
-        : { ...IDLE_TASKS_VIEW, tasks, taskAgents },
-    );
+    following.write(version, {
+      ...IDLE_TASKS_VIEW,
+      tasks,
+      ...(taskAgents === undefined ? undefined : { taskAgents }),
+      ...(agentPullRequests === undefined ? undefined : { agentPullRequests }),
+    });
   };
 
   stand(initial);

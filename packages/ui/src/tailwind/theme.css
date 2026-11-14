@@ -1003,6 +1003,12 @@
     var(--ui-settings-row-inline) +
     var(--ui-settings-row-words-inset)
   );
+  /* A row two steps in, under a row that is itself one of a marked row's things. */
+  --spacing-settings-row-indent-twice: calc(
+    var(--ui-settings-row-inline) +
+    2 *
+    var(--ui-settings-row-words-inset)
+  );
   --spacing-settings-row-words-inset: var(--ui-settings-row-words-inset);
   --spacing-settings-row-mark: var(--ui-settings-row-mark-size, 20px); /* off-scale: a mark */
   --spacing-settings-row-state-dot: 6px; /* off-scale: a connected row's dot */

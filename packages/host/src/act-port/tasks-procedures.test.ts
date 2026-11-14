@@ -112,7 +112,10 @@ const DECLARED: readonly {
     name: "TASKS_CHANGE_RELATION",
     payload: { ...TASK, relation: { taskId: "task-2", from: "blocked-by", to: "blocks" } },
   },
-  { name: "TASKS_EDIT", payload: { ...TASK, edit: { document: { base: "", value: "Expire." } } } },
+  {
+    name: "TASKS_EDIT",
+    payload: { ...TASK, edit: { description: { base: "", value: "Expire." } } },
+  },
   {
     name: "ADMIN_READ",
     payload: { procedure: ADMIN_READ.USERS, query: { [ADMIN_QUERY.WINDOW]: "7" } },
@@ -128,6 +131,7 @@ const DECLARED: readonly {
     payload: { agentId: "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a", address: "https://example.com" },
   },
   { name: "TASKS_FIND", payload: { workspace: "acme", number: 7 } },
+  { name: "TASKS_SETTLED_PAGE", payload: { workspaceId: "acme" } },
   { name: "TASKS_REVISIONS", payload: TASK },
   { name: "TASKS_REVISION", payload: { ...TASK, seq: 3 } },
   { name: "TASKS_RESTORE", payload: { ...TASK, seq: 3 } },

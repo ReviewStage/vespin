@@ -127,7 +127,7 @@ function keepAnyone(workspace: Workspace = ACME): void {
   );
 }
 
-/** The sidebar listing `plans` in `workspace`, read by Dean. */
+/** The sidebar listing `plans` in `workspace`, each task standing in it, read by Dean. */
 function mountSidebar(workspace: Workspace, tasks: readonly TaskSummary[] = TASKS): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
@@ -136,7 +136,7 @@ function mountSidebar(workspace: Workspace, tasks: readonly TaskSummary[] = TASK
   sidebarRouter = windowRouter();
 
   const control = tasksControl({
-    tasks: [...tasks],
+    tasks: tasks.map((each) => ({ ...each, workspaceId: workspace.id })),
     workspace,
     workspaces: [workspace],
     me: DEAN,
@@ -308,7 +308,7 @@ test("a shared workspace opens on your own tasks, those you are on and those no 
   assert.equal(options?.getAttribute("aria-description"), null);
 });
 
-test("View options offers Group by, Show completed sub-tasks, and Assigned to, Assigned to holding Me, Anyone, then each teammate by name with their email beside it, hanging their card", async () => {
+test("View options offers Group by, Show completed sub-tasks, and Assigned to, Assigned to holding Me, Following, Anyone, then each teammate by name with their email beside it, hanging their card", async () => {
   const sidebar = await mountRead(ACME, ASSIGNED);
   const button = viewOptions(sidebar);
   act(() => button.click());
@@ -324,6 +324,7 @@ test("View options offers Group by, Show completed sub-tasks, and Assigned to, A
       ]),
       [
         ["Me", null, true],
+        ["Following", null, false],
         ["Anyone", null, false],
         ["Charles Pan", "charles@acme.dev", false],
         ["Maya Okafor", "maya@acme.dev", false],
@@ -332,32 +333,6 @@ test("View options offers Group by, Show completed sub-tasks, and Assigned to, A
   );
   restOn(menuItem("Charles Pan"));
   assert.equal(cardName(), "Charles Pan");
-});
-
-test("a list kept on Following while the workspace has Following off reads as My tasks, Me checked and no Following offered", async () => {
-  window.localStorage.setItem(
-    "app.sidebarTaskViews",
-    JSON.stringify({ [ACME.id]: { grouping: "repository", assignee: { kind: "following" } } }),
-  );
-
-  const sidebar = await mountRead(ACME, ASSIGNED);
-  assert.equal(headWords(sidebar), "My tasks");
-  act(() => viewOptions(sidebar).click());
-  act(() => menuItem("Assigned to").click());
-  await vi.waitFor(() =>
-    assert.deepEqual(
-      [...document.querySelectorAll<HTMLElement>('[role="option"]')].map((row) => [
-        itemLabel(row),
-        row.getAttribute("aria-current") === "true",
-      ]),
-      [
-        ["Me", true],
-        ["Anyone", false],
-        ["Charles Pan", false],
-        ["Maya Okafor", false],
-      ],
-    ),
-  );
 });
 
 test("the Tasks head says My tasks, then Everyone's tasks once Assigned to › Anyone lists everyone's, kept across launches, with a dot and no chip", async () => {
@@ -684,7 +659,7 @@ test("Assigned to a teammate, with nothing of theirs, says so, and Show all list
   assert.equal(headWords(sidebar), "Everyone's tasks");
 });
 
-test("Assigned to says the members could not be read, with Retry, under Me and Anyone, and Retry reads them again and leaves the menu standing", async () => {
+test("Assigned to says the members could not be read, with Retry, under Me, Following, and Anyone, and Retry reads them again and leaves the menu standing", async () => {
   const reads = handHostReads({ members: { [ACME.id]: { failed: true } } });
   fakeActPort({
     [ACT_KIND.WORKSPACE_MEMBERS_RETRY]: ({ workspaceId }) => {
@@ -712,7 +687,7 @@ test("Assigned to says the members could not be read, with Retry, under Me and A
   const said = document.body.textContent ?? "";
   await act(async () => offeredRetry.click());
 
-  assert.deepEqual(failed, ["Me", "Anyone"]);
+  assert.deepEqual(failed, ["Me", "Following", "Anyone"]);
   assert.match(said, /Members could not be read\./u);
   await vi.waitFor(() => assert.equal(offered().includes("Charles Pan"), true));
   assert.equal(retry(), undefined);

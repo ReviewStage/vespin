@@ -312,7 +312,7 @@ const createCommand = Command.make(
       const task = taskJson(created.body.plan, workspace.name);
 
       if (descriptionText !== undefined) {
-        yield* writeDescription(task.id, created.body.plan.document.body, descriptionText);
+        yield* writeDescription(task.id, created.body.plan.description.body, descriptionText);
       }
 
       const agent =

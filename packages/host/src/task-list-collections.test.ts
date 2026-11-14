@@ -8,7 +8,7 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { entityPool } from "@repo/sync";
-import { Duration, Effect } from "effect";
+import { Deferred, Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import { DRAW_TICK, rowWriteOn } from "./live-collection.js";
 import { AGENT, type LiveTaskList, PLAN, taskListCollections } from "./task-list-collections.js";
@@ -252,6 +252,133 @@ it.effect(
         assert.equal(ofTask(archived, BILLING), undefined);
         assert.equal(ofTask(archived, INVITES), ofTask(before, INVITES));
         assert.equal(ofAgent(archived, billing.id)?.pullRequest.number, 8);
+      }),
+    ),
+);
+
+it.effect(
+  "an earlier read of a task outside the list, answered last, draws back no agent a later read of it left out",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const drawings: LiveTaskList[] = [];
+
+        const collections = yield* taskListCollections({
+          pool: yield* entityPool(),
+          draw: (read) => {
+            drawings.push(read);
+          },
+          txWait: () => undefined,
+        });
+
+        // The list holds the billing task alone, so the invites task is read outside it.
+        yield* collections.answer({ plans: [planListRow(BILLING, "Billing")], agents: [] });
+        const invites = planListRow(INVITES, "Teammate invitations");
+        const kept = { ...agentListRow(INVITES, 1_000), id: "agent-kept" };
+        const deleted = { ...agentListRow(INVITES, 2_000), id: "agent-deleted" };
+
+        // Two reads of the task are out at once: the earlier one asked while both agents stood, the later one after one was deleted.
+        const earlier = yield* Deferred.make<void>();
+        const later = yield* Deferred.make<void>();
+        const earlierMark = collections.mark();
+        const laterMark = collections.mark();
+
+        const earlierRead = yield* Effect.forkChild(
+          Effect.andThen(
+            Deferred.await(earlier),
+            collections.cold({ plans: [invites], agents: [kept, deleted] }, earlierMark),
+          ),
+        );
+
+        const laterRead = yield* Effect.forkChild(
+          Effect.andThen(
+            Deferred.await(later),
+            collections.cold({ plans: [invites], agents: [kept] }, laterMark),
+          ),
+        );
+
+        // The later read answers first, then the earlier one.
+        yield* Deferred.succeed(later, undefined);
+        yield* Fiber.join(laterRead);
+        yield* Deferred.succeed(earlier, undefined);
+        yield* Fiber.join(earlierRead);
+
+        const agentsDrawn = drawings.at(-1)?.taskAgents.map((agent) => agent.id);
+
+        assert.deepEqual(agentsDrawn, [kept.id]);
+      }),
+    ),
+);
+
+it.effect(
+  "an agent started from another lists it under its source, first started first, and every other agent's continuations are the object drawn before",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const drawings: LiveTaskList[] = [];
+
+        const collections = yield* taskListCollections({
+          pool: yield* entityPool(),
+          draw: (read) => {
+            drawings.push(read);
+          },
+          txWait: () => undefined,
+        });
+
+        const plans = [
+          planListRow(INVITES, "Teammate invitations"),
+          planListRow(BILLING, "Billing"),
+        ];
+
+        const invites = { ...agentListRow(INVITES, 1_000), id: "agent-invites" };
+        const billing = { ...agentListRow(BILLING, 1_000), id: "agent-billing" };
+
+        const invitesAgain = {
+          ...agentListRow(INVITES, 2_000),
+          id: "agent-invites-again",
+          title: "Invite flow, continued",
+          startedFrom: { agentId: invites.id, steps: 4, totalSteps: 4 },
+        };
+
+        const billingAgain = {
+          ...agentListRow(BILLING, 2_000),
+          id: "agent-billing-again",
+          title: "Billing, continued",
+          startedFrom: { agentId: billing.id, steps: 4, totalSteps: 4 },
+        };
+
+        const agents = [invites, billing, invitesAgain, billingAgain];
+        yield* collections.answer({ plans, agents });
+        const before = drawings.at(-1);
+
+        // A teammate forks billing's agent at a message.
+        const billingFork = {
+          ...agentListRow(BILLING, 3_000),
+          id: "agent-billing-fork",
+          title: "Billing, forked",
+          startedFrom: { agentId: billing.id, messageId: "message-7", steps: 2, totalSteps: 4 },
+        };
+
+        yield* collections.answer({ plans, agents: [...agents, billingFork] });
+        const after = drawings.at(-1);
+
+        const agentOf = (drawing: LiveTaskList | undefined, id: string) =>
+          drawing?.taskAgents.find((each) => each.id === id);
+
+        assert.deepEqual(agentOf(before, invites.id)?.continuedBy, [
+          { agentId: invitesAgain.id, title: "Invite flow, continued", forked: false },
+        ]);
+        assert.equal(agentOf(after, invites.id), agentOf(before, invites.id));
+
+        assert.deepEqual(agentOf(after, billing.id)?.continuedBy, [
+          { agentId: billingAgain.id, title: "Billing, continued", forked: false },
+          {
+            agentId: billingFork.id,
+            title: "Billing, forked",
+            forked: true,
+            messageId: "message-7",
+          },
+        ]);
       }),
     ),
 );
