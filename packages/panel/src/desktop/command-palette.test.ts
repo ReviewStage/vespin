@@ -1386,6 +1386,7 @@ test("a task's row ends as its sidebar row does, who is on it then an agent at w
 
 test("an agent pressed on a task's card in ⌘K over Settings leaves the palette for the tasks and opens the agent's tab, as a row does", () => {
   const shown: [string, string][] = [];
+
   const task = {
     id: "plan-1",
     workspaceId: "workspace-personal",
