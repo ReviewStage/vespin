@@ -3,6 +3,8 @@ import { COMPUTER_PERMISSION, computerPermissionsNamed } from "@repo/features/ma
 import { THIS_MAC } from "@repo/features/machine-name";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
+  type CallMachine,
+  callMachineOf,
   computerPermissionsMissing,
   machineCommandMachineId,
 } from "@repo/features/tool-call-model";
@@ -18,7 +20,7 @@ import { actFailureWords, askAct } from "../act.js";
 import { workspaceToolsQuery } from "../live-reads.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { appStateQuery, selectCapability, selectMachineCommandDevice } from "../use-app-state.js";
-import { useMacOwner } from "./transcript-blocks.js";
+import { OnMachine, useMacOwner } from "./transcript-blocks.js";
 
 /**
  * computer-permission-note.tsx -- why a `computer` call ran nothing because the Mac lacked Screen Recording or Accessibility, said under its row where its window would have stood.
@@ -38,26 +40,36 @@ import { useMacOwner } from "./transcript-blocks.js";
  * that Mac.
  */
 
-/** What the note says: the grants missing, on this Mac, or on the Mac it names. */
 /** What the note's press says: it asks macOS for the grants and opens the pane of the first missing. */
 const OPEN_SYSTEM_SETTINGS = "Open System Settings";
 
 /** What the note adds once its press was used where Screen Recording is missing. */
 const REOPEN = `Once Screen Recording is on, quit and reopen ${PRODUCT_NAME} for it to take effect.`;
 
+/** What the note says: the grants missing, on this Mac, or on the Mac it names, by its chip where the call's answer names the machine. */
 function noteWords(
   names: string,
   them: string,
   thatMac: boolean,
+  machine: CallMachine | undefined,
   owner: Actor | undefined,
-): string {
+): ReactNode {
   if (thatMac) return `${PRODUCT_NAME} needs ${names} to use apps on this Mac.`;
+  const turnOn = `Turn ${them} on in Settings › ${THIS_MAC} on that Mac.`;
+
+  if (machine !== undefined) {
+    return (
+      <>
+        {PRODUCT_NAME} on <OnMachine machine={machine} /> needs {names} to use apps. {turnOn}
+      </>
+    );
+  }
 
   // Note that a Mac the window cannot name is the reader's own, as `MacOwnerProvider` says.
   const whose =
     owner === undefined ? "your" : actorName(owner, { sentence: true, possessive: true });
 
-  return `${PRODUCT_NAME} on ${whose} Mac needs ${names} to use apps. Turn ${them} on in Settings › ${THIS_MAC} on that Mac.`;
+  return `${PRODUCT_NAME} on ${whose} Mac needs ${names} to use apps. ${turnOn}`;
 }
 
 /** Whether the window runs Mac commands, as only a Mac's does. */
@@ -119,6 +131,7 @@ export function ComputerPermissionNote({
   const queries = useQueryClient();
   const owner = useMacOwner();
   // Note that the call already went to its Mac, which its answer names, so the note asks after that machine rather than where a call would go now.
+  const machine = callMachineOf(output);
   const thatMac = useOnMachine(machineCommandMachineId(output));
 
   const asked = useMutation({
@@ -146,7 +159,7 @@ export function ComputerPermissionNote({
           thatMac ? { label: OPEN_SYSTEM_SETTINGS, onClick: () => asked.mutate() } : undefined
         }
       >
-        {noteWords(names, them, thatMac, owner)}
+        {noteWords(names, them, thatMac, machine, owner)}
         {reopen ? ` ${REOPEN}` : null}
         {asked.isError ? ` ${actFailureWords(asked.error)}` : null}
       </ErrorState>

@@ -500,7 +500,7 @@ export interface CallMachine {
 }
 
 /** The machine a `run_on_mac` or `computer` answer names it went to, or was refused on (`machine`); none where it names none. */
-function callMachineOf(output: WireValue | undefined): CallMachine | undefined {
+export function callMachineOf(output: WireValue | undefined): CallMachine | undefined {
   const machine = isRecord(output) ? output.machine : undefined;
   const id = stringAt(machine, "id");
   const name = stringAt(machine, "name");

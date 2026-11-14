@@ -22,7 +22,7 @@ import {
   bootReadyWords,
   bootStartingWords,
 } from "@repo/features/agent-boot-words";
-import type { AgentMachineKind } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   ANNOUNCE,
@@ -37,6 +37,7 @@ import { useMutation } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { pressMutation } from "../act-mutations.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
+import { OnMachine } from "./transcript-blocks.js";
 import { WorkingLine } from "./working-time.js";
 
 /** What the empty transcript says of a first launch. */
@@ -109,6 +110,32 @@ function ReadyLine({ byReader }: { byReader: boolean }): ReactNode {
   return <Text tone={TEXT_TONE.MUTED}>{words}</Text>;
 }
 
+/** The line while the machine boots: a local agent's Mac by its chip where its device is known, as a call's row ends in it, else in words. */
+function StartingLine({
+  since,
+  machine,
+  host,
+}: {
+  since: number;
+  machine: AgentMachineKind;
+  host: { readonly name: string; readonly deviceId?: string | undefined } | undefined;
+}): ReactNode {
+  const words = bootStartingWords(machine, host?.name);
+
+  if (machine === AGENT_MACHINE.VERCEL || host?.deviceId === undefined) {
+    return <WorkingLine startedAt={since} words={words} />;
+  }
+
+  return (
+    <WorkingLine
+      startedAt={since}
+      words={BOOT_WORDS.STARTING_ON_BEFORE}
+      after={<OnMachine machine={{ id: host.deviceId, name: host.name }} />}
+      heard={words}
+    />
+  );
+}
+
 /** The empty transcript's line while the agent's first launch stands, as `line` says it. */
 export function AgentBootLine({
   line,
@@ -119,8 +146,8 @@ export function AgentBootLine({
   line: BootLine;
   /** Where the agent's machine boots, which the line names while it does. */
   machine: AgentMachineKind;
-  /** The Mac a local agent boots on, by its own name; none for a sandbox, and where the summary does not name it. */
-  host: string | undefined;
+  /** The Mac a local agent boots on, by its own name and, where the summary names it, its device; none for a sandbox, and where the summary does not name it. */
+  host: { readonly name: string; readonly deviceId?: string | undefined } | undefined;
   /** The agent Retry boots again, where the reader may, as only one who may message it may; none where they may not, and before the agent is made. */
   retry: string | undefined;
 }): ReactNode {
@@ -128,7 +155,7 @@ export function AgentBootLine({
 
   switch (line.kind) {
     case BOOT_LINE.STARTING:
-      return <WorkingLine startedAt={line.since} words={bootStartingWords(machine, host)} />;
+      return <StartingLine since={line.since} machine={machine} host={host} />;
     case BOOT_LINE.BUILDING:
       return <WorkingLine startedAt={line.since} words={BOOT_WORDS.BUILDING} />;
     case BOOT_LINE.HANDING_OFF:

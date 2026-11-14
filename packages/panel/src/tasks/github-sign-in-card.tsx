@@ -18,6 +18,7 @@ import { GLYPH } from "@repo/ui/icons";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useRef, useState } from "react";
 import { TRY_AGAIN_LABEL, TRYING_AGAIN_LABEL } from "./agent-model.js";
+import { OnMachine } from "./transcript-blocks.js";
 
 /**
  * github-sign-in-card.tsx -- the card a transcript ends on where a Mac could not start its agent because the Mac's own GitHub sign-in cannot reach the repository: the command that signs in, to copy, then Try again, and Move to cloud where Move to would offer it.
@@ -27,9 +28,10 @@ import { TRY_AGAIN_LABEL, TRYING_AGAIN_LABEL } from "./agent-model.js";
  * the login cannot reach the repository the launch settles unstarted with
  * `DEVICE_LAUNCH_UNSTARTED.GITHUB_SIGN_IN`, and this card stands in place of
  * the end line's sentence. It names the Mac and the repository where the tab
- * knows them, else "This Mac" and "the repository". Try again asks the service
- * to send again, and is named as the failed end line's Try again, since it is the same act: the lines the
- * launch never took, or, where none was lost, a line of the developer's own
+ * knows them, the Mac by its chip where its device is known, as a call's
+ * row ends in it (`OnMachine`), else "This Mac" and "the repository". Try
+ * again asks the service to send again, and is named as the failed end
+ * line's Try again, since it is the same act: the lines the launch never took, or, where none was lost, a line of the developer's own
  * (`RETRY_LINE`), so the same agent launches anew with its first message;
  * the press holds off a second send while it is out, and a refused one is
  * offered again. Move to cloud is Move to's Cloud (`move-agent.tsx`), wearing
@@ -53,8 +55,8 @@ export const RETRY_LINE = "Try again";
 
 /** What the card draws and presses: the Mac and the repository by name where known, and its acts. */
 export interface GitHubSignInDoors {
-  /** The Mac's own name; none where the tab does not know it. */
-  readonly host: string | undefined;
+  /** The Mac, by its own name and, where the agent's summary names it, its device; none where the tab does not know it. */
+  readonly host: { readonly name: string; readonly deviceId?: string | undefined } | undefined;
   /** The repository as `owner/name`; none before it is read, or for an agent with none. */
   readonly repository: string | undefined;
   /** Sends the agent again what its launch lost, launching it anew; answers whether the service took it. */
@@ -114,7 +116,14 @@ export function GitHubSignInCard({
       }
     >
       <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.LABEL}>
-        {host ?? GITHUB_SIGN_IN_WORDS.UNNAMED_MAC} can't reach{" "}
+        {host === undefined ? (
+          GITHUB_SIGN_IN_WORDS.UNNAMED_MAC
+        ) : host.deviceId === undefined ? (
+          host.name
+        ) : (
+          <OnMachine machine={{ id: host.deviceId, name: host.name }} />
+        )}{" "}
+        can't reach{" "}
         {repository === undefined ? (
           GITHUB_SIGN_IN_WORDS.UNNAMED_REPOSITORY
         ) : (
