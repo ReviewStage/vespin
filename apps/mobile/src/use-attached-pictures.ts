@@ -16,7 +16,7 @@ import {
   type AgentAttachment,
   base64Bytes,
 } from "@repo/features/agent-wire";
-import { pictureName } from "@repo/features/file-marker";
+import { nextPictureName, pictureName } from "@repo/features/file-marker";
 import type { AttachedPicture } from "@repo/ui-native";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
@@ -100,6 +100,52 @@ export interface AttachedPictures {
   readonly take: () => readonly HeldPicture[];
   /** Puts pictures a refused send carried back ahead of any attached since. */
   readonly putBack: (pictures: readonly HeldPicture[]) => void;
+}
+
+/** The pictures a holder that keeps its own picked, and what the picker or a bound said of them. */
+export interface PickedPictures {
+  readonly files: readonly AgentAttachment[];
+  readonly note: string | undefined;
+}
+
+/**
+ * Opens the system's photo picker for a holder that keeps its pictures
+ * itself, such as a thread's draft, whose sends and refusals hold them: the
+ * pictures picked, each named past every picture's name it holds, so none
+ * takes the name of one still held, and what a picture the library could
+ * not read, or a bound the pictures held with them pass, says.
+ */
+export async function pickPictures(
+  held: readonly AgentAttachment[],
+  bounds: PictureBounds = MESSAGE_PICTURES,
+): Promise<PickedPictures> {
+  const picked = await launchImageLibraryAsync({
+    mediaTypes: ["images"],
+    allowsMultipleSelection: true,
+    selectionLimit: Math.max(1, bounds.most - held.length),
+    quality: bounds.quality,
+    base64: true,
+  });
+
+  if (picked.canceled) return { files: [], note: undefined };
+  const names = held.map((file) => file.name);
+  const files: AgentAttachment[] = [];
+  let unread: string | undefined;
+
+  for (const asset of picked.assets) {
+    const name = nextPictureName(names);
+    names.push(name);
+
+    if (asset.base64 === null || asset.base64 === undefined) {
+      unread ??= PICTURE_REFUSAL.UNREADABLE(name);
+    } else {
+      files.push({ name, mediaType: AGENT_ATTACHMENT_TYPE.JPEG, data: asset.base64 });
+    }
+  }
+
+  const all = [...held, ...files].map((file) => ({ id: file.name, file }));
+
+  return { files, note: unread ?? pictureRefusal(all, bounds) };
 }
 
 /**

@@ -36,6 +36,7 @@ import {
   AnswerFields,
   AskActs,
   AskNote,
+  AttachedPictures,
   type BarAction,
   type BarMenu,
   CHOICE_MEDIA,
@@ -48,12 +49,16 @@ import {
   StepList,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
+import { pickPictures } from "../use-attached-pictures.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
 /** The ⋯ menu a thread's bar holds. */
 const THREAD_MORE = { label: "More", symbol: GLYPH.MORE } as const;
+
+/** The box's + item that attaches pictures, as an agent's composer names it. */
+const ATTACH_PHOTOS = { label: "Photos", symbol: GLYPH.ATTACH } as const;
 
 /** Each field type an answer ask names, as the card draws it. */
 const FIELD_KIND = {
@@ -287,9 +292,12 @@ export function OpenAskCard({
  * The box under a thread: the composer, its line asking for a note while an
  * ask's controls stand over it and a reply otherwise, Send lit once an answer
  * is picked; docked in a compact window, or at a split view column's foot.
- * Its + holds the panel's "Send as a new thread to" the thread's agent,
- * which turns the next send into a new thread's first message, its line
- * asking to start one.
+ * Its + attaches pictures from Photos, as the panel's box attaches files,
+ * held on the thread's draft as capsules over the field until a send
+ * carries them, and holds the panel's "Send as a new thread to" the
+ * thread's agent, which turns the next send into a new thread's first
+ * message, its line asking to start one. What the picker or a bound said
+ * of the pictures stands in the field's head.
  */
 export function ThreadComposer({
   item,
@@ -305,6 +313,33 @@ export function ThreadComposer({
   readonly inColumn?: boolean;
 }) {
   const { draft, onDraft, answerReady, send, asNew, setAsNew, start } = answer;
+  const [pictureNote, setPictureNote] = useState<string | undefined>(undefined);
+
+  // Note that the draft is read as the picker answers, since nothing else changes it while the system's picker covers the box.
+  const attach = () => {
+    pickPictures(draft.attachments)
+      .then(({ files, note }) => {
+        setPictureNote(note);
+
+        if (files.length > 0) onDraft({ ...draft, attachments: [...draft.attachments, ...files] });
+      })
+      .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
+  };
+
+  const detach = (name: string) => {
+    setPictureNote(undefined);
+    onDraft({ ...draft, attachments: draft.attachments.filter((file) => file.name !== name) });
+  };
+
+  const pictures = draft.attachments.map((file) => ({ id: file.name, name: file.name }));
+
+  const head =
+    pictures.length === 0 && pictureNote === undefined ? undefined : (
+      <>
+        <AttachedPictures pictures={pictures} onDetach={detach} />
+        {pictureNote === undefined ? null : <AskNote words={pictureNote} />}
+      </>
+    );
 
   const placeholder = asNew
     ? INBOX_BOX_WORDS.NEW_THREAD_PLACEHOLDER
@@ -319,8 +354,9 @@ export function ThreadComposer({
     // Note that a new thread starts from words alone, so no picked answer lights Send for one.
     sendable: !asNew && answerReady,
     onSend: () => (asNew ? start() : send()),
+    head,
     addMenu: {
-      actions: [],
+      actions: [{ ...ATTACH_PHOTOS, onPress: attach }],
       switches: [
         {
           label: `${INBOX_BOX_WORDS.SEND_AS_NEW} ${agentName}`,

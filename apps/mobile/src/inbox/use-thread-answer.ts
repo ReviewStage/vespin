@@ -533,30 +533,40 @@ export function useThreadAnswer(
     starting.add(itemId);
     const before = held.get(itemId)?.started;
     const key = before?.words === text ? before.key : randomUUID();
+    // The pictures the box holds go as the new thread's first message's, as the panel's start carries its files.
+    const { attachments } = draft;
     let startedId: string | undefined;
     hold(itemId, (was) => ({
       ...was,
-      draft: { ...was.draft, note: "" },
+      draft: { ...was.draft, note: "", attachments: [] },
       note: undefined,
       started: { key, words: text },
     }));
     void write(
       () =>
-        acts[ACT_KIND.AGENTS_INBOX_START]({ agentId: item.agentId, text, clientKey: key }).then(
-          (answer) => {
-            if (!("failure" in answer)) startedId = answer.item.id;
+        acts[ACT_KIND.AGENTS_INBOX_START]({
+          agentId: item.agentId,
+          text,
+          ...(attachments.length === 0 ? undefined : { attachments: [...attachments] }),
+          clientKey: key,
+        }).then((answer) => {
+          if (!("failure" in answer)) startedId = answer.item.id;
 
-            return answer;
-          },
-        ),
+          return answer;
+        }),
       {
         refused: (answer) => ("failure" in answer ? refusedWords(answer.failure) : undefined),
         unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
-        // Note that the words go back as a new thread's, the box turned back to one, so a later Send never posts them as a reply.
+        // Note that the words and pictures go back as a new thread's, the box turned back to one, so a later Send never posts them as a reply.
         inPlace: (words) =>
           hold(itemId, (was) =>
-            was.draft.note.trim() === ""
-              ? { ...was, asNew: true, draft: { ...was.draft, note: draft.note }, note: words }
+            was.draft.note.trim() === "" && was.draft.attachments.length === 0
+              ? {
+                  ...was,
+                  asNew: true,
+                  draft: { ...was.draft, note: draft.note, attachments },
+                  note: words,
+                }
               : { ...was, note: words },
           ),
         went: BUZZ.SUCCESS,
