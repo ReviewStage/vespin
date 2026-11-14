@@ -975,7 +975,8 @@ export function AgentTranscript({
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
   const keyboard = useDockKeyboard();
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript. While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the tab bar and the bar stands right on it.
-  const foot = (keyboard > 0 ? 0 : bottom + TAB_BAR_ROOM) + useDockRoom();
+  // Note that a keyboard standing only partway over that room, as one an interactive drag is pulling down, takes only the part it covers, since the bar stands clear of the safe area until the keyboard rises past it.
+  const foot = Math.max(0, bottom + TAB_BAR_ROOM - keyboard) + useDockRoom();
 
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
