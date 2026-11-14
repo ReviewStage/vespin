@@ -93,12 +93,16 @@ const STRONGER = {
 /**
  * The dark theme of a sheet or popover standing over a regular window, lifted
  * as iOS lifts presented content in dark: the panel's dialog fill
- * (`SURFACE`) as its ground, and its rows on the hairline's lighter gray, so
- * it stands above the dimmed window behind it rather than as a black hole in
- * it. Light is unchanged, since its sheet already reads above the window.
+ * (`SURFACE`) as every ground it draws on (a plain page's, a list's, and a
+ * form's alike, so no face of it drops back to black), and its rows on the
+ * hairline's lighter gray, so it stands above the dimmed window behind it
+ * rather than as a black hole in it. Light is unchanged, since its sheet
+ * already reads above the window.
  */
 const ELEVATED_DARK = {
   ...THEME.DARK,
+  GROUND: BRAND_COLOR.DARK.SURFACE,
+  SIDEBAR: BRAND_COLOR.DARK.SURFACE,
   GROUPED: BRAND_COLOR.DARK.SURFACE,
   RAISED: BRAND_COLOR.DARK.CHIP_EDGE,
 } as const;
@@ -129,9 +133,9 @@ export function useColors(elevated?: boolean): BrandColors {
 /**
  * What stands in a sheet or popover, drawn on the lifted ground in dark
  * (`ELEVATED_DARK`) while `lifted`: while it stands as a form sheet or
- * popover over a regular window, an iPad's or the open Duo's. A full sheet
- * on an iPhone stands over nothing it must be told apart from, so it keeps
- * the plain ground. Note that a sheet stays wrapped whichever it is, so a
+ * popover over a window regular both ways, an iPad's or the open Duo's. A
+ * full sheet on an iPhone, upright or on its side, stands over nothing it
+ * must be told apart from, so it keeps the plain ground. Note that a sheet stays wrapped whichever it is, so a
  * window crossing the size classes changes the value alone and never
  * remounts what the sheet holds, words typed in it among them.
  */

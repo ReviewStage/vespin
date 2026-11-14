@@ -18,8 +18,7 @@ import {
 } from "@repo/ui-native";
 import { type ReactNode, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
+import { useSheetsFloat } from "../use-window-size-class.js";
 
 /** What Remind me is called and drawn with, wherever it stands: a row's swipe and long press, a thread's ⋯ menu, and Select mode's bar. */
 export const REMIND_ME = { label: REMIND_WORDS.REMIND_ME, symbol: GLYPH.TIME } as const;
@@ -99,8 +98,8 @@ export function useRemind(): UseRemindResult {
   };
 
   const openedAt = held?.at ?? Date.now();
-  // Note that a regular window stands the sheet as a form sheet over it, which draws it lifted in dark.
-  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  // Note that a window regular both ways stands the sheet as a form sheet over it, which draws it lifted in dark.
+  const lifted = useSheetsFloat();
 
   const sheet = (
     <RemindPickSheet
@@ -111,7 +110,7 @@ export function useRemind(): UseRemindResult {
         setHeld(undefined);
       }}
       onDismiss={() => setHeld(undefined)}
-      elevated={regular}
+      elevated={lifted}
     />
   );
 

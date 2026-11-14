@@ -26,7 +26,7 @@ import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
 import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useSheetsFloat, useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { VoiceCallProvider } from "../voice-call.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
@@ -118,7 +118,9 @@ function GuardedScreens() {
         sheetGrabberVisible: true,
       };
 
-  // Note that a sheet over a regular window is a form sheet standing above the dimmed window, so in dark it draws on the lifted ground, as iOS lifts presented content; the app's own pages and an iPhone's full sheets keep the plain ground.
+  // Note that a sheet over a window regular both ways is a form sheet standing above the dimmed window, so in dark it draws on the lifted ground, as iOS lifts presented content; the app's own pages and an iPhone's full sheets, upright or on its side, keep the plain ground.
+  const lifted = useSheetsFloat();
+
   const sheetLayout = ({
     route,
     children,
@@ -127,7 +129,7 @@ function GuardedScreens() {
     children: ReactElement;
   }): ReactElement =>
     LIFTED_SHEETS.has(route.name) ? (
-      <ElevatedGround lifted={regular}>{children}</ElevatedGround>
+      <ElevatedGround lifted={lifted}>{children}</ElevatedGround>
     ) : (
       children
     );
