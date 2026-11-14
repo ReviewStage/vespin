@@ -23,7 +23,7 @@ type CommentStarted = { readonly thread: DescriptionCommentThread } | { readonly
 
 /** What the margin, the Comments tab, and the summary draw and press. */
 export interface DescriptionCommentsControl {
-  readonly planId: string;
+  readonly taskId: string;
   /** Every thread of the description, oldest first, resolved ones among them. */
   readonly threads: readonly DescriptionCommentThread[];
   /** Whether a read has answered, so the threads are what the description holds rather than nothing yet. */

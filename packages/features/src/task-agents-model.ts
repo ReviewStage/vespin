@@ -120,7 +120,7 @@ const WORKING: ReadonlySet<ListedAgent["status"]> = new Set([
 ]);
 
 /** What ordering a task's agents reads of each. */
-type OrderedAgent = Pick<ListedAgent, "id" | "planId" | "status" | "createdAt" | "archivedAt">;
+type OrderedAgent = Pick<ListedAgent, "id" | "taskId" | "status" | "createdAt" | "archivedAt">;
 
 /** Those at work first, then the rest, newest started first within each, and by id among those started at one instant. */
 function workingFirst(a: OrderedAgent, b: OrderedAgent): number {
@@ -139,7 +139,7 @@ export function agentsOfTask<Agent extends OrderedAgent>(
   taskId: string,
 ): readonly Agent[] {
   return (agents ?? [])
-    .filter((agent) => agent.planId === taskId && agent.archivedAt === undefined)
+    .filter((agent) => agent.taskId === taskId && agent.archivedAt === undefined)
     .toSorted(workingFirst);
 }
 

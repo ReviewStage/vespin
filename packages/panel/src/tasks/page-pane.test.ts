@@ -608,7 +608,7 @@ test("Comment asks the frame for an element, an element holding threads is pinne
   };
 
   const control: DescriptionCommentsControl = {
-    planId: TASK,
+    taskId: TASK,
     threads: [thread],
     read: true,
     failed: false,
@@ -767,7 +767,7 @@ test("a comment held in a review stands in the Review panel under its element's 
   let refusals = 1;
 
   const control: DescriptionCommentsControl = {
-    planId: TASK,
+    taskId: TASK,
     threads: [],
     read: true,
     failed: false,
@@ -928,7 +928,7 @@ test("a reply held in a review stands Pending as its thread's last comment, and 
   const sent: Readonly<Record<string, WireBoundaryInput>>[] = [];
 
   const control: DescriptionCommentsControl = {
-    planId: TASK,
+    taskId: TASK,
     threads: [thread],
     read: true,
     failed: false,
@@ -1001,7 +1001,7 @@ test("a reply held in a review stands Pending as its thread's last comment, and 
 
 test("words replied to start a comment quoting them in its field, and two held on one element each say and tint the words they quote, told as the pointer is over the element in the page", async () => {
   const control: DescriptionCommentsControl = {
-    planId: TASK,
+    taskId: TASK,
     threads: [],
     read: true,
     failed: false,

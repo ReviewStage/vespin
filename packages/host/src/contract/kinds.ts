@@ -629,11 +629,11 @@ export const TASKS_ACT_KIND = {
    * One task's description held followed while the window holds the stream open
    * for the task it has open, and a while after among those let go lately:
    * what it holds reaches the panel on app state
-   * (`LIVE_READ.DESCRIPTION_DOCUMENT`), so the stream carries nothing.
+   * (`LIVE_READ.HELD_TASK`), so the stream carries nothing.
    */
-  TASKS_DOCUMENT_FOLLOW: "tasks.documentFollow",
+  TASKS_HELD_FOLLOW: "tasks.heldFollow",
   /** A held task's description, which the panel reads on app state, read again at once, as Try again asks. */
-  TASKS_DOCUMENT_RETRY: "tasks.documentRetry",
+  TASKS_HELD_RETRY: "tasks.heldRetry",
   /**
    * One task's description history held followed while the window holds the stream
    * open for its version history, and a while after among those let go
@@ -1262,8 +1262,8 @@ export const PORT_ACT_USE = {
   TASKS_PAGE_SOURCE: ACT_USE.FETCH,
   TASKS_PAGE_HTML: ACT_USE.FETCH,
   TASKS_PAGES_FOLLOW: ACT_USE.READ,
-  TASKS_DOCUMENT_FOLLOW: ACT_USE.READ,
-  TASKS_DOCUMENT_RETRY: ACT_USE.READ,
+  TASKS_HELD_FOLLOW: ACT_USE.READ,
+  TASKS_HELD_RETRY: ACT_USE.READ,
   TASKS_HISTORY_FOLLOW: ACT_USE.READ,
   TASKS_HISTORY_RETRY: ACT_USE.READ,
   TASKS_PICTURE_READ: ACT_USE.FETCH,

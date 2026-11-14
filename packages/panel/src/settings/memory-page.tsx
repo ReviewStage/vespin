@@ -307,7 +307,7 @@ function SourceChip({
     if (messageId === null || openPlace === undefined) return doors;
 
     const openLine = () =>
-      openPlace({ kind: LINK_DESTINATION.MESSAGE, planId: taskId, agentId, messageId });
+      openPlace({ kind: LINK_DESTINATION.MESSAGE, taskId: taskId, agentId, messageId });
 
     return { ...doors, onOpenTask: openLine, onOpenAgent: openLine };
   }, [doors, openPlace, agentId, messageId, taskId]);

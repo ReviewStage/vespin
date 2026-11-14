@@ -55,7 +55,7 @@ const READS: readonly Read[] = [
     firstLine: 1,
     lastLine: 200,
   }),
-  read(ACT_KIND.TASKS_TREE, { planId: FIXTURE_TASK_ID, path: "src/members" }),
+  read(ACT_KIND.TASKS_TREE, { taskId: FIXTURE_TASK_ID, path: "src/members" }),
   read(ACT_KIND.TERMINAL_CREATE, AGENT),
 ];
 
@@ -137,7 +137,7 @@ it("every changed file's patch counts the lines its hunks hold, as the diff view
 /** Every file path the File tab's tree lists under `path`, walking its folders. */
 function listedFiles(path: string): readonly string[] {
   const listed = answered(RUN_PROFILE.AGENT_FILE, ACT_KIND.TASKS_TREE, {
-    planId: FIXTURE_TASK_ID,
+    taskId: FIXTURE_TASK_ID,
     path,
   });
 

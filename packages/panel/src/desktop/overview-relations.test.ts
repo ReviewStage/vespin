@@ -19,10 +19,10 @@ import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { tasksControl } from "../testing/tasks-control.js";
-import { PlanHead } from "./plan-head.js";
+import { OverviewHead } from "./overview-head.js";
 
 /**
- * plan-relations.test.ts -- the open task's Sub-tasks and Task relations groups:
+ * overview-relations.test.ts -- the open task's Sub-tasks and Task relations groups:
  * a sub-task's own nested under it once its fold opens, a group drawn only
  * while it holds a row, a relation's kind moved from its pill in one
  * call, never a block taken away and added again, and Remove relation
@@ -105,7 +105,7 @@ function draw(
     [ACT_KIND.TASKS_START]: (start) => {
       sent.started?.push(start);
 
-      return Promise.resolve({ planId: "t-9" });
+      return Promise.resolve({ taskId: "t-9" });
     },
   });
 
@@ -120,7 +120,7 @@ function draw(
   act(() =>
     root?.render(
       withQueryClient(
-        createElement(PlanHead, {
+        createElement(OverviewHead, {
           task,
           tasks,
           door: { workspaceName: ACME.name, tasks: listed },

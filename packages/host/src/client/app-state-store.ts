@@ -284,7 +284,7 @@ export function initialAppState(
     [LIVE_READ.AUTOMATION_RUNS]: NO_KEYS_HELD,
     [LIVE_READ.DESCRIPTION_COMMENTS]: NO_DESCRIPTION_COMMENTS,
     [LIVE_READ.HISTORY]: NO_KEYS_HELD,
-    [LIVE_READ.DESCRIPTION_DOCUMENT]: NO_KEYS_HELD,
+    [LIVE_READ.HELD_TASK]: NO_KEYS_HELD,
     machineCommands: { asks: [] },
     notifications: { status: NOTIFICATIONS_STATUS.UNKNOWN },
     network: { online: true, reachable: true },

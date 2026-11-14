@@ -1,10 +1,12 @@
 import { useRef, useState } from "react";
 import { GLYPH } from "../../icons/glyph-registry.js";
+import { AskDeadline } from "../ask-deadline/ask-deadline.js";
+import { AskNoteField, useAskNote } from "../ask-note/ask-note.js";
 import { BUTTON_VARIANT, Button } from "../button/button.js";
 import { CHOICE_LOOK, ChoiceList } from "../choice-list/choice-list.js";
 import { CODE_CARD_TITLE, CodeCard } from "../code-card/code-card.js";
 import { DIALOG_ROLE, DIALOG_SIZE, Dialog } from "../dialog/dialog.js";
-import { FILE_TEXT_EXTENT, FileText } from "../file-text/file-text.js";
+import { FILE_TEXT_EXTENT, FILE_TEXT_FRAME, FileText } from "../file-text/file-text.js";
 
 /**
  * command-ask.tsx -- a command an agent asks to run on this Mac, put to the developer as a modal over the window: the command in its Shell card, how often to allow it, then Deny and Run.
@@ -20,9 +22,12 @@ import { FILE_TEXT_EXTENT, FileText } from "../file-text/file-text.js";
  * The subtitle, not the command, is the card's description, since a
  * payload of thousands of characters would be read out before the answers;
  * the command stands as its own named region instead.
+ * Under the choice, an optional field for the words a Deny hands the agent
+ * (`AskNoteField`), and at the foot's start the time the ask has left
+ * (`AskDeadline`), since it closes by itself.
  * Focus lands on Deny, so a key already pressed runs nothing; Escape and a
- * press on the dimmed window deny too, since a prompt waved away must not
- * run the command.
+ * press on the dimmed window deny too, with no words, since a prompt waved
+ * away must not run the command.
  * Whoever owns the card holds it mounted while the ask stands and passes
  * `open` as the ask goes, answered or timed out, so the card fades out
  * (`Dialog`'s `open`), taking it down once it says it is gone.
@@ -62,6 +67,8 @@ export function CommandAsk({
   onAllowOnce,
   onAllowAlways,
   onDeny,
+  expiresAt,
+  noteMaxLength,
   onExited,
   copy,
 }: {
@@ -73,14 +80,20 @@ export function CommandAsk({
   onAllowOnce: () => void;
   /** Run it, and every later command without asking: Run, with Always allow picked. */
   onAllowAlways: () => void;
-  /** Do not run it, which Escape and the dimmed window also answer. */
-  onDeny: () => void;
+  /** Do not run it, which Escape and the dimmed window also answer. with the words written for the agent where some were; Escape and the dimmed window answer it with none. */
+  onDeny: (note: string | undefined) => void;
+  /** When the ask closes by itself, in epoch milliseconds on the window's clock, which its foot counts down to. */
+  expiresAt: number;
+  /** The most characters of the words a Deny hands the agent. */
+  noteMaxLength: number;
   /** Its fade has run and the card is gone, which its owner takes the ask down on. */
   onExited?: (() => void) | undefined;
   /** The caller's platform act that puts words on the clipboard, for the Shell card's Copy. */
   copy: (text: string) => Promise<void>;
 }): React.JSX.Element {
   const deny = useRef<HTMLButtonElement | null>(null);
+  const note = useAskNote();
+  const denied = () => onDeny(note.note);
   const [scope, setScope] = useState<readonly AllowScope[]>([ALLOW_SCOPE.ALWAYS]);
   // Note that a pick taken back leaves no scope, which runs once rather than widening.
   const run = scope[0] === ALLOW_SCOPE.ALWAYS ? onAllowAlways : onAllowOnce;
@@ -93,12 +106,13 @@ export function CommandAsk({
       title={TITLE}
       subtitle={SUBTITLE}
       initialFocus={deny}
-      onDismiss={onDeny}
+      onDismiss={() => onDeny(undefined)}
       onExited={onExited}
+      actionsStart={<AskDeadline expiresAt={expiresAt} />}
       actions={
         <>
-          <Button ref={deny} variant={BUTTON_VARIANT.QUIET} onClick={onDeny}>
-            Deny
+          <Button ref={deny} variant={BUTTON_VARIANT.QUIET} onClick={denied}>
+            {note.denyLabel}
           </Button>
           <Button variant={BUTTON_VARIANT.PRIMARY} onClick={run}>
             Run
@@ -110,7 +124,14 @@ export function CommandAsk({
         glyph={<GLYPH.TERMINAL />}
         title="Shell"
         titleIs={CODE_CARD_TITLE.WORDS}
-        body={<FileText text={command} label={COMMAND_LABEL} extent={FILE_TEXT_EXTENT.BRIEF} />}
+        body={
+          <FileText
+            text={command}
+            label={COMMAND_LABEL}
+            extent={FILE_TEXT_EXTENT.BRIEF}
+            frame={FILE_TEXT_FRAME.CARD_BODY}
+          />
+        }
         copied={command}
         copy={copy}
       />
@@ -121,6 +142,7 @@ export function CommandAsk({
         value={scope}
         onChange={setScope}
       />
+      <AskNoteField note={note} maxLength={noteMaxLength} onDeny={denied} />
     </Dialog>
   );
 }

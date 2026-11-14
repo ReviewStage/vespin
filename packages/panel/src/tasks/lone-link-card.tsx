@@ -198,7 +198,7 @@ function PageRowCard({
 
   const place =
     "taskId" in page
-      ? ({ kind: LINK_DESTINATION.PAGE, planId: page.taskId, pageId: page.pageId } as const)
+      ? ({ kind: LINK_DESTINATION.PAGE, taskId: page.taskId, pageId: page.pageId } as const)
       : ({ kind: LINK_DESTINATION.PAGE, agentId: page.agentId, pageId: page.pageId } as const);
 
   // Note that the window holds names for the open task's pages alone, so a page of another task is named by the title read with its pages.

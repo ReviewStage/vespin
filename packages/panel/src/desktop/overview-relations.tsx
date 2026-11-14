@@ -47,7 +47,7 @@ import { type RelatedTaskRow, RelatedTasks } from "./related-tasks.js";
 import { chipSubmenu } from "./standing-submenus.js";
 
 /**
- * plan-relations.tsx -- the open task's sub-tasks and the tasks related to it at the head of its description, each a group of the Tasks list's own rows.
+ * overview-relations.tsx -- the open task's sub-tasks and the tasks related to it at the head of its description, each a group of the Tasks list's own rows.
  *
  * Two groups stand under the byline, ahead of the Agents, each the shape
  * every group of the head takes, a `GroupHeader` over a list
@@ -325,7 +325,7 @@ function blockTasks(
  * relations change through the task list's doors, and each group's + adds
  * one through the add menu's `door`.
  */
-export function PlanRelations({
+export function OverviewRelations({
   task,
   tasks,
   door,
@@ -370,7 +370,7 @@ export function PlanRelations({
     relationMenu(TASK_RELATION_KIND.SUB_TASK, doorsOf(subTask, TASK_RELATION_KIND.SUB_TASK)),
   );
 
-  const count = subTaskCount(subTasksOf(tasks.tasks, task.id));
+  const count = subTaskCount(task, subTasksOf(tasks.tasks, task.id));
   const byId = new Map(tasks.tasks.map((each) => [each.id, each]));
 
   const sides = [
@@ -411,7 +411,7 @@ export function PlanRelations({
 
   return (
     // Note that the groups are pulled out by a row's inset on each side, so their marks stand on the title's edge, as the Agents group's do.
-    <div className="plan-relations -mx-row-inset mb-block-gap flex flex-col gap-block-gap">
+    <div className="overview-relations -mx-row-inset mb-block-gap flex flex-col gap-block-gap">
       <ReplayUnmask>
         <GroupHeader
           heading={GROUP_HEADING.NONE}

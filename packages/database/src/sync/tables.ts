@@ -50,6 +50,7 @@ import { installedSkill } from "../schemas/installed-skill.js";
 import { integrationConnection } from "../schemas/integration.js";
 import { integrationInstallation } from "../schemas/integration-installation.js";
 import { machineCommand } from "../schemas/machine-command.js";
+import { machineCommandAsk } from "../schemas/machine-command-ask.js";
 import { memory, memoryRecall } from "../schemas/memory.js";
 import { personalWorkspace } from "../schemas/personal-workspace.js";
 import { accountPreference } from "../schemas/preferences.js";
@@ -72,7 +73,9 @@ import { TOPIC } from "./notification.js";
 import { defineSyncTable, LOG, type SyncTable } from "./sync-table.js";
 
 /**
- * A task, on its own topic and its workspace's. Note that the plan's text
+ * A task, on its own topic and its workspace's, and naming its parent, the
+ * one it had and the one it has (`TOPIC.TASK_PARENT`), so a delta read of
+ * the task list sends the parent whose sub-task count a child moved. Note that the plan's text
  * and the agents' journal of saves are ignored, because every save rewrites
  * both and no view reads them live: a save moves `updated_at` beside them,
  * which the task list and the task's record read, so a save still notifies.
@@ -83,6 +86,7 @@ export const taskSync = defineSyncTable(task, {
   topics: [
     { kind: TOPIC.TASK, column: task.id },
     { kind: TOPIC.WORKSPACE, column: task.organizationId },
+    { kind: TOPIC.TASK_PARENT, column: task.parentTaskId },
   ],
   ignore: [task.description, task.agentEdits, task.doneBy],
   log: LOG.EVERY,
@@ -281,7 +285,8 @@ export const userSync = defineSyncTable(user, {
  * name the local agents on it, and a host's platform, machine, model,
  * update, setup, first register (its home folder), and its going away or
  * coming back reach every surface that reads the hosts (`hostsRead`), as do
- * its enrolling, which writes its version, and its removal. Note that every other column is
+ * its enrolling, which writes its version, its removal, and its being
+ * picked as its account's default machine (`machinesRead`). Note that every other column is
  * ignored, because the device beats and registers again often, rewriting
  * when it was last seen and what it runs, and no view the capture wakes
  * reads them: a window judges a device by its own presence read. Its
@@ -437,11 +442,21 @@ export const taskReadSync = defineSyncTable(taskRead, {
  * `machine_command_device_listener`), which every such read rewrites, are not
  * captured: no read waits on them. A stopped recording's video is ignored
  * too, since its call reads it only once the result it comes before
- * notifies, and an update comparing it would weigh its bytes.
+ * notifies, and an update comparing it would weigh its bytes, and so is the
+ * agent the command is for, which is written with it and never moves.
  */
 export const machineCommandSync = defineSyncTable(machineCommand, {
   topics: [{ kind: TOPIC.ACCOUNT, column: machineCommand.userId }],
-  ignore: [machineCommand.recording],
+  ignore: [machineCommand.recording, machineCommand.agentId],
+});
+
+/**
+ * An ask a machine holds for its owner's answer, on the owner's topic,
+ * which the owner's read of its machines' asks is woken on: an ask posted,
+ * answered, or taken down.
+ */
+export const machineCommandAskSync = defineSyncTable(machineCommandAsk, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: machineCommandAsk.userId }],
 });
 
 /**
@@ -899,6 +914,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   agentPinSync,
   taskReadSync,
   machineCommandSync,
+  machineCommandAskSync,
   accountPreferenceSync,
   accountSoundSync,
   accountSoundChoiceSync,
