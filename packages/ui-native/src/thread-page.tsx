@@ -119,6 +119,17 @@ export type ThreadMessage = {
   readonly media: readonly ThreadMedia[];
   /** What the answer it carries says it was, "Chose Both", and whether it went ahead, a check in the done tone, or held back, a turn back in the muted ink. */
   readonly stamp?: { readonly words: string; readonly ahead: boolean } | undefined;
+  /** What happened to the thread after it, such as a member resolving it or the agent withdrawing its ask. */
+  readonly after?: readonly ThreadEvent[] | undefined;
+};
+
+/** A line of what happened to a thread: who did it, what they did in the panel's words, when, and an agent's why for a withdrawn ask. */
+type ThreadEvent = {
+  readonly key: string;
+  readonly who: { readonly name: string; readonly agent: boolean };
+  readonly did: string;
+  readonly at: number | undefined;
+  readonly reason?: string | undefined;
 };
 
 type ThreadPageProps = {
@@ -131,6 +142,8 @@ type ThreadPageProps = {
   /** The thread's title, which heads the page. */
   readonly title: string;
   readonly messages: readonly ThreadMessage[];
+  /** What happened to the thread before every message read, such as a close on a thread nobody wrote on, drawn under its heading. */
+  readonly opening?: readonly ThreadEvent[] | undefined;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
   /** Opens a link or a chip pressed, by the address it was written as, where the app draws it or in Safari. */
@@ -297,6 +310,65 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
   );
 }
 
+/**
+ * A line of what happened to the thread among its messages, as the panel's
+ * thread draws one: a glyph in the face's column, whoever did it, what
+ * they did and when, in the muted ink, and an agent's why for a
+ * withdrawn ask under it, where the messages' words start.
+ */
+function EventLine({
+  event,
+  now,
+}: {
+  readonly event: ThreadEvent;
+  readonly now?: number | undefined;
+}) {
+  const colors = useColors();
+  const resolved = !event.who.agent;
+  const moment = now ?? Date.now();
+  const when = event.at === undefined ? undefined : sinceText(event.at, moment);
+  const heard = `${event.who.name} ${event.did}${event.at === undefined ? "" : `, ${sinceHeard(event.at, moment)}`}${event.reason === undefined ? "" : `. ${event.reason}`}`;
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[
+        padding({ horizontal: SPACE.EDGE }),
+        accessibilityElement("ignore"),
+        accessibilityLabel(heard),
+      ]}
+    >
+      <HStack spacing={WRITER_GAP} alignment="firstTextBaseline">
+        <Image
+          {...glyphImage(resolved ? GLYPH.RESOLVED : GLYPH.UNDO)}
+          size={MARK_SIZE.GLYPH - 2}
+          color={colors.TEXT_MUTED}
+          modifiers={[frame({ width: MARK_SIZE.WRITER }), accessibilityHidden()]}
+        />
+        {/* Note that the line is one text, never a nested one, since `@expo/ui`'s native text keeps a nested child's first words. */}
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {`${event.who.name} ${event.did}${when === undefined ? "" : ` · ${when}`}`}
+        </Text>
+        <Spacer />
+      </HStack>
+      {event.reason === undefined ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            padding({ leading: MARK_SIZE.WRITER + WRITER_GAP }),
+          ]}
+        >
+          {event.reason}
+        </Text>
+      )}
+    </VStack>
+  );
+}
+
 /** One message, flat on the page: the writer's face or tile, name in 13 pt semibold and time, and under them its words and files. */
 function MessageView({
   message,
@@ -397,6 +469,7 @@ export function ThreadPage(props: ThreadPageProps) {
     pathActions,
     title,
     messages,
+    opening,
     ask,
     acts = [],
     menu,
@@ -431,8 +504,16 @@ export function ThreadPage(props: ThreadPageProps) {
             ]}
           >
             <ThreadHead title={title} standing={standing} />
+            {(opening ?? []).map((event) => (
+              <EventLine key={event.key} event={event} now={drawing.now} />
+            ))}
             {messages.map((message) => (
-              <MessageView key={message.id} message={message} {...drawing} />
+              <VStack key={message.id} alignment="leading" spacing={SPACE.EDGE}>
+                <MessageView message={message} {...drawing} />
+                {(message.after ?? []).map((event) => (
+                  <EventLine key={event.key} event={event} now={drawing.now} />
+                ))}
+              </VStack>
             ))}
             {ask === undefined ? null : (
               <VStack alignment="leading" modifiers={[padding({ horizontal: SPACE.EDGE })]}>

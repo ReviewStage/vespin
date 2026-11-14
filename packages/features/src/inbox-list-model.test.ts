@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { inboxAttachmentAddress } from "./inbox-attachment-link.js";
-import { INBOX_MEDIA, inboxThreadMessages } from "./inbox-list-model.js";
+import { INBOX_MEDIA, inboxThreadEventsShown, inboxThreadMessages } from "./inbox-list-model.js";
 import {
   INBOX_MESSAGE_AUTHOR,
   INBOX_STATUS,
@@ -10,9 +10,10 @@ import {
 import { LINK_DESTINATION } from "./link-grammar.js";
 
 /**
- * inbox-list-model.test.ts -- a thread's message as a client draws it: what
- * its words name in place is drawn there as what it is, a recording as a
- * video, and only what they do not name stands after them, a PDF among it.
+ * inbox-list-model.test.ts -- a thread as a client draws it: what a
+ * message's words name in place is drawn there as what it is, a recording as
+ * a video, and only what they do not name stands after them, a PDF among it;
+ * and the lines of what happened to it, who closed it and where.
  */
 
 const ITEM = "0b6e2f1a-3c4d-4e5f-8a9b-1c2d3e4f5a60";
@@ -72,6 +73,51 @@ describe("inboxThreadMessages", () => {
     expect(message?.media.map(({ kind, attachmentId }) => ({ kind, attachmentId }))).toEqual([
       { kind: INBOX_MEDIA.PICTURE, attachmentId: SHOT },
       { kind: INBOX_MEDIA.FILE, attachmentId: PLAN_PDF },
+    ]);
+  });
+});
+
+describe("inboxThreadEventsShown", () => {
+  it("says who resolved a notice without an answer, the reader as You, after the last message written by then", () => {
+    const item: InboxItem = {
+      id: ITEM,
+      agentId: "agent-1",
+      key: "notice",
+      revision: 3,
+      version: INBOX_WIRE_VERSION,
+      title: "Recorded the flow",
+      needsReply: false,
+      status: INBOX_STATUS.CLOSED,
+      closedBy: { userId: "reader-1", name: "Ada Lovelace" },
+      settledAt: 2_500,
+      thread: [
+        { id: "message-1", author: INBOX_MESSAGE_AUTHOR.AGENT, text: "Done.", createdAt: 1_000 },
+        {
+          id: "message-2",
+          author: INBOX_MESSAGE_AUTHOR.AGENT,
+          text: "Also this.",
+          createdAt: 2_000,
+        },
+        { id: "message-3", author: INBOX_MESSAGE_AUTHOR.AGENT, text: "Later.", createdAt: 3_000 },
+      ],
+      postedAt: 1_000,
+      updatedAt: 3_000,
+    };
+
+    const names = { agentName: "Agent", readerId: "reader-1", memberName: () => undefined };
+
+    expect([...inboxThreadEventsShown(item, names)]).toEqual([
+      [
+        1,
+        [
+          {
+            key: ITEM,
+            who: { name: "You", agent: false },
+            did: "resolved this without an answer",
+            at: 2_500,
+          },
+        ],
+      ],
     ]);
   });
 });
