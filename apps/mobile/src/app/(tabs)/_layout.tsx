@@ -17,6 +17,7 @@ import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
 import { placeOfRoute, SIDEBAR_PLACE } from "../../screens/app-sidebar.js";
 import { AppSplit } from "../../screens/app-split.js";
+import { useSidebarChoiceLapse } from "../../sidebar-shown.js";
 import { useThreeColumns, useWindowSizeClass } from "../../use-window-size-class.js";
 import { useStandingCallCard } from "../../voice-call.js";
 import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
@@ -110,6 +111,7 @@ export default function TabsLayout() {
   const waiting = useInboxBadge();
   // The members of the workspace the phone works in, whose pictures every face reads, followed once for every tab.
   useMemberPicturesFollow();
+  useSidebarChoiceLapse();
   const iconOnly = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const appSidebar = useThreeColumns();
   const pathname = usePathname();
