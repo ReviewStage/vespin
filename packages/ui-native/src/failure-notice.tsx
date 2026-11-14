@@ -1,6 +1,7 @@
 // failure-notice.tsx -- the app's one notice: a banner of Liquid Glass that rises at the window's foot, over its bars, with a refusal's words and a Try again, a write that went with its Undo, or says once that the phone is offline, read aloud by VoiceOver and let go on its own.
 
 import { Host, HStack, Image, Spacer, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityElement,
   accessibilityIdentifier,
@@ -8,6 +9,7 @@ import {
   fixedSize,
   font,
   foregroundStyle,
+  frame,
   glassEffect,
   layoutPriority,
   lineLimit,
@@ -52,7 +54,7 @@ import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";
 import { LiftBarsProvider, type NoticeLift, useLiftBars } from "./notice-lift.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What the banner's one button says, as the panel's refusals and its Undo toast offer it. */
@@ -144,7 +146,9 @@ function NoticeBody({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
-  const ink = notice.kind === NOTICE_KIND.REFUSED ? colors.DANGER : colors.TEXT_MUTED;
+  // Note that a refusal draws as a problem line does, the attention glyph over the muted ink, rather than danger's red: it asks for a second try, not alarm.
+  const refused = notice.kind === NOTICE_KIND.REFUSED;
+  const ink = refused ? colors.ATTENTION : colors.TEXT_MUTED;
   const press = noticePress(notice);
 
   return (
@@ -168,7 +172,7 @@ function NoticeBody({
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-            foregroundStyle(colors.TEXT),
+            foregroundStyle(refused ? colors.TEXT_MUTED : colors.TEXT),
             lineLimit(3),
             layoutPriority(1),
           ]}
@@ -177,17 +181,27 @@ function NoticeBody({
         </Text>
         <Spacer />
         {press === undefined ? null : (
+          // Note that the press takes its target's 44 pt on its label, not the button, since only a label's frame and shape answer a press; the word alone stood about 20 pt tall.
           <SwiftUIButton
-            label={press.label}
             onPress={onPress}
             modifiers={[
               buttonStyle("borderless"),
               tint(colors.TEXT),
-              font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
               fixedSize(),
               accessibilityIdentifier(press.identifier),
             ]}
-          />
+          >
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
+                foregroundStyle(colors.TEXT),
+                frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+                SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+              ]}
+            >
+              {press.label}
+            </Text>
+          </SwiftUIButton>
         )}
       </HStack>
     </Host>
