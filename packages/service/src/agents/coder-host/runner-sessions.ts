@@ -1246,7 +1246,10 @@ export const runnerSessions = <
           return { firstSequence, ...config, opening };
         });
 
-        const [launch, sources, environment, integrations, variables] = yield* Effect.all(
+        // Note that the stamps are read before the values, so a variable set between the two reads leaves the fingerprint older than the launch, and the next message relaunches it.
+        const variables = yield* workspaceVariableStampsOf(agent, kind);
+
+        const [launch, sources, environment, integrations] = yield* Effect.all(
           [
             made,
             // The launch's swaps stand before the runner starts, so its first request carries the
@@ -1260,7 +1263,6 @@ export const runnerSessions = <
                   ),
             workspaceEnvironmentOf(agent, kind),
             options.integrations(agent),
-            workspaceVariableStampsOf(agent, kind),
           ],
           { concurrency: "unbounded" },
         );

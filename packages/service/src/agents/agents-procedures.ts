@@ -756,9 +756,11 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       // Note that the tab holds the sandbox before its shell starts, so a stop as a turn ends never takes the sandbox from under it.
       yield* recordedTerminalOpened(sandboxName, terminalId);
 
-      // Note that the shell starts with the workspace's variables, as a run action and the agent's own commands do.
-      const environment = yield* hostedStoreOrUnavailable(
-        workspaceEnvironmentOf(agent, AGENT_MACHINE.VERCEL),
+      // Note that the shell starts with the workspace's variables, as a run action and the agent's own commands do, and without them where they could not be read, as the relay's does, rather than not at all.
+      const environment = yield* workspaceEnvironmentOf(agent, AGENT_MACHINE.VERCEL).pipe(
+        Effect.catch(() =>
+          Effect.as(Effect.logWarning("a terminal's variables were not read"), {}),
+        ),
       );
 
       const opened = yield* inSandbox(
