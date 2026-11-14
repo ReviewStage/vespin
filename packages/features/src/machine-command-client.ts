@@ -1,4 +1,4 @@
-import type { CallCredential } from "./account-call.js";
+import type { HostedServiceTarget } from "./account-call.js";
 import { machineCommandsContract } from "./contract/machine-commands.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { failureSetOf } from "./hosted-failure.js";
@@ -44,17 +44,10 @@ export const MACHINE_COMMAND_NOT_CLAIMED = {
   failure: MACHINE_COMMAND_CALL_FAILURE.NOT_FOUND,
 } as const;
 
-export interface HostedMachineCommandClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-}
-
 export class HostedMachineCommandClient {
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedMachineCommandClientOptions) {
+  constructor(options: HostedServiceTarget) {
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
       credential: options.credential,
