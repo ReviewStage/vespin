@@ -454,24 +454,29 @@ export const VERSION_WRITER = {
   EARLIER: "earlier",
 } as const;
 
-/** A version's writer as its mark draws them: a person by their face, an agent by its tile and name, and the notetaker and the earlier history by marks of their own. */
+/** A version's writer as its mark draws them: a person by their face, an agent by its tile, name and harness's mark where it is known, and the notetaker and the earlier history by marks of their own. */
 export type VersionWriter =
   | { readonly kind: typeof VERSION_WRITER.PERSON; readonly face: Face }
-  | { readonly kind: typeof VERSION_WRITER.AGENT; readonly name: string }
+  | {
+      readonly kind: typeof VERSION_WRITER.AGENT;
+      readonly name: string;
+      readonly harness: ModelProvider | undefined;
+    }
   | { readonly kind: typeof VERSION_WRITER.PRODUCT }
   | { readonly kind: typeof VERSION_WRITER.EARLIER };
 
-/** A version's writer's mark at a row's lead, as the panel's version rows lead: a person's face, an agent's tile, the app's own mark (`BrandMark`), or the history glyph for the history before versions were kept. */
+/** A version's writer's mark at a row's lead, as the panel's version rows lead: a person's face, an agent's tile with its harness's mark, the app's own mark (`BrandMark`), or the history glyph for the history before versions were kept; each grows with Dynamic Type, as a face does. */
 function VersionMark({ writer }: { readonly writer: VersionWriter }) {
   const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.LEAD);
 
   switch (writer.kind) {
     case VERSION_WRITER.PERSON:
-      return <Avatar name={writer.face.name} picture={writer.face.picture} size={MARK_SIZE.LEAD} />;
+      return <Avatar name={writer.face.name} picture={writer.face.picture} size={size} />;
     case VERSION_WRITER.AGENT:
-      return <AgentTile name={writer.name} size={MARK_SIZE.LEAD} />;
+      return <AgentTile name={writer.name} harness={writer.harness} size={size} />;
     case VERSION_WRITER.PRODUCT:
-      return <BrandMark size={MARK_SIZE.LEAD} />;
+      return <BrandMark size={size} />;
     case VERSION_WRITER.EARLIER:
       return <LeadGlyph symbol={GLYPH.HISTORY} ink={colors.TEXT_MUTED} />;
   }

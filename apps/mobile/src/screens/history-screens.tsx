@@ -5,10 +5,13 @@ import {
   revisionWriterName,
   VERSION_HISTORY_WORDS,
 } from "@repo/features/description-history-words";
+import { providerOf } from "@repo/features/model-label";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { DESCRIPTION_ACTOR, type DescriptionLastEdit } from "@repo/features/task-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
 import { readingWords, showMoreWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
+import { selectTasks } from "@repo/host/app-state-reads";
 import {
   BUTTON_LOOK,
   BUZZ,
@@ -27,8 +30,10 @@ import {
   type VersionWriter,
   WordsRow,
 } from "@repo/ui-native";
+import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useState } from "react";
+import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
@@ -59,7 +64,11 @@ function versionNumber(spelled: string | undefined): number | undefined {
 }
 
 /** Who wrote a version, by the mark its row leads with, as the panel's version rows lead: a person by their face, its picture looked up only for a person, since a notetaker's version names the person whose call it was written on, whose photo is not its writer's. */
-function versionWriter(lastEdit: DescriptionLastEdit, pictureOf: PictureOf): VersionWriter {
+function versionWriter(
+  lastEdit: DescriptionLastEdit,
+  pictureOf: PictureOf,
+  harness: ModelProvider | undefined,
+): VersionWriter {
   switch (lastEdit.actor) {
     case DESCRIPTION_ACTOR.DEVELOPER:
       return {
@@ -70,7 +79,7 @@ function versionWriter(lastEdit: DescriptionLastEdit, pictureOf: PictureOf): Ver
         },
       };
     case DESCRIPTION_ACTOR.AGENT:
-      return { kind: VERSION_WRITER.AGENT, name: revisionWriterName(lastEdit, undefined) };
+      return { kind: VERSION_WRITER.AGENT, name: revisionWriterName(lastEdit, undefined), harness };
     case DESCRIPTION_ACTOR.NOTETAKER:
       return { kind: VERSION_WRITER.PRODUCT };
     case DESCRIPTION_ACTOR.EARLIER:
@@ -97,6 +106,15 @@ export function HistoryScreen() {
   const onOwnTab = useOnOwnTab();
   const history = useTaskHistory(id);
   const pictureOf = useMemberPictures();
+  const { data: tasks } = useQuery({ ...appStateQuery, select: selectTasks });
+
+  // An agent's version leads with its harness's mark where the task's agents still hold its model, as the panel's version rows do.
+  const harnessOf = (agentId: string | undefined): ModelProvider | undefined => {
+    const model = tasks?.taskAgents?.find((agent) => agent.id === agentId)?.model;
+
+    return model === undefined ? undefined : providerOf(model);
+  };
+
   const now = Date.now();
   const revisions = history.page?.revisions ?? [];
   const earlier = history.page?.earlier;
@@ -123,7 +141,7 @@ export function HistoryScreen() {
           {revisions.map((line) => (
             <VersionRow
               key={line.seq}
-              writer={versionWriter(line.lastEdit, pictureOf)}
+              writer={versionWriter(line.lastEdit, pictureOf, harnessOf(line.agentId))}
               name={revisionWriterName(line.lastEdit, history.readerId)}
               summary={revisionSummary(line)}
               at={line.lastEdit.at}
