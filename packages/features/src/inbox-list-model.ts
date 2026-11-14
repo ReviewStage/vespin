@@ -1342,6 +1342,38 @@ const NOTHING_OPEN = "Nothing open";
 /** What Questions says holding no question that waits on the reader, whomever Addressed to names. */
 const NOTHING_QUESTIONS = "No questions wait on you";
 
+/** What an empty scope's press says where another scope holds something: Open from Questions, else All. */
+export const INBOX_SHOW_INSTEAD = {
+  [INBOX_SHOW.OPEN]: "Show open",
+  [INBOX_SHOW.ALL]: "Show all",
+} as const;
+
+/** A scope an empty one's press turns to, and what the press says. */
+export interface InboxScopeInstead {
+  readonly show: keyof typeof INBOX_SHOW_INSTEAD;
+  readonly label: string;
+}
+
+/**
+ * The scope an empty one offers instead: from Questions, Open where it holds
+ * anything; else All where it holds anything; none from All, or where nothing
+ * else holds anything. Every client's empty Inbox offers the same way on.
+ */
+export function inboxScopeInstead(
+  show: InboxShow,
+  counts: InboxCounts,
+): InboxScopeInstead | undefined {
+  if (show === INBOX_SHOW.NEEDS_ME && counts[INBOX_SHOW.OPEN] > 0) {
+    return { show: INBOX_SHOW.OPEN, label: INBOX_SHOW_INSTEAD[INBOX_SHOW.OPEN] };
+  }
+
+  if (show !== INBOX_SHOW.ALL && counts[INBOX_SHOW.ALL] > 0) {
+    return { show: INBOX_SHOW.ALL, label: INBOX_SHOW_INSTEAD[INBOX_SHOW.ALL] };
+  }
+
+  return undefined;
+}
+
 /** What the list says where its scope and Addressed to leave out every item it holds, by whom Addressed to names. */
 export const INBOX_SHOW_EMPTY = {
   [INBOX_WHOSE.MINE]: {
