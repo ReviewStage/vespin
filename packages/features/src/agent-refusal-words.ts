@@ -1,5 +1,5 @@
 /**
- * agent-refusal-words.ts -- what a refused Start, message, Stop, or change of model says, by why the service refused it, worded once for every client that sends one: the panel's agent tabs and New task, and the iOS app's composer, New agent, and New task.
+ * agent-refusal-words.ts -- what a refused Start, message, Stop, or change of model says, by why the service refused it, and what a refused write of the account's default model says, worded once for every client that sends one: the panel's agent tabs, New task, and Agents settings, and the iOS app's composer, New agent, New task, and Agents settings.
  *
  * The words are plain text; what mends a refusal (a press into Settings, a
  * task moved to the workspace whose GitHub reaches it) is each client's own,

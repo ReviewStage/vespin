@@ -37,7 +37,6 @@ import {
   settingFromOption,
   settingRowsForPage,
 } from "@repo/settings";
-import { settingUpdateRefusal } from "@repo/settings/wire";
 import {
   ListSection,
   MenuPickRow,
@@ -46,6 +45,7 @@ import {
   SettingsForm,
   ToggleRow,
 } from "@repo/ui-native";
+import { actionRefused } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
@@ -176,9 +176,7 @@ export default function AgentsScreen() {
     if (view === undefined) return;
     const value = settingFromOption(field, token, view);
     void setting
-      .run(field, token, () =>
-        acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(settingUpdateRefusal),
-      )
+      .run(field, token, () => acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(actionRefused))
       .then((landed) => {
         if (!landed) setSettingRound((round) => round + 1);
       });

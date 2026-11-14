@@ -15,7 +15,7 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { AppSettingField, AppSettingValue, SettingsUpdateResult } from "@repo/settings/wire";
 import { STATUS_TONE } from "@repo/ui";
-import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
+import { actionRefused } from "@repo/wire";
 import { type UseMutationResult, useMutation } from "@tanstack/react-query";
 import { actFailureWords } from "../act.js";
 import { type SettingWrite, settingMutation } from "../act-mutations.js";
@@ -87,11 +87,6 @@ export function rowWrite<Value, Answer, Variables>(
     savedAt: isSuccess && refusal === undefined ? submittedAt : 0,
     settle: reset,
   };
-}
-
-/** An act's answer refused, as the store or the service words it. */
-export function actionRefused(answer: ActionResult): string | undefined {
-  return answer.status === ACTION_RESULT_STATUS.ACCEPTED ? undefined : answer.reason;
 }
 
 /**

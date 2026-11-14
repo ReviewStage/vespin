@@ -2,6 +2,7 @@ export {
   ACTION_RESULT_STATUS,
   type ActionResult,
   type ActionResultStatus,
+  actionRefused,
   isActionResult,
   UNKNOWN_ACTION_STATUS,
   type UnknownActionResult,
