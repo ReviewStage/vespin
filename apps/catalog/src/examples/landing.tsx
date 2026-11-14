@@ -80,6 +80,11 @@ function Landing(): React.JSX.Element {
         scene={LANDING_SCENE.INBOX}
       />
       <LandingSection
+        title="Start agents from Slack or your terminal."
+        lead="Mention @Vespin in a thread, or run the vespin CLI."
+        scene={LANDING_SCENE.STARTS}
+      />
+      <LandingSection
         title="Bring your own keys."
         lead="Run agents on your Codex or Claude plan, or bring your own API keys."
         scene={LANDING_SCENE.KEYS}

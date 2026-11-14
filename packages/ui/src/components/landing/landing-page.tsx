@@ -33,6 +33,7 @@ const SCENE_FIELD: Readonly<Record<LandingScene, LandingFieldPattern>> = {
   [LANDING_SCENE.AUTOMATIONS]: LANDING_FIELD.RINGS,
   [LANDING_SCENE.DEVICES]: LANDING_FIELD.FLOW,
   [LANDING_SCENE.KEYS]: LANDING_FIELD.WAVES,
+  [LANDING_SCENE.STARTS]: LANDING_FIELD.RINGS,
 };
 
 /** A feature: `title` and `lead` over its scene's stage, `aside` beside the stage where given. */

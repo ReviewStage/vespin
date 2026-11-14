@@ -1137,6 +1137,20 @@
     background: transparent;
   }
 
+  /* The starts: a Slack thread over a terminal, in the keys' column, the
+     thread's lines spaced as its cards are. */
+  .ui-landing-starts {
+    max-width: 560px;
+    margin: 0 auto;
+    background: transparent;
+  }
+
+  .ui-landing-starts-cards {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
   /* Under the Pinned line (`docs/DESIGN.md`), the room beside the words is
      narrower than the ball, so the hero stacks as a phone's does: the words,
      then the ball under them, no wider than the column, no taller than it
