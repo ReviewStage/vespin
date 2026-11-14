@@ -37,6 +37,7 @@ import {
   AgentTranscript,
   AskNote,
   AttachedPictures,
+  askForName,
   BAR_TITLE,
   CallCardRow,
   Composer,
@@ -74,8 +75,6 @@ import {
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
-  WORDS_ASK_KIND,
-  WordsAsk,
   withSending,
   withWaitingLine,
 } from "@repo/ui-native";
@@ -158,11 +157,10 @@ const ADD_WORDS = {
   OPTIONS: "Options",
 } as const;
 
-/** What Rename asks, as the system's alert asks for a name. */
+/** What Rename asks, in the system's alert a task's Rename asks in too (`askForName`). */
 const RENAME_WORDS = {
   TITLE: "Rename agent",
   ACT: "Rename",
-  PLACEHOLDER: "Agent name",
 } as const;
 
 /** The options sheet's words: its name, its rows, its close, and when a change reaches the agent, as the panel's chip applies one. */
@@ -639,8 +637,7 @@ export function AgentScreen() {
   useWarmAgent(id);
   const hasPorts = useAgentHasPorts(id);
   const openPorts = () => router.push({ pathname: "/agent-ports", params: { agent: id } });
-  // Whether Rename's alert, or Archive's or Permanently delete's question, stands over the page.
-  const [renaming, setRenaming] = useState(false);
+  // Whether Archive's or Permanently delete's question stands over the page.
   const [archiving, setArchiving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const deleteQuestion = actions.deleteQuestion(title);
@@ -717,7 +714,14 @@ export function AgentScreen() {
             <Stack.Toolbar.Menu inline>
               <Stack.Toolbar.MenuAction
                 icon={glyphSymbol(GLYPH.RENAME)}
-                onPress={() => setRenaming(true)}
+                onPress={() =>
+                  askForName({
+                    title: RENAME_WORDS.TITLE,
+                    act: RENAME_WORDS.ACT,
+                    name: actions.title,
+                    onName: actions.rename,
+                  })
+                }
               >
                 {MENU_WORDS.RENAME}
               </Stack.Toolbar.MenuAction>
@@ -849,23 +853,6 @@ export function AgentScreen() {
       {asked === undefined ? null : (
         <CardMergeAsk agentId={id} pullRequest={asked} onDone={() => setMerging(undefined)} />
       )}
-      <WordsAsk
-        title={RENAME_WORDS.TITLE}
-        placeholder={RENAME_WORDS.PLACEHOLDER}
-        initial={actions.title}
-        kind={WORDS_ASK_KIND.NAME}
-        acts={[
-          {
-            label: RENAME_WORDS.ACT,
-            onAct: (name) => {
-              setRenaming(false);
-              actions.rename(name);
-            },
-          },
-        ]}
-        presented={renaming}
-        onDismiss={() => setRenaming(false)}
-      />
       <ConfirmAsk destructive {...talk.switching} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
