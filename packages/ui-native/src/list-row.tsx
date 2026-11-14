@@ -439,22 +439,16 @@ export function RowFrame({
     return <HStack modifiers={frameModifiers}>{row}</HStack>;
   }
 
-  const opening: readonly RowAction[] =
-    preview === undefined || open === undefined
-      ? []
-      : [
-          {
-            label: VERB.OPEN,
-            symbol: GLYPH.OPEN_EXTERNALLY,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => open(id),
-          },
-        ];
+  // Note that Open stands as its words alone, since it opens the thread or task in the app, where the open-in-Safari glyph said it leaves.
+  const opening =
+    preview === undefined || open === undefined ? null : (
+      <Button {...actContent(VERB.OPEN, undefined)} onPress={() => open(id)} />
+    );
 
   const menu = (
     <ContextMenu>
       <ContextMenu.Items>
-        {opening.map((action) => actionButton(action, colors))}
+        {opening}
         {swiped.map((swipe) => swipeButton(swipe, colors))}
         {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
         {menuActions.map((action) => actionButton(action, colors))}
