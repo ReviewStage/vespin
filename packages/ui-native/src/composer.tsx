@@ -24,17 +24,20 @@ import {
   frame,
   glassEffect,
   lineLimit,
+  onGeometryChange,
   opacity,
   padding,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
+import { useNoticeFoot } from "./notice-foot.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -419,6 +422,10 @@ export function Composer(props: ComposerProps) {
  */
 export function ComposerFoot(props: ComposerProps) {
   const { onDropPictures } = props;
+  const [tall, setTall] = useState<number | undefined>(undefined);
+  const { bottom } = useSafeAreaInsets();
+  // The app's notice stands just above the field, over the column's foot and the bottom safe area under it.
+  useNoticeFoot(tall === undefined ? undefined : tall + bottom);
 
   const glass = [
     padding({ all: BAR_EDGE }),
@@ -430,6 +437,7 @@ export function ComposerFoot(props: ComposerProps) {
     }),
     padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
     ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
+    onGeometryChange(({ height }) => setTall(height)),
   ];
 
   if (props.head === undefined) {

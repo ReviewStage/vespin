@@ -1,4 +1,4 @@
-// failure-notice.tsx -- the app's one notice: a banner of Liquid Glass that slides down from the top with a refusal's words and a Try again, a write that went with its Undo, or says once that the phone is offline, read aloud by VoiceOver and let go on its own.
+// failure-notice.tsx -- the app's one notice: a banner of Liquid Glass that slides up at the window's foot, over the tab bar, composer, or keyboard standing there, with a refusal's words and a Try again, a write that went with its Undo, or says once that the phone is offline, read aloud by VoiceOver and let go on its own.
 
 import { Host, HStack, Image, Spacer, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
 import {
@@ -26,8 +26,8 @@ import {
   useMemo,
   useState,
 } from "react";
-import { AccessibilityInfo, Animated, PanResponder, StyleSheet } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { AccessibilityInfo, Animated, PanResponder, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceMotion } from "./accessibility.js";
 import {
   NO_NOTICE,
@@ -39,9 +39,10 @@ import {
   noticeOnline,
   type ShownNotice,
 } from "./failure-notice-model.js";
-import { BAR_RADIUS } from "./glass-bar.js";
+import { BAR_RADIUS, useKeyboardHeight } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";
+import { useNoticeFootRoom } from "./notice-foot.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -57,13 +58,13 @@ const STANDS_FOR = {
   SCREEN_READER: 10_000,
 } as const;
 
-/** How far the banner travels in from above the screen's top as it arrives, in points. */
+/** How far the banner travels up into its place from below as it arrives, in points. */
 const ARRIVAL = 120;
 
 /** How long it takes to slide in or out, in milliseconds, as the system's own banners do. */
 const SLIDE_MS = 280;
 
-/** How far a swipe up must carry the banner before it lets it go, in points. */
+/** How far a swipe down must carry the banner before it lets it go, in points. */
 const SWIPE_AWAY = 24;
 
 /** The glyph each notice leads with. */
@@ -74,9 +75,9 @@ const NOTICE_SYMBOL = {
 } as const satisfies Record<ShownNotice["kind"], Glyph>;
 
 const styles = StyleSheet.create({
-  // The banner's column, over the whole window and taking no touch outside the banner itself.
-  edge: { position: "absolute", top: 0, left: 0, right: 0 },
-  lane: { paddingHorizontal: SPACE.ROW + 2, paddingTop: SPACE.TIGHT, alignItems: "center" },
+  // The banner's column, across the window's foot and taking no touch outside the banner itself; how far over the bottom edge it stands is set as it draws.
+  edge: { position: "absolute", left: 0, right: 0 },
+  lane: { paddingHorizontal: SPACE.ROW + 2, paddingBottom: SPACE.TIGHT, alignItems: "center" },
   banner: { width: "100%", maxWidth: 560 },
 });
 
@@ -116,12 +117,11 @@ function noticePress(
 
 /**
  * The banner's words, its glyph, and Try again or Undo, in the system's
- * glass, standing `ARRIVAL` above its place until it has `arrived`, and
+ * glass, standing `ARRIVAL` below its place until it has `arrived`, and
  * sliding between the two. Note that SwiftUI slides it, not React Native,
  * because its accessibility frames stay where its host was laid out: a
- * React Native transform moved what was drawn but left Undo's frame above
- * the screen's top, so a tap aimed by it, as Maestro aims one, landed on the
- * status bar.
+ * React Native transform moved what was drawn but left Undo's frame where it
+ * was laid out, so a tap aimed by it, as Maestro aims one, missed the button.
  */
 function NoticeBody({
   notice,
@@ -151,7 +151,7 @@ function NoticeBody({
           // Note that the banner contains its pieces as elements of their own, because an identifier on a plain stack passes down to them and stood over Try again's own.
           accessibilityElement("contain"),
           accessibilityIdentifier("failure-notice"),
-          offset({ y: arrived ? 0 : -ARRIVAL }),
+          offset({ y: arrived ? 0 : ARRIVAL }),
           animation(Animation.easeInOut({ duration: SLIDE_MS / 1000 }), arrived),
         ]}
       >
@@ -186,9 +186,13 @@ function NoticeBody({
 }
 
 /**
- * The banner: fades in and slides down under the status bar as a notice
- * arrives, or only fades in where the reader reduces motion, stands until its time is up,
- * a swipe up, or its Try again or Undo, and slides away. Note that it stands over the
+ * The banner: fades in and slides up at the window's foot as a notice
+ * arrives, or only fades in where the reader reduces motion, stands until
+ * its time is up, a swipe down, or its Try again or Undo, and slides away.
+ * It stands just above the topmost piece at the foot, a tab bar, a
+ * composer, or the keyboard (`useNoticeFootRoom`), as Mail's undo bar
+ * stands over its toolbar, so it covers no bar's title, Back or buttons at
+ * the top, in a split view's columns either. Note that it stands over the
  * app's root view, above the tabs, and passes every touch outside it
  * through to the screen under it; it does not stand in a window of its own
  * (`FullWindowOverlay`), because on iOS 27.2 that window never drew, so no
@@ -202,6 +206,9 @@ function NoticeBanner({
   readonly onGone: (serial: number) => void;
 }) {
   const reduceMotion = useReduceMotion();
+  const footRoom = useNoticeFootRoom();
+  const keyboard = useKeyboardHeight();
+  const { bottom } = useSafeAreaInsets();
   const [place] = useState(() => new Animated.Value(0));
   const [drawn, setDrawn] = useState<ShownNotice | undefined>(notice);
   // Whether the banner stands in its place, or above it as it arrives and leaves.
@@ -269,9 +276,9 @@ function NoticeBanner({
   const swipe = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (_, { dy }) => dy < -4,
+        onMoveShouldSetPanResponder: (_, { dy }) => dy > 4,
         onPanResponderRelease: (_, { dy }) => {
-          if (dy < -SWIPE_AWAY && drawn !== undefined) leave(drawn.serial);
+          if (dy > SWIPE_AWAY && drawn !== undefined) leave(drawn.serial);
         },
       }),
     [drawn, leave],
@@ -286,7 +293,10 @@ function NoticeBanner({
   };
 
   return (
-    <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.edge}>
+    <View
+      pointerEvents="box-none"
+      style={[styles.edge, { bottom: Math.max(footRoom, keyboard, bottom) }]}
+    >
       <Animated.View
         style={[styles.lane, { opacity: place }]}
         pointerEvents="box-none"
@@ -295,7 +305,7 @@ function NoticeBanner({
       >
         <NoticeBody notice={drawn} arrived={lowered || reduceMotion} onPress={press} />
       </Animated.View>
-    </SafeAreaView>
+    </View>
   );
 }
 

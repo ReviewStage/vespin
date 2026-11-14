@@ -47,8 +47,10 @@ builds a control of its own.
   `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
   typed in, its act preferred, for a task and an agent alike),
   `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
-  write did not go: a banner of Liquid Glass sliding down from the top with
-  the refusal's words and Try again, said aloud by VoiceOver, faded rather
+  write did not go: a banner of Liquid Glass sliding up at the window's foot,
+  just above the topmost of a tab bar, a composer or the keyboard
+  (`useNoticeFoot`), as Mail's undo bar stands, so it covers no bar at the
+  top, with the refusal's words and Try again, said aloud by VoiceOver, faded rather
   than slid where the reader reduces motion, standing over the app's root
   view (not a `FullWindowOverlay`, whose window never drew on iOS 27.2), and
   said once for a stretch offline, `failure-notice-model.ts`),

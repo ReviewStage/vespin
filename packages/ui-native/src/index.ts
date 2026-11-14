@@ -76,13 +76,9 @@ export {
 } from "./failure-notice.js";
 
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
-
 export { releaseFields } from "./field-focus.js";
-
 export { AttachRow, MenuPickRow, WORDS_LOOK, WordsField } from "./form-rows.js";
-
 export { GlassBar, GlassDock } from "./glass-bar.js";
-
 export {
   GLYPH,
   type Glyph,
@@ -91,9 +87,7 @@ export {
   type MarkLook,
   sectionGlyph,
 } from "./glyph.js";
-
 export { BUZZ, type Buzz, buzz } from "./haptics.js";
-
 export {
   DeniesWaiting,
   HELD_ANSWER,
@@ -101,13 +95,9 @@ export {
   type HeldCall,
   HeldCallBanner,
 } from "./held-call.js";
-
 export { type Keeping, KeepingProvider } from "./held-menu.js";
-
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-
 export { INTEGRATION_MARK_ASSET, type IntegrationMarkAsset } from "./integration-marks.js";
-
 export {
   type HeldPicture,
   heldPicture,
@@ -117,7 +107,6 @@ export {
   type Kept,
   type KeptKind,
 } from "./keep-model.js";
-
 export {
   NO_WRITES,
   newestValue,
@@ -127,7 +116,6 @@ export {
   writeSent,
   writeSettled,
 } from "./latest-writes-model.js";
-
 export {
   ListRow,
   ROW_ACTION_TONE,
@@ -138,13 +126,9 @@ export {
   type TaskFold,
   TaskRow,
 } from "./list-row.js";
-
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
-
 export { markdownGithubPages, markdownReplyButtons } from "./markdown-model.js";
-
 export { MarkdownPage } from "./markdown-page.js";
-
 export {
   AgentTile,
   Avatar,
@@ -158,10 +142,9 @@ export {
   UnreadDot,
   WorkingMark,
 } from "./marks.js";
-
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
-
 export { monogramOf } from "./monogram.js";
+export { useTabBarNoticeFoot } from "./notice-foot.js";
 
 export { SwitchRow } from "./option-rows.js";
 

@@ -7,6 +7,7 @@ import {
   SplitOverTabs,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useTabBarNoticeFoot,
 } from "@repo/ui-native";
 import { usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
@@ -129,6 +130,8 @@ export default function TabsLayout() {
 
   // Note that the Inbox's Select mode hides the bar only while the Inbox's own list stands, so a link that opens another place never leaves the bar hidden over it.
   const choosing = useInboxChoosingOn() && atRoot && placeOfRoute(standing) === SIDEBAR_PLACE.INBOX;
+  // Note that the app's notice stands above a compact window's foot bar, the tab bar or, in Select mode, the toolbar standing in its place, as tall; a conversation's composer says its own height.
+  useTabBarNoticeFoot(iconOnly && !appSidebar && !conversation);
 
   const tabs = (
     <NativeTabs
