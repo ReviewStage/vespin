@@ -135,7 +135,6 @@ function McpPage({ accountId }: { readonly accountId: string }) {
     ) : (
       <SettingsForm>
         <ListSection
-          count={shown.length}
           footer={shown.length === 0 ? MCP_CLIENTS_WORDS.NONE : MCP_CLIENTS_WORDS.CAPTION}
         >
           {shown.map((client) =>

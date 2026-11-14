@@ -297,6 +297,10 @@ export const LIVE_READ = {
   DEVICE_PRESENCE: "devicePresence",
   /** The account's hosts, by the account: the service's `hostsRead`, declared as `HOSTS_READ`, held while Settings › Hosts draws them and a while after. */
   HOSTS: "hosts",
+  /** The account's machines with their own settings for agents' commands and apps, by the account: the service's `machinesRead`, declared as `MACHINES_READ`, held while Settings › Machines draws them and a while after. */
+  MACHINES: "machines",
+  /** The asks the account's machines hold for its answer, by the account: the service's `machineAsksRead`, declared as `MACHINE_ASKS_READ`, held while a window could draw one and by each machine of the account, which takes its answers from it. */
+  MACHINE_ASKS: "machineAsks",
   /** One workspace's pending invitations, by the workspace: the service's `workspaceInvitations` query, held for an owner's or an admin's windows that draw them and a few they drew lately. */
   WORKSPACE_INVITATIONS: "workspaceInvitations",
   /** Which machine This Mac is and the device its host's record names, by the account: read by the host as it starts and every few seconds after, held for the session, and never in a browser tab, which has no This Mac. */
@@ -329,7 +333,7 @@ export const LIVE_READ = {
    * host follows the task's record (`taskRecordLive`), whose description mark moves
    * with each save, and reads the description again where it moved past the copy held.
    */
-  DESCRIPTION_DOCUMENT: "descriptionDocument",
+  HELD_TASK: "heldTask",
 } as const;
 
 export type LiveRead = (typeof LIVE_READ)[keyof typeof LIVE_READ];

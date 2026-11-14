@@ -11,7 +11,11 @@
  * (https://docs.github.com/en/graphql/reference/objects#repository). A
  * repository with no queue answers a null `mergeQueue`, and one GitHub
  * would not resolve answers null whole beside an error, so both are left
- * out rather than failing the rest. Each entry's pull request is joined to
+ * out rather than failing the rest. Each entry carries GitHub's estimate of
+ * when it merges and how the checks stand on the commit the queue builds for
+ * it (`headCommit`, the merge group's, never the pull request's own head),
+ * counted whole from GitHub's tallies by state, with the names of those that
+ * failed among its first `MAX_CHECKS` checks. Each entry's pull request is joined to
  * a task through the pull requests the service records for agents
  * (`agent_pull_request`). The read stands behind the account's Merge queue
  * experiment.
@@ -25,12 +29,13 @@ import {
   MERGE_QUEUE_BOUNDS,
   MERGE_QUEUE_ENTRY_STATE,
   type MergeQueueAnswer,
+  type MergeQueueChecks,
   type MergeQueueEntryState,
   type MergeQueueRepository,
 } from "@repo/features/merge-queue-wire";
+import type { GitHubFailure } from "@repo/github";
 import { EXPERIMENT } from "@repo/settings";
-import { Effect, type Redacted, Schema } from "effect";
-import type { HttpClient } from "effect/http";
+import { Clock, Effect, Schema } from "effect";
 import type { GitHubRepository } from "../core.js";
 import {
   HOSTED_REFUSAL,
@@ -38,16 +43,34 @@ import {
   hostedStoreOrUnavailable,
   upstreamRefused,
 } from "../http/http-effect.js";
-import {
-  GITHUB_HTTP_STATUS,
-  GitHubApp,
-  type GitHubUnavailable,
-  githubPost,
-  readBody,
-  send,
-} from "./github-app.js";
+import { GitHubApp, type GitHubBearer } from "./github-app.js";
 import { githubReadOrRefusal } from "./github-refusal.js";
 import type { WorkspaceRepositoriesServices } from "./workspace-repositories.js";
+
+/** The most checks named of one entry's merge group; its counts are GitHub's tallies of every check, however many it has. */
+const MAX_CHECKS = 50;
+
+/**
+ * A check run's conclusions that pass it, and those that fail it, as GraphQL
+ * spells them; any other conclusion, or none yet, neither passes nor fails.
+ * Note that a canceled run is neither, because the queue cancels a merge
+ * group's runs when one ahead of it fails and it builds the group again, which
+ * says nothing against this pull request.
+ */
+const CHECK_RUN_PASSED = new Set(["SUCCESS", "NEUTRAL", "SKIPPED"]);
+
+const CHECK_RUN_FAILED = new Set([
+  "FAILURE",
+  "TIMED_OUT",
+  "STARTUP_FAILURE",
+  "ACTION_REQUIRED",
+  "STALE",
+]);
+
+/** A commit status's states that pass it, and those that fail it; `PENDING` and `EXPECTED` are still running. */
+const STATUS_PASSED = new Set(["SUCCESS"]);
+
+const STATUS_FAILED = new Set(["FAILURE", "ERROR"]);
 
 /** The fields read of one queue, after the alias naming its repository. */
 const QUEUE_FIELDS = `mergeQueue {
@@ -57,15 +80,68 @@ const QUEUE_FIELDS = `mergeQueue {
           position
           state
           enqueuedAt
+          estimatedTimeToMerge
           pullRequest { number title url author { login avatarUrl } }
+          headCommit {
+            statusCheckRollup {
+              contexts(first: ${MAX_CHECKS}) {
+                totalCount
+                checkRunCountsByState { state count }
+                statusContextCountsByState { state count }
+                nodes {
+                  __typename
+                  ... on CheckRun { name conclusion }
+                  ... on StatusContext { context state }
+                }
+              }
+            }
+          }
         }
       }
     }`;
+
+/** GitHub's GraphQL type names for the two kinds of check a rollup holds. */
+const CHECK_KIND = {
+  CHECK_RUN: "CheckRun",
+  STATUS: "StatusContext",
+} as const;
+
+/** One check on a merge group: a check run by its name and conclusion, none while it runs, or a commit status by its context and state. */
+const CheckContextSchema = Schema.Union([
+  Schema.Struct({
+    __typename: Schema.Literal(CHECK_KIND.CHECK_RUN),
+    name: Schema.String,
+    conclusion: Schema.NullOr(Schema.String),
+  }),
+  Schema.Struct({
+    __typename: Schema.Literal(CHECK_KIND.STATUS),
+    context: Schema.String,
+    state: Schema.String,
+  }),
+]);
+
+/** How many of a rollup's checks of one kind stand in one state. */
+const StateCountSchema = Schema.Struct({ state: Schema.String, count: Schema.Number });
 
 const QueueEntrySchema = Schema.Struct({
   position: Schema.Number,
   state: Schema.String,
   enqueuedAt: Schema.DateFromString,
+  estimatedTimeToMerge: Schema.NullOr(Schema.Number),
+  headCommit: Schema.NullOr(
+    Schema.Struct({
+      statusCheckRollup: Schema.NullOr(
+        Schema.Struct({
+          contexts: Schema.Struct({
+            totalCount: Schema.Number,
+            checkRunCountsByState: Schema.NullOr(Schema.Array(StateCountSchema)),
+            statusContextCountsByState: Schema.NullOr(Schema.Array(StateCountSchema)),
+            nodes: Schema.Array(Schema.NullOr(CheckContextSchema)),
+          }),
+        }),
+      ),
+    }),
+  ),
   pullRequest: Schema.NullOr(
     Schema.Struct({
       number: Schema.Number,
@@ -76,29 +152,23 @@ const QueueEntrySchema = Schema.Struct({
   ),
 });
 
-const QueuesAnswerSchema = Schema.Struct({
-  // Note that GitHub leaves `data` out of a query it refuses whole, which its errors then say why.
-  data: Schema.optionalKey(
-    Schema.NullOr(
-      Schema.Record(
-        Schema.String,
-        Schema.NullOr(
-          Schema.Struct({
-            mergeQueue: Schema.NullOr(
-              Schema.Struct({
-                url: Schema.String,
-                entries: Schema.Struct({ nodes: Schema.Array(Schema.NullOr(QueueEntrySchema)) }),
-              }),
-            ),
-          }),
-        ),
+/** GitHub's answer's data: each alias's repository, null where GitHub resolved none or refused it. */
+const QueuesAnswerSchema = Schema.Record(
+  Schema.String,
+  Schema.NullOr(
+    Schema.Struct({
+      mergeQueue: Schema.NullOr(
+        Schema.Struct({
+          url: Schema.String,
+          entries: Schema.Struct({ nodes: Schema.Array(Schema.NullOr(QueueEntrySchema)) }),
+        }),
       ),
-    ),
+    }),
   ),
-  errors: Schema.optionalKey(
-    Schema.Array(Schema.Struct({ type: Schema.optionalKey(Schema.String) })),
-  ),
-});
+);
+
+/** The status the wire refuses a queue GitHub kept from the App's token with. */
+const FORBIDDEN = 403;
 
 /**
  * GitHub's word for an alias whose repository it could not resolve, which
@@ -153,8 +223,54 @@ function queuesRequest(repositories: readonly GitHubRepository[]) {
   };
 }
 
-/** One entry as the wire carries it, its task left for the join; none for one whose pull request GitHub did not answer. */
-function entryOf(read: QueueEntryRead | null) {
+/** How many of the tallied checks stand in any of `states`. */
+function countIn(
+  tallies: readonly { readonly state: string; readonly count: number }[],
+  states: ReadonlySet<string>,
+): number {
+  return tallies.reduce((sum, tally) => (states.has(tally.state) ? sum + tally.count : sum), 0);
+}
+
+/**
+ * How the checks stand on an entry's merge group; none before the queue
+ * builds one or reports any check on it, or where GitHub withholds a tally.
+ * Note that the counts are GitHub's tallies of every check, because the
+ * checks named are only the first `MAX_CHECKS`, so a failure past them is
+ * counted though it is not named; and that a tally GitHub answers null says
+ * nothing, so the row shows no checks rather than none failed.
+ */
+function checksOf(read: QueueEntryRead): MergeQueueChecks | null {
+  const contexts = read.headCommit?.statusCheckRollup?.contexts;
+
+  if (contexts === undefined || contexts.totalCount === 0) return null;
+
+  const runs = contexts.checkRunCountsByState;
+  const statuses = contexts.statusContextCountsByState;
+
+  if (runs === null || statuses === null) return null;
+
+  const failed = contexts.nodes.flatMap((check) => {
+    if (check === null) return [];
+
+    return check.__typename === CHECK_KIND.CHECK_RUN
+      ? CHECK_RUN_FAILED.has(check.conclusion ?? "")
+        ? [check.name]
+        : []
+      : STATUS_FAILED.has(check.state)
+        ? [check.context]
+        : [];
+  });
+
+  return {
+    total: contexts.totalCount,
+    passed: countIn(runs, CHECK_RUN_PASSED) + countIn(statuses, STATUS_PASSED),
+    failedCount: countIn(runs, CHECK_RUN_FAILED) + countIn(statuses, STATUS_FAILED),
+    failed,
+  };
+}
+
+/** One entry as the wire carries it, read at `now`, its task left for the join; none for one whose pull request GitHub did not answer. */
+function entryOf(read: QueueEntryRead | null, now: number) {
   if (read === null || read.pullRequest === null) return [];
 
   return [
@@ -162,6 +278,9 @@ function entryOf(read: QueueEntryRead | null) {
       position: read.position,
       state: GITHUB_ENTRY_STATE.get(read.state) ?? MERGE_QUEUE_ENTRY_STATE.QUEUED,
       enqueuedAt: read.enqueuedAt.getTime(),
+      estimatedMergeAt:
+        read.estimatedTimeToMerge === null ? null : now + read.estimatedTimeToMerge * 1000,
+      checks: checksOf(read),
       pullRequest: read.pullRequest,
       task: null,
     },
@@ -173,19 +292,17 @@ function entryOf(read: QueueEntryRead | null) {
  * each repository that has one in the order given, and whether GitHub
  * refused any of it: an error but an unresolved repository, or no data at
  * all. Note that a refusal answers its alias null as a repository with no
- * queue does, so only its error tells the two apart. A status GitHub
+ * queue does, so only its error tells the two apart. A refusal GitHub
  * answers past 2xx, a rate limit among them, is GitHub not answering, and
- * fails as unavailable.
+ * fails as `@repo/github` says.
  */
 const readQueues = /* @__PURE__ */ Effect.fnUntraced(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   repositories: readonly GitHubRepository[],
-): Effect.fn.Return<QueuesRead, GitHubUnavailable, HttpClient.HttpClient> {
-  const answer = yield* Effect.scoped(
-    Effect.flatMap(send(githubPost("/graphql", token, queuesRequest(repositories))), (response) =>
-      readBody(response, QueuesAnswerSchema),
-    ),
-  );
+): Effect.fn.Return<QueuesRead, GitHubFailure> {
+  const { query, variables } = queuesRequest(repositories);
+  const answer = yield* bearer.client.graphqlPartial(query, variables, QueuesAnswerSchema);
+  const now = yield* Clock.currentTimeMillis;
 
   const queues = repositories.flatMap((repository, index) => {
     const queue = answer.data?.[aliasAt(index)]?.mergeQueue;
@@ -196,7 +313,9 @@ const readQueues = /* @__PURE__ */ Effect.fnUntraced(function* (
       {
         repository: repository.fullName,
         url: queue.url,
-        entries: queue.entries.nodes.flatMap(entryOf).sort((a, b) => a.position - b.position),
+        entries: queue.entries.nodes
+          .flatMap((read) => entryOf(read, now))
+          .sort((a, b) => a.position - b.position),
       },
     ];
   });
@@ -204,9 +323,7 @@ const readQueues = /* @__PURE__ */ Effect.fnUntraced(function* (
   return {
     queues,
     refused:
-      answer.data === undefined ||
-      answer.data === null ||
-      (answer.errors ?? []).some((error) => error.type !== GITHUB_NOT_FOUND),
+      answer.data === undefined || answer.errors.some((error) => error.type !== GITHUB_NOT_FOUND),
   };
 });
 
@@ -240,14 +357,14 @@ export const readWorkspaceMergeQueue = /* @__PURE__ */ Effect.fnUntraced(functio
 
   const reads = yield* githubReadOrRefusal(
     Effect.flatMap(app.repositoriesPullRequestTokens(workspaceId, named), (tokens) =>
-      Effect.forEach(tokens, (held) => readQueues(held.token, held.repositories)),
+      Effect.forEach(tokens, (held) => readQueues(held.bearer, held.repositories)),
     ),
   );
 
   if (reads.some((read) => read.refused)) {
     yield* Effect.logWarning("GitHub refused a merge queue read to the App's token");
 
-    return yield* Effect.fail(upstreamRefused(GITHUB_HTTP_STATUS.FORBIDDEN));
+    return yield* Effect.fail(upstreamRefused(FORBIDDEN));
   }
 
   // Note that the queues keep the order the repositories were named in, the most recently changed first.

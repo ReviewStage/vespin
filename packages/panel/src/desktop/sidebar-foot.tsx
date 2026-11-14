@@ -12,6 +12,7 @@ import {
   BUTTON_SIZE,
   BUTTON_VARIANT,
   type ButtonVariant,
+  CALL_CARD_SURFACE,
   ExternalIcon,
   FoldingButton,
   type FoldingButtonHint,
@@ -47,6 +48,7 @@ import { pressMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { runAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
+import { CallCardDock } from "../call/standing-call.js";
 import { useOpenPerson } from "../person-door.js";
 import { signOutSayingFailure } from "../settings/account-section.js";
 import { useReadyToastStanding } from "../update-toast.js";
@@ -343,7 +345,8 @@ function AccountMenu({
 }
 
 /**
- * The foot of the column: the account, which opens its menu; a release on
+ * The foot of the column: the window's call card while it docks here,
+ * over the row; the account, which opens its menu; a release on
  * its way in, and the Mac offline, while they hold; Send feedback, which
  * opens the feedback dialog; and the gear, the one press to
  * Settings.
@@ -353,11 +356,14 @@ export function SidebarFoot({
   updates,
   shown,
   settingsOpen,
+  callDocked,
   onSettings,
   onSignOut,
 }: {
   account: AccountSnapshot;
   updates: UpdateControl;
+  /** Whether the window's call card docks here; folded, the sidebar hands it to the window's corner. */
+  callDocked: boolean;
   /** Whether the sidebar is in sight; folded away, nothing it opened stands over the window. */
   shown: boolean;
   /** Whether Settings is the page on show, which the gear marks. */
@@ -367,6 +373,7 @@ export function SidebarFoot({
 }): React.JSX.Element {
   return (
     <SidebarFootBox>
+      <CallCardDock docked={callDocked} surface={CALL_CARD_SURFACE.SIDEBAR} />
       <SidebarAccountRow>
         <AccountMenu account={account} shown={shown} onSignOut={onSignOut} />
         <OfflineMark />

@@ -144,7 +144,7 @@ it.each<[string, string, InboxItemHere, Route]>([
     ITEM,
     go({
       workspace: "acme",
-      place: { kind: LINK_DESTINATION.AGENT, planId: TASK, agentId: AGENT },
+      place: { kind: LINK_DESTINATION.AGENT, taskId: TASK, agentId: AGENT },
     }),
   ],
   [

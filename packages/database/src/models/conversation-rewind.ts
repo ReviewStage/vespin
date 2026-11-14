@@ -1,9 +1,25 @@
+import type { CheckoutRestoreSnapshot } from "@repo/features/checkout-restore";
 import { MESSAGE_ROLE } from "@repo/wire";
-import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  not,
+  or,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { Clock, Effect, Option, Result, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
-import { conversations, messages, turns } from "../schemas/storage.js";
+import { conversations, messages, recordedSpokenLine, turns } from "../schemas/storage.js";
 import { expireTurnApprovals } from "./agent-approvals.js";
 import {
   DISPATCH_CLAIM,
@@ -11,7 +27,7 @@ import {
   dispatchClaimStands,
   waitingOutDispatchClaim,
 } from "./dispatch-claim.js";
-import { settleKeptTurn, type TurnCheckoutSnapshot } from "./turn-state.js";
+import { settleKeptTurn } from "./turn-state.js";
 import type { ConversationTarget } from "./writer.js";
 
 /**
@@ -358,7 +374,7 @@ const findNextSnapshot = SqlSchema.findOneOption({
     ),
 });
 
-/** The developer's first line past a place in the conversation, where one stands. */
+/** The developer's first line past a place in the conversation, where one stands, passing over a line said on a call that the agent never heard (`recordedSpokenLine`). */
 const findLineAfter = SqlSchema.findOneOption({
   Request: Schema.Struct({ conversationId: Schema.String, seq: Schema.Number }),
   Result: Schema.Struct({
@@ -382,6 +398,48 @@ const findLineAfter = SqlSchema.findOneOption({
             eq(messages.conversationId, conversationId),
             eq(messages.role, MESSAGE_ROLE.USER),
             gt(messages.seq, seq),
+            not(recordedSpokenLine(messages)),
+          ),
+        )
+        .orderBy(asc(messages.seq))
+        .limit(1),
+    ),
+});
+
+/** A line of the same turn as another, read beside it. */
+const turnMate = alias(messages, "turn_mate");
+
+/** The first line past a place in the conversation that opened a turn, where one stands: a turn took it, not under way, and no earlier line of that turn's. */
+const findOpeningLineAfter = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String, seq: Schema.Number }),
+  Result: Schema.Struct({ clientId: Schema.String }),
+  execute: ({ conversationId, seq }) =>
+    Database.use((db) =>
+      db
+        .select({ clientId: messages.clientId })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.role, MESSAGE_ROLE.USER),
+            gt(messages.seq, seq),
+            isNotNull(messages.turnId),
+            isNull(messages.takenAfterStep),
+            not(
+              exists(
+                db
+                  .select({ seq: turnMate.seq })
+                  .from(turnMate)
+                  .where(
+                    and(
+                      eq(turnMate.conversationId, conversationId),
+                      eq(turnMate.turnId, messages.turnId),
+                      eq(turnMate.role, MESSAGE_ROLE.USER),
+                      lt(turnMate.seq, messages.seq),
+                    ),
+                  ),
+              ),
+            ),
           ),
         )
         .orderBy(asc(messages.seq))
@@ -415,6 +473,28 @@ const cutPoint = (conversationId: string, messageId: string) =>
     return Result.succeed({ seq, clientId, heard: turnId !== null, from });
   });
 
+/**
+ * Where the harness's session is cut for a cut at a line: before the line
+ * where a turn took it; else before the next line a turn opened on, since
+ * that turn goes with the cut, as it does past a line said on a call that
+ * no turn took or a line withdrawn; else the line, unheard, for an earlier
+ * cut to stand over.
+ */
+const harnessCut = (
+  conversationId: string,
+  line: { readonly seq: number; readonly clientId: string; readonly heard: boolean },
+) =>
+  Effect.gen(function* () {
+    if (line.heard) return { clientId: line.clientId, heard: true };
+    // Note that a line withdrawn or still queued may stand between, so the next opening line is looked for past them.
+    const next = yield* findOpeningLineAfter({ conversationId, seq: line.seq });
+
+    return Option.match(next, {
+      onNone: () => ({ clientId: line.clientId, heard: false }),
+      onSome: (after) => ({ clientId: after.clientId, heard: true }),
+    });
+  });
+
 /** The cut, under the conversation's row lock and with no hand-over under way, answering what it cut or why it could not. */
 const cut = (target: ConversationTarget, messageId: string, place: number) =>
   Effect.gen(function* () {
@@ -429,7 +509,8 @@ const cut = (target: ConversationTarget, messageId: string, place: number) =>
     const point = yield* cutPoint(conversationId, messageId);
 
     if (Result.isFailure(point)) return Result.fail(point.failure);
-    const { seq, clientId, heard, from } = point.success;
+    const { seq, from } = point.success;
+    const { clientId, heard } = yield* harnessCut(conversationId, point.success);
     const turnIds = (yield* findTurnsFrom({ conversationId, from })).map((turn) => turn.id);
     yield* deleteMessagesFrom({ conversationId, seq, turnIds });
     // Note that a cut dropping every turn keeps the first one's row, its work gone and settled, because
@@ -559,7 +640,7 @@ export function readRewoundRevision(
 export function readRewindSnapshot(
   target: ConversationTarget,
   messageId: string,
-): Effect.Effect<Option.Option<TurnCheckoutSnapshot>, StoreFailure, DatabaseServices> {
+): Effect.Effect<Option.Option<CheckoutRestoreSnapshot>, StoreFailure, DatabaseServices> {
   return Effect.map(findLineSnapshot({ ...target, messageId }), (found) =>
     Option.flatMap(found, (row) =>
       row.commit === null

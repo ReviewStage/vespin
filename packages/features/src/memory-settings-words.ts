@@ -10,7 +10,6 @@ import { countWords, readFailedWords, readingWords, TERM } from "./words.js";
 
 /** What the page says while it cannot read or write, and with nothing to show. */
 export const MEMORY_PAGE_WORDS = {
-  TITLE: "Memories",
   READING: readingWords(`${PRODUCT_NAME}'s memory`),
   FAILED: readFailedWords(`${PRODUCT_NAME}'s memory`),
   EMPTY: `${PRODUCT_NAME} hasn't remembered anything yet.`,

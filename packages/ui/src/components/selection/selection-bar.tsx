@@ -1,6 +1,7 @@
 import { SELECTION_WORDS, selectedWords } from "@repo/features/words";
 import { useId } from "react";
 import { Button } from "../button/button.js";
+import { CARD_CORNER, CARD_LOOK, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
 import { Menu, type MenuAction, useMenu } from "../menu/menu.js";
 import { useSelectionKeys } from "./selection-keys.js";
 
@@ -94,11 +95,15 @@ export function SelectionBar({
   if (count <= 0) return null;
 
   return (
-    <div
+    <Card
       {...keys}
+      look={CARD_LOOK.RAISED}
+      corner={CARD_CORNER.MENU}
+      padding={CARD_PADDING.NONE}
+      shadow={CARD_SHADOW.MENU}
       role="toolbar"
       aria-labelledby={countId}
-      className="ui-selection-bar box-border flex min-w-0 items-center gap-control-gap rounded-control border border-border bg-popover py-tight-gap pr-tight-gap pl-list-inset font-ui text-foreground"
+      className="ui-selection-bar box-border flex min-w-0 items-center gap-control-gap py-tight-gap pr-tight-gap pl-list-inset font-ui text-foreground"
     >
       <span
         id={countId}
@@ -120,6 +125,6 @@ export function SelectionBar({
       <Button roving label={SELECTION_WORDS.CLEAR_SELECTION} onClick={onClear}>
         {SELECTION_WORDS.CLEAR}
       </Button>
-    </div>
+    </Card>
   );
 }
