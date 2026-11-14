@@ -65,7 +65,7 @@ const ANCHOR_REACH = 48;
 
 /**
  * The room the system's tab bar floats over at the screen's foot, past the
- * safe area, which the newest row and Jump to latest stand clear of. Note
+ * safe area, which the newest row stands clear of. Note
  * that the list keeps it at its own end, because a scroll to the end reaches
  * the end of the rows alone and not the room the system keeps for the bar.
  */
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   // Note that the mark leads the model's name at the size of its line's glyphs, from the asset catalog the app's config writes.
   headMark: { width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH, marginRight: 1 },
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
-  jump: { position: "absolute", alignSelf: "center" },
+  jump: { position: "absolute" },
   jumpFace: {
     width: JUMP_SIZE,
     height: JUMP_SIZE,
@@ -465,7 +465,7 @@ function OriginBody({ body }: { readonly body: string }) {
         style={styles.callLine}
       >
         <SymbolView
-          name={open ? "chevron.down" : "chevron.right"}
+          name={glyphSymbol(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
           size={MARK_SIZE.GLYPH - 3}
           tintColor={colors.TEXT_MUTED}
           style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
@@ -823,18 +823,22 @@ export function AgentHead({ model, harness, status, onModel }: AgentHeadProps) {
 }
 
 /**
- * The control that brings the newest row into view, as Messages and the
- * chat apps draw it: a round button of Liquid Glass holding a down arrow,
- * centered over the list's foot, standing only once the reader has scrolled
- * back. Note that where Liquid Glass is unavailable, before iOS 26, or the
+ * The control that brings the newest row into view: a round button of
+ * Liquid Glass holding a down arrow, standing only once the reader has
+ * scrolled back, over the list's foot at the end of the rows' words, as the
+ * panel's way back stands in its log's corner, so it covers at most a
+ * line's end rather than the middle of the words. Note that where Liquid Glass is unavailable, before iOS 26, or the
  * reader turned on Reduce Transparency, it is drawn solid on the surface's
  * ground inside the quiet ink rather than a hand-drawn copy of glass.
  */
 function JumpToLatest({
   bottom,
+  end,
   onPress,
 }: {
   readonly bottom: number;
+  /** How far in from the list's trailing edge it stands: where the rows' words end. */
+  readonly end: number;
   readonly onPress: () => void;
 }) {
   const colors = useColors();
@@ -856,7 +860,7 @@ function JumpToLatest({
       accessibilityRole="button"
       accessibilityLabel={JUMP_TO_LATEST}
       hitSlop={SPACE.TIGHT}
-      style={[styles.jump, { bottom }]}
+      style={[styles.jump, { bottom, right: end }]}
     >
       {solid ? (
         <View
@@ -974,9 +978,12 @@ export function AgentTranscript({
   const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
   const keyboard = useDockKeyboard();
+  const dock = useDockRoom();
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript. While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the tab bar and the bar stands right on it.
   // Note that a keyboard standing only partway over that room, as one an interactive drag is pulling down, takes only the part it covers, since the bar stands clear of the safe area until the keyboard rises past it.
-  const foot = Math.max(0, bottom + TAB_BAR_ROOM - keyboard) + useDockRoom();
+  const foot = Math.max(0, bottom + TAB_BAR_ROOM - keyboard) + dock;
+  // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area, rather than over the tab bar's room, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`).
+  const jumpFoot = Math.max(bottom, keyboard) + dock + SPACE.ROW;
 
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
@@ -1103,7 +1110,8 @@ export function AgentTranscript({
       />
       {away ? (
         <JumpToLatest
-          bottom={foot + keyboard}
+          bottom={jumpFoot}
+          end={right + sides + SPACE.EDGE}
           onPress={() => {
             anchored.current = true;
             // Note that the jump scrolls at once where the reader asked for less motion.
