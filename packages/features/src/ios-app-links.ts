@@ -162,7 +162,7 @@ export function iosPullRequestRoute(agentId: string, number: number): string {
  * (`(inbox)`, `(tasks)`, `(search)`), so one tab's link can open on another's
  * stack.
  */
-const IOS_TAB = {
+export const IOS_TAB = {
   INBOX: "inbox",
   TASKS: "tasks",
   SEARCH: "search",
