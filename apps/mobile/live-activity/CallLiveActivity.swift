@@ -135,7 +135,8 @@ struct CallPressButton: View {
     Button(intent: CallPressIntent(press)) {
       Image(symbol)
         .frame(width: 36, height: 36)
-        .background(lit ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.quaternary), in: Circle())
+        .background(
+          lit ? HierarchicalShapeStyle.tertiary : HierarchicalShapeStyle.quaternary, in: Circle())
     }
     .buttonStyle(.plain)
     .accessibilityLabel(label)
