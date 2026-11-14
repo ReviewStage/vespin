@@ -525,7 +525,9 @@ export function KeptColumns({
  * is. The split view stands in front while a tab's root stands, and behind
  * the tabs while a tab has pushed a page over its root, which slides in over
  * the split view, since the root under it draws nothing of its own; behind,
- * it takes no touch and VoiceOver passes over it. With no
+ * it takes no touch and VoiceOver passes over it. In front, the tabs under it
+ * are passed over in turn, so a page a tab pushed before, or a tab's root,
+ * is never read or matched from behind the split view. With no
  * split view, the tabs stand alone in the same place, so a rotation across
  * the line keeps every tab's stack.
  */
@@ -542,7 +544,12 @@ export function SplitOverTabs({
 
   return (
     <View style={layers.stand}>
-      <View style={[layers.tabs, { zIndex: LAYER.FRONT - layer }]}>{tabs}</View>
+      <View
+        style={[layers.tabs, { zIndex: LAYER.FRONT - layer }]}
+        accessibilityElementsHidden={split !== undefined && front}
+      >
+        {tabs}
+      </View>
       {split === undefined ? null : (
         <View
           style={[layers.split, { zIndex: layer }]}
