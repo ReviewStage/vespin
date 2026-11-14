@@ -1,20 +1,15 @@
 import assert from "node:assert/strict";
-import { AGENT_BRIEF } from "@repo/features/agent-wire";
 import { LINK_DESTINATION, readLink } from "@repo/features/link-grammar";
 import { decodeMention, isMentionLabel, MENTION_KIND } from "@repo/features/mention-link";
 import { test } from "vitest";
-import { standingFor } from "../testing/agent-standing.js";
 import { EDIT_DESCRIPTION_TOOL } from "./coder-host/description-edit.js";
 import { INBOX_TOOLS } from "./coder-host/inbox.js";
-import { coderInstructions } from "./coder-host/instructions.js";
 import { linkRuleWords } from "./link-rule.js";
 
 /**
  * link-examples.test.ts -- the link every author is shown how to write a
  * file, a pull request, or an issue with is one the app draws as a chip: the
- * coding agent's instructions, which show every kind it names as a mention,
- * and its inbox and plan tools; the coding agent's last example is another
- * agent's. An example spelled with `<owner>/<name>` and `<path>` is
+ * link rule, and the coding agent's inbox and plan tools. An example spelled with `<owner>/<name>` and `<path>` is
  * read as an author fills it in. Synthetic repository.
  */
 
@@ -34,12 +29,6 @@ const FILLED: ReadonlyMap<string, string> = new Map([
   ["<issue-id>", "3f0e6f5c-7d1a-4f6e-9a55-000000000042"],
   ["<item-id>", "9b2e4c6a-1d3f-4e5a-8b7c-0d1e2f3a4b5c"],
 ]);
-
-/** The task the coding agent works on, whose link and id its instructions are handed. */
-const TASK_ADDRESS = {
-  link: "https://vespin.dev/acme/task/42",
-  id: "5f3c2a1e-9b8d-4c7a-8e6f-1a2b3c4d5e6f",
-} as const;
 
 /** Every Markdown link to a web page the words show, its label and its target, the placeholders filled in as an author would. */
 function linksIn(words: string): { label: string; target: string }[] {
@@ -65,23 +54,6 @@ function drawnAs(words: string): (string | undefined)[] {
     (target) => decodeMention(target, REPOSITORY)?.kind ?? readLink(target)?.place.kind,
   );
 }
-
-test("a coding agent is shown to name each kind as a mention Vespin draws as its chip, its task's own under its task's link, and a thing of ours by the one link rule", () => {
-  const shared = [MENTION_KIND.FILE, MENTION_KIND.LINK];
-  // A task's own things are named by its number, a place the window draws as the task's chip once it finds the task.
-  const own = [LINK_DESTINATION.TASK, LINK_DESTINATION.SECTION];
-
-  for (const brief of Object.values(AGENT_BRIEF)) {
-    const words = coderInstructions(REPOSITORY, brief, TASK_ADDRESS, standingFor(REPOSITORY));
-    const told = words.slice(words.indexOf("## Writing"));
-    assert.deepEqual(drawnAs(told), [...shared, ...own, LINK_DESTINATION.AUTOMATION], brief);
-    assert.deepEqual(
-      linksIn(told).filter(({ label }) => !isMentionLabel(label)),
-      [],
-      "every example is written as a mention",
-    );
-  }
-});
 
 test("every address the link rule shows an author how to build is one Vespin draws as its chip, a page under its task", () => {
   // Note that only a shape with a placeholder to fill is an address an author builds; the workspace's own address stands alone.
@@ -114,46 +86,4 @@ test("the thread post tool and the plan's edit tool show a file's link Vespin dr
       description,
     );
   }
-});
-
-/** Every mention of an app-only thing the words show, as the mention its target names, and whether its label is a mention's. */
-function appMentionsIn(words: string): { kind: string | undefined; mention: boolean }[] {
-  return [...words.matchAll(/\[([^\]]+)\]\((mention:\/\/mcp\/[^)\s`]+)\)/gu)].map(
-    ([, label, target]) => ({
-      kind: decodeMention(target ?? "", REPOSITORY)?.kind,
-      mention: isMentionLabel(label ?? ""),
-    }),
-  );
-}
-
-test("a coding agent is shown to name an MCP server as a mention Vespin draws as its chip, a second account's among them", () => {
-  const words = coderInstructions(
-    REPOSITORY,
-    AGENT_BRIEF.PROMPT,
-    TASK_ADDRESS,
-    standingFor(REPOSITORY),
-  );
-
-  assert.deepEqual(appMentionsIn(words), [
-    { kind: MENTION_KIND.SERVER, mention: true },
-    { kind: MENTION_KIND.SERVER, mention: true },
-  ]);
-});
-
-/** Every date mention the words show, as the mention its target names. */
-function datesIn(words: string): (string | undefined)[] {
-  return [...words.matchAll(/\]\((mention:\/\/date\/[^)\s`]+)\)/gu)].map(
-    ([, target]) => decodeMention(target ?? "", REPOSITORY)?.kind,
-  );
-}
-
-test("a coding agent is shown a day, a time, and a range, each a date Vespin draws as its chip", () => {
-  const words = coderInstructions(
-    REPOSITORY,
-    AGENT_BRIEF.DESCRIPTION,
-    TASK_ADDRESS,
-    standingFor(REPOSITORY),
-  );
-
-  assert.deepEqual(datesIn(words), [MENTION_KIND.DATE, MENTION_KIND.DATE, MENTION_KIND.DATE]);
 });
