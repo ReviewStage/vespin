@@ -19,21 +19,14 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** The room between the glyph, the title, the line, and the act, as the system's view stands them. */
 const EMPTY_SPACING = 12;
 
-/** An act an empty screen offers: its words, its press, and how it stands. */
-type EmptyAct = {
-  readonly label: string;
-  readonly onPress: () => void;
-  readonly look?: ButtonLook | undefined;
-};
-
 export type EmptyStateProps = {
   readonly title: string;
   readonly symbol: Glyph;
   readonly description?: string | undefined;
   /** The one act that fills the screen, such as Sign in, filled unless it names a quieter look, as a failure's Try again does. */
-  readonly action?: EmptyAct | undefined;
-  /** A quieter act under it, borderless unless it names a look, such as Check again under Update; dimmed while `disabled`. */
-  readonly secondary?: (EmptyAct & { readonly disabled?: boolean | undefined }) | undefined;
+  readonly action?:
+    | { readonly label: string; readonly onPress: () => void; readonly look?: ButtonLook }
+    | undefined;
   /** Whether what the screen shows is still read, which stands the system's spinner over the title in the symbol's place, so a read under way never looks like nothing to show. */
   readonly loading?: boolean | undefined;
 };
@@ -73,7 +66,6 @@ export function EmptyState({
   symbol,
   description,
   action,
-  secondary,
   loading = false,
 }: EmptyStateProps) {
   const colors = useColors();
@@ -121,14 +113,6 @@ export function EmptyState({
             label={action.label}
             onPress={action.onPress}
             look={action.look ?? BUTTON_LOOK.PROMINENT}
-          />
-        )}
-        {secondary === undefined ? null : (
-          <Button
-            label={secondary.label}
-            onPress={secondary.onPress}
-            look={secondary.look ?? BUTTON_LOOK.PLAIN}
-            disabled={secondary.disabled === true}
           />
         )}
       </VStack>

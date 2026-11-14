@@ -1,4 +1,4 @@
-# update-needed.yaml -- the screen that stands in front of the tabs while the service refuses this build as older than it serves, with Update, Check again, and which build this is.
+# update-needed.yaml -- the screen that stands in front of the tabs while the service refuses this build as older than it serves, with Update and which build this is.
 #
 # No service refuses a simulator's build, so the launch asks the fixture run
 # to stand as that refusal leaves the document (`-updateNeeded true`,
@@ -13,7 +13,6 @@ appId: dev.vespin.ios
       updateNeeded: "true"
 - assertVisible: "This Vespin is older than the one now live"
 - assertVisible: "Update"
-- assertVisible: "Check again"
 - assertVisible: "Install the latest build from TestFlight. This is .*"
 - assertNotVisible: "Recorded the invite flow"
 - waitForAnimationToEnd

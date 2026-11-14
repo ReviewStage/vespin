@@ -1,12 +1,9 @@
-// update-needed.tsx -- the screen that stands in front of every other while the service refuses this build as older than it serves: it says so and which build this is, Update opens TestFlight, and Check again asks the service once more.
+// update-needed.tsx -- the screen that stands in front of every other while the service refuses this build as older than it serves: it says so and which build this is, and Update opens TestFlight.
 
 import { BUILD_TOO_OLD_WORDS } from "@repo/features/words";
-import { ACT_KIND } from "@repo/host/acts";
 import { EmptyState, GLYPH, Screen } from "@repo/ui-native";
 import { openURL } from "expo-linking";
-import { useState } from "react";
 import { buildWords } from "../build-words.js";
-import { useHostActs } from "../host/host-provider.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
 
@@ -26,7 +23,6 @@ const TESTFLIGHT_ADDRESS = {
 const UPDATE_WORDS = {
   DESCRIPTION: "Install the latest build from TestFlight.",
   UPDATE: "Update",
-  CHECK_AGAIN: "Check again",
 } as const;
 
 /** What the screen says under its title: what to do, and which build this is, as support asks first. */
@@ -47,22 +43,10 @@ function openTestFlight(): void {
  * The whole screen, over no tabs: every call the app makes is refused until
  * it is updated, so nothing behind it would work. The root layout's guard
  * stands it while the document's `network.updateNeeded` is set and gives the
- * tabs back at the service's next answer of another status. Note that
- * nothing re-reads on its own while it stands, so Check again reads the task
- * list once more, whose answer clears the screen where the service now takes
- * this build, such as after the floor came down.
+ * tabs back at the service's next answer of another status, which the live
+ * reads' own retries find within seconds, so it offers no Check again.
  */
 export default function UpdateNeededScreen() {
-  const acts = useHostActs();
-  const [checking, setChecking] = useState(false);
-
-  const check = () => {
-    setChecking(true);
-    acts[ACT_KIND.TASKS_REFRESH]()
-      .catch((cause: unknown) => console.error("Checking again did not go.", cause))
-      .finally(() => setChecking(false));
-  };
-
   return (
     <Screen>
       <EmptyState
@@ -70,7 +54,6 @@ export default function UpdateNeededScreen() {
         symbol={GLYPH.UPDATE}
         description={descriptionWords()}
         action={{ label: UPDATE_WORDS.UPDATE, onPress: openTestFlight }}
-        secondary={{ label: UPDATE_WORDS.CHECK_AGAIN, onPress: check, disabled: checking }}
       />
     </Screen>
   );
