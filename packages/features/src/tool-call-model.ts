@@ -1302,6 +1302,12 @@ const READ_SEARCH: ToolReader = ({ input, output }) => ({
   output: output === undefined ? undefined : wordsOutput(output, "content"),
 });
 
+/** What a search of files by their names says in place of the search's verb, since it finds files rather than words in them. */
+const FOUND_FILES = "Found files";
+
+/** A search of files by their names: a search, which says it found files before the pattern. */
+const READ_GLOB: ToolReader = (call) => ({ ...READ_SEARCH(call), description: FOUND_FILES });
+
 const READ_WEB_SEARCH: ToolReader = ({ input, output }) => ({
   kind: CALL_KIND.WEB_SEARCH,
   subject: stringAt(input, "query") ?? "",
@@ -1548,7 +1554,7 @@ const AGENT_TOOL_VIEWS = {
     input: textBlock(stringAt(input, "content") ?? ""),
     output: output === undefined ? undefined : wordsOutput(output, "path"),
   }),
-  [AGENT_TOOL.GLOB]: READ_SEARCH,
+  [AGENT_TOOL.GLOB]: READ_GLOB,
   [AGENT_TOOL.GREP]: READ_SEARCH,
   [AGENT_TOOL.APPLY_PATCH]: ({ input, output }) => {
     const patchText = stringAt(input, "patchText") ?? "";
@@ -1869,6 +1875,23 @@ function namedThread(call: TargetedCall): ToolTarget {
     : { kind: TOOL_TARGET.INBOX, key, item };
 }
 
+/**
+ * The thread a read of one answered, by its id and key, which its chip is
+ * linked by; the whole Inbox for a read that answered none, or one of another
+ * agent's threads, which this agent's Inbox does not hold.
+ */
+function readThread(call: TargetedCall): ToolTarget {
+  const thread = isRecord(call.output) ? call.output.thread : undefined;
+  const item = stringAt(thread, "id");
+  const key = stringAt(thread, "key");
+
+  if (item === undefined || key === undefined || stringAt(thread, "agentId") !== undefined) {
+    return INBOX_TARGET;
+  }
+
+  return { kind: TOOL_TARGET.INBOX, key, item };
+}
+
 /** The agent a call names in its input, as a read of or a message to one does. */
 function namedAgent(call: TargetedCall): ToolTarget | undefined {
   const agent = stringAt(call.input, "agentId");
@@ -2021,7 +2044,7 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
   [AGENT_TOOL.WITHDRAW_ASK, namedThread],
   [RETIRED_TOOL.CLOSE_INBOX_ITEM, () => INBOX_TARGET],
   [AGENT_TOOL.LIST_THREADS, () => INBOX_TARGET],
-  [AGENT_TOOL.READ_THREAD, () => INBOX_TARGET],
+  [AGENT_TOOL.READ_THREAD, readThread],
   [RETIRED_TOOL.READ_THREADS, () => INBOX_TARGET],
   [RETIRED_TOOL.READ_INBOX, () => INBOX_TARGET],
   [RETIRED_TOOL.REPLY_INBOX, () => INBOX_TARGET],
