@@ -71,7 +71,11 @@ import {
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
-import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
+import {
+  WORKSPACE_ROLE,
+  type WorkspaceMachine,
+  type WorkspaceMember,
+} from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppAccountPreferences,
@@ -1011,6 +1015,12 @@ const ANSWERS: StagedAnswers = {
     ]),
   [ACT_KIND.WORKSPACE_ENVIRONMENT_DELETE]: ({ name }) =>
     variablesAnswer(acmeVariables.filter((variable) => variable.name !== name)),
+  // The workspace's members' machines, by name, or one member's: the account's own as Hosts stages them, and a teammate's Mac.
+  [ACT_KIND.WORKSPACE_MACHINES_READ]: ({ userId }) => ({
+    machines: STAGED_WORKSPACE_MACHINES.filter(
+      (machine) => userId === undefined || machine.userId === userId,
+    ),
+  }),
   [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
   [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script }) =>
@@ -1214,6 +1224,41 @@ const STAGED_MACHINES: AppMachines = {
     ],
   },
 };
+
+/** A teammate's Mac, as their profile lists it. */
+const TEAMMATE_MAC = "7d3c2a10-0000-4000-8000-0000000000b1";
+
+/** The workspace's members' machines by name, as a profile and the `@` list read them: the account's Linux box and its Mac online, its laptop quiet, and a teammate's Mac online. */
+const STAGED_WORKSPACE_MACHINES: readonly WorkspaceMachine[] = [
+  {
+    id: FIXTURE_HOST.ONLINE,
+    name: "fra-01",
+    platform: DEVICE_PLATFORM.LINUX,
+    userId: ACCOUNT_ID,
+    online: true,
+  },
+  {
+    id: STAGED_LAPTOP,
+    name: "MacBook Air",
+    platform: DEVICE_PLATFORM.DARWIN,
+    userId: ACCOUNT_ID,
+    online: false,
+  },
+  {
+    id: TEAMMATE_MAC,
+    name: "MacBook Pro",
+    platform: DEVICE_PLATFORM.DARWIN,
+    userId: FIXTURE_PERSON.THEO.userId,
+    online: true,
+  },
+  {
+    id: FIXTURE_HOST.MAC,
+    name: "studio-mini",
+    platform: DEVICE_PLATFORM.DARWIN,
+    userId: ACCOUNT_ID,
+    online: true,
+  },
+];
 
 /** An agent no list the window holds names, as one archived on a task the window never read is, so its command's row draws a plain agent chip. */
 const UNLISTED_AGENT = "7f1c5d9e-4a6b-4b8d-0e2f-5a7c9b1d3e4f";
