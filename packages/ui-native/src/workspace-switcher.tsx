@@ -188,7 +188,25 @@ function SwitcherRow({
   const colors = useColors();
   const checkSize = useScaledSize(CHECK_SIZE);
   // Note that at an accessibility size a name and its line wrap rather than cut, as the package's rows do, since a cut name can't tell two workspaces apart.
-  const lines = useAccessibilitySize() ? [] : [lineLimit(1)];
+  const stacked = useAccessibilitySize();
+  const lines = stacked ? [] : [lineLimit(1)];
+
+  const words = (
+    <VStack alignment="leading" spacing={1}>
+      <Text modifiers={[foregroundStyle(colors.TEXT), ...lines]}>{name}</Text>
+      {line === undefined ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            ...lines,
+          ]}
+        >
+          {line}
+        </Text>
+      )}
+    </VStack>
+  );
 
   return (
     <SwiftUIButton
@@ -204,21 +222,18 @@ function SwitcherRow({
         spacing={SPACE.ROW + 2}
         modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
       >
-        {mark}
-        <VStack alignment="leading" spacing={1}>
-          <Text modifiers={[foregroundStyle(colors.TEXT), ...lines]}>{name}</Text>
-          {line === undefined ? null : (
-            <Text
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.ROW_LINE }),
-                foregroundStyle(colors.TEXT_MUTED),
-                ...lines,
-              ]}
-            >
-              {line}
-            </Text>
-          )}
-        </VStack>
+        {/* Note that at an accessibility size the mark stands above the words, so a name takes the row's whole width and wraps between its words, never inside one, as Apple asks a row to stack at those sizes. */}
+        {stacked ? (
+          <VStack alignment="leading" spacing={SPACE.ROW}>
+            {mark}
+            {words}
+          </VStack>
+        ) : (
+          <>
+            {mark}
+            {words}
+          </>
+        )}
         <Spacer />
         {checked ? (
           <Image
