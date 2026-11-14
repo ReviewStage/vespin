@@ -17,7 +17,9 @@ appId: dev.vespin.ios
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd
 # Unpin from the row's long press menu is refused: the row stays pinned and
-# the notice says why, with Try again.
+# the notice says why, with Try again. Note that a notice offering Try again
+# says it as its button, not in its words (`failure-notice-model.ts`), so
+# each refusal is matched by its first sentence.
 - longPressOn: "Weekly digest email"
 - tapOn: "Unpin"
 - assertVisible: "The task could not be unpinned\\..*"
