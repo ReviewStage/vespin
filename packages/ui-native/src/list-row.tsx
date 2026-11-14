@@ -513,7 +513,7 @@ export function RowHead({
   const words = (
     <Text
       modifiers={[
-        font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "medium" : "regular" }),
+        font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "semibold" : "regular" }),
         foregroundStyle(ink),
         lineLimit(lines.title),
       ]}

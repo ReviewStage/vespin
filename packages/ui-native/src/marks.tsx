@@ -56,7 +56,7 @@ export function UnreadDot({
   readonly faded?: boolean;
 }) {
   const colors = useColors();
-  const dot = useScaledSize(MARK_SIZE.DOT);
+  const dot = useScaledSize(MARK_SIZE.UNREAD);
 
   return (
     <Circle

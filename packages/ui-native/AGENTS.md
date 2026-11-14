@@ -157,7 +157,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
 
 - **Type scale** (`tokens/type.ts`'s `TYPE_ROLE`), each role a Dynamic Type
   text style, never a fixed size: a row's title 15 pt (`subheadline`),
-  medium while unread and regular once read, over a 13 pt muted line
+  semibold while unread and regular once read, over a 13 pt muted line
   (`footnote`); a time 12 pt (`caption`); a group header 13 pt muted; a
   screen's title 17 pt semibold, inline in its bar; and a page's heading,
   a thread's or a task's title, 20 pt semibold (`title3`, the style nearest
@@ -207,7 +207,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   is handed a hover effect: the system draws its own on each style, where
   an added highlight drew a second platter on iPadOS 26.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
-  unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
+  unread dot in the margin, at 9 pt the strongest mark a row carries as
+  Mail's is, a 14 pt leading mark in an 18 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from
   `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
   words. An Inbox thread stands roomier, as Mail's message rows do
