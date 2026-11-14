@@ -6,6 +6,7 @@ import {
   HStack,
   Image,
   Menu,
+  ProgressView,
   ScrollView,
   Section,
   Button as SwiftUIButton,
@@ -16,6 +17,7 @@ import {
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
+  accessibilityHidden,
   accessibilityIdentifier,
   accessibilityLabel,
   accessibilityRemoveTraits,
@@ -34,7 +36,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactNode } from "react";
-import { useScaledSize } from "./accessibility.js";
+import { useAnnounced, useScaledSize } from "./accessibility.js";
 import { ADD_LABEL, AddMenuItems, type ComposerMenu } from "./composer.js";
 import {
   type AttachedPicture,
@@ -56,6 +58,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How far apart the capsules in the dock's row stand, as the glass buttons over Notes' keyboard stand apart. */
 const CHIP_SPACING = SPACE.TIGHT * 2;
+
+/** What a start under way that says nothing of its own is heard as. */
+const BUSY_HEARD = "In progress";
 
 /**
  * Where a capsule menu stands: in a compose sheet's dock over the keyboard,
@@ -235,6 +240,8 @@ type ComposeSheetProps = {
   /** What stands over the words, such as the task the new one is related to, as capsules. */
   readonly head?: ReactNode;
   readonly words: ComposeWords;
+  /** A start that is out, which the page says with the system's spinner and, where it says them, its words, such as "Starting…"; none while nothing is out. */
+  readonly busy?: { readonly says: string | undefined } | undefined;
   /** The skills a `/` being typed offers; none while no `/` word ends the words. */
   readonly skills?:
     | {
@@ -258,8 +265,10 @@ type ComposeSheetProps = {
 function ComposePage(props: ComposeSheetProps) {
   const colors = useColors();
   const room = useDockRoom();
-  const { title, head, words, skills, pictures, onDetach, notes, onDropPictures } = props;
+  const { title, head, words, skills, pictures, onDetach, notes, onDropPictures, busy } = props;
   const muted = [font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)];
+  // Note that a start under way is said aloud as it begins, since VoiceOver's focus stays on Start in the bar.
+  useAnnounced(busy === undefined ? undefined : (busy.says ?? BUSY_HEARD));
 
   return (
     <Host style={{ flex: 1, backgroundColor: colors.GROUPED }} modifiers={[tint(colors.TEXT)]}>
@@ -276,6 +285,17 @@ function ComposePage(props: ComposeSheetProps) {
         >
           {title === undefined ? null : <Text modifiers={muted}>{title}</Text>}
           {head}
+          {/* Note that a start under way stands over the words, so a long draft never pushes it under the keyboard. */}
+          {busy === undefined ? null : (
+            <HStack spacing={SPACE.TIGHT}>
+              <ProgressView
+                modifiers={[tint(colors.TEXT_MUTED), accessibilityLabel(busy.says ?? BUSY_HEARD)]}
+              />
+              {busy.says === undefined ? null : (
+                <Text modifiers={[...muted, accessibilityHidden()]}>{busy.says}</Text>
+              )}
+            </HStack>
+          )}
           <WordsField
             placeholder={words.placeholder}
             words={words.words}
