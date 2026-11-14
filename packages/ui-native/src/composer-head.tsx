@@ -175,7 +175,11 @@ export function AttachedPictures({
     <ScrollView axes="horizontal" showsIndicators={false}>
       <HStack spacing={SPACE.TIGHT * 2}>
         {pictures.map((picture) => (
-          <ZStack key={picture.id} alignment="topTrailing">
+          <ZStack
+            key={picture.id}
+            alignment="topTrailing"
+            modifiers={[frame({ width: THUMBNAIL.SIZE, height: THUMBNAIL.SIZE })]}
+          >
             <AvatarPhoto
               address={picture.address}
               size={THUMBNAIL.SIZE}
