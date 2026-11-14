@@ -51,8 +51,8 @@ builds a control of its own.
   pictures and choices, `ComposeSheet` for a sheet that starts work (its
   words filling the page, and the + and `MenuChip` capsule menus in glass
   over the keyboard),
-  `SwitchRow` for an agent's options, `RenameAsk` (the system's alert a name is
-  typed in),
+  `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
+  typed in, its act preferred, for a task and an agent alike),
   `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
   write did not go: a banner of Liquid Glass sliding down from the top with
   the refusal's words and Try again, said aloud by VoiceOver, faded rather
