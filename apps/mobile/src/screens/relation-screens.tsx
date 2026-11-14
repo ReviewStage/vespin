@@ -40,6 +40,7 @@ import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskRelationWrites } from "../tasks/use-relations.js";
 import { useTaskOverview } from "../tasks/use-tasks.js";
+import { TaskMissing } from "./task-missing.js";
 
 /** The sheet's own words. */
 const WORDS = {
@@ -195,12 +196,13 @@ export function TaskRelationScreen({
     </>
   );
 
+  // Note that a task not yet read is on its way, so the sheet reads rather than say it is gone (`TaskMissing`).
   if (overview === undefined) {
     return (
       <>
         {bar}
         <Screen>
-          <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
+          <TaskMissing taskId={taskId} notFound={WORDS.TASK_NOT_FOUND} />
         </Screen>
       </>
     );

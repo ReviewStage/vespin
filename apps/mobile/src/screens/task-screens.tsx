@@ -58,6 +58,7 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { provenanceText } from "@repo/features/time-format";
 import {
   CHOOSE_AN_ITEM_WORDS,
@@ -80,6 +81,7 @@ import {
   BAR_TITLE,
   type BarAction,
   type BarMenu,
+  BUTTON_LOOK,
   ConfirmAsk,
   EmptyState,
   GLYPH,
@@ -157,6 +159,7 @@ import {
   useTaskReadOnOpen,
   useTasksListing,
   useTasksRead,
+  useTasksReadStatus,
   useTaskWrites,
 } from "../tasks/use-tasks.js";
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
@@ -176,6 +179,15 @@ const TASK_NOT_FOUND = "Task not found";
 
 /** What a pushed task's screen says while the list that holds it is first read. */
 const READING_TASK = readingWords("the task");
+
+/** What the Tasks list says while the list is first read, as the panel's Tasks page does. */
+const READING_TASKS = readingWords(TERM.TASK.many);
+
+/** What the Tasks list says where the list could not be read, beside Try again, as the panel's Tasks page does. */
+const TASKS_UNREAD = readFailedWords(`your ${TERM.TASK.many}`);
+
+/** What a failed read offers. */
+const TRY_AGAIN = "Try again";
 
 /** What the list's search field says before anything is typed. */
 const SEARCH_TASKS = "Search tasks";
@@ -804,6 +816,39 @@ function GroupSection({
   );
 }
 
+/**
+ * What an empty list says in place of "No tasks" while the list has not
+ * been read: reading, or that the read failed with Try again, as the
+ * panel's Tasks page says; none once it is read, so an empty list is one
+ * that holds nothing. Note that it is asked only while the whole list holds
+ * nothing, so a list holding rows draws them whatever its read, and a
+ * refresh that fails leaves what was read standing.
+ */
+function notRead(
+  read: TasksView["listStatus"],
+  onRefresh: () => Promise<void>,
+): ReactElement | undefined {
+  if (read === TASKS_READ.READY) return undefined;
+
+  if (read === TASKS_READ.FAILED) {
+    return (
+      <EmptyState
+        title={TASKS_UNREAD}
+        symbol={GLYPH.TASK}
+        action={{
+          label: TRY_AGAIN,
+          onPress: () => {
+            void onRefresh();
+          },
+          look: BUTTON_LOOK.BORDERED,
+        }}
+      />
+    );
+  }
+
+  return <EmptyState title={READING_TASKS} symbol={GLYPH.TASK} loading />;
+}
+
 /** Whether a task stands among a collection's rows, a sub-task under one of them included. */
 function inCollection(collection: TaskTreeGroup): (task: TaskSummary) => boolean {
   const ids = new Set(collection.rows.map((row) => row.task.id));
@@ -851,6 +896,7 @@ function TasksTree({
   onRefresh,
 }: TasksTreeProps) {
   const { tree } = listing;
+  const read = useTasksReadStatus();
 
   // Note that a search under a picked collection finds only that collection's tasks, as its title says.
   const found =
@@ -858,7 +904,11 @@ function TasksTree({
 
   if (search.trim() !== "") {
     if (found.length === 0) {
-      return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
+      return (
+        (treeEmpty(tree) ? notRead(read, onRefresh) : undefined) ?? (
+          <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />
+        )
+      );
     }
 
     return (
@@ -872,7 +922,11 @@ function TasksTree({
 
   if (collection !== undefined) {
     if (collection.rows.length === 0) {
-      return <EmptyState title={WORDS.NO_TASKS} symbol={collectionGlyph(collection)} />;
+      return (
+        (treeEmpty(tree) ? notRead(read, onRefresh) : undefined) ?? (
+          <EmptyState title={WORDS.NO_TASKS} symbol={collectionGlyph(collection)} />
+        )
+      );
     }
 
     return (
@@ -883,7 +937,9 @@ function TasksTree({
   }
 
   // Note that an empty workspace draws the system's empty view, as the Inbox's does, rather than a bare list.
-  if (treeEmpty(tree)) return <EmptyState title={WORDS.NO_TASKS} symbol={GLYPH.TASK} />;
+  if (treeEmpty(tree)) {
+    return notRead(read, onRefresh) ?? <EmptyState title={WORDS.NO_TASKS} symbol={GLYPH.TASK} />;
+  }
 
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>

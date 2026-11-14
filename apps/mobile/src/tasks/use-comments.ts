@@ -65,6 +65,19 @@ export function useTaskComments(taskId: string | undefined): readonly Descriptio
   return threads;
 }
 
+/** Whether a task's description threads have been read once, so a thread it does not hold is one that is not there rather than one still on its way. */
+export function useTaskCommentsHeld(taskId: string | undefined): boolean {
+  const { data: held = false } = useQuery({
+    ...appStateQuery,
+    select: (state) =>
+      taskId !== undefined &&
+      state[LIVE_READ.DESCRIPTION_COMMENTS][COMMENT_SUBJECT.DESCRIPTION][taskId]?.rows !==
+        undefined,
+  });
+
+  return held;
+}
+
 /** Says on the console a comments read asked again that did not go; the page still says the read failed. */
 function commentsRetryLost(cause: unknown): void {
   console.error("Reading the comments again did not go.", cause);
