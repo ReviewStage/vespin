@@ -93,6 +93,7 @@ import {
   type ListLook,
   ListSection,
   menuWithout,
+  NoSelection,
   PATH_PART,
   RelationRow,
   ROW_ACTION_TONE,
@@ -161,7 +162,7 @@ import {
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, type SidebarTasks, useListColumn, useListLook } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, type SidebarTasks, useListColumn } from "./app-sidebar.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -1228,7 +1229,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const { task, document, tasks, relations } = overview;
   const byId = new Map(tasks.map((each) => [each.id, each]));
   const subTasks = subTasksOf(tasks, task.id);
-  const finished = subTaskCount(subTasks);
+  const finished = subTaskCount(task, subTasks);
 
   // Note that each side is listed apart, since one task may both wait on this one and hold it up.
   const sides = [
@@ -1364,9 +1365,10 @@ type UseAgentArchiveAskResult = {
  * an agent, and `ask` is the system's alert that asks it, which the screen
  * stands beside its `<Screen>`, as every list's questions stand. Note that
  * the question reads where the agent stands now, as the agent page's menu
- * asks (`useArchiveAsk`), read afresh as it's raised and checked again as
- * its act is pressed, because one that starts working while the alert is up
- * would otherwise be stopped and archived without a word of it.
+ * asks (`useArchiveAsk`), raised at once on where the list holds it and
+ * checked afresh as its act is pressed, because one that starts working
+ * while the alert is up would otherwise be stopped and archived without a
+ * word of it.
  */
 export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
   const acts = useAgentRowActs();
@@ -1765,8 +1767,8 @@ function OverviewPage({
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
-      ) : document === undefined || document.document.body.trim() === "" ? null : (
-        <OverviewDescription overview={overview} body={document.document.body} />
+      ) : document === undefined || document.description.body.trim() === "" ? null : (
+        <OverviewDescription overview={overview} body={document.description.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
     </RowList>
@@ -1854,7 +1856,6 @@ function TasksSplitScreen({
   const read = useTasksRead();
   const archiveAsk = useAgentArchiveAsk();
   const threeColumns = useThreeColumns();
-  const look = useListLook();
   const picked = useTasksCollection();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
@@ -1867,7 +1868,7 @@ function TasksSplitScreen({
     view: (
       <TasksTree
         listing={listing}
-        look={look}
+        look={LIST_LOOK.PLAIN}
         search={search}
         collection={collection}
         selected={selected}
@@ -1890,7 +1891,7 @@ function TasksSplitScreen({
         onArchiveAgent={archiveAsk.archive}
       />
     ) : selected === undefined ? (
-      <EmptyState title={SELECT_A_TASK} symbol={GLYPH.TASK} />
+      <NoSelection title={SELECT_A_TASK} />
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (

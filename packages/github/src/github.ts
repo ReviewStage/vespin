@@ -20,10 +20,9 @@
  * Inside the throttle's queue, so a request that waited behind a refusal is
  * not sent after it, a hook of this module's own (`conduct`) refuses a
  * request while a hold stands on its identity, reads GitHub's counters off
- * every answer for the members' reserve, and holds for a rate-limit refusal
+ * every answer for the refusal's log line, and holds for a rate-limit refusal
  * the throttle does not read as one: a 429 or a 403 with `retry-after` that
- * names neither a secondary limit nor an empty quota. The reserve itself is
- * read where the caller's `GitHubPriority` is known, as the call starts.
+ * names neither a secondary limit nor an empty quota.
  *
  * Every request leaves through `githubFetch`, on the `HttpClient` the layer
  * was built over, under the fiber context of the call that asked; a token
@@ -54,7 +53,7 @@ import {
   GitHubUnavailable,
   GitHubUnreadable,
 } from "./github-failure.js";
-import { githubFetch } from "./github-fetch.js";
+import { githubFetch, type Kept } from "./github-fetch.js";
 import type { GitHubHoldStore } from "./github-hold-store.js";
 import {
   type GitHubIdentity,
@@ -65,17 +64,14 @@ import {
 import {
   type AnswerHeaders,
   answered,
-  GitHubPriority,
   HeldRequest,
   type HoldState,
   heldUntil,
   holdStateOf,
   type IdentityState,
-  PRIORITY,
   type RouteOf,
   recordRate,
   refused,
-  reservedUntil,
 } from "./github-rate.js";
 
 /** The REST API version every request names (https://docs.github.com/en/rest/about-the-rest-api/api-versions). */
@@ -111,7 +107,11 @@ const NEXT_PAGE = /rel="next"/u;
 const SSO_HEADER = "x-github-sso";
 
 const GRAPHQL_RESOURCE = "graphql";
-const CORE_RESOURCE = "core";
+
+/** GitHub's OAuth endpoints, on github.com rather than the API (https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens). */
+const OAUTH_BASE_URL = "https://github.com";
+const OAUTH_TOKEN_ROUTE = "POST /login/oauth/access_token";
+const REFRESH_GRANT = "refresh_token";
 
 const MintedToken = Schema.Struct({ token: Schema.String, expiresAt: Schema.String });
 
@@ -147,6 +147,49 @@ export interface InstallationGrant {
   readonly repositoryIds?: ReadonlyArray<number>;
   readonly repositoryNames?: ReadonlyArray<string>;
   readonly permissions?: Readonly<Record<string, string>>;
+}
+
+/** The App's OAuth client: the credentials its user access tokens are exchanged, refreshed, and revoked under. */
+export interface GitHubOAuthClient {
+  readonly clientId: string;
+  readonly clientSecret: Redacted.Redacted<string>;
+}
+
+/** What a web flow's return hands back to exchange: its code, the `redirect_uri` it was asked with, and its PKCE verifier. */
+export interface GitHubWebFlowCode {
+  readonly code: string;
+  readonly redirectUrl: string;
+  readonly codeVerifier: string;
+}
+
+/** What of a user's authorization of the App a revocation takes: one access token, or the whole grant (https://docs.github.com/en/rest/apps/oauth-applications). */
+export const AUTHORIZATION_PART = { TOKEN: "token", GRANT: "grant" } as const;
+
+export type AuthorizationPart = (typeof AUTHORIZATION_PART)[keyof typeof AUTHORIZATION_PART];
+
+/**
+ * The App's OAuth endpoints under its client credentials. The token
+ * endpoint answers a refusal with a 200 and an `error` in its body
+ * (https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app),
+ * so its answer is handed back whole for the caller to read.
+ */
+export interface GitHubOAuth {
+  /** A web flow's code exchanged for a user access token. */
+  readonly exchangeCode: (flow: GitHubWebFlowCode) => Effect.Effect<GitHubAnswer, GitHubFailure>;
+  /** An expiring user access token refreshed for a new pair. */
+  readonly refreshToken: (
+    refreshToken: Redacted.Redacted<string>,
+  ) => Effect.Effect<GitHubAnswer, GitHubFailure>;
+  /** A user access token, or the grant it names, revoked. */
+  readonly revoke: (
+    token: Redacted.Redacted<string>,
+    part: AuthorizationPart,
+  ) => Effect.Effect<void, GitHubFailure>;
+}
+
+/** An answer of GitHub's, as far as its body. */
+export interface GitHubAnswer {
+  readonly data: unknown;
 }
 
 /** A value a GraphQL document's variables hold. */
@@ -336,7 +379,7 @@ const ErroredData = Schema.Struct({ errors: Schema.Array(Schema.Unknown) });
 /** What `conduct` is handed for one identity: run before each send, and after each answer or refusal. */
 interface Conduct {
   readonly before: () => Promise<void>;
-  readonly answered: (route: RouteOf, headers: AnswerHeaders) => Promise<void>;
+  readonly answered: (headers: AnswerHeaders) => Promise<void>;
   readonly refused: (route: RouteOf, rejection: Rejection) => Promise<void>;
 }
 
@@ -369,7 +412,7 @@ function conduct(octokit: Octokit, options: OctokitOptions): Record<string, neve
 
     try {
       const response = await request(endpoint);
-      await handed.answered(route, response.headers);
+      await handed.answered(response.headers);
 
       return response;
     } catch (error) {
@@ -546,7 +589,6 @@ function identityState(identity: GitHubIdentity, secondary?: HoldState): Identit
     identity,
     own,
     secondary: secondary ?? own,
-    reserveUntil: undefined,
     rate: undefined,
     kept: new Map(),
   };
@@ -654,7 +696,7 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
       run(heldUntil(state)).then((until) => {
         if (until !== undefined) throw new HeldRequest({ identity: state.identity.kind, until });
       }),
-    answered: (route, headers) => run(answered(state, route, headers)),
+    answered: (headers) => run(answered(state, headers)),
     refused: (route, rejection) => {
       const refusal = refusalOf(rejection);
 
@@ -706,34 +748,28 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
       throttle: throttleFor(state),
     });
 
-  /** One call on Octokit as an Effect: refused at once where the reserve holds background work, sent on the caller's fiber context otherwise. */
-  const called = <A>(state: IdentityState, send: (request: CallOptions) => Promise<A>) =>
-    Effect.gen(function* () {
-      if ((yield* GitHubPriority) === PRIORITY.BACKGROUND) {
-        const until = yield* reservedUntil(state);
-
-        if (until !== undefined) {
-          return yield* new GitHubRateLimited({
-            identity: state.identity.kind,
-            resource: CORE_RESOURCE,
-            resetsAt: new Date(until),
-          });
-        }
-      }
-
-      const context = yield* Effect.context<never>();
-
-      return yield* Effect.tryPromise({
-        try: (signal) => send({ fetch: githubFetch(client, context, state.kept), signal }),
+  /** One call on Octokit as an Effect, sent on the caller's fiber context, its rejection read as the failure union says it. */
+  const sent = <A>(
+    kept: Kept,
+    identity: GitHubIdentityKind,
+    send: (request: CallOptions) => Promise<A>,
+  ) =>
+    Effect.flatMap(Effect.context<never>(), (context) =>
+      Effect.tryPromise({
+        try: (signal) => send({ fetch: githubFetch(client, context, kept), signal }),
         catch: (error) => Option.getOrElse(decodeRejection(error), () => UNREAD_REJECTION),
       }).pipe(
         Effect.catch((rejection) =>
           Effect.flatMap(Clock.currentTimeMillis, (now) =>
-            Effect.fail(failureOf(rejection, state.identity.kind, now)),
+            Effect.fail(failureOf(rejection, identity, now)),
           ),
         ),
-      );
-    });
+      ),
+    );
+
+  /** One call as an identity. */
+  const called = <A>(state: IdentityState, send: (request: CallOptions) => Promise<A>) =>
+    sent(state.kept, state.identity.kind, send);
 
   const clientFor = (state: IdentityState, octokit: GitHubOctokitInstance): GitHubClient => ({
     request: <R extends keyof Endpoints>(
@@ -836,6 +872,56 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
       ),
   });
 
+  // Note that the OAuth endpoints answer no identity's API quota, so they go outside every throttle and hold, and keep no answers.
+  const oauthOctokit = new Octokit({ userAgent: options.userAgent, log });
+
+  const oauth = (credentials: GitHubOAuthClient): GitHubOAuth => {
+    const clientSecret = Redacted.value(credentials.clientSecret);
+
+    const tokenEndpoint = (parameters: Readonly<Record<string, string>>) =>
+      sent(new Map(), IDENTITY_KIND.APP, (request) =>
+        oauthOctokit.request(OAUTH_TOKEN_ROUTE, {
+          baseUrl: OAUTH_BASE_URL,
+          headers: { accept: "application/json" },
+          client_id: credentials.clientId,
+          client_secret: clientSecret,
+          ...parameters,
+          request,
+        }),
+      );
+
+    return {
+      exchangeCode: (flow) =>
+        tokenEndpoint({
+          code: flow.code,
+          redirect_uri: flow.redirectUrl,
+          code_verifier: flow.codeVerifier,
+        }),
+      refreshToken: (refreshToken) =>
+        tokenEndpoint({
+          grant_type: REFRESH_GRANT,
+          refresh_token: Redacted.value(refreshToken),
+        }),
+      revoke: (token, part) =>
+        Effect.asVoid(
+          sent(new Map(), IDENTITY_KIND.APP, (request) => {
+            const parameters = {
+              client_id: credentials.clientId,
+              access_token: Redacted.value(token),
+              headers: {
+                authorization: `basic ${btoa(`${credentials.clientId}:${clientSecret}`)}`,
+              },
+              request,
+            };
+
+            return part === AUTHORIZATION_PART.TOKEN
+              ? oauthOctokit.request("DELETE /applications/{client_id}/token", parameters)
+              : oauthOctokit.request("DELETE /applications/{client_id}/grant", parameters);
+          }),
+        ),
+    };
+  };
+
   const appOctokit = octokitFor(identities.app, {
     authStrategy: createAppAuth,
     auth: { appId: options.appId, privateKey: Redacted.value(options.privateKey) },
@@ -871,6 +957,7 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
 
       return clientFor(state, octokitFor(state, { auth: Redacted.value(token) }));
     },
+    oauth,
   });
 });
 
@@ -894,6 +981,8 @@ export class GitHub extends Context.Service<
       grant: InstallationGrant,
       options?: { readonly minimumLifetime?: Duration.Duration },
     ) => Effect.Effect<InstallationToken, GitHubFailure>;
+    /** The App's OAuth endpoints, under the client credentials given. */
+    readonly oauth: (client: GitHubOAuthClient) => GitHubOAuth;
   }
 >()("@repo/github/GitHub") {
   /** The service for one App, built once per instance over the instance's `HttpClient` and the shared holds. */

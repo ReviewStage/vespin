@@ -69,7 +69,7 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: "acme/web",
-  document: { body: "", assumptions: [] },
+  description: { body: "", assumptions: [] },
 };
 
 const AGENT: AgentSummary = {

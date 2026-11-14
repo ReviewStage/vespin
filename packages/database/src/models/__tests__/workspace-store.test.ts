@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { TASK_STATUS } from "@repo/features/task-wire";
 import { Effect } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
@@ -9,9 +10,10 @@ import {
   joinWorkspace,
   leaveWorkspace,
   openWorkspace,
+  startTask,
   WORKSPACE_ROLE,
 } from "../../testing/index.js";
-import { claimSoleWorkspace, listWorkspaces } from "../workspace-store.js";
+import { claimSoleWorkspace, listWorkspaces, workspacesWithTasks } from "../workspace-store.js";
 
 /**
  * A workspace claimed by its only member over a real dialect, as an
@@ -51,6 +53,24 @@ it.layer(getTestDB())("a sole member's claim", (it) => {
             { id: alone, role: WORKSPACE_ROLE.MEMBER },
           ].toSorted((a, b) => a.id.localeCompare(b.id)),
         );
+      }),
+  );
+});
+
+it.layer(getTestDB())("the workspaces holding a task", (it) => {
+  it.effect(
+    "name each workspace with a task the account reaches, a finished one too, and none of another account's",
+    () =>
+      Effect.gen(function* () {
+        const [ada, grace] = [yield* openAccount, yield* openAccount];
+        const own = yield* openWorkspace(ada);
+        yield* startTask(ada, { name: "Teammate invitations", status: TASK_STATUS.DONE });
+        // Grace's own workspace, with a task Ada is no member to read, and an empty one Ada shares.
+        yield* startTask(grace, { name: "Billing export" });
+        const shared = yield* openWorkspace(grace);
+        yield* joinWorkspace(shared, ada);
+
+        assert.deepEqual(yield* workspacesWithTasks(ada), [own]);
       }),
   );
 });

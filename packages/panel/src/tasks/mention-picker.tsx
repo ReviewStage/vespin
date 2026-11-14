@@ -1,4 +1,4 @@
-import type { ComputerAppKept } from "@repo/features/agent-parts";
+import { type ComputerApps, computerAppNamed } from "@repo/features/agent-parts";
 import type { NamedServer } from "@repo/features/agent-servers-model";
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
@@ -13,7 +13,7 @@ import {
   readerZone,
   suggestedDates,
 } from "@repo/features/date-mention";
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { ENTITY_KIND, type EntityKind, entityOfMention } from "@repo/features/entity-kind";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
@@ -100,8 +100,8 @@ import {
 import { useCreateStore, useSelector } from "@tanstack/react-store";
 import { Duration, Effect, Predicate } from "effect";
 import { UsersIcon } from "lucide-react";
-import { type RefObject, useEffect, useId, useMemo, useState } from "react";
-import { askAct } from "../act.js";
+import { type RefObject, useEffect, useId, useMemo, useRef, useState } from "react";
+import { askAct, tellAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, actorCard, automationActor } from "../actor-ref.js";
 import {
   type ComposerTrigger,
@@ -124,7 +124,7 @@ import { Highlighted } from "../search-field.js";
 import { appStateQuery } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { type AgentRowPlace, agentMenuRow, useAgentRowPlace } from "./agent-menu-row.js";
-import { useKeptApps } from "./agent-pictures.js";
+import { useComputerApps } from "./agent-pictures.js";
 import { useOnThatMac } from "./computer-permission-note.js";
 import {
   DATE_PICKER_CLOSE,
@@ -147,6 +147,7 @@ import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
 import { TaskKey } from "./task-standing.js";
 import { useKnownNames } from "./use-known-names.js";
+import { useServiceTaskSearch } from "./use-service-task-search.js";
 import { MachineGlyph, MachineOwnerFace, useWorkspaceMachines } from "./workspace-machines.js";
 
 /**
@@ -795,6 +796,17 @@ function threadRow(place: InboxItemPlace, item: InboxItem, holder: string): Ment
   };
 }
 
+/** The ids of the tasks the feed holds threads of that the window lists not. */
+function unlistedThreadTasks(
+  feed: AppInboxItems | undefined,
+  tasks: readonly TaskSummary[],
+): readonly string[] {
+  if (feed === undefined) return [];
+  const listed = new Set(tasks.map((task) => task.id));
+
+  return Object.keys(feed[INBOX_SCOPE_KIND.PLAN]).filter((planId) => !listed.has(planId));
+}
+
 /**
  * Each of the workspace's Inbox threads' rows as the account's feed holds
  * them, the plan's own first, then the newest changed first: a task's under
@@ -929,10 +941,7 @@ function allowedAppName(app: string): string {
  * conversation named it, else by its bundle id, and is found by either. Where the reader has more than one
  * machine that allows an app, each row names the machines it is allowed on.
  */
-function allowedAppRows(
-  machines: readonly MachineAllowedApps[],
-  kept: ReadonlyMap<string, ComputerAppKept>,
-): MentionRow[] {
+function allowedAppRows(machines: readonly MachineAllowedApps[], kept: ComputerApps): MentionRow[] {
   const allowedOn = new Map<string, string[]>();
   const posted = new Map<string, string>();
 
@@ -950,7 +959,7 @@ function allowedAppRows(
   const named = machines.length > 1;
 
   const rows = [...allowedOn].map(([app, on]): MentionRow => {
-    const name = posted.get(app) ?? kept.get(app)?.name ?? allowedAppName(app);
+    const name = posted.get(app) ?? computerAppNamed(kept, app)?.name ?? allowedAppName(app);
 
     return {
       mention: { kind: MENTION_KIND.MAC_APP, app },
@@ -2111,6 +2120,19 @@ export function useMentionPicker({
     ? threadRows(feed.data, taskId, tasksWorkspace, listed.tasks)
     : [];
 
+  // Note that a thread of a task the window lists not is offered once the task is read into its list, each asked once while the list stands open and again once it opens anew.
+  const threadTasksOutside = threadsAsked ? unlistedThreadTasks(feed.data, listed.tasks) : [];
+  const threadTasksAsked = useRef(new Set<string>());
+  useEffect(() => {
+    if (!threadsAsked) threadTasksAsked.current.clear();
+
+    for (const outside of threadTasksOutside) {
+      if (threadTasksAsked.current.has(outside)) continue;
+      threadTasksAsked.current.add(outside);
+      tellAct(ACT_KIND.TASKS_LOAD, { taskId: outside });
+    }
+  });
+
   // The automations offered are the workspace's, followed only while the list stands open.
   const automationsAsked = open && tasksWorkspace !== undefined;
   const automations = useAutomations(automationsAsked ? tasksWorkspace.id : undefined);
@@ -2136,7 +2158,7 @@ export function useMentionPicker({
   const onThatMac = useOnThatMac(appsAsked ? self : undefined);
   const apps = useMacApps(open && macApps && onThatMac === true);
   const allowedApps = useAllowedApps(open && macApps && onThatMac === false);
-  const keptApps = useKeptApps();
+  const keptApps = useComputerApps();
 
   const appRowsOffered =
     !open || onThatMac === undefined
@@ -2177,6 +2199,14 @@ export function useMentionPicker({
 
   const scope = open ? scopeOf(trigger, narrowing, kinds) : undefined;
   const term = scope?.term ?? "";
+
+  // Note that the workspace's tasks the window lists not are asked of the service as the typing pauses, as ⌘K asks them, and join the list the task rows above are built from, one row each.
+  const tasksSought =
+    open &&
+    tasksWorkspace !== undefined &&
+    (scope?.kind === undefined || scope.kind.narrow.from === MENTION_FROM.TASKS);
+
+  useServiceTaskSearch(term, tasksSought);
 
   // The workspace's newest agents are read as each `@` word opens the list, and once a word is
   // typed and the typing rests the service finds those it names, archived ones among them, however many the workspace

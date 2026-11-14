@@ -230,7 +230,7 @@ const addCommand = Command.make(
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
       const { plan } = yield* askService(hosted.tasks.open, { id });
-      const text = plan.document.body;
+      const text = plan.description.body;
       const anchor = locatedPhrase(text, on);
 
       if (anchor === undefined) {

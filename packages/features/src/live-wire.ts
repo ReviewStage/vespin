@@ -297,6 +297,8 @@ export const LIVE_READ = {
   DEVICE_PRESENCE: "devicePresence",
   /** The account's hosts, by the account: the service's `hostsRead`, declared as `HOSTS_READ`, held while Settings › Hosts draws them and a while after. */
   HOSTS: "hosts",
+  /** The account's machines with their own settings for agents' commands and apps, by the account: the service's `machinesRead`, declared as `MACHINES_READ`, held while Settings › Machines draws them and a while after. */
+  MACHINES: "machines",
   /** One workspace's pending invitations, by the workspace: the service's `workspaceInvitations` query, held for an owner's or an admin's windows that draw them and a few they drew lately. */
   WORKSPACE_INVITATIONS: "workspaceInvitations",
   /** Which machine This Mac is and the device its host's record names, by the account: read by the host as it starts and every few seconds after, held for the session, and never in a browser tab, which has no This Mac. */

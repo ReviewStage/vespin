@@ -1,20 +1,33 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
+import type { DevicePlatform } from "@repo/features/device-agent-wire";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { type WorkspaceMachine, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { HoverCard, HoverCardHead, HoverCardNote } from "@repo/ui";
+import { MACHINE_COMMAND_MODE_LABEL } from "@repo/settings";
+import {
+  HOVER_CARD_ROW_LOOK,
+  HoverCard,
+  HoverCardHead,
+  HoverCardNote,
+  HoverCardRow,
+  STATUS_TONE,
+} from "@repo/ui";
 import { personActor } from "@repo/ui/actor-model";
+import { GLYPH } from "@repo/ui/icons";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { Duration } from "effect";
-import type { ReactNode } from "react";
+import { type ReactNode, useContext } from "react";
 import { askAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
+import { workspaceToolsQuery } from "../live-reads.js";
+import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { appStateQuery, selectAccount, selectWorkspaces } from "../use-app-state.js";
+import { TranscriptAgent } from "./line-cards.js";
 import { DeviceGlyph, DeviceStandingGlyph } from "./runs-on.js";
 
 /**
@@ -125,8 +138,12 @@ export function MachineOwnerFace({ userId }: { userId: string }): ReactNode {
   );
 }
 
-/** A machine as every list of places draws it: its platform's glyph wearing its online or offline dot. */
-export function MachineGlyph({ machine }: { machine: WorkspaceMachine }): React.JSX.Element {
+/** A machine as every list of places draws it: its platform's glyph, a Mac's where none is known, wearing its online or offline dot. */
+export function MachineGlyph({
+  machine,
+}: {
+  machine: { readonly online: boolean; readonly platform?: DevicePlatform };
+}): React.JSX.Element {
   return (
     <DeviceStandingGlyph
       device={machine}
@@ -181,7 +198,65 @@ export function useMachineOwnerHeard(
   return owner === undefined ? undefined : ` (${owner}'s)`;
 }
 
-/** A machine's card: its glyph and name, whose it is and what it is under it, or that the workspace no longer lists it. */
+/** What a machine's card says. */
+const MACHINE_CARD_WORDS = {
+  ONLINE: "Online",
+  OFFLINE: "Offline",
+  DEFAULT: "This agent's default machine",
+  /** The rows of what the machine lets agents do, named as Settings › Machines names them. */
+  COMMANDS: "Terminal commands",
+  COMPUTER_USE: "Computer use",
+  ON: "On",
+  OFF: "Off",
+} as const;
+
+/** Whose machine it is, as its card's second line says it with its platform: This Mac, Your Mac, or its owner's; the platform alone where the owner is not known. */
+function machineWhose(input: {
+  readonly kind: string;
+  readonly isThis: boolean;
+  readonly yours: boolean;
+  readonly owner: string | undefined;
+}): string {
+  if (input.isThis) return `This ${input.kind}`;
+
+  if (input.yours) return `Your ${input.kind}`;
+
+  return input.owner === undefined ? input.kind : `${input.owner}'s ${input.kind}`;
+}
+
+/** What a machine lets agents do, a row each, as its card says it to any member: its terminal commands mode and its apps switch, each where the machine carried it up. */
+function MachineSettingsRows({ machine }: { machine: WorkspaceMachine }): React.JSX.Element {
+  return (
+    <>
+      {machine.commandMode === undefined ? null : (
+        <HoverCardRow
+          look={HOVER_CARD_ROW_LOOK.DETAIL}
+          glyph={<GLYPH.TERMINAL />}
+          label={MACHINE_CARD_WORDS.COMMANDS}
+          end={MACHINE_COMMAND_MODE_LABEL[machine.commandMode]}
+        />
+      )}
+      {machine.computerUse === undefined ? null : (
+        <HoverCardRow
+          look={HOVER_CARD_ROW_LOOK.DETAIL}
+          glyph={<GLYPH.COMPUTER_USE />}
+          label={MACHINE_CARD_WORDS.COMPUTER_USE}
+          end={machine.computerUse ? MACHINE_CARD_WORDS.ON : MACHINE_CARD_WORDS.OFF}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * A machine's card, read the same for every machine: its glyph and its own
+ * name, then whose it is with its platform (This Mac, Your Mac, or its
+ * owner's), and whether it is online in the corner; what it lets agents do,
+ * its terminal commands mode and its apps switch, so any member sees why a
+ * call there would be refused; that it is the agent's default machine where
+ * it is read in that agent's transcript; or that the workspace no longer
+ * lists it.
+ */
 export function MachineChipCard({
   machineId,
   workspace,
@@ -194,18 +269,21 @@ export function MachineChipCard({
   const { machine, read } = useMachine(machineId, workspace);
   const { members } = useMemberDirectory();
   const readerId = useReaderId();
-  const kind = machine === undefined ? undefined : DEVICE_PLATFORM_NAME[machine.platform];
+  const thisMac = useThisMac();
+  // Note that the agent's tools are read only where the card stands in an agent's transcript, which names the agent.
+  const agentId = useContext(TranscriptAgent);
+  const routed = useQuery(workspaceToolsQuery(agentId)).data?.runOnMac?.machine?.id;
   const owner = members?.find((member) => member.userId === machine?.userId)?.name;
-  const yours = machine !== undefined && machine.userId === readerId;
 
   const sub =
-    kind === undefined
+    machine === undefined
       ? undefined
-      : yours
-        ? `Your ${kind}`
-        : owner === undefined
-          ? kind
-          : `${owner}'s ${kind}`;
+      : machineWhose({
+          kind: DEVICE_PLATFORM_NAME[machine.platform],
+          isThis: thisMac?.deviceId === machine.id,
+          yours: machine.userId === readerId,
+          owner,
+        });
 
   return (
     <HoverCard data-mention-card="">
@@ -217,9 +295,19 @@ export function MachineChipCard({
             <MachineGlyph machine={machine} />
           )
         }
-        name={name}
+        name={machine?.name ?? name}
         sub={sub}
+        corner={
+          machine === undefined
+            ? undefined
+            : machine.online
+              ? MACHINE_CARD_WORDS.ONLINE
+              : MACHINE_CARD_WORDS.OFFLINE
+        }
+        cornerTone={machine?.online === true ? STATUS_TONE.COMPLETE : STATUS_TONE.NEUTRAL}
       />
+      {machine === undefined ? null : <MachineSettingsRows machine={machine} />}
+      {routed === machineId ? <HoverCardNote>{MACHINE_CARD_WORDS.DEFAULT}</HoverCardNote> : null}
       {read && machine === undefined ? <HoverCardNote>{UNLISTED_WORDS}</HoverCardNote> : null}
     </HoverCard>
   );

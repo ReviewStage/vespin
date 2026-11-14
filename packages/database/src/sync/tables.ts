@@ -72,7 +72,9 @@ import { TOPIC } from "./notification.js";
 import { defineSyncTable, LOG, type SyncTable } from "./sync-table.js";
 
 /**
- * A task, on its own topic and its workspace's. Note that the plan's text
+ * A task, on its own topic and its workspace's, and naming its parent, the
+ * one it had and the one it has (`TOPIC.TASK_PARENT`), so a delta read of
+ * the task list sends the parent whose sub-task count a child moved. Note that the plan's text
  * and the agents' journal of saves are ignored, because every save rewrites
  * both and no view reads them live: a save moves `updated_at` beside them,
  * which the task list and the task's record read, so a save still notifies.
@@ -83,8 +85,9 @@ export const taskSync = defineSyncTable(task, {
   topics: [
     { kind: TOPIC.TASK, column: task.id },
     { kind: TOPIC.WORKSPACE, column: task.organizationId },
+    { kind: TOPIC.TASK_PARENT, column: task.parentTaskId },
   ],
-  ignore: [task.document, task.agentEdits, task.doneBy],
+  ignore: [task.description, task.agentEdits, task.doneBy],
   log: LOG.EVERY,
 });
 
@@ -281,7 +284,8 @@ export const userSync = defineSyncTable(user, {
  * name the local agents on it, and a host's platform, machine, model,
  * update, setup, first register (its home folder), and its going away or
  * coming back reach every surface that reads the hosts (`hostsRead`), as do
- * its enrolling, which writes its version, and its removal. Note that every other column is
+ * its enrolling, which writes its version, its removal, and its being
+ * picked as its account's default machine (`machinesRead`). Note that every other column is
  * ignored, because the device beats and registers again often, rewriting
  * when it was last seen and what it runs, and no view the capture wakes
  * reads them: a window judges a device by its own presence read. Its
@@ -365,9 +369,9 @@ export const workspaceFormerSlugSync = defineSyncTable(workspaceFormerSlug, {
 
 /**
  * An experiment a workspace's admin turned on or off, on the workspace's
- * topic, so every member's panel follows the switch. Logged, because the
- * task list answers each task's followers only while its workspace has
- * Following on, and reads its tasks again past a sync id when it flips.
+ * topic, so every member's panel follows the switch. Logged, though no
+ * read past a sync id reads it now; dropping the log is a migration of its
+ * own.
  */
 export const workspaceExperimentSync = defineSyncTable(workspaceExperiment, {
   topics: [{ kind: TOPIC.WORKSPACE, column: workspaceExperiment.organizationId }],
@@ -678,7 +682,7 @@ export const automationRunSync = defineSyncTable(automationRun, {
  */
 export const descriptionRevisionSync = defineSyncTable(descriptionRevision, {
   topics: [{ kind: TOPIC.TASK, column: descriptionRevision.taskId }],
-  ignore: [descriptionRevision.document],
+  ignore: [descriptionRevision.description],
 });
 
 /**

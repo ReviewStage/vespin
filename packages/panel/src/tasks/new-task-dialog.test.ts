@@ -56,6 +56,7 @@ import {
   installEditorLayout,
   pressInComposer,
   typeInComposer,
+  typeKeysInComposer,
 } from "../testing/composer.js";
 import { withQueryClient, writeHandedAppState } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -523,6 +524,14 @@ test("Shift+Return is a new line, and the agent is handed both lines", async () 
 
   assert.deepEqual(card.starts.length, 1);
   assert.equal(card.agents[0]?.prompt, "Fix the refresh\nand add a test");
+});
+
+test("`> ` typed makes a quote the caret stays in, as in an agent's box, and the agent is handed it", async () => {
+  const card = await mount();
+  typeKeysInComposer(document, "> Ship it");
+  await card.key("Enter");
+
+  assert.equal(card.agents[0]?.prompt, "> Ship it");
 });
 
 test("once a repository is chosen, an @ offers its files, read through the workspace, and the row chosen is drawn as its chip and handed to the agent as its link", async () => {

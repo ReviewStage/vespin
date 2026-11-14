@@ -6,7 +6,7 @@ import {
   dateWhole,
   readerZone,
 } from "@repo/features/date-mention";
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
 import {
   ENTITY_KIND,
   ENTITY_WORD,
@@ -88,7 +88,7 @@ import {
 import { useInboxItemTitle } from "./inbox-item-chip.js";
 import { OpenedByRow, PullRequestCard } from "./pull-request-card.js";
 import { WrittenAs } from "./selection-markdown.js";
-import { useKnownNames, useWordTargets } from "./use-known-names.js";
+import { useNamesOf, useWordTargets } from "./use-known-names.js";
 import { useLinkStanding, useNumberedTaskId, useWordsWorkspaceId } from "./use-link-standing.js";
 import { useOpenLink } from "./use-open-link.js";
 import { useWordsDates } from "./words-dates.js";
@@ -130,7 +130,7 @@ import { MachineChipOwner, useMachineOwnerHeard } from "./workspace-machines.js"
  * mark, as the place drawing it knows it (`MentionDoors.agentOf`), and any
  * other agent, one of another task's or of none, or one named where the
  * place knows no agents, the mark of the harness the window last read it
- * running on (`useKnownNames`), or, for one the window lists not, an
+ * running on (`useNamesOf`), or, for one the window lists not, an
  * archived agent say, the harness read for it (`mentioned-agent-card.tsx`); either
  * opens its tab through the window's opener for an app link, as a link
  * copied to it does, or where its place opens it (`onOpenAgent`), and an agent hangs its tab's own card where the place
@@ -523,7 +523,7 @@ export function MentionChipCard({
   /** What its provider answered for it, as the row read it. */
   standing: LinkStanding | undefined;
 }): ReactNode {
-  const known = useKnownNames();
+  const known = useNamesOf(mention);
 
   return (
     <MentionCard
@@ -605,7 +605,7 @@ function MentionChip({
   state?: ReactNode;
 }): React.JSX.Element {
   const openLink = useOpenLink();
-  const known = useKnownNames();
+  const known = useNamesOf(mention);
 
   const standing = useLinkStanding(mention, {
     taskId: doors.holder?.taskId,
@@ -856,7 +856,7 @@ function PlaceChip({
   read?: ((known: KnownNames) => KnownNames) | undefined;
 }): React.JSX.Element {
   const openLink = useOpenLink();
-  const held = useKnownNames("automationId" in place ? place.automationId : undefined);
+  const held = useNamesOf(place);
   const known = read === undefined ? held : read(held);
   const { name, under } = placeChipLook(place, label, known);
 

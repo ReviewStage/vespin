@@ -39,7 +39,9 @@ import {
   AttachedPictures,
   BAR_TITLE,
   BUTTON_LOOK,
+  CallCardRow,
   Composer,
+  type ComposerCall,
   type ComposerMenu,
   ConfirmAsk,
   DeniesWaiting,
@@ -117,6 +119,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { PageScreen } from "./page-screens.js";
 
@@ -276,6 +279,8 @@ function AgentComposerBar({
   onShowWaiting,
   addMenu,
   note,
+  call,
+  otherCall,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -284,6 +289,10 @@ function AgentComposerBar({
   readonly addMenu: ComposerMenu;
   /** What the last act of the page's menu or the + that did not take said, where the composer's own says nothing. */
   readonly note: string | undefined;
+  /** Talk, or the call's presses while a call into this agent stands; none while calls are not offered. */
+  readonly call: ComposerCall | undefined;
+  /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
+  readonly otherCall: ReturnType<typeof useStandingCallCard>;
 }) {
   const said = composer.note ?? note;
   const { banner, waiting } = approvals;
@@ -299,8 +308,12 @@ function AgentComposerBar({
     composer.paused === undefined &&
     composer.attached.length === 0 &&
     composer.skills === undefined &&
+    otherCall === undefined &&
     said === undefined ? undefined : (
       <>
+        {otherCall === undefined ? null : (
+          <CallCardRow call={otherCall.card} onOpen={otherCall.open} />
+        )}
         {composer.skills === undefined ? null : (
           <SkillSuggestions
             skills={composer.skills.skills}
@@ -332,6 +345,7 @@ function AgentComposerBar({
       onDropPictures={composer.dropPictures}
       onStop={composer.stop}
       stopping={composer.stopping}
+      call={call}
       head={head}
     />
   );
@@ -641,6 +655,8 @@ export function AgentScreen() {
   };
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
+  const talk = useAgentTalk(id, shown?.planId);
+  const otherCall = useStandingCallCard(id);
 
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
   const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
@@ -790,6 +806,8 @@ export function AgentScreen() {
             onShowWaiting={showWaiting}
             addMenu={addMenu}
             note={actions.note ?? transcriptCopy.note ?? mode?.note ?? pick.note}
+            call={talk.call}
+            otherCall={otherCall}
           />
         }
       >
@@ -849,6 +867,7 @@ export function AgentScreen() {
         }}
         onDismiss={() => setRenaming(false)}
       />
+      <ConfirmAsk destructive {...talk.switching} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}

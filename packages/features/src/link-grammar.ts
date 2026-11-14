@@ -47,7 +47,9 @@ import { parsedUrl } from "./parsed-url.js";
  *   `/automation/<id>`, and one of its runs, `/automation/<id>/run/<runId>`;
  * - a page of Settings, `/settings[/<page>]`;
  * - a person's page in the workspace, `/person/<userId>`, a member or
- *   someone who left, by the account id the service names them by;
+ *   someone who left, by the account id the service names them by, and
+ *   one of their machines on it, `#machine-<deviceId>`, which the page
+ *   scrolls to and lights;
  * - the Admin place, an admin's alone, which reads every workspace's
  *   accounts, so its workspace is only the one the link was copied in:
  *   `/admin`, a section of it, `/admin/<cost|reliability|workspaces|users>`,
@@ -205,6 +207,9 @@ const STEP = {
 
 /** The query a task's link names one of its comment threads under. */
 const COMMENT_QUERY = "comment";
+
+/** What a person's link writes before a machine's id in its fragment, `#machine-<deviceId>`. */
+const MACHINE_FRAGMENT = "machine-";
 
 /** The steps a task is read under: the one written, and the one every older link holds. */
 const TASK_STEPS: ReadonlySet<string> = new Set([STEP.PLAN, STEP.TASK]);
@@ -493,7 +498,11 @@ const linkDestinationSchema = EffectSchema.Union([
     automationId: idSchema,
     runId: idSchema,
   }),
-  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.PERSON), userId: idSchema }),
+  EffectSchema.Struct({
+    kind: EffectSchema.Literal(LINK_DESTINATION.PERSON),
+    userId: idSchema,
+    machineId: EffectSchema.optionalKey(idSchema),
+  }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.SETTINGS),
     page: EffectSchema.optionalKey(
@@ -558,6 +567,14 @@ export function decodedStep(step: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** The machine a person's link names by its fragment, written without its `#`; none for any other fragment, or one naming no id, which is the address's own. */
+export function machineOfFragment(fragment: string): string | undefined {
+  if (!fragment.startsWith(MACHINE_FRAGMENT)) return undefined;
+  const machineId = decodedStep(fragment.slice(MACHINE_FRAGMENT.length));
+
+  return machineId !== undefined && ID.test(machineId) ? machineId : undefined;
 }
 
 /** A step of a link of ours read back, or nothing where its encoding is broken or it is too long to be one. */
@@ -761,6 +778,19 @@ function taskLink(taskId: string, hash: string): LinkDestination | undefined {
   );
 }
 
+/** A person's link, or one of their machines' on it by its fragment (`machineOfFragment`). */
+function personLink(userId: string, hash: string): LinkDestination | undefined {
+  const machineId = machineOfFragment(hash.replace(/^#/u, ""));
+
+  return Option.getOrUndefined(
+    readPlace({
+      kind: LINK_DESTINATION.PERSON,
+      userId,
+      ...(machineId !== undefined && { machineId }),
+    }),
+  );
+}
+
 /** The path a place is written at under its workspace, each id percent-encoded. */
 function placePath(place: LinkDestination): readonly string[] {
   switch (place.kind) {
@@ -831,8 +861,9 @@ function agentPath(taskId: string | undefined, agentId: string): readonly string
 /**
  * The link a place is shared by, under its workspace by slug, or by id
  * where the slug is not yet known, by its ids alone: a section's with its
- * anchor as the fragment, the task's own where the anchor is empty, and a
- * comment thread's in the task's query.
+ * anchor as the fragment, the task's own where the anchor is empty, a
+ * comment thread's in the task's query, and a person's machine's as its
+ * fragment.
  */
 export function linkOf(place: LinkDestination, workspace: string): string {
   const link = [LINK_ORIGIN, workspace, ...placePath(place)]
@@ -845,6 +876,10 @@ export function linkOf(place: LinkDestination, workspace: string): string {
 
   if (place.kind === LINK_DESTINATION.COMMENT) {
     return `${link}?${new URLSearchParams({ [COMMENT_QUERY]: place.threadId })}`;
+  }
+
+  if (place.kind === LINK_DESTINATION.PERSON && place.machineId !== undefined) {
+    return `${link}#${MACHINE_FRAGMENT}${encodedStep(place.machineId)}`;
   }
 
   return link;
@@ -878,7 +913,7 @@ export function readLink(target: string): ReadLink | undefined {
   // Note that a task's link naming one of its comment threads opens the thread; any other query is the address's own, which the place has no use for.
   const thread = url.searchParams.getAll(COMMENT_QUERY);
 
-  const place =
+  const read =
     taskOwn && thread.length === 1
       ? Option.getOrUndefined(
           readPlace({ kind: LINK_DESTINATION.COMMENT, planId: taskId, threadId: thread[0] }),
@@ -886,6 +921,9 @@ export function readLink(target: string): ReadLink | undefined {
       : taskOwn
         ? taskLink(taskId, url.hash)
         : Option.getOrUndefined(readPlace(placeFields(placeSteps)));
+
+  // Note that a person's link names one of their machines by its fragment alone.
+  const place = read?.kind === LINK_DESTINATION.PERSON ? personLink(read.userId, url.hash) : read;
 
   if (place === undefined) return undefined;
 

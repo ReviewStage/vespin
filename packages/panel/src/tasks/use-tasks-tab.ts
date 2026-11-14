@@ -106,6 +106,7 @@ import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { type LinkStep, type TaskAt, taskAtOf, taskOfAt } from "../places/task-step.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import type { TaskRoute } from "../task-route.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
@@ -168,6 +169,7 @@ import { useInboxTaskAgents } from "./use-inbox-task-agents.js";
 import { isOverviewTab, type MainTab, type MainTabsControl, useMainTabs } from "./use-main-tabs.js";
 import { type NewTask, useNewTask } from "./use-new-task.js";
 import { usePinWrites } from "./use-pin-writes.js";
+import { usePinnedTabTasks } from "./use-pinned-tab-tasks.js";
 import {
   DRAWN_KINDS,
   type SidebarPin,
@@ -335,12 +337,16 @@ export interface TasksControl {
   me: string | undefined;
   /** Every task of every workspace, in the sidebar's order: the pinned ones first, newest pinned first, then the rest, newest started first; what the palette, the inbox, and the history find a task in. */
   tasks: TasksView["tasks"];
+  /** The names being typed for tasks, which `tasks` draws over their listed names (`renamedView`), for a surface that reads a task by its id rather than from `tasks`; empty while none is typed. */
+  typedNames: TaskNames;
   /** The chosen workspace's share of `plans`, which alone the sidebar lists; everything while no workspace is chosen. */
   listed: {
     tasks: TasksView["tasks"];
   };
   /** The tasks a rename, a pin, or where they stand, asked here and not yet carried by the list, is drawn over (main's view's own), which a list held still moves at once; none where nothing waits. */
   pendingTasks?: ReadonlySet<string>;
+  /** The workspaces in which the account reaches any task, as the service last said, whatever the list holds of them (`TasksView.taskWorkspaces`); absent before it says. */
+  taskWorkspaces?: readonly string[];
   /** The workspaces the account is a member of, its first one first; none before the first read lands. */
   workspaces: readonly Workspace[];
   /** The workspace the sidebar lists and New task starts in; absent while none is listed, when every task is listed. */
@@ -1117,20 +1123,22 @@ export function useTasksTab(input: {
         : dictationKeywords({
             repository: openDocument.repository,
             title: openDocument.name,
-            body: openDocument.document.body,
+            body: openDocument.description.body,
           }),
     [openDocument, viewed.activeTaskId],
   );
 
   // A fixture's task lists its agents at the act door: none, but where an agent profile stages one (`tasks-fixture.ts`).
+  // The open task as the list carries it, looked up by its id alone; its agents are followed only where the list carries it.
+  const listCollections = useTaskListCollections();
+  const openListed = useTaskListRow(listCollections.tasks, viewed.activeTaskId);
+
   const agents = useAgents({
     taskId: viewed.activeTaskId,
     repository:
       openDocument?.id === viewed.activeTaskId ? (openDocument?.repository ?? null) : null,
-    listedAgents: tasks.tasks.some((task) => task.id === viewed.activeTaskId)
-      ? liveAgents
-      : undefined,
-    listedPullRequests: tasks.agentPullRequests,
+    agentsFollowed: liveAgents !== undefined && openListed !== undefined,
+    staged: fixture,
     onOpenIntegrations: input.onOpenIntegrations,
     onOpenApiKeys: input.onOpenApiKeys,
     me: input.accountId,
@@ -1293,6 +1301,9 @@ export function useTasksTab(input: {
     inboxView !== undefined ? inboxTaskAgents.heldIds : agents.heldIds,
     cloudBrowserAgents,
   );
+
+  // A tab pinned on a task the list holds not reads its task into the list, so the sidebar draws its pin.
+  usePinnedTabTasks(sidePanel.pins, listCollections.tasks);
 
   const { keys: tabKeys, onKeys, onKeysTaken } = useColumnKeys();
 
@@ -1458,7 +1469,9 @@ export function useTasksTab(input: {
     tellShown({ agentId: shownAgent });
   }, [shownAgent, tellShown]);
   // The agent on screen is kept warm for the next message while the page is visible.
-  useWarmAgent((liveAgents ?? agents.agents)?.find((agent) => agent.id === shownAgent));
+  // Note that it is looked up by its id alone, so a delivery that moves another agent walks no list here.
+  const shownListed = useTaskListRow(listCollections.agents, shownAgent ?? undefined);
+  useWarmAgent(shownListed ?? agents.agents?.find((agent) => agent.id === shownAgent));
 
   // The host answers a press a round trip later, so where the tab is bound
   // is said at once, and a select that did not open the task takes its ask
@@ -1672,7 +1685,7 @@ export function useTasksTab(input: {
 
     if (timed === undefined || readyTask?.id !== timed.taskId) return;
     opening.current = undefined;
-    const descriptionChars = readyTask.document.body.length;
+    const descriptionChars = readyTask.description.body.length;
     recordPanelSpan({
       name: PANEL_SPAN.TASK_OPEN,
       startedAt: timed.startedAt,
@@ -2803,12 +2816,14 @@ export function useTasksTab(input: {
    * A person's page in `home`, the listed workspace where none is named,
    * listed first where another is, because the page reads the listed
    * workspace's work, and only listed, as a link's place is: reopening its
-   * last plan behind the page would only hide it again.
+   * last plan behind the page would only hide it again. A link naming one
+   * of their machines opens it at that machine (`machineId`).
    */
   const openPerson = (
     userId: string,
     name: string | undefined,
     home: Pick<Workspace, "id" | "slug"> | undefined,
+    machineId?: string,
   ) => {
     const shown = home ?? listedWorkspace;
 
@@ -2817,7 +2832,7 @@ export function useTasksTab(input: {
     // asked before it, answering late, lists nothing and leaves nothing over it; both follow the move, so a move kept at a
     // page's leave ask lets that answer land and lists nothing.
     linkArrive(
-      () => routedPerson.onOpen(userId, name, stepOf(shown)),
+      () => routedPerson.onOpen(userId, name, stepOf(shown), machineId),
       () => {
         navigations.current += 1;
 
@@ -2995,7 +3010,12 @@ export function useTasksTab(input: {
       case LINK_ROUTED_PLACE.PERSON: {
         if (place.kind !== LINK_DESTINATION.PERSON) return;
         // A person's page is theirs in the workspace the link names, listed first; one the reader is not in names nobody they can see.
-        openPerson(place.userId, undefined, workspaceOfSlug(viewed.workspaces, workspace));
+        openPerson(
+          place.userId,
+          undefined,
+          workspaceOfSlug(viewed.workspaces, workspace),
+          place.machineId,
+        );
 
         return;
       }
@@ -3448,17 +3468,19 @@ export function useTasksTab(input: {
   };
 
   // Note that the tab is handed back steady, so a part that holds while its share of the tab does (`memo`) holds for every draw that moved nothing it reads.
-  return useSteadyDoors({
+  const steady = useSteadyDoors<Omit<TasksControl, "liveAgents" | "listedPullRequests">>({
     page,
     shown,
     signedIn,
     // Note that a fixture's invented tasks are nobody's, but those of a profile that signs in its own reader.
     me: fixture === undefined ? input.accountId : tasksFixture?.fixtureReader(input.run),
     tasks: sidebar,
+    typedNames: drafts,
     listed: {
       tasks: listedSidebar,
     },
     pendingTasks,
+    ...(tasks.taskWorkspaces === undefined ? undefined : { taskWorkspaces: tasks.taskWorkspaces }),
     workspaces: viewed.workspaces,
     workspace: listedWorkspace,
     onChooseWorkspace: chooseWorkspace,
@@ -3646,9 +3668,18 @@ export function useTasksTab(input: {
     taskPlaceStands: input.place === undefined || input.place.binding === PLACE_BINDING.TASK,
     drawnTasks: drawnNow,
     onDraftName: draftName,
-    liveAgents,
-    listedPullRequests: tasks.agentPullRequests,
     back: escapeTask,
     placeLeave,
   });
+
+  const listedPullRequests = tasks.agentPullRequests;
+
+  // Note that the list's own rows are handed on past the steadying, as the
+  // document keeps them, since it already keeps a list's identity while no
+  // row of it moves, and a steady copy of every row is a place kept for each
+  // of thousands.
+  return useMemo(
+    () => ({ ...steady, liveAgents, listedPullRequests }),
+    [steady, liveAgents, listedPullRequests],
+  );
 }

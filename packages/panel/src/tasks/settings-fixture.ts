@@ -57,6 +57,7 @@ import {
   type IntegrationStatus,
 } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
 import type { MemorySummary } from "@repo/features/memory-wire";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
@@ -70,7 +71,11 @@ import {
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
-import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
+import {
+  WORKSPACE_ROLE,
+  type WorkspaceMachine,
+  type WorkspaceMember,
+} from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppAccountPreferences,
@@ -81,6 +86,7 @@ import {
   type AppInstalledSkills,
   type AppIntegrations,
   type AppIntegrationTools,
+  type AppMachines,
   type AppMcpClients,
   type AppMemories,
   type AppModels,
@@ -101,7 +107,8 @@ import {
   type PortActPayload,
   type PortActResult,
 } from "@repo/host/contract";
-import { EXPERIMENT } from "@repo/settings";
+import { computerUseAppsStored, EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
+import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { appStateQuery } from "../use-app-state.js";
 import { fixtureClient } from "./tasks-fixture-loader.js";
@@ -135,6 +142,7 @@ const STAGED_EXPERIMENTS = {
   [EXPERIMENT.REWIND_FILES]: true,
   [EXPERIMENT.TURN_CHANGES]: true,
   [EXPERIMENT.GOALS]: true,
+  [EXPERIMENT.COMPUTER_USE]: true,
 } as const;
 
 /** The staged hosts, by id. */
@@ -170,6 +178,7 @@ const SETTINGS_LINKS: ReadonlyMap<string, SettingsLink> = new Map<string, Settin
   [RUN_PROFILE.SETTINGS_WORKSPACE, { page: SETTINGS_VIEW.WORKSPACE, workspaceId: WORKSPACE.ACME }],
   [RUN_PROFILE.SETTINGS_AGENTS, { page: SETTINGS_VIEW.AGENTS }],
   [RUN_PROFILE.SETTINGS_HOSTS, { page: SETTINGS_VIEW.HOSTS }],
+  [RUN_PROFILE.SETTINGS_THIS_MAC, { page: SETTINGS_VIEW.THIS_MAC }],
   [RUN_PROFILE.SETTINGS_INTEGRATIONS, { page: SETTINGS_VIEW.INTEGRATIONS }],
   [RUN_PROFILE.SETTINGS_MCP, { page: SETTINGS_VIEW.MCP }],
   [RUN_PROFILE.SETTINGS_SKILLS, { page: SETTINGS_VIEW.SKILLS, workspaceId: WORKSPACE.ACME }],
@@ -945,6 +954,22 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
 
 /** Every read the staged pages ask, answered as the service would answer it for this account. */
 const ANSWERS: StagedAnswers = {
+  // How the staged Mac names the apps it always allows, as Settings › Machines and an agent's `@` list read them.
+  [ACT_KIND.HOSTS_ALLOWED_APPS]: () => ({
+    machines: [
+      {
+        deviceId: FIXTURE_HOST.MAC,
+        name: "studio-mini",
+        apps: STAGED_ALLOWED_APPS.map((app) => app.bundleId),
+        looks: STAGED_ALLOWED_APPS.map((app) => ({ app: app.bundleId, name: app.name })),
+      },
+    ],
+  }),
+  // This Mac's computer use as its helper reads it: Screen Recording allowed, Accessibility still to allow, and the apps it always allows.
+  [ACT_KIND.COMPUTER_USE_STATUS]: () => ({
+    permissions: { screenRecording: true, accessibility: false },
+    apps: STAGED_ALLOWED_APPS.map((app) => ({ ...app })),
+  }),
   // A box waiting on its code, as a pairing's link opened over Settings › Hosts reads it.
   [ACT_KIND.HOSTS_PAIRING_READ]: () => ({
     name: "fra-02",
@@ -990,6 +1015,12 @@ const ANSWERS: StagedAnswers = {
     ]),
   [ACT_KIND.WORKSPACE_ENVIRONMENT_DELETE]: ({ name }) =>
     variablesAnswer(acmeVariables.filter((variable) => variable.name !== name)),
+  // The workspace's members' machines, by name, or one member's: the account's own as Hosts stages them, and a teammate's Mac.
+  [ACT_KIND.WORKSPACE_MACHINES_READ]: ({ userId }) => ({
+    machines: STAGED_WORKSPACE_MACHINES.filter(
+      (machine) => userId === undefined || machine.userId === userId,
+    ),
+  }),
   [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
   [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script }) =>
@@ -1132,6 +1163,104 @@ const STAGED_HOSTS: AppHosts = {
     },
   },
 };
+
+/** The apps the staged Mac always allows, by bundle id and name: enough of them that the list folds. */
+const STAGED_ALLOWED_APPS = [
+  { bundleId: "com.apple.Notes", name: "Notes" },
+  { bundleId: "com.apple.calculator", name: "Calculator" },
+  { bundleId: "com.apple.reminders", name: "Reminders" },
+  { bundleId: "com.apple.iCal", name: "Calendar" },
+  { bundleId: "com.apple.Preview", name: "Preview" },
+  { bundleId: "com.apple.iphonesimulator", name: "Simulator" },
+  { bundleId: "com.apple.dt.Xcode", name: "Xcode" },
+  { bundleId: "com.apple.Safari", name: "Safari" },
+  { bundleId: "com.apple.iWork.Keynote", name: "Keynote" },
+] as const;
+
+/** The desktop's own capabilities, which This Mac's page is drawn by in the profile that opens it. */
+const DESKTOP_CAPABILITIES = [
+  HOST_CAPABILITY.MACHINE_COMMANDS,
+  HOST_CAPABILITY.MICROPHONE,
+  HOST_CAPABILITY.DESKTOP_APP,
+];
+
+/** A Mac the account signed in on that runs no agents, whose app has gone quiet. */
+const STAGED_LAPTOP = "7d3c2a10-0000-4000-8000-0000000000a1";
+
+/**
+ * The account's staged machines with their own settings for agents, as the
+ * host holds them for Settings › Machines: the Mac that runs its agents,
+ * online, asking before each command and always allowing two apps, the
+ * default machine, and a laptop that only runs the app, offline, running
+ * no commands and using no apps.
+ */
+const STAGED_MACHINES: AppMachines = {
+  [ACCOUNT_ID]: {
+    rows: [
+      {
+        id: FIXTURE_HOST.MAC,
+        name: "studio-mini",
+        platform: DEVICE_PLATFORM.DARWIN,
+        host: true,
+        listening: true,
+        isDefault: true,
+        settings: {
+          commandMode: MACHINE_COMMAND_MODE.ASK,
+          computerUse: true,
+          alwaysAllowedApps: STAGED_ALLOWED_APPS.map((app) => app.bundleId),
+        },
+      },
+      {
+        id: STAGED_LAPTOP,
+        name: "MacBook Air",
+        platform: DEVICE_PLATFORM.DARWIN,
+        host: false,
+        listening: false,
+        isDefault: false,
+        settings: {
+          commandMode: MACHINE_COMMAND_MODE.NEVER,
+          computerUse: false,
+          alwaysAllowedApps: [],
+        },
+      },
+    ],
+  },
+};
+
+/** A teammate's Mac, as their profile lists it. */
+const TEAMMATE_MAC = "7d3c2a10-0000-4000-8000-0000000000b1";
+
+/** The workspace's members' machines by name, as a profile and the `@` list read them: the account's Linux box and its Mac online, its laptop quiet, and a teammate's Mac online. */
+const STAGED_WORKSPACE_MACHINES: readonly WorkspaceMachine[] = [
+  {
+    id: FIXTURE_HOST.ONLINE,
+    name: "fra-01",
+    platform: DEVICE_PLATFORM.LINUX,
+    userId: ACCOUNT_ID,
+    online: true,
+  },
+  {
+    id: STAGED_LAPTOP,
+    name: "MacBook Air",
+    platform: DEVICE_PLATFORM.DARWIN,
+    userId: ACCOUNT_ID,
+    online: false,
+  },
+  {
+    id: TEAMMATE_MAC,
+    name: "MacBook Pro",
+    platform: DEVICE_PLATFORM.DARWIN,
+    userId: FIXTURE_PERSON.THEO.userId,
+    online: true,
+  },
+  {
+    id: FIXTURE_HOST.MAC,
+    name: "studio-mini",
+    platform: DEVICE_PLATFORM.DARWIN,
+    userId: ACCOUNT_ID,
+    online: true,
+  },
+];
 
 /** An agent no list the window holds names, as one archived on a task the window never read is, so its command's row draws a plain agent chip. */
 const UNLISTED_AGENT = "7f1c5d9e-4a6b-4b8d-0e2f-5a7c9b1d3e4f";
@@ -1363,11 +1492,13 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
 
   return {
     ...held,
+    ...(profile === RUN_PROFILE.SETTINGS_THIS_MAC ? thisMacStaged(held) : undefined),
     account: ACCOUNT,
     access: ADMIN_ACCESS,
     [LIVE_READ.ACCOUNT_PREFERENCES]: STAGED_PREFERENCES,
     [LIVE_READ.DEVICE_PRESENCE]: beatsStaged(),
     [LIVE_READ.HOSTS]: STAGED_HOSTS,
+    [LIVE_READ.MACHINES]: STAGED_MACHINES,
     [LIVE_READ.INSTALLED_SKILLS]: STAGED_SKILLS,
     [LIVE_READ.INTEGRATIONS]: STAGED_INTEGRATIONS,
     [LIVE_READ.WORKSPACE_INVITATIONS]: HELD_INVITATIONS,
@@ -1382,6 +1513,37 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
     [LIVE_READ.TOKEN_REPOSITORIES]: STAGED_TOKEN_REPOSITORIES,
     [LIVE_READ.MCP_CLIENTS]: STAGED_MCP_CLIENTS,
     [LIVE_READ.REPOSITORY_LISTS]: STAGED_REPOSITORIES,
+  };
+}
+
+/**
+ * The desktop's own slices, laid over a run in a browser tab so This Mac's
+ * page is drawn: its capabilities, the microphone allowed, and Computer use
+ * on with the staged apps always allowed.
+ */
+function thisMacStaged(state: AppStateSnapshot): Partial<AppStateSnapshot> {
+  const settings = state.settings;
+
+  return {
+    run: {
+      ...state.run,
+      capabilities: [...new Set([...state.run.capabilities, ...DESKTOP_CAPABILITIES])],
+    },
+    audio: { ...state.audio, microphoneStatus: MICROPHONE_STATUS.GRANTED },
+    ...(settings === undefined
+      ? undefined
+      : {
+          settings: {
+            ...settings,
+            stored: {
+              ...settings.stored,
+              computerUse: true,
+              computerUseApps: computerUseAppsStored(
+                STAGED_ALLOWED_APPS.map((app) => app.bundleId),
+              ),
+            },
+          },
+        }),
   };
 }
 
