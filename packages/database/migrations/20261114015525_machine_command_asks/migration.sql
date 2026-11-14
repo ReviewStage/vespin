@@ -5,7 +5,12 @@ DROP TRIGGER IF EXISTS "app_sync_write" ON "machine_command_ask";
 -- A Preview database that ran an earlier draft of this migration holds an older table and column; production never did, so these drop nothing there.
 DROP TABLE IF EXISTS "machine_command_ask";
 --> statement-breakpoint
+-- That draft's update trigger on "machine_command" also read "agent_id", so it is put back as main holds it.
+DROP TRIGGER IF EXISTS "app_sync_update" ON "machine_command";
+--> statement-breakpoint
 ALTER TABLE "machine_command" DROP COLUMN IF EXISTS "agent_id";
+--> statement-breakpoint
+CREATE TRIGGER "app_sync_update" AFTER UPDATE ON "machine_command" FOR EACH ROW WHEN (OLD."id" IS DISTINCT FROM NEW."id" OR OLD."user_id" IS DISTINCT FROM NEW."user_id" OR OLD."device_id" IS DISTINCT FROM NEW."device_id" OR OLD."kind" IS DISTINCT FROM NEW."kind" OR OLD."command" IS DISTINCT FROM NEW."command" OR OLD."timeout_seconds" IS DISTINCT FROM NEW."timeout_seconds" OR OLD."queued_at" IS DISTINCT FROM NEW."queued_at" OR OLD."claimed_at" IS DISTINCT FROM NEW."claimed_at" OR OLD."result" IS DISTINCT FROM NEW."result") EXECUTE FUNCTION "app_sync_machine_command"();
 --> statement-breakpoint
 CREATE TABLE "machine_command_ask" (
 	"id" uuid PRIMARY KEY,
