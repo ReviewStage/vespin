@@ -1677,6 +1677,9 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
 /** The threads a fixture run started on the invites task's description, by id, so a reply or a resolve on one finds it as it does a staged thread. */
 const STARTED_THREADS = new Map<string, DescriptionCommentThread>();
 
+/** The number the next reply the run keeps is given its id by, past every id the fixture stages, so each kept reply is keyed apart. */
+let nextReplyId = 1000;
+
 /** Keeps a started thread as it now stands, moved on a revision, and answers it. */
 function keepStarted(thread: DescriptionCommentThread): DescriptionCommentThread {
   const kept = { ...thread, revision: thread.revision + 1, updatedAt: Date.now() };
@@ -2568,8 +2571,9 @@ const ANSWERS: StagedAnswers = {
 
     if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };
 
+    // Note that a reply kept on a started thread takes an id of its own, since the thread's rows are keyed by their entries' ids; a staged thread's one reply, never kept, keeps its fixed id.
     const reply = {
-      id: fixtureId(306),
+      id: started ? fixtureId(nextReplyId++) : fixtureId(306),
       kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
       writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
       words: action.words,
