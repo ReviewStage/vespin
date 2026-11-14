@@ -121,6 +121,7 @@ export function AppSplit({
     columns === undefined ? undefined : { id: columns.root },
     front,
   );
+
   // Note that the menu bar's Back pops this place's pages only while the split view stands in front, so it never acts on a detail the reader can't see.
   useEffect(() => {
     standDetailFront(front ? standing : undefined);
