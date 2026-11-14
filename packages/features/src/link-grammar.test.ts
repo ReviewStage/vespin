@@ -134,6 +134,10 @@ const LINKS: readonly (readonly [LinkDestination, string])[] = [
   [{ kind: LINK_DESTINATION.SETTINGS }, `${HOME}/settings`],
   [{ kind: LINK_DESTINATION.SETTINGS, page: "agents" }, `${HOME}/settings/agents`],
   [{ kind: LINK_DESTINATION.PERSON, userId: "user_9Fq2-x" }, `${HOME}/person/user_9Fq2-x`],
+  [
+    { kind: LINK_DESTINATION.PERSON, userId: "user_9Fq2-x", machineId: OTHER },
+    `${HOME}/person/user_9Fq2-x#machine-${OTHER}`,
+  ],
   [{ kind: LINK_DESTINATION.ADMIN }, `${HOME}/admin`],
   [{ kind: LINK_DESTINATION.ADMIN, section: ADMIN_LINK_SECTION.COST }, `${HOME}/admin/cost`],
   [{ kind: LINK_DESTINATION.ADMIN, section: ADMIN_LINK_SECTION.USERS }, `${HOME}/admin/users`],

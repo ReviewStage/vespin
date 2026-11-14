@@ -1,11 +1,11 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
 import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
-import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import type { HostLine } from "@repo/features/host-live";
 import { HOST_UNINSTALL_COMMAND, hostInstallCommand } from "@repo/features/host-wire";
 import { isThisMac, type ListedMachine, machineName, THIS_MAC } from "@repo/features/machine-name";
 import {
+  type HostStanding,
   MACHINE_STANDING_WORDS,
   MACHINES_WORDS,
   removeMachineQuestion,
@@ -37,10 +37,10 @@ import {
   SettingsBlock,
   SettingsLine,
   SettingsRow,
-  SettingsRowMark,
+  SettingsRowActSlot,
   type SettingsRowSkeletonLayout,
-  type SettingsRowState,
   SettingsRowStateLine,
+  SettingsRowsFold,
   SettingsRowsSkeleton,
   SettingsSection,
   STATUS_TONE,
@@ -65,10 +65,18 @@ import { type PresenceBook, presenceStanding, useDevicePresence } from "../devic
 import { confirmFailure } from "../failure-report.js";
 import { hostsQuery, hostsRetryMutation } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
-import { DeviceGlyph } from "../tasks/runs-on.js";
 import { showToast } from "../toast.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
+import {
+  CommandMachineRow,
+  MachineAgentRows,
+  machineAgentFacts,
+  machineListedOf,
+  useMachineRemove,
+  useMachineSettings,
+} from "./machine-settings-section.js";
+import { type MachineAgentFacts, MachineMark, MachineStandingLine } from "./machine-standing.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
@@ -110,6 +118,10 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
  * since nothing enrolls it again unasked. A Mac whose host is another
  * account's says so where turning it on or off is refused. A browser tab has no This
  * Mac, so it draws none.
+ *
+ * Under the list stands what agents may do on each of the member's
+ * machines, a host or a Mac that only runs the app alike
+ * (`machine-settings-section.tsx`).
  *
  * The list is the host's (`LIVE_READ.HOSTS`): followed live while the page
  * stands and a while after, so a host joining, leaving, renamed, or moving
@@ -175,88 +187,42 @@ function machineOf(host: HostLine): ListedMachine {
   return { deviceId: host.id, name: host.name, machineId: host.machineId, model: host.model };
 }
 
-/** What each standing a host's line says leads with, and its tint: online after the finished session's dot, setting up plain, offline and failed tinted. */
-const STANDING_LINE = {
-  [DEVICE_STANDING.ONLINE]: {
-    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.ONLINE],
-    state: SETTINGS_ROW_STATE.CONNECTED,
-  },
-  [DEVICE_STANDING.OFFLINE]: {
-    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.OFFLINE],
-    state: SETTINGS_ROW_STATE.ATTENTION,
-  },
-  [DEVICE_STANDING.SETTING_UP]: {
-    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.SETTING_UP],
-    state: SETTINGS_ROW_STATE.PLAIN,
-  },
-  [DEVICE_STANDING.FAILED]: {
-    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED],
-    state: SETTINGS_ROW_STATE.ATTENTION,
-  },
-} as const;
-
 /**
- * What a host's line leads with, and its tint, as every surface reads the
- * host (`presenceStanding`): setting up for a host that just joined and is
- * not read yet, offline for one the read does not name, though it is the
+ * Where a host stands, as every surface reads the host
+ * (`presenceStanding`): setting up for a host that just joined and is not
+ * read yet, offline for one the read does not name, though it is the
  * account's own, and none while its standing cannot be told.
  */
-function standingOf(
-  host: HostLine,
-  book: PresenceBook,
-  joined: boolean,
-): { readonly words: string; readonly state: SettingsRowState } | undefined {
+function standingOf(host: HostLine, book: PresenceBook, joined: boolean): HostStanding | undefined {
   const standing =
     presenceStanding(book, host.id) ??
     (joined ? DEVICE_STANDING.SETTING_UP : DEVICE_STANDING.OFFLINE);
 
   return standing === DEVICE_STANDING.UNKNOWN || standing === DEVICE_STANDING.CHECKING
     ? undefined
-    : STANDING_LINE[standing];
+    : standing;
 }
 
-/**
- * A host's line under its name, its standing first, as Integrations leads with
- * Connected, and then what it is. Note that an online line draws its words
- * inside the dot's line, because words after it sit off the dot's baseline,
- * and a tinted one tints its standing alone.
- */
+/** A host's line under its name: a standing that asks something of the member first, then what it is and what it lets agents do (`MachineStandingLine`). */
 function StandingLine({
   host,
   book,
   joined,
+  facts,
 }: {
   host: HostLine;
   book: PresenceBook;
   /** Whether the host joined while the page stands. */
   joined: boolean;
+  /** What it lets agents do (`machineAgentFacts`). */
+  facts: MachineAgentFacts | undefined;
 }): React.JSX.Element {
-  // Note that a service older than platforms listed only Linux servers.
-  const kind = DEVICE_PLATFORM_NAME[host.platform ?? DEVICE_PLATFORM.LINUX];
-  const standing = standingOf(host, book, joined);
-
-  if (standing === undefined) return <>{kind}</>;
-
-  if (standing.state === SETTINGS_ROW_STATE.CONNECTED) {
-    const line = `${standing.words} · ${kind}`;
-
-    return <SettingsRowStateLine state={standing.state}>{line}</SettingsRowStateLine>;
-  }
-
   return (
-    <>
-      <SettingsRowStateLine state={standing.state}>{standing.words}</SettingsRowStateLine>
-      {` · ${kind}`}
-    </>
-  );
-}
-
-/** A machine's mark, by its platform, as Runs on draws it. */
-function MachineMark({ platform }: { platform: HostLine["platform"] }): React.JSX.Element {
-  return (
-    <SettingsRowMark>
-      <DeviceGlyph device={{ platform: platform ?? DEVICE_PLATFORM.LINUX }} />
-    </SettingsRowMark>
+    <MachineStandingLine
+      standing={standingOf(host, book, joined)}
+      platform={host.platform}
+      facts={facts}
+    />
   );
 }
 
@@ -295,6 +261,8 @@ function HostRow({
   label,
   book,
   joined,
+  facts,
+  chevron,
   onRemove,
   locked,
 }: {
@@ -302,6 +270,10 @@ function HostRow({
   /** What the list calls the machine (`machineName`). */
   label: string;
   book: PresenceBook;
+  /** What it lets agents do (`machineAgentFacts`). */
+  facts: MachineAgentFacts | undefined;
+  /** The chevron of its settings' fold, before its ⋯. */
+  chevron: React.ReactNode;
   /** Whether the host joined while the page stands, which lights its row once. */
   joined: boolean;
   /** Asks the section's Remove question of this machine. */
@@ -321,10 +293,11 @@ function HostRow({
         },
       ]}
       row={{
-        leading: <MachineMark platform={host.platform} />,
+        leading: <MachineMark platform={host.platform} standing={standingOf(host, book, joined)} />,
         label: <ReplayMask>{label}</ReplayMask>,
-        description: <StandingLine host={host} book={book} joined={joined} />,
+        description: <StandingLine host={host} book={book} joined={joined} facts={facts} />,
         landed: joined,
+        control: chevron,
       }}
     />
   );
@@ -344,8 +317,14 @@ function ThisMacRow({
   on,
   needsApproval,
   setupFailed,
+  facts,
+  chevron,
   onChange,
 }: {
+  /** What it lets agents do (`machineAgentFacts`). */
+  facts: MachineAgentFacts | undefined;
+  /** The chevron of its settings' fold, after its switch. */
+  chevron: React.ReactNode;
   /** This Mac as the service lists it; none before it does. */
   host: HostLine | undefined;
   book: PresenceBook;
@@ -374,25 +353,33 @@ function ThisMacRow({
       {MACHINE_STANDING_WORDS[DEVICE_STANDING.SETTING_UP]}
     </SettingsRowStateLine>
   ) : (
-    <StandingLine host={host} book={book} joined={true} />
+    <StandingLine host={host} book={book} joined={true} facts={facts} />
   );
+
+  // Note that the dot on the glyph says online or offline only once the host stands; the line says setting up and failed.
+  const standing =
+    on && !setupFailed && host !== undefined ? standingOf(host, book, true) : undefined;
 
   return (
     <>
       <SettingsRow
-        leading={<MachineMark platform={DEVICE_PLATFORM.DARWIN} />}
+        leading={<MachineMark platform={DEVICE_PLATFORM.DARWIN} standing={standing} />}
         label={THIS_MAC}
         description={description}
         labelsControl
+        end={() => <SettingsRowActSlot />}
       >
         {(control) => (
-          <Switch
-            id={control.controlId}
-            checked={on}
-            label={THIS_MAC_WORDS.SWITCH}
-            describedBy={control["aria-describedby"]}
-            onChange={(next) => onChange(next)}
-          />
+          <>
+            <Switch
+              id={control.controlId}
+              checked={on}
+              label={THIS_MAC_WORDS.SWITCH}
+              describedBy={control["aria-describedby"]}
+              onChange={(next) => onChange(next)}
+            />
+            {chevron}
+          </>
         )}
       </SettingsRow>
       {/* Note that macOS holds a registered agent until the member allows it, and only System Settings can, so the line opens it there. */}
@@ -563,9 +550,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   const askRemove = (host: HostLine, label: string) => {
     // Note that a host the sweep marked away hears of its removal only once it is back, whatever its setup says.
     const offline =
-      host.away === true ||
-      standingOf(host, book, joinedNow(host))?.words ===
-        MACHINE_STANDING_WORDS[DEVICE_STANDING.OFFLINE];
+      host.away === true || standingOf(host, book, joinedNow(host)) === DEVICE_STANDING.OFFLINE;
 
     setAsked({ accountId, host, label, offline });
     removing.ask();
@@ -647,6 +632,8 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   };
 
   const listed = hosts?.map(machineOf) ?? [];
+  const machineSettings = useMachineSettings(signedIn);
+  const machineRemove = useMachineRemove();
   // Note that This Mac's host stands on its switch's row only while it is on; one the service still lists while it is off, as an uninstall that could not reach the service leaves it, stands as any host does, by its own name, with its Remove.
   const naming = thisMac?.enrolled === true ? thisMac : undefined;
 
@@ -663,7 +650,56 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   const loaded = signedIn && hosts !== undefined && installScriptUrl !== undefined;
   const others = hosts?.filter((host) => host !== listedMac) ?? [];
   const lastJoined = others.findLast(joinedNow);
-  const empty = others.length === 0 && thisMac === undefined;
+  const machines = machineSettings.machines ?? [];
+
+  // Note that This Mac's settings are its own device's, which its host's record names where it has one, and otherwise the machine it is.
+  const thisMacMachine =
+    thisMac === undefined
+      ? undefined
+      : machines.find((machine) =>
+          thisMac.deviceId === undefined
+            ? isThisMac(machineListedOf(machine), thisMac)
+            : machine.id === thisMac.deviceId,
+        );
+
+  const hostIds = new Set(hosts?.map((host) => host.id) ?? []);
+
+  // Note that a Mac that only runs the app, and so no host, stands after the hosts, with its own row.
+  const commandOnly = machines.filter(
+    (machine) =>
+      machine.settings !== undefined && machine !== thisMacMachine && !hostIds.has(machine.id),
+  );
+
+  const named = [...listed, ...commandOnly.map(machineListedOf)];
+
+  // Note that a list whose machines' settings could not be read is never said to be empty, since a Mac that only runs the app is listed by that read alone; it says why instead.
+  const empty =
+    others.length === 0 &&
+    thisMac === undefined &&
+    commandOnly.length === 0 &&
+    !machineSettings.failed;
+
+  /** The machine of the id with its own settings, where its app joined. */
+  const machineOfId = (id: string | undefined) =>
+    id === undefined ? undefined : machines.find((each) => each.id === id);
+
+  /** A machine's own settings for agents, folded under its row, where its app joined. */
+  const agentRows = (id: string | undefined) => {
+    const machine = machineOfId(id);
+
+    return machine === undefined ? null : (
+      <MachineAgentRows machine={machine} apps={machineSettings.appsOf(machine.id)} />
+    );
+  };
+
+  /** What a machine lets agents do, said under its name, where its app joined. */
+  const agentFacts = (id: string | undefined) => {
+    const machine = machineOfId(id);
+
+    return machine === undefined
+      ? undefined
+      : machineAgentFacts(machine, machineSettings.appsOf(machine.id));
+  };
 
   const list = (
     <SettingsSection {...settingsSectionHead(SECTION.HOSTS)}>
@@ -674,30 +710,77 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
       ) : loaded ? (
         <>
           {thisMac === undefined ? null : (
-            <ThisMacRow
-              host={listedMac}
-              book={book}
-              on={thisMacOn}
-              needsApproval={thisMac.needsApproval === true}
-              setupFailed={thisMac.setupFailed === true}
-              onChange={switchThisMac}
+            <SettingsRowsFold
+              room={false}
+              label={MACHINES_WORDS.settingsOf(THIS_MAC)}
+              rows={agentRows(thisMacMachine?.id)}
+              head={(chevron) => (
+                <ThisMacRow
+                  host={listedMac}
+                  book={book}
+                  on={thisMacOn}
+                  needsApproval={thisMac.needsApproval === true}
+                  setupFailed={thisMac.setupFailed === true}
+                  facts={agentFacts(thisMacMachine?.id)}
+                  chevron={chevron}
+                  onChange={switchThisMac}
+                />
+              )}
             />
           )}
           {others.map((host) => {
-            const label = machineName(machineOf(host), listed, naming);
+            const label = machineName(machineOf(host), named, naming);
 
             return (
-              <HostRow
+              <SettingsRowsFold
                 key={host.id}
-                host={host}
-                label={label}
-                book={book}
-                joined={joinedNow(host)}
-                onRemove={() => askRemove(host, label)}
-                locked={removing.busy}
+                room={false}
+                label={MACHINES_WORDS.settingsOf(label)}
+                rows={agentRows(host.id)}
+                head={(chevron) => (
+                  <HostRow
+                    host={host}
+                    label={label}
+                    book={book}
+                    joined={joinedNow(host)}
+                    facts={agentFacts(host.id)}
+                    chevron={chevron}
+                    onRemove={() => askRemove(host, label)}
+                    locked={removing.busy}
+                  />
+                )}
               />
             );
           })}
+          {commandOnly.map((machine) => {
+            const label = machineName(machineListedOf(machine), named, naming);
+
+            return (
+              <SettingsRowsFold
+                key={machine.id}
+                room={false}
+                label={MACHINES_WORDS.settingsOf(label)}
+                rows={agentRows(machine.id)}
+                head={(chevron) => (
+                  <CommandMachineRow
+                    machine={machine}
+                    label={label}
+                    facts={agentFacts(machine.id)}
+                    chevron={chevron}
+                    onRemove={() => machineRemove.ask(machine, label)}
+                    locked={machineRemove.busy}
+                  />
+                )}
+              />
+            );
+          })}
+          {machineSettings.failed ? (
+            <ReadFailed
+              line={readFailedWords("each machine's settings")}
+              surface={FAILURE_SURFACE.MACHINES_READ}
+              onRetry={machineSettings.retry}
+            />
+          ) : null}
         </>
       ) : read.isError ? (
         <ReadFailed
@@ -716,7 +799,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
     <AddHostSection
       installScriptUrl={installScriptUrl}
       joined={
-        lastJoined === undefined ? undefined : machineName(machineOf(lastJoined), listed, naming)
+        lastJoined === undefined ? undefined : machineName(machineOf(lastJoined), named, naming)
       }
     />
   ) : null;
@@ -736,6 +819,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         </>
       )}
       <RemoveHostDialog asked={asked} confirm={removing} />
+      {machineRemove.dialog}
       <ConfirmDialog
         open
         confirm={turningOff}

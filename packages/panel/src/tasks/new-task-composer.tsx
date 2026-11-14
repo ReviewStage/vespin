@@ -731,10 +731,12 @@ export function NewTaskComposer({
 
   const composer: AgentComposerControl = {
     draft: words,
-    // Note that the words handed back as they stand, as the field echoes the words a refused card opens on, take no note down.
+    // Note that every word the field hands back is written, as every box writes them, because `words` is the last drawn and one keystroke may hand back several.
     setDraft: (text) => {
-      if (text === words) return;
       draft.update((was) => ({ ...was, text }));
+
+      // Note that the words handed back as they stand, as the field echoes the words a refused card opens on, take no note down.
+      if (text === words) return;
       setHanded(undefined);
       starts.clear();
     },

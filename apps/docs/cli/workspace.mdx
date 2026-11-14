@@ -1,0 +1,991 @@
+---
+title: "Workspace"
+description: "vespin workspace, env, github, repo, setup, slack, sentry, integrations, keys, preferences, and models"
+---
+
+Manage workspaces and members, environment variables, GitHub, repositories, cloud setup, Slack, Sentry, integrations, keys, and models. Every command also takes the global flags `--json`, `-q`, `-w`, and `--url`, described in [CLI](/cli#scripts-and-coding-agents).
+
+## vespin workspace list
+
+List your workspaces, the default marked *
+
+```sh
+vespin workspace list [flags]
+```
+
+```sh
+# Your workspaces
+vespin workspace list
+
+# Their ids alone
+vespin workspace list -q
+```
+
+## vespin workspace use
+
+Keep a workspace as the default for commands on this service
+
+```sh
+vespin workspace use [flags] <workspace>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `workspace string` | The workspace's slug or id |
+
+```sh
+# Act in the acme workspace from now on
+vespin workspace use acme
+```
+
+## vespin workspace create
+
+Create a workspace, with you as its owner
+
+```sh
+vespin workspace create [flags] <name>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `name string` | The new workspace's name |
+
+```sh
+# A new workspace named Acme
+vespin workspace create "Acme"
+```
+
+## vespin workspace members
+
+List the workspace's members, and who left it
+
+```sh
+vespin workspace members [flags]
+```
+
+```sh
+# Who is in the workspace
+vespin workspace members
+
+# Their account ids alone
+vespin workspace members -w acme -q
+```
+
+## vespin workspace remove
+
+Remove a member from the workspace (owner, or an admin for a member)
+
+```sh
+vespin workspace remove [flags] <member>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `member string` | The member, by account id or email, as members prints them |
+| `--yes, -y` | Remove without asking; required where stdin is no terminal |
+
+```sh
+# After you confirm
+vespin workspace remove ada@example.com
+
+# From a script
+vespin workspace remove <account-id> --yes
+```
+
+## vespin workspace role
+
+Make a member an admin, or an admin a member (owner only)
+
+```sh
+vespin workspace role [flags] <member> <role>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `member string` | The member, by account id or email, as members prints them |
+| `role choice` | admin or member |
+
+```sh
+# Make Ada an admin
+vespin workspace role ada@example.com admin
+```
+
+## vespin workspace invitations
+
+List the workspace's pending invitations (owners and admins)
+
+```sh
+vespin workspace invitations [flags]
+```
+
+```sh
+# Pending invitations
+vespin workspace invitations
+
+# With their accept links
+vespin workspace invitations --json
+```
+
+## vespin workspace invite
+
+Invite an address to the workspace, emailed where the service sends mail
+
+```sh
+vespin workspace invite [flags] <email>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `email string` | The address to invite |
+| `--role choice` | member, or admin, which only the owner may offer (choices: admin, member) |
+
+```sh
+# As a member
+vespin workspace invite ada@example.com
+
+# As an admin
+vespin workspace invite ada@example.com --role admin
+```
+
+## vespin workspace uninvite
+
+Cancel a pending invitation, so its accept link stops working
+
+```sh
+vespin workspace uninvite [flags] <invitation>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `invitation string` | The invitation, by its id as invitations prints it |
+
+```sh
+# Cancel one invitation
+vespin workspace uninvite <invitation>
+```
+
+## vespin workspace rename
+
+Rename the workspace (owners and admins; never your first workspace)
+
+```sh
+vespin workspace rename [flags] <name>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `name string` | The workspace's new name |
+
+```sh
+# Rename the workspace
+vespin workspace rename "Acme Labs"
+```
+
+## vespin workspace slug
+
+Change the workspace's slug, the first step of its links (owner only)
+
+```sh
+vespin workspace slug [flags] <slug>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `slug string` | The new slug: lowercase letters and digits, hyphens between |
+
+```sh
+# Move links to /acme-labs
+vespin workspace slug acme-labs
+```
+
+## vespin workspace photo
+
+Set or remove the workspace's photo (owner or admin)
+
+```sh
+vespin workspace photo [flags] [<file>]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `file string` | The photo: a PNG, JPEG, or WebP file, such as a 256-pixel square (optional) |
+| `--remove` | Remove the photo; your own first workspace then shows your sign-in picture |
+
+```sh
+# Set the photo
+vespin workspace photo logo.png
+
+# Remove the photo
+vespin workspace photo --remove
+```
+
+## vespin workspace leave
+
+Leave the workspace (anyone but its owner)
+
+```sh
+vespin workspace leave [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--yes, -y` | Leave without asking; required where stdin is no terminal |
+
+```sh
+# After you confirm
+vespin workspace leave -w acme
+
+# From a script
+vespin workspace leave -w acme --yes
+```
+
+## vespin workspace transfer
+
+Hand the workspace to one of its admins, becoming an admin (owner only)
+
+```sh
+vespin workspace transfer [flags] <member>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `member string` | The admin to hand it to, by account id or email |
+| `--yes, -y` | Hand it over without asking; required where stdin is no terminal |
+
+```sh
+# After you confirm
+vespin workspace transfer ada@example.com
+
+# From a script
+vespin workspace transfer <account-id> --yes
+```
+
+## vespin workspace delete
+
+Delete the workspace and everything in it (owner only)
+
+```sh
+vespin workspace delete [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--yes, -y` | Delete without asking; required where stdin is no terminal |
+
+```sh
+# After you confirm
+vespin workspace delete -w acme
+
+# From a script
+vespin workspace delete -w acme --yes
+```
+
+## vespin env list
+
+List the workspace's environment variables by name, with when each was last set; never a value
+
+```sh
+vespin env list [flags]
+```
+
+```sh
+# The variables' names
+vespin env list
+```
+
+## vespin env set
+
+Set a variable every cloud agent in the workspace is handed, its value read from stdin and never shown again
+
+```sh
+vespin env set [flags] <name>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `name string` | The variable's name, such as DATABASE_URL |
+
+```sh
+# Type the value; it is not echoed
+vespin env set DATABASE_URL
+
+# Read it from a file, one trailing newline dropped
+vespin env set DATABASE_URL < url.txt
+
+# Pipe it from a script
+printf %s "$TOKEN" | vespin env set NPM_TOKEN
+```
+
+## vespin env delete
+
+Delete a variable; cloud agents started from then on are not handed it
+
+```sh
+vespin env delete [flags] <name>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `name string` | The variable's name, such as DATABASE_URL |
+| `--yes, -y` | Delete without asking; required where stdin is no terminal |
+
+```sh
+# Delete it, after you confirm
+vespin env delete DATABASE_URL
+
+# The same, from a script
+vespin env delete DATABASE_URL --yes
+```
+
+## vespin github status
+
+Say whether your GitHub account is connected to Vespin, and as whom
+
+```sh
+vespin github status [flags]
+```
+
+```sh
+# Your GitHub connection
+vespin github status
+```
+
+## vespin github token
+
+Your own classic GitHub token: show whose it is, set one from stdin, remove it
+
+## vespin github token show
+
+Whether your GitHub token is set: the login it belongs to, its status, and its expiry
+
+```sh
+vespin github token show [flags]
+```
+
+```sh
+# Your token's state
+vespin github token show
+```
+
+## vespin github token set
+
+Save your classic GitHub token from stdin, replacing the one set; GitHub checks it first
+
+```sh
+vespin github token set [flags]
+```
+
+```sh
+# Paste a token at the prompt
+vespin github token set
+
+# A token from the clipboard
+pbpaste | vespin github token set
+```
+
+## vespin github token remove
+
+Remove your GitHub token; asks first, or takes --yes
+
+```sh
+vespin github token remove [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--yes, -y` | Remove without asking; required where stdin is no terminal |
+
+```sh
+# Remove it from a script
+vespin github token remove --yes
+```
+
+## vespin repo list
+
+List the GitHub repositories you can choose for a task in the workspace, and how each is reached
+
+```sh
+vespin repo list [flags]
+```
+
+```sh
+# The workspace's repositories
+vespin repo list
+```
+
+## vespin repo add
+
+Add a repository to the workspace on your own GitHub token, where the installation does not reach it
+
+```sh
+vespin repo add [flags] <repository>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `repository string` | The GitHub repository, owner/name |
+
+```sh
+# Add a repository your token may push to
+vespin repo add acme/app
+```
+
+## vespin repo remove
+
+Remove a repository added on a member's token from the workspace
+
+```sh
+vespin repo remove [flags] <repository>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `repository string` | The GitHub repository, owner/name |
+
+```sh
+# Remove a token repository
+vespin repo remove acme/app
+```
+
+## vespin repo cat
+
+Print a file of a repository as GitHub holds it, at the default branch's head or a commit
+
+```sh
+vespin repo cat [flags] <repository> <path>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `repository string` | The GitHub repository, owner/name |
+| `path string` | The file's path from the repository's root |
+| `--commit string` | Read at this commit, by its full SHA, rather than the default branch's head |
+
+```sh
+# The file on the default branch
+vespin repo cat acme/app README.md
+
+# The file at a commit
+vespin repo cat acme/app src/index.ts --commit <sha>
+```
+
+## vespin repo ls
+
+List a folder of a repository as GitHub holds it at the default branch's head
+
+```sh
+vespin repo ls [flags] <repository> [<path>]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `repository string` | The GitHub repository, owner/name |
+| `path string` | The folder's path from the repository's root; the root where left out (optional) |
+| `--recursive, -r` | List everything under the folder, each by its path from it |
+
+```sh
+# The repository's root
+vespin repo ls acme/app
+
+# Everything under src
+vespin repo ls acme/app src -r
+```
+
+## vespin repo issue
+
+Print the title, state, and link of an issue or pull request of a repository
+
+```sh
+vespin repo issue [flags] <repository> <number>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `repository string` | The GitHub repository, owner/name |
+| `number integer` | The issue's or pull request's number |
+
+```sh
+# Issue or pull request #42
+vespin repo issue acme/app 42
+```
+
+## vespin repo pins
+
+List the repositories you pinned in your sidebar, newest first
+
+```sh
+vespin repo pins [flags]
+```
+
+```sh
+# Your pinned repositories
+vespin repo pins
+```
+
+## vespin repo pin
+
+Pin a repository in your sidebar
+
+```sh
+vespin repo pin [flags] <repository>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `repository string` | The repository, as owner/name |
+
+```sh
+# Pin acme/app
+vespin repo pin acme/app
+```
+
+## vespin repo unpin
+
+Unpin a repository from your sidebar
+
+```sh
+vespin repo unpin [flags] <repository>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `repository string` | The repository, as owner/name |
+
+```sh
+# Unpin acme/app
+vespin repo unpin acme/app
+```
+
+## vespin setup show
+
+Print the workspace's cloud sandbox install script, each repository's setup script, and its run actions
+
+```sh
+vespin setup show [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--repo string` | A repository's setup script, as owner/name, rather than the install script |
+
+```sh
+# The whole setup
+vespin setup show
+
+# Save one repository's setup script to edit
+vespin setup show --repo acme/app | jq -r .script > setup.sh
+```
+
+## vespin setup edit
+
+Replace the workspace's install script, or a repository's setup script, from a file or stdin
+
+```sh
+vespin setup edit [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--repo string` | A repository's setup script, as owner/name, rather than the install script |
+| `--file, -F string` | The whole script, from a file or - for stdin; an empty one removes it |
+
+```sh
+# Save the install script
+vespin setup edit -F install.sh
+
+# Save a repository's setup script
+vespin setup edit --repo acme/app -F setup.sh
+
+# Remove it
+vespin setup edit --repo acme/app -F /dev/null
+```
+
+## vespin setup actions
+
+List each repository's run actions, the commands a member runs in its cloud agents' sandboxes from the Run menu, and add, edit, or remove one
+
+## vespin setup actions add
+
+Add a run action to a repository's list, last unless --position says
+
+```sh
+vespin setup actions add [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--repo string` | The repository, as owner/name, in any casing |
+| `--label string` | What the Run menu and the action's Terminal tab call it |
+| `--command string` | The bash it runs from the checkout, such as 'pnpm dev' |
+| `--emoji string` | One emoji for its icon |
+| `--glyph string` | A Lucide icon for its icon, by its kebab-case name, such as rocket |
+| `--color choice` | With `--glyph`, the color it wears (choices: red, orange, yellow, green, teal, blue, purple, pink) |
+| `--position integer` | Its place in the list, from 0; past the end is the last |
+| `--default` | Make it the default, which the Run button runs |
+
+```sh
+# The Run button's action
+vespin setup actions add --repo acme/app --label 'Dev server' --command 'pnpm dev' --default
+
+# Another, with an emoji
+vespin setup actions add --repo acme/app --label Tests --command 'pnpm test' --emoji 🧪
+
+# Keep the new action's id
+id=$(vespin setup actions add --repo acme/app --label Lint --command 'pnpm lint' -q)
+```
+
+## vespin setup actions edit
+
+Change one run action in only what the flags name; its id stays
+
+```sh
+vespin setup actions edit [flags] <action>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `action string` | The action's id, as `vespin setup actions` lists it |
+| `--repo string` | The repository, as owner/name, in any casing |
+| `--label string` | What the Run menu and the action's Terminal tab call it |
+| `--command string` | The bash it runs from the checkout, such as 'pnpm dev' |
+| `--emoji string` | One emoji for its icon |
+| `--glyph string` | A Lucide icon for its icon, by its kebab-case name, such as rocket |
+| `--color choice` | With `--glyph`, the color it wears (choices: red, orange, yellow, green, teal, blue, purple, pink) |
+| `--position integer` | Its place in the list, from 0; past the end is the last |
+| `--clear-icon` | Wear the Run menu's own icon again |
+| `--default` | Make it the default, which the Run button runs; `--no-default` makes it no longer the default |
+
+```sh
+# A new command
+vespin setup actions edit <id> --command 'pnpm dev --port 3001'
+
+# Make it the default
+vespin setup actions edit <id> --default
+
+# Move it first
+vespin setup actions edit <id> --position 0
+```
+
+## vespin setup actions remove
+
+Remove one run action from its repository's list
+
+```sh
+vespin setup actions remove [flags] <action>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `action string` | The action's id, as `vespin setup actions` lists it |
+| `--repo string` | The repository, as owner/name, in any casing |
+
+```sh
+# Remove it
+vespin setup actions remove <id>
+```
+
+## vespin slack show
+
+Show the workspace's Slack bot: its team, your notifications, its repositories and channels
+
+```sh
+vespin slack show [flags]
+```
+
+```sh
+# The workspace's Slack bot
+vespin slack show
+```
+
+## vespin slack set
+
+Set your Slack notifications, the workspace's default repository for Slack starts, or a channel
+
+```sh
+vespin slack set [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--notifications choice` | Whether the bot writes you, in Slack, the threads that wait on you (choices: on, off) |
+| `--repo string` | The repository Slack starts work in where a message names none, as owner/name; none clears it. With `--channel`, that channel's own |
+| `--channel string` | A channel to change, by its id or its name as slack show lists them |
+| `--join` | With `--channel`: put the bot in it, a public channel alone |
+| `--leave` | With `--channel`: take the bot out of it, forgetting its repository |
+
+```sh
+# Stop the bot writing you
+vespin slack set --notifications off
+
+# Slack starts work in acme/app
+vespin slack set --repo acme/app
+
+# Put the bot in #eng, its starts in acme/api
+vespin slack set --channel eng --join --repo acme/api
+
+# Take the bot out of #eng
+vespin slack set --channel eng --leave
+```
+
+## vespin slack disconnect
+
+Disconnect the workspace's Slack bot; it stays installed in Slack until its admins remove it
+
+```sh
+vespin slack disconnect [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--yes, -y` | Disconnect without asking; required where stdin is no terminal |
+
+```sh
+# Disconnect without asking
+vespin slack disconnect --yes
+```
+
+## vespin models
+
+List the models and efforts agent start --model and --effort take, your default marked *
+
+```sh
+vespin models [flags]
+```
+
+```sh
+# The models and their efforts
+vespin models
+
+# The model ids alone
+vespin models -q
+```
+
+## vespin integrations list
+
+List your integrations' accounts, each by its connection name
+
+```sh
+vespin integrations list [flags]
+```
+
+```sh
+# Your accounts and where each stands
+vespin integrations list
+```
+
+## vespin integrations connect
+
+Begin connecting an integration: prints the link to sign in at
+
+```sh
+vespin integrations connect [flags] <provider>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `provider choice` | The provider to sign in to, such as notion or linear |
+| `--account string` | An account you hold, by its connection name, to sign it in again |
+| `--add` | Sign in another account at the provider, where it takes more than one |
+| `--no-browser` | Print the link without opening it |
+
+```sh
+# Sign in to Notion
+vespin integrations connect notion
+
+# Sign in a second Notion account
+vespin integrations connect notion --add
+```
+
+## vespin integrations tools
+
+List the tools one of your integration accounts offers your agents
+
+```sh
+vespin integrations tools [flags] <connection>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `connection string` | The account, by its connection name as list prints it, such as notion |
+
+```sh
+# Notion's tools, by name
+vespin integrations tools notion
+```
+
+## vespin integrations rename
+
+Rename one of your integration accounts
+
+```sh
+vespin integrations rename [flags] <connection> <label>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `connection string` | The account, by its connection name as list prints it, such as notion |
+| `label string` | What you call the account |
+
+```sh
+# Name your second Notion account
+vespin integrations rename notion-2 "Acme wiki"
+```
+
+## vespin integrations disconnect
+
+Disconnect one of your integration accounts and revoke its grant
+
+```sh
+vespin integrations disconnect [flags] <connection>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `connection string` | The account, by its connection name as list prints it, such as notion |
+| `--yes, -y` | Disconnect without asking; required where stdin is no terminal |
+
+```sh
+# After you confirm
+vespin integrations disconnect notion-2
+
+# From a script
+vespin integrations disconnect notion-2 --yes
+```
+
+## vespin sentry list
+
+List the Sentry organizations linked to the workspace
+
+```sh
+vespin sentry list [flags]
+```
+
+```sh
+# The workspace's Sentry installations
+vespin sentry list
+```
+
+## vespin sentry disconnect
+
+Disconnect one of the workspace's Sentry installations
+
+```sh
+vespin sentry disconnect [flags] <installation>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `installation string` | The installation, by its id as list prints it |
+| `--yes, -y` | Disconnect without asking; required where stdin is no terminal |
+
+```sh
+# After you confirm
+vespin sentry disconnect <installation>
+
+# From a script
+vespin sentry disconnect <installation> --yes
+```
+
+## vespin preferences set
+
+Set the model, effort, and context window your agents start on where a start names none
+
+```sh
+vespin preferences set [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--model string` | The default model, by its catalog id (vespin models lists them) |
+| `--effort string` | The default reasoning effort, as the model lists it |
+| `--context-window choice` | The default context window (default: standard) (choices: standard, long) |
+
+```sh
+# Start agents on Opus at high effort by default
+vespin preferences set --model anthropic/claude-opus-5.5 --effort high
+```
+
+## vespin keys list
+
+List each provider, whether a key or plan of yours is set, and each one's status; never a key
+
+```sh
+vespin keys list [flags]
+```
+
+```sh
+# Your keys and plans
+vespin keys list
+
+# The providers with a key or plan set
+vespin keys list -q
+```
+
+## vespin keys set
+
+Save a key from stdin, checked with the provider first; --plan saves a Claude setup-token instead
+
+```sh
+vespin keys set [flags] <provider>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `provider choice` | anthropic or openai |
+| `--plan` | The provider's plan (a Claude setup-token or a ChatGPT sign-in), not its API key |
+
+```sh
+# Paste an Anthropic API key at the prompt
+vespin keys set anthropic
+
+# An OpenAI API key from the clipboard
+pbpaste | vespin keys set openai
+
+# Your Claude plan, as claude setup-token printed it, for coding agents to run on
+pbpaste | vespin keys set anthropic --plan
+```
+
+## vespin keys remove
+
+Remove a key or plan of yours; asks first, or takes --yes
+
+```sh
+vespin keys remove [flags] <provider>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `provider choice` | anthropic or openai |
+| `--plan` | The provider's plan (a Claude setup-token or a ChatGPT sign-in), not its API key |
+| `--id string` | Which one, by the id keys list prints, where several are set (default: the first) |
+| `--yes, -y` | Remove without asking; required where stdin is no terminal |
+
+```sh
+# Remove your OpenAI API key
+vespin keys remove openai
+
+# Disconnect your Claude plan, from a script
+vespin keys remove anthropic --plan --yes
+```
+
+## vespin keys for-agents
+
+Turn whether your plan pays for your coding agents by default on or off
+
+```sh
+vespin keys for-agents [flags] <provider> <on|off>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `provider choice` | anthropic or openai |
+| `on|off choice` | on to pay for your coding agents with the plan by default, off not to |
+| `--id string` | Which one, by the id keys list prints, where several are set (default: the first) |
+
+```sh
+# Run agents on your Claude plan
+vespin keys for-agents anthropic on
+
+# Stop defaulting to ChatGPT
+vespin keys for-agents openai off
+```
