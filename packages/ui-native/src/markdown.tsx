@@ -1219,7 +1219,10 @@ function noVideo(): undefined {
  * message: the panel's parse (`@repo/features/markdown-tree`), read into
  * blocks by `markdown-model.ts`, in the brand's colors for the window's
  * scheme and at the reader's Dynamic Type size. It draws no scroller of its
- * own, so a screen stands it in its own.
+ * own, so a screen stands it in its own. Note that a chip is held to the
+ * width the words stand in, measured once they are laid out, since an open
+ * iPhone Duo's or an iPad's detail column is far narrower than the window;
+ * until then, to the window's width less a page's margins.
  */
 export function Markdown({
   words,
@@ -1234,6 +1237,7 @@ export function Markdown({
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
+  const [measured, setMeasured] = useState<number | undefined>(undefined);
 
   const blocks = useMemo(
     () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
@@ -1243,7 +1247,7 @@ export function Markdown({
   const drawing: Drawing = {
     colors,
     fontScale,
-    lineWidth: width - SPACE.PAGE * 2,
+    lineWidth: measured ?? width - SPACE.PAGE * 2,
     openLink: onOpenLink,
     pictureSource,
     videoAt,
@@ -1253,7 +1257,14 @@ export function Markdown({
   };
 
   return (
-    <View>
+    <View
+      onLayout={(event) => {
+        // Note that a width of none, as a view hidden behind another lays out, keeps the last, so no chip is held to nothing.
+        const laid = event.nativeEvent.layout.width;
+
+        if (laid > 0) setMeasured(laid);
+      }}
+    >
       <Blocks blocks={blocks} drawing={drawing} />
     </View>
   );
