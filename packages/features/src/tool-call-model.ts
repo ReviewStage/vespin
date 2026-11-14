@@ -296,6 +296,7 @@ const UNREACHED_LABEL = {
   [MACHINE_UNREACHED.DEFAULT_GONE]: "No default machine",
   [MACHINE_UNREACHED.UNKNOWN_MACHINE]: "Unknown machine",
   [MACHINE_UNREACHED.NO_MACHINE]: "No machine",
+  [MACHINE_UNREACHED.OWN_SHELL]: "Use own shell",
 } as const satisfies Record<MachineUnreached, string>;
 
 /** What a call that ran nothing says at its line's end, by how. */
