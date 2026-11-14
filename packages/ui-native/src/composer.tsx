@@ -28,7 +28,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -88,8 +88,8 @@ const FIELD_LEADING = SPACE.ROW + 4 - BAR_EDGE;
 /** How far the field's words stand from Send's frame, which stands its round in by less than the row's spacing did. */
 const FIELD_TRAILING = SPACE.TIGHT;
 
-/** The most lines the field grows to before it scrolls its words. */
-const FIELD_LINES = 6;
+/** The most lines the field grows to before it scrolls its words; fewer at an accessibility size, where six of its lines with the keyboard up left the transcript over it no room. */
+const FIELD_LINES = { REGULAR: 6, LARGE: 3 } as const;
 
 /** What the + is named by, whether it opens one act or a menu. */
 const ADD_LABEL = "Add";
@@ -325,6 +325,7 @@ function ComposerPieces(props: ComposerProps) {
   };
 
   const empty = words.trim() === "" && !sendable;
+  const lines = useAccessibilitySize() ? FIELD_LINES.LARGE : FIELD_LINES.REGULAR;
 
   const send =
     onSend === undefined
@@ -348,7 +349,7 @@ function ComposerPieces(props: ComposerProps) {
         onTextChange={type}
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-          lineLimit(FIELD_LINES),
+          lineLimit(lines),
           padding({
             vertical: FIELD_INSET,
             trailing: FIELD_TRAILING,
