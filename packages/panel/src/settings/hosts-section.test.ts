@@ -12,9 +12,10 @@ import type { MachineLine } from "@repo/features/machine-live";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateDelivery, AppStateSnapshot, AppThisMacHost } from "@repo/host/app-state";
 import { EXPERIMENT } from "@repo/settings";
-import { act, createElement } from "react";
+import { act, createElement, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
+import { RoutedExitsProvider, useSettingsMachineStore } from "../places/routed-exits.js";
 import {
   type FakeActPort,
   fakeActPort,
@@ -69,13 +70,39 @@ async function settle(): Promise<void> {
  * left it, the host answering the window's acts as `procedures` say and
  * holding its holds quietly, as it does while their reads are laid.
  */
-function drawHosts(procedures: Partial<FakeActPort> = {}): void {
+function drawHosts(procedures: Partial<FakeActPort> = {}, landingAt?: string): void {
   fakeActPort(procedures);
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(HostsSection, { signedIn: true }))));
+  const page = createElement(HostsSection, { signedIn: true });
+
+  act(() =>
+    root.render(
+      withQueryClient(
+        landingAt === undefined
+          ? page
+          : createElement(
+              RoutedExitsProvider,
+              null,
+              createElement(OpenedAt, { machineId: landingAt }),
+              page,
+            ),
+      ),
+    ),
+  );
+}
+
+/** Opens Machines at the machine of `machineId`, as a press on its chip does. */
+function OpenedAt({ machineId }: { machineId: string }): null {
+  const landings = useSettingsMachineStore();
+  useEffect(
+    () => landings.setState(() => ({ asks: 1, at: { machineId, ask: 1 } })),
+    [landings, machineId],
+  );
+
+  return null;
 }
 
 /**
@@ -504,7 +531,7 @@ const LAPTOP: MachineLine = {
  * with their settings as the host holds them, Computer use on; answers with
  * every change and Remove the page sent, as the host was asked them.
  */
-async function machinesWithSettings(): Promise<unknown[]> {
+async function machinesWithSettings(landingAt?: string): Promise<unknown[]> {
   const sent: unknown[] = [];
 
   handBeats({});
@@ -533,28 +560,31 @@ async function machinesWithSettings(): Promise<unknown[]> {
     },
   });
 
-  drawHosts({
-    [ACT_KIND.MACHINES_CHANGE]: async (change) => {
-      sent.push(change);
+  drawHosts(
+    {
+      [ACT_KIND.MACHINES_CHANGE]: async (change) => {
+        sent.push(change);
 
-      return { done: true } as const;
-    },
-    [ACT_KIND.MACHINES_REMOVE]: async (removed) => {
-      sent.push(removed);
+        return { done: true } as const;
+      },
+      [ACT_KIND.MACHINES_REMOVE]: async (removed) => {
+        sent.push(removed);
 
-      return { done: true } as const;
+        return { done: true } as const;
+      },
+      [ACT_KIND.HOSTS_ALLOWED_APPS]: async () => ({
+        machines: [
+          {
+            deviceId: STUDIO.id,
+            name: STUDIO.name,
+            apps: ["com.apple.Notes"],
+            looks: [{ app: "com.apple.Notes", name: "Notes" }],
+          },
+        ],
+      }),
     },
-    [ACT_KIND.HOSTS_ALLOWED_APPS]: async () => ({
-      machines: [
-        {
-          deviceId: STUDIO.id,
-          name: STUDIO.name,
-          apps: ["com.apple.Notes"],
-          looks: [{ app: "com.apple.Notes", name: "Notes" }],
-        },
-      ],
-    }),
-  });
+    landingAt,
+  );
   await settle();
   await vi.waitFor(() => assert.ok(pageText().includes("Laptop"), pageText()));
 
@@ -614,4 +644,14 @@ test("an account with no host whose machines' settings could not be read says so
     assert.ok(pageText().includes("Each machine's settings could not be read."), pageText()),
   );
   assert.equal(pageText().includes("No machines yet."), false);
+});
+
+test("Machines opened at a machine, as a press on its chip opens it, unfolds that machine's settings alone", async () => {
+  await machinesWithSettings(LAPTOP.id);
+
+  const unfolded = (name: string) =>
+    document.querySelector(`[aria-label="${name}'s settings"]`)?.getAttribute("aria-expanded");
+
+  await vi.waitFor(() => assert.equal(unfolded("Laptop"), "true"));
+  assert.equal(unfolded("Studio"), "false");
 });
