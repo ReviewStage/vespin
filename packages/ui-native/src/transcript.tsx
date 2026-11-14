@@ -62,7 +62,7 @@ const ANCHOR_REACH = 48;
 
 /**
  * The room the system's tab bar floats over at the screen's foot, past the
- * safe area, which the newest row and Jump to latest stand clear of. Note
+ * safe area, which the newest row stands clear of. Note
  * that the list keeps it at its own end, because a scroll to the end reaches
  * the end of the rows alone and not the room the system keeps for the bar.
  */
@@ -964,7 +964,10 @@ export function AgentTranscript({
   const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
-  const foot = bottom + TAB_BAR_ROOM + useDockRoom();
+  const dock = useDockRoom();
+  const foot = bottom + TAB_BAR_ROOM + dock;
+  // Note that Jump to latest stands just over the composer rather than over the tab bar's room, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`).
+  const jumpFoot = bottom + dock + SPACE.ROW;
 
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
@@ -1083,7 +1086,7 @@ export function AgentTranscript({
       />
       {away ? (
         <JumpToLatest
-          bottom={foot}
+          bottom={jumpFoot}
           end={right + sides + SPACE.EDGE}
           onPress={() => {
             anchored.current = true;
