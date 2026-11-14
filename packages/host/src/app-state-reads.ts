@@ -489,14 +489,16 @@ export function shareAppState<T>(held: T, next: T, depth = 0): T {
     const nextItem = after[key];
     const placed = before[key];
     const id = !array || placed === nextItem ? undefined : itemId(nextItem);
+    // Note that the item at the same place is its partner wherever it goes by the same id, so a row edited in place builds no map, and a held row whose id repeats an earlier one's keeps its own partner.
+    const moved = id !== undefined && itemId(placed) !== id;
 
     // Note that an item with an id is laid over the held item of that id, never the one that stood at its place, because a list a row joined or left at its head would otherwise lay every row over its neighbor and hold copies of all of them.
-    if (id !== undefined) {
+    if (moved) {
       // SAFETY: `id` is found only where `array` holds, so `held` is a plain array.
       partners ??= heldById(held as readonly unknown[]);
     }
 
-    const heldItem = id === undefined ? placed : partners?.get(id);
+    const heldItem = moved ? partners?.get(id) : placed;
 
     // Note that a part that is the same, or no object on either side, needs no walk of its own.
     const shared =

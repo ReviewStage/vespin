@@ -43,6 +43,15 @@ describe("shareAppState", () => {
 
     expect(shared).toBe(document);
   });
+
+  it("keeps a held row whose id repeats an earlier row's while another row changes", () => {
+    const repeated = { id: "a", value: 2 };
+    const held = [{ id: "a", value: 1 }, repeated, { id: "b" }];
+
+    const shared = shareAppState(held, [{ id: "a", value: 1 }, { id: "a", value: 2 }, { id: "c" }]);
+
+    expect(shared[1]).toBe(repeated);
+  });
 });
 
 describe("answerKeeper", () => {
