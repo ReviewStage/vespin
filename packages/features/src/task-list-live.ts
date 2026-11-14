@@ -49,6 +49,7 @@ import { countedNumber } from "./service-wire.js";
 import { agentMarkedPullRequest, standingFailures } from "./task-agents-model.js";
 import {
   DESCRIPTION_ACTOR,
+  isTaskSettled,
   type ListedPullRequest,
   type TaskAgentPin,
   type TaskAgentsSummary,
@@ -257,18 +258,50 @@ const agentLiveRowSchema = EffectSchema.Struct({
 });
 
 /**
+ * How long a Done or Canceled task stays in the account's live list after
+ * it was last touched: thirty days, the Tasks page's Past month, so its
+ * Past week and Past month windows draw from the live list alone and only
+ * All pages older tasks from the service (`TASKS_SETTLED_PAGE`).
+ */
+export const TASK_LIVE_WINDOW_MILLIS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a task stands in the account's live list as of `liveSince`, the
+ * instant the service bound its window from (`TASK_LIVE_WINDOW_MILLIS`):
+ * every one under way, every one the account pinned or pinned an agent of,
+ * and a Done or Canceled one touched at or after it. The service narrows
+ * the list to these by the same rule; a task that only ages out logs
+ * nothing, so the reader lets it go itself by this, at the `liveSince` the
+ * service answered, so the two never disagree at the window's edge.
+ */
+export function standsLive(
+  plan: Pick<TaskLiveRow, "status" | "updatedAt" | "pinnedAt">,
+  agentPinned: boolean,
+  liveSince: number,
+): boolean {
+  return (
+    !isTaskSettled(plan.status) ||
+    plan.pinnedAt !== null ||
+    agentPinned ||
+    plan.updatedAt >= liveSince
+  );
+}
+
+/**
  * The plan list as one live read declares it, by the account (`tasks`): its
  * plans and its agents, each by id, newest started first as the held read
  * orders them, and the issues plans linked, which answer no rows and stand
  * for a released desktop that follows them, and which this build keeps
- * none of; beside them, the workspaces holding any task it reaches. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
+ * none of; beside them, the workspaces holding any task it reaches. It holds
+ * the live tasks alone (`standsLive`), as of the instant the service binds
+ * (`liveSince`), and their agents. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
  * The service answers `unavailable` where its deployment's Realtime is
  * misconfigured.
  */
 export const TASK_LIST_READ = liveRead({
   name: "tasks",
   path: HOSTED_SERVICE_PATH.LIVE_TASKS,
-  params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER, liveSince: LIVE_PARAM.SERVED },
   mode: LIVE_MODE.DELTA,
   parts: {
     plans: liveRows({
@@ -302,6 +335,13 @@ export const TASK_LIST_READ = liveRead({
      * service before it was answered.
      */
     taskWorkspaces: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
+    /**
+     * The instant, as epoch milliseconds, a settled task must have been
+     * touched at or after to stand in the list (`standsLive`), as the
+     * service bound it for this answer. Absent from a service before the
+     * list was narrowed, which held every task.
+     */
+    liveSince: EffectSchema.optionalKey(countedNumber),
   },
 });
 
