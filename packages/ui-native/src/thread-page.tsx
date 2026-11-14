@@ -43,6 +43,7 @@ import { actContent } from "./glyph-label.js";
 import { CopyWordsSwiftMenu } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
+import { PictureSet, type SetPicture } from "./picture-set.js";
 import {
   BAR_ITEM_MENU,
   type BarAction,
@@ -250,6 +251,28 @@ export function PathTitle({
   );
 }
 
+/** A message's files in runs: each run of pictures side by side as one set, and each other file alone, in the order the message carried them. */
+function mediaRuns(media: readonly ThreadMedia[]): readonly (readonly ThreadMedia[])[] {
+  const runs: ThreadMedia[][] = [];
+
+  for (const each of media) {
+    const last = runs.at(-1);
+    const joins = each.kind === THREAD_MEDIA.PICTURE && last?.[0]?.kind === THREAD_MEDIA.PICTURE;
+
+    if (joins) last.push(each);
+    else runs.push([each]);
+  }
+
+  return runs;
+}
+
+/** A picture of a run as its set draws it; none for a file of another kind, which a run of pictures never holds. */
+function setPicture(media: ThreadMedia): readonly SetPicture[] {
+  return media.kind === THREAD_MEDIA.PICTURE
+    ? [{ key: media.key, source: media.source, alt: media.alt, onRetry: media.onRetry }]
+    : [];
+}
+
 /** A file after a message's words, as its kind draws it. */
 function MediaView({ media }: { readonly media: ThreadMedia }) {
   switch (media.kind) {
@@ -382,9 +405,13 @@ function MessageView({
                 linkStanding={linkStanding}
               />
             )}
-            {message.media.map((media) => (
-              <MediaView key={media.key} media={media} />
-            ))}
+            {mediaRuns(message.media).map((run) =>
+              run.length === 1 && run[0] !== undefined ? (
+                <MediaView key={run[0].key} media={run[0]} />
+              ) : (
+                <PictureSet key={run[0]?.key} pictures={run.flatMap(setPicture)} />
+              ),
+            )}
           </View>
         </RNHostView>
       </VStack>
