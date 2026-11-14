@@ -31,7 +31,7 @@ import {
   presentationDragIndicator,
 } from "@expo/ui/swift-ui/modifiers";
 import { WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar } from "./marks.js";
@@ -290,7 +290,7 @@ function SwitcherList({
         <Section>
           <SwitcherRow
             mark={<Avatar name={account.name} picture={account.picture} size={markSize} />}
-            name={account.address ?? account.name}
+            name={account.address || account.name}
             line={SETTINGS}
             onPress={() => closed(account.onPress)}
           />
@@ -391,11 +391,16 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
     after?.act();
   };
 
-  // Note that every row's act, a workspace chosen among them, runs once the list has gone, because a choice redraws every screen that reads the workspace, which made the list's leaving stutter, and a screen presented while it leaves is refused.
+  // Note that every row's act, a workspace chosen among them, runs once the list has gone, because a choice redraws every screen that reads the workspace, which made the list's leaving stutter, and a screen presented while it leaves is refused; the first row pressed is the one that runs.
   const closed = (then: () => void) => {
-    setAfter({ act: then });
+    setAfter((held) => held ?? { act: then });
     setPresented(false);
   };
+
+  // Note that a window crossing between a sheet and a popover drops the list without telling it gone, so an act left waiting is dropped with it rather than run by a later close.
+  useEffect(() => {
+    setAfter(undefined);
+  }, [presentation]);
 
   const face = (
     <SwitcherFace
