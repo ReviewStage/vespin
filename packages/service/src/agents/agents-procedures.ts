@@ -57,6 +57,7 @@ import {
   AGENT_ARCHIVER,
   AGENT_BOUNDS,
   AGENT_LIST_ARCHIVED,
+  AGENT_MACHINE,
   type AgentPullRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
@@ -110,7 +111,7 @@ import {
   type PublishedReach,
 } from "./coder-host/published.js";
 import { productionSummaryModel, type SummaryModelOf } from "./coder-host/replay-summary.js";
-import { sandboxLetGo } from "./coder-host/runner-sessions.js";
+import { sandboxLetGo, workspaceEnvironmentOf } from "./coder-host/runner-sessions.js";
 import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   acceptedAgentChoice,
@@ -744,7 +745,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     }),
     /** A shell started in the agent's sandbox, under an id the service mints, the sandbox resumed first where it stopped. */
     openTerminal: signedIn.openTerminal.effect(function* ({ input, context }) {
-      const sessionId = yield* reachedSession(context.userId, input.params.id);
+      const { sessionId, agent } = yield* reachedAgentSession(context.userId, input.params.id);
 
       if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
       const { title } = input.body;
@@ -755,12 +756,19 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       // Note that the tab holds the sandbox before its shell starts, so a stop as a turn ends never takes the sandbox from under it.
       yield* recordedTerminalOpened(sandboxName, terminalId);
 
+      // Note that the shell starts with the workspace's variables, as a run action and the agent's own commands do, and without them where they could not be read, as the relay's does, rather than not at all.
+      const environment = yield* workspaceEnvironmentOf(agent, AGENT_MACHINE.VERCEL).pipe(
+        Effect.catch(() =>
+          Effect.as(Effect.logWarning("a terminal's variables were not read"), {}),
+        ),
+      );
+
       const opened = yield* inSandbox(
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
 
           const started = yield* sandboxOrUpstream(
-            startedWaking(sessionId, sandbox.start(sessionId, terminalId, title)),
+            startedWaking(sessionId, sandbox.start(sessionId, terminalId, title, environment)),
           );
 
           // Note that a refused start started nothing, so it lets go; one the sandbox did not answer may have started, so a later list's prune decides.

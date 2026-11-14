@@ -115,6 +115,8 @@ export interface RelayAgent {
   readonly repositoryCredential: Effect.Effect<RepositoryCredential, unknown>;
   /** Whether the agent's credential is its starter's own GitHub token, set once as a connection attaches rather than renewed. */
   readonly memberToken: boolean;
+  /** The workspace's variables a shell made afresh for the connection starts with, read as it attaches. */
+  readonly environment: Effect.Effect<Readonly<Record<string, string>>, unknown>;
 }
 
 /** What the relay stands on: the deployment's in production, a script's in a test. */
@@ -378,7 +380,15 @@ export function relayTerminal(
     const agent = reached.success.value;
 
     if (agent.sessionId === undefined) return yield* device.close(TERMINAL_RELAY_CLOSE.STARTING);
-    const attached = yield* Effect.result(deps.sandbox.attach(agent.sessionId, ask.terminalId));
+
+    // Note that a shell still starts where the variables could not be read, without them, rather than leaving the tab unattached.
+    const environment = yield* agent.environment.pipe(
+      Effect.catch(() => Effect.as(Effect.logWarning("a terminal's variables were not read"), {})),
+    );
+
+    const attached = yield* Effect.result(
+      deps.sandbox.attach(agent.sessionId, ask.terminalId, environment),
+    );
 
     if (Result.isFailure(attached)) return yield* device.close(TERMINAL_RELAY_CLOSE.UNAVAILABLE);
     const sandbox = attached.success;

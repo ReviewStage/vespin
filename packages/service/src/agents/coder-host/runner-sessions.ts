@@ -168,7 +168,10 @@ import {
   withdrawRunnerLine,
 } from "@repo/database/models/runner-line-store";
 import { turnAwaitedByLine } from "@repo/database/models/turn-state";
-import { openWorkspaceEnvironment } from "@repo/database/models/workspace-environment-store";
+import {
+  listWorkspaceVariables,
+  openWorkspaceEnvironment,
+} from "@repo/database/models/workspace-environment-store";
 import {
   readInstallScript,
   readRepositorySetup,
@@ -665,8 +668,9 @@ function stopLine(launch: number): InputLine {
 
 /**
  * What a runner was launched with that it cannot take up while it runs: its
- * credential, the integrations it was handed, and its permission mode
- * where it asks, as a digest. A warm
+ * credential, the integrations it was handed, its permission mode where it
+ * asks, and its workspace's variables as their names and when each was last
+ * set (`workspaceVariableStampsOf`), never their values, as a digest. A warm
  * runner whose fingerprint no longer matches is relaunched rather than
  * handed the next message (`sendHolding`). The digest is one-way and
  * truncated, so the record carries nothing of the credential. Note that a
@@ -674,14 +678,17 @@ function stopLine(launch: number): InputLine {
  * never its placeholder, which every launch mints afresh, under the key a
  * slot once named it by, so a digest reads as it did; that a declared
  * credential its machine hands the runner itself is read among the
- * variables, as one the harness set there itself once was; and that a
- * launch holding none digests what it did before any was held.
+ * variables, as one the harness set there itself once was; that a launch
+ * holding none digests what it did before any was held; and that a launch
+ * whose workspace holds no variable digests what it did before they were
+ * read, so its runner stays warm across the change.
  */
 function launchFingerprint(
   credential: HarnessLaunch,
   delivered: DeliveredCredentials,
   integrations: readonly IntegrationServer[],
   mode: AgentPermissionMode,
+  variables: readonly VariableStamp[],
 ): string {
   const declared = credential.credentials ?? [];
   const isHeld = (each: RunnerCredential) => delivered.swaps.has(each.slot);
@@ -713,8 +720,10 @@ function launchFingerprint(
   // Note that full access is digested as nothing, as every launch before modes was, so its runners stay warm across the change.
   const asks = mode === AGENT_PERMISSION_MODE.FULL_ACCESS ? undefined : mode;
 
+  const stamps = variables.length === 0 ? undefined : variables;
+
   return createHash("sha256")
-    .update(JSON.stringify({ env, names, held: swapped, mode: asks }))
+    .update(JSON.stringify({ env, names, held: swapped, mode: asks, variables: stamps }))
     .digest("hex")
     .slice(0, FINGERPRINT_CHARS);
 }
@@ -763,6 +772,25 @@ export function workspaceEnvironmentOf(agent: Agent, machine: AgentMachineKind) 
     if (ring === undefined || Result.isFailure(ring)) return {};
 
     return yield* openWorkspaceEnvironment(ring.success, agent.organizationId);
+  });
+}
+
+/** One of the workspace's variables as a launch's fingerprint reads it: its name, and when it was last set. */
+type VariableStamp = readonly [name: string, setAt: number];
+
+/**
+ * The agent's workspace's variables as its launch's fingerprint reads them
+ * on a cloud machine, by name and when each was last set, in name order,
+ * so a variable added, changed, or deleted since the launch relaunches a
+ * warm runner on its next message (`staleWarm`) and none of their values is
+ * read; none on a Mac, which is handed none.
+ */
+function workspaceVariableStampsOf(agent: Agent, machine: AgentMachineKind) {
+  return Effect.gen(function* () {
+    if (machine !== AGENT_MACHINE.VERCEL) return [];
+    const listed = yield* listWorkspaceVariables(agent.organizationId);
+
+    return listed.map((each): VariableStamp => [each.name, each.updatedAt.getTime()]);
   });
 }
 
@@ -1218,6 +1246,9 @@ export const runnerSessions = <
           return { firstSequence, ...config, opening };
         });
 
+        // Note that the stamps are read before the values, so a variable set between the two reads leaves the fingerprint older than the launch, and the next message relaunches it.
+        const variables = yield* workspaceVariableStampsOf(agent, kind);
+
         const [launch, sources, environment, integrations] = yield* Effect.all(
           [
             made,
@@ -1247,6 +1278,7 @@ export const runnerSessions = <
             delivered,
             integrations,
             permissionModeOf(agent),
+            variables,
           ),
         };
       }).pipe(Effect.withSpan("web/runnerLaunchPrepared"));
@@ -1981,7 +2013,8 @@ export const runnerSessions = <
 
     /**
      * Whether the runner is warm, no turn of the agent's under way, and was
-     * launched with a credential, integrations, or a permission mode that have changed since,
+     * launched with a credential, integrations, a permission mode, or
+     * workspace variables that have changed since,
      * which it cannot take up while it runs. A runner at work keeps going on
      * what it has, and one from before fingerprints were tagged is never
      * read as stale.
@@ -1989,6 +2022,7 @@ export const runnerSessions = <
     const staleWarm = (
       agent: Agent,
       layout: MachineLayout,
+      kind: AgentMachineKind,
       runner: RunnerMark,
       turnRunning: boolean,
     ) =>
@@ -2002,6 +2036,7 @@ export const runnerSessions = <
           delivered,
           yield* options.integrations(agent),
           permissionModeOf(agent),
+          yield* workspaceVariableStampsOf(agent, kind),
         );
 
         return now !== runner.fingerprint;
@@ -2158,7 +2193,7 @@ export const runnerSessions = <
                 handedAt,
               )) ||
             (yield* stopWritten(machine, running)) ||
-            (yield* staleWarm(agent, layout, running.mark, turnRunning))
+            (yield* staleWarm(agent, layout, standing.machine, running.mark, turnRunning))
           ) {
             if (handsOn) {
               yield* letGo(standing, agent.id, running.handle);
