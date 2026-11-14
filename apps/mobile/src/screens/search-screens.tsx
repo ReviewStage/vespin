@@ -171,7 +171,13 @@ function FoundList({
           count={found.agents.length}
         >
           {shown.agents.map((line) => (
-            <TaskAgentRow key={line.agent.id} line={line} onArchive={onArchiveAgent} />
+            <TaskAgentRow
+              key={line.agent.id}
+              line={line}
+              task={found.tasksById.get(line.agent.taskId)}
+              named
+              onArchive={onArchiveAgent}
+            />
           ))}
         </ListSection>
       )}

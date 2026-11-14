@@ -215,6 +215,8 @@ type AgentRowProps = {
   readonly runsOn: string;
   /** How many of its threads wait on the reader; none said at none. */
   readonly waiting: number;
+  /** The task it works on, named first in its line where the list holds agents of many tasks, as ⌘K's agent rows name it; none on the task's own page. */
+  readonly task?: string | undefined;
   /** The pull request it opened, its state's glyph and number in its line, pressed to open it. */
   readonly pullRequest?:
     | {
@@ -291,7 +293,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
  * want you.
  */
 export function AgentRow(props: AgentRowProps) {
-  const { id, name, harness, state, runsOn, waiting, pullRequest } = props;
+  const { id, name, harness, state, runsOn, waiting, pullRequest, task } = props;
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
@@ -309,8 +311,29 @@ export function AgentRow(props: AgentRowProps) {
         ink={colors.TEXT}
         end={<EndWords words={runsOn} />}
       />
-      {!told && waiting === 0 ? null : (
+      {!told && waiting === 0 && task === undefined ? null : (
         <RowLine>
+          {task === undefined ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+                lineLimit(stacked ? 2 : 1),
+              ]}
+            >
+              {task}
+            </Text>
+          )}
+          {task === undefined || (!told && waiting === 0) || stacked ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+              ]}
+            >
+              {LINE_PART.trim()}
+            </Text>
+          )}
           {resting ? null : <AgentStateWords working={state === AGENT_ROW_STATE.WORKING} />}
           {pullRequest === undefined ? null : <PullRequestLink pullRequest={pullRequest} />}
           {waiting === 0 ? null : (

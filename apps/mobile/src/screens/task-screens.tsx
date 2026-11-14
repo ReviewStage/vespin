@@ -1412,11 +1412,14 @@ export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
 export function TaskAgentRow({
   line,
   task,
+  named = false,
   onArchive,
 }: {
   readonly line: TaskAgentLine;
   /** The task it works on, which its preview names over it; none where the list does not hold it. */
   readonly task?: TaskSummary | undefined;
+  /** Whether its row names the task in its line, as a list of many tasks' agents does, such as Search's; its preview names it either way. */
+  readonly named?: boolean | undefined;
   /** Asks to archive the agent, once it rests (`useAgentArchiveAsk`); its row offers no Archive where none is given. */
   readonly onArchive?: ((agentId: string) => void) | undefined;
 }) {
@@ -1437,6 +1440,7 @@ export function TaskAgentRow({
       state={agentState(agent.status)}
       runsOn={runsOn}
       waiting={waiting}
+      task={named ? task?.name : undefined}
       pullRequest={
         pullRequest === undefined
           ? undefined
