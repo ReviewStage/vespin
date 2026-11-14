@@ -60,7 +60,7 @@ const PLACES = [
   },
 ] as const;
 
-/** New task as a list's bar offers it, under the compose glyph, as the tab bar's round + names it. */
+/** New task as the detail's bar offers it, under the compose glyph, as the tab bar's round + names it. */
 const NEW_TASK = { label: "New task", symbol: GLYPH.NEW_TASK } as const;
 
 /** The collections of tasks the sidebar lists under its places: Pinned, Following, and each of the member's sections. */
