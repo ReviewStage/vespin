@@ -321,10 +321,22 @@ export interface StopAgentsWords {
   readonly verb: string;
 }
 
-/** What every question that stops running agents says beneath its title, and its act's word, whatever was pressed. */
+/** What a question that stops several running agents says beneath its title, and its act's word. */
 const STOP_AGENTS = {
   body: "Agents are still running. This will stop them and any work they're in the middle of doing.",
   verb: "Stop agents",
+} as const;
+
+/** What a question that stops one running agent says beneath its title, and its act's word, in the singular. */
+const STOP_RUNNING_AGENT = {
+  body: "An agent is still running. This will stop it and any work it's in the middle of doing.",
+  verb: "Stop agent",
+} as const;
+
+/** What archiving one running agent says beneath its title, and its act's word, in the singular. */
+const STOP_AGENT = {
+  body: "This agent is still running. Archiving stops it and any work it's in the middle of.",
+  verb: "Stop agent",
 } as const;
 
 /** What a settle's question is titled, by the status it settles at. */
@@ -333,14 +345,19 @@ const SETTLE_STOP_TITLES = {
   [SETTLED_STATUS.CANCELED]: "Mark as Canceled?",
 } as const satisfies Record<SettledStatus, string>;
 
-/** What setting a task, or several, at Done or Canceled asks while their agents are running. */
-export function settleStopWords(status: SettledStatus): StopAgentsWords {
-  return { title: SETTLE_STOP_TITLES[status], ...STOP_AGENTS };
+/** What setting a task, or several, at Done or Canceled asks while `working` of their agents are running, in the singular for one. */
+export function settleStopWords(status: SettledStatus, working: number): StopAgentsWords {
+  return {
+    title: SETTLE_STOP_TITLES[status],
+    ...(working === 1 ? STOP_RUNNING_AGENT : STOP_AGENTS),
+  };
 }
 
-/** What archiving a running agent asks, or several at once. */
+/** What archiving a running agent asks, or several at once, each in its own number. */
 export function archiveStopWords(several: boolean): StopAgentsWords {
-  return { title: several ? "Archive agents?" : "Archive agent?", ...STOP_AGENTS };
+  return several
+    ? { title: "Archive agents?", ...STOP_AGENTS }
+    : { title: "Archive agent?", ...STOP_AGENT };
 }
 
 /**
