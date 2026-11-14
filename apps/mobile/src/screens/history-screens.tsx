@@ -5,6 +5,7 @@ import {
   revisionWriterName,
   VERSION_HISTORY_WORDS,
 } from "@repo/features/description-history-words";
+import { DESCRIPTION_ACTOR, type DescriptionLastEdit } from "@repo/features/task-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
 import { readingWords, showMoreWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
@@ -21,13 +22,15 @@ import {
   Screen,
   useColors,
   useFailureNotices,
+  VERSION_WRITER,
   VersionRow,
+  type VersionWriter,
   WordsRow,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
-import { useMemberPictures } from "../member-pictures.js";
+import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
@@ -53,6 +56,26 @@ function versionNumber(spelled: string | undefined): number | undefined {
   const seq = Number(spelled);
 
   return Number.isInteger(seq) && seq >= 1 ? seq : undefined;
+}
+
+/** Who wrote a version, by the mark its row leads with, as the panel's version rows lead: a person by their face, its picture looked up only for a person, since a notetaker's version names the person whose call it was written on, whose photo is not its writer's. */
+function versionWriter(lastEdit: DescriptionLastEdit, pictureOf: PictureOf): VersionWriter {
+  switch (lastEdit.actor) {
+    case DESCRIPTION_ACTOR.DEVELOPER:
+      return {
+        kind: VERSION_WRITER.PERSON,
+        face: {
+          name: revisionWriterName(lastEdit, undefined),
+          picture: pictureOf(lastEdit.by?.userId),
+        },
+      };
+    case DESCRIPTION_ACTOR.AGENT:
+      return { kind: VERSION_WRITER.AGENT, name: revisionWriterName(lastEdit, undefined) };
+    case DESCRIPTION_ACTOR.NOTETAKER:
+      return { kind: VERSION_WRITER.PRODUCT };
+    case DESCRIPTION_ACTOR.EARLIER:
+      return { kind: VERSION_WRITER.EARLIER };
+  }
 }
 
 /** What reads a version or the history again, as the app's other failures say it, in the system's bordered look rather than a filled one. */
@@ -100,10 +123,7 @@ export function HistoryScreen() {
           {revisions.map((line) => (
             <VersionRow
               key={line.seq}
-              writer={{
-                name: revisionWriterName(line.lastEdit, undefined),
-                picture: pictureOf(line.lastEdit.by?.userId),
-              }}
+              writer={versionWriter(line.lastEdit, pictureOf)}
               name={revisionWriterName(line.lastEdit, history.readerId)}
               summary={revisionSummary(line)}
               at={line.lastEdit.at}

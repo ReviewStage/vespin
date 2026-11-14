@@ -41,6 +41,7 @@ import { sinceHeard } from "@repo/features/time-format";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { BrandMark } from "./brand-mark.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dropLink } from "./interactions.js";
@@ -445,9 +446,40 @@ export function LinkRow({
   );
 }
 
+/** Who wrote a version, by the mark its row leads with: a person, an agent, the app's own notetaker, or the history from before versions were kept. */
+export const VERSION_WRITER = {
+  PERSON: "person",
+  AGENT: "agent",
+  PRODUCT: "product",
+  EARLIER: "earlier",
+} as const;
+
+/** A version's writer as its mark draws them: a person by their face, an agent by its tile and name, and the notetaker and the earlier history by marks of their own. */
+export type VersionWriter =
+  | { readonly kind: typeof VERSION_WRITER.PERSON; readonly face: Face }
+  | { readonly kind: typeof VERSION_WRITER.AGENT; readonly name: string }
+  | { readonly kind: typeof VERSION_WRITER.PRODUCT }
+  | { readonly kind: typeof VERSION_WRITER.EARLIER };
+
+/** A version's writer's mark at a row's lead, as the panel's version rows lead: a person's face, an agent's tile, the app's own mark (`BrandMark`), or the history glyph for the history before versions were kept. */
+function VersionMark({ writer }: { readonly writer: VersionWriter }) {
+  const colors = useColors();
+
+  switch (writer.kind) {
+    case VERSION_WRITER.PERSON:
+      return <Avatar name={writer.face.name} picture={writer.face.picture} size={MARK_SIZE.LEAD} />;
+    case VERSION_WRITER.AGENT:
+      return <AgentTile name={writer.name} size={MARK_SIZE.LEAD} />;
+    case VERSION_WRITER.PRODUCT:
+      return <BrandMark size={MARK_SIZE.LEAD} />;
+    case VERSION_WRITER.EARLIER:
+      return <LeadGlyph symbol={GLYPH.HISTORY} ink={colors.TEXT_MUTED} />;
+  }
+}
+
 type VersionRowProps = {
-  /** Who wrote the version, as their mark draws them: their name's letters, and their photo where one is known. */
-  readonly writer: Face;
+  /** Who wrote the version, as its mark draws them. */
+  readonly writer: VersionWriter;
   /** The writer as the row names them, such as "You". */
   readonly name: string;
   /** What the version did, such as "3 changes". */
@@ -485,7 +517,7 @@ export function VersionRow({ writer, name, summary, at, now, current, onPress }:
         <RowHead
           unread={false}
           faded={false}
-          lead={<Avatar name={writer.name} picture={writer.picture} size={MARK_SIZE.LEAD} />}
+          lead={<VersionMark writer={writer} />}
           title={name}
           ink={colors.TEXT}
           end={<RowTime at={at} now={now} />}
