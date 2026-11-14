@@ -1,0 +1,51 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow r9242
+Set orientation ${ORIENT}...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Tap on id: workspace-switcher... COMPLETED
+Tap on ".*, Settings"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-1-root... COMPLETED
+Scroll vertically... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-2-root-end... COMPLETED
+Scrolling UP until "Signed in with .*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Signed in with .*"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-3-account... COMPLETED
+Tap on id: BackButton... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on id: settings-workspace... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-4-workspace... COMPLETED
+Scrolling DOWN until "Invite" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-5-workspace-members... COMPLETED
+Tap on id: BackButton... COMPLETED
+Wait for animation to end... COMPLETED
+Scrolling DOWN until "MCP.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "MCP.*"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-6-mcp... COMPLETED
+Tap on id: BackButton... FAILED
+
+Element not found: Id matching regex: BackButton
+
+Element with Id matching regex: BackButton not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sn2r/9242/9242-native-ipad26-light/2026-11-14_042056

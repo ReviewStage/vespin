@@ -1,0 +1,21 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow settings-integrations-tools
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Tap on id: workspace-switcher... COMPLETED
+Tap on ".*, Settings"... COMPLETED
+Wait for animation to end... COMPLETED
+Scrolling DOWN until "Integrations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Integrations"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "The tools could not be read." is visible... COMPLETED
+Assert that "Try again" is visible... COMPLETED
+Take screenshot settings-integrations-tools... COMPLETED
+Long press on "Notion · Personal"... COMPLETED
+Tap on "Rename"... COMPLETED
+Assert that "Rename Notion account" is visible... COMPLETED
+Take screenshot settings-integrations-rename... COMPLETED
+Tap on "Cancel"... COMPLETED

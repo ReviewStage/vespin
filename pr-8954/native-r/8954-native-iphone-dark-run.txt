@@ -1,0 +1,21 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow markdown
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Tap on "Tasks"... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Wait for animation to end... COMPLETED
+Scrolling DOWN until "Goal" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Take screenshot markdown-top... COMPLETED
+Scrolling DOWN until "Owner" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Take screenshot markdown-table... COMPLETED
+Scrolling DOWN until "The invite page" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Take screenshot markdown-end... COMPLETED
+Tap on "The invite page"... COMPLETED
+Assert that "Done" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot markdown-picture... COMPLETED
+Tap on "Done"... COMPLETED

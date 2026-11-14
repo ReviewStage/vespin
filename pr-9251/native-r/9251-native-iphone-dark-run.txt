@@ -1,0 +1,30 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow r9251
+Set orientation ${ORIENT}...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Tap on id: workspace-switcher... COMPLETED
+Tap on ".*, Settings"... COMPLETED
+Tap on id: settings-workspace... COMPLETED
+Take screenshot ${P}-1-workspace-loading... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-2-workspace... COMPLETED
+Tap on id: BackButton... COMPLETED
+Wait for animation to end... COMPLETED
+Scrolling DOWN until "MCP.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "MCP.*"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-3-mcp... COMPLETED
+Tap on id: BackButton... COMPLETED
+Wait for animation to end... COMPLETED
+Scrolling DOWN until "Skills" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Skills"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-4-skills... COMPLETED

@@ -1,0 +1,49 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow inbox
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Assert that id: workspace-switcher is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-list... COMPLETED
+Tap on "More"... COMPLETED
+Assert that "Mark all as read" is visible... COMPLETED
+Take screenshot inbox-more... COMPLETED
+Tap on point (50%, 90%)... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when "Choose an item" is visible...
+  Tap on "Open.*"... COMPLETED
+Run flow when "Choose an item" is visible... COMPLETED
+Tap on "All"... COMPLETED
+Scrolling DOWN until "Which day the digest goes out" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-all... COMPLETED
+Scrolling UP until "Recorded the invite flow" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when "Choose an item" is visible...
+  Tap on "All"... COMPLETED
+Run flow when "Choose an item" is visible... COMPLETED
+Tap on "Open.*"... COMPLETED
+Run flow when "Recorded the invite flow" is not visible...
+Run flow when "Recorded the invite flow" is not visible... SKIPPED
+Tap on "Recorded the invite flow"... COMPLETED
+Assert that ".*walked the invite flow.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-thread... COMPLETED
+Tap on "The invite page"... COMPLETED
+Assert that "Done" is visible... FAILED
+
+Assertion is false: "Done" is visible
+
+Assertion '"Done" is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state
+- This could be a real regression that needs to be addressed
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sn2r/8954/8954-native-ipad26-light/2026-11-14_041625

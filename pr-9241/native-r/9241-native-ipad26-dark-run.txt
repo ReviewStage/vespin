@@ -1,0 +1,19 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow share9241
+Set orientation PORTRAIT... COMPLETED
+Launch app "com.apple.mobilesafari"... COMPLETED
+Open https://example.com... COMPLETED
+Assert that "Example Domain" is visible... COMPLETED
+Tap on point (85%,4%)... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-share-01-sheet...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Tap on point (80%,22%)... COMPLETED
+Swipe from (50%, 99%) to (50%, 99%) in 4000 ms... COMPLETED
+Take screenshot ${P}-share-02-vespin... COMPLETED
