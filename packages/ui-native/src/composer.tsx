@@ -24,10 +24,13 @@ import {
   frame,
   glassEffect,
   lineLimit,
+  opacity,
   padding,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useScaledSize } from "./accessibility.js";
+import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
@@ -51,23 +54,42 @@ const PRESS_FRAME = [
   SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
 ];
 
-/** The mark inside the round button, centered in the circle's own size, so the system's circle draws at Send's size around it. */
-const ROUND_MARK = [frame({ width: SEND_SIZE - 12, height: SEND_SIZE - 12 })];
+/** How far the round button's circle stands past the mark inside it, on each axis, in points. */
+const ROUND_EDGE = 12;
 
-/**
- * The round button's look: the system's prominent circle in the ink, its mark
- * in the ground, inside the composer's press frame. Note that a disabled
- * circle drops the tint for the system's faint fill, which in light mode
- * matched the composer's own ground, so a Send with nothing to send vanished:
- * it stands on a hairline-gray disc of ours instead, its mark muted.
- */
-function roundModifiers(colors: ReturnType<typeof useColors>, enabled = true) {
+/** The mark inside the round button, centered in the circle's own size less its edge, so the system's circle draws at Send's size around it. */
+function roundMark(round: number) {
+  return [frame({ width: round - ROUND_EDGE, height: round - ROUND_EDGE })];
+}
+
+/** How much of Send's look stands while there is nothing to send, as Messages' gray arrow stands before a word is typed. */
+const IDLE_OPACITY = 0.2;
+
+/** The round button's look: the system's prominent circle in the ink, its mark in the ground, inside the composer's press frame. */
+function roundModifiers(colors: ReturnType<typeof useColors>) {
   return [
     buttonStyle("borderedProminent"),
     SwiftModifiers.buttonBorderShape("circle"),
     tint(colors.TEXT),
-    foregroundStyle(enabled ? colors.GROUND : colors.TEXT_MUTED),
-    ...(enabled ? [] : [background(colors.CHIP_EDGE, SwiftModifiers.shapes.circle())]),
+    foregroundStyle(colors.GROUND),
+    ...PRESS_FRAME,
+  ];
+}
+
+/**
+ * Send with nothing to send: the same circle and mark, faint, so it reads as
+ * one button waiting in either scheme. Note that we draw the circle
+ * ourselves, because a disabled prominent button drops its tint for the
+ * system's own fill, which in light vanished into the composer's ground and
+ * in dark stood as a black disc that read as a live button.
+ */
+function idleRoundModifiers(colors: ReturnType<typeof useColors>, round: number) {
+  return [
+    buttonStyle("plain"),
+    foregroundStyle(colors.GROUND),
+    frame({ width: round, height: round }),
+    background(colors.TEXT, SwiftModifiers.shapes.circle()),
+    opacity(IDLE_OPACITY),
     ...PRESS_FRAME,
   ];
 }
@@ -120,6 +142,8 @@ type ComposerProps = {
   readonly addMenu?: ComposerMenu | undefined;
   /** Starts dictation, drawn as a mic in Send's place while the field is empty. */
   readonly onDictate?: (() => void) | undefined;
+  /** What the composer offers of a voice call into its agent: Talk before Send while the field is empty, or the call's presses there while the call stands; none where it calls no one. */
+  readonly call?: ComposerCall | undefined;
   /** Stops the turn under way, drawn as Stop in Send's place while the field is empty, as the panel's box offers it while its agent works. */
   readonly onStop?: (() => void) | undefined;
   /** Whether a Stop is out, which stands as the system's spinner in Stop's place until the agent stops. */
@@ -152,12 +176,16 @@ function SendButton({
   readonly stopping: boolean;
 }) {
   const colors = useColors();
+  // Note that the circle and its marks grow with the reader's text size, as Messages' Send does, so the field's words never outgrow the button beside them.
+  const round = useScaledSize(SEND_SIZE);
+  const stopSize = useScaledSize(MARK_SIZE.GLYPH - 2);
+  const sendSize = useScaledSize(MARK_SIZE.GLYPH);
 
   if (empty && onStop !== undefined && stopping) {
     return (
       <ProgressView
         modifiers={[
-          frame({ width: SEND_SIZE, height: SEND_SIZE }),
+          frame({ width: round, height: round }),
           ...PRESS_FRAME,
           tint(colors.TEXT_MUTED),
           accessibilityLabel("Stopping"),
@@ -169,7 +197,7 @@ function SendButton({
   if (empty && onStop !== undefined) {
     return (
       <Button onPress={onStop} modifiers={[...roundModifiers(colors), accessibilityLabel("Stop")]}>
-        <Image {...glyphImage(GLYPH.STOP_TURN)} size={MARK_SIZE.GLYPH - 2} modifiers={ROUND_MARK} />
+        <Image {...glyphImage(GLYPH.STOP_TURN)} size={stopSize} modifiers={roundMark(round)} />
       </Button>
     );
   }
@@ -191,12 +219,12 @@ function SendButton({
     <Button
       onPress={() => onSend?.()}
       modifiers={[
-        ...roundModifiers(colors, sendable),
+        ...(sendable ? roundModifiers(colors) : idleRoundModifiers(colors, round)),
         disabled(!sendable),
         accessibilityLabel("Send"),
       ]}
     >
-      <Image {...glyphImage(GLYPH.SEND)} size={MARK_SIZE.GLYPH} modifiers={ROUND_MARK} />
+      <Image {...glyphImage(GLYPH.SEND)} size={sendSize} modifiers={roundMark(round)} />
     </Button>
   );
 }
@@ -289,6 +317,7 @@ function ComposerPieces(props: ComposerProps) {
     onAdd,
     addMenu,
     onDictate,
+    call,
     onStop,
     stopping = false,
   } = props;
@@ -340,9 +369,14 @@ function ComposerPieces(props: ComposerProps) {
             trailing: FIELD_TRAILING,
             ...(addMenu === undefined && onAdd === undefined && { leading: FIELD_LEADING }),
           }),
+          // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there.
+          frame({ minHeight: PRESS_SIZE }),
           accessibilityIdentifier("composer-field"),
         ]}
       />
+      {call === undefined || (call.kind === COMPOSER_CALL.TALK && !empty) ? null : (
+        <ComposerCallPresses call={call} />
+      )}
       <SendButton
         empty={empty}
         onSend={send}
@@ -396,7 +430,7 @@ export function ComposerFoot(props: ComposerProps) {
 
   if (props.head === undefined) {
     return (
-      <HStack spacing={BAR_ROW_SPACING} modifiers={glass}>
+      <HStack alignment="bottom" spacing={BAR_ROW_SPACING} modifiers={glass}>
         <ComposerPieces {...props} />
       </HStack>
     );
@@ -405,7 +439,7 @@ export function ComposerFoot(props: ComposerProps) {
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
       <BarHead>{props.head}</BarHead>
-      <HStack spacing={BAR_ROW_SPACING}>
+      <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
         <ComposerPieces {...props} />
       </HStack>
     </VStack>

@@ -31,7 +31,6 @@ import {
 import { SymbolView } from "expo-symbols";
 import {
   type AccessibilityActionEvent,
-  Pressable,
   StyleSheet,
   Text,
   type TextStyle,
@@ -40,9 +39,10 @@ import {
 import { glyphSymbol } from "./glyph.js";
 import { useKeeping } from "./held-menu.js";
 import { KEEP_ACT, KEEP_SYMBOL } from "./keep-model.js";
+import { Press } from "./press.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 
 /** The SF Symbol each draft's header leads with, the closest to the panel's: a message's bubble for Slack, whose mark SF Symbols has no drawing of, an envelope, and a pen. */
@@ -60,8 +60,8 @@ const MARK_LOOK = {
   [DRAFT_MARK.CODE]: { fontFamily: MONOSPACE_FONT, fontSize: TEXT_SIZE.FOOTNOTE },
 } as const satisfies Record<DraftMark, TextStyle>;
 
-/** The room a Copy's press reaches past its glyph, so a finger finds it. */
-const PRESS_REACH = 10;
+/** How far a bar's words stand from its top and bottom edges. */
+const BAR_PADDING = 6;
 
 const styles = StyleSheet.create({
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
@@ -70,10 +70,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: SPACE.TIGHT + 2,
     paddingHorizontal: SPACE.ROW,
-    paddingVertical: 6,
+    paddingVertical: BAR_PADDING,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   barWords: { flex: 1 },
+  // Note that Copy stands as Apple's least target, over the bar's own padding and out to its trailing edge, so its glyph sits where it did while the whole of the target takes the press.
+  copy: {
+    minWidth: PRESS_SIZE,
+    minHeight: PRESS_SIZE,
+    marginVertical: -BAR_PADDING,
+    marginEnd: -SPACE.ROW,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   body: { padding: SPACE.ROW },
 });
 
@@ -121,18 +130,18 @@ function CopyPress({
   readonly colors: BrandColors;
 }) {
   return (
-    <Pressable
+    <Press
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={copyName(what)}
-      hitSlop={PRESS_REACH}
+      style={styles.copy}
     >
       <SymbolView
         name={glyphSymbol(KEEP_SYMBOL[KEEP_ACT.COPY])}
         size={MARK_SIZE.GLYPH}
         tintColor={colors.TEXT_MUTED}
       />
-    </Pressable>
+    </Press>
   );
 }
 

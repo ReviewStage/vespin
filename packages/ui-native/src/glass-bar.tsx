@@ -6,6 +6,8 @@ import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
   Keyboard,
+  type KeyboardEvent,
+  LayoutAnimation,
   type LayoutChangeEvent,
   StyleSheet,
   useWindowDimensions,
@@ -66,15 +68,32 @@ const styles = StyleSheet.create({
   },
 });
 
+/**
+ * Moves the next layout with the keyboard, on its own duration and curve, as
+ * React Native's keyboard-avoiding view does, so what the keyboard lifts
+ * rises with it rather than snapping to where it ends.
+ */
+function moveWithKeyboard({ duration, easing }: KeyboardEvent) {
+  if (duration <= 0) return;
+  LayoutAnimation.configureNext({
+    duration,
+    update: { duration, type: LayoutAnimation.Types[easing] ?? LayoutAnimation.Types.keyboard },
+  });
+}
+
 /** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. */
 function useKeyboardHeight(): number {
   const [height, setHeight] = useState(0);
   useEffect(() => {
-    const rising = Keyboard.addListener("keyboardWillShow", ({ endCoordinates }) =>
-      setHeight(endCoordinates.height),
-    );
+    const rising = Keyboard.addListener("keyboardWillShow", (event) => {
+      moveWithKeyboard(event);
+      setHeight(event.endCoordinates.height);
+    });
 
-    const falling = Keyboard.addListener("keyboardWillHide", () => setHeight(0));
+    const falling = Keyboard.addListener("keyboardWillHide", (event) => {
+      moveWithKeyboard(event);
+      setHeight(0);
+    });
 
     return () => {
       rising.remove();
@@ -140,7 +159,8 @@ export function BarHead({ children }: { readonly children: ReactNode }) {
  * A bar of glass holding a composer's field and its buttons, floating over
  * the content it scrolls above, as the system's own bars do. Its children
  * are SwiftUI pieces, laid in a row on a host of its own, under its head
- * where it has one. It stands inside
+ * where it has one, along the row's foot, so a field grown past one line
+ * keeps its buttons beside its last line, as Messages' do. It stands inside
  * the screen's bottom safe area, which the tab bar's height is part of, so
  * the bar sits above the tab bar rather than under it. Note that where
  * Liquid Glass is unavailable, before iOS 26, or the reader turned on Reduce
@@ -164,7 +184,11 @@ export function GlassBar({
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
 
   const row = (
-    <HStack spacing={BAR_ROW_SPACING} modifiers={head === undefined ? [...modifiers] : []}>
+    <HStack
+      alignment="bottom"
+      spacing={BAR_ROW_SPACING}
+      modifiers={head === undefined ? [...modifiers] : []}
+    >
       {children}
     </HStack>
   );

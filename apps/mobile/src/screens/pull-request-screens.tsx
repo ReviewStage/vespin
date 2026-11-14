@@ -1,5 +1,6 @@
 // pull-request-screens.tsx -- one agent's pull request on its own screen: where it stands, its checks and reviews held live, its merge or Remove from queue in the bar or, in a regular window, under its checks, and Open on GitHub in the bar.
 
+import { githubAvatarUrl } from "@repo/features/account-picture";
 import {
   type AgentOverviewPullRequest,
   CHECK_STATE,
@@ -38,14 +39,19 @@ import { workingTime } from "@repo/features/time-format";
 import type { AppHostRead } from "@repo/host/app-state";
 import {
   BAR_TITLE,
+  BUZZ,
+  buzz,
   CHECK_LOOK,
   CHECK_SUMMARY_LOOK,
   ConfirmAsk,
   EmptyState,
+  FACE_KIND,
   GLYPH,
+  githubFace,
   glyphSymbol,
   LIST_LOOK,
   ListSection,
+  MARK_FACE,
   MarkRow,
   MergeActRow,
   PATH_PART,
@@ -57,6 +63,7 @@ import {
   useColors,
   WriteNoteRow,
 } from "@repo/ui-native";
+import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent } from "../agents/use-agent.js";
@@ -73,9 +80,10 @@ import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
-/** What the bar's ⋯ menu offers beside the merge. */
+/** What the bar's ⋯ menu offers beside the merge, in the panel's words. */
 const MENU_WORDS = {
   MORE: "More",
+  COPY_GITHUB_LINK: "Copy GitHub link",
   OPEN_ON_GITHUB: "Open on GitHub",
   REFRESH: "Refresh",
   TRY_AGAIN: "Try again",
@@ -117,6 +125,28 @@ function checkDetail(check: PullRequestCheck): string {
   }
 
   return CHECK_WORDS[check.state];
+}
+
+/** The App that runs a check, by the logo GitHub's avatar host serves for it, beside the check's mark, as the panel's check rows draw it; none where it has no such avatar. */
+function checkFace(check: PullRequestCheck) {
+  const picture = githubAvatarUrl(check.avatarUrl);
+
+  if (picture === undefined) return undefined;
+
+  return {
+    of: { name: check.app ?? check.name, picture, kind: FACE_KIND.APP },
+    stands: MARK_FACE.BESIDE,
+  };
+}
+
+/** Copies the pull request's GitHub address, with the system's tap of success, or says on the console why it could not. */
+function copyLink(url: string): void {
+  setStringAsync(url)
+    .then(() => buzz(BUZZ.SUCCESS))
+    .catch((cause: unknown) => {
+      console.error("The pull request's link could not be copied.", cause);
+      buzz(BUZZ.ERROR);
+    });
 }
 
 /** The press the bar offers as the pull request stands: its words, whether it is the screen's one prominent act, and the change it sends. */
@@ -216,10 +246,10 @@ function methodsOffered(pullRequest: AgentOverviewPullRequest | undefined): read
 
 /**
  * The bar's acts: the merge's one press where the screen hands it one, and
- * the ⋯ menu, which opens the pull request on GitHub, chooses how to merge
- * where the repository allows more than one way and the press stands in the
- * bar, and reads it again. A regular window chooses the way on the press
- * under the checks instead.
+ * the ⋯ menu, grouped as the panel's and Mail's are: Copy GitHub link and
+ * Open on GitHub; the ways to merge, where the repository allows more than
+ * one and the press stands in the bar; and Refresh. A regular window chooses
+ * the way on the press under the checks instead.
  */
 function PullRequestToolbar({
   pullRequest,
@@ -255,15 +285,21 @@ function PullRequestToolbar({
       )}
       <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
         {url === undefined ? null : (
-          <Stack.Toolbar.MenuAction
-            icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
-            onPress={() => openInSafari(url)}
-          >
-            {MENU_WORDS.OPEN_ON_GITHUB}
-          </Stack.Toolbar.MenuAction>
+          <Stack.Toolbar.Menu inline>
+            <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LINK)} onPress={() => copyLink(url)}>
+              {MENU_WORDS.COPY_GITHUB_LINK}
+            </Stack.Toolbar.MenuAction>
+            <Stack.Toolbar.MenuAction
+              icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
+              onPress={() => openInSafari(url)}
+            >
+              {MENU_WORDS.OPEN_ON_GITHUB}
+            </Stack.Toolbar.MenuAction>
+          </Stack.Toolbar.Menu>
         )}
-        {chooses
-          ? methods.map((each) => (
+        {chooses ? (
+          <Stack.Toolbar.Menu inline>
+            {methods.map((each) => (
               <Stack.Toolbar.MenuAction
                 key={each}
                 isOn={each === method}
@@ -271,11 +307,14 @@ function PullRequestToolbar({
               >
                 {MERGE_METHOD_WORDS[each]}
               </Stack.Toolbar.MenuAction>
-            ))
-          : null}
-        <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RETRY)} onPress={onRefresh}>
-          {MENU_WORDS.REFRESH}
-        </Stack.Toolbar.MenuAction>
+            ))}
+          </Stack.Toolbar.Menu>
+        ) : null}
+        <Stack.Toolbar.Menu inline>
+          <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RETRY)} onPress={onRefresh}>
+            {MENU_WORDS.REFRESH}
+          </Stack.Toolbar.MenuAction>
+        </Stack.Toolbar.Menu>
       </Stack.Toolbar.Menu>
     </Stack.Toolbar>
   );
@@ -342,7 +381,7 @@ export function PullRequestScreen() {
           {
             agentId: id,
             workspaceId: agent.workspaceId,
-            taskId: agent.planId,
+            taskId: agent.taskId,
             number: key.number,
             title,
           },
@@ -443,6 +482,18 @@ export function PullRequestScreen() {
                   ? mergeSentence(pullRequest, action)
                   : undefined
               }
+              opened={
+                pullRequest === undefined
+                  ? undefined
+                  : {
+                      by:
+                        pullRequest.author === undefined
+                          ? undefined
+                          : githubFace(pullRequest.author),
+                      at: pullRequest.createdAt,
+                      mergedAt: pullRequest.mergedAt,
+                    }
+              }
             />
             {writes.note === undefined ? null : (
               <WriteNoteRow words={writes.note.words} said={writes.note.said} />
@@ -481,6 +532,8 @@ export function PullRequestScreen() {
                   mark={CHECK_LOOK[check.state]}
                   title={check.name}
                   detail={checkDetail(check)}
+                  standing={CHECK_WORDS[check.state]}
+                  face={checkFace(check)}
                 />
               ))
             )}
@@ -508,6 +561,7 @@ export function PullRequestScreen() {
                 mark={REVIEW_LOOK[reviewer.state]}
                 title={reviewer.by.login}
                 detail={REVIEW_WORDS[reviewer.state]}
+                face={{ of: githubFace(reviewer.by), stands: MARK_FACE.LEAD }}
               />
             ))}
             <MarkRow

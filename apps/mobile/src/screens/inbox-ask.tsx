@@ -36,6 +36,7 @@ import {
   AnswerFields,
   AskActs,
   AskNote,
+  type BarAction,
   type BarMenu,
   CHOICE_MEDIA,
   type Choice,
@@ -374,3 +375,45 @@ export function threadMenu(item: InboxItem, answer: ThreadAnswer, doors: ThreadM
     ],
   };
 }
+
+/**
+ * A thread's main acts as a wide window's detail bar stands them, in the
+ * place of Mail's Reply and Trash: its read mark, whichever the thread's is
+ * not, Remind me, and Resolve, dimmed once the thread is settled so the bar
+ * keeps its shape. The rest stay in ⋯ (`menuWithout`); a compact window's
+ * stack keeps every act in ⋯.
+ */
+export function threadActs(
+  item: InboxItem,
+  answer: ThreadAnswer,
+  doors: ThreadMenuDoors,
+): readonly BarAction[] {
+  const unread = isUnread(item);
+
+  return [
+    {
+      label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
+      symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+      onPress: () => doors.onMark(!unread),
+    },
+    { ...REMIND_ME, onPress: doors.onRemind },
+    {
+      label: RESOLVE,
+      symbol: GLYPH.RESOLVED,
+      disabled: item.status !== INBOX_STATUS.OPEN,
+      onPress: answer.resolve,
+    },
+  ];
+}
+
+/** A thread's acts while none is picked, dimmed rather than gone, as Mail's bar stands over No Message Selected. */
+export const NO_THREAD_ACTS: readonly BarAction[] = [
+  {
+    label: INBOX_READ_MARK.UNREAD,
+    symbol: GLYPH.MARK_UNREAD,
+    disabled: true,
+    onPress: () => undefined,
+  },
+  { ...REMIND_ME, disabled: true, onPress: () => undefined },
+  { label: RESOLVE, symbol: GLYPH.RESOLVED, disabled: true, onPress: () => undefined },
+];

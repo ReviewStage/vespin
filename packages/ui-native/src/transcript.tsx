@@ -2,6 +2,7 @@
 
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
+import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -11,9 +12,9 @@ import {
   type AccessibilityActionEvent,
   ActivityIndicator,
   FlatList,
+  Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -35,6 +36,8 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
+import { HARNESS_MARK_ASSET } from "./marks.js";
+import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -115,6 +118,9 @@ const OLDER_WORDS = {
 const styles = StyleSheet.create({
   list: { flex: 1 },
   content: { paddingVertical: SPACE.ROW },
+  // Note that while there are no rows the content fills the list, so the empty state has room to center in.
+  emptyContent: { flexGrow: 1 },
+  emptyHost: { flex: 1 },
   row: { paddingHorizontal: SPACE.EDGE, paddingVertical: SPACE.TIGHT },
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
@@ -162,6 +168,8 @@ const styles = StyleSheet.create({
   },
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
   headModel: { flexDirection: "row", alignItems: "center", gap: 3 },
+  // Note that the mark leads the model's name at the size of its line's glyphs, from the asset catalog the app's config writes.
+  headMark: { width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH, marginRight: 1 },
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
   jump: { position: "absolute", alignSelf: "center" },
   jumpFace: {
@@ -287,7 +295,7 @@ function CallRow({
 
   return (
     <View style={[styles.row, inset(item.depth)]}>
-      <Pressable
+      <Press
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
@@ -351,7 +359,7 @@ function CallRow({
           running={item.standing === CALL_STANDING.RUNNING && held?.waiting !== true}
           failed={item.standing === CALL_STANDING.FAILED}
         />
-      </Pressable>
+      </Press>
       {held === undefined ? null : (
         <View style={styles.body}>
           {/* Note that the presses are SwiftUI's, hosted in the row at the height they draw. */}
@@ -448,7 +456,7 @@ function OriginBody({ body }: { readonly body: string }) {
 
   return (
     <View style={styles.originBody}>
-      <Pressable
+      <Press
         onPress={() => setOpen((was) => !was)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -466,7 +474,7 @@ function OriginBody({ body }: { readonly body: string }) {
         <Text style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
           {WEBHOOK_BODY.LABEL}
         </Text>
-      </Pressable>
+      </Press>
       {open ? <BodyBlock title={WEBHOOK_BODY.KIND} text={body} colors={colors} /> : null}
     </View>
   );
@@ -490,7 +498,7 @@ function FoldRow({
 
   return (
     <View style={[styles.row, inset(item.depth)]}>
-      <Pressable
+      <Press
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
@@ -514,7 +522,7 @@ function FoldRow({
           {item.summary}
         </Text>
         <StandingMark running={item.running} failed={false} />
-      </Pressable>
+      </Press>
     </View>
   );
 }
@@ -666,7 +674,7 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.PAGE:
       return (
         <View style={[styles.row, inset(item.depth)]}>
-          <Pressable
+          <Press
             onPress={() => drawing.onOpenPage(item)}
             accessibilityRole="button"
             accessibilityLabel={`${item.title}, ${PAGE_WORD}`}
@@ -699,7 +707,7 @@ function TranscriptRow({
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
-          </Pressable>
+          </Press>
         </View>
       );
     case TRANSCRIPT_ITEM.PULL_REQUEST:
@@ -736,6 +744,8 @@ function TranscriptRow({
 type AgentHeadProps = {
   /** The model the agent runs on, as the panel's chip names it. */
   readonly model: string | undefined;
+  /** The harness the model runs in, whose mark leads the model's name, as the panel's chip leads with it; none where it is not known. */
+  readonly harness?: ModelProvider | undefined;
   readonly status: AgentStatus | undefined;
   /** Opens the picker that changes the model, as a press on the panel's chip does; none where the reader may not change it. */
   readonly onModel?: (() => void) | undefined;
@@ -751,7 +761,7 @@ const CHANGE_MODEL = "Change model";
  * Where the model may be changed, its name is a press with a chevron after
  * it, as the panel's chip draws one, opening the picker.
  */
-export function AgentHead({ model, status, onModel }: AgentHeadProps) {
+export function AgentHead({ model, harness, status, onModel }: AgentHeadProps) {
   const colors = useColors();
   const state = status === undefined ? undefined : agentGlyphState(status);
   const words = status === undefined ? undefined : agentStateWords(status);
@@ -783,7 +793,7 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
         <Text style={ink}>{pressed && words !== undefined ? `${said} ·` : said}</Text>
       )}
       {pressed ? (
-        <Pressable
+        <Press
           onPress={onModel}
           accessibilityRole="button"
           accessibilityLabel={`${CHANGE_MODEL}, ${model}`}
@@ -791,6 +801,13 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
           testID="agent-model"
           style={styles.headModel}
         >
+          {harness === undefined ? null : (
+            <Image
+              source={{ uri: HARNESS_MARK_ASSET[harness] }}
+              style={styles.headMark}
+              accessibilityElementsHidden
+            />
+          )}
           <Text style={ink}>{model}</Text>
           <SymbolView
             name={glyphSymbol(GLYPH.UNFOLDED)}
@@ -799,7 +816,7 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
             tintColor={colors.TEXT_MUTED}
             accessibilityElementsHidden
           />
-        </Pressable>
+        </Press>
       ) : null}
     </View>
   );
@@ -834,7 +851,7 @@ function JumpToLatest({
   );
 
   return (
-    <Pressable
+    <Press
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={JUMP_TO_LATEST}
@@ -859,7 +876,7 @@ function JumpToLatest({
           {arrow}
         </GlassView>
       )}
-    </Pressable>
+    </Press>
   );
 }
 
@@ -1043,10 +1060,10 @@ export function AgentTranscript({
             {older === undefined ? null : <OlderRow older={older} />}
           </>
         }
-        // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app.
+        // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app. The host fills the room the list leaves rather than matching its content, since the state asks for all the height it is offered, so a host sized to its content stood at no height and a brand-new agent's page was blank.
         ListEmptyComponent={
           empty === undefined ? undefined : (
-            <InlineHost matchContents={{ vertical: true }}>
+            <InlineHost style={styles.emptyHost}>
               <EmptyState {...empty} />
             </InlineHost>
           )
@@ -1055,6 +1072,7 @@ export function AgentTranscript({
         // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
         contentContainerStyle={[
           styles.content,
+          items.length === 0 ? styles.emptyContent : undefined,
           { paddingLeft: left + sides, paddingRight: right + sides },
         ]}
         contentInsetAdjustmentBehavior="automatic"

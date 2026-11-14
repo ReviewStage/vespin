@@ -70,4 +70,4 @@ function ProgressIndicator({ className, ...props }: ProgressPrimitive.Indicator.
   );
 }
 
-export { Progress, ProgressIndicator, ProgressTrack };
+export { Progress };

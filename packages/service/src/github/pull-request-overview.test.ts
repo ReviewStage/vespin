@@ -22,8 +22,10 @@ import { REACTION } from "@repo/features/pull-request-write-wire";
 import { Duration, Effect, Fiber, Option, Redacted } from "effect";
 import { TestClock } from "effect/testing";
 import {
+  fixtureBearer,
   GITHUB_FIXTURE_BOT,
   githubReaching,
+  nextPageOf,
   type RepositoryScript,
 } from "../testing/github-app-fake.js";
 import { GITHUB_PROVIDER_ID } from "./github-app.js";
@@ -234,8 +236,12 @@ function repository(answers: {
     if (pathname === COMMENTS) {
       // GitHub pages a listing a hundred to a page.
       const page = Number(new URL(sent.url).searchParams.get("page") ?? "1");
+      const comments = answers.comments ?? [];
+      const listed = comments.slice((page - 1) * 100, page * 100);
 
-      return Response.json((answers.comments ?? []).slice((page - 1) * 100, page * 100));
+      return page * 100 < comments.length
+        ? Response.json(listed, nextPageOf(sent.url))
+        : Response.json(listed);
     }
 
     if (pathname === `${PULL}/reviews`) return Response.json(answers.reviews ?? []);
@@ -315,19 +321,25 @@ const linkedAccount = (githubId: number) =>
 
 /** The pull request itself read off the repository given and named for an agent of the workspace given, its stack read where `stacked` says so; none where GitHub holds no such pull request. */
 const pullRequestPartOf = (organizationId: string, stacked = true) =>
-  Effect.flatMap(pullRequestOverview(TOKEN, REPOSITORY, NUMBER, stacked), (read) =>
-    Option.isNone(read)
-      ? Effect.succeed(undefined)
-      : namedOverviewPullRequest(
-          { organizationId, repository: REPOSITORY, author: AGENT_AUTHOR.DEVELOPER },
-          read.value,
-        ),
+  Effect.flatMap(
+    Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+      pullRequestOverview(bearer, REPOSITORY, NUMBER, stacked),
+    ),
+    (read) =>
+      Option.isNone(read)
+        ? Effect.succeed(undefined)
+        : namedOverviewPullRequest(
+            { organizationId, repository: REPOSITORY, author: AGENT_AUTHOR.DEVELOPER },
+            read.value,
+          ),
   );
 
 /** The conversation read off the repository given and named for an agent of the workspace given. */
 const conversationPartOf = (organizationId: string) =>
   Effect.flatMap(
-    pullRequestConversation(TOKEN, REPOSITORY, { number: NUMBER, url: PAGE }),
+    Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+      pullRequestConversation(bearer, REPOSITORY, { number: NUMBER, url: PAGE }),
+    ),
     (read) => namedOverviewConversation({ organizationId }, NUMBER, read),
   );
 
@@ -341,7 +353,9 @@ const overviewOf = (organizationId: string, script: RepositoryScript) =>
     const [pullRequest, checks, conversation] = yield* Effect.all(
       [
         pullRequestPartOf(organizationId),
-        pullRequestChecks(TOKEN, REPOSITORY, NUMBER),
+        Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+          pullRequestChecks(bearer, REPOSITORY, NUMBER),
+        ),
         conversationPartOf(organizationId),
       ],
       { concurrency: "unbounded" },
@@ -510,7 +524,9 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
     "each check wears its avatar: a run its App's logo, a status the picture GitHub names on it, and none for a picture GitHub serves from no host of its own",
     () =>
       Effect.gen(function* () {
-        const checks = yield* pullRequestChecks(TOKEN, REPOSITORY, NUMBER).pipe(
+        const checks = yield* Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+          pullRequestChecks(bearer, REPOSITORY, NUMBER),
+        ).pipe(
           answering(
             repository({
               checkRuns: [checkRun("lint", "completed", "failure")],
@@ -564,7 +580,9 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
           ],
         });
 
-        const deployments = yield* pullRequestDeployments(TOKEN, REPOSITORY, NUMBER).pipe(
+        const deployments = yield* Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+          pullRequestDeployments(bearer, REPOSITORY, NUMBER),
+        ).pipe(
           answering((sent) => {
             asked += 1;
 
@@ -616,7 +634,9 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
           deployment("Preview", "INACTIVE", "https://preview.vercel.app"),
         );
 
-        const deployments = yield* pullRequestDeployments(TOKEN, REPOSITORY, NUMBER).pipe(
+        const deployments = yield* Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+          pullRequestDeployments(bearer, REPOSITORY, NUMBER),
+        ).pipe(
           answering(
             repository({
               deployments: [...redeployed, deployment("staging", "SUCCESS", null)],
@@ -635,7 +655,9 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
     "deployments GitHub refuses to name, or a read that fails, list none rather than failing beside the checks",
     () =>
       Effect.gen(function* () {
-        const refused = yield* pullRequestDeployments(TOKEN, REPOSITORY, NUMBER).pipe(
+        const refused = yield* Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+          pullRequestDeployments(bearer, REPOSITORY, NUMBER),
+        ).pipe(
           answering(
             repository({
               deployments: Response.json({
@@ -648,9 +670,9 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
 
         assert.deepEqual(refused, []);
 
-        const failed = yield* pullRequestDeployments(TOKEN, REPOSITORY, NUMBER).pipe(
-          answering(repository({ deployments: Response.json({}, { status: 502 }) })),
-        );
+        const failed = yield* Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+          pullRequestDeployments(bearer, REPOSITORY, NUMBER),
+        ).pipe(answering(repository({ deployments: Response.json({}, { status: 502 }) })));
 
         assert.deepEqual(failed, []);
       }),
@@ -707,7 +729,9 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
     () =>
       Effect.gen(function* () {
         const refused = yield* Effect.flip(
-          pullRequestChecks(TOKEN, REPOSITORY, NUMBER).pipe(
+          Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+            pullRequestChecks(bearer, REPOSITORY, NUMBER),
+          ).pipe(
             answering(
               repository({
                 pull: pull(),
@@ -720,7 +744,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
           ),
         );
 
-        assert.deepEqual([refused._tag, refused.status], ["GitHubUnavailable", 403]);
+        assert.equal(refused._tag, "GitHubRateLimited");
       }),
   );
 
@@ -1319,15 +1343,18 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
           });
         };
 
-        const conversation = yield* Effect.flatMap(
-          pullRequestConversation(
-            TOKEN,
+        const conversation = yield* Effect.gen(function* () {
+          const read = yield* pullRequestConversation(
+            yield* fixtureBearer(TOKEN),
             REPOSITORY,
             { number: NUMBER, url: PAGE },
-            viewerReactionsOf(member, REPOSITORY, NUMBER),
-          ),
-          (read) => namedOverviewConversation({ organizationId: workspace }, NUMBER, read),
-        ).pipe(answering(answered));
+            Effect.flatMap(fixtureBearer(member), (bearer) =>
+              viewerReactionsOf(bearer, REPOSITORY, NUMBER),
+            ),
+          );
+
+          return yield* namedOverviewConversation({ organizationId: workspace }, NUMBER, read);
+        }).pipe(answering(answered));
 
         assert.deepEqual(
           [...bearers].sort(),
@@ -1387,13 +1414,25 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
 
         const reading = yield* Effect.forkChild(
           Effect.flatMap(
-            pullRequestConversation(TOKEN, REPOSITORY, { number: NUMBER, url: PAGE }, Effect.never),
+            Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+              pullRequestConversation(
+                bearer,
+                REPOSITORY,
+                { number: NUMBER, url: PAGE },
+                Effect.never,
+              ),
+            ),
             (read) => namedOverviewConversation({ organizationId: workspace }, NUMBER, read),
           ).pipe(answering(script)),
         );
 
-        yield* TestClock.adjust(Duration.seconds(1));
+        // Note that the clock is moved on until the read joins, because its grace starts only once the App's reads, sent through Octokit's promises, land.
+        const ticking = yield* Effect.forkChild(
+          Effect.forever(Effect.andThen(TestClock.adjust(Duration.seconds(1)), Effect.yieldNow)),
+        );
+
         const conversation = yield* Fiber.join(reading);
+        yield* Fiber.interrupt(ticking);
         assert.deepEqual(conversation.descriptionReactions, [
           { content: REACTION.HEART, count: 1, by: [] },
         ]);
@@ -1463,7 +1502,10 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
           pullRequestPartOf(workspace).pipe(answering(failing)),
         );
 
-        const checks = yield* pullRequestChecks(TOKEN, REPOSITORY, NUMBER).pipe(answering(failing));
+        const checks = yield* Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+          pullRequestChecks(bearer, REPOSITORY, NUMBER),
+        ).pipe(answering(failing));
+
         const conversation = yield* conversationPartOf(workspace).pipe(answering(failing));
 
         assert.equal(pullRequest._tag, "Failure", "the pull request's own read fails");

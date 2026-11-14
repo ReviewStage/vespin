@@ -8,7 +8,7 @@ import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { DOCUMENT_REGION } from "@repo/features/tasks-model";
+import { TASK_REGION } from "@repo/features/tasks-model";
 import { AgentPlaceholderIcon, DocumentIcon, PlusIcon, TaskStatusMark } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { pullRequestLabelOf, TAB_WORDS } from "@repo/ui/tab-strip-model";
@@ -162,13 +162,13 @@ export function openPlanStanding(
   const { region } = tasks;
 
   // Note that while its description is read, the tab wears the task as the list holds it.
-  if (region.kind === DOCUMENT_REGION.READING) {
+  if (region.kind === TASK_REGION.READING) {
     const listed = tasks.tasks.find((each) => each.id === tasks.activeTaskId);
 
     return listed === undefined ? undefined : { name: listed.name, status: listed.status };
   }
 
-  if (region.kind !== DOCUMENT_REGION.READY) return undefined;
+  if (region.kind !== TASK_REGION.READY) return undefined;
   const { task } = region;
   const listed = tasks.tasks.find((each) => each.id === task.id) ?? task;
 

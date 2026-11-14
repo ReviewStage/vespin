@@ -11,6 +11,7 @@ import {
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import {
   INTEGRATION_PROVIDER,
   INTEGRATION_PROVIDER_LIST,
@@ -31,7 +32,11 @@ import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { TASK_SKILL_SOURCE, TASK_TREE_ENTRY } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
-import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
+import {
+  WORKSPACE_ROLE,
+  type WorkspaceMachine,
+  type WorkspaceMember,
+} from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
@@ -159,7 +164,7 @@ function workspaceAgent(
 ): AgentSummary {
   return {
     id,
-    planId: taskId,
+    taskId: taskId,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title,
@@ -235,7 +240,7 @@ function workspaceAnswer({ words = "" }: AgentWorkspaceListParams): readonly Age
   return WORKSPACE_AGENTS.filter(
     (agent) =>
       (agent.title ?? "").toLowerCase().includes(lower) ||
-      (agent.planId === BILLING.id && BILLING.name.toLowerCase().includes(lower)),
+      (agent.taskId === BILLING.id && BILLING.name.toLowerCase().includes(lower)),
   );
 }
 
@@ -250,6 +255,24 @@ const MEMBERS: readonly WorkspaceMember[] = [
     name: "Charles Pan",
     email: "charles@example.com",
     role: WORKSPACE_ROLE.OWNER,
+  },
+];
+
+/** The workspace's machines as its members' machines read answers them: a teammate's, then the reader's, by name. */
+const MACHINES: readonly WorkspaceMachine[] = [
+  {
+    id: "m-build",
+    name: "Build box",
+    platform: DEVICE_PLATFORM.LINUX,
+    userId: DANA_ID,
+    online: true,
+  },
+  {
+    id: "m-studio",
+    name: "Studio",
+    platform: DEVICE_PLATFORM.DARWIN,
+    userId: READER_ID,
+    online: true,
   },
 ];
 
@@ -326,6 +349,10 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
 
   if (request.kind === ACT_KIND.HOSTS_ALLOWED_APPS) {
     return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { machines: ALLOWED_MACHINES } });
+  }
+
+  if (request.kind === ACT_KIND.WORKSPACE_MACHINES_READ) {
+    return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { machines: MACHINES } });
   }
 
   if (request.kind === ACT_KIND.COMPUTER_USE_APP_ICON) {
@@ -756,7 +783,7 @@ test("off a plan's page a sent message's mention is still its chip, which opens 
   assert.deepEqual(opened, [
     {
       workspace: "",
-      place: { kind: LINK_DESTINATION.SECTION, planId: TASK_ID, anchor: "rollout" },
+      place: { kind: LINK_DESTINATION.SECTION, taskId: TASK_ID, anchor: "rollout" },
     },
   ]);
   assert.equal(carryingTarget(container), undefined);
@@ -1151,7 +1178,16 @@ test("an @ in the box on a plan's page suggests the plan's other agents and then
     ["Suggested", ["Wire the desktop", "Invites by week"]],
     [
       "Browse",
-      ["Agents", "People", "Description", "Pages", "Files and folders", "Dates", "MCP servers"],
+      [
+        "Agents",
+        "People",
+        "Description",
+        "Pages",
+        "Files and folders",
+        "Dates",
+        "Machines",
+        "MCP servers",
+      ],
     ],
   ]);
   assert.equal(agentGlyph?.className, "state-glyph", "the agent's row leads with its tab's glyph");
@@ -1221,7 +1257,7 @@ test("a sent message's mention of a page or an agent is drawn as the chip that o
 
   assert.deepEqual(chips.map(chipName), [PAGE.title, STORE_AGENT.name]);
   assert.deepEqual(opened, [
-    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, planId: TASK_ID, pageId: PAGE.id } },
+    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, taskId: TASK_ID, pageId: PAGE.id } },
     {
       workspace: "acme",
       place: { kind: LINK_DESTINATION.AGENT, agentId: STORE_AGENT.id },
@@ -1778,6 +1814,7 @@ test("a bare @ browses a row for each kind the place offers, saying nothing besi
     ["Pages", ""],
     ["Files and folders", ""],
     ["Dates", ""],
+    ["Machines", ""],
     ["MCP servers", ""],
   ]);
   assert.equal(crumb(container), "Pages");
@@ -2193,6 +2230,38 @@ test("an @ among the workspace's members offers its people, the reader first as 
   assert.deepEqual(marked, ["Reyes"]);
   const card = document.querySelector('.ui-tooltip-card [data-actor-card="person"]');
   assert.equal(card?.querySelector(".ui-hover-card-name")?.textContent, "Dana Reyes");
+});
+
+test("an @ narrowed to machines offers the reader's own first, then a teammate's wearing their face before its name, and a pick is sent as the machine's link by its id alone", async () => {
+  const { container, sent } = await memberBox();
+
+  typeInComposer(container, "Run it on @machines:");
+  await settle();
+  const narrowed = crumb(container);
+
+  const rows = [...container.querySelectorAll('.mention-menu [role="option"]')].map((row) => [
+    row.querySelector(".ui-combobox-option-label")?.textContent ?? "",
+    row.querySelector(".ui-combobox-option-before .actor-mark")?.getAttribute("data-kind") ?? null,
+  ]);
+
+  typeInComposer(container, "build");
+  await settle();
+  pressInComposer(container, "Enter");
+  await settle();
+  pressInComposer(container, "Enter");
+  await settle();
+
+  assert.deepEqual(
+    [narrowed, rows],
+    [
+      "Machines",
+      [
+        ["Studio", null],
+        ["Build box", ACTOR_KIND.PERSON],
+      ],
+    ],
+  );
+  assert.deepEqual(sent, ["Run it on [@Build box](mention://machine/m-build)"]);
 });
 
 test("a person picked from the @ list is drawn as their chip and sent as their page's link, which names them by their account's id alone", async () => {

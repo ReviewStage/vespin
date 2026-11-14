@@ -43,15 +43,15 @@ import { useEffect, useMemo, useState } from "react";
 import { AccountCell, AccountCellSkeleton } from "../accounts-table/accounts-table.js";
 import { useAdminDoors } from "../admin-doors.js";
 import { adminWorkspacesQuery, useAdminSignOut } from "../admin-queries.js";
-import { adminReadView } from "../admin-read-view.js";
+import {
+  type AdminRosterChoice,
+  type AdminScreenShell,
+  adminReadView,
+} from "../admin-read-view.js";
 import { AdminSection, STAT_LAYOUT, StatCards, type StatSpec } from "../charts/stat-card.js";
 import { AdminViewOptions, PageSections } from "../chrome/controls.js";
 import { ExternalLink } from "../chrome/external-links.js";
-import {
-  AdminCollectionPage,
-  CollectionCountSkeleton,
-  type ViewerAccount,
-} from "../chrome/page-header.js";
+import { AdminCollectionPage, CollectionCountSkeleton } from "../chrome/page-header.js";
 import { WORKSPACES_SHARED_ONLY } from "../prefs.js";
 import { searchTerm, workspacesReadQuery } from "../routing.js";
 import { useSettledSearch } from "../settled-search.js";
@@ -296,16 +296,11 @@ export function WorkspacesScreen({
   onOpenAccount,
   onOpenWorkspace,
   frame,
-}: {
-  hideAdmins: boolean;
-  onHideAdminsChange: (hide: boolean) => void;
-  account: ViewerAccount | undefined;
-  onSignOut: () => Promise<void>;
-  onOpenAccount: (id: string) => void;
-  onOpenWorkspace: (id: string) => void;
-  /** Applied around every answer but the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
-}): React.JSX.Element {
+}: AdminScreenShell &
+  AdminRosterChoice & {
+    onOpenAccount: (id: string) => void;
+    onOpenWorkspace: (id: string) => void;
+  }): React.JSX.Element {
   // The search follows the roster's: the box filters what is loaded at once,
   // the debounced read searches every workspace, and the mount's address keeps it.
   const { reads, gate, address } = useAdminDoors();

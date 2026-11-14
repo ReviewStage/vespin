@@ -125,16 +125,14 @@ onFlowComplete:
 - tapOn: "Cancel"
 - waitForAnimationToEnd
 - assertVisible: "Weekly digest email"
-# Copy link raises the system's share sheet on the task's address, whose
-# first row copies it; its close puts it away, which iOS 27.2 names
-# "dismiss popup" where earlier releases said "Close".
+# Copy link raises the system's share sheet on the task's address. Its Copy
+# action copies the address and puts the sheet away; the sheet's own close
+# button isn't reliably found by its label on iOS 27.2.
 - longPressOn: "Weekly digest email"
 - tapOn: "Copy link"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-copy-link
-- tapOn:
-    text: "Close|dismiss popup"
-    optional: true
+- tapOn: "Copy"
 - waitForAnimationToEnd
 - longPressOn: "Weekly digest email"
 # Mark as unread draws the row's dot.
@@ -278,7 +276,9 @@ onFlowComplete:
 - takeScreenshot: task-sub-task-add
 - tapOn: "New sub-task"
 - assertVisible: "Describe the task"
-- assertVisible: "Relation, Sub-task of"
+# The parent stands over the words as the relation's capsule (since #8903),
+# "Sub-task of · its name".
+- assertVisible: "Sub-task of.*"
 # Note that the keyboard is lowered by a short drag up the form, which
 # lowers it on a drag (`SettingsForm`), since Maestro's hideKeyboard fails
 # on this sheet when no keyboard stands, as with nothing typed.

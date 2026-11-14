@@ -8,11 +8,17 @@
  * repositories, the account's workspaces with their GitHub installations,
  * and, for each workspace a window followed them in, its members and those
  * who left, its pending invitations with the origin their accept links are
- * built on, and its automations with their latest runs. None of them holds
- * a credential, and an automation's row holds no webhook's body or secret. Every other read the host
- * holds stays in memory, among them transcripts, the inbox, descriptions, pages,
- * comments, browser tabs, Mac commands, Terminal bytes, pictures, devices,
- * and every credential's standing.
+ * built on, and its automations with their latest runs; and the Inbox: the
+ * threads the account reaches as its follow last took them, the first in
+ * the order a plan's list draws them that fit in `KEPT_CHARACTERS`
+ * (`account-items-follow.ts`), each with the plan it is on, its title, who
+ * it waits on, and its messages' words and files' names as its thread
+ * carries them (the latest `INBOX_BOUNDS.MAX_MESSAGES_READ`), never a
+ * file's bytes, with the sync id they were read at where they are every
+ * thread. None of them holds a credential, and an automation's row holds
+ * no webhook's body or secret. Every other read the host holds stays in memory, among them
+ * transcripts, descriptions, pages, comments, browser tabs, Mac commands,
+ * Terminal bytes, pictures, devices, and every credential's standing.
  *
  * The file is `entities.sealed` beside `settings.json`, written whole
  * through a temporary file of its own (`writeSettingsFileAtomic`), sealed by
@@ -22,8 +28,10 @@
  * shapes it was kept at, so a file of another account, of another build's
  * shapes, or one that will not open, is deleted and read as none, and every
  * read reads whole. A store saves lists that moved at most every
- * `SAVE_EVERY`, the writes waiting for the service `QUEUE_SETTLE` after
- * they move, and both once more as it closes; a sign-out forgets it,
+ * `SAVE_EVERY`, or only at the moments the shell names where it names any
+ * (`KeptListsDue`, the phone's app going to the background), the writes
+ * waiting for the service `QUEUE_SETTLE` after they move, and both once
+ * more as it closes; a sign-out forgets it,
  * which deletes the file. Rows
  * kept where none of them moved but where they stand (`keepUnmoved`), as the
  * task list's sync id moving alone, are written only beside the next save of
@@ -45,6 +53,7 @@
  */
 
 import { AUTOMATIONS_READ } from "@repo/features/automation-live";
+import { inboxItemSchema } from "@repo/features/inbox-wire";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
 import {
   agentSectionEntrySchema,
@@ -99,6 +108,7 @@ export const KEPT_READ = {
   MEMBERS: "members",
   INVITATIONS: "invitations",
   AUTOMATIONS: "automations",
+  INBOX: "inbox",
 } as const;
 
 type KeptRead = (typeof KEPT_READ)[keyof typeof KEPT_READ];
@@ -109,9 +119,14 @@ type KeptByWorkspace =
   | typeof KEPT_READ.INVITATIONS
   | typeof KEPT_READ.AUTOMATIONS;
 
-/** Each kept read's rows as the file keeps them: what its follow last answered, the task list's with the sync id it was read at. */
+/** Each kept read's rows as the file keeps them: what its follow last answered, the task list's and the Inbox's with the sync id they were read at. */
 const keptRowsSchema = Schema.Struct({
-  [KEPT_READ.TASK_LIST]: Schema.Struct({ rows: TASK_LIST_READ.rows, at: Schema.String }),
+  [KEPT_READ.TASK_LIST]: Schema.Struct({
+    rows: TASK_LIST_READ.rows,
+    at: Schema.String,
+    /** The workspaces the answer said hold any task, where it said; absent from a file kept before they were. */
+    taskWorkspaces: Schema.optionalKey(Schema.Array(Schema.String)),
+  }),
   [KEPT_READ.SIDEBAR]: Schema.Struct({
     sections: Schema.Array(taskSectionSchema),
     entries: Schema.Array(taskSectionEntrySchema),
@@ -128,6 +143,12 @@ const keptRowsSchema = Schema.Struct({
     }),
   ),
   [KEPT_READ.AUTOMATIONS]: Schema.Record(Schema.String, AUTOMATIONS_READ.rows),
+  [KEPT_READ.INBOX]: Schema.Struct({
+    /** The first items the follow held, as it took them from the service, each with the plan it is on. */
+    items: Schema.Array(Schema.Struct({ item: inboxItemSchema, taskId: Schema.String })),
+    /** The sync id the items were read at, kept only where they are every item the follow held, so the next launch reads past it; absent where the follow kept only its first ones, and reads whole. */
+    at: Schema.optionalKey(Schema.String),
+  }),
 });
 
 /** Each kept read's rows, as a read hands them to the store and takes them back. */
@@ -148,6 +169,7 @@ const keptReadsSchema = Schema.Struct({
   [KEPT_READ.MEMBERS]: Schema.optionalKey(keptRowsSchema.fields[KEPT_READ.MEMBERS]),
   [KEPT_READ.INVITATIONS]: Schema.optionalKey(keptRowsSchema.fields[KEPT_READ.INVITATIONS]),
   [KEPT_READ.AUTOMATIONS]: Schema.optionalKey(keptRowsSchema.fields[KEPT_READ.AUTOMATIONS]),
+  [KEPT_READ.INBOX]: Schema.optionalKey(keptRowsSchema.fields[KEPT_READ.INBOX]),
 });
 
 /** What the file holds once opened: whose it is, the shapes its rows were kept at, the rows, the writes waiting, and the messages refused. */
@@ -219,6 +241,8 @@ export interface EntityStoreOptions {
   readonly refused?: () => readonly unknown[];
   /** Each moving of `refused`, which has the store write them `QUEUE_SETTLE` later. */
   readonly refusedMoves?: Stream.Stream<void>;
+  /** Each moment the shell asks the lists written (`KeptListsDue`); where given, lists that moved are written only then and as the store closes, never every `SAVE_EVERY`. */
+  readonly listsDue?: Stream.Stream<void>;
 }
 
 /** The SHA-256, in hex, of every kept row shape's JSON Schema, which a build that changes any of them changes. */
@@ -372,7 +396,7 @@ export function openEntityStore(
 
     /**
      * The saver: once the writes waiting moved, a save `QUEUE_SETTLE` later;
-     * once lists moved, one when `SAVE_EVERY` has passed since the last save,
+     * once lists moved, where the shell names no moments of its own, one when `SAVE_EVERY` has passed since the last save,
      * sooner where the writes waiting move meanwhile; otherwise asleep until
      * woken. Note that it ends once the store is forgotten, since nothing it
      * would save is kept.
@@ -381,7 +405,7 @@ export function openEntityStore(
       while (!forgotten) {
         if (waitingNow() !== savedQueue) {
           yield* Effect.sleep(QUEUE_SETTLE);
-        } else if (dirty) {
+        } else if (dirty && options.listsDue === undefined) {
           const left = savedAt + Duration.toMillis(SAVE_EVERY) - (yield* Clock.currentTimeMillis);
 
           if (left > 0) {
@@ -410,6 +434,14 @@ export function openEntityStore(
     if (options.refusedMoves !== undefined) {
       yield* Effect.forkScoped(
         Stream.runForEach(options.refusedMoves, () => woken),
+        { startImmediately: true },
+      );
+    }
+
+    // Note that a moment the shell names writes the lists whole, as the store closing does, since the app may not run again before it is ended.
+    if (options.listsDue !== undefined) {
+      yield* Effect.forkScoped(
+        Stream.runForEach(options.listsDue, () => save(true)),
         { startImmediately: true },
       );
     }

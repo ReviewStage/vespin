@@ -42,7 +42,7 @@ export const BRAND_COLOR = {
     SIDEBAR: "#000000",
     SIDEBAR_INK: "#a1a1a1",
     WELL: "#000000",
-    CHIP_EDGE: "#2e2e2e",
+    CHIP_EDGE: "#292929",
     FILL_STRONG: "#ffffff17",
     TEXT: "#ededed",
     TEXT_BODY: "#ededed",

@@ -74,8 +74,9 @@ import { linkPressOf } from "./use-open-link.js";
  *
  * The plug is its glyph alone after the Cloud chip, wearing a dot in the
  * complete tone while a port is forwarded or shared, its hint saying the
- * address or the port. Its popover is a `PortTable`: a line per port, its
- * number first and what serves it under, under This Mac (on the desktop)
+ * address or the port. Its popover is as wide as its `PortTable`, at most
+ * the wide popover's width: a line per port, its number first and what
+ * serves it under, under This Mac (on the desktop)
  * and Team link. Each cell is one press that gets its place ready and acts:
  * Open forwards the port and opens it in the default browser, and Share
  * shares it by link and copies the link; the button spins while it gets
@@ -682,7 +683,7 @@ export function ForwardChip({ agent }: { agent: PlugAgent }): React.JSX.Element 
         open={open}
         align={POPOVER_ALIGN.START}
         side={POPOVER_SIDE.ABOVE}
-        width={POPOVER_WIDTH.WIDE}
+        width={POPOVER_WIDTH.FIT}
       >
         <PopoverPanel
           open={open}
@@ -695,7 +696,7 @@ export function ForwardChip({ agent }: { agent: PlugAgent }): React.JSX.Element 
             if (!(left instanceof Node && root.current?.contains(left))) setOpen(false);
           }}
         >
-          <div className="agent-forward-ports p-menu-inset">
+          <div className="agent-forward-ports max-w-popover-wide p-menu-inset">
             <MenuSection heading={WORDS.PORTS}>
               <PortTable
                 label={WORDS.PORTS}

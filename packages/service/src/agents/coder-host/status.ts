@@ -426,7 +426,7 @@ function summaryFields(
   names: ReadonlyMap<string, string>,
   continuedBy: readonly AgentStartedFromIt[],
   macs: ReadonlyMap<string, Device>,
-): Omit<AgentSummary, "id" | "planId"> {
+): Omit<AgentSummary, "id" | "taskId"> {
   const starter = names.get(agent.userId);
   const mac = macOf(agent, macs);
 
@@ -439,7 +439,7 @@ function summaryFields(
 
   const turn = agentTurnOf(standing.turn);
 
-  const summary: Omit<AgentSummary, "id" | "planId"> = {
+  const summary: Omit<AgentSummary, "id" | "taskId"> = {
     model: agent.model,
     effort: agent.effort,
     ...(agent.contextWindow === CONTEXT_WINDOW.STANDARD
@@ -516,7 +516,7 @@ export function agentSummary(
 
   return {
     id: line.id,
-    planId: line.taskId,
+    taskId: line.taskId,
     ...summaryFields(line, standing, now, names, continuedBy, macs),
   };
 }
@@ -574,7 +574,7 @@ export function agentPage(
 ): AgentPage {
   return {
     id: agent.id,
-    planId: agent.taskId,
+    taskId: agent.taskId,
     ...summaryFields(agentLineOf(agent), standing, now, names, continuedBy, macs),
     automationId: agent.automationId,
     ...(agent.automationOrigin === null

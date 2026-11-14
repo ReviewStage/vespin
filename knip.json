@@ -4,7 +4,11 @@
   "ignoreBinaries": ["afconvert", "iconutil", "ditto", "shasum", "tiffutil"],
   "workspaces": {
     ".": {
-      "entry": ["scripts/vercel-deployed-paths.mjs", "scripts/test-durations.mjs"],
+      "entry": [
+        "scripts/vercel-deployed-paths.mjs",
+        "scripts/test-durations.mjs",
+        "scripts/tsconfig-references.mjs"
+      ],
       "project": ["scripts/**"]
     },
     "apps/desktop": {
@@ -13,6 +17,7 @@
         "src/preload/index.ts",
         "src/utility/task-code.ts",
         "src/renderer/index.tsx",
+        "src/renderer/call/index.tsx",
         "src/renderer/styles/index.css",
         "src/renderer/session-recorder/index.ts",
         "scripts/*.mjs",
