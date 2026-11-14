@@ -8,6 +8,7 @@ import {
   PRODUCT_SETTING_VALUE,
   productEventBuildFromWire,
   productEventFromWire,
+  productLaunchSeconds,
 } from "./product-events.js";
 
 const AT = Date.parse("2026-08-19T12:00:00.000Z");
@@ -137,6 +138,31 @@ test("a mirror's failure travels its wait on a rung, never as the raw time", () 
       name: PRODUCT_EVENT.MIRROR_FAIL,
       at: AT,
       properties: { ...failed, [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: 137 },
+    }),
+    undefined,
+  );
+});
+
+test("a launch travels its time to the first rows on a rung, never as the raw time, and nothing else", () => {
+  assert.equal(productLaunchSeconds(6_400), 5);
+  assert.equal(productLaunchSeconds(700), 0);
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.APP_READY,
+      at: AT,
+      properties: { [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: 5, rows: 639 },
+    }),
+    {
+      name: PRODUCT_EVENT.APP_READY,
+      at: AT,
+      properties: { [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: 5 },
+    },
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.APP_READY,
+      at: AT,
+      properties: { [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: 6.4 },
     }),
     undefined,
   );

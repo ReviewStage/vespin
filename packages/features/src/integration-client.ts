@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
-import type { CallCredential } from "./account-call.js";
+import type { HostedServiceOptions } from "./account-call.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
 import { INTEGRATION_CALL_FAILURE, INTEGRATION_RENAMES } from "./integration-view.js";
@@ -23,14 +23,6 @@ import { HOSTED_API_ERROR } from "./service-wire.js";
  * every caller does the same with one: says why, and offers to try again.
  */
 
-export interface HostedIntegrationsClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-  requestTimeoutMs?: number;
-}
-
 /** The refusal a live read of the account's integrations reads as its own: the service unavailable. */
 const LIVE_RENAMES = {
   [HOSTED_API_ERROR.UNAVAILABLE]: INTEGRATION_CALL_FAILURE.UNAVAILABLE,
@@ -43,7 +35,7 @@ const READING = { as: INTEGRATION_RENAMES } as const;
 export class HostedIntegrationsClient {
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedIntegrationsClientOptions) {
+  constructor(options: HostedServiceOptions) {
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
       credential: options.credential,

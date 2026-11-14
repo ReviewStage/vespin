@@ -31,14 +31,14 @@ import {
   presentationDragIndicator,
 } from "@expo/ui/swift-ui/modifiers";
 import { WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
-import { type ReactNode, useState } from "react";
+import { memo, type ReactNode, useState } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar } from "./marks.js";
 import { ActionRow, SettingsForm } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
-import { TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 
 /** The tile in a bar, beside the workspace's name. */
@@ -312,7 +312,11 @@ function SwitcherFace({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+  const tile = useScaledSize(BAR_TILE_SIZE);
+  const chevron = useScaledSize(CHEVRON_SIZE);
+  const nameWidth = useScaledSize(NAME_MAX_WIDTH);
 
+  // Note that the named face heads the sidebar's list rather than a bar, so it grows with Dynamic Type as the rows under it do.
   return (
     <SwiftUIButton
       onPress={onPress}
@@ -329,20 +333,20 @@ function SwitcherFace({
           spacing={SPACE.TIGHT + 2}
           modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
         >
-          <WorkspaceTile workspace={chosen} size={BAR_TILE_SIZE} />
+          <WorkspaceTile workspace={chosen} size={tile} />
           <Text
             modifiers={[
-              font({ size: TEXT_SIZE.HEADLINE, weight: "semibold" }),
+              font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE, weight: "semibold" }),
               foregroundStyle(colors.TEXT),
               lineLimit(1),
-              frame({ maxWidth: NAME_MAX_WIDTH, alignment: "leading" }),
+              frame({ maxWidth: nameWidth, alignment: "leading" }),
             ]}
           >
             {chosen.name}
           </Text>
           <Image
             {...glyphImage(GLYPH.UNFOLDED)}
-            size={CHEVRON_SIZE}
+            size={chevron}
             color={colors.TEXT_BODY}
             modifiers={[accessibilityHidden()]}
           />
@@ -364,7 +368,9 @@ function SwitcherFace({
  * such as Settings, runs only once the list has gone, since a screen
  * presented while the popover or the sheet is still leaving is refused.
  */
-export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
+export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
+  props: WorkspaceSwitcherProps,
+) {
   const {
     chosen,
     look = SWITCHER_LOOK.NAMED,
@@ -451,7 +457,7 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
       </Popover.Content>
     </Popover>
   );
-}
+});
 
 /**
  * The switcher for a screen's own navigation bar, the stack's header, which
@@ -464,13 +470,13 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
  * than the bar's title view, because a host sized to its contents drew at
  * no size at all in the native stack's title on iOS 27.
  */
-export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
+export const WorkspaceSwitcher = memo(function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
   return (
     <Host matchContents>
       <WorkspaceSwitcherItem {...props} look={SWITCHER_LOOK.TILE} />
     </Host>
   );
-}
+});
 
 /** The list's act that makes a workspace, as the panel words it. */
 export function newWorkspaceAction(onPress: () => void): SwitcherAction {

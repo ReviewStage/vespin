@@ -17,21 +17,30 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
+# Note that this row stands near the Open list's end, which can't scroll it to the middle, so it is scrolled to without centering, then lifted clear of the floating tab bar, which would take the tap.
 - scrollUntilVisible:
     element: "acceptInvite can add a member twice"
     direction: DOWN
-    centerElement: true
+- swipe:
+    start: 50%, 70%
+    end: 50%, 40%
 - waitForAnimationToEnd
 - tapOn: "acceptInvite can add a member twice"
+# Note that the row is tapped again while the Inbox's scopes still stand, the list alone showing them, because a tap right after the list draws, as at launch on the folded Duo, can leave the list in front.
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Questions.*"
+    commands:
+      - tapOn: "acceptInvite can add a member twice"
 - assertVisible: "Got it"
 - waitForAnimationToEnd
 - takeScreenshot: got-it
 - tapOn: "Got it"
+# Note that the notice stands 6 seconds, so it is found by its words in one wait and Undo is pressed straight after, before it slides away under the bar's ⋯.
 - extendedWaitUntil:
-    visible:
-      id: "failure-notice-undo"
+    visible: "Got it: “acceptInvite can add a member twice”"
     timeout: 5000
-- assertVisible: "Got it: “acceptInvite can add a member twice”"
 # Note that the fixture answers a Got it without drawing the thread settled,
 # so this shot shows the Got it chip back under its own notice; on a device
 # the host draws the thread settled until a read carries it, and the chip
@@ -54,12 +63,22 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
+# Note that this row is the Open list's last, which fits without scrolling, so it is scrolled to without centering, which a list that cannot scroll never reaches. A last row rests under the floating tab bar, which took the tap, so the list is lifted from 70% to 40% first, as far as it scrolls.
 - scrollUntilVisible:
     element: "What the expired invite page says"
     direction: DOWN
-    centerElement: true
+- swipe:
+    start: 50%, 70%
+    end: 50%, 40%
 - waitForAnimationToEnd
 - tapOn: "What the expired invite page says"
+# Note that the row is tapped again while the Inbox's scopes still stand, the list alone showing them, because a tap right after the list draws, as at launch on the folded Duo, can leave the list in front.
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Questions.*"
+    commands:
+      - tapOn: "What the expired invite page says"
 - waitForAnimationToEnd
 # Note that on an iPhone the thread's ⋯ is the one "More"; a split view's list has its own first, so where Resolve did not open the thread's is tapped by its place, a second time where that tap only closed the list's menu. Maestro 2.12 finds no "More" by a negative index.
 - extendedWaitUntil:
@@ -84,10 +103,8 @@ appId: dev.vespin.ios
           index: 1
 - tapOn: "Resolve"
 - extendedWaitUntil:
-    visible:
-      id: "failure-notice-undo"
+    visible: "Resolved “What the expired invite page says”"
     timeout: 5000
-- assertVisible: "Resolved “What the expired invite page says”"
 - takeScreenshot: resolve-undo
 - tapOn:
     id: "failure-notice-undo"

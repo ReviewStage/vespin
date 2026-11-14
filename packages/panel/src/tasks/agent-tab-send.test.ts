@@ -53,7 +53,7 @@ const PRESSED_AT = Date.parse("2026-10-30T15:42:00Z");
 
 const AGENT_SUMMARY: AgentSummary = {
   id: AGENT,
-  planId: TASK,
+  taskId: TASK,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Fix the tile",
@@ -77,7 +77,7 @@ const MESSAGES: readonly AgentTranscriptMessage[] = [
 const TAKEN: AgentAgentAnswer = {
   agent: {
     id: AGENT,
-    planId: TASK,
+    taskId: TASK,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,

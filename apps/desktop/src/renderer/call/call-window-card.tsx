@@ -25,7 +25,6 @@ function press(sent: VoiceCallPress): void {
 const PRESSES: CallCardPresses = {
   setMicrophoneMuted: (muted) => press({ press: VOICE_CALL_PRESS.MICROPHONE, muted }),
   setSpeakerMuted: (muted) => press({ press: VOICE_CALL_PRESS.SPEAKER, muted }),
-  stop: () => press({ press: VOICE_CALL_PRESS.STOP }),
   end: () => press({ press: VOICE_CALL_PRESS.END }),
   open: () => press({ press: VOICE_CALL_PRESS.OPEN }),
 };

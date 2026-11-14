@@ -36,10 +36,13 @@ import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
+import { useAgentPullRequests } from "../agents/use-agent.js";
+import { PUSHED_PAGE, type PushedPage, useTopPage } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
+import { placeOfRoute, type SidebarPlace } from "../screens/app-sidebar.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
@@ -109,11 +112,51 @@ function namesTask(task: TaskSummary, named: string): boolean {
   return task.id === named || (task.number !== undefined && String(task.number) === named);
 }
 
+/** The place whose split view stands at a tab's root, by the route; none on a page pushed over the window. */
+function rootPlaceOf(pathname: string): SidebarPlace | undefined {
+  const segments = pathname.split("/").filter((segment) => segment !== "");
+
+  return segments.length === 1 ? placeOfRoute(segments[0]) : undefined;
+}
+
+/**
+ * What a page pushed over a split view's detail puts in front of the menu:
+ * an agent for its own page, its pull request, or a page it showed, so Stop
+ * and Pin follow it; a task for its page, comments, history, or versions.
+ */
+function pushedFocus(page: PushedPage): MenuFocus {
+  switch (page.kind) {
+    case PUSHED_PAGE.AGENT:
+    case PUSHED_PAGE.PULL_REQUEST:
+    case PUSHED_PAGE.AGENT_PAGE:
+      return { kind: MENU_SUBJECT.AGENT, id: page.agentId };
+    case PUSHED_PAGE.TASK:
+    case PUSHED_PAGE.TASK_PAGE:
+    case PUSHED_PAGE.COMMENTS:
+    case PUSHED_PAGE.NEW_COMMENT:
+    case PUSHED_PAGE.HISTORY:
+    case PUSHED_PAGE.VERSION:
+      return { kind: MENU_SUBJECT.TASK, id: page.taskId };
+  }
+}
+
 /** Reads what the route stands in front into what each command may do to it. */
 function useSubject(signedIn: boolean): Subject {
   const pathname = usePathname();
   const { selected } = useGlobalSearchParams<{ selected?: string }>();
-  const focus: MenuFocus = signedIn ? menuFocusOf(pathname, selected) : { kind: MENU_SUBJECT.NONE };
+  // Note that a page pushed over a split view's detail is no route, so it is read off the detail's stack while its tab's root stands.
+  const pushed = useTopPage(signedIn ? rootPlaceOf(pathname) : undefined);
+
+  const focus: MenuFocus = !signedIn
+    ? { kind: MENU_SUBJECT.NONE }
+    : pushed === undefined
+      ? menuFocusOf(pathname, selected)
+      : pushedFocus(pushed);
+
+  const pulled = useAgentPullRequests(
+    pushed?.kind === PUSHED_PAGE.PULL_REQUEST ? pushed.agentId : "",
+  );
+
   const thread = useInboxThread(focus.kind === MENU_SUBJECT.THREAD ? focus.id : undefined).listed;
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
@@ -130,7 +173,7 @@ function useSubject(signedIn: boolean): Subject {
 
   const task =
     taskNamed ??
-    (agent === undefined ? undefined : view?.tasks?.find(({ id }) => id === agent.planId));
+    (agent === undefined ? undefined : view?.tasks?.find(({ id }) => id === agent.taskId));
 
   const workspaceId = thread?.holder.task.workspaceId ?? task?.workspaceId;
   const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
@@ -145,7 +188,7 @@ function useSubject(signedIn: boolean): Subject {
   if (thread !== undefined) {
     address = linked({
       kind: LINK_DESTINATION.INBOX_ITEM,
-      planId: thread.holder.task.id,
+      taskId: thread.holder.task.id,
       itemId: thread.item.id,
     });
     enabled.push(MENU_COMMAND.TOGGLE_READ, ...REMIND_PRESETS.keys());
@@ -157,12 +200,12 @@ function useSubject(signedIn: boolean): Subject {
     address = linked(
       task === undefined
         ? { kind: LINK_DESTINATION.AGENT, agentId: agent.id }
-        : { kind: LINK_DESTINATION.AGENT, planId: task.id, agentId: agent.id },
+        : { kind: LINK_DESTINATION.AGENT, taskId: task.id, agentId: agent.id },
     );
 
     if (task !== undefined) enabled.push(MENU_COMMAND.NEW_AGENT);
   } else if (task !== undefined) {
-    address = linked({ kind: LINK_DESTINATION.TASK, planId: task.id });
+    address = linked({ kind: LINK_DESTINATION.TASK, taskId: task.id });
     enabled.push(MENU_COMMAND.NEW_AGENT, MENU_COMMAND.TOGGLE_READ, MENU_COMMAND.PIN);
 
     if (task.status !== TASK_STATUS.DONE) enabled.push(MENU_COMMAND.MARK_DONE);
@@ -170,6 +213,24 @@ function useSubject(signedIn: boolean): Subject {
     if (taskRowLook(task, 0, undefined).unread) toggled.push(MENU_COMMAND.TOGGLE_READ);
 
     if (task.pinnedAt !== undefined) toggled.push(MENU_COMMAND.PIN);
+  }
+
+  // Note that a pushed pull request or page opens itself in the browser, not the agent or task it stands over.
+  if (pushed?.kind === PUSHED_PAGE.PULL_REQUEST) {
+    address = pulled.find(({ number }) => number === pushed.number)?.url;
+  } else if (pushed?.kind === PUSHED_PAGE.AGENT_PAGE && agent !== undefined) {
+    address = linked({ kind: LINK_DESTINATION.PAGE, taskId: agent.taskId, pageId: pushed.pageId });
+  } else if (pushed?.kind === PUSHED_PAGE.TASK_PAGE) {
+    // Note that a task's page carries its own workspace, so it opens even where the task isn't in the list read.
+    const pageStep = linkWorkspaceStep(pushed.workspaceId ?? task?.workspaceId, workspaces);
+
+    const page = {
+      kind: LINK_DESTINATION.PAGE,
+      taskId: pushed.taskId,
+      pageId: pushed.pageId,
+    } as const;
+
+    address = pageStep === undefined ? undefined : linkOf(page, pageStep);
   }
 
   if (address !== undefined) enabled.push(MENU_COMMAND.OPEN_IN_BROWSER);
@@ -185,18 +246,19 @@ function useSubject(signedIn: boolean): Subject {
   };
 }
 
-/** Whether any agent of the task is starting or running, so marking it done stops them and asks first. */
-function useAgentsWorking(taskId: string | undefined): boolean {
-  const { data: working = false } = useQuery({
+/** How many agents of the task are starting or running, so marking it done stops them and asks first. */
+function useWorkingAgents(taskId: string | undefined): number {
+  const { data: working = 0 } = useQuery({
     ...appStateQuery,
     select: (state) =>
-      taskId !== undefined &&
-      (selectTasks(state).taskAgents ?? []).some(
-        (agent) =>
-          agent.planId === taskId &&
-          agent.archivedAt === undefined &&
-          agentStillWriting(agent.status),
-      ),
+      taskId === undefined
+        ? 0
+        : (selectTasks(state).taskAgents ?? []).filter(
+            (agent) =>
+              agent.taskId === taskId &&
+              agent.archivedAt === undefined &&
+              agentStillWriting(agent.status),
+          ).length,
   });
 
   return working;
@@ -248,7 +310,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const toggled =
     sidebarStands && !sidebar.shown ? [...subject.toggled, MENU_COMMAND.SIDEBAR] : subject.toggled;
 
-  const working = useAgentsWorking(subject.task?.id);
+  const working = useWorkingAgents(subject.task?.id);
   const [asking, setAsking] = useState<Ask>(ASK.NONE);
   // Note that the menu is told only as what it shows changes, since each telling rebuilds it.
   const told = useRef<string>(undefined);
@@ -340,7 +402,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       case MENU_COMMAND.SIDEBAR:
         return sidebar.toggle();
       case MENU_COMMAND.MARK_DONE:
-        if (working) setAsking(ASK.MARK_DONE);
+        if (working > 0) setAsking(ASK.MARK_DONE);
         else markDone();
 
         return;
@@ -419,7 +481,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     return () => listening?.remove();
   }, []);
 
-  const done = settleStopWords(TASK_STATUS.DONE);
+  const done = settleStopWords(TASK_STATUS.DONE, working);
   const dismiss = () => setAsking(ASK.NONE);
 
   return (
