@@ -340,7 +340,12 @@ export function rowPlacement(
  * glyph and words padded inside a rounded fill set in from the sidebar's
  * edges, the fill drawn only while it is selected. Note that the fill is
  * the row's own rather than the system's selection, because the system's
- * takes the list's tint, the ink, and would draw a near-black capsule.
+ * takes the list's tint, the ink, and would draw a near-black capsule. Note
+ * that the fill is the panel's translucent `FILL_STRONG` rather than the
+ * opaque `SELECTED` gray, because the sidebar stands on the system's glass,
+ * which iPadOS 27 tints from what lies behind it: the gray matched that
+ * warm pane's shade and the selection vanished, where a translucent fill
+ * darkens whatever the pane shows, as Mail's selected mailbox does.
  */
 export function sidebarRowPlacement(colors: BrandColors, selected = false) {
   return [
@@ -351,7 +356,7 @@ export function sidebarRowPlacement(colors: BrandColors, selected = false) {
     ...(selected
       ? [
           background(
-            colors.SELECTED,
+            colors.FILL_STRONG,
             SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
           ),
         ]
