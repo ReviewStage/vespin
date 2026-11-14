@@ -1,7 +1,6 @@
 // screen-failure.tsx -- what a screen draws in its place once drawing it threw: that something went wrong, and Try again.
 
 import { useEffect } from "react";
-import { BUTTON_LOOK } from "./button.js";
 import { EmptyState } from "./empty-state.js";
 import { GLYPH } from "./glyph.js";
 import { Screen } from "./screen.js";
@@ -10,7 +9,6 @@ import { Screen } from "./screen.js";
 const FAILURE_WORDS = {
   TITLE: "Something went wrong",
   DESCRIPTION: "This screen could not be drawn.",
-  TRY_AGAIN: "Try again",
 } as const;
 
 /**
@@ -38,11 +36,7 @@ export function ScreenFailure({
         title={FAILURE_WORDS.TITLE}
         symbol={GLYPH.FAILED}
         description={FAILURE_WORDS.DESCRIPTION}
-        action={{
-          label: FAILURE_WORDS.TRY_AGAIN,
-          look: BUTTON_LOOK.BORDERED,
-          onPress: () => void retry(),
-        }}
+        retry={() => void retry()}
       />
     </Screen>
   );
