@@ -4,6 +4,7 @@ import { PRODUCT_SURFACE_EVENT, productLaunchSeconds } from "@repo/features/anal
 import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 import { useHostCount } from "./host/host-provider.js";
+import { launchLeftFront } from "./launch-state.js";
 
 /** React Native's own startup marks, which its `performance` holds beside the web's and its types leave out. */
 interface StartupPerformance {
@@ -12,14 +13,6 @@ interface StartupPerformance {
 
 /** Whether this launch has counted, or let go of, its first Inbox, which it does once. */
 let counted = false;
-
-/**
- * Whether this launch began in the background, a push or a Live Activity's
- * wake, as React Native read the app's state when the bundle first ran.
- * Note that only `background` marks one, since a launch from a tap can still
- * read `inactive` while iOS finishes launching it.
- */
-const launchedInBackground = AppState.currentState === "background";
 
 /** The time since React Native's own start of this launch, in milliseconds, or none where the runtime keeps no start. */
 function sinceLaunch(): number | undefined {
@@ -41,10 +34,9 @@ function sinceLaunch(): number | undefined {
  * `productLaunchSeconds` and nothing else: never how many rows, which
  * threads, or the time itself. Note that the rows the current scope lists
  * aren't asked for, since an account whose Open scope is empty would never
- * count, and that a launch in the background, a push or a Live Activity's
- * wake, counts nothing, since nobody waited on it, even where the app is
- * brought forward before the Inbox answers, since its time would hold that
- * wait.
+ * count, and that a launch that began in the background, a push or a Live
+ * Activity's wake, or went there before the Inbox answered, counts nothing,
+ * since its time would hold a wait nobody sat through.
  */
 export function useAppReadyCount(shown: boolean): void {
   const count = useHostCount();
@@ -63,7 +55,7 @@ export function useAppReadyCount(shown: boolean): void {
   useEffect(() => {
     if (counted || !shown) return;
 
-    if (launchedInBackground) {
+    if (launchLeftFront()) {
       counted = true;
 
       return;
