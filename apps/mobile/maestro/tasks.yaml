@@ -349,8 +349,10 @@ onFlowComplete:
 # first, as the agent page's ⋯ does. The search above leaves "Ledger
 # rounding" found, whose agent finished, so its swipe offers Archive where a
 # working agent's offers Open and Stop. Note that the swipe starts on the
-# row's name and runs short of a full swipe, since a full one would press
-# the first action and a held press would lift the preview.
+# row, one element whose center is the row's, and takes 900 ms, as the
+# leading swipe above does, since a quick one reads as a tap and opens the
+# agent. A full swipe only asks, since Archive never runs on one, so the
+# ask is what the flow waits for.
 - tapOn: "Ledger rounding"
 - extendedWaitUntil:
     visible: "Created by .*"
@@ -364,10 +366,12 @@ onFlowComplete:
     from:
       text: "Fix ledger rounding"
     direction: LEFT
-    duration: 400
+    duration: 900
 - waitForAnimationToEnd
 - takeScreenshot: task-agent-swipe-resting
-- tapOn: "Archive"
+- tapOn:
+    text: "Archive"
+    optional: true
 - assertVisible: "Archive agent?"
 - takeScreenshot: task-agent-archive-ask
 - tapOn: "Cancel"
