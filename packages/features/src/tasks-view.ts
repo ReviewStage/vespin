@@ -208,6 +208,13 @@ export const tasksViewSchema = EffectSchema.Struct({
    */
   pendingTasks: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   listStatus: tasksReadSchema,
+  /**
+   * The workspaces in which the account reaches any task, as the list's
+   * last answer said, whatever the list holds of them: whether it has ever
+   * had a task there. Absent before an answer says, as one drawn from disk
+   * or from a service before it was answered.
+   */
+  taskWorkspaces: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   /** Whether what the host follows live is current (`HOST_LIVE`); absent before the list's follow first says, which reads as live. */
   live: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(HOST_LIVE))),
   /** The workspaces the account is a member of, its first one first, as the last list read answered; none before the first lands. */
@@ -769,6 +776,16 @@ export const tasksFindAnswerSchema = EffectSchema.Union([
 
 /** The most characters a task search sends the service. */
 export const TASK_SEARCH_QUERY_MAX_CHARS = 200;
+
+/** How long typing pauses before a task search's words are asked of the host, so a word typed out reads once rather than once a letter. */
+export const TASK_SEARCH_PAUSE_MILLIS = 250;
+
+/** The words a task search typed as `typed` asks of the service (`TASKS_SEARCH`): trimmed and cut to what it sends, or none where nothing is typed. */
+export function serviceTaskSearchQuery(typed: string): string | undefined {
+  const words = typed.trim().slice(0, TASK_SEARCH_QUERY_MAX_CHARS);
+
+  return words.length === 0 ? undefined : words;
+}
 
 /** A search of the account's tasks the window asks the host to read past the list it holds: the words typed. */
 export const tasksSearchParamsSchema = EffectSchema.Struct({

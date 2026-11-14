@@ -873,6 +873,49 @@ it.effect("a task the list does not hold is read into it as it opens, and only o
 );
 
 it.effect(
+  "the tasks the Inbox names outside the list are read into it once the list answers, each once",
+  () =>
+    Effect.gen(function* () {
+      const invites = {
+        ...task(INVITES, "Teammate invitations", "# Invites", 10),
+        status: TASK_STATUS.DONE,
+      };
+
+      const billing = task(BILLING, "Billing export", "# Billing export", 20);
+      const gone = "0d6f2c4a-9b1e-4f3a-8c5d-7e2a1b9c4f60";
+      const service = fakeService([billing, invites]);
+      const { tasks, call, last, settled } = yield* subject(service);
+      const taskRowReads = () => service.reads.filter((read) => read.startsWith("task-rows"));
+      yield* call("TASKS_REFRESH", undefined);
+      // The Inbox names its tasks before the list first answers, when every task is outside it.
+      yield* tasks.inboxNamed([INVITES, BILLING, gone]);
+      yield* settled;
+      assert.deepEqual(taskRowReads(), [], "nothing is read before the list answers");
+
+      // The list the host follows holds the billing task alone, as one that keeps only recent tasks live.
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+      yield* settled;
+
+      assert.deepEqual(
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted(),
+        [BILLING, INVITES].toSorted(),
+        "the finished task the Inbox names is drawn beside the list's",
+      );
+
+      yield* tasks.inboxNamed([INVITES, BILLING, gone]);
+      yield* settled;
+
+      assert.deepEqual(
+        taskRowReads().toSorted(),
+        [`task-rows:${INVITES}`, `task-rows:${gone}`].toSorted(),
+        "each task outside the list is read once, one the service answers gone never again, and the one in it never",
+      );
+    }),
+);
+
+it.effect(
   "a search draws the tasks it finds outside the list beside it, and each it holds once",
   () =>
     Effect.gen(function* () {

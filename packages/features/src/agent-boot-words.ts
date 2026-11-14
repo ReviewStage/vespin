@@ -7,7 +7,8 @@ import { AGENT_MACHINE, type AgentMachineKind } from "./agent-wire.js";
 export const BOOT_WORDS = {
   /** A machine booting where the transcript cannot name it: a local agent whose Mac is not named. */
   STARTING: "Starting…",
-  STARTING_SANDBOX: "Starting a cloud sandbox…",
+  /** A cloud sandbox booting. */
+  PREPARING: "Preparing…",
   STARTING_ON_BEFORE: "Starting on ",
   STARTING_ON_AFTER: "…",
   /** The start waits on its workspace's drive being built. */
@@ -38,12 +39,12 @@ const FAILURE_WORDS = {
 } as const satisfies Record<BootFailure, string>;
 
 /**
- * What the transcript says while the machine boots, naming where: a cloud
+ * What the transcript says while the machine boots: Preparing… for a cloud
  * sandbox, or a local agent's Mac by its own name, where the summary names
  * it.
  */
 export function bootStartingWords(machine: AgentMachineKind, host: string | undefined): string {
-  if (machine === AGENT_MACHINE.VERCEL) return BOOT_WORDS.STARTING_SANDBOX;
+  if (machine === AGENT_MACHINE.VERCEL) return BOOT_WORDS.PREPARING;
 
   return host === undefined
     ? BOOT_WORDS.STARTING

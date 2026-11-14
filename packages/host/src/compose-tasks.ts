@@ -465,6 +465,14 @@ export interface TasksComposer extends Composer {
   pullRequestListings: Effect.Effect<Stream.Stream<PullRequestListing>, never, Scope.Scope>;
   /** Reads the task or the agent `id` names into the list as a cold task where the list holds neither, behind the open that asked, which it answers at once; a second open reads nothing. */
   openedOutside: (id: string) => Effect.Effect<void>;
+  /**
+   * The tasks the account's Inbox holds items of, as its read last named
+   * them, the ones waiting on the reader first: each the list holds not is
+   * read into it as a cold task (`openedOutside`), a few at a time, so the
+   * Inbox lists and counts its items as any; answered at once. A later call
+   * stands in place of the one before.
+   */
+  inboxNamed: (taskIds: readonly string[]) => Effect.Effect<void>;
   /** Every workspace's repositories the windows hold asked again, as the member's own token saved or removed moves them, answering once each has landed. */
   repositoriesMoved: Effect.Effect<void>;
 }
@@ -660,6 +668,9 @@ function rowFollowerFields(followers: readonly RowFollower[]): Partial<PlanRow> 
  * several events at once (resume, then unlock) seals the list again once.
  */
 const RESYNC_SETTLE = Duration.seconds(10);
+
+/** How many of the tasks the Inbox names are read outside the list at once (`inboxNamed`). */
+const INBOX_READS_AT_ONCE = 4;
 
 type TakeAnsweredResult = {
   readonly taskId: string;
@@ -1232,14 +1243,18 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    * is read again. A list replaced by a sign-out meanwhile draws nothing of
    * it.
    */
-  const openedOutside = (id: string): Effect.Effect<void> =>
+  /** Whether a task outside the list can be read into it now: signed in, and the list answered, since until then every task is outside it. */
+  const readableOutside = (): boolean =>
+    gate() && dependencies.accountId() !== undefined && view.listStatus === TASKS_READ.READY;
+
+  const readOutside = (id: string): Effect.Effect<void> =>
     Effect.suspend(() => {
       const userId = dependencies.accountId();
       const { collections } = taskList;
 
       if (coldNone.has(id) || collections.holds(id)) return Effect.void;
 
-      if (!gate() || userId === undefined || view.listStatus !== TASKS_READ.READY) {
+      if (!readableOutside() || userId === undefined) {
         coldWaiting.add(id);
 
         return Effect.void;
@@ -1275,6 +1290,61 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       );
 
       return Effect.asVoid(FiberMap.run(coldReads, id, pending, { onlyIfMissing: true }));
+    });
+
+  const openedOutside = (id: string): Effect.Effect<void> =>
+    Effect.suspend(() => {
+      // Note that a task a window opens is the window's, read again for a session signing in, though the Inbox asked it first.
+      inboxAsked.delete(id);
+
+      return readOutside(id);
+    });
+
+  /** The tasks the account's Inbox last named (`inboxNamed`). */
+  let inboxTaskIds: readonly string[] = [];
+  /** Whether the Inbox named tasks while the list could not be read outside of, which are read once it answers. */
+  let inboxWaiting = false;
+  /** The ids read outside the list for the Inbox alone, which a session signing in does not read again, since its own Inbox names its own. */
+  const inboxAsked = new Set<string>();
+  /** The Inbox's reads outside the list now, which the next naming stands in place of. */
+  const inboxReads = yield* FiberHandle.make<void>();
+
+  /** One task the Inbox names, read outside the list as a window's open reads it, and waited for. */
+  const readForInbox = (id: string): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      if (!coldPending.has(id) && !taskList.collections.holds(id) && !coldNone.has(id)) {
+        inboxAsked.add(id);
+      }
+
+      yield* readOutside(id);
+      const pending = yield* FiberMap.get(coldReads, id);
+
+      if (Option.isSome(pending)) yield* Fiber.await(pending.value);
+    });
+
+  /**
+   * Each task the Inbox last named that the list holds not, read into it a
+   * few at a time (`INBOX_READS_AT_ONCE`), so an account whose Inbox names
+   * many finished tasks never asks every one at once over the socket the
+   * list is followed on; nothing while the list cannot be read outside of,
+   * whose first answer reads them.
+   */
+  const readInboxTasks = Effect.suspend(() => {
+    inboxWaiting = !readableOutside();
+
+    return inboxWaiting
+      ? Effect.void
+      : Effect.forEach(inboxTaskIds, readForInbox, {
+          concurrency: INBOX_READS_AT_ONCE,
+          discard: true,
+        });
+  });
+
+  const inboxNamed = (taskIds: readonly string[]): Effect.Effect<void> =>
+    Effect.suspend(() => {
+      inboxTaskIds = taskIds;
+
+      return Effect.asVoid(FiberHandle.run(inboxReads, readInboxTasks));
     });
 
   const decodeSearchRows = Schema.decodeUnknownOption(TASK_SEARCH_READ.rows);
@@ -1351,21 +1421,35 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
                   : sealed,
             ),
       // Note that an answer's read standing rides the list it draws, so a window is told both at once.
-      take: (rows, standing) =>
+      take: (rows, standing, taskWorkspaces) =>
         Effect.gen(function* () {
-          view = { ...view, listStatus: TASKS_READ.READY, live: HOST_LIVE.LIVE };
+          view = {
+            ...view,
+            listStatus: TASKS_READ.READY,
+            live: HOST_LIVE.LIVE,
+            ...(taskWorkspaces === undefined ? undefined : { taskWorkspaces }),
+          };
           const entities = dependencies.entities();
           const { collections } = taskList;
           const moved = yield* collections.answer(rows, standing);
           const waiting = [...coldWaiting];
           coldWaiting.clear();
           yield* Effect.forEach(waiting, openedOutside, { discard: true });
+
+          if (inboxWaiting) yield* FiberHandle.run(inboxReads, readInboxTasks);
           // Note that an answer the list did not draw tells its standing here, as after a poll that failed, and one it drew told it already.
           publish();
 
           // Note that only an answer read at a sync id is kept, since the follow reads past it at the next launch, and one that moved no row is written only beside the next that did, or as the store closes.
           if (entities !== undefined && standing !== undefined) {
-            const kept = { rows: collections.synced(), at: standing.next };
+            const kept = {
+              rows: collections.synced(),
+              at: standing.next,
+              ...(view.taskWorkspaces === undefined
+                ? undefined
+                : { taskWorkspaces: view.taskWorkspaces }),
+            };
+
             yield* moved
               ? entities.keep(KEPT_READ.TASK_LIST, kept)
               : entities.keepUnmoved(KEPT_READ.TASK_LIST, kept);
@@ -1508,7 +1592,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     if (list !== undefined && view.listStatus !== TASKS_READ.READY) {
       listKeptAt = list.at;
       // Note that a list drawn from disk is not said to be behind: the follow's first answer, or its failure, says where it stands.
-      view = { ...view, listStatus: TASKS_READ.READY };
+      view = {
+        ...view,
+        listStatus: TASKS_READ.READY,
+        ...(list.taskWorkspaces === undefined
+          ? undefined
+          : { taskWorkspaces: list.taskWorkspaces }),
+      };
       yield* taskList.collections.answer(list.rows, { past: undefined, next: list.at, gone: [] });
     }
 
@@ -2904,6 +2994,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     ],
     pullRequestListings: Effect.map(PubSub.subscribe(listings), Stream.fromSubscription),
     openedOutside,
+    inboxNamed,
     repositoriesMoved: repositoryLists.reread(() => true),
     reset: Effect.gen(function* () {
       yield* Cache.invalidateAll(pullRequestReads);
@@ -2922,8 +3013,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       yield* FiberHandle.clear(listFollow);
 
       // Note that the cold tasks read, and those still being read, are read again for the session signing in, as the windows' holds on them stand through a sign-out.
-      for (const id of [...coldRead, ...coldPending]) coldWaiting.add(id);
+      for (const id of [...coldRead, ...coldPending]) if (!inboxAsked.has(id)) coldWaiting.add(id);
 
+      // Note that the Inbox's reads end with its session, whose next names its own tasks.
+      yield* FiberHandle.clear(inboxReads);
+      inboxTaskIds = [];
+      inboxWaiting = false;
+      inboxAsked.clear();
       yield* FiberMap.clear(coldReads);
 
       coldRead.clear();

@@ -345,6 +345,8 @@ export interface TasksControl {
   };
   /** The tasks a rename, a pin, or where they stand, asked here and not yet carried by the list, is drawn over (main's view's own), which a list held still moves at once; none where nothing waits. */
   pendingTasks?: ReadonlySet<string>;
+  /** The workspaces in which the account reaches any task, as the service last said, whatever the list holds of them (`TasksView.taskWorkspaces`); absent before it says. */
+  taskWorkspaces?: readonly string[];
   /** The workspaces the account is a member of, its first one first; none before the first read lands. */
   workspaces: readonly Workspace[];
   /** The workspace the sidebar lists and New task starts in; absent while none is listed, when every task is listed. */
@@ -3471,6 +3473,7 @@ export function useTasksTab(input: {
       tasks: listedSidebar,
     },
     pendingTasks,
+    ...(tasks.taskWorkspaces === undefined ? undefined : { taskWorkspaces: tasks.taskWorkspaces }),
     workspaces: viewed.workspaces,
     workspace: listedWorkspace,
     onChooseWorkspace: chooseWorkspace,
