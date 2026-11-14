@@ -128,7 +128,10 @@ for your account, encrypted, and we keep the connection's state and a display
 name. While connected, your agents can read and change whatever your grant at
 that service allows, without asking you first, and everything the service
 answers, which can include other people's messages or credentials it hands
-out, goes to the agent's model and into its transcript. If your workspace
+out, goes to the agent's model and into its transcript. Where you connect more
+than one account at a service, a call your agent makes keeps the display name
+of the account it ran on (which can be an email address), and anyone who can
+open the task sees it beside the call. If your workspace
 connects Vespin's Slack bot, we store your Slack user id, and messages you send
 the bot, with the earlier messages of that Slack thread, are handed to an
 agent. If you allow an app such as Claude Code or Cursor to connect to our MCP
