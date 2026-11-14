@@ -101,6 +101,7 @@
     "./markdown-tree": "./src/markdown-tree.js",
     "./media-read-words": "./src/media-read-words.js",
     "./media-signature": "./src/media-signature.js",
+    "./message-files": "./src/message-files.js",
     "./agent-origin-live": "./src/agent-origin-live.js",
     "./agent-pictures-model": "./src/agent-pictures-model.js",
     "./agent-replay": "./src/agent-replay.js",

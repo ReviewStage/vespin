@@ -12,6 +12,7 @@ import {
 } from "@repo/features/agent-wire";
 import type { FileChip } from "@repo/features/attachment-model";
 import { isVideoType, type KeptPicture } from "@repo/features/conversation-picture-wire";
+import { type MessageFileChip, messageFileChips } from "@repo/features/message-files";
 import { formatBytes } from "@repo/features/number-format";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -37,11 +38,7 @@ import { pictureUnread } from "../failure-report.js";
 import { PictureBlock } from "../picture-block.js";
 import { type PictureReader, pictureQuery } from "../picture-query.js";
 import { useAddToDescription } from "./add-to-description.js";
-import {
-  AttachedFileChips,
-  type MessageFileChip,
-  messageFileChips,
-} from "./attached-file-chips.js";
+import { AttachedFileChips } from "./attached-file-chips.js";
 import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
 import { useWordFiles, WordFilesContext } from "./file-chips.js";
 

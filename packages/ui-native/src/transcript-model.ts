@@ -51,6 +51,8 @@ import {
 import { fileName } from "@repo/features/code-ref-words";
 import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
+import { messageFileChips } from "@repo/features/message-files";
+import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { SUGGESTION_LEAD, suggestionWords } from "@repo/features/reply-button-wire";
 import { callHeading, WORKING_LINE, workedForText } from "@repo/features/time-format";
@@ -176,6 +178,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.SAID;
       readonly words: string;
+      /** The pictures the line carried, drawn over its words as the panel draws them; none where it carried none. */
+      readonly pictures?: readonly SaidPicture[] | undefined;
       /** Who sent it, where the reader did not. */
       readonly sender: string | undefined;
       /** Who sent an automation's prompt, or the agent whose suggestion a line was sent from, part by part; it stands over the sender. */
@@ -398,6 +402,33 @@ function suggestionFrom(
   return [{ ...by, after: sender === undefined ? STARTED_BY.YOU : STARTED_BY.MEMBER(sender) }];
 }
 
+/** The media types a sent line's file is drawn as a picture for. */
+const PICTURE_TYPES: ReadonlySet<string> = new Set(Object.values(PICTURE_TYPE));
+
+/** A picture a sent line carried: its place on the line, its name, and its bytes where the line kept them, or the picture it was kept as, read by its id. */
+export interface SaidPicture {
+  readonly key: string;
+  readonly name: string;
+  readonly url: string | undefined;
+  readonly pictureId: string | undefined;
+}
+
+/** The pictures a sent line carried, in order, as the panel lists a line's files (`messageFileChips`); a file that is no picture, such as a PDF, is left to the panel. */
+function saidPictures(line: AgentTranscriptMessage): readonly SaidPicture[] {
+  return messageFileChips(line).flatMap((file, index): SaidPicture[] =>
+    PICTURE_TYPES.has(file.mediaType)
+      ? [
+          {
+            key: String(index),
+            name: file.name,
+            url: file.url === "" ? undefined : file.url,
+            pictureId: file.pictureId,
+          },
+        ]
+      : [],
+  );
+}
+
 /** A line someone sent, as its item: one sent from a suggestion headed by who suggested it, its words without the lead that names that agent to the agent reading them. */
 function saidItem(
   line: AgentTranscriptMessage,
@@ -418,6 +449,7 @@ function saidItem(
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
     words: from === undefined ? words : suggestionWords(words),
+    pictures: saidPictures(line),
     sender: started ? undefined : sender,
     from,
     sent: line.sentAt === undefined ? undefined : callHeading(line.sentAt, reading.now),
@@ -932,7 +964,16 @@ export function openCuts(items: readonly TranscriptItem[]): readonly AgentPartCu
 
 /** The ids of every picture and recording the items show, which the list reads the bytes of. */
 export function shownMediaIds(items: readonly TranscriptItem[]): readonly string[] {
-  return items.flatMap((item) =>
-    item.kind === TRANSCRIPT_ITEM.MEDIA ? item.media.map(({ id }) => id) : [],
-  );
+  return items.flatMap((item) => {
+    if (item.kind === TRANSCRIPT_ITEM.MEDIA) return item.media.map(({ id }) => id);
+
+    // Note that a picture a sent line kept by its id is read as the agent's shown ones are, through the same door.
+    if (item.kind === TRANSCRIPT_ITEM.SAID) {
+      return (item.pictures ?? []).flatMap(({ pictureId }) =>
+        pictureId === undefined ? [] : [pictureId],
+      );
+    }
+
+    return [];
+  });
 }
