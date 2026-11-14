@@ -3,6 +3,7 @@
 import { act, createElement, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { leavingPlace } from "../../testing/leaving-place.js";
 import { useDisclosureFold } from "../disclosure/disclosure.js";
 import { LIST_MOTION_WAY, ListMotion, motionKey, motionRows, useLeaving } from "./list-motion.js";
 
@@ -89,7 +90,7 @@ beforeEach(() => {
     const list = this.parentElement;
 
     // Note that a row taken out of the layout is drawn nowhere, as a browser draws it: an empty box at the window's corner.
-    if (!this.matches("li") || list === null || this.getAttribute("data-leaving") === "gone") {
+    if (!this.matches("li") || list === null || leavingPlace(this) === "gone") {
       return new DOMRect(0, 0, 0, 0);
     }
 
@@ -116,9 +117,9 @@ afterEach(() => {
 
 /** Where a row out of the layout stands: laid over its place as it leaves, else where its run placed it; none for a row in the layout. */
 function topOf(row: HTMLElement): number | undefined {
-  if (row.getAttribute("data-leaving") === "placed") {
-    return Number.parseFloat(row.style.getPropertyValue("--ui-leaving-top"));
-  }
+  const place = leavingPlace(row);
+
+  if (place !== undefined && place !== "gone") return place.top;
 
   return row.style.position === "absolute" ? Number.parseFloat(row.style.top) : undefined;
 }
