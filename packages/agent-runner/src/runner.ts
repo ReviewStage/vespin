@@ -367,19 +367,6 @@ function backgroundServerHooks(
 }
 
 /**
- * Whether a server reaches the CLI relayed as an SDK server rather than over
- * HTTP: every one on a host, and ours everywhere. Note that ours is relayed in
- * the cloud's sandbox too, because CLI 2.1.322 reserves `workspace` among the
- * names of its own servers and silently drops an HTTP server registered
- * under it, which left every cloud launch without its `mcp__workspace__*`
- * tools; an SDK server under the name is kept. Ours holds the first turn
- * either way (`MCP_STARTUP.REQUIRED`), so the relay costs it no wait.
- */
-function relayedServer(server: McpServer, onHost: boolean): boolean {
-  return onHost || server.name === MCP_SERVER;
-}
-
-/**
  * The launch's MCP servers (`mcp-servers.ts`) as the CLI's `mcpServers`. In
  * the cloud's sandbox each is an HTTP server the CLI reaches itself, so a
  * background one connects behind the first turn rather than holding it: the
@@ -388,7 +375,6 @@ function relayedServer(server: McpServer, onHost: boolean): boolean {
  * readable there by root, which every command can become, wherever it
  * stands. On a host the bearer is the real one, with no firewall in front of
  * it, so there each is an SDK server the runner relays (`mcp-relay.ts`).
- * Our own server is relayed everywhere (`relayedServer`).
  */
 const claudeCodeServers = Effect.fn("agent-runner/claudeCodeServers")(function* (
   servers: readonly McpServer[],
@@ -398,7 +384,7 @@ const claudeCodeServers = Effect.fn("agent-runner/claudeCodeServers")(function* 
   const rendered: Record<string, McpServerConfig> = {};
 
   for (const server of servers) {
-    rendered[server.name] = relayedServer(server, onHost)
+    rendered[server.name] = onHost
       ? yield* openMcpRelay(server.name, server.url, bearer)
       : {
           type: "http",
