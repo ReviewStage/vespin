@@ -530,9 +530,9 @@ function ThreadDetail({
     [item, agentName, readerId],
   );
 
-  const memberFace = useMemberFaces();
+  const memberFace = useMemberFaces(holder.task.workspaceId);
 
-  // What happened to the thread, by the message each line follows, -1 before every message read, as the panel's thread draws it, a member named as the workspace's members name them.
+  // What happened to the thread, by the message each line follows, -1 before every message read, as the panel's thread draws it, a member named as the thread's own workspace names them, since a link may open a thread of another workspace than the one chosen.
   const events = useMemo(
     () =>
       inboxThreadEventsShown(item, {
