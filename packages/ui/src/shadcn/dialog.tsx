@@ -1,5 +1,13 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
+import type { HTMLAttributes, Ref } from "react";
 import { cn } from "../cn.js";
+import {
+  CARD_CORNER,
+  CARD_LOOK,
+  CARD_PADDING,
+  CARD_SHADOW,
+  Card,
+} from "../components/card/card.js";
 
 /**
  * dialog.tsx -- shadcn/ui's dialog (style `base-nova`, on Base UI), vendored and drawn as our dimmed window and card.
@@ -19,8 +27,9 @@ import { cn } from "../cn.js";
  * strip. The grid's one column is the room's width (`grid-cols-1`), never
  * an `auto` one, which grows to a line that never wraps, such as a menu
  * row's name, and stood a phone's sheet off the screen's edge. The card is
- * the profile's dialog card, its inset, corners, edge, and lift, at a
- * question's measure; it fades and rises in on the motion
+ * `@repo/ui`'s `Card` (Base UI's `render`), raised at a dialog's corner on a
+ * dialog's shadow, so it stands as every card does and a card set inside it
+ * drops its own edge, at the profile's inset and a question's measure; it fades and rises in on the motion
  * tokens, and as it closes it and its dimmed window fade out over
  * `--ui-duration-exit`, taking no press while they do, Base UI holding
  * them drawn (`data-ending-style`) until the card's fade has run. A card
@@ -50,9 +59,31 @@ const DIALOG_ROOM =
 const DIALOG_ROOM_MARGIN =
   "pt-[max(--spacing(6),env(safe-area-inset-top,0px))] pr-[max(--spacing(6),env(safe-area-inset-right,0px))] pb-[max(--spacing(6),env(safe-area-inset-bottom,0px)_-_var(--ui-keyboard-inset))] pl-[max(--spacing(6),env(safe-area-inset-left,0px))]";
 
-/** The card: a column at a question's measure, never taller than the window less its margins, on the motion tokens, fading out as it closes. */
+/**
+ * The card's own layout: a column at a question's measure, never taller than the window less its margins, on the
+ * motion tokens, fading out as it closes. Its ground, edge, corner, and shadow are `@repo/ui`'s `Card`'s (a raised
+ * card at a dialog's corner on a dialog's shadow), so a card set inside it drops its own edge.
+ */
 const DIALOG_CARD =
-  "box-border flex w-dialog-confirm max-h-dialog-room flex-col gap-2 rounded-dialog border border-border-strong bg-popover p-dialog-inset text-body leading-[inherit] text-popover-foreground shadow-dialog animate-dialog-in transition-shadow duration-(--ui-duration-hover) ease-motion-exit data-ending-style:pointer-events-none data-ending-style:animate-leave";
+  "box-border flex w-dialog-confirm max-h-dialog-room flex-col gap-2 p-dialog-inset text-body leading-[inherit] text-popover-foreground animate-dialog-in transition-shadow duration-(--ui-duration-hover) ease-motion-exit data-ending-style:pointer-events-none data-ending-style:animate-leave";
+
+/** The card the popup is drawn as: a raised card, at a dialog's corner, on a dialog's shadow, holding what Base UI hands it. */
+function DialogFrame({
+  children,
+  ...props
+}: HTMLAttributes<HTMLElement> & { ref?: Ref<HTMLElement> | undefined }) {
+  return (
+    <Card
+      {...props}
+      look={CARD_LOOK.RAISED}
+      corner={CARD_CORNER.DIALOG}
+      shadow={CARD_SHADOW.DIALOG}
+      padding={CARD_PADDING.NONE}
+    >
+      {children}
+    </Card>
+  );
+}
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -101,6 +132,7 @@ function DialogContent({
       >
         <DialogPrimitive.Popup
           data-slot="dialog-content"
+          render={(frame) => <DialogFrame {...frame} />}
           className={cn(DIALOG_CARD, className)}
           {...props}
         >

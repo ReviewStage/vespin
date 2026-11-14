@@ -9,10 +9,13 @@
  * the later lines from the service instead (`RUNNER_LINES`).
  *
  * The config says which harness the launch runs: Claude Code (P05), or Codex
- * through `codex app-server` (P20). Secrets never travel in argv or on
- * stdin: the runner's bearer and, in the cloud, the harness's credential are
- * in its environment; on a host the harnesses run on the machine's own
- * logins. Codex's ChatGPT access token is never handed in at all: in the
+ * through `codex app-server` (P20). Secrets never travel on stdin: the
+ * runner's bearer and, in the cloud, the harness's credential are in its
+ * environment; on a host the harnesses run on the machine's own logins. The
+ * one value in argv that stands for one is the bearer's placeholder in a
+ * cloud launch of Claude Code, its MCP servers' header (`runner.ts`'s
+ * `claudeCodeServers`), which only the sandbox's firewall turns into the
+ * bearer. Codex's ChatGPT access token is never handed in at all: in the
  * cloud's sandbox the runner asks the service for each over HTTPS
  * (`codex-token.ts`) as it signs app-server in, so no line carries one, on a
  * Mac's queue (`@repo/features/device-agent-wire`) or anywhere else.
@@ -161,8 +164,9 @@ const PermissionModeSchema = Schema.Literals(Object.values(PERMISSION_MODE));
  * CLI gives them: those that only read, the checkout or the web, load a
  * skill's instructions or a deferred tool, or keep the agent's own to-do
  * list. Every MCP server the launch hands the CLI, ours and each
- * integration's, runs unasked beside them by its `mcp__<server>` rule, so
- * what asks is a file edit, a shell command, and a server the checkout adds.
+ * integration's, runs unasked beside them, by its `mcp__<server>` rule or,
+ * for a server connected in the background, its hook, so what asks is a
+ * file edit, a shell command, and a server the checkout adds.
  */
 export const CLAUDE_CODE_UNASKED_TOOLS = [
   "Read",
@@ -899,27 +903,14 @@ export const RUNNER_WARM = {
   IDLE_CAP_MS: 60 * 60 * 1_000,
 } as const;
 
-/** The bounds of a turn's summary of files (`TurnFilesSummary`). */
-export const TURN_FILES_BOUNDS = {
-  /** The most files a summary names; the rest are counted in its totals alone. */
-  MAX_FILES: 50,
-} as const;
-
-/** One file a turn changed, where it stands after the turn, with the lines the turn added to it and removed from it. */
-export interface TurnFile {
-  readonly path: string;
-  readonly additions: number;
-  readonly deletions: number;
-}
-
 /**
  * The files a turn changed, as git diffs its checkout from the snapshot
- * before it to the checkout as the turn left it (`checkout-diff.ts`): the
- * first `TURN_FILES_BOUNDS.MAX_FILES` files, and how many files and lines
- * the turn changed over all of them.
+ * before it to the checkout as the turn left it (`checkout-diff.ts`): how
+ * many files it changed, and the lines it added and removed over all of
+ * them. It names no file; the turn's Turn changes tab reads them from the
+ * same diff.
  */
 export interface TurnFilesSummary {
-  readonly files: readonly TurnFile[];
   readonly total: number;
   readonly additions: number;
   readonly deletions: number;

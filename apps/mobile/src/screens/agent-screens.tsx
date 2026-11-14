@@ -38,7 +38,9 @@ import {
   AskNote,
   AttachedPictures,
   BAR_TITLE,
+  CallCardRow,
   Composer,
+  type ComposerCall,
   type ComposerMenu,
   ConfirmAsk,
   DeniesWaiting,
@@ -48,13 +50,13 @@ import {
   type Glyph,
   glyphSymbol,
   HeldCallBanner,
-  HintPickRows,
   ListSection,
   MenuPickRow,
   MenuRow,
   type MenuRowAct,
   NO_TOGGLES,
   openCuts,
+  PickRows,
   QueuedLines,
   RenameAsk,
   Screen,
@@ -115,6 +117,9 @@ import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
+import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
+import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { PageScreen } from "./page-screens.js";
 
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
@@ -195,7 +200,7 @@ function useAgentAddress(
   const place =
     taskId === undefined
       ? { kind: LINK_DESTINATION.AGENT, agentId }
-      : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId };
+      : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId };
 
   return step === undefined ? undefined : linkOf(place, step);
 }
@@ -273,6 +278,8 @@ function AgentComposerBar({
   onShowWaiting,
   addMenu,
   note,
+  call,
+  otherCall,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -281,6 +288,10 @@ function AgentComposerBar({
   readonly addMenu: ComposerMenu;
   /** What the last act of the page's menu or the + that did not take said, where the composer's own says nothing. */
   readonly note: string | undefined;
+  /** Talk, or the call's presses while a call into this agent stands; none while calls are not offered. */
+  readonly call: ComposerCall | undefined;
+  /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
+  readonly otherCall: ReturnType<typeof useStandingCallCard>;
 }) {
   const said = composer.note ?? note;
   const { banner, waiting } = approvals;
@@ -296,8 +307,12 @@ function AgentComposerBar({
     composer.paused === undefined &&
     composer.attached.length === 0 &&
     composer.skills === undefined &&
+    otherCall === undefined &&
     said === undefined ? undefined : (
       <>
+        {otherCall === undefined ? null : (
+          <CallCardRow call={otherCall.card} onOpen={otherCall.open} />
+        )}
         {composer.skills === undefined ? null : (
           <SkillSuggestions
             skills={composer.skills.skills}
@@ -329,6 +344,7 @@ function AgentComposerBar({
       onDropPictures={composer.dropPictures}
       onStop={composer.stop}
       stopping={composer.stopping}
+      call={call}
       head={head}
     />
   );
@@ -482,7 +498,7 @@ export function AgentScreen() {
   const asked = merging === undefined ? undefined : offers.get(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const address = useAgentAddress(id, shown?.workspaceId, shown?.planId);
+  const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
   const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
@@ -574,7 +590,7 @@ export function AgentScreen() {
     suggested,
   );
 
-  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.planId);
+  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId);
   const older = useOlderPages(id, transcript?.before);
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
@@ -591,7 +607,7 @@ export function AgentScreen() {
             id,
             title,
             workspaceId: shown.workspaceId,
-            taskId: shown.planId,
+            taskId: shown.taskId,
           },
           workspaces,
         ),
@@ -638,6 +654,19 @@ export function AgentScreen() {
   };
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
+  const talk = useAgentTalk(id, shown?.taskId);
+  const otherCall = useStandingCallCard(id);
+
+  // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
+  const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
+
+  // Archive asks first. Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
+  const askArchive = () => {
+    setArchiving(false);
+    void actions.archiveAsk.ask(id).then((stands) => {
+      if (stands) setArchiving(true);
+    });
+  };
 
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) =>
     router.push({
@@ -692,12 +721,14 @@ export function AgentScreen() {
               >
                 {MENU_WORDS.RENAME}
               </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
-                onPress={actions.pin}
-              >
-                {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
-              </Stack.Toolbar.MenuAction>
+              {barActs ? null : (
+                <Stack.Toolbar.MenuAction
+                  icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
+                  onPress={actions.pin}
+                >
+                  {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+                </Stack.Toolbar.MenuAction>
+              )}
             </Stack.Toolbar.Menu>
           )}
           {openOptions === undefined ? null : (
@@ -726,18 +757,12 @@ export function AgentScreen() {
               )}
             </Stack.Toolbar.Menu>
           )}
-          {agent === undefined ? null : (
+          {agent === undefined || barActs ? null : (
             <Stack.Toolbar.Menu inline>
               <Stack.Toolbar.MenuAction
                 icon={glyphSymbol(GLYPH.ARCHIVE)}
                 destructive
-                onPress={() => {
-                  // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
-                  setArchiving(false);
-                  void actions.archiveAsk.ask(id).then((stands) => {
-                    if (stands) setArchiving(true);
-                  });
-                }}
+                onPress={askArchive}
               >
                 {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
@@ -755,6 +780,21 @@ export function AgentScreen() {
             </Stack.Toolbar.Menu>
           )}
         </Stack.Toolbar.Menu>
+        {/* Note that a right bar's first item stands at its edge, so the ⋯ leads the list and Archive then Pin stand before it, as Mail stands its acts before More. Each glyph is named as the ⋯'s is, since a top bar loads an `xcasset` icon through React Native's image loader, which reads no symbol set, and drew an empty capsule. */}
+        {barActs ? (
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.ARCHIVE)}
+            accessibilityLabel={MENU_WORDS.ARCHIVE}
+            onPress={askArchive}
+          />
+        ) : null}
+        {barActs ? (
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
+            accessibilityLabel={actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+            onPress={actions.pin}
+          />
+        ) : null}
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
       <GlassDock
@@ -765,6 +805,8 @@ export function AgentScreen() {
             onShowWaiting={showWaiting}
             addMenu={addMenu}
             note={actions.note ?? transcriptCopy.note ?? mode?.note ?? pick.note}
+            call={talk.call}
+            otherCall={otherCall}
           />
         }
       >
@@ -822,6 +864,7 @@ export function AgentScreen() {
         }}
         onDismiss={() => setRenaming(false)}
       />
+      <ConfirmAsk destructive {...talk.switching} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}
@@ -872,7 +915,7 @@ export function AgentPageScreen() {
   return (
     <PageScreen
       workspaceId={agent?.workspaceId}
-      taskId={agent?.planId}
+      taskId={agent?.taskId}
       pageId={page}
       version={Number(version)}
       title={title}
@@ -955,8 +998,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
               title={PERMISSION_MODE_WORDS.GROUP}
               footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
             >
-              <HintPickRows
-                label={PERMISSION_MODE_WORDS.QUESTION}
+              <PickRows
                 options={mode.modes}
                 picked={mode.mode}
                 onPick={(picked) => {

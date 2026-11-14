@@ -866,7 +866,6 @@ it.layer(SUITE)("the runner events route", (it) => {
         const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
 
         const files = {
-          files: [{ path: "src/queue.ts", additions: 12, deletions: 3 }],
           total: 1,
           additions: 12,
           deletions: 3,

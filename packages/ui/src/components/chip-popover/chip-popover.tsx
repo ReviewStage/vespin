@@ -5,6 +5,7 @@ import {
   AnchoredPopover,
   POPOVER_ALIGN,
   POPOVER_WIDTH,
+  type PopoverWidth,
 } from "../anchored-popover/anchored-popover.js";
 import { CHIP_LOOK, CHIP_WIDTH, Chip, ChipName } from "../chip/chip.js";
 import { Fact, Facts } from "../facts/facts.js";
@@ -25,7 +26,9 @@ import { type FootRow, type MenuRow, SearchableMenu } from "../searchable-menu/s
  * Where the owner hands a menu, its rows stand under the facts behind a
  * hairline, headed by the menu's heading ("Move to"), the one chosen
  * checked, and a pick hands the row's id to the owner and closes the
- * popover: the popover is then the picker menu (`SearchableMenu`), its
+ * popover; a title may stand over the rows with no facts, as an agent's
+ * "Where this agent works" does, each of its rows opening a submenu beside
+ * it whose pick closes the popover too: the popover is then the picker menu (`SearchableMenu`), its
  * facts standing over its rows (`lead`), so its keys and its phone sheet
  * are the menu's own. With no menu it is a small card (`PopoverPanel`)
  * holding the facts alone. A popover whose menu says all there is, as a
@@ -33,7 +36,10 @@ import { type FootRow, type MenuRow, SearchableMenu } from "../searchable-menu/s
  * of it, named to a reader by the chip's own name; its rows may stand under
  * no heading, with none chosen, and where its owner takes no pick they only
  * say, each hanging its card, so a press on one changes nothing and the
- * popover stays. Under the rows the owner may pin rows of its own
+ * popover stays. Where its owner hands the rows on now (`checked`), a pick
+ * turns one on or off and the popover stays too, its field (`placeholder`)
+ * finding rows listed only once something is searched, as a task's
+ * followers find the members who do not follow yet. Under the rows the owner may pin rows of its own
  * (`SearchableMenu`'s `FootRow`): a press, or a switch a press turns, which
  * act and leave the popover standing. Its title and the facts' labels are
  * the app's own words, which a screen recording shows as they read; a value
@@ -54,12 +60,20 @@ export interface ChipPopoverMenu {
   readonly rows: readonly MenuRow[];
   /** The id of the row chosen now, drawn checked; none where no row is chosen. */
   readonly value?: string | undefined;
+  /** The rows on now, each drawn checked, where a pick turns a row on or off and leaves the popover standing, as a task's followers. */
+  readonly checked?: ReadonlySet<string> | undefined;
+  /** The search field's placeholder; none draws the rows with no field. */
+  readonly placeholder?: string | undefined;
+  /** Heard as the popover puts itself away, as an owner forgets what it held for one visit. */
+  readonly onClosed?: (() => void) | undefined;
   /** Said where no row is listed. */
   readonly noMatch: string;
   /** What a pick does, which puts the popover away; none where the rows only say, so a press changes nothing. */
   readonly onPick?: ((id: string) => void) | undefined;
   /** Rows pinned under the list: a press, or a switch, each acting with the popover still standing. */
   readonly foot?: readonly FootRow[] | undefined;
+  /** How wide the menu stands; regular where none is named, wide where a pinned row's words and detail need the room. */
+  readonly width?: PopoverWidth | undefined;
 }
 
 /**
@@ -78,6 +92,22 @@ type ChipPopoverBody =
       facts?: undefined;
       menu: ChipPopoverMenu;
     };
+
+/** A row's submenu whose pick puts the popover away first, as a pick of a row does, unless the submenu stays. */
+function closingOnPick(
+  submenu: NonNullable<MenuRow["submenu"]>,
+  close: () => void,
+): NonNullable<MenuRow["submenu"]> {
+  if (submenu.stays === true) return submenu;
+
+  return {
+    ...submenu,
+    onPick: (id) => {
+      close();
+      submenu.onPick(id);
+    },
+  };
+}
 
 /** The title over the facts, as a popover card heads itself. */
 const TITLE = "ui-chip-popover-title m-0 text-section font-section";
@@ -114,9 +144,16 @@ export function ChipPopover({
   /** Whether the chip draws its glyph alone, its words kept for a reader. */
   iconOnly?: boolean | undefined;
 } & ChipPopoverBody): React.JSX.Element {
-  const [open, setOpen] = useState(false);
-  const drawn = useDisclosure(open);
   const { menu } = body;
+  const [open, setOpenTo] = useState(false);
+
+  const setOpen = (next: boolean) => {
+    setOpenTo(next);
+
+    if (open && !next) menu?.onClosed?.();
+  };
+
+  const drawn = useDisclosure(open);
   // The title and the facts under it, where the popover holds them.
   const head = body.title === undefined ? undefined : { title: body.title, facts: body.facts };
   const popoverId = useId();
@@ -180,23 +217,31 @@ export function ChipPopover({
                 <p className={TITLE} aria-hidden="true">
                   {head.title}
                 </p>
-                <PopoverFacts facts={head.facts} />
+                {head.facts.length === 0 ? null : <PopoverFacts facts={head.facts} />}
               </>
             )
           }
-          rows={menu.rows.map((row) => ({ ...row, section: menu.heading }))}
+          rows={menu.rows.map((row) => ({
+            ...row,
+            section: menu.heading,
+            submenu: row.submenu === undefined ? undefined : closingOnPick(row.submenu, close),
+          }))}
           value={menu.value}
+          checked={menu.checked}
+          placeholder={menu.placeholder}
           noMatch={menu.noMatch}
           foot={menu.foot}
           align={POPOVER_ALIGN.START}
-          width={POPOVER_WIDTH.REGULAR}
+          width={menu.width ?? POPOVER_WIDTH.REGULAR}
           replayUnmasked
           onPick={(id) => {
             const { onPick } = menu;
 
             // Note that rows that only say take no pick, so a press on one leaves the popover standing.
             if (onPick === undefined) return;
-            close();
+
+            // Note that a pick that turns a row on or off leaves the popover standing, so several are turned in one visit.
+            if (menu.checked === undefined) close();
             onPick(id);
           }}
           onClose={close}

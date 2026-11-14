@@ -142,11 +142,34 @@ const decodeConsentAnswer = Schema.decodeUnknownSync(
 const noMetadataDocument: ClientMetadataResourceFetch = (input) =>
   Promise.reject(new Error(`this test fetches no metadata document: ${String(input)}`));
 
+/** The OAuth provider as `auth.ts` configures it, its consent page the test's own. */
+const MEMBER_MCP_TEST_PROVIDER_OPTIONS = {
+  loginPage: LOGIN_PAGE,
+  consentPage: MEMBER_MCP_TEST.CONSENT_PAGE,
+  ...oauthClientRegistration(),
+  clientPrivileges: denyOAuthClientPrivileges,
+  scopes: [...OAUTH_PROVIDER_SCOPES],
+  resourcePrivileges: denyOAuthResourcePrivileges,
+};
+
+/** The test's plugins, named each by its own factory's type, as `auth.ts`'s `AuthPlugins` are and for its reason. */
+type MemberMcpTestPlugins = [
+  ReturnType<typeof jwt<typeof JWT_KEY_STORAGE>>,
+  ReturnType<typeof oauthProvider<typeof MEMBER_MCP_TEST_PROVIDER_OPTIONS>>,
+  ReturnType<typeof cimd>,
+];
+
 /** Better Auth as `auth.ts` configures what the server and a client reach, its metadata documents fetched through the transport given. */
 function memberMcpTestAuth(
   client: Awaited<ReturnType<typeof openMigratedPglite>>,
   fetchClientMetadataResource: ClientMetadataResourceFetch = noMetadataDocument,
 ) {
+  const plugins: MemberMcpTestPlugins = [
+    jwt(JWT_KEY_STORAGE),
+    oauthProvider(MEMBER_MCP_TEST_PROVIDER_OPTIONS),
+    cimd(memberMcpClientDiscovery(fetchClientMetadataResource)),
+  ];
+
   return betterAuth({
     baseURL: MEMBER_MCP_TEST.ORIGIN,
     basePath: AUTH_BASE_PATH,
@@ -155,18 +178,7 @@ function memberMcpTestAuth(
     emailAndPassword: { enabled: true },
     rateLimit: AUTH_RATE_LIMIT,
     disabledPaths: [...DISABLED_AUTH_PATHS],
-    plugins: [
-      jwt(JWT_KEY_STORAGE),
-      oauthProvider({
-        loginPage: LOGIN_PAGE,
-        consentPage: MEMBER_MCP_TEST.CONSENT_PAGE,
-        ...oauthClientRegistration(),
-        clientPrivileges: denyOAuthClientPrivileges,
-        scopes: [...OAUTH_PROVIDER_SCOPES],
-        resourcePrivileges: denyOAuthResourcePrivileges,
-      }),
-      cimd(memberMcpClientDiscovery(fetchClientMetadataResource)),
-    ],
+    plugins,
   });
 }
 

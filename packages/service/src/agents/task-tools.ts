@@ -179,7 +179,7 @@ export function runReadTask(
       const descriptionsOn = yield* callerDescriptionsOn(call.caller);
       const blocks = yield* taskBlockReadings(userId, task);
 
-      const followers = yield* followerReadingsOf(userId, workspace.value, [task.id]);
+      const followers = yield* followerReadingsOf(userId, [task.id]);
 
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
@@ -193,9 +193,7 @@ export function runReadTask(
           isYourTask: task.id === callerTask(call.caller),
           brief: brief ?? null,
           ...blocks,
-          ...(followers === undefined
-            ? undefined
-            : { followers: (followers.get(task.id) ?? []).map((follower) => ({ ...follower })) }),
+          followers: (followers.get(task.id) ?? []).map((follower) => ({ ...follower })),
         },
         ...(descriptionsOn
           ? {

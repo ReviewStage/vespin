@@ -3,7 +3,6 @@ import {
   AttachmentChip,
   BUTTON_VARIANT,
   Button,
-  CALL_STAGE,
   CallComposerControls,
   COMPOSER_ELEMENT,
   COMPOSER_LOOK,
@@ -37,7 +36,7 @@ import { CatalogSection } from "../section";
  * saying what is missing; holding files, which stand over its words; near its limit, the counter showing;
  * sending; Stop in the send's place, and stopping; with a cut paste's note,
  * a refused send's Retry, and a closed box's mend under its note; dictating;
- * in a call, wide and as its status gives way in a narrow foot; then at a
+ * in a call, wide and narrow; then at a
  * field's and a bare frame's inset, and still loading.
  */
 
@@ -94,15 +93,10 @@ function Box({
   );
 }
 
-/** When the catalog's call started, and the moment its count stands still at: 2m 14s in. */
-const CALL_STARTED_AT = Date.UTC(2026, 9, 24, 15, 0, 0);
-const CALL_NOW = CALL_STARTED_AT + 134_000;
-
-/** A call's status and its controls, as an agent's box shows them in Dictate's place while a call into it stands. */
+/** A call's controls, as an agent's box shows them in Dictate's place while a call into it stands, with no status beside them. */
 function InCall(): React.JSX.Element {
   return (
     <CallComposerControls
-      live={{ stage: CALL_STAGE.LIVE, startedAt: CALL_STARTED_AT, muted: false, now: CALL_NOW }}
       microphone={{ muted: false, onPress: ignore }}
       speaker={{ muted: false, onPress: ignore }}
       onEnd={ignore}
@@ -236,16 +230,13 @@ function ComposerFoots(): React.JSX.Element {
           </Stack>
         </div>
       </CatalogSection>
-      <CatalogSection id="composer-foot-call" title="In a call, at 600px, 440px, and 360px">
+      <CatalogSection id="composer-foot-call" title="In a call, at 600px and 360px">
         <Stack gap={GAP.FIELD}>
           <div style={{ width: 600 }}>
             <Box words={`Ask ${PRODUCT_NAME} while you talk…`} actions={<InCall />} />
           </div>
-          <div style={{ width: 440 }}>
-            <Box words="The live word gives way" actions={<InCall />} />
-          </div>
           <div style={{ width: 360 }}>
-            <Box words="The status gives way" actions={<InCall />} />
+            <Box words="A narrow box" actions={<InCall />} />
           </div>
         </Stack>
       </CatalogSection>

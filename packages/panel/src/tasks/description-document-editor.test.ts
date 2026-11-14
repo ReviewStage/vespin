@@ -66,7 +66,7 @@ import { useDescriptionWordsUnsaved } from "./use-description-editing.js";
  * editor would: the text it hands over, its finish, and its leaving up.
  */
 
-const BODY = DOCUMENT_TASK.document.body;
+const BODY = DOCUMENT_TASK.description.body;
 
 const CHARLES = { userId: "user-charles", name: "Charles Pan" };
 
@@ -229,7 +229,7 @@ function threadOn(
 
 function commentsOver(threads: readonly DescriptionCommentThread[]): DescriptionCommentsControl {
   return {
-    planId: "plan-1",
+    taskId: "plan-1",
     threads,
     read: true,
     failed: false,
@@ -283,7 +283,7 @@ function unsavedWords(container: HTMLElement): boolean {
 }
 
 /** The fixture task with no description written yet. */
-const EMPTY_TASK: Task = { ...DOCUMENT_TASK, document: { body: "", assumptions: [] } };
+const EMPTY_TASK: Task = { ...DOCUMENT_TASK, description: { body: "", assumptions: [] } };
 
 function mount(
   answers: readonly TasksEditAnswer[] = [],
@@ -474,7 +474,7 @@ test("a press on a diagram's Show code shows its code and opens no editor", asyn
   const code = "flowchart LR\n  Invite --> Join";
   render({
     ...DOCUMENT_TASK,
-    document: { body: `## Flow\n\n\`\`\`mermaid\n${code}\n\`\`\`\n`, assumptions: [] },
+    description: { body: `## Flow\n\n\`\`\`mermaid\n${code}\n\`\`\`\n`, assumptions: [] },
   });
   await settle();
   const toggle = container.querySelector<HTMLButtonElement>(".description-diagram-head button");
@@ -491,7 +491,7 @@ test("a mouse's press on a diagram in a wide room, which enlarges nothing, opens
   const { container, render } = mount();
   render({
     ...DOCUMENT_TASK,
-    document: {
+    description: {
       body: "## Flow\n\n```mermaid\nflowchart LR\n  Invite --> Join\n```\n",
       assumptions: [],
     },
@@ -529,7 +529,7 @@ test("a mouse's press on a picture in the text opens the editor at the picture, 
 
   const { container } = mount([], {
     ...DOCUMENT_TASK,
-    document: { body: `## Flow\n\n![The invite](${address})\n`, assumptions: [] },
+    description: { body: `## Flow\n\n![The invite](${address})\n`, assumptions: [] },
   });
 
   await vi.waitFor(() =>
@@ -606,7 +606,7 @@ test("a press on a video in a section, on its frame, its scrubber, Play, Full sc
 
     const { container } = mount([], {
       ...DOCUMENT_TASK,
-      document: {
+      description: {
         body: `## Flow\n\n![Inviting a member](${address} "The flow")\n`,
         assumptions: [],
       },
@@ -683,7 +683,7 @@ test("a press on a task's checkbox ticks or clears that one item in the saved te
     { saved: true },
   ]);
 
-  render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } });
+  render({ ...DOCUMENT_TASK, description: { body, assumptions: [] } });
   await settle();
   const boxes = [...block(container, "Steps").querySelectorAll<HTMLElement>('[role="checkbox"]')];
   assert.deepEqual(
@@ -710,7 +710,7 @@ test("a press on a task's checkbox ticks or clears that one item in the saved te
   // Note that the description is not drawn again here, so each tick is written over the text the one before it saved.
   const written = body.replace("  - [ ] Write", "  - [x] Write");
   assert.deepEqual(
-    sent.map((request) => request.document),
+    sent.map((request) => request.description),
     [
       { base: body, value: written },
       { base: written, value: written.replace("* [X] Pick", "* [ ] Pick") },
@@ -730,7 +730,7 @@ test("a press on a task's checkbox ticks or clears that one item in the saved te
 test("a press on the label around a task's checkbox, which takes a finger's press beside the box, ticks it once and opens no editor", async () => {
   const body = ["## Steps", "- [ ] Send the invite", ""].join("\n");
   const { container, sent, render } = mount([{ saved: true }]);
-  render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } });
+  render({ ...DOCUMENT_TASK, description: { body, assumptions: [] } });
   await settle();
 
   const label = block(container, "Steps").querySelector<HTMLLabelElement>(
@@ -743,7 +743,7 @@ test("a press on the label around a task's checkbox, which takes a finger's pres
   await settle();
 
   assert.deepEqual(
-    sent.map((request) => request.document),
+    sent.map((request) => request.description),
     [{ base: body, value: body.replace("- [ ] Send", "- [x] Send") }],
   );
   // Note that the check is a boolean, because a failing comparison would print the whole editor's DOM.
@@ -767,7 +767,7 @@ test("a press while a tick is out waits its turn, and both land, the second over
   };
 
   const { container, render } = mount();
-  render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } }, door);
+  render({ ...DOCUMENT_TASK, description: { body, assumptions: [] } }, door);
   await settle();
   const boxes = [...container.querySelectorAll<HTMLElement>('[role="checkbox"]')];
   assert.deepEqual(
@@ -788,7 +788,7 @@ test("a press while a tick is out waits its turn, and both land, the second over
 
   const first = body.replace("[ ] One", "[x] One");
   assert.deepEqual(
-    sent.map((request) => request.document),
+    sent.map((request) => request.description),
     [
       { base: body, value: first },
       { base: first, value: first.replace("[ ] ![Upload", "[x] ![Upload") },
@@ -801,7 +801,7 @@ test("a press while a tick is out waits its turn, and both land, the second over
 test("a tick saved on one task is not carried into another whose description reads the same", async () => {
   const body = "## Steps\n- [ ] One\n- [ ] Two\n";
   const { container, sent, render } = mount();
-  render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } });
+  render({ ...DOCUMENT_TASK, description: { body, assumptions: [] } });
   await settle();
   const one = container.querySelector<HTMLElement>('[role="checkbox"][aria-label="One"]');
   assert.ok(one, "One is drawn");
@@ -809,14 +809,14 @@ test("a tick saved on one task is not carried into another whose description rea
   await settle();
 
   const other = { ...DOCUMENT_TASK, id: "0c4f2e9a-7d1b-4a3e-8f6c-2b9d5e1a7c40" };
-  render({ ...other, document: { body, assumptions: [] } });
+  render({ ...other, description: { body, assumptions: [] } });
   await settle();
   const two = container.querySelector<HTMLElement>('[role="checkbox"][aria-label="Two"]');
   assert.ok(two, "Two is drawn");
   act(() => two.click());
   await settle();
 
-  assert.deepEqual(sent.at(-1)?.document, {
+  assert.deepEqual(sent.at(-1)?.description, {
     base: body,
     value: body.replace("[ ] Two", "[x] Two"),
   });
@@ -835,14 +835,14 @@ test("a description drawn anew while a tick is out is what the next tick is writ
   };
 
   const { container, render } = mount();
-  render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } }, door);
+  render({ ...DOCUMENT_TASK, description: { body, assumptions: [] } }, door);
   await settle();
   const one = container.querySelector<HTMLElement>('[role="checkbox"][aria-label="One"]');
   assert.ok(one, "One is drawn");
   act(() => one.click());
   await settle();
 
-  render({ ...DOCUMENT_TASK, document: { body: appText, assumptions: [] } }, door);
+  render({ ...DOCUMENT_TASK, description: { body: appText, assumptions: [] } }, door);
   first.resolve({ saved: true });
   await settle();
   const two = container.querySelector<HTMLElement>('[role="checkbox"][aria-label="Two"]');
@@ -850,7 +850,7 @@ test("a description drawn anew while a tick is out is what the next tick is writ
   act(() => two.click());
   await settle();
 
-  assert.deepEqual(sent.at(-1)?.document, {
+  assert.deepEqual(sent.at(-1)?.description, {
     base: appText,
     value: appText.replace("[ ] Two", "[x] Two"),
   });
@@ -859,7 +859,7 @@ test("a description drawn anew while a tick is out is what the next tick is writ
 test("a tick the service did not answer goes back and says the description could not be saved", async () => {
   const body = "## Steps\n- [ ] One\n";
   const { container, sent, render } = mount([{ failure: TASK_CALL_FAILURE.UNANSWERED }]);
-  render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } });
+  render({ ...DOCUMENT_TASK, description: { body, assumptions: [] } });
   await settle();
   const box = container.querySelector<HTMLElement>('[role="checkbox"]');
   assert.ok(box, "the box is drawn");
@@ -884,7 +884,7 @@ test("a box pressed twice while its first tick is out, whose first is refused, s
   };
 
   const { container, render } = mount();
-  render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } }, door);
+  render({ ...DOCUMENT_TASK, description: { body, assumptions: [] } }, door);
   await settle();
   const box = container.querySelector<HTMLElement>('[role="checkbox"]');
   assert.ok(box, "the box is drawn");
@@ -910,9 +910,9 @@ test("a box in a later section ticks its own item after an earlier section's wor
   const body = "## Goal\n\nInvite by email.\n\n## Steps\n- [ ] One\n";
   const grown = body.replace("Invite by email.", "Invite by email, or by a link.");
   const { container, sent, render } = mount();
-  render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } });
+  render({ ...DOCUMENT_TASK, description: { body, assumptions: [] } });
   await settle();
-  render({ ...DOCUMENT_TASK, document: { body: grown, assumptions: [] } });
+  render({ ...DOCUMENT_TASK, description: { body: grown, assumptions: [] } });
   await settle();
   const box = container.querySelector<HTMLElement>('[role="checkbox"][aria-label="One"]');
   assert.ok(box, "the box is drawn");
@@ -920,7 +920,7 @@ test("a box in a later section ticks its own item after an earlier section's wor
   act(() => box.click());
   await vi.waitFor(() => expect(sent.length).toBe(1));
 
-  assert.deepEqual(sent[0]?.document, {
+  assert.deepEqual(sent[0]?.description, {
     base: grown,
     value: grown.replace("[ ] One", "[x] One"),
   });
@@ -985,7 +985,7 @@ function scrollerOf(container: HTMLElement): HTMLElement {
 test("a press anywhere on an empty description's room opens its text with the caret in it, leaving the press to the page", () => {
   layTextOut();
   const { container, render } = mount();
-  render({ ...DOCUMENT_TASK, document: { body: "", assumptions: [] } });
+  render({ ...DOCUMENT_TASK, description: { body: "", assumptions: [] } });
   const scroller = scrollerOf(container);
   const body = container.querySelector(".description-body") ?? assert.fail("the body");
 
@@ -1142,7 +1142,7 @@ test("words handed over and not yet saved are sent when the developer leaves the
   unmount();
   await settle();
 
-  assert.deepEqual(sent, [{ document: { base: BODY, value: `${BODY}Mine.\n` } }]);
+  assert.deepEqual(sent, [{ description: { base: BODY, value: `${BODY}Mine.\n` } }]);
 });
 
 test("words typed in one description are saved to that description when another opens", async () => {
@@ -1485,8 +1485,8 @@ test("Keep mine in the open editor over a teammate's change to another section l
 
   assert.deepEqual(editor?.took, [[mine, merged]]);
   assert.deepEqual(sent, [
-    { document: { base: BODY, value: mine } },
-    { document: { base: theirs, value: merged } },
+    { description: { base: BODY, value: mine } },
+    { description: { base: theirs, value: merged } },
   ]);
 });
 
@@ -1511,7 +1511,7 @@ test("words left waiting on a conflict are kept and said, and the toast's Keep m
   act(() => newestToastAction()?.click());
   await settle();
 
-  assert.deepEqual(sent.at(-1), { document: { base: appText, value: `${appText}Mine.\n` } });
+  assert.deepEqual(sent.at(-1), { description: { base: appText, value: `${appText}Mine.\n` } });
   assert.equal(newestToastSays(), undefined);
   render(DOCUMENT_TASK);
   await settle();
@@ -1543,7 +1543,7 @@ test("the toast's Retry over words a refused save left saves them to the descrip
   act(() => newestToastAction()?.click());
   await settle();
 
-  const mine = { document: { base: BODY, value: `${BODY}Mine.\n` } };
+  const mine = { description: { base: BODY, value: `${BODY}Mine.\n` } };
   assert.deepEqual(doors, [
     [DOCUMENT_TASK.id, mine],
     [DOCUMENT_TASK.id, mine],
@@ -1579,7 +1579,7 @@ function wordsNode(within: HTMLElement, words: string, nth = 0): Text {
 test("a click hands the editor the words it landed on, so the caret finds them however the editor draws what stands above", () => {
   const body = "## Goal\n\nShip it.\n\nShip it.\n";
   const { container, render } = mount();
-  render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } });
+  render({ ...DOCUMENT_TASK, description: { body, assumptions: [] } });
   const goal = block(container, "Goal");
   pointLandsOn(wordsNode(goal, "Ship it.", 1), 5, 300);
 
@@ -1601,7 +1601,7 @@ test("a click hands the editor the words it landed on, so the caret finds them h
 test("a click whose press selected words in a section hands the editor where they start and end, so it opens with them selected", () => {
   const body = "## Goal\n\nShip it.\n\nShip the invite flow.\n";
   const { container, render } = mount();
-  render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } });
+  render({ ...DOCUMENT_TASK, description: { body, assumptions: [] } });
   const goal = block(container, "Goal");
   window
     .getSelection()
@@ -1782,7 +1782,7 @@ function savedBy(body: string, updatedAt: number, by = CHARLES): Task {
   return {
     ...DOCUMENT_TASK,
     updatedAt,
-    document: { ...DOCUMENT_TASK.document, body },
+    description: { ...DOCUMENT_TASK.description, body },
     lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, by, at: updatedAt, duringCall: false },
   };
 }
@@ -1800,7 +1800,7 @@ test("a teammate's save reaching an open editor holding nothing unsaved is laid 
   act(() => open().onDraft(`${theirs}Mine.\n`));
   act(() => open().onFinish(1, FINISH.ESCAPE));
   await settle();
-  assert.deepEqual(sent, [{ document: { base: theirs, value: `${theirs}Mine.\n` } }]);
+  assert.deepEqual(sent, [{ description: { base: theirs, value: `${theirs}Mine.\n` } }]);
 });
 
 test("an open editor holding unsaved words keeps them as a teammate saves, saves them as a change from what it opened on, and takes the merged answer", async () => {
@@ -1835,7 +1835,7 @@ test("an open editor holding unsaved words keeps them as a teammate saves, saves
     // The words save a beat later, as a change from the text they were typed over, which the service lays over Charles's.
     act(() => vi.advanceTimersByTime(1_000));
     await settle();
-    assert.deepEqual(sent, [{ document: { base: BODY, value: mine } }]);
+    assert.deepEqual(sent, [{ description: { base: BODY, value: mine } }]);
 
     // The host draws the description the save answered, the developer's last, before the save's answer arrives.
     render(savedBy(merged, 4, { userId: "user-me", name: "Me" }), door);
@@ -1872,7 +1872,7 @@ test("the editor is handed the open threads' words, and none while no open threa
 
 /** The fixture task as its description was saved holding `body`. */
 function holding(body: string, task: Task = DOCUMENT_TASK): Task {
-  return { ...task, document: { ...task.document, body } };
+  return { ...task, description: { ...task.description, body } };
 }
 
 /** The description opened, `words` typed, and the editor left by Escape once its save landed, the page drawing the text it saved. */

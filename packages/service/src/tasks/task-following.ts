@@ -1,15 +1,12 @@
 /**
- * task-following.ts -- the members following a task: a member follows it or stops, switches whether its agents may use their machines, or adds another member; a member's message makes them follow; and the followers an agent's task tools read.
+ * task-following.ts -- the members following a task: a member follows it or stops, switches whether its agents may use their machines, or adds or removes another member; a member's message makes them follow; and the followers an agent's task tools read.
  *
  * Every door of following stands over this one module: the hosted
  * `taskFollowers` procedures, the member words path (`steerMemberWords` and a
- * queued message), and `read_task` and `list_tasks`. What a member sees of it
- * is gated on the task's workspace having Following on
- * (`EXPERIMENT.FOLLOWING`): a write while it is off is refused as no task, and
- * a tool answers no followers. The follows a task's start and its assignment
- * write are the store's own (`task-store.ts`), written in their transaction
- * whatever the experiment, as are a member's message's here, so a workspace
- * that turns Following on finds its followers already there.
+ * queued message), and `read_task` and `list_tasks`. A write on a task the
+ * account does not reach is refused as no task. The follows a task's start
+ * and its assignment write are the store's own (`task-store.ts`), written in
+ * their transaction.
  *
  * A member follows by hand with their machines off, and by messaging one of
  * the task's agents with them on where they did not follow it yet; a follower
@@ -28,12 +25,11 @@ import {
   unfollowTask,
 } from "@repo/database/models/task-follower-store";
 import { readTaskHeader } from "@repo/database/models/task-store";
-import { workspaceExperimentOn } from "@repo/database/models/workspace-experiment-store";
 import type { TaskFollowersAnswer } from "@repo/features/task-wire";
-import { EXPERIMENT } from "@repo/settings";
+import type { TaskMachinesAnswer } from "@repo/features/workspace-tools-wire";
 import type { TaskFollowerWire } from "@repo/wire";
 import { Effect, Option, Result } from "effect";
-import { experimentOnIn } from "../agents/workspace-experiment-on.js";
+import { followerMachinesOf } from "../agents/machine-routing.js";
 import {
   HOSTED_REFUSAL,
   type HostedRefusal,
@@ -70,24 +66,17 @@ function answerOf(
   return Effect.succeed(txid === undefined ? answer : { ...answer, txid });
 }
 
-/** Refused as no task unless the account reaches the task and its workspace has Following on. */
-const followingOnFor = Effect.fnUntraced(function* (userId: string, taskId: string) {
+/** Refused as no task unless the account reaches the task. */
+const reachedFor = Effect.fnUntraced(function* (userId: string, taskId: string) {
   const header = yield* hostedStoreOrUnavailable(readTaskHeader(userId, taskId));
 
   if (Option.isNone(header)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-
-  // A read that failed is an outage, never Following off.
-  const on = yield* hostedStoreOrUnavailable(
-    workspaceExperimentOn(header.value.workspaceId, EXPERIMENT.FOLLOWING),
-  );
-
-  if (!on) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 });
 
 /** The account follows the task by hand, its machines off; one following already keeps its row. */
 export function followTaskAsked(userId: string, taskId: string): FollowingEffect {
   return Effect.gen(function* () {
-    yield* followingOnFor(userId, taskId);
+    yield* reachedFor(userId, taskId);
 
     const written = yield* hostedStoreOrUnavailable(
       followTask(userId, { taskId, followerId: userId, machines: false }),
@@ -104,7 +93,7 @@ export function addTaskFollowerAsked(
   followerId: string,
 ): FollowingEffect {
   return Effect.gen(function* () {
-    yield* followingOnFor(userId, taskId);
+    yield* reachedFor(userId, taskId);
 
     const written = yield* hostedStoreOrUnavailable(
       followTask(userId, { taskId, followerId, machines: false }),
@@ -116,11 +105,20 @@ export function addTaskFollowerAsked(
 
 /** The account stops following the task; its assignee is refused as not permitted, since they follow it while assigned. */
 export function unfollowTaskAsked(userId: string, taskId: string): FollowingEffect {
+  return removeTaskFollowerAsked(userId, taskId, userId);
+}
+
+/** A follower of the task taken away, the account itself or another member, as the Following popover's Remove asks; the assignee is refused as not permitted. */
+export function removeTaskFollowerAsked(
+  userId: string,
+  taskId: string,
+  followerId: string,
+): FollowingEffect {
   return Effect.gen(function* () {
-    yield* followingOnFor(userId, taskId);
+    yield* reachedFor(userId, taskId);
 
     const unfollowed = yield* hostedStoreOrUnavailable(
-      unfollowTask(userId, taskId).pipe(
+      unfollowTask(userId, taskId, followerId).pipe(
         Effect.map((written) => Result.succeed(written)),
         Effect.catchTag("TaskFollowerIsAssignee", (refused) =>
           Effect.succeed(Result.fail(refused)),
@@ -141,7 +139,7 @@ export function setFollowerMachinesAsked(
   machines: boolean,
 ): FollowingEffect {
   return Effect.gen(function* () {
-    yield* followingOnFor(userId, taskId);
+    yield* reachedFor(userId, taskId);
     const written = yield* hostedStoreOrUnavailable(setFollowerMachines(userId, taskId, machines));
 
     return yield* answerOf(taskId, written);
@@ -151,8 +149,7 @@ export function setFollowerMachinesAsked(
 /**
  * A member's own words to one of the task's agents make them follow it, with
  * their machines on, where they did not follow it yet; a follower's row
- * stands as it is. Whatever the experiment, so the followers are there
- * once it is on. It never fails the message it follows: a write the store
+ * stands as it is. It never fails the message it follows: a write the store
  * could not make is logged for the operator and the message goes on.
  */
 export function followAsMessaged(
@@ -169,20 +166,17 @@ export function followAsMessaged(
 /**
  * The followers of each of the tasks named, as `read_task` and `list_tasks`
  * name them, keyed by the task's id, each by name and id, as every tool
- * names a member; none where the workspace has Following off, when the
- * tools answer no followers.
+ * names a member.
  */
 export function followerReadingsOf(
   userId: string,
-  workspaceId: string,
   taskIds: readonly string[],
 ): Effect.Effect<
-  ReadonlyMap<string, readonly TaskFollowerReading[]> | undefined,
+  ReadonlyMap<string, readonly TaskFollowerReading[]>,
   StoreFailure,
   DatabaseServices
 > {
   return Effect.gen(function* () {
-    if (!(yield* experimentOnIn(workspaceId, EXPERIMENT.FOLLOWING))) return undefined;
     const named = yield* listTasksFollowersNamed(userId, taskIds);
 
     return new Map(
@@ -196,5 +190,26 @@ export function followerReadingsOf(
         })),
       ]),
     );
+  });
+}
+
+/** The machines of the task's followers, each with whose it is, whether its owner lets the task's agents use it, and whether it listened lately, as a follower's card lists them; refused as no task where the account does not reach it. */
+export function followerMachinesAsked(
+  userId: string,
+  taskId: string,
+): Effect.Effect<TaskMachinesAnswer, HostedRefusal, DatabaseServices> {
+  return Effect.gen(function* () {
+    yield* reachedFor(userId, taskId);
+    const machines = yield* hostedStoreOrUnavailable(followerMachinesOf(userId, taskId));
+
+    return {
+      machines: machines.map(({ id, name, owner, online, lets }) => ({
+        id,
+        name,
+        owner,
+        online,
+        lets,
+      })),
+    };
   });
 }

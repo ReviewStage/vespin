@@ -104,6 +104,19 @@ export class SettingsChangedElsewhere extends Context.Service<
 >()("@repo/host/SettingsChangedElsewhere") {}
 
 /**
+ * Each moment the shell asks the account's kept lists written
+ * (`entity-store.ts`): on the phone, the app going to the background. A host
+ * handed it writes the lists that moved only then and as the store closes,
+ * never on the store's own timer, because the phone seals the file in
+ * JavaScript, about half a second a save for a large account, which a timer
+ * firing while the member taps would stand in front of the tap. It is
+ * optional: the desktop seals with the system's own cipher and provides none.
+ */
+export class KeptListsDue extends Context.Service<KeptListsDue, Stream.Stream<void>>()(
+  "@repo/host/KeptListsDue",
+) {}
+
+/**
  * A terminal's relay WebSocket. It arrives rather than being built here,
  * because the desktop's is opened over `ws` (`@repo/host/node`), and a host
  * that imported it could not load where `ws` does not. Only the terminals

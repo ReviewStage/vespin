@@ -34,7 +34,7 @@ afterEach(() => {
 function agent(id: string, title: string, status: AgentSummary["status"]) {
   return {
     id,
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title,

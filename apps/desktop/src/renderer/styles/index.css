@@ -7,3 +7,19 @@
    layers the panel's sheets opened first, so coming after them changes no
    winner. */
 @import "./tailwind.css";
+
+/* The floating call window (`call.html`) is the card alone: its ground is no
+   ground at all, so the card is the whole of what is seen, centered in the
+   room the window leaves its shadow. */
+html.call-window,
+html.call-window body,
+html.call-window #root {
+  background: transparent;
+}
+
+html.call-window #root {
+  display: flex;
+  height: 100vh;
+  align-items: center;
+  justify-content: center;
+}

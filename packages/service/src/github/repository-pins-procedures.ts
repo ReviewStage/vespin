@@ -8,7 +8,7 @@
  * nothing: a repository the account no longer reaches groups no task.
  * Every request resolves the bearer before it touches a row, and every row
  * it touches is the bearer's account's own. It stands apart from
- * `/api/plans/*` because that path's rewrite reads its next segment as a
+ * `/api/tasks/*` because that path's rewrite reads its next segment as a
  * task's id.
  */
 

@@ -31,6 +31,7 @@ import {
   type AgentCallFailure,
   type AgentChangesAnswerView,
   type AgentDefaultAnswer,
+  type AgentDefaultMachineAnswerView,
   type AgentDeleteAnswerView,
   type AgentGitHubImageView,
   type AgentInboxAnsweredView,
@@ -80,6 +81,8 @@ import {
   type LiveActivityTokenAnswerView,
   type LiveActivityTokenParams,
   type MachineAllowedAppsAnswerView,
+  type MachineAskAnsweredView,
+  type MachineChangeParams,
   type MemoriesAnswerView,
   type MemoryForgetParams,
   type MemorySaveAnswerView,
@@ -109,8 +112,6 @@ import {
   type SoundStateView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
-  type VoiceCallEndedAnswerView,
-  type VoiceCallEndedParams,
   type VoiceSessionAnswerView,
   type VoiceSessionParams,
 } from "./agent-view.js";
@@ -119,6 +120,7 @@ import {
   AGENT_LIST_QUERY,
   AGENT_WORKSPACE_QUERY,
   type AgentArchiveRequest,
+  type AgentChatHold,
   type AgentMessageRequest,
   type AgentNewestAnswer,
   type AgentOlderAnswer,
@@ -195,6 +197,7 @@ import {
 } from "./live-activity-wire.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { TRANSCRIPT_NOW_QUERY, type TranscriptNowAnswer } from "./live-wire.js";
+import type { MachineAskAnswerRequest } from "./machine-ask-wire.js";
 import { MEMORY_QUERY } from "./memory-wire.js";
 import {
   agentDefaultWriteSchema,
@@ -240,7 +243,7 @@ import {
 } from "./sound-clip-wire.js";
 import type { TaskAgentRefusal } from "./task-wire.js";
 import { MP4_TYPE, PLAYABLE_VIDEO_TYPE, type PlayableVideoType } from "./video-signature.js";
-import { voiceCallEndedRequestSchema, voiceSessionRequestSchema } from "./voice-wire.js";
+import { voiceSessionRequestSchema } from "./voice-wire.js";
 
 /**
  * agent-client.ts -- the window's side of a task's coding agents, as the host asks the service for them.
@@ -550,6 +553,25 @@ export class HostedAgentClient {
   /** One of the account's hosts removed, its secret refused at once, answering the transaction it was removed in. */
   removeHost(id: string): Effect.Effect<HostDoneAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.hosts.remove, { id });
+  }
+
+  /** One of the account's machines changed from this device: each setting named, or an app taken back from those it always allows, answering the transaction it was written in. */
+  changeMachine(
+    change: MachineChangeParams,
+  ): Effect.Effect<HostDoneAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.hosts.changeMachine, change);
+  }
+
+  /** One of the account's machines removed, as a host where it runs agents, answering the transaction it was removed in. */
+  /** An ask one of the account's machines holds, answered from this device: the answer that stands, this one where it was the first. */
+  answerMachineAsk(
+    answer: MachineAskAnswerRequest,
+  ): Effect.Effect<MachineAskAnsweredView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.hosts.answerMachineAsk, answer);
+  }
+
+  removeMachine(id: string): Effect.Effect<HostDoneAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.hosts.removeMachine, { id });
   }
 
   /** A box's pending pairing by the code its link named, as the approve screen shows it: the box and the address its start came from. */
@@ -915,10 +937,10 @@ export class HostedAgentClient {
 
   /**
    * A voice call into an agent opened on the member's own OpenAI key
-   * (`voice-wire.ts`): the peer's SDP offer out, GPT-Live's SDP answer back,
-   * under the held deadline, since the service answers only once OpenAI has
-   * made the session; an offer the service would refuse by shape is refused
-   * here without traveling at all.
+   * (`voice-wire.ts`): the peer's SDP offer out, the call's id and GPT-Live's
+   * SDP answer back, under the held deadline, since the service answers only
+   * once OpenAI has made the session; an offer the service would refuse by
+   * shape is refused here without traveling at all.
    */
   openVoiceSession(
     params: VoiceSessionParams,
@@ -928,17 +950,6 @@ export class HostedAgentClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 
     return hostedCall(this.#hosted.voice.open, admitted, { deadline: HOSTED_DEADLINE.HELD });
-  }
-
-  /** A finished voice call's seconds, kept on the member's day; a report the service would refuse by shape is refused here without traveling. */
-  reportVoiceCall(
-    params: VoiceCallEndedParams,
-  ): Effect.Effect<VoiceCallEndedAnswerView, never, HttpClient.HttpClient> {
-    const admitted = Result.getOrUndefined(readEither(voiceCallEndedRequestSchema)(params));
-
-    if (admitted === undefined) return Effect.succeed(UNANSWERED);
-
-    return hostedCall(this.#hosted.voice.ended, admitted);
   }
 
   /** The member's own GitHub token, as what tells it apart; never the token. */
@@ -1361,9 +1372,12 @@ export class HostedAgentClient {
     );
   }
 
-  /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */
-  warm(agentId: string): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
-    return hostedCall(this.#hosted.agents.warm, { id: agentId });
+  /** Keeps one agent warm for the next message, its chat's hold beaten while it is shown and let go as it is hidden (`agentWarmAnswerSchema`). */
+  warm(
+    agentId: string,
+    hold?: AgentChatHold,
+  ): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.warm, { id: agentId, ...hold });
   }
 
   /** One button in an agent's reply as the window draws it, or why it is not drawn. */
@@ -1473,6 +1487,17 @@ export class HostedAgentClient {
     agentId: string,
   ): Effect.Effect<AgentWorkspaceToolsAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.agents.workspaceTools, { id: agentId });
+  }
+
+  /** One agent's default machine set, where its terminal commands and computer use go when a call names none; answers its tools as they then stand. */
+  setDefaultMachine(
+    agentId: string,
+    machineId: string,
+  ): Effect.Effect<AgentDefaultMachineAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.setDefaultMachine, {
+      params: { id: agentId },
+      body: { machineId },
+    });
   }
 
   /** What the reviewer and label pickers of one agent's Pull request tab offer: its repository's labels, assignable users, and teams as GitHub holds them now. */

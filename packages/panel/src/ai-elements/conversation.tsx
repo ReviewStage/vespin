@@ -1,5 +1,8 @@
 import {
+  BUTTON_CORNERS,
+  BUTTON_VARIANT,
   cn,
+  cssCustomProperties,
   Fill,
   IconButton,
   SCROLL_FADE,
@@ -18,6 +21,7 @@ import {
   type UIEvent,
   useCallback,
   useContext,
+  useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
@@ -47,8 +51,12 @@ import {
  * does, is drawn inside the last of them, which grows as the guide's
  * streaming reply grows, or is the run's last row, as an Inbox thread's
  * reply box is; and the log's room at its end is the virtualizer's own (`paddingEnd`), read from the theme (`--conversation-log-end`, a
- * length the stylesheet registers). The log goes to its end as the reader's
- * own line lands (`ownLast`), as the guide's example does on a send.
+ * length the stylesheet registers), and, where something floats over the
+ * log's end, as the apps' windows an agent is using do, that much more
+ * (`overEnd`): a log standing at its end keeps to it as that room comes,
+ * grows, shrinks, and goes, and the way back to the newest line stands
+ * above it. The log goes to its end as the reader's own line lands
+ * (`ownLast`), as the guide's example does on a send.
  *
  * The log scrolls in `@repo/ui`'s `ScrollArea`, which fades its edges as
  * the caller asks, and holds its lines in one block of its own inside it
@@ -63,11 +71,16 @@ import {
 /** The theme's room at a log's end (tasks.css), registered as a length so it reads in pixels. */
 const LOG_END_PROPERTY = "--conversation-log-end";
 
+/** How near its end, in pixels, a log must stand to keep to it as its box shrinks: the rounding of a scroll that reached it. */
+const SHRINK_END_PX = 8;
+
 /** How near its top, in screens of the box, a log asks for the lines older than its first (`onNearTop`): one, so they land before the reader reaches them. */
 const NEAR_TOP_SCREENS = 1;
 
 interface ConversationScroll {
   readonly isAtBottom: boolean;
+  /** The room, in pixels, what floats over the log's end takes (`overEnd`). */
+  readonly overEnd: number;
   /** Hears whether the log stands at its end, as its run of lines says (`isAtEnd()`). */
   readonly atBottom: (atEnd: boolean) => void;
   readonly scrollToBottom: () => void;
@@ -102,6 +115,13 @@ export type ConversationProps = ComponentProps<"div"> & {
    * before the first keep the reader's place.
    */
   onNearTop?: (() => void) | undefined;
+  /**
+   * The room, in pixels, what floats over the log's end takes, as the apps'
+   * windows an agent is using do; none where nothing does. The log's end
+   * makes that much more room, the way back to the newest line stands above
+   * it, and a log standing at its end keeps to it as the room changes.
+   */
+  overEnd?: number | undefined;
 };
 
 export function Conversation({
@@ -109,6 +129,8 @@ export function Conversation({
   children,
   list: handed,
   onNearTop,
+  overEnd = 0,
+  style,
   ...props
 }: ConversationProps): ReactNode {
   const own = useRef<HTMLDivElement>(null);
@@ -145,6 +167,27 @@ export function Conversation({
     rows.current?.current?.scrollToEnd();
   }, []);
 
+  // Note that a log standing at its end keeps to it as its box shrinks, as a phone's keyboard shrinks it, because the box's foot would otherwise rise over the newest line, an Inbox thread's reply box being typed in among it, and leave it under the keyboard. Where it stood is read against the box's height before the shrink, since the scroll has not moved.
+  useEffect(() => {
+    const box = list.current;
+
+    if (box === null) return;
+    let height = box.clientHeight;
+
+    const heard = new ResizeObserver(() => {
+      const was = height;
+      height = box.clientHeight;
+
+      if (height < was && box.scrollHeight - box.scrollTop - was <= SHRINK_END_PX) {
+        rows.current?.current?.scrollToEnd();
+      }
+    });
+
+    heard.observe(box);
+
+    return () => heard.disconnect();
+  }, [list]);
+
   const onScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
       const element = event.currentTarget;
@@ -159,6 +202,7 @@ export function Conversation({
   const scroll = useMemo<ConversationScroll>(
     () => ({
       isAtBottom,
+      overEnd,
       atBottom: setAtBottom,
       list,
       log,
@@ -167,12 +211,19 @@ export function Conversation({
       scrollToBottom,
       onScroll,
     }),
-    [isAtBottom, list, hold, askOlder, scrollToBottom, onScroll],
+    [isAtBottom, overEnd, list, hold, askOlder, scrollToBottom, onScroll],
   );
 
   return (
     <ConversationContext.Provider value={scroll}>
-      <Fill className={cn("conversation relative", className)} {...props}>
+      <Fill
+        className={cn("conversation relative", className)}
+        style={{
+          ...style,
+          ...cssCustomProperties({ "--conversation-over-end": `${String(overEnd)}px` }),
+        }}
+        {...props}
+      >
         {children}
       </Fill>
     </ConversationContext.Provider>
@@ -259,7 +310,7 @@ export function ConversationRows({
   /** Draws the line at an index, which wears `place` where the lines are list items of the caller's own. */
   children: (index: number, place: VirtualRowPlace) => ReactNode;
 }): ReactNode {
-  const { list, log, hold, askOlder, isAtBottom, atBottom } = useConversation();
+  const { list, log, hold, askOlder, isAtBottom, atBottom, overEnd } = useConversation();
   const run = useRef<VirtualRowsHandle>(null);
   useLayoutEffect(() => hold(run), [hold]);
   // Note that the run follows a line appended only where the last line is new, so a line put before a last line that stands still, as the reply box at an Inbox thread's end, is followed here while the reader stood at the end.
@@ -282,6 +333,14 @@ export function ConversationRows({
     const room = Number.isFinite(said) ? said : 0;
     setEnd((was) => (was === room ? was : room));
   });
+  // Note that room floating over the log's end coming, changing, or going keeps a log that stood at its end there, since the room moves the end and not the reader.
+  const room = useRef(overEnd);
+  useLayoutEffect(() => {
+    const was = room.current;
+    room.current = overEnd;
+
+    if (overEnd !== was && isAtBottom) run.current?.scrollToEnd();
+  }, [overEnd, isAtBottom]);
   // The reader's own line landing takes the log to its end; the line the log opened on does not, since the log opens there.
   const sent = useRef(ownLast);
   useLayoutEffect(() => {
@@ -320,7 +379,7 @@ export function ConversationRows({
       aria-label={label}
       handle={run}
       onAtEnd={atBottom}
-      paddingEnd={end}
+      paddingEnd={end + overEnd}
     >
       {children}
     </VirtualRows>
@@ -372,9 +431,9 @@ export function ConversationLead({
 
 /**
  * What floats over a log in a slot of its own, centered across it, on a
- * ground of its own ringed and lifted off the lines: the way back to the
- * newest line over its foot, and the line saying earlier lines could not be
- * read over its top, so neither moves a row of the log as it comes and goes.
+ * ground of its own ringed and lifted off the lines: the line saying earlier
+ * lines could not be read, over its top, so it moves no row of the log as it
+ * comes and goes.
  */
 export const FLOATING_OVER_LOG_CLASS =
   "absolute left-1/2 -translate-x-1/2 rounded-control shadow-floating-edge";
@@ -384,8 +443,10 @@ const SCROLL_LABEL = "Scroll to the newest line";
 
 /**
  * The way back to the newest line, shown while the reader has scrolled away
- * from it: the shared icon button, floating over the lines on a ground of
- * its own.
+ * from it: the shared icon button, round, floating over the lines on a
+ * ground of its own in the log's bottom right corner, as phone chat apps
+ * stand theirs, so it covers at most a line's end rather than the middle of
+ * the words, or a reply box being typed in.
  */
 export function ConversationScrollButton(): ReactNode {
   const { isAtBottom, scrollToBottom } = useConversation();
@@ -394,12 +455,12 @@ export function ConversationScrollButton(): ReactNode {
 
   return (
     // Its ground is the button's own (`--ui-button-ground`), which the button's lit fill is laid over as a title bar's is.
-    <div
-      className={`conversation-scroll ${FLOATING_OVER_LOG_CLASS} bottom-ui-16 flex bg-button-ground [--ui-button-ground:var(--ui-color-well)]`}
-    >
+    <div className="conversation-scroll absolute right-content-inset bottom-conversation-scroll flex rounded-disc bg-button-ground shadow-floating-edge [--ui-button-ground:var(--ui-color-well)]">
       <Tooltip label={SCROLL_LABEL}>
         <IconButton
           label={SCROLL_LABEL}
+          corners={BUTTON_CORNERS.ROUND}
+          variant={BUTTON_VARIANT.OUTLINE}
           icon={<ArrowDownIcon aria-hidden="true" />}
           onClick={scrollToBottom}
         />

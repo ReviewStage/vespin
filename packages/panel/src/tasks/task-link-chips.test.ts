@@ -44,7 +44,7 @@ const TASK: Task = {
   ...DOCUMENT_TASK,
   id: TASK_ID,
   repository: REPOSITORY,
-  document: { body: `## Rollout\n\n${LINKS}`, assumptions: [] },
+  description: { body: `## Rollout\n\n${LINKS}`, assumptions: [] },
 };
 
 const roots: Root[] = [];
@@ -68,7 +68,7 @@ const PAGE: TaskMentionsValue = {
   taskName: "Invitations",
   workspace: "acme",
   repository: REPOSITORY,
-  text: () => TASK.document.body,
+  text: () => TASK.description.body,
   doors: {
     holder: { taskId: TASK_ID },
     place: { workspace: "acme", repository: REPOSITORY },
@@ -188,7 +188,7 @@ test("the description's version history, off the plan's page, reads a version's 
           changes: 1,
         },
         current: true,
-        read: { kind: HISTORY_READ.READY, document, previous: document },
+        read: { kind: HISTORY_READ.READY, description: document, previous: document },
       },
       restore: { busy: false, onRestore: () => undefined },
       task: { taskId: TASK_ID, place: PAGE.doors.place, anchors: PAGE.doors.anchors },

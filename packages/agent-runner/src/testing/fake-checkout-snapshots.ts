@@ -15,17 +15,16 @@ export function fakeSnapshotOf(cwd: string, lineId: string): CheckoutSnapshot {
   return { commit: `snapshot-of-${lineId}`, head: `head-of-${cwd}`, branch: "main" };
 }
 
-/** The files the fake says a turn changed, from the snapshot it opened on: one file named for that snapshot. */
+/** The files the fake says a turn changed, from the snapshot it opened on: one file, its added lines counted off the snapshot's name, so a turn read from another snapshot counts otherwise. */
 export function fakeFilesOf(from: string): TurnFilesSummary {
   return {
-    files: [{ path: `since-${from}.ts`, additions: 2, deletions: 1 }],
     total: 1,
-    additions: 2,
+    additions: [...from].reduce((sum, character) => sum + character.charCodeAt(0), 0),
     deletions: 1,
   };
 }
 
-/** Snapshots answered as `fakeSnapshotOf` says, or none at all where `missing`, as a checkout that could not be recorded answers; a turn changed the files `fakeFilesOf` names where `changed`, and none otherwise. */
+/** Snapshots answered as `fakeSnapshotOf` says, or none at all where `missing`, as a checkout that could not be recorded answers; a turn changed the files `fakeFilesOf` counts where `changed`, and none otherwise. */
 export function fakeCheckoutSnapshots(missing = false, changed = false) {
   const layer = Layer.succeed(CheckoutSnapshots, {
     take: (cwd, _agentId, lineId) =>

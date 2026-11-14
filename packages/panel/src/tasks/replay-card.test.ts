@@ -52,7 +52,7 @@ const FORKED_AT = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
 
 function summary(overrides: Partial<AgentSummary> & { id: string }): AgentSummary {
   return {
-    planId: TASK_ID,
+    taskId: TASK_ID,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,
@@ -205,7 +205,7 @@ function headOf(container: Element): string {
 
 /** The line under the replay card as a reader reads it: whom it names, if anyone, and the moment its time stands for. */
 function cardMeta(container: Element) {
-  const meta = container.querySelector(":has(> [data-replay-card]) ~ .ui-message-line");
+  const meta = container.querySelector(":has([data-replay-card]) ~ .ui-message-line");
   assert.ok(meta !== null);
 
   return {
@@ -242,7 +242,7 @@ function drawnSteps(container: Element): string[] {
   );
 }
 
-test("an agent continued from another opens on the description's card, the folded Continued card under who started it, and the note as the developer's line, with no marker drawn", async () => {
+test("an agent continued from another opens on the description's card, the folded Continued card under who started it, and the note as the developer's line, with no marker drawn, and its rail lists the brief and the note", async () => {
   const agent = summary({
     id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
     brief: AGENT_BRIEF.DESCRIPTION,
@@ -284,6 +284,20 @@ test("an agent continued from another opens on the description's card, the folde
   assert.ok(!container.textContent?.includes("<!--"));
   assert.ok(!container.textContent?.includes("The work you continue from"));
   assert.ok(!container.textContent?.includes("Note from the developer"));
+
+  // The rail beside the log lists the brief and the note as they are drawn, never the replay the first line carries.
+  const rail = container.querySelector('nav[aria-label="Messages to the agent"] button');
+  act(() => (rail instanceof HTMLElement ? rail.focus() : undefined));
+
+  const marks = [
+    ...container.querySelectorAll(
+      '[role="listbox"][aria-label="Messages to the agent"] [role="option"]',
+    ),
+  ].map((mark) => mark.textContent ?? "");
+
+  assert.equal(marks.length, 2);
+  assert.match(marks[0] ?? "", /Invite flow Let admins withdraw invites\.$/u);
+  assert.match(marks[1] ?? "", /Try five days\.$/u);
 
   // The source's chip opens its tab, and leaves the card folded.
   press(container.querySelector("[data-replay-card] ~ .ui-disclosure-actions [data-actor-ref]"));
@@ -421,7 +435,7 @@ test("on an agent's own page, which lists no source, the card names the source a
   assert.equal(headOf(container), "Continued from Wire the start from field · 3 steps");
   press(container.querySelector("[data-replay-card] ~ .ui-disclosure-actions [data-actor-ref]"));
   assert.deepEqual(opened, []);
-  assert.deepEqual(places, [{ kind: LINK_DESTINATION.AGENT, planId: TASK_ID, agentId: SOURCE.id }]);
+  assert.deepEqual(places, [{ kind: LINK_DESTINATION.AGENT, taskId: TASK_ID, agentId: SOURCE.id }]);
 });
 
 test("a replay holding Vespin's summary of the oldest steps opens on one folded row naming it as its, which opens onto the summary", async () => {
@@ -536,7 +550,7 @@ test("the line under the card says when the reader's own agent was started, nami
     at: new Date(SENT_AT).toISOString(),
   });
   assert.doesNotMatch(
-    container.querySelector(":has(> [data-replay-card]) ~ .ui-message-line")?.textContent ?? "",
+    container.querySelector(":has([data-replay-card]) ~ .ui-message-line")?.textContent ?? "",
     /You|·/u,
   );
 });
@@ -561,7 +575,7 @@ test("the line under the card names a teammate who started the agent by their fa
     at: new Date(SENT_AT).toISOString(),
   });
   assert.match(
-    container.querySelector(":has(> [data-replay-card]) ~ .ui-message-line .ui-message-line-time")
+    container.querySelector(":has([data-replay-card]) ~ .ui-message-line .ui-message-line-time")
       ?.textContent ?? "",
     /^·/u,
   );
@@ -759,7 +773,7 @@ test("a replayed line stands under who sent it, over when and Copy, and the card
 
   press(
     container.querySelector(
-      ':has(> [data-replay-card]) ~ .ui-message-line button[aria-label="Copy message"]',
+      ':has([data-replay-card]) ~ .ui-message-line button[aria-label="Copy message"]',
     ),
   );
   await settle();

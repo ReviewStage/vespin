@@ -11,7 +11,7 @@ import type {
   TaskStanding,
   TaskSummary,
 } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, RENAME_FAILED_NOTE, TASKS_PAGE } from "@repo/features/tasks-model";
+import { RENAME_FAILED_NOTE, TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
 import { EXPERIMENT, INTRO } from "@repo/settings";
@@ -97,7 +97,6 @@ import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
-import { askTurnFileReveal } from "../tasks/turn-file-reveal.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
@@ -132,10 +131,10 @@ import {
   newAgentStarts,
   TaskTopbar,
 } from "./main-tabs.js";
+import { OverviewAgents } from "./overview-agents.js";
+import { OverviewHead } from "./overview-head.js";
+import { OverviewPages } from "./overview-pages.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
-import { PlanAgents } from "./plan-agents.js";
-import { PlanHead } from "./plan-head.js";
-import { PlanPages } from "./plan-pages.js";
 import {
   changesTabOf,
   SIDE_PANEL_HOLDER,
@@ -295,16 +294,20 @@ function TaskTabsRow({
  * side panel at its width where it is open. The column's tab draws the very
  * same placeholder until it lands, so a task opens through one placeholder
  * rather than a chain of them, and nothing moves as the page arrives but
- * what fills it.
+ * what fills it. A task New task is still starting has no transcript yet,
+ * so its column's log says the agent is starting instead (`starting`).
  */
 function TaskPageSkeleton({
   drawing,
   head,
+  starting = false,
 }: {
   /** The side panel as it will be drawn, its panel none where it is shut. */
   drawing: SidePanelDrawing;
   /** A phone's head over the page, as the page will be headed once it lands (`TaskWaitHead`); none elsewhere. */
   head?: React.ReactNode;
+  /** Whether the task's agent is still being started, before anything of it can be read. */
+  starting?: boolean;
 }): React.JSX.Element {
   const { panel, ...frame } = drawing;
 
@@ -328,7 +331,7 @@ function TaskPageSkeleton({
           <TaskBody>
             <Fill className="desktop-task-column">
               <AgentColumn>
-                <AgentTabSkeleton label={TASK_LOADING_LABEL} />
+                <AgentTabSkeleton label={TASK_LOADING_LABEL} starting={starting} />
               </AgentColumn>
             </Fill>
           </TaskBody>
@@ -452,7 +455,7 @@ function DescriptionDocument({
   const phone = room === SHELL_ROOM.NARROW;
   const drawing = useSidePanelDrawing(tasks.sidePanel);
   const views = useTabViews();
-  const inboxTaskId = region.kind === DOCUMENT_REGION.READY ? region.task.id : undefined;
+  const inboxTaskId = region.kind === TASK_REGION.READY ? region.task.id : undefined;
 
   // The task's agents' cloud browser tabs, which a phone's Show browser goes back to, read only on a phone.
   const agentBrowsers = useCloudBrowserTabs(
@@ -473,7 +476,7 @@ function DescriptionDocument({
 
   // The task's comments are held from its open while it is shown, for its description's margin and list, so its first ready frame marks them; none are read while its workspace, the listed one while it is read, has Descriptions off.
   const shownWorkspaceId =
-    region.kind === DOCUMENT_REGION.READY
+    region.kind === TASK_REGION.READY
       ? region.task.workspaceId
       : (tasks.tasks.find((each) => each.id === tasks.activeTaskId)?.workspaceId ??
         tasks.workspace?.id);
@@ -496,7 +499,7 @@ function DescriptionDocument({
   // so nothing opens it again. Note that the description has taken it by then,
   // beside its words or, resolved, in its list, since a child's effects run
   // before ours.
-  const commentAsk = tasks.commentReveal?.planId === inboxTaskId ? tasks.commentReveal : undefined;
+  const commentAsk = tasks.commentReveal?.taskId === inboxTaskId ? tasks.commentReveal : undefined;
   const commentsRead = comments?.read === true;
   const { onCommentRevealed } = tasks;
   useEffect(() => {
@@ -508,7 +511,7 @@ function DescriptionDocument({
   // The description in the column, whose heading a phone's row picks up once it scrolls away under the row (`useHeadingAway`).
   // Note that each box is handed afresh as it mounts, and the document's for each task, because the document stands only once the task is read, and the heading watched is that task's.
   const [documentBox, setDocumentBox] = useState<HTMLElement | null>(null);
-  const headingTask = region.kind === DOCUMENT_REGION.READY ? region.task.id : undefined;
+  const headingTask = region.kind === TASK_REGION.READY ? region.task.id : undefined;
   const columnHeld = useMemo(() => ({ current: column }), [column]);
 
   const documentHeld = useMemo(
@@ -552,13 +555,13 @@ function DescriptionDocument({
   // among it, which its card and its banner read. Held above the states
   // with no document for the same reason.
   // The task as its description was read, which only the description and what it names draw from.
-  const read = region.kind === DOCUMENT_REGION.READY ? region.task : undefined;
+  const read = region.kind === TASK_REGION.READY ? region.task : undefined;
 
   // The task the page stands on: as read, or, while its description is read, as the list holds it, so its bars, its
   // tabs, and its agents draw at once rather than wait on the description.
   const opened: TaskSummary | undefined =
     read ??
-    (region.kind === DOCUMENT_REGION.READING
+    (region.kind === TASK_REGION.READING
       ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
       : undefined);
 
@@ -706,8 +709,8 @@ function DescriptionDocument({
 
         return openPlace?.(
           itemId === undefined
-            ? { kind: LINK_DESTINATION.INBOX, planId: taskId }
-            : { kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId },
+            ? { kind: LINK_DESTINATION.INBOX, taskId: taskId }
+            : { kind: LINK_DESTINATION.INBOX_ITEM, taskId: taskId, itemId },
         );
       }
 
@@ -802,9 +805,8 @@ function DescriptionDocument({
   const pullRequestCardDoor = useSteadyDoor(pullRequestCard);
   const openMentionedFileDoor = useSteadyDoor(openMentionedFile);
 
-  // A turn's files row opens the turn's Changes tab standing on the file pressed (`turn-file-reveal.ts`).
-  const openTurnChangesDoor = useSteadyDoor((agentId: string, messageId: string, path: string) => {
-    askTurnFileReveal(agentId, messageId, path);
+  // A turn's count of files opens the turn's Changes tab.
+  const openTurnChangesDoor = useSteadyDoor((agentId: string, messageId: string) => {
     onPressTab({ kind: TAB_PRESS.PANEL, tab: turnChangesTab(agentId, messageId) });
   });
 
@@ -1114,7 +1116,7 @@ function DescriptionDocument({
   // The task's agents head its description, a row opening its agent in this column as its tab does.
   const planAgents = useMemo(
     () => (
-      <PlanAgents
+      <OverviewAgents
         agents={agents}
         held={views.held}
         tab={tab}
@@ -1167,7 +1169,7 @@ function DescriptionDocument({
   const planPages = useMemo(
     () =>
       openedId === undefined ? null : (
-        <PlanPages
+        <OverviewPages
           pages={pages}
           place={{ taskId: openedId }}
           shown={tasks.shown}
@@ -1188,7 +1190,7 @@ function DescriptionDocument({
           {planPages}
         </Fragment>
       ) : (
-        <PlanHead
+        <OverviewHead
           key={openedId}
           task={read}
           tasks={tasks}
@@ -1254,7 +1256,7 @@ function DescriptionDocument({
     return heldTaskMentions(
       opened,
       workspace,
-      read?.document.body,
+      read?.description.body,
       { pages, agents, readAgents: readMentionAgents },
       {
         onOpenTask: openMention,
@@ -1279,7 +1281,7 @@ function DescriptionDocument({
   ]);
 
   // Note that a task the list does not hold, as a link may open, waits on its description, which alone names it.
-  if (region.kind === DOCUMENT_REGION.READING && opened === undefined) {
+  if (region.kind === TASK_REGION.READING && opened === undefined) {
     return (
       <TaskPageSkeleton
         drawing={drawing}
@@ -1296,7 +1298,7 @@ function DescriptionDocument({
     sectionLinks === undefined
   ) {
     const line =
-      region.kind === DOCUMENT_REGION.FAILED
+      region.kind === TASK_REGION.FAILED
         ? "The task could not be read."
         : "Choose a task, or start a new one.";
 
@@ -1304,7 +1306,7 @@ function DescriptionDocument({
     const close = { label: "Close task", onClick: tasks.onLeaveTask };
 
     // A plan the service would not hand the reader is not there for them, whether it was deleted or never theirs.
-    if (region.kind === DOCUMENT_REGION.MISSING) {
+    if (region.kind === TASK_REGION.MISSING) {
       return (
         <NotFound
           thing={NOT_FOUND_THING.TASK}
@@ -1320,7 +1322,7 @@ function DescriptionDocument({
       <>
         {phone ? <TaskWaitHead away={away} reading={false} /> : <Toolbar />}
         <Fill as={FILL_ELEMENT.SECTION} className="desktop-empty-region">
-          {region.kind === DOCUMENT_REGION.FAILED ? (
+          {region.kind === TASK_REGION.FAILED ? (
             <ErrorState
               failure={unreadShown(FAILURE_SURFACE.TASK_DOCUMENT_READ)}
               onRetry={retryDescription}
@@ -1512,8 +1514,8 @@ function DescriptionDocument({
     <LinkWorkspaceProvider value={workspace}>
       <DescriptionCommentsProvider value={comments}>
         <CommentFocusScope
-          planId={inboxTaskId}
-          reveal={tasks.commentReveal?.planId === inboxTaskId ? tasks.commentReveal : undefined}
+          taskId={inboxTaskId}
+          reveal={tasks.commentReveal?.taskId === inboxTaskId ? tasks.commentReveal : undefined}
         >
           <MemberDirectory workspace={home} readerId={tasks.me}>
             <AutomationDirectory
@@ -1728,8 +1730,9 @@ function DescriptionDocument({
  * The page of a task New task is still starting with its agent, before the
  * service has made either: the task's page in the shape it lands in, with
  * no side panel beside it, since the task lands on its agent alone
- * (`useTasksTab`'s `openAgent`), so Start opens the page at once and the
- * start's answer fills it in, its agent's tab saying Starting… from then.
+ * (`useTasksTab`'s `openAgent`), so Start opens the page at once, its log
+ * saying Starting… with no transcript, and the start's answer fills it in,
+ * its agent's tab saying how its machine boots from then.
  */
 function StartingTaskPage({
   tasks,
@@ -1745,6 +1748,7 @@ function StartingTaskPage({
     <TaskPageSkeleton
       drawing={drawing}
       head={phoneAway === undefined ? undefined : <TaskWaitHead away={phoneAway} reading />}
+      starting
     />
   );
 }
