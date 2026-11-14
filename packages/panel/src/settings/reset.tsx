@@ -306,9 +306,9 @@ function ResetPageButton({
 }
 
 /** Which page carries which group's reset. */
-const PAGE_RESET = {
+const PAGE_RESET: Partial<Record<SettingsView, SettingsResetScope>> = {
   [SETTINGS_VIEW.APPEARANCE]: SETTINGS_RESET_SCOPE.APPEARANCE,
-} satisfies Partial<Record<SettingsView, SettingsResetScope>>;
+};
 
 /** The reset a page's title line carries, or a phone's ⋯ holding it; absent while the page stands at its defaults. */
 export function pageResetControl(
@@ -320,9 +320,9 @@ export function pageResetControl(
   /** On a phone, whose bar ends with a ⋯ in its place, the page the ⋯ names ("Appearance actions"); none draws the button. */
   more?: string | undefined,
 ): React.JSX.Element | undefined {
-  if (!(view in PAGE_RESET)) return undefined;
-  // SAFETY: `in` narrows the view to the pages the table names.
-  const scope = PAGE_RESET[view as keyof typeof PAGE_RESET];
+  const scope = PAGE_RESET[view];
+
+  if (scope === undefined) return undefined;
 
   if (!settings || !rows || !settingsScopeChanged(settings, scope, rows)) return undefined;
 
