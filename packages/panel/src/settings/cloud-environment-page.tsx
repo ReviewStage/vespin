@@ -15,7 +15,7 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
 /**
  * cloud-environment-page.tsx -- Settings › Cloud environment: what the workspace's cloud agents start with, its variables and then its scripts, on one page since both exist only for those agents.
  *
- * Variables comes first, Add variable on its heading, then Install
+ * Variables comes first, Add variables on its heading, then Install
  * software and Setup scripts, each section reading and
  * saving its own as it did on a page of its own.
  */
@@ -24,11 +24,14 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
 export function CloudEnvironmentPage({
   control,
   view,
+  readerId,
 }: {
   /** The account's workspaces, drawn while it is signed in. */
   control: WorkspaceSettingsControl | undefined;
   /** What the pages offer, absent until the settings have arrived. */
   view: SettingsSearchInput | undefined;
+  /** The signed-in account, whose own changes to a variable read as You. */
+  readerId: string | undefined;
 }): React.JSX.Element | null {
   if (control === undefined) return null;
   const workspace = shownWorkspace(control);
@@ -53,7 +56,7 @@ export function CloudEnvironmentPage({
   // Keyed to the workspace, so another one listed reads its own variables and scripts and asks nothing left over.
   return (
     <Fragment key={workspace.id}>
-      <EnvironmentVariablesSection workspace={workspace} />
+      <EnvironmentVariablesSection workspace={workspace} readerId={readerId} />
       <CloudSetupSections workspace={workspace} view={view} />
     </Fragment>
   );

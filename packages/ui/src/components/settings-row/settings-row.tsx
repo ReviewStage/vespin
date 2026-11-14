@@ -17,6 +17,7 @@ import { LANDED, landedMark } from "../landed/landed.js";
 import { GAP, type Gap, Inline } from "../layout/layout.js";
 import { PROGRESS_SIZE, Progress, type ProgressTone } from "../progress/progress.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { Tooltip } from "../tooltip/hint.js";
 import { type UsageMeterRow, UsageMeters } from "../usage-meters/usage-meters.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 
@@ -559,12 +560,15 @@ export function SettingsSavedMark(): React.JSX.Element {
   );
 }
 
-/** The small mark beside a name while the feature it belongs to still needs a hand, its `note` the hover's and the screen reader's words. */
+/** The small mark beside a name while the feature it belongs to still needs a hand, its `note` the words of the tooltip it raises on hover and of the screen reader. */
 export function SettingsAttentionMark({ note }: { note: string }): React.JSX.Element {
   return (
-    <span className="ui-settings-attention-mark inline-flex flex-none text-attention" title={note}>
-      <AlertIcon />
-      <VisuallyHidden>({note})</VisuallyHidden>
-    </span>
+    <Tooltip label={note}>
+      {/* Note that a screen reader hears the note in the line's own words, so the mark takes no focus of its own. */}
+      <span className="ui-settings-attention-mark inline-flex flex-none text-attention">
+        <AlertIcon />
+        <VisuallyHidden>({note})</VisuallyHidden>
+      </span>
+    </Tooltip>
   );
 }
