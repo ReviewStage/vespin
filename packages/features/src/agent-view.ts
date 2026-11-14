@@ -58,6 +58,7 @@ import {
   liveActivityEndedRequestSchema,
   liveActivityTokenRequestSchema,
 } from "./live-activity-wire.js";
+import { machineAskAnswerRequestSchema } from "./machine-ask-wire.js";
 import { memoryIdSchema, memorySaveRequestSchema } from "./memory-wire.js";
 import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
@@ -424,6 +425,14 @@ export type HostDoneAnswerView = typeof hostDoneAnswerViewSchema.Type;
 
 /** What removing a host names: its id. */
 export const hostIdParamsSchema = hostIdRequestSchema;
+
+/** An ask one of the account's machines holds, answered from this device: the answer that stands, or why not. */
+export const machineAskAnsweredViewSchema = answerView(hostsContract.answerMachineAsk);
+
+export type MachineAskAnsweredView = typeof machineAskAnsweredViewSchema.Type;
+
+/** What answering an ask names: its id, the decision, and a denial's words. */
+export const machineAskAnswerParamsSchema = machineAskAnswerRequestSchema;
 
 /** What changing one of the account's machines names: its id, and each setting changed, or an app taken back from those it always allows. */
 export const machineChangeParamsSchema = machineChangeRequestSchema;
