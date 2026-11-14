@@ -65,6 +65,7 @@ import {
   waitingOf,
 } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
+import { type PersonRoute, usePersonRoute } from "../workspace-routes.js";
 import { PersonPage } from "./person-page.js";
 
 /**
@@ -293,6 +294,16 @@ let machinesOf: ReadonlyMap<string, readonly WorkspaceMachine[]> = new Map();
 /** Whether the read of a member's machines is refused, as a read that failed is. */
 let machinesRefused = false;
 
+/** The person route as the page drawn last reads it, whose opener a test opens a page at a machine by. */
+let personRouteNow: PersonRoute | undefined;
+
+/** Hands the test the person route the page reads, as a link's opener reaches it. */
+function HoldsPersonRoute(): null {
+  personRouteNow = usePersonRoute();
+
+  return null;
+}
+
 /** Lays the held-back people on the document, the fixture's members and who left. */
 let answerMembers: () => void = () => undefined;
 
@@ -404,6 +415,7 @@ function mountWith(
   name?: string,
   memberCount = MEMBERS.length,
   away?: { label: string; onPress: () => void },
+  fragment = "",
 ) {
   const opened: Opened = { tasks: [], agents: [], settings: [] };
   handInbox(inboxRead);
@@ -433,7 +445,9 @@ function mountWith(
 
   // The page stands at its person's address under Acme, as the router stands it.
   const router = windowRouter(
-    createMemoryHistory({ initialEntries: [`/acme/person/${encodeURIComponent(userId)}`] }),
+    createMemoryHistory({
+      initialEntries: [`/acme/person/${encodeURIComponent(userId)}${fragment}`],
+    }),
   );
 
   const draw = (tasks: TasksControl) =>
@@ -444,6 +458,7 @@ function mountWith(
             createElement(
               OpenSettingsProvider,
               { value: (link: SettingsLink) => opened.settings.push(link) },
+              createElement(HoldsPersonRoute),
               createElement(PersonPage, { tasks, userId, name, away }),
             ),
           ),
@@ -672,6 +687,91 @@ test("machines read again that could not be read say so and offer Retry, their l
   );
 
   assert.deepEqual(sections(page), { Machines: ["Studio"] });
+});
+
+/** Sam's two machines, a Mac and a Linux box, as the machines read answers them. */
+const SAM_MACHINES: readonly WorkspaceMachine[] = [
+  {
+    id: "machine-1",
+    name: "Studio",
+    platform: DEVICE_PLATFORM.DARWIN,
+    userId: "user-sam",
+    online: true,
+  },
+  {
+    id: "machine-2",
+    name: "build-box",
+    platform: DEVICE_PLATFORM.LINUX,
+    userId: "user-sam",
+    online: false,
+  },
+];
+
+/** The titles of the rows lit as landed on in `page`. */
+function landedRows(page: HTMLElement): (string | null)[] {
+  return [...page.querySelectorAll("li[data-landed] .ui-list-row-title")].map(
+    (row) => row.textContent,
+  );
+}
+
+/** Takes every row's landed light away, as the light's own end does. */
+function unlight(page: HTMLElement): void {
+  for (const row of page.querySelectorAll("li[data-landed]")) row.removeAttribute("data-landed");
+}
+
+test("a page opened at one of their machines lights that machine's row, and again each time it is opened there", async () => {
+  machinesOf = new Map([["user-sam", SAM_MACHINES]]);
+  const { page } = mount("user-sam");
+  await settle();
+
+  assert.deepEqual(landedRows(page), [], "opened at no machine");
+
+  act(() => personRouteNow?.onOpen("user-sam", undefined, "acme", "machine-2"));
+  await vi.waitFor(() => assert.deepEqual(landedRows(page), ["build-box"]));
+
+  unlight(page);
+  act(() => personRouteNow?.onOpen("user-sam", undefined, "acme"));
+  act(() => personRouteNow?.onOpen("user-sam", undefined, "acme", "machine-2"));
+  await vi.waitFor(() =>
+    assert.deepEqual(landedRows(page), ["build-box"], "opened there after opened at none"),
+  );
+
+  unlight(page);
+  act(() => personRouteNow?.onOpen("user-sam", undefined, "acme", "machine-2"));
+  await vi.waitFor(() => assert.deepEqual(landedRows(page), ["build-box"], "opened there again"));
+});
+
+test("a page opened at one of their machines while Machines stands folded opens it to light that machine's row", async () => {
+  machinesOf = new Map([["user-sam", SAM_MACHINES]]);
+  const { page } = mount("user-sam");
+  await settle();
+
+  const head = page.querySelector<HTMLButtonElement>(
+    'section[aria-label="Machines"] button[aria-expanded]',
+  );
+
+  act(() => head?.click());
+  await vi.waitFor(() => assert.deepEqual(sections(page).Machines, []));
+
+  act(() => personRouteNow?.onOpen("user-sam", undefined, "acme", "machine-2"));
+  await vi.waitFor(() => assert.deepEqual(landedRows(page), ["build-box"]));
+  assert.equal(head?.getAttribute("aria-expanded"), "true");
+});
+
+test("a person's address loaded at one of their machines lights that machine's row", async () => {
+  machinesOf = new Map([["user-sam", SAM_MACHINES]]);
+
+  const { page } = mountWith(
+    {},
+    "user-sam",
+    undefined,
+    MEMBERS.length,
+    undefined,
+    "#machine-machine-1",
+  );
+
+  await settle();
+  await vi.waitFor(() => assert.deepEqual(landedRows(page), ["Studio"]));
 });
 
 test("each row opens what it names: an agent its tab, an item the Inbox on it, and a task the task", async () => {

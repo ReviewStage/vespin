@@ -2816,12 +2816,14 @@ export function useTasksTab(input: {
    * A person's page in `home`, the listed workspace where none is named,
    * listed first where another is, because the page reads the listed
    * workspace's work, and only listed, as a link's place is: reopening its
-   * last plan behind the page would only hide it again.
+   * last plan behind the page would only hide it again. A link naming one
+   * of their machines opens it at that machine (`machineId`).
    */
   const openPerson = (
     userId: string,
     name: string | undefined,
     home: Pick<Workspace, "id" | "slug"> | undefined,
+    machineId?: string,
   ) => {
     const shown = home ?? listedWorkspace;
 
@@ -2830,7 +2832,7 @@ export function useTasksTab(input: {
     // asked before it, answering late, lists nothing and leaves nothing over it; both follow the move, so a move kept at a
     // page's leave ask lets that answer land and lists nothing.
     linkArrive(
-      () => routedPerson.onOpen(userId, name, stepOf(shown)),
+      () => routedPerson.onOpen(userId, name, stepOf(shown), machineId),
       () => {
         navigations.current += 1;
 
@@ -3008,7 +3010,12 @@ export function useTasksTab(input: {
       case LINK_ROUTED_PLACE.PERSON: {
         if (place.kind !== LINK_DESTINATION.PERSON) return;
         // A person's page is theirs in the workspace the link names, listed first; one the reader is not in names nobody they can see.
-        openPerson(place.userId, undefined, workspaceOfSlug(viewed.workspaces, workspace));
+        openPerson(
+          place.userId,
+          undefined,
+          workspaceOfSlug(viewed.workspaces, workspace),
+          place.machineId,
+        );
 
         return;
       }
