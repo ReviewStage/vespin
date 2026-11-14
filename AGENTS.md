@@ -227,6 +227,24 @@ answers unavailable and sweeps nothing. A turn past the deadline its row holds
 (`packages/database/src/models/turn-state.ts`) is the sweep's: it fails it with
 why (`packages/service/src/agents/coder-host/reconcile.ts`); no read settles one.
 
+## Breaking the hosted wire
+
+The service deploys from `main` on merge, but the desktop, the host daemon,
+the CLI, and the iOS app ship only on their tags, and stay installed for
+weeks. So a change a released client cannot read lands in three steps, never
+one:
+
+1. Clients read the old shape and the new, and send the next
+   `HOSTED_API_VERSION` (`packages/features/src/client-identity.ts`), while
+   the service still serves the old shape; for a rename, it sends both keys.
+2. Every client is released from a commit after that step.
+3. The service drops the old shape and raises `HOSTED_API_FLOOR`
+   (`packages/service/src/orpc/handler.ts`), which refuses older builds as
+   needing an update they can now take.
+
+`[check: scripts/repository-checks.sh]` The floor may not pass the version
+the newest `v*`, `host-v*`, `cli-v*`, or `ios-v*` tag sends.
+
 ## Testing
 
 A test is a cost every push pays for as long as it exists. Write one only

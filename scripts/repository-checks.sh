@@ -593,4 +593,31 @@ if [[ -n "$provider_shaped_literals" ]]; then
     exit 1
 fi
 
+# The service deploys from `main` on merge, while a client ships only when its
+# tag is pushed, so a `HOSTED_API_FLOOR` above what a released client sends
+# refuses that client before any build it could update to exists (Nov 14,
+# 2026: #9272 raised it to 2 under every released client). So the floor may not
+# pass the `HOSTED_API_VERSION` the newest tag of each client sends. A tag
+# whose build sends no version is served at every floor and is passed over.
+# Note that CI checks out no tags, so each one is fetched alone, shallow.
+api_floor=$(sed -n 's/^const HOSTED_API_FLOOR = \([0-9][0-9]*\);$/\1/p' \
+    "$APP_REPO_ROOT/packages/service/src/orpc/handler.ts")
+if [[ -z "$api_floor" ]]; then
+    printf 'error: HOSTED_API_FLOOR is no longer a literal in packages/service/src/orpc/handler.ts\n' >&2
+    exit 1
+fi
+released_tags=$(git -C "$APP_REPO_ROOT" ls-remote --tags --refs origin | sed -n 's|^.*refs/tags/||p')
+for client_prefix in v host-v cli-v ios-v; do
+    newest_tag=$(grep -E "^${client_prefix}[0-9]+\.[0-9]+\.[0-9]+$" <<<"$released_tags" | sort -V | tail -n 1 || true)
+    [[ -z "$newest_tag" ]] && continue
+    git -C "$APP_REPO_ROOT" fetch --quiet --depth=1 --no-tags origin "refs/tags/$newest_tag"
+    released_version=$({ git -C "$APP_REPO_ROOT" show FETCH_HEAD:packages/features/src/client-identity.ts 2>/dev/null || true; } |
+        sed -n 's/^export const HOSTED_API_VERSION = \([0-9][0-9]*\);$/\1/p')
+    if [[ -n "$released_version" ]] && ((api_floor > released_version)); then
+        printf 'error: HOSTED_API_FLOOR is %s, but %s, the newest release of its client, sends hosted API %s; release every client at %s before raising the floor (AGENTS.md, "Breaking the hosted wire")\n' \
+            "$api_floor" "$newest_tag" "$released_version" "$api_floor" >&2
+        exit 1
+    fi
+done
+
 printf 'Repository contract checks passed.\n'
