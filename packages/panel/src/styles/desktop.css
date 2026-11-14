@@ -748,8 +748,8 @@ body,
   .desktop-shell
   > .desktop-main
   .desktop-task:has(> .desktop-task-main)
-  > .side-panel::before {
-  background: var(--ui-color-ground);
+  > .side-panel {
+  --side-panel-ground: var(--ui-color-ground);
 }
 
 :where(:root):not([data-ui-room="narrow"])
@@ -925,17 +925,19 @@ body,
    naming who sent it and when, its card across the message's whole measure,
    so it lines up with a long sent message's left edge rather than a width of
    its own: the measure is the sent message's (`Message`'s `is-user`), and a
-   card folded or open spans all of it, the frame around a card whose head
-   holds a control beside it among them. */
-.agent-origin > :is([data-origin-description], [data-replay-card], :has(> [data-replay-card])) {
+   card folded or open spans all of it. The card's fold stands in a `Card`,
+   and one whose head holds a control beside it in a frame inside that, so
+   the rule finds the message's child that holds the card, at any depth. */
+.agent-origin > :has([data-origin-description], [data-replay-card]) {
   width: 100%;
 }
 
 /* What GitHub said on the agent's pull request (`line-cards.tsx`) stands at
    the left as another's line does, its card across the received message's
    whole measure, as an opening card spans the sent one's. Its head holds
-   chips, so the card is its frame (`Disclosure`'s `actions`). */
-.transcript-message.is-received > :is([data-github-line], :has(> [data-github-line])) {
+   chips, so its fold stands in a frame inside its `Card` (`Disclosure`'s
+   `actions`), and the rule finds the child that holds it. */
+.transcript-message.is-received > :has([data-github-line]) {
   width: 100%;
 }
 
@@ -1095,6 +1097,20 @@ body,
 .desktop-document .ui-markdown-heading:is([data-level="1"], [data-level="2"]),
 .desktop-document :not(.ui-markdown-heading) + .ui-markdown-heading[data-level="3"] {
   margin-top: 1.6em;
+}
+
+/* The call card (`call/standing-call.tsx`) --------------------------------- */
+
+/* Folded, the sidebar's call card stands in the corner it would have stood
+   over, as far in as the toasts are from theirs, over the work rather than
+   moving it, at the sidebar's own width less its rows' inset. */
+.desktop-shell .ui-call-card[data-surface="floating"] {
+  position: fixed;
+  z-index: var(--ui-z-toast);
+  /* Above the on-screen keyboard, while it is up. */
+  bottom: calc(var(--ui-space-16) + var(--ui-keyboard-inset));
+  left: var(--ui-space-16);
+  width: calc(var(--sidebar-width) - 2 * var(--row-inset));
 }
 
 /* The repository chip ------------------------------------------------------ */
@@ -1470,6 +1486,18 @@ body,
   padding-inline: calc(var(--column-inset) + var(--ui-list-inset));
 }
 
+/* The panel's ground, named once (`--side-panel-ground`): the panel paints
+   it, or its sheet does where the shell stands it on one (shell.css), and
+   whatever in a tab must paint a ground of its own paints this one (a Pull
+   request tab's stuck headings and folding header, the list of changed
+   files), so none shows as a strip or a sheet of another ground. A page that stands the panel on
+   another ground changes this one name (`.desktop-task` beside its
+   conversation, below). */
+.side-panel {
+  --side-panel-ground: var(--ui-color-well);
+  background: var(--side-panel-ground);
+}
+
 /* Full screen, the panel covers the document as well as its own room. */
 .side-panel[data-full-screen="true"] {
   position: absolute;
@@ -1611,10 +1639,17 @@ body,
 .side-panel-content .agent-tab-foot .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
 }
-/* The apps' windows an agent is using float at the right edge of that same column. */
+/* The apps an agent is using float at the right edge of that same column,
+   and across it in a narrow foot (`tasks.css`). */
 .desktop-agent .agent-computer-float,
 .side-panel-content .agent-computer-float {
   inset-inline-end: max(var(--content-inset), var(--reading-room));
+}
+@container agent-tab-foot (width < 480px) {
+  .desktop-agent .agent-computer-float,
+  .side-panel-content .agent-computer-float {
+    inset-inline-start: max(var(--content-inset), var(--reading-room));
+  }
 }
 
 /* Tabs ------------------------------------------------------------------------ */

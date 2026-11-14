@@ -4,15 +4,19 @@
  * One JSON POST to `/live/sessions` with the session and the transport
  * (https://developers.openai.com/api/docs/guides/voice-webrtc?api=live): the
  * model, the instructions, client delegation, because the agent behind the
- * panel is the call's backend and nothing else may act, no storage, and the
- * voice; and the panel's SDP offer as a `webrtc` transport. No `audio.format`,
- * because WebRTC negotiates its own, and no data-channel allowlist, because
- * the panel is the call's only client and appends the agent's progress over
- * that channel itself. OpenAI answers the session's id and the SDP answer;
- * the SDP answer is all that is read. The key is revealed into the bearer
- * header alone. Nothing of the exchange is logged here, since the offer and
- * the instructions carry the agent's words; a failure carries the status
- * OpenAI answered and nothing it said.
+ * call is its backend and nothing else may act, no storage, the voice, and
+ * the panel's data channel cut down to what the panel does with it; and the
+ * panel's SDP offer as a `webrtc` transport. No `audio.format`, because
+ * WebRTC negotiates its own. The panel carries the call's audio and nothing
+ * of its logic, which the service holds over its own sideband
+ * (`live-sideband.ts`), unaffected by the allowlist: so the panel may send
+ * only mute, unmute, and the close that ends the call, and hears only the
+ * session's start and close and the mute acknowledgments, never a
+ * delegation or a transcript. OpenAI answers the session's id, which the
+ * sideband attaches by, and the SDP answer. The key is revealed into the
+ * bearer header alone. Nothing of the exchange is logged here, since the
+ * offer and the instructions carry the agent's words; a failure carries the
+ * status OpenAI answered and nothing it said.
  */
 
 import type { LiveVoice } from "@repo/features/voices";
@@ -25,7 +29,7 @@ import type * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { EXCESS_KEYS, type UnparsedWireValue, unparsedWire } from "../core.js";
 import { HOSTED_OPENAI_DEFAULTS } from "../providers/openai.js";
 
-const LIVE_SESSION = {
+export const LIVE_SESSION = {
   MODEL: "gpt-live-1",
   PATH: "/live/sessions",
   TRANSPORT: "webrtc",
@@ -38,8 +42,20 @@ const CREATE_TIMEOUT = Duration.seconds(20);
 /** A created session answers 201; any 2xx is read as one. */
 const SUCCESS_STATUS = { LEAST: 200, MOST: 299 } as const;
 
-/** The part of a created session read here: the SDP answer. OpenAI names more (the session's id), which is dropped unread. */
+/** What the panel's data channel may carry: the events it may send, and the events it hears. */
+const PANEL_DATA_CHANNEL = {
+  CLIENT_EVENTS: ["session.input_audio.mute", "session.input_audio.unmute", "session.close"],
+  SERVER_EVENTS: [
+    "session.started",
+    "session.closed",
+    "session.input_audio.muted",
+    "session.input_audio.unmuted",
+  ],
+} as const;
+
+/** The part of a created session read here: its id and the SDP answer. */
 const LiveSessionAnswerSchema = Schema.Struct({
+  session: Schema.Struct({ id: Schema.String.check(Schema.isNonEmpty()) }),
   transport: Schema.Struct({
     type: Schema.Literal(LIVE_SESSION.TRANSPORT),
     sdp: Schema.String.check(Schema.isNonEmpty()),
@@ -67,6 +83,12 @@ function sessionBody(input: LiveSessionInput) {
       delegation: { type: LIVE_SESSION.DELEGATION },
       store: false,
       audio: { output: { voice: input.voice } },
+      client: {
+        data_channel: {
+          allowed_client_events: PANEL_DATA_CHANNEL.CLIENT_EVENTS,
+          allowed_server_events: PANEL_DATA_CHANNEL.SERVER_EVENTS.map((type) => ({ type })),
+        },
+      },
     },
     transport: { type: LIVE_SESSION.TRANSPORT, sdp: input.offer },
   };
@@ -98,10 +120,16 @@ function replyOf(
   }));
 }
 
-/** Creates one session over the ambient client and answers its SDP answer; a failure carries a status at most. */
+/** A created session: its id, which only the service keeps, and the SDP answer the panel takes. */
+export interface LiveSessionCreated {
+  readonly sessionId: string;
+  readonly sdp: string;
+}
+
+/** Creates one session over the ambient client and answers its id and SDP answer; a failure carries a status at most. */
 export const createLiveSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   input: LiveSessionInput,
-): Effect.fn.Return<string, LiveSessionFailed, HttpClient.HttpClient> {
+): Effect.fn.Return<LiveSessionCreated, LiveSessionFailed, HttpClient.HttpClient> {
   const client = yield* HttpClient.HttpClient;
 
   // A request that failed or timed out is no answer, and its cause is dropped unread.
@@ -118,5 +146,5 @@ export const createLiveSession = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   if (Result.isFailure(read)) return yield* new LiveSessionFailed({ status });
 
-  return read.success.transport.sdp;
+  return { sessionId: read.success.session.id, sdp: read.success.transport.sdp };
 });

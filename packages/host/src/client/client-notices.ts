@@ -6,7 +6,7 @@ import type { AgentAccountInboxAnswerView } from "@repo/features/agent-view";
 import type { LinkDestination } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { APP_SETTING_DEFAULTS } from "@repo/settings";
-import { Effect, FiberSet, Queue, type Scope, Stream } from "effect";
+import { Duration, Effect, FiberSet, Queue, type Scope, Stream } from "effect";
 import {
   AgentNoticeDoors,
   type AgentNotices,
@@ -27,6 +27,9 @@ interface NoticePresenter {
 }
 
 /** What the notification of a command waiting says: nothing of the command, which the prompt shows. */
+/** How long an ask waits unanswered before it is announced, so one answered at once never is. */
+const ASK_NOTICE_AFTER = Duration.seconds(10);
+
 const MACHINE_COMMAND_ASK_NOTICE = {
   title: "Run a command on your Mac?",
   body: "An agent is waiting for you to allow or deny a command.",
@@ -214,11 +217,28 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
     ),
   );
   // A command asked while the window is behind would otherwise wait unseen
-  // until its timeout denies it, so each new ask is announced once, whatever the
-  // account's notifications switch, since Ask every time is the developer's own ask
-  // to be asked; the window in front shows the prompt itself. Each is news
-  // the notices chime for as well, where the account turned a sound on.
+  // until its timeout denies it, so each new ask still waiting after a few
+  // seconds is announced once, whatever the account's notifications switch,
+  // since Ask every time is the developer's own ask to be asked; one answered
+  // by then, here or on another device, is not. The window in front shows the
+  // prompt itself. Each is news the notices chime for as well, where the
+  // account turned a sound on.
   const told = new Set<string>();
+
+  const announced = (askId: string) =>
+    Effect.sync(() => {
+      if (!state.snapshot().machineCommands.asks.some((ask) => ask.id === askId)) return;
+      const subject = { kind: NOTICE_KIND.MACHINE_COMMAND_ASK, askId } as const;
+      notices.heard(subject);
+
+      if (focused) return;
+      doors.post({
+        ...MACHINE_COMMAND_ASK_NOTICE,
+        subject,
+        onClick: presenter.openMachineCommandAsk,
+      });
+    });
+
   yield* Effect.forkScoped(
     Stream.runForEach(
       Stream.changes(Stream.map(state.changes, (document) => document.machineCommands.asks)),
@@ -231,15 +251,7 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
           for (const ask of asks) {
             if (told.has(ask.id)) continue;
             told.add(ask.id);
-            const subject = { kind: NOTICE_KIND.MACHINE_COMMAND_ASK, askId: ask.id } as const;
-            notices.heard(subject);
-
-            if (focused) continue;
-            doors.post({
-              ...MACHINE_COMMAND_ASK_NOTICE,
-              subject,
-              onClick: presenter.openMachineCommandAsk,
-            });
+            fork(Effect.andThen(Effect.sleep(ASK_NOTICE_AFTER), announced(ask.id)));
           }
         }),
     ),

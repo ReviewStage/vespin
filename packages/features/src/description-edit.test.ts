@@ -9,7 +9,7 @@ test("an edit of a document still holding its base takes the developer's text ex
   const value =
     "## Context\n\nOnly an owner can add a member.\n\n## Goal\n\n- Members invite by email.";
 
-  assert.deepEqual(applyDocumentEdit(DOCUMENT, { document: { base: DOCUMENT, value } }), {
+  assert.deepEqual(applyDocumentEdit(DOCUMENT, { description: { base: DOCUMENT, value } }), {
     applied: value,
   });
 });
@@ -18,7 +18,7 @@ test("an edit of a document Vespin wrote in meanwhile is laid over its words, wh
   const appText = `${DOCUMENT}- Invites expire after 7 days.\n`;
   const value = DOCUMENT.replace("an admin", "an owner");
 
-  assert.deepEqual(applyDocumentEdit(appText, { document: { base: DOCUMENT, value } }), {
+  assert.deepEqual(applyDocumentEdit(appText, { description: { base: DOCUMENT, value } }), {
     applied: appText.replace("an admin", "an owner"),
   });
 });

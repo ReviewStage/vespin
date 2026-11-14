@@ -21,7 +21,7 @@
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, type LinkDestination, taskLinkStep } from "@repo/features/link-grammar";
-import { DOCUMENT_REGION } from "@repo/features/tasks-model";
+import { TASK_REGION } from "@repo/features/tasks-model";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { StripTab } from "@repo/ui/tab-strip-model";
 import { type HistoryLocation, useRouter } from "@tanstack/react-router";
@@ -61,7 +61,7 @@ import { stripTabSurface } from "../tasks/strip-tab-kinds.js";
 import { MAIN_TAB } from "../tasks/task-tab-model.js";
 import type { MainTab } from "../tasks/use-main-tabs.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
-import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import type { OpenSurface } from "../use-surface-open.js";
 import type { RoutedViews } from "../workspace-routes.js";
 import type { PanelRouteId } from "./link-places.js";
@@ -187,6 +187,19 @@ function workspaceGate(params: PlaceParams, access: RouteAccess): boolean {
 }
 
 /** A place each of whose steps is a page of its own. */
+/** The task an Inbox choice stands on, where the workspace listed lists it, as `listedInboxChoice` keeps a choice, read by its id; none for one named by its id alone. */
+function listedChoiceTask(
+  chosen: InboxChoice | undefined,
+  tasks: StepTitleTasks,
+): string | undefined {
+  if (chosen === undefined || !("taskId" in chosen)) return undefined;
+  const listedId = tasks.workspace?.id;
+
+  if (listedId === undefined) return chosen.taskId;
+
+  return tasks.rows.task(chosen.taskId)?.workspaceId === listedId ? chosen.taskId : undefined;
+}
+
 function noDraft(): undefined {
   return undefined;
 }
@@ -210,14 +223,14 @@ function withinLink(place: LinkDestination, thing: LinkThing, workspace: string)
 function versionLinks({ tasks, at }: PlaceLinks): readonly LinkAtHand[] {
   const { region } = tasks;
 
-  if (region.kind !== DOCUMENT_REGION.READY) return [];
+  if (region.kind !== TASK_REGION.READY) return [];
   const { task: drawn } = region;
   const workspace = slugOf(tasks.workspaces, drawn.workspaceId);
   // Note that the task's links name it by its number, where it has one, as every link to it is written.
-  const planId = taskLinkStep(drawn);
+  const taskId = taskLinkStep(drawn);
 
   const task: LinkAtHand = {
-    link: { workspace, place: { kind: LINK_DESTINATION.TASK, planId } },
+    link: { workspace, place: { kind: LINK_DESTINATION.TASK, taskId } },
     thing: LINK_THING.TASK,
     name: drawn.name,
   };
@@ -229,7 +242,7 @@ function versionLinks({ tasks, at }: PlaceLinks): readonly LinkAtHand[] {
   if (revision === undefined || listedAlone) return [{ ...task, step: true }];
 
   return [
-    stepLink({ kind: LINK_DESTINATION.VERSION, planId, revision }, LINK_THING.VERSION, workspace),
+    stepLink({ kind: LINK_DESTINATION.VERSION, taskId, revision }, LINK_THING.VERSION, workspace),
     task,
   ];
 }
@@ -601,8 +614,7 @@ export const ROUTED_PLACE = {
     listedOnly: true,
     title: (tasks, under, views) => {
       if (!views.inbox.open) return under();
-      const chosen = listedInboxChoice(views.inbox.chosen, tasks);
-      const holder = chosen !== undefined && "taskId" in chosen ? chosen.taskId : undefined;
+      const holder = listedChoiceTask(views.inbox.chosen, tasks);
       // An Inbox narrowed to a task is named by the task, every item it shows being that task's.
       const detail = taskName(tasks, holder) ?? taskName(tasks, views.inbox.narrowed);
 
@@ -622,7 +634,7 @@ export const ROUTED_PLACE = {
       const inboxPlace: LinkDestination =
         at.inboxTask === undefined
           ? { kind: LINK_DESTINATION.INBOX }
-          : { kind: LINK_DESTINATION.INBOX, planId: at.inboxTask };
+          : { kind: LINK_DESTINATION.INBOX, taskId: at.inboxTask };
 
       const inbox = stepLink(inboxPlace, LINK_THING.INBOX, listed);
       const chosen = listedInboxChoice(views.inbox.chosen, tasks);

@@ -68,8 +68,16 @@ export default function NotificationsScreen() {
               }
             />
           </ListSection>
-        ) : notifications.standing === NOTIFICATION_STANDING.REFUSED ||
-          notifications.standing === NOTIFICATION_STANDING.UNASKED ? (
+        ) : notifications.standing === NOTIFICATION_STANDING.REFUSED ? (
+          // Note that once iOS has refused, the one way on is its own Settings, so the row leaves the app as Open iOS notification settings does, with the arrow out.
+          <ListSection>
+            <PushRow
+              label={NOTIFICATION_STEP[notifications.standing]}
+              goes={PUSH_ROW_GOES.OUT}
+              onPress={notifications.allow}
+            />
+          </ListSection>
+        ) : notifications.standing === NOTIFICATION_STANDING.UNASKED ? (
           <ListSection>
             <ActionRow
               label={NOTIFICATION_STEP[notifications.standing]}

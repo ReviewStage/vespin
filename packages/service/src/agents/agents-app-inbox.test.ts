@@ -322,9 +322,9 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
 
         const all = yield* waiting();
         assert.deepEqual(
-          all.items.map((item) => [item.title, item.planId, item.agentId, item.agentModel]).sort(),
+          all.items.map((item) => [item.title, item.taskId, item.agentId, item.agentModel]).sort(),
           [
-            [QUESTION.title, agent.planId, agent.id, agent.model],
+            [QUESTION.title, agent.taskId, agent.id, agent.model],
             ["CSV or JSON?", second.id, secondAgent.id, secondAgent.model],
           ].sort(),
         );
@@ -377,7 +377,7 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
           [[posted.success.id, posted.success.revision]],
         );
         assert.deepEqual(
-          standing.plans.map((plan) => [plan.planId, plan.items]),
+          standing.tasks.map((each) => [each.taskId, each.items]),
           [[task.id, 1]],
         );
         const included = yield* archivedToo();
@@ -1601,7 +1601,7 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
 
         assert.deepEqual(readAnswer(inboxItemHomeSchema, HOSTED_HTTP_STATUS.OK, yield* home(id)), {
           agentId: agent.id,
-          planId: task.id,
+          taskId: task.id,
           workspaceId: task.workspaceId,
         });
         const unknown = yield* home(randomUUID());

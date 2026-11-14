@@ -1,18 +1,26 @@
 import type { AgentPullRequest } from "@repo/features/agent-wire";
+import { DEVICE_STANDING } from "@repo/features/agent-wire";
 import {
   automationOwner,
   automationRunStanding,
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import { AUTOMATION_SCOPE, type AutomationSummary } from "@repo/features/automation-wire";
+import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { NEEDS_YOU, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { machineName, type ThisMac } from "@repo/features/machine-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ASSIGNED_TO } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { type Noun, TERM } from "@repo/features/words";
-import { WORKSPACE_ROLE, workspaceOfSlug } from "@repo/features/workspace-wire";
+import {
+  WORKSPACE_ROLE,
+  type WorkspaceMachine,
+  workspaceOfSlug,
+} from "@repo/features/workspace-wire";
+import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -22,6 +30,7 @@ import {
   ErrorState,
   Fill,
   GAP,
+  type GroupFold,
   LIST_INSET,
   List,
   ListRow,
@@ -48,6 +57,7 @@ import {
   useMinute,
   usePageScroll,
   VirtualTaskRows,
+  VisuallyHidden,
 } from "@repo/ui";
 import {
   ACTOR_KIND,
@@ -57,10 +67,15 @@ import {
   ROLE_WORDS,
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
+import { land } from "@repo/ui/landed";
 import {
   agentStarter,
   PERSON_TASKS_SHOWN,
   type PersonAgent,
+  type PersonCounted,
+  type PersonCounts,
+  personCounts,
+  personHeld,
   personPage,
   personPageEmpty,
   personRef,
@@ -68,9 +83,11 @@ import {
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { changesTab } from "@repo/ui/tab-strip-model";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
-import { useQueryClient } from "@tanstack/react-query";
+import { queryOptions, skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Duration } from "effect";
 import { ListFilterIcon, MailIcon, UsersIcon } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { askAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor, YouBadge } from "../actor-ref.js";
 import { useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
@@ -78,9 +95,14 @@ import { useCopyToast } from "../copy-feedback.js";
 import { LinkWorkspaceProvider, linkItems, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
+import { focusSeek } from "../focus-seek.js";
+import { useThisMac } from "../machine-name.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { useAutomationsDoor, usePersonDoor } from "../places/routed-doors.js";
+import type { PersonLanding } from "../places/routed-exits.js";
+import { QUERY_ROOT } from "../query-keys.js";
+import { centerWithin, scrollerOf } from "../scroll-within.js";
 import { useShortcutTargetsOf } from "../shortcut-target.js";
 import { stateEndMark } from "../state-glyph.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
@@ -88,6 +110,7 @@ import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { HOME_ROW_CONTEXT, HOME_ROW_META, HOME_ROW_PICTURE } from "../tasks/home-row.js";
 import { InboxItemRows } from "../tasks/inbox-item-rows.js";
 import { InboxListSkeleton } from "../tasks/inbox-list.js";
+import { DeviceStandingGlyph, STANDING_WORDS } from "../tasks/runs-on.js";
 import { type AgentsControl, readAgentById } from "../tasks/use-agents.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -111,10 +134,10 @@ import {
   RowsSkeleton,
   SectionSkeleton,
 } from "./person-frame.js";
+import type { TaskHeadBack } from "./phone-head.js";
 import { PhoneBack, PhoneHead, phoneBar, phoneFindGroups } from "./phone-head.js";
 import { RecentTasks, RecentTasksSkeleton } from "./recent-tasks.js";
 import { useTaskListView } from "./task-list-view.js";
-import type { TaskHeadBack } from "./task-pane-switcher.js";
 import type { ChosenRows } from "./tasks-selection.js";
 import { useAutomations } from "./use-automations.js";
 
@@ -129,15 +152,21 @@ import { useAutomations } from "./use-automations.js";
  * items their agents wait on, the tasks assigned to them, the rest of the
  * tasks they created, and their other
  * agents, each from the listed workspace's task list and Inbox
- * (`@repo/ui/person-page-model`), and the workspace's automations they
- * made, a section with nothing in it left out.
+ * (`@repo/ui/person-page-model`), the workspace's automations they
+ * made, and their machines, each by its platform's glyph wearing the Runs
+ * on menu's dot for whether it is there now, its name, and its platform, a
+ * section with nothing in it left out.
  * Until the members, the task list, the Inbox, and the automations are read,
  * placeholders stand where what each names will, and a read that failed
  * says that and offers Retry, so a page names nobody as someone outside the
  * workspace, and is called empty, only once its reads have answered.
- * Nothing on it is read for it: it shows a teammate only what the sidebar,
- * the Inbox, and an agent's card already show any member, never their
- * personal workspace, their answers, or another workspace's. A press on a
+ * Nothing on it is read for it but their machines
+ * (`WORKSPACE_MACHINES_READ`), read as it opens and every half
+ * minute while it stands, which say only what each machine is and whether
+ * it is there, never its settings or whether agents may use it: it shows a
+ * teammate only what the sidebar, the Inbox, an agent's card, and a
+ * follower's card already show any member, never their personal workspace,
+ * their answers, or another workspace's. A press on a
  * row opens what it names, and its ⋯, a right-click, and the menu key open
  * its acts: a task's the sidebar's, an agent's Copy link and Archive, an
  * Item's and an automation's Copy link, each link written under the
@@ -181,26 +210,23 @@ function headName(person: Actor): string {
   return person.kind === ACTOR_KIND.PERSON ? person.name : actorName(person);
 }
 
-/** A section: its name and count, then its rows, folding on a press on its head. */
+/** A section: its name and count, then its rows, folding on a press on its head, open at first unless its owner holds its fold. */
 function PersonSection({
   title,
   count,
   noun,
+  fold = PERSON_SECTION_FOLD,
   children,
 }: {
   title: string;
   count: number;
   noun: Noun;
+  /** How it folds, where its owner holds it open or shut. */
+  fold?: GroupFold | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <PersonSectionFrame
-      label={title}
-      title={title}
-      count={count}
-      noun={noun}
-      fold={PERSON_SECTION_FOLD}
-    >
+    <PersonSectionFrame label={title} title={title} count={count} noun={noun} fold={fold}>
       <List label={title} inset={LIST_INSET.ROW} moves>
         {children}
       </List>
@@ -289,11 +315,14 @@ const AGENT_ROWS_FIT = {};
 function PersonAgentsSection({
   title,
   agents,
+  count = agents.length,
   tasks,
   pullRequests,
 }: {
   title: string;
   agents: readonly PersonAgent[];
+  /** How many its head counts, those it lists and any the service counted past them (`personCounts`). */
+  count?: number;
   tasks: TasksControl;
   /** The pull request each listed agent opened, by agent. */
   pullRequests: ReadonlyMap<string, AgentPullRequest>;
@@ -321,7 +350,7 @@ function PersonAgentsSection({
     <PersonSectionFrame
       label={title}
       title={title}
-      count={agents.length}
+      count={count}
       noun={TERM.AGENT}
       fold={PERSON_SECTION_FOLD}
     >
@@ -622,6 +651,163 @@ function AutomationRows({
   );
 }
 
+/** What their machines are called, a section's title and the noun its count reads with. */
+const MACHINES_TITLE = "Machines";
+
+const MACHINE_NOUN = { one: "machine", many: "machines" } as const satisfies Noun;
+
+/** How often their machines are read again while the page stands, since where each stands moves by the minute. */
+const MACHINES_READ_EVERY = Duration.seconds(30);
+
+/** Their machines as the page draws them, none while they are first read or where they never could be, and whether the latest read failed, which the page says rather than pass a stale or missing answer for a fresh one. */
+interface PersonMachines {
+  readonly machines: readonly WorkspaceMachine[];
+  readonly reading: boolean;
+  readonly failed: boolean;
+  readonly onRetry: () => void;
+}
+
+/** Their machines in the workspace the page stands in, read as it opens and every half minute while it stands; none outside a workspace. */
+function usePersonMachines(workspaceId: string | undefined, userId: string): PersonMachines {
+  const read = useQuery({
+    queryKey: [QUERY_ROOT.MEMBER_MACHINES, workspaceId, userId],
+    queryFn: () =>
+      workspaceId === undefined
+        ? Promise.reject(new Error("No workspace is listed."))
+        : askAct(ACT_KIND.WORKSPACE_MACHINES_READ, { workspaceId, userId }),
+    enabled: workspaceId !== undefined,
+    refetchOnMount: "always",
+    refetchInterval: Duration.toMillis(MACHINES_READ_EVERY),
+    retry: false,
+  });
+
+  const none = { machines: [], reading: false, failed: false, onRetry: () => void read.refetch() };
+
+  if (workspaceId === undefined) return none;
+
+  // Note that a poll that failed keeps its last answer drawn and still says it failed, so a stale dot never passes for a fresh one.
+  if (read.data !== undefined) {
+    return { ...none, machines: read.data.machines, failed: read.isError };
+  }
+
+  return read.isError ? { ...none, failed: true } : { ...none, reading: true };
+}
+
+/**
+ * The Machines section's fold, open at first, which a machine the page is
+ * opened at opens again, each time it is asked for, so its row is drawn to
+ * land on.
+ */
+function useMachinesFold(landing: PersonLanding | undefined): GroupFold {
+  const [open, setOpen] = useState(true);
+  const ask = landing?.ask;
+
+  useEffect(() => {
+    if (ask !== undefined) setOpen(true);
+  }, [ask]);
+
+  return { open, onOpenChange: setOpen };
+}
+
+/** The id a machine's row wears, which a landing finds it by. */
+function machineRowId(machineId: string): string {
+  return `person-machine-${machineId}`;
+}
+
+/**
+ * Takes the view to the machine the page was opened at and lights its row,
+ * once each time it is asked for (`PersonLanding.ask`), as soon as the
+ * machine is drawn; a machine they do not have, or no longer do, is given
+ * up on quietly, the page standing as it opened. Note that it scrolls the
+ * page's own scroller rather than call `scrollIntoView`, since the page may
+ * still be sliding in.
+ */
+function useMachineLanding(
+  machines: readonly WorkspaceMachine[],
+  landing: PersonLanding | undefined,
+): void {
+  const landed = useRef<number | undefined>(undefined);
+  const machineId = landing?.machineId;
+  const ask = landing?.ask;
+  const drawn = machineId !== undefined && machines.some((machine) => machine.id === machineId);
+
+  useEffect(() => {
+    if (!drawn || machineId === undefined || landed.current === ask) return undefined;
+    landed.current = ask;
+
+    return focusSeek({
+      find: () => document.getElementById(machineRowId(machineId)),
+      act: (row) => {
+        const scroller = scrollerOf(row);
+
+        if (scroller !== undefined) centerWithin(scroller, row);
+        land(row);
+      },
+    });
+  }, [drawn, machineId, ask]);
+}
+
+/**
+ * One of their machines as a row: its platform's glyph wearing whether it
+ * is there now, its name, and its platform in words. Note that its
+ * standing is the dot's alone to the eye, with words for a reader only,
+ * since the row's leading mark is decoration.
+ */
+function MachineRow({
+  machine,
+  name,
+}: {
+  machine: WorkspaceMachine;
+  /** What the list calls it (`machineName`): This Mac on the reader's own page. */
+  name: string;
+}): React.JSX.Element {
+  const standing = machine.online ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE;
+
+  return (
+    <ListRow
+      id={machineRowId(machine.id)}
+      motionKey={machine.id}
+      leading={<DeviceStandingGlyph device={machine} standing={standing} hinted={false} />}
+      title={name}
+      titleReplayMasked
+      meta={
+        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          {DEVICE_PLATFORM_NAME[machine.platform]}
+          <VisuallyHidden>{`, ${STANDING_WORDS[standing]}`}</VisuallyHidden>
+        </Text>
+      }
+    />
+  );
+}
+
+/** Their machines' rows, each named as every list of machines names it, This Mac on the reader's own page, the one the page was opened at landed on. */
+function MachineRows({
+  machines,
+  thisMac,
+  landing,
+}: {
+  machines: readonly WorkspaceMachine[];
+  /** The reader's own Mac, which only their own page names so. */
+  thisMac: ThisMac;
+  /** The machine the page was opened at, none where it was opened at none. */
+  landing: PersonLanding | undefined;
+}): React.JSX.Element {
+  const listed = machines.map((machine) => ({ deviceId: machine.id, name: machine.name }));
+  useMachineLanding(machines, landing);
+
+  return (
+    <>
+      {machines.map((machine) => (
+        <MachineRow
+          key={machine.id}
+          machine={machine}
+          name={machineName({ deviceId: machine.id, name: machine.name }, listed, thisMac)}
+        />
+      ))}
+    </>
+  );
+}
+
 /** The page's title: their face beside their name, which is the page's one `h1`. */
 function PersonHeading({ person }: { person: Actor }): React.JSX.Element {
   return (
@@ -661,12 +847,15 @@ function PersonLine({ person }: { person: Actor }): React.ReactNode {
 function PersonTasks({
   title,
   listed,
+  count,
   tasks,
   unread,
   onShowAll,
 }: {
   title: string;
   listed: readonly TaskSummary[];
+  /** How many its head counts, those it lists and any the service counted past them (`personCounts`). */
+  count: number;
   tasks: TasksControl;
   /** Whether a task is unread, as the sidebar's rows count it. */
   unread: (task: TaskSummary) => boolean;
@@ -680,18 +869,14 @@ function PersonTasks({
     <PersonSectionFrame
       label={title}
       title={title}
-      count={listed.length}
+      count={count}
       noun={TERM.TASK}
       fold={PERSON_SECTION_FOLD}
     >
       <Stack gap={GAP.TIGHT}>
         <PersonTaskRows title={title} listed={listed} tasks={tasks} unread={unread} />
         {onShowAll === undefined ? null : (
-          <ShowMoreRow
-            more={listed.length - PERSON_TASKS_SHOWN}
-            shown={false}
-            onToggle={onShowAll}
-          />
+          <ShowMoreRow more={count - PERSON_TASKS_SHOWN} shown={false} onToggle={onShowAll} />
         )}
       </Stack>
     </PersonSectionFrame>
@@ -734,6 +919,49 @@ function PersonTaskRows({
   );
 }
 
+/**
+ * A person's tasks and agents read from the service (`TASKS_PERSON_PAGE`),
+ * which reads their newest into the task list and answers how many of each
+ * it counted, beside how many of them the list held as it asked: keyed by
+ * those, so a change to what the list holds of theirs asks again, and the
+ * last answer for the same person stands meanwhile. One the service did not
+ * answer counts nothing past what the list holds, and none is asked until
+ * the list has been read, since the host answers none before.
+ */
+function personPageQueryOptions(
+  workspaceId: string | undefined,
+  personId: string,
+  held: PersonCounts,
+  listRead: boolean,
+) {
+  return queryOptions({
+    queryKey: [
+      QUERY_ROOT.PERSON_PAGE,
+      workspaceId,
+      personId,
+      held.assigned,
+      held.created,
+      held.agents,
+    ],
+    queryFn:
+      workspaceId === undefined || !listRead
+        ? skipToken
+        : async (): Promise<PersonCounted | null> => {
+            const answer = await askAct(ACT_KIND.TASKS_PERSON_PAGE, { workspaceId, personId });
+
+            return "failure" in answer ? null : { counts: answer.counts, held };
+          },
+    // Note that only the same person's last answer stands while theirs is asked again, never another's.
+    placeholderData: (last, lastQuery) =>
+      lastQuery !== undefined &&
+      lastQuery.queryKey[1] === workspaceId &&
+      lastQuery.queryKey[2] === personId
+        ? last
+        : undefined,
+    retry: false,
+  });
+}
+
 /** What a phone's bar over the page is named by. */
 const PERSON_PHONE_PLACE = "person-page";
 
@@ -752,7 +980,7 @@ function PersonColumn({
   away: TaskHeadBack | undefined;
 }): React.JSX.Element {
   const now = useMinute();
-  const standing = usePersonRoute().workspace;
+  const { workspace: standing, landing } = usePersonRoute();
   // What a phone's bar picks up from the page's header once it scrolls away.
   const [pickUp, setPickUp] = useState<ToolbarPickUp>({ name: "", shown: false });
   const listed = tasks.listed.tasks;
@@ -777,6 +1005,13 @@ function PersonColumn({
   // Note that the page keeps one identity while the list stands, because each of its lists follows its rows (`useLeaving`).
   const { liveAgents, listedPullRequests } = tasks;
   const page = useMemo(() => personPage(userId, listed, liveAgents), [userId, listed, liveAgents]);
+  // Each section counts what the list holds and what the service counted past it.
+  const held = personHeld(page);
+  const workspaceId = tasks.workspace?.id;
+
+  const counted = useQuery(personPageQueryOptions(workspaceId, userId, held, tasks.listRead));
+
+  const counts = personCounts(page, counted.data ?? undefined);
 
   // The pull request each agent the list follows opened, as a task's agents' rows chip it.
   const pullRequests = useMemo(
@@ -790,6 +1025,10 @@ function PersonColumn({
   const waitingTitle = you ? NEEDS_YOU.LABEL : "Waiting on their answer";
   const theirAutomations = usePersonAutomations(tasks.workspace?.id, userId);
   const { automations } = theirAutomations;
+  const theirMachines = usePersonMachines(tasks.workspace?.id, userId);
+  const { machines } = theirMachines;
+  const thisMac = useThisMac();
+  const machinesFold = useMachinesFold(landing);
   const read = useWaitingItems(tasks);
 
   // An item is theirs where it waits on them (`inboxWaitsOn`), on a task its assignee or else its agent's starter, by the list followed live from a service that names neither.
@@ -868,7 +1107,13 @@ function PersonColumn({
         actions={away === undefined ? actions : undefined}
       >
         <PersonBody
-          reading={!tasks.listRead || read.reading || theirAutomations.reading || unnamed}
+          reading={
+            !tasks.listRead ||
+            read.reading ||
+            theirAutomations.reading ||
+            theirMachines.reading ||
+            unnamed
+          }
         >
           <PersonTop>{note}</PersonTop>
           {tasks.listFailed ? (
@@ -931,6 +1176,7 @@ function PersonColumn({
           <PersonTasks
             title={you ? "Assigned to you" : "Assigned"}
             listed={page.assigned}
+            count={counts.assigned}
             tasks={tasks}
             unread={unread}
             onShowAll={shared ? showTasks : undefined}
@@ -938,6 +1184,7 @@ function PersonColumn({
           <PersonTasks
             title={you ? "Created by you" : "Created"}
             listed={page.created}
+            count={counts.created}
             tasks={tasks}
             unread={unread}
           />
@@ -945,6 +1192,7 @@ function PersonColumn({
             <PersonAgentsSection
               title="Agents"
               agents={page.agents}
+              count={counts.agents}
               tasks={tasks}
               pullRequests={pullRequests}
             />
@@ -966,15 +1214,44 @@ function PersonColumn({
           ) : theirAutomations.reading ? (
             <RowsSkeleton label={`Reading ${theirs} automations…`} />
           ) : null}
-          {/* Note that the page is said to be empty only once it names someone and the task list, the Inbox, and the automations have answered, since any may yet name something, or nobody may be found. */}
+          {machines.length === 0 ? null : (
+            <PersonSection
+              title={MACHINES_TITLE}
+              count={machines.length}
+              noun={MACHINE_NOUN}
+              fold={machinesFold}
+            >
+              <MachineRows
+                machines={machines}
+                thisMac={you ? thisMac : undefined}
+                landing={landing}
+              />
+            </PersonSection>
+          )}
+          {theirMachines.failed ? (
+            <div className="home-note my-tight-gap">
+              <ErrorState
+                failure={unreadShown(FAILURE_SURFACE.PERSON_MACHINES_READ)}
+                onRetry={theirMachines.onRetry}
+              >
+                {`${you ? "Your" : "Their"} machines could not be read.`}
+              </ErrorState>
+            </div>
+          ) : theirMachines.reading ? (
+            <RowsSkeleton label={`Reading ${theirs} machines…`} />
+          ) : null}
+          {/* Note that the page is said to be empty only once it names someone and the task list, the Inbox, the automations, and the machines have answered, since any may yet name something, or nobody may be found. */}
           {unnamed ||
           !tasks.listRead ||
           read.failed ||
           read.reading ||
           theirAutomations.failed ||
-          theirAutomations.reading ? null : personPageEmpty(page) &&
+          theirAutomations.reading ||
+          theirMachines.failed ||
+          theirMachines.reading ? null : personPageEmpty(page) &&
             waiting.length === 0 &&
-            automations.length === 0 ? (
+            automations.length === 0 &&
+            machines.length === 0 ? (
             <div className="home-note my-tight-gap">
               <NoteLine look={NOTE_LINE_LOOK.INSET}>
                 {you ? "Nothing of yours here yet." : "Nothing of theirs here yet."}

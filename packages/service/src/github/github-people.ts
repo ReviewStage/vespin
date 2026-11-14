@@ -36,10 +36,10 @@ import type {
   ReactionGroup,
 } from "@repo/features/agent-wire";
 import { and, eq, inArray } from "drizzle-orm";
-import { Effect, type Redacted, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { SqlSchema } from "effect/sql";
-import { GITHUB_PROVIDER_ID } from "./github-app.js";
+import { GITHUB_PROVIDER_ID, type GitHubBearer } from "./github-app.js";
 import type { StackEntry } from "./pull-request-stack.js";
 import {
   type GitHubAccount,
@@ -160,12 +160,12 @@ function changesPeopleOf(
  * in the log, where any part of the read fails.
  */
 export const changesPeople = /* @__PURE__ */ Effect.fn("web/changesPeople")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   agent: { readonly repository: string; readonly organizationId: string },
   number: number,
 ): Effect.fn.Return<ChangesPeople, never, HttpClient.HttpClient | DatabaseServices> {
   return yield* Effect.gen(function* () {
-    const people = yield* pullRequestPeople(token, agent.repository, number);
+    const people = yield* pullRequestPeople(bearer, agent.repository, number);
     const linked = yield* linkedMembers(agent.organizationId, idsOf(accountsOfPeople(people)));
 
     return changesPeopleOf(people, linked);

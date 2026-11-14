@@ -37,12 +37,13 @@ import {
   type PullRequestPart,
   type PullRequestPartParams,
 } from "@repo/features/agent-view";
-import type { AgentPullRequest, AgentStatus } from "@repo/features/agent-wire";
+import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { ListedPullRequest } from "@repo/features/task-wire";
 import { Data, Effect, MutableHashMap, Option, type Scope, Stream } from "effect";
 import { type AppPullRequestParts, NO_KEYS_HELD, OWN_PULL_REQUEST } from "./app-state.js";
 import { type HeldFetch, heldFetch } from "./held-fetch.js";
+import { type ListMove, movesBetween } from "./list-moves.js";
 import type { WindowFocus } from "./window-focus.js";
 
 /** Whose part: one agent's pull request, by the agent's id and the number its tab names, none for the agent's own. */
@@ -51,10 +52,42 @@ export class PullRequestKey extends Data.Class<{
   readonly number: number | undefined;
 }> {}
 
-/** The task list as the parts read it: each agent's status, and each pull request it names, by the agent that published it. */
+/** The task list's agents and their pull requests as one drawing of it holds them. */
+export interface ListDrawing {
+  readonly taskAgents: readonly ListedAgent[];
+  readonly agentPullRequests: readonly ListedPullRequest[];
+}
+
+/**
+ * One drawing of the task list as the parts read it: the agents and the
+ * pull requests that moved since the drawing before, each as it stood and
+ * as it stands, told by the list's live queries (`list-moves.ts`), or every
+ * pull request as come where the drawing starts the list anew.
+ */
 export interface PullRequestListing {
-  readonly statuses: ReadonlyMap<string, AgentStatus>;
-  readonly pullRequests: readonly ListedPullRequest[];
+  /** Whether the drawing starts the list anew, the first of a session or one no drawing before it can be told the moves since, so nothing in it moved. */
+  readonly whole: boolean;
+  readonly agents: readonly ListMove<ListedAgent>[];
+  readonly pullRequests: readonly ListMove<ListedPullRequest>[];
+}
+
+/** The listing of the drawing `after`, told the moves since `before`; whole where there is no drawing before it or the moves since it cannot be told. */
+export function pullRequestListing(
+  before: ListDrawing | undefined,
+  after: ListDrawing,
+): PullRequestListing {
+  const agents = before && movesBetween(before.taskAgents, after.taskAgents);
+  const pullRequests = before && movesBetween(before.agentPullRequests, after.agentPullRequests);
+
+  if (agents === undefined || pullRequests === undefined) {
+    return {
+      whole: true,
+      agents: [],
+      pullRequests: after.agentPullRequests.map((now) => ({ was: undefined, now })),
+    };
+  }
+
+  return { whole: false, agents: agents.moves, pullRequests: pullRequests.moves };
 }
 
 export interface PullRequestPartsDependencies {
@@ -127,17 +160,6 @@ function lineMoved(before: AgentPullRequest, after: AgentPullRequest | undefined
   );
 }
 
-/** Each pull request the list names, by its address, the first line naming it where several do. */
-function linesOf(listing: PullRequestListing): ReadonlyMap<string, AgentPullRequest> {
-  const lines = new Map<string, AgentPullRequest>();
-
-  for (const { pullRequest } of listing.pullRequests) {
-    if (!lines.has(pullRequest.url)) lines.set(pullRequest.url, pullRequest);
-  }
-
-  return lines;
-}
-
 type Moved = {
   readonly agents: ReadonlySet<string>;
   readonly opened: ReadonlySet<string>;
@@ -145,32 +167,28 @@ type Moved = {
   readonly heads: ReadonlySet<string>;
 };
 
-/** What moved from one drawing of the list to the next: the agents whose status moved, those the list names a pull request of anew, the addresses of the pull requests whose line moved or left, and of those whose head moved or left among them. */
-function movedOf(before: PullRequestListing, after: PullRequestListing): Moved {
+/** What a drawing of the list moved: the agents whose status moved, those it names a pull request of anew, the addresses of the pull requests whose line moved or left, and of those whose head moved or left among them. */
+function movedIn(listing: PullRequestListing): Moved {
   const agents = new Set<string>();
 
-  for (const [agentId, status] of before.statuses) {
-    if (after.statuses.get(agentId) !== status) agents.add(agentId);
+  for (const { was, now } of listing.agents) {
+    if (was !== undefined && now?.status !== was.status) agents.add(was.id);
   }
 
   const opened = new Set<string>();
-
-  for (const { agentId, pullRequest } of after.pullRequests) {
-    const was = before.pullRequests.find((listed) => listed.agentId === agentId);
-
-    if (was?.pullRequest.url !== pullRequest.url) opened.add(agentId);
-  }
-
   const urls = new Set<string>();
   const heads = new Set<string>();
-  const afterLines = linesOf(after);
 
-  for (const [url, line] of linesOf(before)) {
-    const now = afterLines.get(url);
+  for (const { was, now } of listing.pullRequests) {
+    if (now !== undefined && was?.pullRequest.url !== now.pullRequest.url) opened.add(now.agentId);
 
-    if (lineMoved(line, now)) urls.add(url);
+    if (was === undefined) continue;
+    const line = was.pullRequest;
+    const after = now?.pullRequest.url === line.url ? now.pullRequest : undefined;
 
-    if (now?.headSha !== line.headSha) heads.add(url);
+    if (lineMoved(line, after)) urls.add(line.url);
+
+    if (after?.headSha !== line.headSha) heads.add(line.url);
   }
 
   return { agents, opened, urls, heads };
@@ -270,22 +288,45 @@ export function pullRequestParts(
     const moving: readonly PartFetch[] = [pullRequest, checks, conversation, published];
 
     /** The address a key's pull request is listed by: its pull request or published part's answer, or for the agent's own, the pull request the list says it published. */
-    const urlOf = (key: PullRequestKey, listing: PullRequestListing): string | undefined =>
+    const urlOf = (
+      key: PullRequestKey,
+      agentUrl: (agentId: string) => string | undefined,
+    ): string | undefined =>
       Option.getOrUndefined(MutableHashMap.get(urls, key)) ??
-      (key.number === undefined
-        ? listing.pullRequests.find((listed) => listed.agentId === key.agentId)?.pullRequest.url
-        : undefined);
+      (key.number === undefined ? agentUrl(key.agentId) : undefined);
 
-    // Note that the first drawing asks nothing, since nothing moved yet that a part was read before.
-    let before: PullRequestListing | undefined;
+    /** The address of each agent's pull request the list names, as the drawings so far left it. */
+    const agentUrls = new Map<string, string>();
 
+    /** Lays a drawing's moved pull requests over the addresses held. */
+    const relisted = (listing: PullRequestListing) => {
+      if (listing.whole) agentUrls.clear();
+
+      for (const { was, now } of listing.pullRequests) {
+        if (now !== undefined) agentUrls.set(now.agentId, now.pullRequest.url);
+        else if (was !== undefined) agentUrls.delete(was.agentId);
+      }
+    };
+
+    // Note that a drawing that starts the list anew asks nothing, since nothing moved yet that a part was read before.
     const heard = (listing: PullRequestListing) =>
       Effect.suspend(() => {
-        const was = before;
-        before = listing;
+        const moved = movedIn(listing);
 
-        if (was === undefined) return Effect.void;
-        const moved = movedOf(was, listing);
+        // Note that an agent's address is read as the drawing before left it, so a pull request its line no longer names is still heard as left.
+        const wasUrls = new Map(
+          listing.pullRequests.map(({ was, now }) => [
+            (now ?? was)?.agentId ?? "",
+            was?.pullRequest.url,
+          ]),
+        );
+
+        const wasUrlOf = (agentId: string) =>
+          wasUrls.has(agentId) ? wasUrls.get(agentId) : agentUrls.get(agentId);
+
+        relisted(listing);
+
+        if (listing.whole) return Effect.void;
 
         if (moved.agents.size === 0 && moved.opened.size === 0 && moved.urls.size === 0) {
           return Effect.void;
@@ -295,13 +336,13 @@ export function pullRequestParts(
           if (moved.agents.has(key.agentId)) return true;
 
           if (key.number === undefined && moved.opened.has(key.agentId)) return true;
-          const url = urlOf(key, was);
+          const url = urlOf(key, wasUrlOf);
 
           return url !== undefined && moved.urls.has(url);
         };
 
         const pushed = (key: PullRequestKey) => {
-          const url = urlOf(key, was);
+          const url = urlOf(key, wasUrlOf);
 
           return url !== undefined && moved.heads.has(url);
         };

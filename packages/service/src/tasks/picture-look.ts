@@ -17,7 +17,7 @@ import { Effect, Option, Result, Schema } from "effect";
 import { Base64 } from "effect/encoding";
 import { logStoreFailure } from "../http/store-failure.js";
 import { readInboxAttachment } from "../inbox/inbox-store.js";
-import type { DescriptionDocumentBinding } from "./description-notes.js";
+import type { DescriptionBinding } from "./description-notes.js";
 
 /**
  * picture-look.ts -- `look_at_picture`, a model's eyes on one of the description's pictures: the picture its text names, handed back as an image.
@@ -229,7 +229,7 @@ function lookedFile(
  * otherwise, a video among them.
  */
 export function runLookAtPicture(
-  description: DescriptionDocumentBinding,
+  description: DescriptionBinding,
   input: UnparsedWireValue,
   writePdf: PdfWrite,
 ): Effect.Effect<PictureLookResult, never, DatabaseServices> {

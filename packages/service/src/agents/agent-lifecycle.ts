@@ -21,7 +21,8 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { type Agent, deleteAgent } from "@repo/database/models/agent-store";
 import type { StoreWriter } from "@repo/database/models/writer";
-import type { AgentSummary } from "@repo/features/agent-wire";
+import { AGENT_SANDBOX_BEAT_KIND } from "@repo/database/schemas/agent-sandbox";
+import { AGENT_CHAT, type AgentChatHold, type AgentSummary } from "@repo/features/agent-wire";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/terminal-wire";
 import type { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
@@ -32,12 +33,15 @@ import {
   hostedStoreOrUnavailable,
 } from "../http/http-effect.js";
 import { controlsAgent, reachedAgentById } from "./agent-reach.js";
+import { agentSandboxName } from "./agent-sandbox-open.js";
 import { clearedAgent } from "./coder-host/clear.js";
 import { rewoundAgent } from "./coder-host/rewind.js";
+import { sandboxLetGo } from "./coder-host/runner-sessions.js";
 import { runnerWarmed } from "./coder-host/runtime-sessions.js";
 import { startedBlank } from "./coder-host/status.js";
 import { standsStopped, stoppedForGood, summaryOf } from "./coder-host/stop.js";
 import { retiredBeforeDelete, retiringReach } from "./retire-sessions.js";
+import { recordedSandboxBeat, recordedSandboxBeatReleased } from "./sandbox-use.js";
 import { AgentSandbox } from "./terminal/agent-sandbox.js";
 import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach.js";
 
@@ -121,16 +125,37 @@ export const rewoundAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /**
  * The agent kept warm (`runnerWarmed`), its runner launched where none
- * runs. Kept for a member who may message it alone, whose message the warm
- * runner would take; anyone else is answered the same, and nothing is kept.
+ * runs, and the chat that asks held or let go. A shown chat beats its
+ * window's or device's hold on the sandbox before the launch, so the warm
+ * runner's sandbox is never stopped for want of one; a hidden chat lets go
+ * of that hold at once and launches nothing, and the sandbox stops where
+ * nothing else keeps it up (`sandboxLetGo`). Kept for a member who may
+ * message it alone, whose message the warm runner would take; anyone else
+ * is answered the same, and nothing is kept or let go.
  */
 export const warmedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   account: string,
   id: string,
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices> {
+  hold?: AgentChatHold,
+): Effect.fn.Return<void, HostedRefusal, DatabaseServices | Sandbox | HttpClient.HttpClient> {
   const { userId, agent } = yield* reachedAgentById(account, id);
 
-  if (controlsAgent(userId, agent)) yield* runnerWarmed(agent);
+  if (!controlsAgent(userId, agent) || agent.archivedAt !== null) return;
+
+  if (hold === undefined) return yield* runnerWarmed(agent);
+  const { sessionId } = yield* reachedAgentSession(account, id);
+  const beat = { kind: AGENT_SANDBOX_BEAT_KIND.CHAT, holder: hold.holder };
+
+  if (hold.chat === AGENT_CHAT.HIDDEN) {
+    if (sessionId === undefined) return;
+    yield* recordedSandboxBeatReleased(agentSandboxName(sessionId), beat);
+
+    return yield* sandboxLetGo(sessionId);
+  }
+
+  // Note that the hold is beaten before the launch, so the warm runner's sandbox is held from its start.
+  if (sessionId !== undefined) yield* recordedSandboxBeat(agentSandboxName(sessionId), beat);
+  yield* runnerWarmed(agent);
 });
 
 /** The agent's sandbox resumed from its snapshot, answering where it stands after; one not opened yet stands starting and is resumed by nothing. */

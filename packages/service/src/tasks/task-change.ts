@@ -1,7 +1,7 @@
 /**
  * task-change.ts -- a change to a task, as every door changes one: confirmed before anything is written, written, then followed through.
  *
- * The app's change (`plans.update`) and an agent's or a member's
+ * The app's change (`tasks.update`) and an agent's or a member's
  * `update_task` go through the same three steps, so one rule holds for
  * each; each door reads its own input and answers in its own words.
  */

@@ -200,13 +200,17 @@ const FIND_SKIPPED = "[data-gutter]";
  * The panel's look in the shadow root, from the window's tokens, in
  * Pierre's last layer so it stands over the theme's own tints: the diff
  * tints every place a diff is drawn shares, and lit lines in the code's
- * blue. The ground and ink are the theme's, the File tab's own in its
- * GitHub themes, and the type is the host's (`typeset`).
+ * blue. The ground is the window's code ground (`--ui-color-code-ground`),
+ * the one every code surface stands on (a message's code block, a
+ * Terminal's screen), rather than the GitHub themes' own white and navy;
+ * the ink is the themes', and the type is the host's (`typeset`).
  */
 const LOOK_CSS = `
 @layer unsafe {
   :host {
     display: block;
+    --diffs-light-bg: var(--ui-color-code-ground);
+    --diffs-dark-bg: var(--ui-color-code-ground);
     --diffs-addition-color-override: var(--diff-added-mark);
     --diffs-deletion-color-override: var(--diff-removed-mark);
     --diffs-bg-addition-override: var(--diff-added-ground);
@@ -466,8 +470,9 @@ const LIST_CSS = `
   :host {
     box-sizing: border-box;
     overflow: clip;
-    border: 1px solid var(--ui-color-border);
+    border: 1px solid var(--ui-color-card-edge);
     border-radius: var(--ui-control-radius);
+    box-shadow: var(--ui-shadow-card);
     --diffs-bg-separator-override: var(--ui-color-fill-hover);
   }
   [data-separator="line-info-basic"] {

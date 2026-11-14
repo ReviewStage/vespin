@@ -65,7 +65,8 @@ import { CatalogSection } from "../section";
  * their words, one open from the start with a long name among them, one
  * of 24 that scrolls its list, one with a ⋯ before its chevron whose repositories its token reaches, at a page's measure and
  * narrower than 380px; and integrations that fold the rows they own under
- * their own row, closed until pressed, beside one that owns none.
+ * their own row, closed until pressed, beside one that owns none; and an
+ * emptied script's row, a red Delete script standing in its Save's place.
  */
 
 /** A note long enough to run to several lines of its row. */
@@ -333,7 +334,7 @@ function CompactRows(): React.JSX.Element {
   );
 }
 
-/** A row whose words are typed in place: ringed while it is edited, its words a bare field in their own type, and Cancel and Save at its end. */
+/** A row whose words are typed in place: ringed while it is edited, its words a bare field in their own type, and Cancel and Save at its end; and a saved script emptied, Delete script standing in its Save's place. */
 function EditedRows(): React.JSX.Element {
   const [typed, setTyped] = useState("pnpm test");
   const [editing, setEditing] = useState(true);
@@ -345,44 +346,60 @@ function EditedRows(): React.JSX.Element {
   );
 
   return (
-    <SettingsSection title="Always allowed">
-      <SettingsRow
-        editing={editing}
-        controls={SETTINGS_ROW_CONTROLS.BESIDE}
-        label={words(
-          editing ? (
-            <TextField
-              label="Command"
-              size={TEXT_FIELD_SIZE.INLINE}
-              value={typed}
-              onChange={setTyped}
-              onEnter={() => setEditing(false)}
-              onEscape={() => setEditing(false)}
-            />
-          ) : (
-            `${typed} *`
-          ),
-        )}
-        description="Added 2h ago by you"
-      >
-        {() =>
-          editing ? (
+    <>
+      <SettingsSection title="Always allowed">
+        <SettingsRow
+          editing={editing}
+          controls={SETTINGS_ROW_CONTROLS.BESIDE}
+          label={words(
+            editing ? (
+              <TextField
+                label="Command"
+                size={TEXT_FIELD_SIZE.INLINE}
+                value={typed}
+                onChange={setTyped}
+                onEnter={() => setEditing(false)}
+                onEscape={() => setEditing(false)}
+              />
+            ) : (
+              `${typed} *`
+            ),
+          )}
+          description="Added 2h ago by you"
+        >
+          {() =>
+            editing ? (
+              <EditActions
+                leave="Cancel"
+                saving={false}
+                canSave={typed.trim() !== ""}
+                onLeave={() => setEditing(false)}
+                onSave={() => setEditing(false)}
+              />
+            ) : (
+              <Button variant={BUTTON_VARIANT.QUIET} onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+            )
+          }
+        </SettingsRow>
+        <SettingsRow label={words("git status *")} description="Added 3w ago by you" />
+      </SettingsSection>
+      <SettingsSection title="Setup scripts">
+        <SettingsRow label="acme/api" controls={SETTINGS_ROW_CONTROLS.BESIDE}>
+          {() => (
             <EditActions
-              leave="Cancel"
+              leave="Discard"
               saving={false}
-              canSave={typed.trim() !== ""}
-              onLeave={() => setEditing(false)}
-              onSave={() => setEditing(false)}
+              canSave={false}
+              onLeave={() => undefined}
+              onSave={() => undefined}
+              deletes="Delete script"
             />
-          ) : (
-            <Button variant={BUTTON_VARIANT.QUIET} onClick={() => setEditing(true)}>
-              Edit
-            </Button>
-          )
-        }
-      </SettingsRow>
-      <SettingsRow label={words("git status *")} description="Added 3w ago by you" />
-    </SettingsSection>
+          )}
+        </SettingsRow>
+      </SettingsSection>
+    </>
   );
 }
 

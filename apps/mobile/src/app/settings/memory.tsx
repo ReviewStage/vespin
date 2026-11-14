@@ -126,11 +126,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
       <EmptyState title={MEMORY_PAGE_WORDS.NO_MATCH} symbol={GLYPH.SEARCH} />
     ) : (
       <SettingsForm>
-        <ListSection
-          title={MEMORY_PAGE_WORDS.TITLE}
-          count={listed.length}
-          footer={MEMORY_RECALLS_WORDS}
-        >
+        <ListSection footer={MEMORY_RECALLS_WORDS}>
           {listed.map((memory) => (
             <NoteRow
               key={memory.id}
