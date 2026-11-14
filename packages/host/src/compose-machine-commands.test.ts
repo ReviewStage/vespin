@@ -208,6 +208,8 @@ function scriptedService(
     readonly recordingUnsent?: boolean;
     /** Whether an ask's post never reaches the service, as a network fault loses one. */
     readonly askPostUnanswered?: boolean;
+    /** How long an ask's post takes to land, as a slow network holds one. */
+    readonly askPostTakes?: Duration.Input;
   } = {},
 ) {
   let unanswered = options.unansweredClaims ?? 0;
@@ -454,13 +456,16 @@ function scriptedService(
         return { settled: true } as const;
       }),
     postAsk: (request) =>
-      Effect.sync(() => {
-        if (options.askPostUnanswered === true) return LOST_CALL;
-        asks.set(request.id, { ...request });
-        asksVersion += 1;
+      Effect.andThen(
+        Effect.sleep(options.askPostTakes ?? 0),
+        Effect.sync(() => {
+          if (options.askPostUnanswered === true) return LOST_CALL;
+          asks.set(request.id, { ...request });
+          asksVersion += 1;
 
-        return STANDS;
-      }),
+          return STANDS;
+        }),
+      ),
     lapseAsk: (id) =>
       Effect.sync(() => {
         const ask = asks.get(id);
@@ -2245,4 +2250,26 @@ it.effect(
         }),
       );
     }),
+);
+
+it.effect("an ask whose post lands only after its wait ended is said closed once it lands", () =>
+  Effect.gen(function* () {
+    const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+    const slow = scriptedService({ askPostTakes: "306 seconds" });
+
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        yield* joinedAndAsked(slow, spawner, COMMAND);
+        yield* TestClock.adjust("6 minutes");
+        yield* settled;
+
+        assert.ok(slow.settledResults.has(COMMAND.id), "the call was answered at its window's end");
+        assert.equal(
+          slow.asks.get(COMMAND.id)?.lapsed,
+          true,
+          "and the ask that landed after is said closed",
+        );
+      }),
+    );
+  }),
 );

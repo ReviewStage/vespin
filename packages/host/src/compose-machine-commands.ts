@@ -839,22 +839,38 @@ export function composeMachineCommands(
       });
 
     /**
-     * An ask's wait ended, told to the service once its post has landed,
-     * or after a few seconds of a post that has not: taken down where an
-     * answer was taken, or else said closed, answering the answer that beat
-     * the close, where one did. Note that a take-down runs beside the command,
-     * since nothing waits on it.
+     * An ask's wait ended, told to the service once its post has landed:
+     * taken down where an answer was taken, or else said closed, answering
+     * the answer that beat the close, where one did. A post still out after
+     * a few seconds is followed to its end beside the command, and an ask it
+     * lands then is taken down or said closed all the same, its answer no
+     * longer waited on, so no ask outlives its command on the service. Note
+     * that a take-down runs beside the command, since nothing waits on it.
      */
     const ended = (id: string, landed: Deferred.Deferred<boolean>, answered: boolean) =>
       Effect.gen(function* () {
-        const up = Option.getOrElse(
-          yield* Effect.timeoutOption(Deferred.await(landed), POST_WITHIN),
-          () => false,
-        );
+        const up = yield* Effect.timeoutOption(Deferred.await(landed), POST_WITHIN);
+
+        if (Option.isNone(up)) {
+          yield* errand(
+            Effect.andThen(Deferred.await(landed), (late) =>
+              Effect.andThen(
+                setPosted(id, false),
+                !late
+                  ? Effect.void
+                  : answered
+                    ? askedOfService(client.closeAsk(id))
+                    : askedOfService(client.lapseAsk(id)),
+              ),
+            ),
+          );
+
+          return undefined;
+        }
 
         yield* setPosted(id, false);
 
-        if (!up) return undefined;
+        if (!up.value) return undefined;
 
         if (answered) {
           yield* errand(askedOfService(client.closeAsk(id)));
