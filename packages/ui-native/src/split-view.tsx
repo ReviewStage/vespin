@@ -2,6 +2,7 @@
 
 import {
   Divider,
+  HStack,
   Menu,
   NavigationDestination,
   NavigationSplitView,
@@ -28,6 +29,7 @@ import {
   menuStyle,
   navigationSplitViewStyle,
   navigationTitle,
+  overlay,
   searchable,
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
@@ -359,6 +361,8 @@ function Column({
 }) {
   const colors = useColors();
   const text = useSearchWords(bar.search, searchKey);
+  // Note that a list standing first, as a portrait iPad's, ends in a hairline beside the detail, as Mail's message list does, because both columns paint one ground and the system's sidebar column draws no edge of its own.
+  const ruled = sidebar && !clear;
 
   const stacked = (
     <ZStack
@@ -383,7 +387,14 @@ function Column({
             : [toolbarTitleDisplayMode("inline")]),
       ]}
     >
-      {view}
+      {ruled ? (
+        <HStack spacing={0}>
+          {view}
+          <Divider modifiers={[overlay({ color: colors.CHIP_EDGE })]} />
+        </HStack>
+      ) : (
+        view
+      )}
     </ZStack>
   );
 
