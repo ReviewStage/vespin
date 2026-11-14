@@ -38,7 +38,7 @@ export function writeDescription(taskId: string, base: string, value: string) {
       body: { description: { base, value } },
     });
 
-    if ("plan" in saved) return saved.plan;
+    if ("task" in saved) return saved.task;
 
     return yield* new CommandFailed({
       exit: CLI_EXIT.REFUSED,
@@ -107,7 +107,7 @@ const showCommand = Command.make(
         return;
       }
 
-      const { plan } = yield* askService(hosted.tasks.open, { id });
+      const { task: plan } = yield* askService(hosted.tasks.open, { id });
       yield* answer({
         json: { id: plan.id, name: plan.name, body: plan.description.body },
         // Note that the closing line break is dropped, since each line printed ends in one.
@@ -144,7 +144,7 @@ const editCommand = Command.make(
       const value = yield* readInput(file);
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
-      const { plan } = yield* askService(hosted.tasks.open, { id });
+      const { task: plan } = yield* askService(hosted.tasks.open, { id });
       const saved = yield* writeDescription(id, plan.description.body, value);
       yield* answer({
         json: { id: saved.id, name: saved.name, body: saved.description.body },
@@ -235,7 +235,7 @@ const restoreCommand = Command.make(
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
 
-      const { plan } = yield* askService(
+      const { task: plan } = yield* askService(
         hosted.tasks.restoreDescription,
         { id, seq: String(revision) },
         HOSTED_DEADLINE.USUAL,

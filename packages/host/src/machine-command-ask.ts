@@ -1,3 +1,10 @@
+import {
+  MACHINE_ASK_BOUNDS,
+  MACHINE_ASK_DECISION,
+  type MachineAskDecision,
+  machineAskDecisionSchema,
+  machineAskNoteSchema,
+} from "@repo/features/machine-ask-wire";
 import { Schema } from "effect";
 
 /**
@@ -63,29 +70,23 @@ export const machineCommandDeviceSchema = Schema.Struct({
 
 /**
  * What the developer answers an ask: run it this once, run it and every later
- * one without asking, or not at all. For an app, this once holds the app for
- * the conversation that asked until the account or the setting moves, and every
+ * one without asking, or not at all, as any of the owner's devices answers
+ * it (`MACHINE_ASK_DECISION`). For an app, this once holds the app for the
+ * conversation that asked until the account or the setting moves, and every
  * later one adds the app to the apps agents use without asking.
  */
-export const MACHINE_COMMAND_DECISION = {
-  ALLOW_ONCE: "allow-once",
-  ALLOW_ALWAYS: "allow-always",
-  DENY: "deny",
-} as const;
+export const MACHINE_COMMAND_DECISION = MACHINE_ASK_DECISION;
 
-export type MachineCommandDecision =
-  (typeof MACHINE_COMMAND_DECISION)[keyof typeof MACHINE_COMMAND_DECISION];
+export type MachineCommandDecision = MachineAskDecision;
 
 /** The most characters of the words a denial hands the agent. */
-export const MACHINE_COMMAND_NOTE_MAX_CHARS = 2000;
+export const MACHINE_COMMAND_NOTE_MAX_CHARS = MACHINE_ASK_BOUNDS.MAX_NOTE_CHARS;
 
 /** One ask answered, by its id, and for a denial, the words the developer gave the agent with it. */
 export const machineCommandAnswerSchema = Schema.Struct({
   id: Schema.String,
-  decision: Schema.Literals(Object.values(MACHINE_COMMAND_DECISION)),
-  note: Schema.optionalKey(
-    Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(MACHINE_COMMAND_NOTE_MAX_CHARS)),
-  ),
+  decision: machineAskDecisionSchema,
+  note: Schema.optionalKey(machineAskNoteSchema),
 });
 
 export type MachineCommandAnswer = typeof machineCommandAnswerSchema.Type;

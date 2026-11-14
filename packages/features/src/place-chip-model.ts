@@ -38,7 +38,7 @@ function taskOf(place: LinkDestination): string | undefined {
   if (place.kind === LINK_DESTINATION.TASK || place.kind === LINK_DESTINATION.VERSION)
     return undefined;
 
-  return "planId" in place ? place.planId : undefined;
+  return "taskId" in place ? place.taskId : undefined;
 }
 
 /**

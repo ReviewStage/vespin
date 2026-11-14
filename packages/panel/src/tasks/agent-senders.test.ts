@@ -84,7 +84,7 @@ const SENDER_TASK = "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d";
 /** That agent as the task list carries it now: renamed since it sent the line, and moved to another model. */
 const SENDER_NOW: AgentSummary = {
   id: SENDER_ID,
-  planId: SENDER_TASK,
+  taskId: SENDER_TASK,
   model: "openai/gpt-6.1-sol",
   effort: "high",
   title: "Split view, merged",
@@ -97,7 +97,7 @@ const SENDER_NOW: AgentSummary = {
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+  taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Invite flow",
@@ -111,8 +111,8 @@ const AGENT: AgentSummary = {
 /** The automation whose runs go to the same agent, which started it. */
 const TRIAGE: AutomationSummary = {
   id: "3f0e6f5c-7d1a-4f6e-9a55-000000000001",
-  planId: null,
-  planName: null,
+  taskId: null,
+  taskName: null,
   workspaceId: ACME.id,
   name: "Nightly triage",
   enabled: true,

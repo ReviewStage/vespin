@@ -804,7 +804,7 @@ function unlistedThreadTasks(
   if (feed === undefined) return [];
   const listed = new Set(tasks.map((task) => task.id));
 
-  return Object.keys(feed[INBOX_SCOPE_KIND.PLAN]).filter((planId) => !listed.has(planId));
+  return Object.keys(feed[INBOX_SCOPE_KIND.TASK]).filter((taskId) => !listed.has(taskId));
 }
 
 /**
@@ -822,16 +822,21 @@ function threadRows(
   if (feed === undefined || workspace === undefined) return [];
   const held: { readonly row: MentionRow; readonly own: boolean; readonly at: number }[] = [];
 
-  for (const [planId, items] of Object.entries(feed[INBOX_SCOPE_KIND.PLAN])) {
-    const task = tasks.find((each) => each.id === planId && each.workspaceId === workspace.id);
+  for (const [itemTaskId, items] of Object.entries(feed[INBOX_SCOPE_KIND.TASK])) {
+    const task = tasks.find((each) => each.id === itemTaskId && each.workspaceId === workspace.id);
 
     if (task === undefined) continue;
 
     for (const item of items) {
-      const place: InboxItemPlace = { kind: LINK_DESTINATION.INBOX_ITEM, planId, itemId: item.id };
+      const place: InboxItemPlace = {
+        kind: LINK_DESTINATION.INBOX_ITEM,
+        taskId: itemTaskId,
+        itemId: item.id,
+      };
+
       held.push({
         row: threadRow(place, item, task.name),
-        own: planId === taskId,
+        own: itemTaskId === taskId,
         at: item.updatedAt,
       });
     }
@@ -1847,8 +1852,8 @@ function treeKey(
   taskId: string | undefined,
   workspaceId: string | undefined,
   repository: string | null,
-): { planId: string } | { workspaceId: string; repository: string } | undefined {
-  if (taskId !== undefined) return { planId: taskId };
+): { taskId: string } | { workspaceId: string; repository: string } | undefined {
+  if (taskId !== undefined) return { taskId: taskId };
 
   if (workspaceId === undefined || repository === null) return undefined;
 
@@ -2271,7 +2276,7 @@ export function useMentionPicker({
                 ? []
                 : agentRows(taskId, source.agents ?? NO_AGENTS, NO_AGENTS, self, "", agentPlace)),
               ...threadRowsOffered.filter(
-                (row) => "thread" in row && "planId" in row.thread && row.thread.planId === taskId,
+                (row) => "thread" in row && "taskId" in row.thread && row.thread.taskId === taskId,
               ),
               ...pullRequestRows(source.pullRequests ?? NO_PULL_REQUESTS),
               ...pageRows(holder, source.pages ?? NO_PAGES, now),

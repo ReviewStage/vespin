@@ -405,7 +405,7 @@ const REFUSED_ITEM = fixtureId(2);
 
 /** Where the recorded thread's words draw its still from: the still's address on the thread, as an agent's post names a picture it attached. */
 const RECORDED_PICTURE_ADDRESS = inboxAttachmentAddress(
-  { kind: LINK_DESTINATION.INBOX_ITEM, planId: TASK.INVITES, itemId: RECORDED.ITEM },
+  { kind: LINK_DESTINATION.INBOX_ITEM, taskId: TASK.INVITES, itemId: RECORDED.ITEM },
   RECORDED.PICTURE,
   FIXTURE_WORKSPACE_SLUG,
 );
@@ -812,7 +812,7 @@ function agentOn(
 ): AgentSummary {
   return {
     id,
-    planId: taskId,
+    taskId: taskId,
     model: MODEL,
     effort: "high",
     title,
@@ -1636,7 +1636,7 @@ const INVITES_PAGES: readonly PageLine[] = [
 /** A descriptions slice with the reference journey's laid over it, and the listed task it was laid from. */
 interface StagedDocuments {
   readonly from: TaskSummary;
-  readonly laid: AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT];
+  readonly laid: AppStateSnapshot[typeof LIVE_READ.HELD_TASK];
 }
 
 /**
@@ -1645,7 +1645,7 @@ interface StagedDocuments {
  * laid from stands as it was.
  */
 const STAGED_DOCUMENTS = new WeakMap<
-  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT],
+  AppStateSnapshot[typeof LIVE_READ.HELD_TASK],
   StagedDocuments
 >();
 
@@ -1655,10 +1655,8 @@ const STAGED_DOCUMENTS = new WeakMap<
  * row say the same; the stand-in where the document lists none of it, as the
  * panel's fixture run, which lists its own on the window's side, does.
  */
-function stagedDocuments(
-  state: AppStateSnapshot,
-): AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT] {
-  const held = state[LIVE_READ.DESCRIPTION_DOCUMENT];
+function stagedDocuments(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.HELD_TASK] {
+  const held = state[LIVE_READ.HELD_TASK];
   const from = state.tasks.tasks.find((task) => task.id === TASK.INVITES) ?? INVITES_TASK;
   const staged = STAGED_DOCUMENTS.get(held);
 
@@ -2055,9 +2053,9 @@ export function inboxAppState(
     ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
     inbox: stagedInbox(state.inbox),
     [LIVE_READ.INBOX_ITEMS]: {
-      rows: { [INBOX_SCOPE_KIND.PLAN]: fed },
+      rows: { [INBOX_SCOPE_KIND.TASK]: fed },
     },
-    [LIVE_READ.DESCRIPTION_DOCUMENT]: stagedDocuments(state),
+    [LIVE_READ.HELD_TASK]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),
     [LIVE_READ.DESCRIPTION_COMMENTS]: stagedComments(state),
     [LIVE_READ.AUTOMATIONS]: noneHeldIn(workspaceIds),
@@ -2119,7 +2117,7 @@ export function inboxRemindersAppState(
   state: AppStateSnapshot,
   reminders: InboxReminders,
 ): AppStateSnapshot {
-  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.PLAN];
+  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.TASK];
 
   if (reminders.size === 0 || fed === undefined) return state;
 
@@ -2132,7 +2130,7 @@ export function inboxRemindersAppState(
 
   return {
     ...state,
-    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: reminded } },
+    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: reminded } },
   };
 }
 
@@ -2284,7 +2282,7 @@ function pinnedAgents(
 
   const added = agents
     .filter(({ id }) => choices.get(id)?.pinned === true && !kept.some((pin) => pin.agentId === id))
-    .map(({ id, planId }) => ({ agentId: id, taskId: planId, pinnedAt: LANDED }));
+    .map(({ id, taskId }) => ({ agentId: id, taskId: taskId, pinnedAt: LANDED }));
 
   return [...kept, ...added];
 }
@@ -2569,9 +2567,9 @@ const ANSWERS: StagedAnswers = {
   // Note that a start with no agent, File for later's, is answered with the task made alone.
   [ACT_KIND.TASKS_START]: ({ agent }) =>
     agent === undefined
-      ? { planId: fixtureId(92) }
+      ? { taskId: fixtureId(92) }
       : {
-          planId: fixtureId(92),
+          taskId: fixtureId(92),
           agentStart: {
             agent: agentOn(
               fixtureId(93),
@@ -2586,10 +2584,10 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.TASKS_RENAME]: () => true,
   [ACT_KIND.TASKS_DELETE]: () => true,
   // Note that a reply is taken as the service takes one, answered with its thread as it then stands, though nothing here moves.
-  [ACT_KIND.TASKS_COMMENT_ACT]: ({ planId, threadId, action }) => {
+  [ACT_KIND.TASKS_COMMENT_ACT]: ({ taskId, threadId, action }) => {
     const thread = INVITES_THREADS.find((each) => each.id === threadId);
 
-    if (planId !== TASK.INVITES || thread === undefined) {
+    if (taskId !== TASK.INVITES || thread === undefined) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
     }
 

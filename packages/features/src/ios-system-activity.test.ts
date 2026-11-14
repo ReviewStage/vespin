@@ -136,7 +136,7 @@ describe("a screen's activity, continued on another of the member's devices", ()
     // Note that a desktop window names a task by its number, which the other workspace's task shares.
     [
       "a task the desktop shows",
-      deskShows({ kind: LINK_DESTINATION.TASK, planId: "42" }),
+      deskShows({ kind: LINK_DESTINATION.TASK, taskId: "42" }),
       "https://vespin.dev/acme/task/task-1",
       "/tasks/task-1",
     ],
@@ -167,7 +167,7 @@ describe("a screen's activity, continued on another of the member's devices", ()
     // Note that a task the window holds no row for hands off nothing, since its number may name another workspace's task on the phone.
     expect(
       desktopHandoffOf(
-        { workspace: "acme", place: { kind: LINK_DESTINATION.TASK, planId: "99" } },
+        { workspace: "acme", place: { kind: LINK_DESTINATION.TASK, taskId: "99" } },
         DESK_READS,
       ),
     ).toBe(undefined);

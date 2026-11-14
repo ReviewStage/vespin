@@ -7,6 +7,7 @@ import {
 import { sql } from "drizzle-orm";
 import { check, index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { bound, bytea, timestamptz } from "./_helpers.js";
+import { agentTable } from "./agent.js";
 import { user } from "./auth.js";
 import { device } from "./device.js";
 
@@ -36,6 +37,13 @@ export const machineCommand = pgTable(
      * device, since no other machine may run what was meant for that one.
      */
     deviceId: uuid("device_id").references(() => device.id, { onDelete: "cascade" }),
+    /**
+     * The agent whose call queued the command, or whose worker's; null for a
+     * call of no agent's, or one queued before agents were kept, and once its
+     * agent is gone. Read for the ask its machine posts, so the owner's
+     * devices draw it on that agent.
+     */
+    agentId: uuid("agent_id").references(() => agentTable.id, { onDelete: "set null" }),
     /** What the command asks; a row queued before kinds were is a shell command. */
     kind: text("kind").$type<MachineCommandKind>().notNull().default(MACHINE_COMMAND_KIND.SHELL),
     /** What it asks: a shell command's text, or a computer command's request as JSON (`storedMachineCommandText`). */

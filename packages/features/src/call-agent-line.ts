@@ -7,12 +7,12 @@
  * between calls, which the card says as thinking.
  */
 
-import { AGENT_PART, agentParts } from "@repo/features/agent-parts";
-import type { AgentStatus, AgentTranscriptMessage } from "@repo/features/agent-wire";
-import { agentStillWriting } from "@repo/features/task-agents-model";
-import { TOOL_STATE } from "@repo/features/tool-call-block";
-import { toolCallView } from "@repo/features/tool-call-model";
 import { MESSAGE_ROLE } from "@repo/wire";
+import { AGENT_PART, agentParts } from "./agent-parts.js";
+import type { AgentStatus, AgentTranscriptMessage } from "./agent-wire.js";
+import { agentStillWriting } from "./task-agents-model.js";
+import { TOOL_STATE } from "./tool-call-block.js";
+import { toolCallView } from "./tool-call-model.js";
 
 /** The agent's line of a call: absent while the agent is idle, and its command while it runs one. */
 export interface CallAgentLine {
