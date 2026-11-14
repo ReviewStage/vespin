@@ -306,6 +306,6 @@ test("the Default machine row names the agent's default with its dot, offline as
   act(() => placeChip().click());
   assert.deepEqual(optionsOf("Where this agent works"), [
     "Agent runs inMini",
-    "Default machineALaptop",
+    "Terminal and computer useALaptop",
   ]);
 });
