@@ -14,13 +14,33 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
-- assertVisible: "Add a way to resend an invite that expired."
+# Note that each launch waits up to half a minute for its first words,
+# because a loaded runner has taken longer than Maestro's own wait to bring
+# the app to the front.
+- extendedWaitUntil:
+    visible: "Add a way to resend an invite that expired."
+    timeout: 30000
 # The card offers Merge beside Review, which asks first.
-- scrollUntilVisible:
-    element: "Merge"
-    direction: UP
-    centerElement: true
-- waitForAnimationToEnd
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: Merge
+      DIRECTION: UP
+# Note that the transcript is drawn up a quarter of the window where Merge
+# stands no higher than the dock's held approval, whose note heads the dock,
+# because a short window, the iPhone Duo's, centers the card under the dock,
+# where the tap lands on it instead.
+- runFlow:
+    when:
+      notVisible:
+        text: "Merge"
+        above: "Sending a message denies the waiting approval."
+    commands:
+      - swipe:
+          start: "50%, 60%"
+          end: "50%, 35%"
+          duration: 800
+      - waitForAnimationToEnd
 - takeScreenshot: pull-request-card
 - tapOn: "Merge"
 - assertVisible: "Merge this pull request?"
@@ -71,7 +91,13 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- tapOn: "Tasks"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - tapOn: "Teammate invitations"
 - assertVisible: "Agents"
 - tapOn: "#128"
@@ -84,15 +110,22 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- tapOn: "Tasks"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - tapOn: "Teammate invitations"
 # Note that iOS never hears a chip as an element of its own, since it stands
 # in its line as a view, so the line is found by what it is heard as
 # (`heardLine`), "Pull request: pull request #128 …", and pressed at its
 # middle, where the chip stands.
-- scrollUntilVisible:
-    element: ".*#128 Invite a teammate by email"
-    direction: DOWN
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*#128 Invite a teammate by email"
 - tapOn: ".*#128 Invite a teammate by email"
 - extendedWaitUntil:
     visible: "Ready to merge"
@@ -181,8 +214,11 @@ appId: dev.vespin.ios
 - assertVisible: "Open on GitHub"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-menu
+# Note that the flow waits for the system's "Return to Vespin" in the
+# status bar, which stands once Safari is in front, because the app's own
+# words stay in the tree Maestro reads while Safari draws its first page.
 - tapOn: "Open on GitHub"
 - extendedWaitUntil:
-    notVisible: "Send the invite email from the workspace.*"
+    visible: "Return to Vespin"
     timeout: 30000
 - takeScreenshot: pull-request-github

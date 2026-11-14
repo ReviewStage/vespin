@@ -32,9 +32,9 @@ export type SidebarPlace = (typeof SIDEBAR_PLACE)[keyof typeof SIDEBAR_PLACE];
 
 /**
  * Each place's row and the tab root it opens, in the sidebar's order. Note
- * that Search carries the Search tab's own id, since the sidebar stands for
- * the tab bar a regular window hides, so a flow finds it the same way in
- * either window.
+ * that each carries its tab's own id, since the sidebar stands for the tab
+ * bar a regular window hides, so a flow finds it the same way in either
+ * window.
  */
 const PLACES = [
   {
@@ -42,14 +42,14 @@ const PLACES = [
     title: "Inbox",
     symbol: GLYPH.INBOX,
     route: "/inbox",
-    testId: undefined,
+    testId: "inbox-tab",
   },
   {
     id: SIDEBAR_PLACE.TASKS,
     title: "Tasks",
     symbol: GLYPH.TASK,
     route: "/tasks",
-    testId: undefined,
+    testId: "tasks-tab",
   },
   {
     id: SIDEBAR_PLACE.SEARCH,

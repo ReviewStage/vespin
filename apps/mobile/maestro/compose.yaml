@@ -16,7 +16,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
-- assertVisible: "Then add a Resend button beside each pending invite."
+- extendedWaitUntil:
+    visible: "Then add a Resend button beside each pending invite."
+    timeout: 30000
 - assertVisible: "Steer"
 - assertVisible: "Stop"
 - assertVisible: "Add"
@@ -76,9 +78,16 @@ appId: dev.vespin.ios
 # The mode taken stands picked in the options sheet the + also opens.
 - tapOn: "Add"
 - tapOn: "Options"
+- runFlow:
+    file: subflows/full-sheet.yaml
 - assertVisible:
     text: "Approve for me.*"
     selected: true
+# Note that the sheet is scrolled back to its head for Done, which drawing
+# it up on a short window, the iPhone Duo's, scrolled out of sight.
+- scrollUntilVisible:
+    element: "Done"
+    direction: UP
 - tapOn: "Done"
 # A `/` typed offers the task's skills over the field, narrowed as the name
 # is typed, and a press writes the skill's word into the message.

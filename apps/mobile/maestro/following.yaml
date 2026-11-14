@@ -12,7 +12,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - assertVisible: "Following, [0-9]+"
 - assertVisible: "Billing export"
 - waitForAnimationToEnd
@@ -21,10 +24,14 @@ appId: dev.vespin.ios
 # opens the Followers sheet; the account is its assignee, so Unfollow stands
 # dimmed with why.
 - tapOn: "Weekly digest email"
-- assertVisible: "Following"
+# Note that the chip is found by its id, since a regular window's sidebar
+# stands the Following group beside it under the same word.
+- assertVisible:
+    id: "following-chip"
 - waitForAnimationToEnd
 - takeScreenshot: following-chip
-- tapOn: "Following"
+- tapOn:
+    id: "following-chip"
 - assertVisible: "Let agents here use my machines"
 - assertVisible: "You're the assignee"
 - waitForAnimationToEnd
@@ -32,9 +39,13 @@ appId: dev.vespin.ios
 - tapOn: "Done"
 - waitForAnimationToEnd
 # The billing export is a teammate's, so the account may unfollow it.
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - tapOn: "Billing export"
-- tapOn: "Following"
+- tapOn:
+    id: "following-chip"
 - assertVisible: "Unfollow"
 - assertNotVisible: "You're the assignee"
 - waitForAnimationToEnd

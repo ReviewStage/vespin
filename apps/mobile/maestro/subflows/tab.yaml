@@ -1,0 +1,64 @@
+# tab.yaml -- opens the tab `TAB` names (Inbox, Tasks, or Search): by its id, which the iPhone's tab bar and the app sidebar carry, or on an iPad by its name, last in the tree, in its floating bar, which carries no id.
+#
+# Note that a tab is never tapped by its name alone where an id stands,
+# because a list's title and a back button share the name and come first in
+# the tree: a tap meant for the Tasks tab lands on the Tasks list's title.
+# Note too that the way is chosen by the device, `FLOATING_TABS` that
+# `scripts/simulator-screenshots.sh` sets for an iPad, rather than by
+# whether the id stands on screen, because the tab bar draws seconds after a
+# cold launch and is out of the tree while a sheet goes, so a check of the
+# screen found neither way and tapped nothing. Each way waits for its tab
+# up to half a minute, as long as a loaded runner's cold launch has taken.
+# On an iPhone, a page scrolled down collapses the tab bar to its current
+# tab alone, heard as "Collapsed" and with no id, and a page pushed over a
+# tab's list hides the bar, so until the tab's id stands a collapsed bar is
+# pressed to stand its tabs again and a pushed page is gone back from, as a
+# person would. Note that the bar is never waited for by its own name, "Tab
+# Bar", because a wide window, the iPhone Duo's, draws the tabs as a rail
+# that carries their ids but no such name.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - repeat:
+          times: 10
+          while:
+            notVisible:
+              id: "${TAB.toLowerCase()}-tab"
+          commands:
+            - runFlow:
+                when:
+                  visible: "Collapsed"
+                commands:
+                  - tapOn: "Collapsed"
+            - runFlow:
+                when:
+                  visible:
+                    id: "BackButton"
+                  notVisible:
+                    id: "${TAB.toLowerCase()}-tab"
+                commands:
+                  - tapOn:
+                      id: "BackButton"
+            - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible:
+            id: "${TAB.toLowerCase()}-tab"
+          timeout: 30000
+      - tapOn:
+          id: "${TAB.toLowerCase()}-tab"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - extendedWaitUntil:
+          visible: "${TAB}"
+          timeout: 30000
+      - tapOn:
+          text: "${TAB}"
+          index: -1
+- waitForAnimationToEnd

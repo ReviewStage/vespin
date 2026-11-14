@@ -1,0 +1,19 @@
+# bar-act.yaml -- brings the open page's act `ACT` into reach: a regular window's bar stands it already, and a compact window opens the page's ⋯ on it.
+#
+# Note that a regular window's bar stands a page's main acts as buttons of
+# their own and keeps only the rest in ⋯, as Mail stands its acts: a thread's
+# read mark, Remind me, and Resolve (`threadActs`), and an agent's Pin and
+# Archive; a compact window keeps every act in ⋯. So a flow that always
+# opened ⋯ found no Resolve or Pin there on the iPad. The way is chosen
+# by the device, `FLOATING_TABS` naming a regular window, as `tab.yaml`'s is.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn:
+          text: "More"
+          index: -1

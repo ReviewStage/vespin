@@ -11,12 +11,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "acceptInvite can add a member twice"
-    direction: DOWN
-    centerElement: true
-- waitForAnimationToEnd
-- tapOn: "acceptInvite can add a member twice"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "acceptInvite can add a member twice"
 - assertVisible: "Reply"
 - waitForAnimationToEnd
 # New thread, from the composer's +: a switch named for the agent, which has

@@ -21,13 +21,31 @@ appId: dev.vespin.ios
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
-    timeout: 15000
+    timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-inbox
 # A thread: its title as the page's heading, each message's writer line, and
-# the composer docked at its foot.
-- tapOn: "Recorded the invite flow"
+# the composer docked at its foot. Note that the list is drawn up a quarter
+# of the window first, because at this text size the row stands at the
+# window's foot, its middle under the tab bar, though its top stands above
+# it, which `open-row.yaml`'s check reads as clear.
+- swipe:
+    start: "50%, 60%"
+    end: "50%, 35%"
+    duration: 800
+- waitForAnimationToEnd
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Recorded the invite flow"
+# Note that the thread is scrolled up to its first message, since at this
+# text size it opens at its newest, the first one's words above the window.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*walked the invite flow.*"
+      DIRECTION: UP
 - assertVisible: ".*walked the invite flow.*"
 - waitForAnimationToEnd:
     timeout: 5000
@@ -37,7 +55,10 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - extendedWaitUntil:
     visible: "Weekly digest email"
     timeout: 15000
@@ -46,10 +67,10 @@ appId: dev.vespin.ios
 - takeScreenshot: accessibility-tasks
 # A task's page: its name as a heading, and its status, priority, and
 # assignee chips one to a line.
-- scrollUntilVisible:
-    element: "Teammate invitations"
-    direction: DOWN
-- tapOn: "Teammate invitations"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Teammate invitations"
 - assertVisible: "Created by .*"
 - waitForAnimationToEnd:
     timeout: 5000
@@ -71,7 +92,7 @@ appId: dev.vespin.ios
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
     visible: "Waiting on you.*"
-    timeout: 15000
+    timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-agent
@@ -82,7 +103,7 @@ appId: dev.vespin.ios
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
-    timeout: 15000
+    timeout: 30000
 - tapOn: "New task"
 - assertVisible: "Describe the task"
 - waitForAnimationToEnd:
@@ -95,9 +116,14 @@ appId: dev.vespin.ios
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
-    timeout: 15000
+    timeout: 30000
 - tapOn:
     id: "workspace-switcher"
+# Note that the switcher's list is scrolled to the account's row, which at
+# this text size a short window, the iPhone Duo's, stands below its foot.
+- scrollUntilVisible:
+    element: ".*, Settings"
+    direction: DOWN
 - tapOn: ".*, Settings"
 - waitForAnimationToEnd:
     timeout: 5000

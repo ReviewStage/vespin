@@ -6,6 +6,8 @@ appId: dev.vespin.ios
 # Note that each wait for the screen to settle is capped at five seconds,
 # because the page draws its turn still running, whose mark never stops
 # moving, so an uncapped wait always ran to Maestro's fifteen.
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, whose invitations agent holds a
 # transcript three turns long (`@repo/host/fixture-inbox`), and opened on its
@@ -16,7 +18,11 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
-- assertVisible: "Add a way to resend an invite that expired."
+# Note that the launch waits up to half a minute for its first words, as
+# `pull-request.yaml`'s do.
+- extendedWaitUntil:
+    visible: "Add a way to resend an invite that expired."
+    timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-latest
@@ -36,13 +42,16 @@ appId: dev.vespin.ios
 - tapOn: "Edited.*"
 # The second turn: the page it showed as a card, and its recording, read as
 # its MP4 copy, which the system's player plays in place.
-# Note that the card is left near the top as it scrolls in, clear of Jump to
-# latest, which floats over the middle of a short window such as the Duo's.
-- scrollUntilVisible:
-    element: "Invite funnel, Page"
-    direction: UP
-- waitForAnimationToEnd:
-    timeout: 5000
+# Note that the card is scrolled to in short steps until it stands clear
+# under the agent's name in the bar (`scroll-to.yaml`'s `BELOW`), because a
+# scroll that stops once it shows leaves it under the bar, where the tap
+# lands on the status bar and scrolls the list to its top, and one that
+# centers it may leave it under the held call's banner.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Invite funnel, Page"
+      BELOW: "Build teammate invitations"
 - takeScreenshot: agent-page-card
 - tapOn: "Invite funnel, Page"
 # Note that the wait is long, because the first web view a freshly booted
@@ -74,12 +83,11 @@ appId: dev.vespin.ios
 - takeScreenshot: agent-recording
 # The first turn finished: its run of calls folded under one line, the
 # pictures it showed standing apart after it.
-- scrollUntilVisible:
-    element: "The invite dialog"
-    direction: UP
-    centerElement: true
-- waitForAnimationToEnd:
-    timeout: 5000
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "The invite dialog"
+      DIRECTION: UP
 - takeScreenshot: agent-pictures
 # The pull request it opened after them, as its card with Review.
 - scrollUntilVisible:
@@ -101,12 +109,17 @@ appId: dev.vespin.ios
 # At the top, the page older than the transcript's first is read; the
 # fixture's first read is not heard back, so it offers Try again, and the
 # next lays the older turn before the first.
-# Note that the list scrolls to the notice's words rather than to Try again
-# under them, because a scroll that stops once Try again shows leaves the
-# words under the bar.
+# Note that the list is then pulled on to its top, because the notice is its
+# first row, which no scroll can center, and a scroll that stops once the
+# notice shows leaves Try again under the bar, where a press lands beside it.
 - scrollUntilVisible:
     element: "Earlier messages could not be read."
     direction: UP
+- swipe:
+    start: "50%, 30%"
+    end: "50%, 80%"
+- waitForAnimationToEnd:
+    timeout: 5000
 - assertVisible: "Try again"
 - waitForAnimationToEnd:
     timeout: 5000
@@ -135,12 +148,23 @@ appId: dev.vespin.ios
 # Opus's fast version; its permission mode, Ask for approval to start, each
 # mode with what it does; and the MCP servers it is handed, each connected
 # one with its switch. A change is drawn on the agent at once, as the fixture
-# lays it.
+# lays it. Note that a regular window's bar stands Pin and Archive beside ⋯
+# rather than in it (`bar-act.yaml`), so there they are found before ⋯ opens.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - assertVisible: "Pin"
+      - assertVisible: "Archive"
 - tapOn: "More"
 - assertVisible: "Copy link"
 - assertVisible: "Rename"
-- assertVisible: "Pin"
-- assertVisible: "Archive"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - assertVisible: "Pin"
+      - assertVisible: "Archive"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-menu
@@ -157,6 +181,10 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-options-fast
+# Note that the sheet is drawn up first, because its permissions and their
+# note stand below a short window's fold.
+- runFlow:
+    file: subflows/full-sheet.yaml
 - tapOn: "Approve for me.*"
 - assertVisible: "Takes effect from the next turn."
 - waitForAnimationToEnd:
@@ -173,10 +201,11 @@ appId: dev.vespin.ios
 # Note that the Model row is centered as the form scrolls back, because one
 # left at the top stands under the sheet's bar, and its menu is opened from
 # its value, since the system's menu picker opens from its value alone.
-- scrollUntilVisible:
-    element: "Model.*"
-    direction: UP
-    centerElement: true
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Model.*"
+      DIRECTION: UP
 - tapOn: "Opus 5.5"
 - assertVisible: ".*Sonnet 5.5"
 - waitForAnimationToEnd:
@@ -203,10 +232,16 @@ appId: dev.vespin.ios
 - inputText: "Invite by email"
 - tapOn: "Rename"
 - assertVisible: "Invite by email"
-# Pinned, the menu offers Unpin in its place.
-- tapOn: "More"
+# Pinned, Unpin stands in its place.
+- runFlow:
+    file: subflows/bar-act.yaml
+    env:
+      ACT: Pin
 - tapOn: "Pin"
-- tapOn: "More"
+- runFlow:
+    file: subflows/bar-act.yaml
+    env:
+      ACT: Unpin
 - assertVisible: "Unpin"
 - waitForAnimationToEnd:
     timeout: 5000
@@ -224,7 +259,10 @@ appId: dev.vespin.ios
 # Confirmed, the archive is taken, as the fixture takes it, with no refusal
 # said over the composer; launched straight onto the page, there is nothing
 # to go back to, so the page stays.
-- tapOn: "More"
+- runFlow:
+    file: subflows/bar-act.yaml
+    env:
+      ACT: Archive
 - tapOn: "Archive"
 - tapOn: "Stop agents"
 - assertNotVisible: "Archive agent?"
@@ -239,7 +277,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 00000000-0000-4000-8000-000000000000
-- assertVisible: "Reading the transcript|The transcript could not be read\\."
+- extendedWaitUntil:
+    visible: "Reading the transcript|The transcript could not be read\\."
+    timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-empty

@@ -13,8 +13,23 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Inbox"
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 30000
 - takeScreenshot: inbox
+# New task opens as a sheet over the tabs, from the tab bar's round + on a
+# compact window and the Inbox bar's on a regular one, and Cancel puts the
+# empty sheet away unasked. Note that it is opened here, on the Inbox, since
+# an iPad's Search tab turns its floating tabs into the search field, which
+# leaves no tab to go back by.
+- tapOn: "New task"
+- assertVisible: "Describe the task"
+- assertVisible: "ada/relay"
+- takeScreenshot: new-task
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    notVisible: "Describe the task"
+    timeout: 5000
 # A row's detail: pushed over the list in a compact window, and beside it in
 # a regular one. A thread with a decide ask opens on its question.
 # Note that it is the list's first row, opened as the app launches, because
@@ -29,16 +44,20 @@ appId: dev.vespin.ios
 # notice, opens on its words; it may stand below the fold of a short window,
 # so the list is scrolled to it, and settles before the tap, which a list
 # still gliding takes as a stop rather than a pick.
-- tapOn: "Inbox"
-- scrollUntilVisible:
-    element: "acceptInvite can add a member twice"
-    direction: DOWN
-- waitForAnimationToEnd
-- tapOn: "acceptInvite can add a member twice"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Inbox
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "acceptInvite can add a member twice"
 - assertVisible: ".*adds them twice.*"
 - takeScreenshot: inbox-thread
-- tapOn: "Inbox"
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - assertVisible: "Tasks"
 - takeScreenshot: tasks
 - tapOn: "Teammate invitations"
@@ -66,10 +85,3 @@ appId: dev.vespin.ios
 - inputText: "invitations"
 - assertVisible: "Teammate invitations"
 - takeScreenshot: search
-# Note that the keyboard is put away, since it stands over the tab bar.
-- hideKeyboard
-# The tab bar's round + opens New task as a sheet over the tabs.
-- tapOn: "New task"
-- assertVisible: "Describe the task"
-- assertVisible: "ada/relay"
-- takeScreenshot: new-task

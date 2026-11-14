@@ -11,7 +11,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       updateNeeded: "true"
-- assertVisible: "This Vespin is older than the one now live"
+- extendedWaitUntil:
+    visible: "This Vespin is older than the one now live"
+    timeout: 30000
 - assertVisible: "Update"
 - assertNotVisible: "Recorded the invite flow"
 - waitForAnimationToEnd

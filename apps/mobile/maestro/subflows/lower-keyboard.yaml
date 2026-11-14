@@ -1,0 +1,13 @@
+# lower-keyboard.yaml -- lowers the keyboard over a sheet whose page lowers it on a drag, by a short drag at the window's middle.
+#
+# Note that the drag is the flow's own rather than Maestro's hideKeyboard,
+# which makes the same drag but then fails where it cannot tell the keyboard
+# went, as on a wide window's keyboard, the iPhone Duo's, or where none
+# stands; and that the words field's return key would type a new line.
+appId: dev.vespin.ios
+---
+- swipe:
+    start: "50%, 50%"
+    end: "50%, 40%"
+    duration: 400
+- waitForAnimationToEnd

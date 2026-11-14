@@ -11,7 +11,9 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       authServer: stub
-- assertVisible: "Sign in to Vespin"
+- extendedWaitUntil:
+    visible: "Sign in to Vespin"
+    timeout: 30000
 - waitForAnimationToEnd
 - takeScreenshot: sign-in
 - tapOn: "Continue with GitHub"
@@ -27,7 +29,9 @@ appId: dev.vespin.ios
 - launchApp:
     arguments:
       authServer: stub
-- assertVisible: "Inbox"
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 30000
 - assertNotVisible: "Sign in to Vespin"
 # The workspace switcher leads the Inbox's bar, and its menu's account,
 # heard as its name and Settings, opens it.

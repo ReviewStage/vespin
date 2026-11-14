@@ -7,6 +7,8 @@ appId: dev.vespin.ios
 # a run left in landscape fails every flow after it.
 onFlowComplete:
   - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, as `inbox.yaml` is, so the tree holds
 # the fixture's tasks, pinned, sectioned, and in two repositories, and no
@@ -16,7 +18,10 @@ onFlowComplete:
     clearState: true
     arguments:
       fixture: inbox
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - assertVisible: "Pinned"
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd
@@ -29,22 +34,18 @@ onFlowComplete:
 - tapOn: "Launch, [0-9]+"
 - assertVisible: "Launch checklist"
 # A long press offers Mark done in the row's menu, and a swipe from the
-# trailing edge marks it done at once; either way the row leaves the list.
+# trailing edge reveals it too; either way the row leaves the list once it
+# is pressed.
 # Note that a row may stand below the fold of a short window, the folded
 # iPhone Duo's, so the list is scrolled to it.
-- scrollUntilVisible:
-    element: "Launch checklist"
-    direction: DOWN
-- waitForAnimationToEnd
-- longPressOn: "Launch checklist"
-- assertVisible: "Mark done"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Launch checklist
+      ITEM: Mark done
 - takeScreenshot: tasks-menu
 - tapOn: "Mark done"
 - assertNotVisible: "Launch checklist"
-- scrollUntilVisible:
-    element: "Usage alerts"
-    direction: DOWN
-- waitForAnimationToEnd
 # Note that a swipe on a split view's sidebar reads as a tap under Maestro's
 # driver, so a regular window, which stands "Select a task" beside its list,
 # marks the task done from its menu instead.
@@ -52,17 +53,23 @@ onFlowComplete:
     when:
       notVisible: "Select a task"
     commands:
+      - scrollUntilVisible:
+          element: "Usage alerts"
+          direction: DOWN
+      - waitForAnimationToEnd
       - swipe:
           from: "Usage alerts"
           direction: LEFT
-      - tapOn:
-          text: "Mark done"
-          optional: true
+      - tapOn: "Mark done"
 - runFlow:
     when:
       visible: "Select a task"
     commands:
-      - longPressOn: "Usage alerts"
+      - runFlow:
+          file: subflows/row-menu.yaml
+          env:
+            ROW: Usage alerts
+            ITEM: Mark done
       - tapOn: "Mark done"
 - assertNotVisible: "Usage alerts"
 - takeScreenshot: tasks-marked-done
@@ -77,8 +84,11 @@ onFlowComplete:
 - waitForAnimationToEnd
 # A swipe from the leading edge reveals Unpin, which a full swipe would
 # press at once, so the flow swipes partway across the first row, under
-# Pinned's header, and a tap on the Tasks tab closes it unpressed. Note that
-# a regular window, whose swipes read as taps, is left out.
+# Pinned's header, and a tap on the row's own words closes it unpressed.
+# Note that the row is closed before anything else is pressed, because a row
+# left open takes the next press on the list, the long press below among
+# them, only to close itself; and that a regular window, whose swipes read
+# as taps, is left out.
 - runFlow:
     when:
       notVisible: "Select a task"
@@ -87,25 +97,26 @@ onFlowComplete:
           start: "8%, 21%"
           end: "38%, 21%"
           duration: 900
-      - takeScreenshot: tasks-swipe-leading
-      - tapOn: "Tasks"
       - waitForAnimationToEnd
-# Note that the long press is pressed again where the menu did not open,
-# because a swipe left open takes the first press to close itself.
-- longPressOn: "Weekly digest email"
+      - takeScreenshot: tasks-swipe-leading
+      - tapOn: "Weekly digest email"
+      - waitForAnimationToEnd
 - runFlow:
-    when:
-      notVisible: "Open"
-    commands:
-      - longPressOn: "Weekly digest email"
-- assertVisible: "Open"
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Open
 - assertVisible: "Status"
 - assertVisible: "Copy link"
 - assertVisible: "Rename"
 - assertVisible: "Mark as unread"
 - assertVisible: "Unpin"
 - assertVisible: "Open in browser"
-- assertVisible: "Permanently delete"
+# Note that the menu is scrolled to its last act, which a short window, the
+# iPhone Duo's, stands below its foot.
+- scrollUntilVisible:
+    element: "Permanently delete"
+    direction: DOWN
 - takeScreenshot: tasks-row-menu
 # Rename asks for the name in the system's alert, opened on the task's name,
 # and Cancel keeps it.
@@ -117,7 +128,11 @@ onFlowComplete:
 - waitForAnimationToEnd
 # Permanently delete asks first, in the panel's words, and Cancel keeps the
 # task.
-- longPressOn: "Weekly digest email"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Permanently delete
 - tapOn: "Permanently delete"
 - assertVisible: "Permanently delete task?"
 - waitForAnimationToEnd
@@ -128,20 +143,45 @@ onFlowComplete:
 # Copy link raises the system's share sheet on the task's address. Its Copy
 # action copies the address and puts the sheet away; the sheet's own close
 # button isn't reliably found by its label on iOS 27.2.
-- longPressOn: "Weekly digest email"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Copy link
 - tapOn: "Copy link"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-copy-link
-- tapOn: "Copy"
+# Note that an iPad draws the share sheet as a popover whose actions run out
+# of the app's process, where Maestro reads none of them, so there it is
+# closed by a tap off it, on the popover's dismiss region.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "Copy"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn:
+          id: "PopoverDismissRegion"
 - waitForAnimationToEnd
-- longPressOn: "Weekly digest email"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Mark as unread
 # Mark as unread draws the row's dot.
 - tapOn: "Mark as unread"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-row-unread
 # Mark done on a task whose agent is at work asks first, as the panel does,
 # and Cancel leaves the task where it stands.
-- longPressOn: "Weekly digest email"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Mark done
 - tapOn: "Mark done"
 - assertVisible: "Mark as Done?"
 - assertVisible: "Stop agents"
@@ -152,8 +192,10 @@ onFlowComplete:
 # Opening the task reads it, so its dot is gone once the list shows again.
 - tapOn: "Weekly digest email"
 - assertVisible: "Created by .*"
-- tapOn: "Tasks"
-- waitForAnimationToEnd
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - takeScreenshot: tasks-row-read
 # A task opens on its Overview: its path in the bar, its name, its chips, and
 # who created it,
@@ -173,15 +215,18 @@ onFlowComplete:
 # holds its transcript, and its pull request, over Open and Stop, which a
 # swipe from its trailing edge reveals too while it works; once it rests the
 # swipe offers Archive, which asks first. A tap off the preview closes it.
-- longPressOn: "Build teammate invitations"
-- assertVisible: "Open"
-- waitForAnimationToEnd
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Build teammate invitations
+      ITEM: Open
 - takeScreenshot: task-agent-preview
-# Note that the tap lands on the dimmed screen above the preview, since one
-# on the status bar is taken by the system and leaves the menu open.
-- tapOn:
-    point: "50%, 30%"
-- waitForAnimationToEnd
+# Note that the tap lands on the dimmed screen above the preview, which
+# lifts low on the screen under the agent's row.
+- runFlow:
+    file: subflows/dismiss.yaml
+    env:
+      POINT: 50%, 30%
 - runFlow:
     when:
       notVisible: "Select a task"
@@ -190,15 +235,17 @@ onFlowComplete:
       # Overview opened at its top stands it, as the leading swipe above
       # does, because a swipe from the row's name either holds long enough
       # to lift its preview or runs far enough to press Open; a tap on the
-      # page's plain line then closes it.
+      # page's plain line, inside the same list, then closes it. It starts
+      # a fifth of the window in from the edge, clear of a wide window's
+      # rail of tabs.
       - swipe:
-          start: "85%, 66%"
-          end: "50%, 66%"
+          start: "80%, 66%"
+          end: "45%, 66%"
           duration: 900
+      - waitForAnimationToEnd
       - takeScreenshot: task-agent-swipe
       - tapOn: "Created by .*"
       - waitForAnimationToEnd
-- waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Goal"
     direction: DOWN
@@ -207,10 +254,15 @@ onFlowComplete:
 # offering Open in browser, and back leads to the Overview. A tap off the
 # menu closes it.
 # Note that the wait is long, because the first web view a freshly booted
-# simulator opens launches WebKit's processes, as `agent.yaml` says.
-- scrollUntilVisible:
-    element: "Invite funnel"
-    direction: UP
+# simulator opens launches WebKit's processes, as `agent.yaml` says; and
+# that the page is scrolled to in short steps until it stands clear under
+# the task's name in the bar (`scroll-to.yaml`'s `BELOW`), because a scroll
+# that stops once it shows leaves it under the bar, where the tap misses it.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Invite funnel"
+      BELOW: "relay › AL-42"
 - tapOn: "Invite funnel"
 - extendedWaitUntil:
     visible: "Invites sent in the staging workspace.*"
@@ -219,9 +271,8 @@ onFlowComplete:
 - tapOn: "More"
 - assertVisible: "Open in browser"
 - takeScreenshot: task-page-menu
-- tapOn:
-    point: "50%, 90%"
-- waitForAnimationToEnd
+- runFlow:
+    file: subflows/dismiss.yaml
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
@@ -279,22 +330,20 @@ onFlowComplete:
 # The parent stands over the words as the relation's capsule (since #8903),
 # "Sub-task of · its name".
 - assertVisible: "Sub-task of.*"
-# Note that the keyboard is lowered by a short drag up the form, which
-# lowers it on a drag (`SettingsForm`), since Maestro's hideKeyboard fails
-# on this sheet when no keyboard stands, as with nothing typed.
-- swipe:
-    start: "50%, 50%"
-    end: "50%, 40%"
-    duration: 400
-- waitForAnimationToEnd
+# The keyboard is lowered by a drag on the sheet's page.
+- runFlow:
+    file: subflows/lower-keyboard.yaml
 - takeScreenshot: new-sub-task
 - tapOn: "Cancel"
 - waitForAnimationToEnd
 # Its description's open comment threads stand under it; one opens with its
 # comments and the reply field, a reply typed into it.
+# Note that the scroll may take a minute, because the description's video
+# plays on, holding each swipe ten seconds waiting for the page to settle.
 - scrollUntilVisible:
     element: "Comments"
     direction: DOWN
+    timeout: 60000
 - waitForAnimationToEnd
 - takeScreenshot: task-comments
 - tapOn: "Should an owner be able to resend.*"
@@ -312,15 +361,11 @@ onFlowComplete:
 - waitForAnimationToEnd
 # Back on the list, a landscape window stands it as a split view: on an iPad
 # the app sidebar, the list, and the task side by side.
-# Note that the tab is pressed again where the list did not come back,
-# because the first press after the reply's keyboard lowers can be spent.
-- tapOn: "Tasks"
 - runFlow:
-    when:
-      notVisible: "Pinned"
-    commands:
-      - tapOn: "Tasks"
-      - waitForAnimationToEnd
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- assertVisible: "Pinned"
 - setOrientation: LANDSCAPE_LEFT
 - waitForAnimationToEnd
 - takeScreenshot: tasks-wide

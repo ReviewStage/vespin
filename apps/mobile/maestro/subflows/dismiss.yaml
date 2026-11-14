@@ -1,0 +1,12 @@
+# dismiss.yaml -- closes a menu or a preview standing over the screen by a tap off it, at `POINT`, near the screen's foot unless a flow names another.
+#
+# Note that the tap lands above the tab bar and below the menus the flows
+# open, and never on the status bar, which the system takes and leaves the
+# menu open; a menu lifted low on the screen names a point above it.
+appId: dev.vespin.ios
+env:
+  POINT: ${POINT || '50%, 90%'}
+---
+- tapOn:
+    point: "${POINT}"
+- waitForAnimationToEnd

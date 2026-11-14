@@ -6,16 +6,37 @@
 # Notification Center opens a notification as the Lock Screen does, on a
 # swipe to the right: a tap there only hints at the swipe, and leaves the
 # app closed. Where the swipe stops short of opening it, its Open stands.
+# Note too that the notification's words are waited for before the swipe,
+# so a pull that opened something else fails there, by name.
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 - swipe:
     start: 30%, 0%
     end: 30%, 70%
 - waitForAnimationToEnd
-- swipe:
-    from:
-      text: ".*Who can withdraw an invite.*"
-    direction: RIGHT
+- extendedWaitUntil:
+    visible: ".*Who can withdraw an invite.*"
+    timeout: 15000
+- takeScreenshot: notification-center
+# On an iPad, which `FLOATING_TABS` names, the notification stands at the
+# window's foot, where a swipe to the right turns Notification Center's
+# page to the widgets rather than opening it, and a drag up does not raise
+# it, so it is tapped there instead; an iPhone swipes it, as above.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn: ".*Who can withdraw an invite.*"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - swipe:
+          from:
+            text: ".*Who can withdraw an invite.*"
+          direction: RIGHT
 - tapOn:
     id: "swipe-action-button-identifier"
     optional: true

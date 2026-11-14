@@ -9,7 +9,11 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+# Note that the Inbox is waited for, since a loaded runner's cold launch has
+# drawn it after Maestro's own few seconds.
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - tapOn:
     id: "workspace-switcher"
 - tapOn: ".*, Settings"
@@ -35,5 +39,9 @@ appId: dev.vespin.ios
 - tapOn: "Send"
 - waitForAnimationToEnd
 # Settings' list stands again, Email beside Send feedback under About.
-- assertVisible: "Email"
+# Note that the list is scrolled to it, because a short window, the iPhone
+# Duo's, stands About below its fold.
+- scrollUntilVisible:
+    element: "Email"
+    direction: DOWN
 - takeScreenshot: feedback-sent

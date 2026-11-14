@@ -1,0 +1,25 @@
+# clear-of-tabs.yaml -- moves the list up a quarter of the window where the row `ROW` stands no higher than the iPhone's tab bar, so a tap on it lands on the row rather than on a tab.
+#
+# Note that a scroll down stops as soon as the row shows, at the window's
+# foot, under the tab bar, where a tap opens the tab instead. The row is let
+# be where it stands above the bar, as a row found without a scroll does,
+# since moving it would carry it under the bar at the top; and where the
+# tabs are a rail, the iPhone Duo's, the same check moves only a row low on
+# the window. An iPad's tabs float at the window's top and cover no row.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+      notVisible:
+        text: "${ROW}"
+        above:
+          id: "search-tab"
+    commands:
+      - swipe:
+          start: "50%, 60%"
+          end: "50%, 35%"
+          duration: 800
+- waitForAnimationToEnd

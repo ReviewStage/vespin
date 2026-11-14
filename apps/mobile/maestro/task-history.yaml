@@ -10,7 +10,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - scrollUntilVisible:
     element: "Teammate invitations"
     direction: DOWN
@@ -30,8 +33,11 @@ appId: dev.vespin.ios
 - assertVisible: "Context"
 - takeScreenshot: task-version
 - tapOn: "Restore this version"
-- waitForAnimationToEnd
-- assertVisible: "Version restored"
+# Note that the notice is checked at once, since it stands six seconds and a
+# loaded runner has reached it after it went.
+- extendedWaitUntil:
+    visible: "Version restored"
+    timeout: 5000
 - assertVisible:
     id: "failure-notice-undo"
 - assertVisible: "Version history"

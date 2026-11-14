@@ -14,7 +14,9 @@ onFlowComplete:
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - waitForAnimationToEnd
 # A regular window, which stands "Choose an item" beside the Inbox's list, is
 # turned to landscape, wide enough for three columns: the system's tab bar
@@ -49,7 +51,8 @@ onFlowComplete:
       - waitForAnimationToEnd
       - assertVisible: "Weekly digest email"
       - takeScreenshot: ipad-sidebar-pinned-turned
-      - tapOn: "Tasks"
+      - tapOn:
+          id: "tasks-tab"
       - waitForAnimationToEnd
       - takeScreenshot: ipad-sidebar-tasks
       - tapOn:
@@ -57,7 +60,10 @@ onFlowComplete:
       - assertVisible: "Find a task, an Inbox item, or an agent."
       - waitForAnimationToEnd
       - takeScreenshot: ipad-sidebar-search
-      - tapOn: "Inbox"
+      - runFlow:
+          file: subflows/tab.yaml
+          env:
+            TAB: Inbox
       - tapOn:
           id: "workspace-switcher"
       - assertVisible: ".*, Settings"
@@ -81,10 +87,17 @@ onFlowComplete:
       - assertVisible: ".*, Settings"
       - assertVisible: "Workspace settings|Settings…"
       - takeScreenshot: switcher-settings
-      - tapOn:
-          point: "50%, 90%"
-      - waitForAnimationToEnd
-      - tapOn: "Tasks"
+      # Note that the switcher's list is a sheet at the window's foot, so it
+      # is put away by a tap above it, since one low on the window lands on
+      # its Settings row.
+      - runFlow:
+          file: subflows/dismiss.yaml
+          env:
+            POINT: "50%, 20%"
+      - runFlow:
+          file: subflows/tab.yaml
+          env:
+            TAB: Tasks
       - assertVisible: "Weekly digest email"
       - waitForAnimationToEnd
       - takeScreenshot: tab-bar

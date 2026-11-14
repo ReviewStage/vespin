@@ -11,7 +11,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd
 # A row's long press menu holds Task relation, the four kinds under it.

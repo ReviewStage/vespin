@@ -3,6 +3,8 @@
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, as `skeleton.yaml` is, so the list
 # holds the fixture's threads and no server is reached; the fixture answers
@@ -11,7 +13,9 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 # The workspace's one button leads the bar, its menu holding the account and
 # Settings (`workspace.yaml`).
 - assertVisible:
@@ -22,9 +26,8 @@ appId: dev.vespin.ios
 - tapOn: "More"
 - assertVisible: "Mark all as read"
 - takeScreenshot: inbox-more
-- tapOn:
-    point: "50%, 90%"
-- waitForAnimationToEnd
+- runFlow:
+    file: subflows/dismiss.yaml
 # The scopes' segmented control over the list, Open chosen: All lists the settled threads
 # too. A regular window's list column holds them as a menu picker instead,
 # named for the scope chosen, so the flow opens it first there.
@@ -95,14 +98,15 @@ appId: dev.vespin.ios
 # A file that is neither a picture nor a video, the test plan's PDF, stands
 # after its message as its chip, its name over its kind and size once read; a
 # press opens it full screen, its pages drawn in a web view under a bar with
-# Done and Share. Note that the chip is scrolled to the screen's middle, since
-# the thread's last message first shows under the reply box and the tab bar,
-# where a tap lands on them instead.
-- scrollUntilVisible:
-    element: "invite-test-plan.pdf, PDF.*"
-    direction: DOWN
-    centerElement: true
-- waitForAnimationToEnd
+# Done and Share. Note that the chip is scrolled to above the reply box,
+# since the thread's last message first shows under it and the tab bar, where
+# a tap lands on them instead, and stands at the list's end, which no scroll
+# can center.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "invite-test-plan.pdf, PDF.*"
+      ABOVE: composer-field
 - takeScreenshot: inbox-file
 - tapOn: "invite-test-plan.pdf, PDF.*"
 # The viewer stands as file-viewer only once WebKit has drawn the PDF, so the
@@ -116,15 +120,15 @@ appId: dev.vespin.ios
 - tapOn:
     id: "file-viewer-done"
 - waitForAnimationToEnd
-# The thread's ⋯ menu opens Remind me too: a compact window's bar holds the
-# menu, and a regular window's detail column its own, the last "More" on
-# screen beside the sidebar's. The sheet stands over the whole thread, and a
-# split view's thread fills its column's height beneath it. A tap off the
-# sheet closes it unchanged, so the row's Remind me below still finds the
-# thread under Open.
-- tapOn:
-    text: "More"
-    index: -1
+# The thread's own Remind me opens the sheet too, in its ⋯ on a compact
+# window and in a regular window's detail bar (`bar-act.yaml`). The sheet
+# stands over the whole thread, and a split view's thread fills its column's
+# height beneath it. A tap off the sheet closes it unchanged, so the row's
+# Remind me below still finds the thread under Open.
+- runFlow:
+    file: subflows/bar-act.yaml
+    env:
+      ACT: Remind me
 - tapOn: "Remind me"
 - assertVisible: "Pick a date and time…"
 - waitForAnimationToEnd
@@ -136,55 +140,57 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - assertNotVisible: "Pick a date and time…"
 # Back on the list, from the thread.
-- tapOn: "Inbox"
-- waitForAnimationToEnd
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Inbox
 # A swipe from the leading edge reveals Mark as read or unread, which a full
 # swipe would press at once, so the flow swipes partway across "Recorded the
 # invite flow", the second row, which a compact window stands at about a
-# quarter of its height whatever the list holds below it; a long press offers
-# the same in the row's menu. Note that the press is optional, because a
-# regular window's sidebar stands its rows elsewhere.
-- swipe:
-    start: "8%, 27%"
-    end: "38%, 27%"
-    duration: 900
-- takeScreenshot: inbox-swipe
-- tapOn:
-    text: "Mark as .*"
-    optional: true
-# A swipe from the trailing edge reveals Resolve, which a full swipe would
-# press at once, and Remind me, so the flow swipes partway back across the
-# same row, and a tap on the Inbox's tab closes it unpressed. Note that a
-# regular window, which stands "Choose an item" beside its sidebar, is left
-# out, as its swipes read as taps.
+# quarter of its height whatever the list holds below it, and presses it; a
+# long press offers the same in the row's menu. A swipe from the trailing
+# edge reveals Resolve, which a full swipe would press at once, and Remind
+# me, so the flow swipes partway back across the same row, and a tap on the
+# row's own line, across from its actions, closes it unpressed.
+# Note that each swipe is closed before anything else is pressed, because a
+# row left open takes the next press on the list, the long press below among
+# them, only to close itself; that a tap off the list, on the bar's title,
+# leaves it open; and that an iPad, whose floating tabs `FLOATING_TABS`
+# names, is left out, since its list is a column a third of the window wide,
+# which the swipes' points, set across a compact window, miss. The trailing
+# swipe starts a fifth of the window in from its edge, since a wide
+# window, the iPhone Duo's, stands its tabs as a rail along that edge.
 - runFlow:
     when:
-      notVisible: "Choose an item"
+      true: ${FLOATING_TABS != 'true'}
     commands:
       - swipe:
-          start: "92%, 27%"
-          end: "60%, 27%"
+          start: "8%, 27%"
+          end: "38%, 27%"
           duration: 900
+      - waitForAnimationToEnd
+      - takeScreenshot: inbox-swipe
+      - tapOn: "Mark as .*"
+      - waitForAnimationToEnd
+      - swipe:
+          start: "80%, 27%"
+          end: "48%, 27%"
+          duration: 900
+      - waitForAnimationToEnd
       - assertVisible: "Resolve"
       - takeScreenshot: inbox-swipe-trailing
-      - tapOn: "Inbox"
+      - tapOn:
+          point: "10%, 27%"
       - waitForAnimationToEnd
-- scrollUntilVisible:
-    element: "acceptInvite can add a member twice"
-    direction: DOWN
-- waitForAnimationToEnd
 # A long press lifts the thread's preview, its newest messages under its
 # task and title, over the row's menu, which leads with Open, since a tap on
 # the preview only closes it.
-- longPressOn: "acceptInvite can add a member twice"
 - runFlow:
-    when:
-      notVisible: "Open"
-    commands:
-      - longPressOn: "acceptInvite can add a member twice"
-- assertVisible: "Open"
+    file: subflows/row-menu.yaml
+    env:
+      ROW: acceptInvite can add a member twice
+      ITEM: Open
 - assertVisible: "Mark as read"
-- waitForAnimationToEnd
 - takeScreenshot: inbox-preview
 - tapOn: "Mark as read"
 # Note that the list is scrolled back to its first row, rather than to the
@@ -204,14 +210,30 @@ appId: dev.vespin.ios
 # the thread away, out of Open and under Reminders, its time in the row's
 # time's place. The long press is used, since a regular window's sidebar
 # stands its rows elsewhere. Open is chosen again for the search below.
-- longPressOn: "Recorded the invite flow"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Recorded the invite flow
+      ITEM: Remind me
 - tapOn: "Remind me"
 - assertVisible: "Pick a date and time…"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-remind
 - tapOn: "In 1 hour.*"
 - waitForAnimationToEnd
-- assertNotVisible: "Recorded the invite flow"
+# Note that a compact window goes back to the list, which no longer holds
+# the reminded thread, while an iPad's split view keeps it standing, still
+# picked beside its thread, with its reminder's time, Open's count one less.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - assertNotVisible: "Recorded the invite flow"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - assertVisible: "Reminder .*"
 - runFlow:
     when:
       visible: "Choose an item"
