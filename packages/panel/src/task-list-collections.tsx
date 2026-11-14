@@ -105,9 +105,10 @@ export function useTaskListRow<Row extends object>(
     [collection, key],
   );
 
-  return useSyncExternalStore(subscribe, () =>
-    key === undefined ? undefined : collection.get(key),
-  );
+  const read = (): Row | undefined => (key === undefined ? undefined : collection.get(key));
+
+  // Note that a render to markup reads the row as it stands, as a window's first frame does.
+  return useSyncExternalStore(subscribe, read, read);
 }
 
 /**

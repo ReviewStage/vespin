@@ -69,7 +69,7 @@ import {
 import { skillWord } from "@repo/features/skill-word";
 import { GOAL_LINE } from "@repo/features/slash-command";
 import { sentOf } from "@repo/features/suggestion-model";
-import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { workingTime } from "@repo/features/time-format";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
@@ -224,6 +224,7 @@ import { useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
@@ -987,9 +988,6 @@ function TodosDock({
   );
 }
 
-/** Every task's pull requests the window's task list carries. */
-const selectTaskPullRequests = (state: AppStateSnapshot) => state.tasks.taskPullRequests;
-
 /** Every pull request the agent opened, pinned over the box under the to-do list for as long as one stands, whether the agent works or has ended: the one it stands on as its tab read it, and the others its task's list names it as having opened (`dockedPullRequests`); nothing before it opened one. */
 function PublishedDock({
   published,
@@ -1002,16 +1000,11 @@ function PublishedDock({
   taskId: string | null;
   doors: PublishedDoors;
 }): ReactNode {
-  const listed = useQuery({ ...appStateQuery, select: selectTaskPullRequests }).data;
+  const listed = useTaskListRow(useTaskListCollections().taskPullRequests, taskId ?? undefined);
 
   const docked = useMemo(
-    () =>
-      dockedPullRequests(
-        published,
-        taskId === null ? [] : pullRequestsOfTask(listed, taskId),
-        agentId,
-      ),
-    [published, listed, taskId, agentId],
+    () => dockedPullRequests(published, listed?.pullRequests ?? [], agentId),
+    [published, listed, agentId],
   );
 
   // Note that one pull request is drawn only as the row of the branch the agent stands on, so the dock stands only where that row or the split bar draws.

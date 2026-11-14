@@ -14,14 +14,13 @@ import {
   runActionsIn,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { Badge, PlayIcon, SplitButton, STATUS_TONE, useMenu } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useMemo, useState } from "react";
 import { askAct } from "../act.js";
 import { useAppCommand } from "../app-commands.js";
 import { ActionMenu, type MenuAction, type MenuSubmenu } from "../desktop/action-menu.js";
@@ -35,12 +34,12 @@ import {
   shortcutSubject,
   useShortcutTarget,
 } from "../shortcut-target.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { showToast } from "../toast.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { localRunsQuery, runActionGlyph, shellsQuery } from "./run-action-shells.js";
 import type { HeldAction } from "./terminal-held.js";
 import { TERMINAL_KIND } from "./terminal-session.js";
-import { listedAgentIn } from "./use-workspace-agents.js";
 
 /**
  * run-actions-button.tsx -- an agent's run actions: its repository's commands, kept in Settings › Cloud environment, each run when pressed, in a Terminal tab of a cloud agent's sandbox or a Local tab on the Mac a local agent runs on.
@@ -107,18 +106,14 @@ function useRepositoryRunActions(agentId: string, reached: boolean) {
 
 /** The agent's workspace and repository as the task list carries them; none where it carries no such agent. */
 function useRunPlace(agentId: string) {
-  const select = useCallback(
-    (state: AppStateSnapshot) => {
-      const listed = listedAgentIn(state.tasks, agentId);
+  const listed = useTaskListRow(useTaskListCollections().agents, agentId);
+  const workspaceId = listed?.workspaceId;
+  const repository = listed?.repository;
 
-      return listed === undefined
-        ? undefined
-        : { workspaceId: listed.workspaceId, repository: listed.repository };
-    },
-    [agentId],
+  return useMemo(
+    () => (workspaceId === undefined ? undefined : { workspaceId, repository }),
+    [workspaceId, repository],
   );
-
-  return useQuery({ ...appStateQuery, select }).data;
 }
 
 /** Says a press that did not go through, reporting it beside the act and the agent. */

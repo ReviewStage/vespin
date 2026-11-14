@@ -29,14 +29,15 @@ export function listedRows(
   };
 }
 
-/** The tasks, agents, and agents' pull requests a test lists; none of the agents where it lists none. */
+/** The tasks, agents, and pull requests a test lists; none of the agents where it lists none. */
 interface ListedTasks {
   readonly tasks: TasksView["tasks"];
   readonly taskAgents?: TasksView["taskAgents"] | undefined;
+  readonly taskPullRequests?: TasksView["taskPullRequests"] | undefined;
   readonly agentPullRequests?: TasksView["agentPullRequests"] | undefined;
 }
 
-/** The window's task-list collections over what a test lists: `stand` writes its tasks and agents as the window's follow writes a document, and `provide` hands them to a tree. */
+/** The window's task-list collections over what a test lists: `stand` writes its tasks, agents, and pull requests as the window's follow writes a document, and `provide` hands them to a tree. */
 export interface StandingTaskList {
   readonly stand: (listed: ListedTasks) => void;
   readonly provide: (element: ReactNode) => ReactElement;
@@ -47,12 +48,13 @@ export function standingTaskList(initial: ListedTasks): StandingTaskList {
   const following = taskListFollowing();
   let version = 0;
 
-  const stand = ({ tasks, taskAgents, agentPullRequests }: ListedTasks) => {
+  const stand = ({ tasks, taskAgents, taskPullRequests, agentPullRequests }: ListedTasks) => {
     version += 1;
     following.write(version, {
       ...IDLE_TASKS_VIEW,
       tasks,
       ...(taskAgents === undefined ? undefined : { taskAgents }),
+      ...(taskPullRequests === undefined ? undefined : { taskPullRequests }),
       ...(agentPullRequests === undefined ? undefined : { agentPullRequests }),
     });
   };
