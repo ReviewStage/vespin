@@ -1,32 +1,35 @@
 import { type ReactNode, useId } from "react";
 import type { CodexArt } from "../../marks/harness-mark.js";
-import { MarkOrb } from "../../marks/mark-orb.js";
+import { TEXT_LINK_HEIGHT, TextLink } from "../text-link/text-link.js";
 import { LANDING_FIELD, LandingField, type LandingFieldPattern } from "./landing-field.js";
+import { LandingHeroApp } from "./landing-hero.js";
 import { LANDING_SCENE, type LandingScene, LandingSceneView } from "./landing-scenes.js";
 import { SiteFrame, SiteRule } from "./site-frame.js";
 
 export { SiteBarPages } from "./site-frame.js";
 
 /**
- * landing-page.tsx -- the product's landing: a bar that floats once the page scrolls, the one line beside the copper ball, a section per feature each over a moving screen, and a close over the wordmark in dots.
+ * landing-page.tsx -- the product's landing: the line over the live app, a section per feature each over a moving screen, and a close over the wordmark in dots.
  *
- * It stands in the site's frame (`site-frame.tsx`): the margin grid's
- * rails, the bar that floats once the page scrolls, and the foot over the
- * wordmark; every section opens under a rule across the rails with a cross
- * where they meet. A section is a heading and a sentence over a
- * stage, the feature's whole screen standing on a field of drifting copper dots with no panel round it, the
- * app's own components playing a short story (`landing-scenes.tsx`), with
- * an aside beside it where the caller gives one. The close carries the
- * page's last call.
+ * The hero sets its line large and to the left, its sentence and its calls
+ * on one row under it, and the Mac app live below them, as wide as the page
+ * allows, its foot fading into the ground (`landing-hero.tsx`). A section opens under a hairline across
+ * the page with its words, a heading over a sentence and a link to read
+ * more, beside the feature's screen standing on a field of drifting copper
+ * dots, the app's own components playing a short story
+ * (`landing-scenes.tsx`); the words and the screen trade sides
+ * from one section to the next, and stack on a phone. The close sets
+ * the page's last call in the middle.
  *
- * Its words and its links are the caller's; its art, scenes, and rhythm are
- * its own, drawn in the theme's roles and the web profile's display styles
- * (`tokens/display.css`). It is drawn in `landing.css`.
+ * It stands in the site's frame (`site-frame.tsx`). Its words and its links
+ * are the caller's; its art, scenes, and rhythm are its own, drawn in the
+ * theme's roles and the web profile's display styles (`tokens/display.css`).
+ * It is drawn in `landing.css`.
  */
 
 export { LANDING_SCENE, type LandingScene };
 
-/** The field behind each scene's stage. */
+/** The field of copper dots behind each scene's stage. */
 const SCENE_FIELD: Readonly<Record<LandingScene, LandingFieldPattern>> = {
   [LANDING_SCENE.INBOX]: LANDING_FIELD.FLOW,
   [LANDING_SCENE.AGENTS]: LANDING_FIELD.WAVES,
@@ -35,18 +38,21 @@ const SCENE_FIELD: Readonly<Record<LandingScene, LandingFieldPattern>> = {
   [LANDING_SCENE.KEYS]: LANDING_FIELD.WAVES,
 };
 
-/** A feature: `title` and `lead` over its scene's stage, `aside` beside the stage where given. */
+/** A feature: `title` over `lead`, its link to read `more`, and `aside` where given, beside its scene's stage, the two trading sides from one section to the next. */
 export function LandingSection({
   title,
   lead,
+  more,
   scene,
   aside,
   codexArt,
 }: {
   title: ReactNode;
   lead: ReactNode;
+  /** Where to read more of the feature, linked under the lead. */
+  more?: { readonly label: string; readonly href: string } | undefined;
   scene: LandingScene;
-  /** What stands beside the stage, such as `LandingFacts`; none lets the stage take the column. */
+  /** What stands under the words, such as `LandingFacts`. */
   aside?: ReactNode;
   /** Codex's picture as the site serves it, which a scene naming Codex draws its mark from. */
   codexArt?: CodexArt | undefined;
@@ -64,18 +70,19 @@ export function LandingSection({
     <section className="ui-landing-section" aria-labelledby={titleId}>
       <SiteRule />
       <div className="ui-landing-section-body">
-        <h2 className="ui-landing-section-title" id={titleId}>
-          {title}
-        </h2>
-        <p className="ui-landing-lead">{lead}</p>
-        {aside === undefined ? (
-          stage
-        ) : (
-          <div className="ui-landing-beside">
-            {stage}
-            {aside}
-          </div>
-        )}
+        <div className="ui-landing-section-words">
+          <h2 className="ui-landing-section-title" id={titleId}>
+            {title}
+          </h2>
+          <p className="ui-landing-lead">{lead}</p>
+          {more === undefined ? null : (
+            <TextLink href={more.href} height={TEXT_LINK_HEIGHT.CONTROL}>
+              {more.label} →
+            </TextLink>
+          )}
+          {aside}
+        </div>
+        {stage}
       </div>
     </section>
   );
@@ -129,7 +136,7 @@ export function LandingBackedBy({ href }: { href: string }): React.JSX.Element {
   );
 }
 
-/** The landing: `bar` over the hero's `badge`, `title`, `lead`, and `actions` beside the ball, the sections, the `close`, and the `footer` over the wordmark. */
+/** The landing: `bar` over the hero's `badge`, `title`, and its `lead` beside its `actions`, over the live app, the sections, the `close`, and the `footer` over the wordmark. */
 export function LandingPage({
   bar,
   barCall,
@@ -169,22 +176,24 @@ export function LandingPage({
           <div className="ui-landing-hero-words">
             {badge === undefined ? null : <div className="ui-landing-hero-badge">{badge}</div>}
             <h1 className="ui-landing-title">{title}</h1>
-            {lead === undefined ? null : <p className="ui-landing-hero-lead">{lead}</p>}
-            <div className="ui-landing-actions">{actions}</div>
+            <div className="ui-landing-hero-row">
+              {lead === undefined ? null : <p className="ui-landing-hero-lead">{lead}</p>}
+              <div className="ui-landing-actions">{actions}</div>
+            </div>
           </div>
-          <div className="ui-landing-hero-art">
-            <MarkOrb />
+          <div className="ui-landing-hero-stage">
+            <div className="ui-landing-hero-app">
+              <LandingHeroApp />
+            </div>
           </div>
         </div>
         {children}
         <SiteRule />
         <section className="ui-landing-close" aria-labelledby={closeId}>
-          <div>
-            <h2 className="ui-landing-section-title" id={closeId}>
-              {close.title}
-            </h2>
-            {close.lead === undefined ? null : <p className="ui-landing-lead">{close.lead}</p>}
-          </div>
+          <h2 className="ui-landing-close-title" id={closeId}>
+            {close.title}
+          </h2>
+          {close.lead === undefined ? null : <p className="ui-landing-lead">{close.lead}</p>}
           <div className="ui-landing-actions">{close.actions}</div>
         </section>
       </main>

@@ -5,7 +5,6 @@ import { ChevronDownIcon, GLYPH, InboxIcon, ListTodoIcon, ZapIcon } from "../../
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
-  ComposeIcon,
   GearIcon,
   SearchIcon,
   SidebarIcon,
@@ -45,6 +44,7 @@ import { MINUTE, STORY_NOW, still } from "./landing-story.js";
 
 /** The page on show, which the sidebar marks among its places. */
 export const DESKTOP_PLACE = {
+  HOME: "home",
   INBOX: "inbox",
   TASK: "task",
   AUTOMATIONS: "automations",
@@ -140,6 +140,51 @@ export function SidePanelToggle(): React.JSX.Element {
   );
 }
 
+/**
+ * The sidebar's places as the panel lists them: Search, Home, the Inbox
+ * with how many of its items wait on the reader, Tasks, Automations, and the Merge queue,
+ * `place` marked, each of Home, the Inbox, and Automations going where
+ * `go` says where it is given.
+ */
+export function DesktopPlaces({
+  place,
+  needYou = 2,
+  go,
+}: {
+  place: DesktopPlace;
+  needYou?: number | undefined;
+  go?: ((place: DesktopPlace) => void) | undefined;
+}): React.JSX.Element {
+  const current = (shown: DesktopPlace) => (place === shown ? NAV_CURRENT.PAGE : undefined);
+  const press = (to: DesktopPlace) => (go === undefined ? undefined : () => go(to));
+
+  return (
+    <SidebarPlaces label="Places">
+      <NavItem icon={<SearchIcon />}>Search</NavItem>
+      <NavItem
+        icon={<GLYPH.HOME />}
+        current={current(DESKTOP_PLACE.HOME)}
+        onClick={press(DESKTOP_PLACE.HOME)}
+      >
+        Home
+      </NavItem>
+      <NavItem
+        icon={<InboxIcon />}
+        current={current(DESKTOP_PLACE.INBOX)}
+        count={{ value: needYou, noun: "need you", tone: STATUS_TONE.ATTENTION }}
+        onClick={press(DESKTOP_PLACE.INBOX)}
+      >
+        Inbox
+      </NavItem>
+      <NavItem icon={<ListTodoIcon />}>Tasks</NavItem>
+      <NavItem icon={<ZapIcon />} current={current(DESKTOP_PLACE.AUTOMATIONS)}>
+        Automations
+      </NavItem>
+      <NavItem icon={<GLYPH.QUEUED />}>Merge queue</NavItem>
+    </SidebarPlaces>
+  );
+}
+
 /** The desktop's sidebar, `place` marked among its places and `openTask` among My tasks. */
 export function DesktopSidebar({
   place,
@@ -161,24 +206,7 @@ export function DesktopSidebar({
           </span>
         </NavItem>
       </div>
-      <SidebarPlaces label="Places">
-        <NavItem icon={<ComposeIcon />}>New task</NavItem>
-        <NavItem icon={<SearchIcon />}>Search</NavItem>
-        <NavItem
-          icon={<InboxIcon />}
-          current={place === DESKTOP_PLACE.INBOX ? NAV_CURRENT.PAGE : undefined}
-          count={{ value: 2, noun: "need you", tone: STATUS_TONE.ATTENTION }}
-        >
-          Inbox
-        </NavItem>
-        <NavItem icon={<ListTodoIcon />}>Tasks</NavItem>
-        <NavItem
-          icon={<ZapIcon />}
-          current={place === DESKTOP_PLACE.AUTOMATIONS ? NAV_CURRENT.PAGE : undefined}
-        >
-          Automations
-        </NavItem>
-      </SidebarPlaces>
+      <DesktopPlaces place={place} />
       <SidebarRule />
       <nav className="ui-landing-sidebar-group" aria-label="My tasks">
         <GroupHeader heading={GROUP_HEADING.NONE} label="My tasks" />

@@ -670,13 +670,14 @@ export function Button({
   );
 }
 
-/** A link drawn as a labeled button: its words after its glyph, going to `href` when pressed. */
+/** A link drawn as a labeled button: its words after its glyph and before its end glyph, going to `href` when pressed. */
 export function ButtonLink({
   href,
   variant,
   size,
   corners,
   icon,
+  endIcon,
   label,
   external = false,
   onClick,
@@ -695,6 +696,8 @@ export function ButtonLink({
   onClick?: ((event: MouseEvent<HTMLAnchorElement>) => void) | undefined;
   /** The glyph before its words. */
   icon?: ReactNode;
+  /** The glyph after its words, where what the press does reads best at their end: a download's arrow. */
+  endIcon?: ReactNode;
   /** Its accessible name, where it says more of what it does than its words have room for; it holds them. */
   label?: string | undefined;
   children: ReactNode;
@@ -718,6 +721,7 @@ export function ButtonLink({
       <span className={faceClasses(boxSize(variant, size, false), false, false)} {...PRESS_FACE}>
         {icon}
         <span className={WORDS}>{children}</span>
+        {endIcon}
         {external ? <ArrowUpRightIcon /> : null}
       </span>
     </a>

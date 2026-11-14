@@ -1,4 +1,5 @@
 import { PANEL_ASSET_BASE } from "@repo/features/link-home";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   BUTTON_VARIANT,
   ButtonLink,
@@ -8,10 +9,9 @@ import {
   LandingSection,
   MARK_PROVIDER,
   ProviderMark,
-  TEXT_LINK_HEIGHT,
-  TextLink,
 } from "@repo/ui";
 import {
+  DOCS_URL,
   REPOSITORY_URL,
   SITE_PAGE,
   SiteBarDownload,
@@ -32,10 +32,9 @@ const CODEX_ART = {
 const Y_COMBINATOR_PAGE = "https://www.ycombinator.com/companies/vespin";
 
 /**
- * The landing: the one line beside the copper ball, then a section for each
- * of the product's features over the app's own screens at work, and the
- * close. A reader with an account signs in from the bar or under the hero's
- * download.
+ * The landing: the one line over the live app, then a section for each of
+ * the product's features over the app's own screens at work, and the close. A reader with an account signs in
+ * from the bar, or continues on the web beside the hero's download.
  */
 export function App(): React.JSX.Element {
   return (
@@ -43,17 +42,18 @@ export function App(): React.JSX.Element {
       bar={<SiteNavigation current={{ page: SITE_PAGE.HOME }} />}
       barCall={<SiteBarDownload />}
       badge={<LandingBackedBy href={Y_COMBINATOR_PAGE} />}
-      title="An inbox for all your coding agents."
+      title="The unified workspace for engineering teams and agents."
+      lead="Designed to keep every task moving, day and night."
       actions={
         <>
           <SiteDownload />
-          <TextLink href={WEB_APP_URL} height={TEXT_LINK_HEIGHT.CONTROL}>
-            or sign in on the web
-          </TextLink>
+          <ButtonLink variant={BUTTON_VARIANT.OUTLINE} href={WEB_APP_URL}>
+            Continue on web
+          </ButtonLink>
         </>
       }
       close={{
-        title: "Free and open source.",
+        title: `Try ${PRODUCT_NAME} today.`,
         actions: (
           <>
             <SiteDownload />
@@ -62,7 +62,7 @@ export function App(): React.JSX.Element {
               href={REPOSITORY_URL}
               icon={<ProviderMark provider={MARK_PROVIDER.GITHUB} />}
             >
-              View on GitHub
+              GitHub
             </ButtonLink>
           </>
         ),
@@ -72,21 +72,25 @@ export function App(): React.JSX.Element {
       <LandingSection
         title="Monitor all your agents with one inbox."
         lead="Agents only post to your inbox when something needs your attention."
+        more={{ label: "Learn more", href: `${DOCS_URL}/quickstart` }}
         scene={LANDING_SCENE.INBOX}
       />
       <LandingSection
         title="Agents work together."
         lead="They hand off work, message each other, and split tasks into sub-tasks."
+        more={{ label: "Learn more", href: DOCS_URL }}
         scene={LANDING_SCENE.AGENTS}
       />
       <LandingSection
         title="Check in from anywhere."
         lead="Use the Mac app at your desk, or the web app on your phone."
+        more={{ label: "Get the apps", href: `${DOCS_URL}/install` }}
         scene={LANDING_SCENE.DEVICES}
       />
       <LandingSection
         title="Bring your own keys."
         lead="Run agents on your Codex or Claude plan, or bring your own API keys."
+        more={{ label: "Connect an agent", href: `${DOCS_URL}/install` }}
         scene={LANDING_SCENE.KEYS}
         codexArt={CODEX_ART}
       />

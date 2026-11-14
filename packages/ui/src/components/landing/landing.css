@@ -1,6 +1,6 @@
-/* landing.css -- the landing (`landing-page.tsx`): its margin grid, the bar
-   that floats once the page scrolls, the hero beside the ball, each
-   feature's stage, the devices, the screens the scenes lay out at the app's
+/* landing.css -- the landing (`landing-page.tsx`): its insets, the bar
+   that stays at the top as the page scrolls, the hero over the live app,
+   each feature's stage, the devices, the screens the scenes lay out at the app's
    own sizes, the close, and the foot over the wordmark. The page queries its
    own width rather than the viewport's, so it is drawn the same in a frame
    as in a window; a container query cannot read a custom property, so the
@@ -28,6 +28,8 @@
      than that centers the frame, the room outside it its margin, and the
      bar's links, the hero, every section, and the foot keep to it. */
   .ui-landing-page > * {
+    /* off-scale: the site's hairline, the border's gray at half its ink, barely there */
+    --ui-landing-hairline: color-mix(in srgb, var(--ui-color-border) 50%, transparent);
     /* off-scale: 1376px, the rails' 1280px and an inset either side */
     --ui-landing-margin: max(0px, (100cqw - 1376px) / 2);
     --ui-landing-inset: calc(var(--ui-landing-margin) + 48px);
@@ -38,71 +40,10 @@
     margin: 0;
   }
 
-  /* The margin grid: a hairline rail at each of the content's edges, the
-     page's length. */
-  .ui-landing-rails {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-
-  .ui-landing-rails::before,
-  .ui-landing-rails::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    background: var(--ui-color-border);
-  }
-
-  .ui-landing-rails::before {
-    left: var(--ui-landing-inset);
-  }
-
-  .ui-landing-rails::after {
-    right: var(--ui-landing-inset);
-  }
-
-  /* A rule across the page, a cross where it meets each rail. */
+  /* A hairline across the page's whole width, between its parts. */
   .ui-landing-rule {
-    position: relative;
     height: 1px;
-    background: var(--ui-color-border);
-  }
-
-  .ui-landing-rule > i {
-    position: absolute;
-    top: -5px;
-    width: 11px;
-    height: 11px;
-  }
-
-  .ui-landing-rule > i:first-child {
-    left: calc(var(--ui-landing-inset) - 5px);
-  }
-
-  .ui-landing-rule > i:last-child {
-    right: calc(var(--ui-landing-inset) - 5px);
-  }
-
-  .ui-landing-rule > i::before,
-  .ui-landing-rule > i::after {
-    content: "";
-    position: absolute;
-    background: var(--ui-color-border-strong);
-  }
-
-  .ui-landing-rule > i::before {
-    left: 5px;
-    width: 1px;
-    height: 11px;
-  }
-
-  .ui-landing-rule > i::after {
-    top: 5px;
-    width: 11px;
-    height: 1px;
+    background: var(--ui-landing-hairline);
   }
 
   /* The bar: across the page at its top, then, once the page scrolls, a
@@ -139,7 +80,7 @@
     margin: 0 auto;
     padding: 0 var(--ui-landing-gutter);
     border: 1px solid transparent;
-    border-bottom-color: var(--ui-color-border);
+    border-bottom-color: var(--ui-landing-hairline);
     border-radius: 0;
     background: var(--ui-display-landing-bar);
     backdrop-filter: blur(16px);
@@ -155,15 +96,10 @@
     flex: 1;
   }
 
+  /* Once the page moves under it, the bar stays across the top on a
+     blurred glass of the ground, its hairline under it. */
   .ui-landing-bar[data-floating="true"] .ui-landing-bar-in {
-    max-width: 720px;
-    height: 56px;
-    padding: 0 6px 0 20px;
-    border-color: var(--ui-color-border-strong);
-    border-radius: var(--ui-display-bar-radius);
-    background: var(--ui-color-float-solid);
-    box-shadow: var(--ui-display-landing-edge);
-    transform: translateY(12px);
+    background: color-mix(in srgb, var(--ui-color-ground) 72%, transparent);
   }
 
   /* The bar's links to the site's pages, a hairline after them setting them
@@ -181,20 +117,46 @@
     background: var(--ui-color-border-strong);
   }
 
-  /* The hero: the one line and its calls to the left, the ball to the right. */
+  /* The hero: the one line, its sentence, and its calls, over the live app
+     on a stage as wide as the rails. */
   .ui-landing-hero {
     position: relative;
     display: flex;
-    align-items: center;
-    min-height: 700px;
-    overflow: hidden;
+    flex-direction: column;
   }
 
+  /* The words stand well down from the bar, a share of the screen's height,
+     so the hero opens on room above its line. */
   .ui-landing-hero-words {
     position: relative;
     z-index: 1;
-    max-width: calc(600px + 2 * var(--ui-landing-margin));
-    padding: 0 var(--ui-landing-inset) 0 var(--ui-landing-gutter);
+    /* off-scale: the room above the words, a share of the screen */
+    padding: clamp(120px, 24svh, 240px) var(--ui-landing-gutter) 0;
+  }
+
+  /* The line takes the row's whole width, balanced over two lines of
+     even length rather than a long one over a short one. */
+  .ui-landing-hero-words .ui-landing-title {
+    max-width: none;
+    font-size: var(--ui-display-landing-hero-size);
+    text-wrap: balance;
+  }
+
+  /* The sentence under the line, and the calls on a row of their own under it. */
+  .ui-landing-hero-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 32px;
+    margin-top: 24px;
+  }
+
+  .ui-landing-hero-row .ui-landing-hero-lead {
+    margin-top: 0;
+  }
+
+  .ui-landing-hero-row .ui-landing-actions {
+    margin-top: 0;
   }
 
   /* The chip over the hero's line: a hairline pill, quiet words around
@@ -208,7 +170,7 @@
     align-items: center;
     gap: 8px;
     padding: 6px 12px;
-    border: 1px solid var(--ui-color-border-strong);
+    border: 1px solid var(--ui-landing-hairline);
     border-radius: var(--ui-radius-full);
     background: color-mix(in srgb, var(--ui-color-surface) 60%, transparent);
     color: var(--ui-color-text-muted);
@@ -257,7 +219,10 @@
     line-height: var(--ui-display-lead-leading);
   }
 
+  /* An outlined call is edged in the page's hairline, as the dividers are,
+     and filled as the app's composer is, so it stands solid on the page. */
   .ui-landing-actions {
+    --ui-color-border-strong: var(--ui-landing-hairline);
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -265,31 +230,605 @@
     margin-top: 40px;
   }
 
-  .ui-landing-hero-art {
+  .ui-landing-actions .ui-button[data-variant="outline"]:not(:hover) {
+    --ui-button-fill: var(--ui-color-field);
+  }
+
+  /* The live app stands in the hero itself, right under the words and on
+     their column, a step wider either side so its frame clears their edge,
+     its foot fading into the ground so the page runs on under it. */
+  .ui-landing-hero-stage {
+    position: relative;
+    /* off-scale: how far the window reaches past the words' column either side */
+    margin: 64px calc(var(--ui-landing-gutter) - 20px) 0;
+    padding-bottom: 24px;
+  }
+
+  /* A faint ground behind the window, so its black stands off the page's:
+     a lifted band across the page's whole width, fading in over the room
+     above the window so it has no edge across the page, with a low copper
+     light where the window's top meets it, both fading out toward the foot. */
+  .ui-landing-hero-stage::before {
+    content: "";
     position: absolute;
-    top: 60px;
-    right: calc(var(--ui-landing-inset) + 24px);
-    width: 580px;
-    height: 580px;
+    /* off-scale: the band starts well above the window and runs to the page's edges */
+    inset: -200px calc(20px - var(--ui-landing-gutter)) 0;
+    background:
+      radial-gradient(
+        50% 260px at 50% 200px,
+        color-mix(in srgb, var(--ui-color-accent) 14%, transparent),
+        transparent
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--ui-color-text) 5%, transparent) 200px,
+        transparent 85%
+      );
+    mask-image: linear-gradient(to bottom, transparent, black 200px);
+    pointer-events: none;
   }
 
-  .ui-landing-orb {
-    display: block;
+  .ui-landing-hero-app {
+    position: relative;
+    z-index: 1;
+    mask-image: linear-gradient(to bottom, black 62%, transparent 98%);
+  }
+
+  /* The hero's app (`landing-hero.tsx`): the Mac app at its own size,
+     restating the panel's shell (`packages/panel/src/styles/shell.css`
+     and `desktop.css`) for the parts no `@repo/ui` component draws: the
+     frame and its title bar, the sidebar's column, the sheet each page
+     stands on under its row on the frame, and the Inbox's and a task's
+     columns. It stands at one to one wherever the stage is wide enough,
+     and a narrower stage scales it down whole (`--ui-hero-app-fit`). */
+  /* Inside the mockups every edge is drawn in the border's one gray, the
+     stronger edge a control or a card would take included, so the screens
+     read as quietly as the page around them. */
+  .ui-hero-app,
+  .ui-landing-desktop,
+  .ui-landing-phone-screen {
+    --ui-color-border-strong: var(--ui-color-border);
+  }
+
+  .ui-hero-app-room {
+    position: relative;
+    /* off-scale: the app's height, a laptop window's */
+    height: calc(760px * var(--ui-hero-app-fit, 1));
+  }
+
+  .ui-hero-app {
+    /* off-scale: the panel's shell metrics, its title bar, sheet gap, and column inset */
+    --ui-hero-bar: 50px;
+    --ui-hero-gap: 8px;
+    --ui-hero-inset: 12px;
+    --ui-hero-reading-room: max(20px, calc((100% - 720px) / 2));
+
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: grid;
+    grid-template-columns: 264px minmax(0, 1fr);
+    box-sizing: border-box;
     width: 100%;
-    height: 100%;
+    height: 760px;
+    overflow: hidden;
+    border-radius: var(--ui-display-window-radius);
+    background: var(--ui-color-sidebar);
+    color: var(--ui-color-text);
+    font-family: var(--ui-font-sans);
+    text-align: start;
+    /* The window's edge is a ring of its shadow rather than a border, so
+       nothing the window clips can paint over the edge's curve. */
+    box-shadow:
+      0 0 0 1px var(--ui-color-border),
+      0 48px 140px -24px var(--ui-color-shadow-deep);
   }
 
-  /* A feature: its heading and sentence over its stage. */
+  .ui-hero-app-room[data-scaled="true"] .ui-hero-app {
+    width: 1040px;
+    transform: scale(var(--ui-hero-app-fit));
+    transform-origin: 0 0;
+  }
+
+  .ui-hero-sidebar {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    padding: 0 var(--ui-hero-inset) var(--ui-hero-inset);
+  }
+
+  .ui-hero-title-bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-tight-gap);
+    height: var(--ui-hero-bar);
+    --ui-button-ground: var(--ui-color-sidebar);
+  }
+
+  .ui-hero-lights {
+    display: flex;
+    gap: 8px;
+    margin: 0 18px 0 8px;
+  }
+
+  .ui-hero-lights > i {
+    width: 12px;
+    height: 12px;
+    border-radius: var(--ui-radius-full);
+    background: var(--ui-color-danger);
+  }
+
+  /* The lights in the Mac's own order: close, minimize, zoom. */
+  .ui-hero-lights > i:nth-child(2) {
+    background: var(--ui-color-attention);
+  }
+
+  .ui-hero-lights > i:nth-child(3) {
+    background: var(--ui-color-complete);
+  }
+
+  .ui-hero-history {
+    display: flex;
+    margin-left: auto;
+  }
+
+  .ui-hero-workspace {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-control-gap);
+    padding-bottom: var(--ui-tight-gap);
+  }
+
+  .ui-hero-workspace > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ui-hero-workspace-ref {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-icon-gap);
+    min-width: 0;
+    font-weight: var(--ui-type-section-weight);
+  }
+
+  /* The places and My tasks scroll under the workspace, the account's foot
+     standing still, as the panel's sidebar does. */
+  .ui-hero-sidebar-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .ui-hero-sidebar-group + .ui-hero-sidebar-group {
+    margin-top: var(--ui-section-gap);
+  }
+
+  .ui-hero-repository + .ui-hero-repository {
+    margin-top: var(--ui-tight-gap);
+  }
+
+  .ui-hero-row-time {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-icon-gap);
+    color: var(--ui-color-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The work column: each page's top row on the frame, level with the
+     lights, and its sheet under the row, a gap from the window's edges. */
+  .ui-hero-main {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    margin: 0 var(--ui-hero-gap) var(--ui-hero-gap) 0;
+  }
+
+  .ui-hero-page {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .ui-hero-bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    min-width: 0;
+    height: var(--ui-hero-bar);
+    --ui-button-ground: var(--ui-color-sidebar);
+  }
+
+  .ui-hero-bar > :only-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ui-hero-sheet,
+  .ui-hero-inbox::before {
+    border-radius: var(--ui-radius-14);
+    background: var(--ui-color-ground);
+    box-shadow:
+      0 0 0 1px var(--ui-color-border),
+      0 1px 2px var(--ui-color-shadow-soft),
+      0 16px 40px -20px var(--ui-color-shadow);
+  }
+
+  .ui-hero-sheet {
+    position: relative;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Home has no row of its own: its sheet starts a gap under the window's top. */
+  .ui-hero-home {
+    padding-top: var(--ui-hero-gap);
+  }
+
+  .ui-hero-home .ui-hero-sheet > * {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .ui-hero-new-task {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-control-gap);
+    margin-bottom: var(--ui-page-section-gap);
+  }
+
+  .ui-hero-new-task-head {
+    display: flex;
+  }
+
+  .ui-hero-home-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-tight-gap);
+  }
+
+  .ui-hero-composer-field {
+    padding: 12px 16px 4px;
+  }
+
+  .ui-hero-chip-words {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-icon-gap);
+  }
+
+  .ui-hero-chip-words svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .ui-hero-effort {
+    color: var(--ui-color-text-muted);
+  }
+
+  /* The Inbox: its list beside the opened item, one sheet under both
+     rows, the list parted from the item by a hairline. */
+  .ui-hero-inbox {
+    position: relative;
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .ui-hero-inbox::before {
+    content: "";
+    position: absolute;
+    inset: var(--ui-hero-bar) 0 0;
+  }
+
+  .ui-hero-inbox-list,
+  .ui-hero-inbox-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .ui-hero-inbox-list-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    border-right: 1px solid var(--ui-color-border);
+  }
+
+  .ui-hero-inbox-head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-control-gap);
+    padding: var(--ui-hero-inset) var(--ui-hero-inset) var(--ui-row-inset);
+  }
+
+  .ui-hero-inbox-head > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ui-hero-inbox-rows {
+    min-height: 0;
+    overflow: hidden;
+    padding: var(--ui-row-inset) var(--ui-hero-inset) var(--ui-hero-inset);
+  }
+
+  .ui-hero-inbox-item-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--ui-section-gap) var(--ui-hero-reading-room) var(--ui-hero-inset);
+  }
+
+  .ui-hero-subject {
+    padding-bottom: var(--ui-block-gap);
+    border-bottom: 1px solid var(--ui-color-border);
+  }
+
+  .ui-hero-comments {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-section-gap);
+    margin: var(--ui-block-gap) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .ui-hero-line {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-tight-gap);
+    min-width: 0;
+  }
+
+  .ui-hero-line-glyph {
+    display: inline-flex;
+    flex: none;
+    color: var(--ui-color-complete);
+  }
+
+  .ui-hero-line-glyph[data-open="true"] {
+    color: var(--ui-color-attention);
+  }
+
+  .ui-hero-line-glyph > svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .ui-hero-draft-ask {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ui-tight-gap);
+    padding: var(--ui-list-inset) var(--ui-list-inset) var(--ui-tight-gap);
+  }
+
+  .ui-hero-draft-ask-options {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* A task: its name on the frame, its agents' tabs under it, and the
+     agent's transcript on the sheet over the follow-up box. */
+  .ui-hero-task-title {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-icon-gap);
+    min-width: 0;
+    padding-left: var(--ui-hero-inset);
+    font-weight: var(--ui-type-section-weight);
+  }
+
+  .ui-hero-bar > .ui-hero-bar-end {
+    display: flex;
+    flex: none;
+    margin-left: auto;
+  }
+
+  /* The tabs' row stands a control's height and a gap under the title,
+     as the panel's does (`desktop.css`'s `--task-tabs-gap`). */
+  /* The tabs' row stands a control's height and a gap under the title,
+     as the panel's does (`desktop.css`'s `--task-tabs-gap`), the task's
+     checks and the side panel's toggle at its end. */
+  .ui-hero-task-tabs {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-tight-gap);
+    min-width: 0;
+    height: calc(var(--ui-control-height) + var(--ui-hero-gap));
+    padding-bottom: var(--ui-hero-gap);
+    box-sizing: border-box;
+    --ui-button-ground: var(--ui-color-sidebar);
+  }
+
+  .ui-hero-tabs {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--ui-list-gap);
+    min-width: 0;
+  }
+
+  .ui-hero-tabs-end {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-tight-gap);
+    padding-right: var(--ui-tight-gap);
+  }
+
+  .ui-hero-check svg {
+    color: var(--ui-color-complete);
+  }
+
+  .ui-hero-cloud {
+    position: relative;
+    display: inline-flex;
+  }
+
+  /* The sandbox standing ready: a dot at the cloud's foot. */
+  .ui-hero-cloud::after {
+    content: "";
+    position: absolute;
+    right: -2px;
+    bottom: -1px;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--ui-radius-full);
+    background: var(--ui-color-complete);
+    box-shadow: 0 0 0 1.5px var(--ui-color-surface);
+  }
+
+  .ui-hero-context {
+    display: inline-flex;
+    padding: 0 var(--ui-space-4);
+  }
+
+  .ui-hero-asks {
+    color: var(--ui-color-attention);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ui-hero-answered {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-tight-gap);
+    font-size: var(--ui-type-caption-size);
+    line-height: var(--ui-type-caption-leading);
+  }
+
+  .ui-hero-worked {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-tight-gap);
+  }
+
+  .ui-hero-turn-acts {
+    display: inline-flex;
+  }
+
+  .ui-hero-log {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--ui-block-gap);
+    min-height: 0;
+    overflow: auto;
+    padding: var(--ui-section-gap) var(--ui-hero-reading-room) var(--ui-block-gap);
+  }
+
+  .ui-hero-message-you {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--ui-tight-gap);
+    align-self: flex-end;
+    max-width: 80%;
+  }
+
+  .ui-hero-bubble {
+    width: fit-content;
+    padding: var(--ui-row-inset) var(--ui-list-inset);
+    border-radius: var(--ui-radius-14);
+    background: var(--ui-color-fill-strong);
+  }
+
+  .ui-hero-call-words {
+    display: inline-flex;
+    flex: 1;
+    align-items: baseline;
+    gap: var(--ui-tight-gap);
+    min-width: 0;
+    font-size: var(--ui-type-caption-size);
+    line-height: var(--ui-type-caption-leading);
+  }
+
+  .ui-hero-call-subject {
+    color: var(--ui-color-text-muted);
+  }
+
+  .ui-hero-working {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--ui-item-gap);
+    color: var(--ui-color-text-muted);
+    font-size: var(--ui-type-caption-size);
+    line-height: var(--ui-type-caption-leading);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ui-hero-empty {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ui-control-gap);
+  }
+
+  .ui-hero-agent-foot {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: var(--ui-tight-gap);
+    padding: 0 var(--ui-hero-reading-room) var(--ui-hero-inset);
+  }
+
+  .ui-hero-pull-request {
+    display: inline-flex;
+    color: var(--ui-color-complete);
+  }
+
+  .ui-hero-enter {
+    animation: ui-landing-enter var(--ui-duration-shape) var(--ui-motion-pane) both;
+  }
+
+  /* A feature: under a hairline, its words beside its screen, the words
+     standing in the middle of the screen's height; every other section
+     sets its screen first, so the two trade sides down the page. */
   .ui-landing-section {
     position: relative;
   }
 
   .ui-landing-section-body {
-    padding: 128px var(--ui-landing-gutter) 112px;
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: center;
+    gap: 64px;
+    padding: 112px var(--ui-landing-gutter);
+  }
+
+  .ui-landing-section:nth-of-type(even) .ui-landing-section-body {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  }
+
+  .ui-landing-section:nth-of-type(even) .ui-landing-section-words {
+    order: 2;
   }
 
   .ui-landing-section-title {
-    max-width: 680px;
+    max-width: 520px;
     font-family: var(--ui-display-landing-face);
     font-size: var(--ui-display-landing-feature-size);
     font-weight: var(--ui-display-landing-title-weight);
@@ -298,14 +837,25 @@
     text-wrap: balance;
   }
 
+  .ui-landing-section-words {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .ui-landing-section-words .ui-landing-lead {
+    max-width: 440px;
+    margin-top: 0;
+  }
+
   /* A stage: the feature's whole screen standing on a field of drifting
      copper dots, with no panel round it, lifted off the field by a deep
      shadow. The field fades out toward every edge, so it reads as light
      round the screen rather than a box. */
   .ui-landing-stage {
     position: relative;
-    margin-top: 56px;
-    padding: 56px 6%;
+    padding: 48px 6%;
   }
 
   /* off-scale: the field's fade at each edge */
@@ -335,6 +885,83 @@
     mask-composite: intersect;
   }
 
+  /* The Inbox and a task are close-ups: the columns their story happens in,
+     each a card drawn as the app draws a column (its bar on the frame over
+     its sheet) at the Mac app's own sizes, the one beside the story behind
+     the other and lower, so the two overlap as windows on a desk do. */
+  .ui-landing-closeup {
+    --ui-toolbar-height: 50px;
+    color: var(--ui-color-text);
+    font-family: var(--ui-font-sans);
+  }
+
+  .ui-landing-closeup-cards {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .ui-landing-card {
+    display: grid;
+    grid-template-rows: 50px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    grid-row: 1;
+    min-width: 0;
+    padding: 0 8px 8px;
+    border-radius: var(--ui-display-window-radius);
+    background: var(--ui-color-sidebar);
+    box-shadow:
+      0 0 0 1px var(--ui-color-border),
+      0 40px 120px -20px var(--ui-color-shadow-deep);
+  }
+
+  .ui-landing-card-sheet {
+    position: relative;
+    min-height: 0;
+    border-radius: var(--ui-radius-14);
+    background: var(--ui-color-ground);
+    box-shadow:
+      0 0 0 1px var(--ui-color-border),
+      0 1px 2px var(--ui-color-shadow-soft);
+  }
+
+  /* The Inbox: its list behind at the left, the thread in front, lower;
+     the stage keeps the thread's tallest step, so nothing under it moves. */
+  .ui-landing-stage[data-scene="inbox"] .ui-landing-closeup-cards {
+    min-height: 720px;
+  }
+
+  .ui-landing-stage[data-scene="inbox"] .ui-landing-card[data-aside="true"] {
+    grid-column: 1 / span 5;
+  }
+
+  .ui-landing-stage[data-scene="inbox"] .ui-landing-card[data-aside="false"] {
+    z-index: 1;
+    grid-column: 4 / -1;
+    margin-top: 72px;
+  }
+
+  /* A task: its log, and the plan's sub-tasks over its foot's corner,
+     standing past its edge. */
+  .ui-landing-stage[data-scene="agents"] .ui-landing-card {
+    grid-column: 1 / span 10;
+    height: 460px;
+  }
+
+  .ui-landing-satellite {
+    z-index: 1;
+    grid-row: 1;
+    grid-column: 6 / -1;
+    margin-top: 380px;
+    box-shadow:
+      0 0 0 1px var(--ui-color-border),
+      0 24px 64px -16px var(--ui-color-shadow-deep);
+  }
+
+  .ui-landing-card .ui-landing-log-sheet {
+    height: 100%;
+  }
+
   .ui-landing-stage .ui-landing-window {
     box-shadow:
       0 0 0 1px color-mix(in srgb, var(--ui-color-text-muted) 10%, transparent),
@@ -358,19 +985,6 @@
     z-index: 1;
   }
 
-  /* A stage with an aside: the stage, and what stands beside it. */
-  .ui-landing-beside {
-    display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-    align-items: center;
-    gap: 40px;
-    margin-top: 40px;
-  }
-
-  .ui-landing-beside > .ui-landing-stage {
-    margin-top: 0;
-  }
-
   .ui-landing-facts > .ui-landing-fact {
     padding: 16px 0;
     border-top: 1px solid var(--ui-color-border);
@@ -388,14 +1002,26 @@
   /* The page's close and its foot over the wordmark. */
   .ui-landing-close {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
-    gap: 32px;
-    padding: 112px var(--ui-landing-gutter) 80px;
+    padding: 160px var(--ui-landing-gutter) 140px;
+    text-align: center;
+  }
+
+  .ui-landing-close-title {
+    font-family: var(--ui-display-landing-face);
+    font-size: var(--ui-display-landing-feature-size);
+    font-weight: var(--ui-display-landing-title-weight);
+    line-height: var(--ui-display-feature-leading);
+    letter-spacing: var(--ui-display-landing-feature-tracking);
+  }
+
+  .ui-landing-close .ui-landing-lead {
+    margin-inline: auto;
   }
 
   .ui-landing-close .ui-landing-actions {
-    margin-top: 0;
+    justify-content: center;
   }
 
   /* Under a page's closing rule, as on every page but the landing, whose
@@ -547,7 +1173,7 @@
     width: 100%;
     aspect-ratio: 16 / 10;
     overflow: hidden;
-    border: 1px solid var(--ui-color-border-strong);
+    border: 1px solid var(--ui-color-border);
     border-radius: var(--ui-display-window-radius);
     background: var(--ui-color-sidebar);
     box-shadow: var(--ui-display-landing-screen-glow);
@@ -601,7 +1227,7 @@
     border-radius: var(--ui-display-phone-radius);
     background: var(--ui-color-sidebar);
     box-shadow:
-      inset 0 0 0 1px var(--ui-color-border-strong),
+      inset 0 0 0 1px var(--ui-color-border),
       var(--ui-display-landing-screen-glow);
   }
 
@@ -761,9 +1387,7 @@
   /* A column of the page: its bar on the frame, then its share of the sheet. */
   .ui-landing-inbox-list,
   .ui-landing-inbox-thread,
-  .ui-landing-agent-log,
-  .ui-landing-automation,
-  .ui-landing-side {
+  .ui-landing-automation {
     position: relative;
     display: grid;
     grid-template-rows: 50px minmax(0, 1fr);
@@ -776,31 +1400,10 @@
     grid-template-columns: 320px minmax(0, 1fr);
   }
 
-  .ui-landing-task {
-    grid-template-columns: minmax(0, 1fr) 400px;
-    gap: 8px;
-  }
-
   /* The sheet the columns' content stands on, under their bars; the side
      panel's is the well. */
   .ui-landing-inbox::before,
-  .ui-landing-agent-log::before,
   .ui-landing-automation::before,
-  .ui-landing-side::before {
-    content: "";
-    position: absolute;
-    inset: 50px 0 0;
-    border-radius: var(--ui-radius-14);
-    background: var(--ui-color-ground);
-    box-shadow:
-      0 0 0 1px var(--ui-color-border),
-      0 1px 2px var(--ui-color-shadow-soft);
-  }
-
-  .ui-landing-side::before {
-    background: var(--ui-color-well);
-  }
-
   .ui-landing-sheet-start,
   .ui-landing-sheet-end {
     position: relative;
@@ -985,18 +1588,6 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .ui-landing-agent-foot {
-    flex: none;
-  }
-
-  .ui-landing-dock {
-    padding: 0 16px var(--ui-row-inset);
-  }
-
-  .ui-landing-composer {
-    padding: 0 16px var(--ui-list-inset);
-  }
-
   .ui-landing-pull-request {
     display: inline-flex;
     color: var(--ui-color-complete);
@@ -1004,12 +1595,6 @@
 
   .ui-landing-effort {
     color: var(--ui-color-text-muted);
-  }
-
-  .ui-landing-side-bar {
-    display: flex;
-    align-items: center;
-    min-width: 0;
   }
 
   .ui-landing-side-sheet {
@@ -1103,7 +1688,7 @@
 
   .ui-landing-devices-phone .ui-landing-phone {
     box-shadow:
-      inset 0 0 0 1px var(--ui-color-border-strong),
+      inset 0 0 0 1px var(--ui-color-border),
       0 0 0 2.5cqw var(--ui-color-ground),
       0 6cqw 16cqw var(--ui-color-shadow-deep);
   }
@@ -1131,66 +1716,28 @@
     background: var(--ui-color-ground);
   }
 
+  /* The keys: the composer's model menu open at its own width over the
+     model chip it hangs from, the chip at the menu's trailing edge. */
   .ui-landing-keys {
-    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--ui-tight-gap);
+    width: min(100%, 340px);
     margin: 0 auto;
     background: transparent;
   }
 
-  /* Under the Pinned line (`docs/DESIGN.md`), the room beside the words is
-     narrower than the ball, so the hero stacks as a phone's does: the words,
-     then the ball under them, no wider than the column, no taller than it
-     stands beside the words, and no taller than a share of the screen, so a
-     phone held sideways keeps the words and the ball's top on its first
-     screen; the words' room above them gives way on a short screen too. The
-     small viewport is the one measured, so a browser's own bars never count.
-     A container query keeps no state, so the line has its enter width alone,
-     without the leave width a script would hold. */
-  /* off-scale: 1120px, the Pinned line */
-  @container (width < 1120px) {
-    .ui-landing-hero {
-      /* off-scale: the ball's least size, and its share of the screen */
-      --ui-landing-art-least: 160px;
-      --ui-landing-art-screen: 58svh;
-      /* off-scale: the room above the words and above the ball, each a share of the screen */
-      --ui-landing-hero-top: min(96px, 8svh);
-      --ui-landing-art-top: min(24px, 2svh);
-
-      flex-direction: column;
-      align-items: stretch;
-      min-height: 0;
-    }
-
-    .ui-landing-hero-words {
-      padding: var(--ui-landing-hero-top) var(--ui-landing-gutter) 0;
-    }
-
-    .ui-landing-hero-art {
-      position: relative;
-      top: auto;
-      right: auto;
-      width: auto;
-      height: max(
-        var(--ui-landing-art-least),
-        min(580px, 100cqw - 2 * var(--ui-landing-gutter), var(--ui-landing-art-screen))
-      );
-      max-width: 580px;
-      margin: var(--ui-landing-art-top) var(--ui-landing-gutter) 40px;
-    }
+  .ui-landing-keys-menu {
+    width: 100%;
+    border: 1px solid var(--ui-color-border);
+    border-radius: var(--ui-radius-14);
+    background: var(--ui-color-float-solid);
+    box-shadow: 0 24px 64px -16px var(--ui-color-shadow-deep);
   }
 
-  /* Under 640px of room the page keeps to one column: the ball under the
-     words, and each stage under its heading. A
-     window scaled to the column draws its words too small to read, so a
-     stage that holds one alone shows the one moment that sells it instead:
-     the desktop app as it is, laid out at 1280 by 800, cut to that moment's
-     box and scaled so the box spans the stage, about three quarters of the
-     app's size on a phone, ruled round as a window is, its top corner the
-     window's own; the stage is as tall as the box. A window names its box
-     in its own pixels: where it starts
-     (`--ui-landing-crop-x`, `--ui-landing-crop-y`) and how wide and tall it
-     is (`--ui-landing-crop-w`, `--ui-landing-crop-h`); a margin's percentage
-     is of the stage's width, so each offset is a share of the box's. */
+  /* Under 640px of room the page keeps to one column: the live app under the
+     words, and each stage under its heading. */
   /* off-scale: 640px, a phone's landing */
   @container (width < 640px) {
     .ui-landing-lost {
@@ -1214,17 +1761,12 @@
       transform: translateY(10px);
     }
 
-    .ui-landing-hero {
-      flex-direction: column;
-      align-items: stretch;
-      min-height: 0;
-    }
-
     .ui-landing-hero-words {
       padding: 44px var(--ui-landing-gutter) 0;
     }
 
-    .ui-landing-title {
+    .ui-landing-title,
+    .ui-landing-hero-words .ui-landing-title {
       font-size: var(--ui-display-landing-size-narrow);
     }
 
@@ -1233,13 +1775,9 @@
       font-size: var(--ui-display-lead-size-narrow);
     }
 
-    .ui-landing-hero-art {
-      position: relative;
-      top: auto;
-      right: auto;
-      width: auto;
-      height: 340px;
-      margin: 24px var(--ui-landing-gutter);
+    .ui-landing-hero-stage {
+      margin-top: 40px;
+      padding: 28px 0 40px;
     }
 
     .ui-landing-section-body {
@@ -1250,68 +1788,40 @@
       font-size: var(--ui-display-feature-size-narrow);
     }
 
-    .ui-landing-stage {
-      margin-top: 28px;
-      padding: 28px 5%;
+    /* On a phone a section stacks, its words over its screen, whichever
+       side it took. */
+    .ui-landing-section-body,
+    .ui-landing-section:nth-of-type(even) .ui-landing-section-body {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 28px;
     }
 
-    /* A cropped window fills its stage edge to edge, so no field shows. */
-    .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) .ui-landing-field {
+    .ui-landing-section:nth-of-type(even) .ui-landing-section-words {
+      order: 0;
+    }
+
+    .ui-landing-close {
+      padding: 96px var(--ui-landing-gutter) 80px;
+    }
+
+    /* On a phone a close-up keeps its story's card alone, across the stage. */
+    .ui-landing-card[data-aside="true"],
+    .ui-landing-satellite {
       display: none;
     }
 
-    .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) {
-      padding: 0;
-      overflow: hidden;
-      border-right: 1px solid var(--ui-color-border-strong);
-      border-bottom: 1px solid var(--ui-color-border-strong);
-      border-radius: var(--ui-display-window-radius);
-      aspect-ratio: var(--ui-landing-crop-w) / var(--ui-landing-crop-h);
+    .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"])
+      .ui-landing-card[data-aside="false"] {
+      grid-column: 1 / -1;
+      margin-top: 0;
     }
 
-    .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) .ui-landing-scene {
-      overflow: clip;
-      border-top: 1px solid var(--ui-color-border-strong);
-      border-left: 1px solid var(--ui-color-border-strong);
-      border-top-left-radius: var(--ui-display-window-radius);
-    }
-
-    .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) .ui-landing-window {
-      width: calc(100% * 1280 / var(--ui-landing-crop-w));
-      margin: calc(-100% * var(--ui-landing-crop-y) / var(--ui-landing-crop-w)) 0 0
-        calc(-100% * var(--ui-landing-crop-x) / var(--ui-landing-crop-w));
-    }
-
-    /* The Inbox's moment is the ask: the question over its options, the
-       pick, the note, and the send. */
-    .ui-landing-stage[data-scene="inbox"] {
-      --ui-landing-crop-x: 592;
-      --ui-landing-crop-y: 56;
-      --ui-landing-crop-w: 420;
-      --ui-landing-crop-h: 440;
-    }
-
-    /* The task's moment is the hand-off: the agent started and messaged,
-       and its answer, the next one rising from the foot. */
-    .ui-landing-stage[data-scene="agents"] {
-      --ui-landing-crop-x: 268;
-      --ui-landing-crop-y: 0;
-      --ui-landing-crop-w: 420;
-      --ui-landing-crop-h: 345;
-    }
-
-    .ui-landing-beside {
-      grid-template-columns: minmax(0, 1fr);
+    .ui-landing-stage[data-scene="inbox"] .ui-landing-closeup-cards {
+      min-height: 0;
     }
 
     .ui-landing-stage[data-scene="devices"] {
       padding-bottom: 12px;
-    }
-
-    .ui-landing-close {
-      flex-direction: column;
-      align-items: stretch;
-      padding: 72px var(--ui-landing-gutter) 48px;
     }
 
     /* The foot's facts keep their line, and its links stand in two columns

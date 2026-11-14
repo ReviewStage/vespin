@@ -24,10 +24,8 @@ import {
 import { FiringGlyph } from "../../marks/firing-glyph.js";
 import { type CodexArt, HarnessMark } from "../../marks/harness-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
-import { STATUS_TONE } from "../../status-tone.js";
 import { PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
 import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
-import { Badge } from "../badge/badge.js";
 import { BarAction, BarItem, BarItems } from "../bar-item/bar-item.js";
 import { Breadcrumbs } from "../breadcrumbs/breadcrumbs.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, IconButton } from "../button/button.js";
@@ -64,11 +62,11 @@ import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
 import { PROGRESS_COUNT_LOOK, ProgressCount } from "../progress-ring/progress-ring.js";
 import { SearchField } from "../search-field/search-field.js";
 import {
-  SETTINGS_ROW_STATE,
-  SettingsRow,
-  SettingsRowMark,
-  SettingsRowStateLine,
-} from "../settings-row/settings-row.js";
+  type MenuRow,
+  SEARCHABLE_MENU_LAYER,
+  SearchableMenu,
+} from "../searchable-menu/searchable-menu.js";
+import { SettingsRow } from "../settings-row/settings-row.js";
 import { SETTINGS_SECTION_FRAME, SettingsSection } from "../settings-section/settings-section.js";
 import { Shimmer } from "../shimmer/shimmer.js";
 import { Switch } from "../switch/switch.js";
@@ -89,7 +87,7 @@ import {
   SidePanelToggle,
 } from "./landing-desktop.js";
 import { LandingPhone, LandingWindow } from "./landing-devices.js";
-import { MINUTE, STORY_NOW, still, useNarrowPage, useStory } from "./landing-story.js";
+import { MINUTE, STORY_NOW, still, useStory } from "./landing-story.js";
 
 /**
  * landing-scenes.tsx -- the landing's moving screens: the app's own components, composed as the panel composes them, stepping through a short story each.
@@ -100,34 +98,34 @@ import { MINUTE, STORY_NOW, still, useNarrowPage, useStory } from "./landing-sto
  * agent's question in the draft under it; a task's page shows its agent's
  * log, folded calls and all, starting another agent and trading messages
  * with it, the plan's sub-tasks beside it; an automation's page fires a run;
- * the phone holds the same Inbox; and Settings › Agents connects Claude on
- * its plan and Codex on an API key. None is pressed: each plays its story on a clock that
- * runs only while it is on screen (`landing-story.ts`). On a page too narrow
- * for a whole window, the Inbox and the task play only from their telling
- * moment, the ask and the hand-off, which is all their crop shows.
+ * the phone holds the same Inbox; and the composer's model menu stands
+ * open over Claude's models on a plan and GPT on an API key, still. None is
+ * pressed: each other scene plays its story on a clock that
+ * runs only while it is on screen (`landing-story.ts`). The Inbox and the
+ * task are close-ups cut to the panel their story happens in, so they play
+ * only from their telling moment, the ask and the hand-off.
  */
 
 /** How long each scene holds a step, in milliseconds. */
-const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700, KEYS: 1500 } as const;
+const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700 } as const;
 
 /**
  * A window's story: how many steps it plays, the last it draws (held for the
- * rest), and the step a narrow page's crop opens on.
+ * rest), and the step it opens on, its telling moment, since the window is
+ * cut to the panel that moment happens in.
  */
 const STORY = {
-  INBOX: { STEPS: 7, LAST: 5, NARROW_FROM: 2 },
-  AGENTS: { STEPS: 7, LAST: 5, NARROW_FROM: 3 },
+  INBOX: { STEPS: 7, LAST: 5, FROM: 1 },
+  AGENTS: { STEPS: 7, LAST: 5, FROM: 0 },
 } as const;
 
-/** The step a window's `story` draws: all of it on a wide page, from its telling moment on a narrow one. */
+/** The step a window's `story` draws, from its telling moment on. */
 function useWindowStory(
   ref: RefObject<HTMLDivElement | null>,
   story: (typeof STORY)[keyof typeof STORY],
   beat: number,
 ): number {
-  const from = useNarrowPage(ref) ? story.NARROW_FROM : 0;
-
-  return Math.min(useStory(ref, story.STEPS - from, beat) + from, story.LAST);
+  return Math.min(useStory(ref, story.STEPS - story.FROM, beat) + story.FROM, story.LAST);
 }
 
 /** The scenes the landing plays, by the feature each shows. */
@@ -547,15 +545,92 @@ function InboxPage({ step }: { step: number }): React.JSX.Element {
   );
 }
 
+/**
+ * A column of the app as a card: its bar on the frame over its sheet, at the
+ * Mac app's own sizes, so a close-up draws the columns its story happens in
+ * and nothing else of the window. `aside` names the card that stands beside
+ * the story, which a phone's narrow stage leaves out.
+ */
+function ColumnCard({
+  bar,
+  aside = false,
+  children,
+}: {
+  bar: ReactNode;
+  aside?: boolean;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <div className="ui-landing-card" data-aside={aside}>
+      {bar}
+      <div className="ui-landing-card-sheet">{children}</div>
+    </div>
+  );
+}
+
+/** The Inbox's list at `step`: the question arriving on top of the others, opened, and settled. */
+function InboxListCard({ step }: { step: number }): React.JSX.Element {
+  return (
+    <ColumnCard
+      aside
+      bar={
+        <Toolbar
+          title="Inbox"
+          end={TOOLBAR_INSET.COLUMN}
+          actions={
+            <IconButton icon={<SlidersHorizontalIcon />} label="View options" onClick={still} />
+          }
+        />
+      }
+    >
+      <div className="ui-landing-rows">
+        <List label="Inbox items">
+          {inboxItems(step).map((item) => (
+            <InboxRow key={item.id} item={item} />
+          ))}
+        </List>
+      </div>
+    </ColumnCard>
+  );
+}
+
+/** The question's thread at `step`, under its path: the ask, the pick, the note, and the send. */
+function QuestionCard({ step }: { step: number }): React.JSX.Element {
+  return (
+    <ColumnCard
+      bar={
+        <Toolbar
+          start={TOOLBAR_INSET.COLUMN}
+          title={<ThreadPath />}
+          actions={<MoreButton thing="thread" onClick={still} />}
+        />
+      }
+    >
+      <QuestionThread step={step} />
+    </ColumnCard>
+  );
+}
+
+/**
+ * The Inbox close up: its list behind, the question arriving on top of it,
+ * and the question's thread in front, answered in the draft under it.
+ */
 function InboxScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const step = useWindowStory(ref, STORY.INBOX, BEAT.INBOX);
 
   return (
-    <div ref={ref} className="ui-landing-scene">
-      <DesktopWindow label="The Inbox, where an agent's question is answered">
-        <InboxPage step={step} />
-      </DesktopWindow>
+    <div
+      ref={ref}
+      className="ui-landing-scene ui-landing-closeup"
+      role="img"
+      aria-label="The Inbox, where an agent's question is answered"
+      {...DESKTOP_SURFACE}
+    >
+      <div className="ui-landing-closeup-cards" inert>
+        <InboxListCard step={step} />
+        <QuestionCard step={step} />
+      </div>
     </div>
   );
 }
@@ -703,79 +778,46 @@ function AgentLog({ step }: { step: number }): React.JSX.Element {
   );
 }
 
-/** The log's foot at `step`: the pull request once opened, over the composer with the model the agent runs on. */
-function AgentFoot({ step }: { step: number }): React.JSX.Element {
+/** A pull request an agent opened, as the log's dock holds it: its glyph, its title, and the lines it adds and removes. */
+export function PullRequestCard({
+  title,
+  added,
+  removed,
+}: {
+  title: string;
+  added: number;
+  removed: number;
+}): React.JSX.Element {
   return (
-    <div className="ui-landing-agent-foot">
-      {step >= 5 ? (
-        <div className="ui-landing-dock ui-landing-enter">
-          <List label="Pull request" variant={LIST_VARIANT.CARD}>
-            <ListRow
-              leading={
-                <span className="ui-landing-pull-request">
-                  <GLYPH.PULL_REQUEST />
-                </span>
-              }
-              title="#217 Invite emails through Postmark"
-              meta={
-                <span className="ui-landing-row-marks">
-                  <CountParts parts={linesCount(184, 12)} />
-                </span>
-              }
-              onPress={still}
-            />
-          </List>
-        </div>
-      ) : null}
-      <div className="ui-landing-composer">
-        <ComposerFrame>
-          <ComposerField label="Follow-up" placeholder="Send a follow-up" />
-          <ComposerFoot
-            send={{ label: "Send", empty: true }}
-            stop={{ label: "Stop", onStop: still }}
-            tools={
-              <>
-                <IconButton icon={<PlusIcon />} label="Attach files" onClick={still} />
-                <Badge tone={STATUS_TONE.NEUTRAL} icon={<GLYPH.CLOUD />}>
-                  Cloud
-                </Badge>
-              </>
-            }
-            actions={
-              <>
-                <Chip look={CHIP_LOOK.TOOLBAR} chevron onClick={still}>
-                  <ChipName>
-                    Opus 5.5 <span className="ui-landing-effort">High</span>
-                  </ChipName>
-                </Chip>
-                <IconButton icon={<MicrophoneIcon />} label="Dictate" onClick={still} />
-              </>
-            }
-          />
-        </ComposerFrame>
-      </div>
-    </div>
+    <List label="Pull request" variant={LIST_VARIANT.CARD}>
+      <ListRow
+        leading={
+          <span className="ui-landing-pull-request">
+            <GLYPH.PULL_REQUEST />
+          </span>
+        }
+        title={title}
+        meta={
+          <span className="ui-landing-row-marks">
+            <CountParts parts={linesCount(added, removed)} />
+          </span>
+        }
+        onPress={still}
+      />
+    </List>
   );
 }
 
-/** The side panel at `step`: the plan's tab, with its sub-tasks and agents. */
-function PlanPanel({ step }: { step: number }): React.JSX.Element {
+/**
+ * The plan's sub-tasks at `step`, as the side panel lists them, on a sheet of
+ * their own beside the log, each stepping toward done as the agents work.
+ */
+function SubTasksCard({ step }: { step: number }): React.JSX.Element {
   const tasks = subTasks(step);
   const done = tasks.filter((task) => task.status === TASK_STATUS.DONE).length;
 
   return (
-    <aside className="ui-landing-side">
-      <div className="ui-landing-side-bar">
-        <Tabs label="Panel" ground={TABS_GROUND.FRAME}>
-          <Tab
-            icon={<TaskStatusMark status={TASK_STATUS.IN_PROGRESS} />}
-            label="Teammate invitations"
-            selected
-            onSelect={still}
-          />
-          <Tab icon={<InboxIcon />} label="Inbox" selected={false} onSelect={still} />
-        </Tabs>
-      </div>
+    <div className="ui-landing-card-sheet ui-landing-satellite">
       <div className="ui-landing-side-sheet">
         <GroupHeader
           heading={GROUP_HEADING.NONE}
@@ -803,69 +845,52 @@ function PlanPanel({ step }: { step: number }): React.JSX.Element {
             />
           ))}
         </List>
-        <GroupHeader
-          heading={GROUP_HEADING.NONE}
-          glyph={<GLYPH.AGENT />}
-          label="Agents"
-          count={{ value: step >= 1 ? 2 : 1, noun: "agents" }}
-        />
-        <List label="Agents" density={LIST_DENSITY.DENSE}>
-          <ListRow
-            density={LIST_DENSITY.DENSE}
-            leading={<WorkingMark />}
-            title={INVITE_EMAILS}
-            meta="Opus 5.5"
-            onPress={still}
-          />
-          {step >= 1 ? (
-            <ListRow
-              density={LIST_DENSITY.DENSE}
-              leading={step >= 4 ? agentFace(ACCEPT_PAGE, AVATAR_SIZE.ROW) : <WorkingMark />}
-              title={ACCEPT_PAGE}
-              meta="Sonnet 5.5"
-              onPress={still}
-            />
-          ) : null}
-        </List>
       </div>
-    </aside>
-  );
-}
-
-/** The task's page at `step`: its tabs, the agent's log over its foot, and the plan beside it. */
-function TaskPage({ step }: { step: number }): React.JSX.Element {
-  return (
-    <div className="ui-landing-app">
-      <DesktopSidebar place={DESKTOP_PLACE.TASK} openTask="invites" />
-      <div className="ui-landing-main ui-landing-task">
-        <section className="ui-landing-agent-log">
-          <Toolbar
-            start={TOOLBAR_INSET.COLUMN}
-            look={TOOLBAR_LOOK.TABS}
-            title={<TaskTabs step={step} />}
-            actions={<MoreButton thing="agent" onClick={still} />}
-          />
-          <div className="ui-landing-sheet-start ui-landing-log-sheet">
-            <AgentLog step={step} />
-            <AgentFoot step={step} />
-          </div>
-        </section>
-        <PlanPanel step={step} />
-      </div>
-      <SidePanelToggle />
     </div>
   );
 }
 
+/** The agent's log at `step` under its tabs: its words, its calls, and the other agent's answers. */
+function LogCard({ step }: { step: number }): React.JSX.Element {
+  return (
+    <ColumnCard
+      bar={
+        <Toolbar
+          start={TOOLBAR_INSET.COLUMN}
+          look={TOOLBAR_LOOK.TABS}
+          title={<TaskTabs step={step} />}
+          actions={<MoreButton thing="agent" onClick={still} />}
+        />
+      }
+    >
+      <div className="ui-landing-log-sheet">
+        <AgentLog step={step} />
+      </div>
+    </ColumnCard>
+  );
+}
+
+/**
+ * A task close up: the agent's log, where it starts another agent and the
+ * two trade messages, and the plan's sub-tasks over its corner, stepping to
+ * done.
+ */
 function AgentsScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const step = useWindowStory(ref, STORY.AGENTS, BEAT.AGENTS);
 
   return (
-    <div ref={ref} className="ui-landing-scene">
-      <DesktopWindow label="A task's agent starting another agent, and the two trading messages">
-        <TaskPage step={step} />
-      </DesktopWindow>
+    <div
+      ref={ref}
+      className="ui-landing-scene ui-landing-closeup"
+      role="img"
+      aria-label="A task's agent starting another agent, and the two trading messages"
+      {...DESKTOP_SURFACE}
+    >
+      <div className="ui-landing-closeup-cards" inert>
+        <LogCard step={step} />
+        <SubTasksCard step={step} />
+      </div>
     </div>
   );
 }
@@ -1127,84 +1152,60 @@ function DevicesScene(): React.JSX.Element {
 /** What a scene is handed: Codex's picture, where the page has one to draw its mark from. */
 type SceneProps = { readonly codexArt?: CodexArt | undefined };
 
-/** A harness's row in Settings › Agents: its mark, its name, the credential it connects with, and the step of the story it connects at. */
-type KeyRow = {
-  readonly id: string;
-  readonly name: string;
-  /** Its mark, or none for Codex's, which is drawn from the page's `codexArt`. */
-  readonly mark: ReactNode;
-  readonly connected: string;
-  readonly at: number;
-};
+/** The models the composer's menu offers, by the harness each runs in. */
+const MENU_MODELS = [
+  { id: "opus", label: "Opus 5.5", provider: MODEL_PROVIDER.ANTHROPIC },
+  { id: "sonnet", label: "Sonnet 5.5", provider: MODEL_PROVIDER.ANTHROPIC },
+  { id: "haiku", label: "Haiku 5.5", provider: MODEL_PROVIDER.ANTHROPIC },
+  { id: "gpt", label: "GPT-5.5", provider: MODEL_PROVIDER.OPENAI },
+  { id: "gpt-mini", label: "GPT-5.5 mini", provider: MODEL_PROVIDER.OPENAI },
+] as const;
 
-const KEY_ROWS: readonly KeyRow[] = [
-  {
-    id: "claude",
-    name: "Claude",
-    mark: <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />,
-    connected: "Claude plan",
-    at: 0,
-  },
-  {
-    id: "codex",
-    name: "Codex",
-    mark: null,
-    connected: "OpenAI API key",
-    at: 2,
-  },
-];
+/** The model chosen, which the menu checks and the chip names. */
+const MENU_CHOSEN = "opus";
 
 /**
- * Note that the section stands in no device, so it is made a picture here as
- * a device makes its screen one: a reader is told what it shows, and its rows
- * are inert, since none of them is ever pressed.
+ * The composer's model menu as the app opens it over the model chip: the
+ * models on the plans and keys connected, Claude's and Codex's together, the
+ * chosen one checked with its effort. It stands still, open, and nothing in it is
+ * pressed. Note that it stands in no device, so it is made a picture here as
+ * a device makes its screen one: a reader is told what it shows, and it is
+ * inert.
  */
 function KeysScene({ codexArt }: SceneProps): React.JSX.Element {
-  const ref = useRef<HTMLDivElement>(null);
-  const step = useStory(ref, 5, BEAT.KEYS);
+  const rows: MenuRow[] = MENU_MODELS.map((model) => ({
+    id: model.id,
+    label: model.label,
+    icon:
+      model.provider === MODEL_PROVIDER.ANTHROPIC ? (
+        <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />
+      ) : codexArt === undefined ? null : (
+        <HarnessMark provider={MODEL_PROVIDER.OPENAI} codexArt={codexArt} />
+      ),
+    terms: [model.label, model.provider],
+    detail: model.id === MENU_CHOSEN ? "High" : undefined,
+  }));
 
   return (
     <div
-      ref={ref}
       className="ui-landing-scene ui-landing-keys"
       role="img"
-      aria-label="Settings › Agents: Claude connected on its Claude plan, and Codex connecting with an OpenAI API key"
+      aria-label="The composer's model menu: Opus, Sonnet, and Haiku on a Claude plan, and GPT-5.5 on an OpenAI API key"
       {...DESKTOP_SURFACE}
     >
-      <div inert>
-        <SettingsSection title="Agents">
-          {KEY_ROWS.map((row) => {
-            const connected = step >= row.at;
-
-            return (
-              <SettingsRow
-                key={row.id}
-                leading={
-                  <SettingsRowMark>
-                    {row.mark ??
-                      (codexArt === undefined ? null : (
-                        <HarnessMark provider={MODEL_PROVIDER.OPENAI} codexArt={codexArt} />
-                      ))}
-                  </SettingsRowMark>
-                }
-                label={row.name}
-                description={
-                  <SettingsRowStateLine
-                    state={connected ? SETTINGS_ROW_STATE.CONNECTED : SETTINGS_ROW_STATE.PLAIN}
-                  >
-                    {connected ? row.connected : "Not connected"}
-                  </SettingsRowStateLine>
-                }
-              >
-                {() => (
-                  <Button variant={BUTTON_VARIANT.OUTLINE} onClick={still}>
-                    {connected ? "Manage" : "Connect"}
-                  </Button>
-                )}
-              </SettingsRow>
-            );
-          })}
-        </SettingsSection>
+      <div className="ui-landing-keys-menu" inert>
+        <SearchableMenu
+          layer={SEARCHABLE_MENU_LAYER.EMBEDDED}
+          id="landing-model-menu"
+          label="Model"
+          placeholder="Search models"
+          rows={rows}
+          value={MENU_CHOSEN}
+          noMatch="No models match"
+          onPick={still}
+          onClose={still}
+          onLeave={still}
+        />
       </div>
     </div>
   );

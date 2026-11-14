@@ -10,10 +10,9 @@ import { TextLink } from "../text-link/text-link.js";
  * public-page.tsx -- the page the public site is drawn on: the page's title and lead and its sections on one column, in the site's frame with the landing.
  *
  * The page stands in the site's frame (`site-frame.tsx`), as the landing
- * does: the margin grid's rails, the bar that floats once the page scrolls
- * holding the caller's banner and its call, and the foot holding the
- * caller's footer over the wordmark in dots, a rule across the rails above
- * it. Its content is on one measure centered in the room, inset by the web
+ * does: the bar that stays at the top as the page scrolls, holding the
+ * caller's banner and its call, and the foot holding the caller's footer
+ * over the wordmark in dots, a hairline across the page above it. Its content is on one measure centered in the room, inset by the web
  * profile's page inset. The page sets no scroll of its own, because a
  * public page is read in the document's, which is what a prerendered page
  * and a browser's find and anchor links expect.
