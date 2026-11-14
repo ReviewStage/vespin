@@ -29,9 +29,12 @@ function bench(): void {
   );
   const byTask = state.inboxItems.rows.task;
   const one = Object.entries(byTask).flatMap(([taskId, list]) => list.map((item) => ({ item, taskId })));
-  // Note that the fixture's threads are about 1.6 KB each, so they repeat, with fresh ids, to reach a real account's 4.8 MB.
+  // Note that the fixture's threads are about 1.6 KB each, so they repeat to reach a real account's 4.8 MB, each with a fresh id of the same 36 characters the wire allows.
   const all = Array.from({ length: 5 }, (_, round) =>
-    one.map((each) => ({ ...each, item: { ...each.item, id: `${each.item.id}-${round}` } })),
+    one.map((each) => ({
+      ...each,
+      item: { ...each.item, id: `${each.item.id.slice(0, 34)}${round.toString(16).padStart(2, "0")}` },
+    })),
   ).flat();
   const decode = Schema.decodeUnknownSync(
     Schema.Struct({
