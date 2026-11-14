@@ -71,6 +71,12 @@ describe("transcriptItems", () => {
               url: "data:text/markdown;base64,YQpiCg==",
             },
             { type: "file", mediaType: "application/pdf", filename: "plan.pdf", url: "" },
+            {
+              type: "file",
+              mediaType: "text/plain",
+              filename: "broken.txt",
+              url: "data:text/plain;base64,%%%",
+            },
           ],
         },
       ],
@@ -84,6 +90,7 @@ describe("transcriptItems", () => {
       files: [
         { name: "notes.md", base64: "YQpiCg==", size: "2 lines" },
         { name: "plan.pdf", base64: undefined, size: undefined },
+        { name: "broken.txt", base64: "%%%" },
       ],
     });
   });

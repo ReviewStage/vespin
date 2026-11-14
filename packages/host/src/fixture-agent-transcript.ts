@@ -38,12 +38,12 @@ const KEPT = {
   RECORDING: "fixture-recording-accept",
 } as const;
 
-/** The file the account sent with its ask to resend an expired invite: the invites that expired, as a short CSV, so a sent line's file chip has a text file to count the lines of. */
+/** The file the account sent with its ask to resend an expired invite: the invites that expired, as a short CSV sent as plain text as every text file is, so a sent line's file chip has a text file to count the lines of. */
 const EXPIRED_INVITES = {
   type: "file",
-  mediaType: "text/csv",
+  mediaType: AGENT_ATTACHMENT_TYPE.TEXT,
   filename: "expired-invites.csv",
-  url: "data:text/csv;base64,ZW1haWwsZXhwaXJlZAprYXRoZXJpbmVAZXhhbXBsZS5jb20sMjAyNi0xMS0wMgptYXJjb0BleGFtcGxlLmNvbSwyMDI2LTExLTA1Cg==",
+  url: "data:text/plain;base64,ZW1haWwsZXhwaXJlZAprYXRoZXJpbmVAZXhhbXBsZS5jb20sMjAyNi0xMS0wMgptYXJjb0BleGFtcGxlLmNvbSwyMDI2LTExLTA1Cg==",
 } as const;
 
 /** The fixture's picture as the service keeps one: a screenshot-sized PNG. */

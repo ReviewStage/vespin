@@ -540,6 +540,8 @@ interface RowDrawing {
   readonly onRetryMedia?: ((id: string) => void) | undefined;
   /** Where a file a sent line carried was written for its chip to open, by the line's message and the file's place on it; none while it is written, and `null` where it could not be. A file the line kept no bytes of is drawn by its name and kind alone. */
   readonly fileSource?: ((message: string, key: string) => string | null | undefined) | undefined;
+  /** Writes a sent line's file again where it could not be written, by the line's message and the file's place on it. */
+  readonly onRetryFile?: ((message: string, key: string) => void) | undefined;
   /** Opens a recording the system's player cannot play where it plays. */
   readonly onOpenElsewhere?: (() => void) | undefined;
   /** Opens a web address in Safari, such as a pull request's page on GitHub. */
@@ -571,6 +573,17 @@ function sentFileSource(
   file: SaidFile,
 ): string | null | undefined {
   return drawing.fileSource === undefined ? null : drawing.fileSource(message, file.key);
+}
+
+/** What writes a sent line's file again, where the transcript offers it. */
+function sentFileRetry(
+  drawing: RowDrawing,
+  message: string,
+  file: SaidFile,
+): (() => void) | undefined {
+  const retry = drawing.onRetryFile;
+
+  return retry === undefined ? undefined : () => retry(message, file.key);
 }
 
 /** What reads a picture or a recording again, by its id, where the transcript offers it. */
@@ -624,6 +637,7 @@ function TranscriptRow({
               mediaType={file.mediaType}
               source={sentFileSource(drawing, item.place.message, file)}
               size={file.size}
+              onRetry={sentFileRetry(drawing, item.place.message, file)}
             />
           ))}
           {/* Note that a line of files alone draws no empty bubble under them. */}

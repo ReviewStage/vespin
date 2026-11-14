@@ -424,7 +424,7 @@ export interface SaidPicture {
   readonly pictureId: string | undefined;
 }
 
-/** The pictures a sent line carried, in order, as the panel lists a line's files (`messageFileChips`); a file that is no picture, such as a PDF, is left to the panel. */
+/** The pictures a sent line carried, in order, as the panel lists a line's files (`messageFileChips`); a file that is no picture, such as a PDF, stands as its chip (`saidFiles`). */
 function saidPictures(line: AgentTranscriptMessage): readonly SaidPicture[] {
   return messageFileChips(line).flatMap((file, index): SaidPicture[] =>
     PICTURE_TYPES.has(file.mediaType)
@@ -450,11 +450,20 @@ export interface SaidFile {
   readonly size: string | undefined;
 }
 
-/** What a sent file's chip says of its size, as the panel's: a text file's count of lines, any other file's bytes. */
+/** A text file's words, or none where its bytes are no base64 the system reads. */
+function saidWords(base64: string): string | undefined {
+  try {
+    return attachmentText(base64);
+  } catch {
+    return undefined;
+  }
+}
+
+/** What a sent file's chip says of its size, as the panel's: a text file's count of lines, any other file's bytes. Note that a damaged text file says its bytes, as the panel's chip does, so the row still draws. */
 function saidSize(file: FileChip, base64: string): string {
-  return attachmentView(file) === ATTACHMENT_VIEW.TEXT
-    ? linesLabel(attachmentText(base64))
-    : sizeLabel(base64);
+  const words = attachmentView(file) === ATTACHMENT_VIEW.TEXT ? saidWords(base64) : undefined;
+
+  return words === undefined ? sizeLabel(base64) : linesLabel(words);
 }
 
 /** The files a sent line carried that are no picture, in order, as the panel lists a line's files (`messageFileChips`). */

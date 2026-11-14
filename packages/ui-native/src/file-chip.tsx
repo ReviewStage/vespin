@@ -331,7 +331,13 @@ export function FileChip({
           accessibilityRole="button"
           accessibilityLabel={heard}
           accessibilityHint={
-            !held ? undefined : unread ? READS_AGAIN : viewed ? FILE_WORDS.OPENS : FILE_WORDS.SHARES
+            !held || (unread && onRetry === undefined)
+              ? undefined
+              : unread
+                ? READS_AGAIN
+                : viewed
+                  ? FILE_WORDS.OPENS
+                  : FILE_WORDS.SHARES
           }
           accessibilityState={{ busy: waiting }}
           style={[

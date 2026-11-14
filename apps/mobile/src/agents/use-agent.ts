@@ -62,6 +62,12 @@ const SENT_FILE_PREFIX = "sent";
 /** Where each file the agent's sent lines carried was written, by the line's message, then the file's place on it; `null` where it could not be. */
 type SentFiles = ReadonlyMap<string, ReadonlyMap<string, string | null>>;
 
+/** Where a sent line's file was written, by the line's message and the file's place on it, and what writes one again that could not be. */
+interface SentFileSources {
+  readonly source: (message: string, key: string) => string | null | undefined;
+  readonly retry: (message: string, key: string) => void;
+}
+
 /** Says on the console a read the host refused, which the page draws without. */
 function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not land.`, error);
@@ -366,17 +372,17 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
 /**
  * Where each file the agent's sent lines carried was written for its chip,
  * by the line's message and the file's place on it: the line's own bytes,
- * written once under the app's caches (`cachedFile`), since the PDF viewer
- * and the share sheet open a file on the device. One being written is
- * absent, and one that could not be written is `null`, which its chip says.
- * Note that each is written once while the page stands, however often the
- * transcript moves, and that a write that lands after the page left is
- * dropped.
+ * written once under the app's caches (`cachedFile`), each in a folder of
+ * its own place, since two files of one line may share a name, and the PDF
+ * viewer and the share sheet open a file on the device. One being written
+ * is absent, and one that could not be written is `null`, which its chip
+ * says, offering `retry`. Note that each is written once while the page
+ * stands, however often the transcript moves, and that a write that lands
+ * after the page left is dropped.
  */
-export function useSentFiles(
-  files: readonly ShownFile[],
-): (message: string, key: string) => string | null | undefined {
+export function useSentFiles(files: readonly ShownFile[]): SentFileSources {
   const [written, setWritten] = useState<SentFiles>(new Map());
+  const [round, setRound] = useState(0);
   const asked = useRef(new Map<string, Set<string>>());
   const standing = useRef(true);
 
@@ -407,7 +413,7 @@ export function useSentFiles(
       keys.add(file.key);
       asked.current.set(message, keys);
 
-      cachedFile(SENT_FILE_PREFIX, message, file.name, file.mediaType, file.base64).then(
+      cachedFile(SENT_FILE_PREFIX, message, file.name, file.mediaType, file.base64, file.key).then(
         (source) => land(message, file.key, source),
         (cause: unknown) => {
           console.error(`A file sent to the agent was not written (message ${message}). ${cause}`);
@@ -415,9 +421,23 @@ export function useSentFiles(
         },
       );
     }
-  }, [files]);
+    // Note that `round` is read so a retry, which forgets the file's ask, writes it again.
+  }, [files, round]);
 
-  return (message, key) => written.get(message)?.get(key);
+  const retry = (message: string, key: string) => {
+    asked.current.get(message)?.delete(key);
+    setWritten((held) => {
+      const next = new Map(held);
+      const kept = new Map(held.get(message));
+      kept.delete(key);
+      next.set(message, kept);
+
+      return next;
+    });
+    setRound((at) => at + 1);
+  };
+
+  return { source: (message, key) => written.get(message)?.get(key), retry };
 }
 
 /** A cut part's whole read as held: the size it was asked at, and how it stands. */
