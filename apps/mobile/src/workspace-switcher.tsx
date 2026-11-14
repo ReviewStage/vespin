@@ -89,10 +89,8 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
   const accountName = account?.name;
   const accountPicture = account?.picture;
 
-  // Note that a phone turned on its side is wide enough for a regular window but too short for the popover's list, so the popover takes a window regular both ways, as an iPad's is.
   const presentation =
-    windowSizeClass(width) === WINDOW_SIZE_CLASS.REGULAR &&
-    windowSizeClass(height) === WINDOW_SIZE_CLASS.REGULAR
+    windowSizeClass(width, height) === WINDOW_SIZE_CLASS.REGULAR
       ? SWITCHER_PRESENTATION.POPOVER
       : SWITCHER_PRESENTATION.SHEET;
 
