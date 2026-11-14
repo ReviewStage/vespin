@@ -30,8 +30,11 @@ for e in items:
 print("; ".join(out) or "no bars")
 '
 }
-# Whether the Inbox list stands in front: its scopes show only there.
-on_list() { idb ui describe-all --udid $U 2>/dev/null | grep -q '"Questions'; }
+# Whether the Inbox list stands in front: a thread's page holds Send, which the list never does, and the list names its rows.
+on_list() {
+  local tree=$(idb ui describe-all --udid $U 2>/dev/null)
+  ! print -r -- "$tree" | grep -q '"AXLabel":"Send"' && print -r -- "$tree" | grep -q 'What the expired invite page says'
+}
 
 for r in $(seq 1 $ROUNDS); do
   for y in $YS; do
@@ -46,17 +49,18 @@ for r in $(seq 1 $ROUNDS); do
   done
 done
 
-# The sweep's own path: pop from a thread, scroll down, then tap the last row.
-for r in $(seq 1 $ROUNDS); do
-  fresh
-  idb ui tap --udid $U $X 139; sleep 2
-  idb ui swipe --udid $U 10 300 300 300 --duration 0.3; sleep 2
-  idb ui swipe --udid $U 184 500 184 200 --duration 0.4; sleep 2
-  hit=$(idb ui describe-point --udid $U $X 605 2>/dev/null | tr -d '\n' | cut -c1-200)
-  bars=$(frames)
-  idb ui tap --udid $U $X 605; sleep 2
-  if on_list; then res=SWALLOWED; else res=pushed; fi
-  echo "pop r$r tap=($X,605) $res | hit $hit | bars $bars" >> $LOG
+# The sweep's own path: pop from a thread, scroll down, then tap the last row, once with the list settled and once while it still coasts.
+for wait in 2 0.3; do
+  for r in $(seq 1 $ROUNDS); do
+    fresh
+    idb ui tap --udid $U $X 139; sleep 2
+    idb ui swipe --udid $U 10 300 300 300 --duration 0.3; sleep 2
+    idb ui swipe --udid $U 184 500 184 150 --duration 0.15; sleep $wait
+    hit=$(idb ui describe-point --udid $U $X 605 2>/dev/null | tr -d '\n' | cut -c1-160)
+    idb ui tap --udid $U $X 605; sleep 2
+    if on_list; then res=SWALLOWED; else res=pushed; fi
+    echo "pop wait=${wait}s r$r tap=($X,605) $res | hit $hit" >> $LOG
+  done
 done
 idb ui describe-all --udid $U > $OUT/list-hierarchy.json 2>&1
 xcrun simctl io $U screenshot $OUT/list.png >/dev/null 2>&1
