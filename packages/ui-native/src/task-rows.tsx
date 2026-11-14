@@ -29,6 +29,7 @@ import {
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
+import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
 import type { LinkStanding } from "@repo/features/link-standing-model";
@@ -36,6 +37,7 @@ import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
+import { sinceHeard } from "@repo/features/time-format";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
@@ -50,11 +52,13 @@ import {
   RowHead,
   type RowSubmenu,
   type RowSwipe,
+  RowTime,
   rowPlacement,
 } from "./list-row.js";
 import { Markdown, type MarkdownVideo } from "./markdown.js";
 import {
   AgentTile,
+  Avatar,
   type Face,
   FailedMark,
   TaskStatusMark,
@@ -437,6 +441,67 @@ export function LinkRow({
         ink={ink}
         end={detail === undefined ? null : <EndWords words={detail} />}
       />
+    </SwiftUIButton>
+  );
+}
+
+type VersionRowProps = {
+  /** Who wrote the version, as their mark draws them: their name's letters, and their photo where one is known. */
+  readonly writer: Face;
+  /** The writer as the row names them, such as "You". */
+  readonly name: string;
+  /** What the version did, such as "3 changes". */
+  readonly summary: string;
+  /** When it was last saved. */
+  readonly at: number;
+  readonly now: number;
+  /** Whether it is the description as it stands, which its line says first. */
+  readonly current: boolean;
+  readonly onPress: () => void;
+};
+
+/**
+ * A description's version in its history, as the panel's version row stands
+ * and as Mail stands a message: the writer's face, their name and the time
+ * at the line's end, and what the version did under them on up to two lines,
+ * "Current" leading it on the description as it stands. VoiceOver hears it
+ * as one element, the writer then what it did and when, the time in words.
+ */
+export function VersionRow({ writer, name, summary, at, now, current, onPress }: VersionRowProps) {
+  const colors = useColors();
+  const said = current ? `${VERSION_HISTORY_WORDS.CURRENT} · ${summary}` : summary;
+
+  return (
+    <SwiftUIButton
+      onPress={onPress}
+      modifiers={[
+        ...rowPlacement(colors),
+        buttonStyle("borderless"),
+        accessibilityLabel(name),
+        accessibilityValue([said, sinceHeard(at, now)].join(", ")),
+      ]}
+    >
+      <VStack alignment="leading" spacing={ROW_INSET.THREAD_LINE_GAP}>
+        <RowHead
+          unread={false}
+          faded={false}
+          lead={<Avatar name={writer.name} picture={writer.picture} size={MARK_SIZE.LEAD} />}
+          title={name}
+          ink={colors.TEXT}
+          end={<RowTime at={at} now={now} />}
+        />
+        <RowLine>
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE }),
+              foregroundStyle(colors.TEXT_MUTED),
+              lineLimit(2),
+            ]}
+          >
+            {said}
+          </Text>
+        </RowLine>
+      </VStack>
     </SwiftUIButton>
   );
 }

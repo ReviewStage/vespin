@@ -5,15 +5,14 @@ import {
   revisionWriterName,
   VERSION_HISTORY_WORDS,
 } from "@repo/features/description-history-words";
-import type { DescriptionRevisionLine } from "@repo/features/task-wire";
-import { agoText, dayAndTimeText } from "@repo/features/time-format";
-import { readingWords, showMoreWords, VERB } from "@repo/features/words";
+import { dayAndTimeText } from "@repo/features/time-format";
+import { readingWords, showMoreWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
+  BUTTON_LOOK,
   BUZZ,
   EmptyState,
   GLYPH,
-  glyphSymbol,
   LIST_LOOK,
   LinkRow,
   ListSection,
@@ -22,11 +21,13 @@ import {
   Screen,
   useColors,
   useFailureNotices,
+  VersionRow,
   WordsRow,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
+import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
@@ -44,9 +45,6 @@ export const VERSION_ROUTE = "/tasks/version/[id]";
 /** The route a task's version history is opened on. */
 export const HISTORY_ROUTE = "/tasks/history/[id]";
 
-/** The glyph each version's row leads with, the panel's restore arrow round a clock. */
-const VERSION_SYMBOL = GLYPH.HISTORY;
-
 /** The glyph the history stands under while it says nothing else. */
 const HISTORY_SYMBOL = GLYPH.HISTORY;
 
@@ -57,12 +55,11 @@ function versionNumber(spelled: string | undefined): number | undefined {
   return Number.isInteger(seq) && seq >= 1 ? seq : undefined;
 }
 
-/** The line under a version's writer: Current first on the newest, so a narrow row cuts off its summary rather than it, then what it did and how long ago. */
-function versionLine(line: DescriptionRevisionLine, newest: boolean, now: number): string {
-  const said = [revisionSummary(line), agoText(line.lastEdit.at, now)];
+/** What reads a version or the history again, as the app's other failures say it, in the system's bordered look rather than a filled one. */
+const TRY_AGAIN = "Try again";
 
-  return (newest ? [VERSION_HISTORY_WORDS.CURRENT, ...said] : said).join(" · ");
-}
+/** What the bar's Restore says, short for the bar; it is heard as the panel's whole "Restore this version". */
+const RESTORE_BAR = "Restore";
 
 /**
  * A task description's version history, as the panel's lists it: each
@@ -76,6 +73,7 @@ export function HistoryScreen() {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const history = useTaskHistory(id);
+  const pictureOf = useMemberPictures();
   const now = Date.now();
   const revisions = history.page?.revisions ?? [];
   const earlier = history.page?.earlier;
@@ -86,7 +84,7 @@ export function HistoryScreen() {
       <EmptyState
         title={VERSION_HISTORY_WORDS.UNREAD}
         symbol={GLYPH.FAILED}
-        action={{ label: VERB.RETRY, onPress: history.retry }}
+        action={{ label: TRY_AGAIN, onPress: history.retry, look: BUTTON_LOOK.BORDERED }}
       />
     ) : history.read === HISTORY_READ.READING ? (
       <EmptyState title={readingWords("the version history")} symbol={HISTORY_SYMBOL} loading />
@@ -100,11 +98,17 @@ export function HistoryScreen() {
           }
         >
           {revisions.map((line) => (
-            <LinkRow
+            <VersionRow
               key={line.seq}
-              symbol={VERSION_SYMBOL}
-              label={revisionWriterName(line.lastEdit, history.readerId)}
-              detail={versionLine(line, line.seq === newest, now)}
+              writer={{
+                name: revisionWriterName(line.lastEdit, undefined),
+                picture: pictureOf(line.lastEdit.by?.userId),
+              }}
+              name={revisionWriterName(line.lastEdit, history.readerId)}
+              summary={revisionSummary(line)}
+              at={line.lastEdit.at}
+              now={now}
+              current={line.seq === newest}
               onPress={() =>
                 router.push({
                   pathname: onOwnTab(VERSION_ROUTE),
@@ -250,7 +254,11 @@ function Version({
     <EmptyState
       title={VERSION_HISTORY_WORDS.VERSION_UNREAD}
       symbol={GLYPH.FAILED}
-      action={{ label: VERB.RETRY, onPress: () => void version.refetch() }}
+      action={{
+        label: TRY_AGAIN,
+        onPress: () => void version.refetch(),
+        look: BUTTON_LOOK.BORDERED,
+      }}
     />
   ) : (
     <RowList look={LIST_LOOK.PLAIN}>
@@ -270,17 +278,19 @@ function Version({
       <Stack.Screen
         options={{ title: at === undefined ? VERSION_HISTORY_WORDS.TITLE : dayAndTimeText(at) }}
       />
-      {current ? null : (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.RESTORE)}
-            tintColor={colors.TEXT}
-            accessibilityLabel={VERSION_HISTORY_WORDS.RESTORE}
-            disabled={read === undefined || restoring}
-            onPress={restore}
-          />
-        </Stack.Toolbar>
-      )}
+      {/* Note that Restore says what it does in words, as Pages' does, and stands dimmed on the description as it stands, heard as already current, as the panel keeps it, rather than vanishing. */}
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          tintColor={colors.TEXT}
+          accessibilityLabel={
+            current ? VERSION_HISTORY_WORDS.ALREADY_CURRENT : VERSION_HISTORY_WORDS.RESTORE
+          }
+          disabled={current || read === undefined || restoring}
+          onPress={restore}
+        >
+          {RESTORE_BAR}
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
       <Screen>{body}</Screen>
     </>
   );
