@@ -1,0 +1,8 @@
+== bundle P3 base 887265ed1fc
+  merged #9408 fd097b42c7d
+  built 32caf1d8e37
+  install 0
+  export 0
+  signed 0
+light: status (frame 16,154-131,182, 28 pt tall): dy-8 opens dy0 opens dy8 opens; priority (frame 137,154-190,182, 28 pt tall): dy-8 opens dy0 opens dy8 opens; assignee (frame 196,154-324,182, 28 pt tall): dy-8 opens dy0 opens dy8 opens; 6 pt below Assignee (y 188): none; following: chip not found
+dark: status (frame 16,154-131,182, 28 pt tall): dy-8 opens dy0 opens dy8 opens; priority (frame 137,154-190,182, 28 pt tall): dy-8 opens dy0 opens dy8 opens; assignee (frame 196,154-324,182, 28 pt tall): dy-8 opens dy0 opens dy8 opens; 6 pt below Assignee (y 188): none; following: chip not found
