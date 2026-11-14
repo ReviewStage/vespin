@@ -2252,6 +2252,30 @@ it.effect(
     }),
 );
 
+it.effect(
+  "an answer the Mac had not yet heard when its window closed is taken from the close, and the ask comes down",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* joinedAndAsked(service, spawner, COMMAND);
+          // Note that the answer is written where the follow does not wake, as one given a moment before the window closes is.
+          const posted = service.asks.get(COMMAND.id);
+          assert.ok(posted !== undefined);
+          posted.decision = MACHINE_ASK_DECISION.ALLOW_ONCE;
+          yield* TestClock.adjust("6 minutes");
+          yield* settled;
+
+          assert.equal(spawner.spawned.length, 1, "the command ran on the answer");
+          assert.equal(service.asks.has(COMMAND.id), false, "and the ask came down");
+        }),
+      );
+    }),
+);
+
 it.effect("an ask whose post lands only after its wait ended is said closed once it lands", () =>
   Effect.gen(function* () {
     const spawner = scriptedSpawner(() => ({ exitCode: 0 }));

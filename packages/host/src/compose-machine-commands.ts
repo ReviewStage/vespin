@@ -880,7 +880,12 @@ export function composeMachineCommands(
 
         const lapsed = yield* askedOfService(client.lapseAsk(id));
 
-        return lapsed?.answer === undefined ? undefined : answeredOf(lapsed.answer);
+        if (lapsed?.answer === undefined) return undefined;
+
+        // Note that an answer that beat the close is taken as an answer here is, so its ask comes down everywhere.
+        yield* errand(askedOfService(client.closeAsk(id)));
+
+        return answeredOf(lapsed.answer);
       });
 
     /** The answers the service took for the asks this Mac waits on, heard as the account's asks move: each decides its ask, whichever device gave it. */
