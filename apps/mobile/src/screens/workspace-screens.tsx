@@ -11,12 +11,14 @@ import {
   SettingsForm,
   useAsyncAction,
   useColors,
+  WORDS_LOOK,
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
+import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -52,7 +54,7 @@ type Said = { words?: string };
  */
 export function NewWorkspaceScreen() {
   const colors = useColors();
-  const router = useRouter();
+  const close = useCloseSheet();
   const acts = useHostActs();
   const write = useWrite();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
@@ -63,8 +65,8 @@ export function NewWorkspaceScreen() {
   const [made, setMade] = useState<string | undefined>(undefined);
   const listed = made !== undefined && workspaces.some((workspace) => workspace.id === made);
   useEffect(() => {
-    if (listed) router.back();
-  }, [listed, router]);
+    if (listed) close();
+  }, [listed, close]);
   const waiting = create.running || made !== undefined;
 
   const make = () => {
@@ -101,7 +103,7 @@ export function NewWorkspaceScreen() {
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
+        <Stack.Toolbar.Button onPress={close}>
           {made === undefined ? WORDS.CANCEL : WORDS.CLOSE}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
@@ -120,6 +122,7 @@ export function NewWorkspaceScreen() {
         <SettingsForm>
           <ListSection title={WORDS.WORKSPACE} footer={create.refusal}>
             <WordsField
+              look={WORDS_LOOK.LINE}
               placeholder={WORDS.TEAM_NAME}
               onWords={(words) => {
                 setName(words);

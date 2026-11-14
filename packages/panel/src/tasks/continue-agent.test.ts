@@ -1224,7 +1224,7 @@ test("the continued box's Archive archives the reader's own settled agent at onc
   assert.deepEqual(archived, [], "nothing is archived before the answer");
 
   const stop = [...dialog.querySelectorAll("button")].find(
-    (each) => each.textContent === "Stop agents",
+    (each) => each.textContent === "Stop agent",
   );
 
   await act(async () => (stop ?? assert.fail("the stop is offered")).click());
