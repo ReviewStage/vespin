@@ -196,6 +196,8 @@ export const GLYPH = {
   FILTER: system("line.3.horizontal.decrease.circle"),
   FILTERED: system("line.3.horizontal.decrease.circle.fill"),
   DISCLOSURE: system("chevron.forward"),
+  // A sheet's step back to the step before it, the back chevron iOS draws in a navigation bar.
+  BACK: system("chevron.backward"),
   STOP_TURN: system("stop.fill"),
   // A task's status ring, the panel's own mark.
   STATUS_BACKLOG: statusMark(TASK_STATUS_SYMBOL.BACKLOG),

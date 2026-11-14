@@ -75,6 +75,7 @@ import {
   type BarMenu,
   ConfirmAsk,
   EmptyState,
+  FailedReadRow,
   GLYPH,
   type Glyph,
   GroupRow,
@@ -183,6 +184,7 @@ const WORDS = {
   UNPIN: "Unpin",
   AGENTS: "Agents",
   NEW_AGENT: "New agent",
+  TRY_AGAIN: "Try again",
   PAGES: "Pages",
   DESCRIPTION: "Description",
   CREATED_BY: "Created by",
@@ -1656,15 +1658,7 @@ function ReadFailedRow({
   readonly words: string;
   readonly onRetry: () => void;
 }) {
-  return (
-    <LinkRow
-      symbol={GLYPH.FAILED}
-      label={words}
-      detail={VERB.RETRY}
-      tone={LINK_ROW_TONE.ATTENTION}
-      onPress={onRetry}
-    />
-  );
+  return <FailedReadRow label={words} act={WORDS.TRY_AGAIN} onPress={onRetry} />;
 }
 
 /**

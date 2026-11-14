@@ -12,6 +12,7 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityHidden,
   accessibilityHint,
   accessibilityIdentifier,
   accessibilityLabel,
@@ -39,6 +40,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dropLink } from "./interactions.js";
@@ -275,7 +277,8 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_LINE }),
-          foregroundStyle(working ? colors.TEXT_MUTED : colors.DANGER_TEXT),
+          // Note that Failed stands muted beside the failed mark, which already carries the red, as the panel marks a failed agent by its glyph alone.
+          foregroundStyle(colors.TEXT_MUTED),
         ]}
       >
         {working ? GLYPH_STATE_WORDS[GLYPH_STATE.WORKING] : GLYPH_STATE_WORDS[GLYPH_STATE.FAILED]}
@@ -438,6 +441,53 @@ export function LinkRow({
         end={detail === undefined ? null : <EndWords words={detail} />}
       />
     </SwiftUIButton>
+  );
+}
+
+type FailedReadRowProps = {
+  /** What could not be read, such as the description. */
+  readonly label: string;
+  /** The act's words, such as Try again. */
+  readonly act: string;
+  readonly onPress: () => void;
+};
+
+/**
+ * A row saying a part of a page could not be read: the failed glyph in the
+ * attention ink, the one look of every problem line in the app (a status
+ * mark such as an agent's failed ring keeps its red), hidden from VoiceOver
+ * since the words say it, the words muted, and its one
+ * act at the line's end as the system's small bordered capsule in the ink, as
+ * Mail says a message could not be loaded. Note that only the capsule takes a press, so the row reads
+ * as a line that says, with the act beside it.
+ */
+export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
+  const colors = useColors();
+
+  return (
+    <HStack modifiers={rowPlacement(colors)}>
+      <RowHead
+        unread={false}
+        faded={false}
+        lead={
+          <Image
+            {...glyphImage(GLYPH.FAILED)}
+            color={colors.ATTENTION}
+            modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), accessibilityHidden(true)]}
+          />
+        }
+        title={label}
+        ink={colors.TEXT_MUTED}
+        end={
+          <Button
+            label={act}
+            look={BUTTON_LOOK.BORDERED}
+            size={BUTTON_SIZE.SMALL}
+            onPress={onPress}
+          />
+        }
+      />
+    </HStack>
   );
 }
 
