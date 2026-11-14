@@ -55,6 +55,9 @@ import { useLatestWrites } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
+/** No setting's row redrawn yet. */
+const NO_ROUNDS: ReadonlyMap<AppSettingField, number> = new Map();
+
 /** No models read yet. */
 const NO_MODELS: readonly CatalogModel[] = [];
 
@@ -124,9 +127,12 @@ export default function AgentsScreen() {
   // Note that each pick goes at once, even while an earlier one is out, such as an effort right after a model, since the host draws the default and a setting as they are sent.
   const write = useLatestWrites<string, ModelChoice | undefined>(rejectionWords);
   const setting = useLatestWrites<string, string>(rejectionWords);
-  // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was refused redraws its section, which reads the stored choice again.
+  // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was refused redraws its own controls, which read the stored choice again: the default's model, effort and speed together, and each setting's row alone, so another row's pick still out stands.
   const [defaultRound, setDefaultRound] = useState(0);
-  const [settingRound, setSettingRound] = useState(0);
+
+  const [settingRounds, setSettingRounds] =
+    useState<ReadonlyMap<AppSettingField, number>>(NO_ROUNDS);
+
   const standard = current === undefined ? undefined : standardModelIdOf(current.model);
   const speeds = standard === undefined ? [] : speedsOffered(catalog, standard);
   const speed = current === undefined ? MODEL_SPEED.STANDARD : modelSpeedOf(current.model);
@@ -178,7 +184,9 @@ export default function AgentsScreen() {
     void setting
       .run(field, token, () => acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(actionRefused))
       .then((landed) => {
-        if (!landed) setSettingRound((round) => round + 1);
+        if (!landed) {
+          setSettingRounds((rounds) => new Map(rounds).set(field, (rounds.get(field) ?? 0) + 1));
+        }
       });
   };
 
@@ -203,7 +211,7 @@ export default function AgentsScreen() {
       // Note that SwiftUI's picker keeps the pick a person made, so a refused write draws the row anew under the next round, reading the stored choice again.
       <Fragment key={entry.id}>
         <MenuPickRow
-          key={settingRound}
+          key={settingRounds.get(field) ?? 0}
           label={entry.label}
           options={control.options.map((option) => ({ id: option.value, label: option.label }))}
           picked={control.value}
@@ -218,13 +226,9 @@ export default function AgentsScreen() {
     <Screen>
       <SettingsForm>
         {current === undefined && newAgentRows.length === 0 ? null : (
-          <ListSection
-            key={defaultRound}
-            title={DEFAULT_WORDS.SECTION}
-            footer={refusalOf(newAgentRows, write.said)}
-          >
+          <ListSection title={DEFAULT_WORDS.SECTION} footer={refusalOf(newAgentRows, write.said)}>
             {current === undefined || standard === undefined ? null : (
-              <>
+              <Fragment key={defaultRound}>
                 <MenuPickRow
                   label={DEFAULT_WORDS.MODEL}
                   options={modelOptions(catalog)}
@@ -279,7 +283,7 @@ export default function AgentsScreen() {
                     }}
                   />
                 ) : null}
-              </>
+              </Fragment>
             )}
             {newAgentRows.map(pickRow)}
           </ListSection>
