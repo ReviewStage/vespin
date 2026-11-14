@@ -33,6 +33,8 @@
      and the public pages'. */
   --ui-display-landing-face: var(--ui-font-sans);
   --ui-display-landing-title-size: 4rem;
+  /* The hero's line, which grows with the page (its container's width) so its two lines span most of the row on any desktop width. */
+  --ui-display-landing-hero-size: clamp(4rem, 5.6cqw, 5.25rem);
   --ui-display-landing-title-leading: 1.04;
   --ui-display-landing-title-weight: 450;
   --ui-display-landing-title-tracking: -0.032em;

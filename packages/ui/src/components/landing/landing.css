@@ -133,9 +133,7 @@
      even length rather than a long one over a short one. */
   .ui-landing-hero-words .ui-landing-title {
     max-width: none;
-    /* off-scale: the hero's line grows with the page, so its two lines
-       span most of the row on any desktop width */
-    font-size: clamp(var(--ui-display-landing-title-size), 5.6cqw, 5.25rem);
+    font-size: var(--ui-display-landing-hero-size);
     text-wrap: balance;
   }
 
@@ -226,33 +224,19 @@
     margin-top: 40px;
   }
 
-  /* The live app's stage: the window as wide as the page's inset allows,
-     a faint light over its top edge, its foot fading into the ground so
-     the page runs on under it. */
+  /* The live app stands in the hero itself, right under the words and on
+     their column, a step wider either side so its frame clears their edge,
+     its foot fading into the ground so the page runs on under it. */
   .ui-landing-hero-stage {
     position: relative;
-    margin: 72px var(--ui-landing-inset) 0;
+    /* off-scale: how far the window reaches past the words' column either side */
+    margin: 64px calc(var(--ui-landing-gutter) - 20px) 0;
     padding-bottom: 24px;
-  }
-
-  .ui-landing-hero-stage::before {
-    content: "";
-    position: absolute;
-    inset: -120px 10% auto;
-    height: 320px;
-    background: radial-gradient(
-      closest-side,
-      color-mix(in srgb, var(--ui-color-text) 7%, transparent),
-      transparent
-    );
-    pointer-events: none;
   }
 
   .ui-landing-hero-app {
     position: relative;
     z-index: 1;
-    max-width: 1280px;
-    margin: 0 auto;
     mask-image: linear-gradient(to bottom, black 62%, transparent 98%);
   }
 
