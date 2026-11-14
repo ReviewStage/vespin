@@ -1737,14 +1737,10 @@ it.effect(
         assert.ok(worker?.disallowedTools?.includes(tool), tool);
       }
 
-      // In the cloud's sandbox the CLI reaches our server over HTTP under the bearer, which no other option carries.
+      // In the cloud's sandbox our server is relayed as an SDK server, because the CLI drops an HTTP server
+      // registered under `workspace`, a name it reserves; the bearer rides in no option.
       const { mcpServers, ...rest } = options;
-      assert.deepEqual(mcpServers?.workspace, {
-        type: "http",
-        url: CONFIG.mcpUrl,
-        headers: { authorization: `Bearer ${BEARER}` },
-        timeout: 600_000,
-      });
+      assert.equal(mcpServers?.workspace?.type, "sdk");
       assert.ok(!JSON.stringify(rest).includes(BEARER));
       assert.equal(options.env?.[RUNNER_ENV.BEARER], undefined);
       assert.equal(options.env?.[RUNNER_ENV.CLAUDE_TOKEN], CLAUDE_TOKEN);
