@@ -138,8 +138,10 @@ builds a control of its own.
   takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
   items, which expo-router types as plain names, take `GLYPH.X` too
   (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
-  where iOS draws the thing its own way (Share, and the chevron at the end of
-  a Settings row that goes on) or where the panel draws a
+  where iOS draws the thing its own way (Share, the chevron at the end of a
+  Settings row that goes on, the small arrow out at the end of one that
+  leaves the app, and the up-and-down chevron at the end of one whose press
+  opens a menu) or where the panel draws a
   mark of its own rather than a Lucide glyph (a check box, a face, an MCP
   server, the panel's product mark). A task's status ring is the panel's own
   mark, cut into the asset catalog from `@repo/brand`'s table
