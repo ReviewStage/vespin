@@ -29,13 +29,29 @@ appId: dev.vespin.ios
     id: "failure-notice-retry"
 - assertVisible: "The task could not be unpinned\\..*"
 - assertVisible: "Pinned"
-# A swipe down puts the notice away before its time is up.
-- swipe:
-    from:
-      id: "failure-notice"
-    direction: DOWN
-- waitForAnimationToEnd
-- assertNotVisible: "The task could not be unpinned\\..*"
+# A swipe down puts the notice away well before its six seconds are up.
+# Note that a swipe Maestro starts from an element ends at 90% of the
+# screen's height, which a regular window's notice, standing at the foot with
+# no tab bar under it, already stands past; so there it is swiped from its
+# own place, 95% down, to the screen's foot.
+- runFlow:
+    when:
+      notVisible: "Select a task"
+    commands:
+      - swipe:
+          from:
+            id: "failure-notice"
+          direction: DOWN
+- runFlow:
+    when:
+      visible: "Select a task"
+    commands:
+      - swipe:
+          start: "50%, 95%"
+          end: "50%, 99%"
+- extendedWaitUntil:
+    notVisible: "The task could not be unpinned\\..*"
+    timeout: 3000
 # Mark done from the same menu asks first in the system's alert, since the
 # task's agent is at work and only the person can decide to stop it; once
 # confirmed, it is refused too: the task stays in the list and the notice
@@ -43,6 +59,6 @@ appId: dev.vespin.ios
 - longPressOn: "Weekly digest email"
 - tapOn: "Mark done"
 - tapOn: "Stop agents"
-- assertVisible: "The task could not be marked done. Try again."
+- assertVisible: "The task could not be marked done\\..*"
 - assertVisible: "Weekly digest email"
 - takeScreenshot: failure-notice-mark-done

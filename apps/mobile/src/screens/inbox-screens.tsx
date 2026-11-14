@@ -77,7 +77,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
@@ -597,6 +597,8 @@ function ThreadDetail({
 
   const navigation = useNavigation();
   const inFront = useInFront();
+  // Whether the thread's screen is the one in front of its stack, which its docked composer tells the app's notice.
+  const focused = useIsFocused();
 
   // Whether this thread stands in front now, read when a start answers rather than when it was sent, since the reader may have switched tabs meanwhile.
   const front = useRef(inFront);
@@ -767,7 +769,14 @@ function ThreadDetail({
         : {
             acts,
             menu: menuWithout(menu, acts),
-            foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
+            foot: (
+              <ThreadComposer
+                item={item}
+                answer={answer}
+                agentName={agentName}
+                inColumn={{ shown: inFront }}
+              />
+            ),
           })}
     />
   );
@@ -806,7 +815,10 @@ function ThreadDetail({
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
-      <GlassDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
+      <GlassDock
+        shown={focused}
+        bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}
+      >
         <Screen>{page}</Screen>
       </GlassDock>
       {remind.sheet}

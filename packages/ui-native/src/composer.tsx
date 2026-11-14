@@ -24,6 +24,7 @@ import {
   frame,
   glassEffect,
   lineLimit,
+  onGeometryChange,
   padding,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -42,8 +43,8 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** The send button's round, in points. */
 const SEND_SIZE = 32;
 
-/** How tall a column's composer stands at its foot with its gap, a bare field's, which the app's notice stands over, in points. */
-const COMPOSER_FOOT_ROOM = SEND_SIZE + 2 * (SPACE.ROW + 2) + SPACE.ROW;
+/** How tall a column's composer stands at its foot with its gap before it is measured, a bare field's, which the app's notice stands over, in points. */
+const COMPOSER_FOOT_UNMEASURED = SEND_SIZE + 2 * (SPACE.ROW + 2) + SPACE.ROW;
 
 /**
  * A press's frame in the composer's row: Apple's least target, its mark
@@ -396,10 +397,13 @@ export function Composer(props: ComposerProps) {
 /**
  * The same composer at the foot of a SwiftUI column, such as a split view's
  * detail, where no React Native bar can stand: its pieces in a row of the
- * system's own glass, rounded as the bar is.
+ * system's own glass, rounded as the bar is. While its column is the one in
+ * front (`shown`), the app's notice stands over it, as tall as it stands, its
+ * head of queued messages or a held call included.
  */
-export function ComposerFoot(props: ComposerProps) {
-  useNoticeLift(COMPOSER_FOOT_ROOM);
+export function ComposerFoot(props: ComposerProps & { readonly shown: boolean }) {
+  const [room, setRoom] = useState(COMPOSER_FOOT_UNMEASURED);
+  useNoticeLift({ room }, props.shown);
 
   const glass = [
     padding({ all: BAR_EDGE }),
@@ -410,6 +414,7 @@ export function ComposerFoot(props: ComposerProps) {
       cornerRadius: BAR_RADIUS,
     }),
     padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
+    onGeometryChange(({ height }) => setRoom(height + SPACE.ROW)),
   ];
 
   if (props.head === undefined) {

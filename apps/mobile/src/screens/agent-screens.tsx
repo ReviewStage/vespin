@@ -75,7 +75,7 @@ import {
   withWaitingLine,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   useAgentMedia,
@@ -460,6 +460,8 @@ export function AgentScreen() {
   } = useLocalSearchParams<{ id: string; suggestedBy?: string; button?: string }>();
 
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
+  // Whether the agent's page is the one in front of its stack, which its composer tells the app's notice.
+  const focused = useIsFocused();
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const navigation = useNavigation();
@@ -782,6 +784,7 @@ export function AgentScreen() {
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
       <GlassDock
+        shown={focused}
         bar={
           <AgentComposerBar
             composer={composer}

@@ -160,6 +160,8 @@ export type ComposeAdd = {
 };
 
 type ComposeSheetProps = {
+  /** Whether the sheet is the screen in front, which the app's notice stands over its bar of capsules while it holds (`GlassDock`'s `shown`). */
+  readonly shown: boolean;
   /** The line over the words, such as who suggested them; none for a draft of the member's own. */
   readonly title?: string | undefined;
   /** What stands over the words, such as the task the new one is related to, as capsules. */
@@ -240,10 +242,11 @@ function ComposePage(props: ComposeSheetProps) {
  * where it outruns the bar. The sheet's own bar holds Cancel and Start.
  */
 export function ComposeSheet(props: ComposeSheetProps) {
-  const { add, chips, onDropPictures } = props;
+  const { add, chips, onDropPictures, shown } = props;
 
   return (
     <GlassDock
+      shown={shown}
       bar={
         <GlassBar modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}>
           <AddPress menu={add.menu} onAdd={add.onAdd} testId={add.testId} />

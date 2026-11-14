@@ -22,9 +22,19 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import { AccessibilityInfo, Animated, PanResponder, StyleSheet, View } from "react-native";
+import {
+  AccessibilityInfo,
+  Animated,
+  type HostInstance,
+  type LayoutChangeEvent,
+  PanResponder,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceMotion } from "./accessibility.js";
 import {
@@ -40,7 +50,7 @@ import {
 import { BAR_RADIUS, useKeyboardHeight } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";
-import { NoticeLift, type NoticeLifts } from "./notice-lift.js";
+import { LiftBarsProvider, type NoticeLift, useLiftBars } from "./notice-lift.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -93,11 +103,10 @@ export interface FailureNotices {
 
 const Notices = createContext<FailureNotices | undefined>(undefined);
 
-/** Where the one notice stands: the notice itself, the layer drawn last (the sheet on top), how tall the bar drawn last at a screen's foot stands, and how a layer comes and goes. */
+/** Where the one notice stands: the notice itself, the layer drawn last (the sheet on top), and how a layer comes and goes. */
 interface NoticeStage {
   readonly shown: ShownNotice | undefined;
   readonly top: string | undefined;
-  readonly lift: number | undefined;
   readonly gone: (serial: number) => void;
   readonly enter: (layer: string) => () => void;
 }
@@ -186,6 +195,37 @@ function NoticeBody({
 }
 
 /**
+ * How far above its place's foot the banner stands. Note that the keyboard
+ * covers the safe area and the tab bar alike, so with it up the banner stands
+ * on the keyboard, over a bar only where one rides it; else over the bar in
+ * front where it was measured in the window, which counts a tab bar under
+ * it; else over its height above the safe area, as a column's composer
+ * stands; else over the window's own bar, such as the tab bar. A form sheet
+ * standing short of the window's foot has no safe area of its own there.
+ */
+function bannerFoot({
+  keyboard,
+  safeBottom,
+  lift,
+  footRoom,
+  placeFoot,
+}: {
+  readonly keyboard: number;
+  readonly safeBottom: number;
+  readonly lift: NoticeLift | undefined;
+  readonly footRoom: number;
+  readonly placeFoot: number;
+}): number {
+  if (keyboard > 0) return Math.max(0, keyboard - placeFoot) + (lift?.room ?? 0);
+
+  if (lift?.foot !== undefined) return Math.max(0, lift.foot - placeFoot);
+
+  const safe = placeFoot > 0 ? 0 : safeBottom;
+
+  return safe + (lift === undefined ? footRoom : lift.room);
+}
+
+/**
  * The banner: rises at the window's foot as a notice arrives, over the
  * composer or the tab bar there, as Mail and Messages stand Undo over their
  * bars, so it never covers the heading or the search field it speaks of; or
@@ -204,13 +244,16 @@ function NoticeBanner({
   onGone,
   lift,
   footRoom,
+  placeFoot,
 }: {
   readonly notice: ShownNotice | undefined;
   readonly onGone: (serial: number) => void;
-  /** How tall the bar drawn last at a screen's foot stands, which the banner stands over; none where none stands. */
-  readonly lift: number | undefined;
+  /** The bar in front at the foot of the place the banner stands in, which it stands over; none where none stands. */
+  readonly lift: NoticeLift | undefined;
   /** The room the window's own bar takes at its foot where no screen's bar stands, such as a compact window's tab bar. */
   readonly footRoom: number;
+  /** How far the place's own foot stands above the window's, in points: none for the root or a sheet to the window's foot, more for an iPad's form sheet. */
+  readonly placeFoot: number;
 }) {
   const reduceMotion = useReduceMotion();
   const keyboard = useKeyboardHeight();
@@ -306,8 +349,7 @@ function NoticeBanner({
         ],
       };
 
-  // Note that the keyboard covers the bottom safe area and the tab bar alike, so with it up the banner stands on the keyboard, under a bar only where one rides it.
-  const foot = keyboard > 0 ? keyboard + (lift ?? 0) : safeBottom + (lift ?? footRoom);
+  const foot = bannerFoot({ keyboard, safeBottom, lift, footRoom, placeFoot });
 
   return (
     <View pointerEvents="box-none" style={[styles.edge, { bottom: foot }]}>
@@ -342,7 +384,7 @@ export function FailureNoticeProvider({
 }) {
   const [state, setState] = useState(NO_NOTICE);
   const [layers, setLayers] = useState<readonly string[]>([]);
-  const [bars, setBars] = useState<ReadonlyArray<readonly [string, number]>>([]);
+  const { bars, lift } = useLiftBars();
 
   const notices = useMemo<FailureNotices>(
     () => ({
@@ -362,31 +404,16 @@ export function FailureNoticeProvider({
     return () => setLayers((were) => were.filter((was) => was !== layer));
   }, []);
 
-  // Note that a bar that grows keeps its place among the bars, and the one drawn last is the one in front.
-  const lifts = useMemo<NoticeLifts>(
-    () => ({
-      raise: (bar, room) =>
-        setBars((were) =>
-          were.some(([was]) => was === bar)
-            ? were.map((was) => (was[0] === bar ? ([bar, room] as const) : was))
-            : [...were, [bar, room] as const],
-        ),
-      drop: (bar) => setBars((were) => were.filter(([was]) => was !== bar)),
-    }),
-    [],
-  );
-
   const top = layers.at(-1);
-  const lift = bars.at(-1)?.[1];
 
   const stage = useMemo<NoticeStage>(
-    () => ({ shown: state.shown, top, lift, gone, enter }),
-    [state.shown, top, lift, gone, enter],
+    () => ({ shown: state.shown, top, gone, enter }),
+    [state.shown, top, gone, enter],
   );
 
   return (
     <Notices.Provider value={notices}>
-      <NoticeLift.Provider value={lifts}>
+      <LiftBarsProvider value={bars}>
         <Stage.Provider value={stage}>
           {children}
           <NoticeBanner
@@ -394,9 +421,10 @@ export function FailureNoticeProvider({
             onGone={gone}
             lift={lift}
             footRoom={footRoom}
+            placeFoot={0}
           />
         </Stage.Provider>
-      </NoticeLift.Provider>
+      </LiftBarsProvider>
     </Notices.Provider>
   );
 }
@@ -405,6 +433,8 @@ export function FailureNoticeProvider({
  * A sheet's own place for the notice: wraps the sheet's screens, and draws
  * the notice over them while this sheet is the one on top, so a write
  * refused inside a sheet, or under it, is seen rather than hidden behind it.
+ * It keeps the bars drawn in the sheet apart from the root's, so its notice
+ * stands over the sheet's own composer, never one on the screen under it.
  */
 export function FailureNoticeLayer({ children }: { readonly children: ReactNode }) {
   const stage = useContext(Stage);
@@ -412,18 +442,29 @@ export function FailureNoticeLayer({ children }: { readonly children: ReactNode 
 
   if (stage === undefined) throw new Error("A sheet drew a notice layer outside its provider.");
 
-  const { enter, top, shown, gone, lift } = stage;
+  const { enter, top, shown, gone } = stage;
+  const { bars, lift } = useLiftBars();
+  const sheet = useRef<HostInstance>(null);
+  const { height: windowHeight } = useWindowDimensions();
+  const [placeFoot, setPlaceFoot] = useState(0);
 
   useEffect(() => enter(layer), [enter, layer]);
 
+  // Note that a form sheet on an iPad stands short of the window's foot, which the window's measures of the bars under it are taken from.
+  const onLayout = (_event: LayoutChangeEvent) =>
+    sheet.current?.measureInWindow((_x, y, _width, height) =>
+      setPlaceFoot(Math.max(0, windowHeight - (y + height))),
+    );
+
   return (
-    <View style={styles.layer}>
-      {children}
+    <View ref={sheet} style={styles.layer} onLayout={onLayout}>
+      <LiftBarsProvider value={bars}>{children}</LiftBarsProvider>
       <NoticeBanner
         notice={top === layer ? shown : undefined}
         onGone={gone}
         lift={lift}
         footRoom={0}
+        placeFoot={placeFoot}
       />
     </View>
   );

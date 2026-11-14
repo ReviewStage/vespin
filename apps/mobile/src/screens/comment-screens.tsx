@@ -17,7 +17,7 @@ import {
   ThreadPage,
   useColors,
 } from "@repo/ui-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
@@ -71,6 +71,8 @@ function quoteOf(quote: string, anchored: boolean): string {
  */
 export function CommentThreadScreen() {
   const { id = "", task: taskId = "" } = useLocalSearchParams<{ id: string; task: string }>();
+  // Whether the thread is the one in front of its stack, which its composer tells the app's notice.
+  const focused = useIsFocused();
   const colors = useColors();
   const openLink = useOpenLink();
   const overview = useTaskOverview(taskId);
@@ -100,6 +102,7 @@ export function CommentThreadScreen() {
         </Screen>
       ) : (
         <GlassDock
+          shown={focused}
           bar={
             <Composer
               placeholder={WORDS.REPLY}
@@ -148,6 +151,9 @@ export function NewCommentScreen() {
     to = "",
     quote = "",
   } = useLocalSearchParams<{ task: string; from: string; to: string; quote: string }>();
+
+  // Whether the new comment is the one in front of its stack, which its composer tells the app's notice.
+  const focused = useIsFocused();
 
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -200,6 +206,7 @@ export function NewCommentScreen() {
         </Screen>
       ) : (
         <GlassDock
+          shown={focused}
           bar={
             <Composer
               placeholder={WORDS.ADD_COMMENT}
