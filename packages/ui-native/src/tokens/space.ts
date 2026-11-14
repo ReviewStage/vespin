@@ -88,6 +88,12 @@ export const ROW_INSET = {
   THREAD_VERTICAL: 11,
   /** Between an Inbox thread's title and the line under it, as Mail's subject sits under its sender. */
   THREAD_LINE_GAP: 3,
-  /** Between the column's edge and a selected row's rounded fill, so the fill stands set in, as Mail's selected message does, the unread dot still inside it. */
-  FILL: SPACE.TIGHT,
+  /**
+   * Between the column's edge and a selected row's rounded fill, so the fill
+   * stands set in, as Mail's selected message does. Note that it stays under
+   * `LEADING`, the dot's margin, which the row pads by `LEADING - FILL` inside
+   * the fill, so the unread dot always stands inside it, whatever size the
+   * dot is drawn at.
+   */
+  FILL: SPACE.TIGHT / 2,
 } as const;
