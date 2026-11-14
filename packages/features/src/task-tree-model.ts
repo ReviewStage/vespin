@@ -56,6 +56,9 @@ export const TASK_TREE_GROUP = {
 
 export type TaskTreeGroupKind = (typeof TASK_TREE_GROUP)[keyof typeof TASK_TREE_GROUP];
 
+/** The key of the repository group holding the tasks with no repository, which no repository's full name can take. */
+export const NO_REPOSITORY_KEY = "";
+
 /** One list of the tree: its kind, a key it is told apart by, its heading, and its rows in order, child tasks nested. */
 export interface TaskTreeGroup {
   readonly kind: TaskTreeGroupKind;
@@ -207,7 +210,7 @@ export function taskTree(input: TaskTreeInput): TaskTree {
     tasksHead: input.tasksHead,
     tasks: homedGroups.map((group) => ({
       kind: TASK_TREE_GROUP.REPOSITORY,
-      key: group.repository ?? "",
+      key: group.repository ?? NO_REPOSITORY_KEY,
       title: !headings
         ? undefined
         : group.repository === null

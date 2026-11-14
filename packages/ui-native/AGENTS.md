@@ -222,7 +222,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   foot, a compact window's tab bar stepping aside for it.
 - **Group headers** (`ListSection`) are small and muted with a count, or
   finished of all as `2/5` (`progress`); a `foldable` one folds in place on
-  a press, its chevron on the left, its rows easing away and back; and one given `add` ends in a muted +,
+  a press, its chevron on the left, its rows easing away and back; one given a `glyph` leads its title
+  with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
+  mark; and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an
   empty section stands as its header alone rather than a list of add rows.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
