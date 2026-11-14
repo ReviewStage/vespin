@@ -8,6 +8,7 @@ import {
   ArrowUpLeft,
   ArrowUpRight,
   AudioLines,
+  Bell,
   Bold,
   Bot,
   Check,
@@ -53,11 +54,13 @@ import {
   Minimize2,
   Minus,
   Monitor,
+  MousePointerClick,
   PanelLeft,
   PanelRight,
   Pause,
   Pencil,
   PenLine,
+  PersonStanding,
   Pin,
   PinOff,
   Play,
@@ -65,6 +68,7 @@ import {
   Plus,
   Rewind,
   RotateCw,
+  ScreenShare,
   Search,
   SearchX,
   Settings,
@@ -130,6 +134,9 @@ export const ExpandIcon = lucideGlyph(Maximize2, "icon-button-glyph");
 
 /** Two arrows in from opposite corners: a full-window pane brought back to its place. */
 export const CollapseIcon = lucideGlyph(Minimize2, "icon-button-glyph");
+
+/** A bar alone, as a window's title bar draws it: a window shrunk down to its pill, there to bring back. */
+export const MinimizeIcon = lucideGlyph(Minus, "icon-button-glyph");
 
 /** An arrow turning round to where it began: tries again what did not land. */
 export const RetryIcon = lucideGlyph(RotateCw, "icon-button-glyph");
@@ -283,6 +290,18 @@ export const LaptopIcon = lucideGlyph(Laptop, "filter-icon");
 
 /** The microphone itself — what macOS's own access ask is about. */
 export const MicrophoneIcon = lucideGlyph(Mic, "settings-icon");
+
+/** A bell: whether macOS lets the app post notifications. */
+export const NotificationsIcon = lucideGlyph(Bell, "settings-icon");
+
+/** A screen being shared: whether macOS lets the app see other apps' windows. */
+export const ScreenRecordingIcon = lucideGlyph(ScreenShare, "settings-icon");
+
+/** A pointer pressing: agents using a machine's apps, as computer use does. */
+export const ComputerUseIcon = lucideGlyph(MousePointerClick, "settings-icon");
+
+/** A person standing, macOS's own mark for Accessibility: whether macOS lets the app click and type in other apps. */
+export const AccessibilityIcon = lucideGlyph(PersonStanding, "settings-icon");
 
 /** The microphone struck through: a call's microphone muted, so the caller is not heard. */
 export const MicrophoneOffIcon = lucideGlyph(MicOff, "settings-icon");

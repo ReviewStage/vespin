@@ -4,18 +4,18 @@
  * Each procedure is a door over the one operation (`agent-browser-tabs.ts`),
  * which the member MCP server's browser tab tools run too.
  * `GET /api/agents/{id}/browser-tabs` lists one agent's tabs, and
- * `GET /api/plans/{id}/browser-tabs` a task's, every one of
+ * `GET /api/tasks/{id}/browser-tabs` a task's, every one of
  * its agents' together, each with the coding agent whose browser holds it,
  * and the member driving it while their takeover stands. `POST
  * /api/agents/{id}/browser-tabs/{tab}/driver`, or the same under
- * `/api/plans/{id}`, takes the tab over for `BROWSER_TAKEOVER_HOLD_MS`, or
+ * `/api/tasks/{id}`, takes the tab over for `BROWSER_TAKEOVER_HOLD_MS`, or
  * moves the member's own takeover on by as much, so a window that went away
  * leaves the tab to its agent once that passes; `DELETE` hands it back. Each
  * answers the tab as it then stands, so a tab another member drives answers
  * them as its driver.
  *
  * `POST /api/agents/{id}/browser-tabs` opens a page at an http or https
- * address in the agent's browser, and `POST /api/plans/{id}/browser-tabs`
+ * address in the agent's browser, and `POST /api/tasks/{id}/browser-tabs`
  * in the browser of a coding agent on the task, as a member does to
  * sign in somewhere for it: the browser is reached through
  * `connectRestoring`, which resumes a stopped sandbox and reopens its kept

@@ -777,16 +777,17 @@ const CREATE_TASK_WORDS = `\`${AGENT_TOOL.CREATE_TASK}\` makes a task of its own
 const MESSAGES_WORDS = `Your messages are read by the developer in ${PRODUCT_NAME}'s own window as a transcript, beside your tool calls. Put words the developer will send elsewhere in a fence named for where they go: \`\`\`slack with Slack's own marks, \`\`\`email with an optional \`Subject:\` first line, or \`\`\`draft, the last two in plain text.`;
 
 /**
- * What the agent is told of the suggestions it may put in its reply
+ * What the agent is told of the suggestions it may put in its reply or a
+ * thread's message, which draws them the same
  * (`../reply-buttons/add-suggestion.ts`) where it is offered
  * `add_suggestion`, as where its starter turned Suggestions on
  * (`../tool-catalog/gates.ts`'s `REPLY_BUTTONS`), and nothing where not.
  */
 function replyButtonWords(standing: AgentStanding): string {
   return offers(standing, AGENT_TOOL.ADD_SUGGESTION)
-    ? `## Suggestions in your reply
+    ? `## Suggestions
 
-Where your reply names work the developer may want next that runs apart from yours, such as a follow-up you found along the way, or words for an agent already running, put a suggestion beside the line it is about with \`${AGENT_TOOL.ADD_SUGGESTION}\` rather than asking them to start it by hand: a new agent on a brief you write, or your words for that agent. A member who presses it opens it filled in, may edit it, and sends it as themselves, only once. Write the link it answers as \`[<label>](<link>)\` at the end of that line. A suggestion is for work you leave to the developer's choice, never for what you will do yourself, and never for a decision, which goes in a thread.
+Where your reply or a thread names work the developer may want next that runs apart from yours, such as a follow-up you found along the way, or words for an agent already running, put a suggestion beside the line it is about with \`${AGENT_TOOL.ADD_SUGGESTION}\` rather than asking them to start it by hand: a new agent on a brief you write, or your words for that agent. A member who presses it opens it filled in, may edit it, and sends it as themselves, only once. Write the link it answers as \`[<label>](<link>)\` at the end of that line, in your reply or in a thread's message, which draws it the same; so a finding you post in a thread carries its suggestion there, never a pointer to one in your reply. A suggestion is for work you leave to the developer's choice, never for what you will do yourself, and never for a decision, which goes in a thread.
 
 `
     : "";

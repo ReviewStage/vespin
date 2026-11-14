@@ -21,7 +21,7 @@ import { isTaskSettled, TASK_STATUS, type TaskStatus, type TaskSummary } from ".
  * statuses has no status to leave it out by and always stands. The Tasks page lays the same tasks out its own way
  * (`tasks-page-model.ts`).
  *
- * Where the workspace has Following on, the reader may narrow the list to
+ * The reader may narrow the list to
  * the tasks they follow (`ASSIGNED_TO.FOLLOWING`), and the tasks they follow
  * that no other list holds stand in a Following group of their own
  * (`followingTasks`), so a teammate's task they keep up with stays in reach.
@@ -137,9 +137,11 @@ function grouped<K>(
   return groups;
 }
 
-/** The latest time among a group's tasks. */
+/** The latest time among a group's tasks, newest active first: its first's. */
 function latest(tasks: readonly TaskSummary[]): number {
-  return Math.max(...tasks.map(activityTime));
+  const [first] = tasks;
+
+  return first === undefined ? 0 : activityTime(first);
 }
 
 /** What every surface calls the state of naming no repository: a task's, a group's, a filter's, a pick's. */
@@ -174,12 +176,16 @@ function nameOf(repository: string): string {
 /**
  * The tasks grouped by their repository, newest updated first: the group
  * holding the latest task first, and the tasks with none last whatever
- * their age.
+ * their age. Note that `ordered` comes newest active first (`orderTasks`,
+ * or a live query ordered the same way), so each group keeps that order and
+ * nothing here sorts a task, because the sidebar regroups on every delivery
+ * and a sort of every task by its time is what that cost.
  */
-export function repositoryGroups(tasks: readonly TaskSummary[]): readonly RepositoryGroup[] {
-  const groups = [...grouped(orderTasks(tasks), (task) => task.repository)].map(
-    ([repository, members]) => ({ repository, tasks: members }),
-  );
+export function repositoryGroups(ordered: readonly TaskSummary[]): readonly RepositoryGroup[] {
+  const groups = [...grouped(ordered, (task) => task.repository)].map(([repository, members]) => ({
+    repository,
+    tasks: members,
+  }));
 
   return groups.sort((a, b) => {
     if (a.repository === null || b.repository === null) {
@@ -228,7 +234,7 @@ export function createdByOnly(
   return createdBy === undefined ? tasks : tasks.filter((task) => creatorIdOf(task) === createdBy);
 }
 
-/** Whether the reader follows a task: one of its followers, which a task of a workspace with Following off names none of. */
+/** Whether the reader follows a task: one of its followers. */
 export function followedBy(task: TaskSummary, readerId: string | undefined): boolean {
   return (
     readerId !== undefined &&
@@ -338,8 +344,8 @@ interface TaskNode {
   readonly children: readonly TaskNode[];
 }
 
-/** Every task of the workspace by its id, those no list draws among them, through which a task's ancestors are walked. */
-export type TasksById = ReadonlyMap<string, TaskSummary>;
+/** Every task of the workspace by its id, those no list draws among them, through which a task's ancestors are walked: a map, or a collection keyed by task id. */
+export type TasksById = Pick<ReadonlyMap<string, TaskSummary>, "get">;
 
 /** Every task of `tasks` by its id. */
 export function tasksById(tasks: readonly TaskSummary[]): TasksById {
@@ -551,32 +557,74 @@ export function subTasksOf(
     .toSorted((one, other) => one.createdAt - other.createdAt);
 }
 
-/** How many of `subTasks` are finished (done or canceled), of all of them. */
-export function subTaskCount(subTasks: readonly TaskSummary[]): ChildTaskCount {
-  return { finished: subTasks.filter(taskFinished).length, total: subTasks.length };
+/**
+ * A parent's sub-task count from the children the list holds and the count
+ * the service carries on the parent's row (`TaskSummary.subTasks`): the
+ * list's own where it holds as many as the service counted, since it then
+ * holds every child and draws a status the service has not answered yet,
+ * and the service's wherever the two differ, as a list that keeps only some
+ * tasks live holds fewer, and one still holding a child read outside it
+ * that has since moved away or gone holds more; none where neither counts a
+ * child.
+ */
+function countBeside(
+  held: ChildTaskCount | undefined,
+  counted: ChildTaskCount | undefined,
+): ChildTaskCount | undefined {
+  if (counted === undefined || (held !== undefined && held.total === counted.total)) return held;
+
+  return counted;
+}
+
+/** How many of `parent`'s sub-tasks are finished (done or canceled), of all of them, `subTasks` the ones the list holds (`countBeside`). */
+export function subTaskCount(
+  parent: Pick<TaskSummary, "subTasks">,
+  subTasks: readonly TaskSummary[],
+): ChildTaskCount {
+  const held = { finished: subTasks.filter(taskFinished).length, total: subTasks.length };
+
+  return countBeside(held, parent.subTasks) ?? held;
 }
 
 /**
  * How many of each parent's child tasks are finished (done or canceled),
- * by the parent's id, for the parents with any. Note that only a task's
- * direct children count, never theirs, and that `tasks` is every task the
- * workspace holds rather than the rows a view draws, since the view
- * hides the finished ones by default and the count is how many of them there are.
+ * by the parent's id, for the parents with any, as the list's own rows and
+ * the service's count on each parent's row say together (`countBeside`).
+ * Note that only a task's direct children count, never theirs, and that
+ * `tasks` is every task the workspace holds rather than the rows a view
+ * draws, since the view hides the finished ones by default and the count is
+ * how many of them there are.
  */
 export function childTaskCounts(
   tasks: readonly TaskSummary[],
 ): ReadonlyMap<string, ChildTaskCount> {
-  const counts = new Map<string, ChildTaskCount>();
+  const held = new Map<string, ChildTaskCount>();
 
   for (const task of tasks) {
     const { id, parentTaskId } = task;
 
     if (parentTaskId === undefined || parentTaskId === id) continue;
-    const was = counts.get(parentTaskId) ?? { finished: 0, total: 0 };
-    counts.set(parentTaskId, {
+    const was = held.get(parentTaskId) ?? { finished: 0, total: 0 };
+    held.set(parentTaskId, {
       finished: was.finished + (taskFinished(task) ? 1 : 0),
       total: was.total + 1,
     });
+  }
+
+  return servedCounts(tasks, held);
+}
+
+/** `held`, each parent's count among `parents` read beside the service's on its row (`countBeside`). */
+export function servedCounts(
+  parents: readonly { readonly id: string; readonly subTasks?: ChildTaskCount | undefined }[],
+  held: ReadonlyMap<string, ChildTaskCount>,
+): ReadonlyMap<string, ChildTaskCount> {
+  const counts = new Map(held);
+
+  for (const { id, subTasks } of parents) {
+    const count = countBeside(held.get(id), subTasks);
+
+    if (count !== undefined) counts.set(id, count);
   }
 
   return counts;
@@ -591,21 +639,21 @@ export type TaskSections =
   | { readonly grouping: typeof TASK_GROUPING.NONE; readonly tasks: readonly TaskSummary[] };
 
 /**
- * The tasks under Tasks as the view groups them, newest updated first.
- * Grouped by repository, the pinned repositories' groups stand above the
+ * The tasks under Tasks as the view groups them, `ordered` handed newest
+ * active first (`repositoryGroups`). Grouped by repository, the pinned repositories' groups stand above the
  * rest in the order `pinnedRepositories` names them, newest pinned first,
  * and the rest keep the order's.
  */
 export function taskSections(
-  tasks: readonly TaskSummary[],
+  ordered: readonly TaskSummary[],
   grouping: TaskSections["grouping"],
   pinnedRepositories: readonly string[],
 ): TaskSections {
   if (grouping === TASK_GROUPING.NONE) {
-    return { grouping, tasks: orderTasks(tasks) };
+    return { grouping, tasks: ordered };
   }
 
-  const grouped = repositoryGroups(tasks);
+  const grouped = repositoryGroups(ordered);
 
   const pinnedAt = (group: RepositoryGroup) =>
     group.repository === null ? -1 : pinnedRepositories.indexOf(group.repository);

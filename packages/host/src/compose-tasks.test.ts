@@ -23,6 +23,7 @@ import { LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import { PAGE_OWNER, PAGE_SHOWER } from "@repo/features/page-wire";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
+import { subTaskCount, subTasksOf } from "@repo/features/task-list-model";
 import { TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_SECTION_WRITE, type TaskSection } from "@repo/features/task-section-wire";
 import {
@@ -239,12 +240,12 @@ it.effect("the window's refresh lists the plans and opening one draws its saved 
 
     assert.deepEqual(yield* openTask(INVITES), true);
     assert.equal(last()?.activeTaskId, INVITES);
-    assert.deepEqual(description(INVITES)?.document, invites.document);
+    assert.deepEqual(description(INVITES)?.description, invites.description);
     assert.equal(tasks.snapshot().activeTaskId, INVITES);
 
     yield* openTask(BILLING);
     assert.equal(last()?.activeTaskId, BILLING);
-    assert.deepEqual(description(BILLING)?.document, billing.document);
+    assert.deepEqual(description(BILLING)?.description, billing.description);
   }),
 );
 
@@ -532,7 +533,7 @@ it.effect(
       // A teammate saves the description, which the next poll carries.
       service.tasks = service.tasks.map((each) =>
         each.id === INVITES
-          ? { ...each, updatedAt: 40, document: { ...each.document, body: "# Theirs" } }
+          ? { ...each, updatedAt: 40, description: { ...each.description, body: "# Theirs" } }
           : each,
       );
       record.move();
@@ -541,7 +542,7 @@ it.effect(
 
       assert.deepEqual(service.createKeys, ["start-key", "start-key"]);
       assert.equal(last()?.activeTaskId, INVITES);
-      assert.equal(description(INVITES)?.document.body, "# Theirs");
+      assert.equal(description(INVITES)?.description.body, "# Theirs");
       assert.deepEqual(pool.queued(), []);
     }),
 );
@@ -766,7 +767,7 @@ it.effect(
 
       assert.equal(opened, INVITES, "the task opens before the service answers");
       assert.equal(drawn?.name, "Invitation expiry");
-      assert.equal(drawn?.document.body, "", "on its empty description");
+      assert.equal(drawn?.description.body, "", "on its empty description");
       assert.deepEqual(refused, { failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE });
       assert.equal(last()?.activeTaskId, BILLING, "the reader is back where they stood");
     }),
@@ -806,14 +807,14 @@ it.effect(
       // A teammate saves the description, which the next poll carries.
       service.tasks = service.tasks.map((each) =>
         each.id === INVITES
-          ? { ...each, updatedAt: 40, document: { ...each.document, body: "# Theirs" } }
+          ? { ...each, updatedAt: 40, description: { ...each.description, body: "# Theirs" } }
           : each,
       );
       record.move();
       yield* TestClock.adjust(Duration.seconds(1));
       yield* followSettled;
 
-      assert.equal(description(INVITES)?.document.body, "# Theirs");
+      assert.equal(description(INVITES)?.description.body, "# Theirs");
     }),
 );
 
@@ -839,6 +840,344 @@ it.effect("a start answered after another task was opened answers its task and o
 
     assert.deepEqual(starting.pollUnsafe(), Exit.succeed({ planId: INVITES }));
     assert.equal(last()?.activeTaskId, BILLING, "the task opened since stays open");
+  }),
+);
+
+it.effect("a task the list does not hold is read into it as it opens, and only once", () =>
+  Effect.gen(function* () {
+    const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+    const billing = task(BILLING, "Billing export", "# Billing export", 20);
+    const service = fakeService([billing, invites]);
+    const { call, last, openTask } = yield* subject(service);
+    // The list the host follows holds the billing task alone, as one that keeps only recent tasks live.
+    yield* call("TASKS_REFRESH", undefined);
+    yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+
+    const listed = () =>
+      last()
+        ?.tasks.map((each) => each.id)
+        .toSorted();
+
+    assert.deepEqual(listed(), [BILLING]);
+
+    yield* openTask(INVITES);
+    assert.deepEqual(listed(), [BILLING, INVITES].toSorted(), "the task opened is drawn");
+
+    yield* openTask(BILLING);
+    yield* openTask(INVITES);
+    assert.deepEqual(
+      service.reads.filter((read) => read.startsWith("task-rows")),
+      [`task-rows:${INVITES}`],
+      "the task outside the list is read once, and the one in it never",
+    );
+  }),
+);
+
+it.effect(
+  "a task opened draws its finished sub-task and its blocker from outside the list, the sub-task counted finished",
+  () =>
+    Effect.gen(function* () {
+      const shipped = "2d6f3b1a-8e4c-4f2a-9b7d-1c5e8a3f6b90";
+
+      const invites = {
+        ...task(INVITES, "Teammate invitations", "# Teammate invitations", 30),
+        blockedBy: [BILLING],
+      };
+
+      const billing = {
+        ...task(BILLING, "Billing export", "# Billing export", 10),
+        status: TASK_STATUS.DONE,
+        blocks: [INVITES],
+      };
+
+      const emails = {
+        ...task(shipped, "Invitation emails", "# Invitation emails", 20),
+        status: TASK_STATUS.DONE,
+        parentTaskId: INVITES,
+      };
+
+      const service = fakeService([invites, billing, emails]);
+      const { call, last, openTask } = yield* subject(service);
+      // The list the host follows holds the open task alone, as one that keeps only active tasks live.
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(invites)], agents: [], issues: [] });
+
+      yield* openTask(INVITES);
+      const listed = last()?.tasks ?? [];
+
+      assert.deepEqual(
+        listed.map((each) => each.id).toSorted(),
+        [INVITES, BILLING, shipped].toSorted(),
+        "the sub-task and the blocker outside the list are drawn",
+      );
+      assert.deepEqual(subTaskCount({}, subTasksOf(listed, INVITES)), { finished: 1, total: 1 });
+    }),
+);
+
+it.effect(
+  "the tasks the Inbox names outside the list are read into it once the list answers, each once",
+  () =>
+    Effect.gen(function* () {
+      const invites = {
+        ...task(INVITES, "Teammate invitations", "# Invites", 10),
+        status: TASK_STATUS.DONE,
+      };
+
+      const billing = task(BILLING, "Billing export", "# Billing export", 20);
+      const gone = "0d6f2c4a-9b1e-4f3a-8c5d-7e2a1b9c4f60";
+      const service = fakeService([billing, invites]);
+      const { tasks, call, last, settled } = yield* subject(service);
+      const taskRowReads = () => service.reads.filter((read) => read.startsWith("task-rows"));
+      yield* call("TASKS_REFRESH", undefined);
+      // The Inbox names its tasks before the list first answers, when every task is outside it.
+      yield* tasks.inboxNamed([INVITES, BILLING, gone]);
+      yield* settled;
+      assert.deepEqual(taskRowReads(), [], "nothing is read before the list answers");
+
+      // The list the host follows holds the billing task alone, as one that keeps only recent tasks live.
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+      yield* settled;
+
+      assert.deepEqual(
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted(),
+        [BILLING, INVITES].toSorted(),
+        "the finished task the Inbox names is drawn beside the list's",
+      );
+
+      yield* tasks.inboxNamed([INVITES, BILLING, gone]);
+      yield* settled;
+
+      assert.deepEqual(
+        taskRowReads().toSorted(),
+        [`task-rows:${INVITES}`, `task-rows:${gone}`].toSorted(),
+        "each task outside the list is read once, one the service answers gone never again, and the one in it never",
+      );
+    }),
+);
+
+it.effect(
+  "a search draws the tasks it finds outside the list beside it, and each it holds once",
+  () =>
+    Effect.gen(function* () {
+      const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+      const billing = task(BILLING, "Billing invitations", "# Billing invitations", 20);
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      // The list holds the billing task alone, as one that keeps only recent tasks live.
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+
+      yield* call("TASKS_SEARCH", { query: "invitations" });
+
+      assert.deepEqual(
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted(),
+        [BILLING, INVITES].toSorted(),
+        "the task found outside the list is drawn, and the one in it is drawn once",
+      );
+    }),
+);
+
+it.effect(
+  "a page of settled tasks is read into the list beside the follow's, each it holds staying its own",
+  () =>
+    Effect.gen(function* () {
+      const invites = {
+        ...task(INVITES, "Teammate invitations", "# Invites", 10),
+        status: TASK_STATUS.DONE,
+      };
+
+      const billing = {
+        ...task(BILLING, "Billing export", "# Billing export", 20),
+        status: TASK_STATUS.DONE,
+      };
+
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      // The list the host follows holds the billing task alone, renamed since the page was kept, as one that keeps only recent tasks live.
+      yield* call("TASKS_REFRESH", undefined);
+      const renamed = { ...billing, name: "Billing export, renamed" };
+      yield* listAnswers(service, { plans: [rowOfTask(renamed)], agents: [], issues: [] });
+
+      assert.deepEqual(
+        yield* call("TASKS_SETTLED_PAGE", { workspaceId: billing.workspaceId }),
+        {},
+        "a page shorter than a page's tasks is the last",
+      );
+
+      assert.deepEqual(
+        last()
+          ?.tasks.map((each) => [each.id, each.name])
+          .toSorted(),
+        [
+          [BILLING, "Billing export, renamed"],
+          [INVITES, "Teammate invitations"],
+        ].toSorted(),
+        "the settled task outside the list is drawn, and the one in it as the follow answers it",
+      );
+    }),
+);
+
+it.effect("a pinned tab's task outside the list is drawn in it once read, and left unopened", () =>
+  Effect.gen(function* () {
+    const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+    const billing = task(BILLING, "Billing export", "# Billing export", 20);
+    const service = fakeService([billing, invites]);
+    const { call, last } = yield* subject(service);
+    // The list holds the billing task alone, as one that keeps only recent tasks live.
+    yield* call("TASKS_REFRESH", undefined);
+    yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+
+    yield* call("TASKS_LOAD", { taskId: INVITES });
+
+    assert.deepEqual(
+      last()
+        ?.tasks.map((each) => each.id)
+        .toSorted(),
+      [BILLING, INVITES].toSorted(),
+      "the pinned tab's task is drawn beside the list's",
+    );
+    assert.equal(last()?.activeTaskId, undefined, "nothing is opened");
+  }),
+);
+
+it.effect(
+  "a task read outside the list the service did not answer is read again at the list's next answer",
+  () =>
+    Effect.gen(function* () {
+      const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+      const billing = task(BILLING, "Billing export", "# Billing export", 20);
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+
+      const listed = () =>
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted();
+
+      service.taskRowsFail = true;
+      yield* call("TASKS_LOAD", { taskId: INVITES });
+      assert.deepEqual(
+        listed(),
+        [BILLING],
+        "nothing is drawn of a read the service did not answer",
+      );
+
+      service.taskRowsFail = false;
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+      assert.deepEqual(
+        listed(),
+        [BILLING, INVITES].toSorted(),
+        "the task is drawn once read again",
+      );
+    }),
+);
+
+it.effect(
+  "a task's relations the service did not answer are read again at the list's next answer",
+  () =>
+    Effect.gen(function* () {
+      const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+
+      const billing = {
+        ...task(BILLING, "Billing export", "# Billing export", 20),
+        parentTaskId: INVITES,
+        status: TASK_STATUS.DONE,
+      };
+
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(invites)], agents: [], issues: [] });
+
+      const listed = () =>
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted();
+
+      service.taskRowsFail = true;
+      yield* call("TASKS_RELATIONS_READ", { taskId: INVITES });
+      assert.deepEqual(
+        listed(),
+        [INVITES],
+        "nothing is drawn of a read the service did not answer",
+      );
+
+      service.taskRowsFail = false;
+      yield* listAnswers(service, { plans: [rowOfTask(invites)], agents: [], issues: [] });
+      assert.deepEqual(
+        listed(),
+        [BILLING, INVITES].toSorted(),
+        "the finished sub-task is drawn once read again",
+      );
+    }),
+);
+
+it.effect("a person's finished task outside the list is counted and read into it", () =>
+  Effect.gen(function* () {
+    const ada = { userId: "user-ada", name: "Ada Lovelace" };
+
+    const invites = {
+      ...task(INVITES, "Teammate invitations", "# Invites", 10),
+      status: TASK_STATUS.DONE,
+      assignee: ada,
+    };
+
+    const billing = { ...task(BILLING, "Billing export", "# Billing export", 20), assignee: ada };
+    const service = fakeService([billing, invites]);
+    const { call, last } = yield* subject(service);
+    // The list the host follows holds the billing task alone, as one that keeps only recent tasks live.
+    yield* call("TASKS_REFRESH", undefined);
+    const held = { ...rowOfTask(billing), assigneeId: ada.userId, assigneeName: ada.name };
+    yield* listAnswers(service, { plans: [held], agents: [], issues: [] });
+
+    assert.deepEqual(
+      yield* call("TASKS_PERSON_PAGE", { workspaceId: billing.workspaceId, personId: ada.userId }),
+      { counts: { assigned: 2, created: 0, agents: 0 } },
+    );
+
+    assert.deepEqual(
+      last()
+        ?.tasks.filter((each) => each.assignee?.userId === ada.userId)
+        .map((each) => each.id)
+        .toSorted(),
+      [BILLING, INVITES].toSorted(),
+      "the finished task outside the list is drawn as theirs beside the one in it",
+    );
+  }),
+);
+
+it.effect("a task the list takes up and then lets go is read again as it opens", () =>
+  Effect.gen(function* () {
+    const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+    const billing = task(BILLING, "Billing export", "# Billing export", 20);
+    const service = fakeService([billing, invites]);
+    const { call, last, openTask } = yield* subject(service);
+    yield* call("TASKS_REFRESH", undefined);
+    yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+    yield* openTask(INVITES);
+    // The follow takes the task up, as an edit moves it into the live set, then lets it go again as it ages out.
+    yield* listAnswers(service, { plans: [rowOfTask(billing), rowOfTask(invites)] });
+    yield* listAnswers(service, { plans: [rowOfTask(billing)] });
+    assert.deepEqual(
+      last()?.tasks.map((each) => each.id),
+      [BILLING],
+    );
+
+    yield* openTask(INVITES);
+
+    assert.deepEqual(
+      last()
+        ?.tasks.map((each) => each.id)
+        .toSorted(),
+      [BILLING, INVITES].toSorted(),
+      "the task let go is read into the list again",
+    );
   }),
 );
 
@@ -933,13 +1272,27 @@ it.effect(
       yield* openTask(INVITES);
       assert.equal(held(INVITES), undefined, "the description is still read");
       yield* call("TASKS_RENAME", { taskId: INVITES, name: "Invitations" });
-      assert.equal(description(INVITES)?.document.body, "# Invitations");
+      assert.equal(description(INVITES)?.description.body, "# Invitations");
 
       yield* Deferred.succeed(answered, undefined);
       yield* settled;
       assert.equal(description(INVITES)?.name, "Invitations");
-      assert.equal(description(INVITES)?.document.body, "# Invitations");
+      assert.equal(description(INVITES)?.description.body, "# Invitations");
     }),
+);
+
+it.effect("a rename of an open task draws the description the service answered with", () =>
+  Effect.gen(function* () {
+    const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+    const { call, settled, description, openTask } = yield* subject(fakeService([invites]));
+    yield* openTask(INVITES);
+    yield* settled;
+
+    yield* call("TASKS_RENAME", { taskId: INVITES, name: "Invitations" });
+    yield* settled;
+
+    assert.equal(description(INVITES)?.description.body, "# Invitations");
+  }),
 );
 
 it.effect(
@@ -964,7 +1317,7 @@ it.effect(
       yield* Deferred.succeed(answered, undefined);
       yield* settled;
       assert.equal(description(INVITES)?.pinnedAt, MARKED_AT);
-      assert.equal(description(INVITES)?.document.body, "# Teammate invitations");
+      assert.equal(description(INVITES)?.description.body, "# Teammate invitations");
     }),
 );
 
@@ -1030,11 +1383,11 @@ it.effect(
 
       const answer = yield* call("TASKS_EDIT", {
         taskId: INVITES,
-        edit: { document: { base: INVITES_TEXT, value: mine } },
+        edit: { description: { base: INVITES_TEXT, value: mine } },
       });
 
       assert.deepEqual(answer, { saved: true }, "the edit answers once its description is drawn");
-      assert.equal(description(INVITES)?.document.body, mine);
+      assert.equal(description(INVITES)?.description.body, mine);
       assert.equal(description(INVITES)?.updatedAt, EDITED_AT);
 
       // A teammate's save the record carries before the edit's transaction reads nothing, and the list's row from before it is held over.
@@ -1044,7 +1397,7 @@ it.effect(
       const theirs = {
         ...edited,
         updatedAt: 9_000,
-        document: { ...edited.document, body: "Theirs." },
+        description: { ...edited.description, body: "Theirs." },
       };
 
       service.tasks = [theirs];
@@ -1054,7 +1407,7 @@ it.effect(
       service.live.list.set({ plans: [rowOfTask(invites)] }, ["tx-other"]);
       yield* nextPoll(settled);
       assert.equal(opens(), opened);
-      assert.equal(description(INVITES)?.document.body, mine);
+      assert.equal(description(INVITES)?.description.body, mine);
       assert.equal(last()?.tasks.find((row) => row.id === INVITES)?.updatedAt, EDITED_AT);
 
       // Once the record carries the edit's transaction, the save it delivered meanwhile is read.
@@ -1064,7 +1417,7 @@ it.effect(
       service.live.list.set({ plans: [rowOfTask(theirs)] }, ["tx-edit"]);
       yield* nextPoll(settled);
       assert.equal(opens(), opened + 1);
-      assert.equal(description(INVITES)?.document.body, "Theirs.");
+      assert.equal(description(INVITES)?.description.body, "Theirs.");
       assert.equal(last()?.tasks.find((row) => row.id === INVITES)?.updatedAt, theirs.updatedAt);
     }),
 );
@@ -2205,7 +2558,7 @@ it.effect(
           ? {
               ...held,
               updatedAt: 20,
-              document: { ...held.document, body: theirs },
+              description: { ...held.description, body: theirs },
               lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, at: 20, duringCall: false },
             }
           : each,
@@ -2216,10 +2569,10 @@ it.effect(
       yield* TestClock.adjust(Duration.seconds(1));
       yield* followSettled;
       assert.equal(opens(), opened + 1);
-      assert.equal(description(INVITES)?.document.body, INVITES_TEXT, "the copy held stands");
+      assert.equal(description(INVITES)?.description.body, INVITES_TEXT, "the copy held stands");
       yield* TestClock.adjust(Duration.seconds(2));
       yield* followSettled;
-      assert.equal(description(INVITES)?.document.body, theirs);
+      assert.equal(description(INVITES)?.description.body, theirs);
       assert.equal(opens(), opened + 2);
 
       // The window's own save is drawn from its answer, which the next poll's mark only confirms.
@@ -2227,14 +2580,14 @@ it.effect(
       assert.deepEqual(
         yield* call("TASKS_EDIT", {
           taskId: INVITES,
-          edit: { document: { base: theirs, value: mine } },
+          edit: { description: { base: theirs, value: mine } },
         }),
         { saved: true },
       );
       record.move();
       yield* TestClock.adjust(Duration.seconds(5));
       yield* followSettled;
-      assert.equal(description(INVITES)?.document.body, mine);
+      assert.equal(description(INVITES)?.description.body, mine);
       assert.equal(opens(), opened + 2);
     }),
 );
@@ -2279,7 +2632,7 @@ it.effect("a read answering an older save than the held description lands nothin
     const mine = `${INVITES_TEXT}\n\nInvites expire.`;
     yield* call("TASKS_EDIT", {
       taskId: INVITES,
-      edit: { document: { base: INVITES_TEXT, value: mine } },
+      edit: { description: { base: INVITES_TEXT, value: mine } },
     });
     const opens = () => service.reads.filter((read) => read === `open:${INVITES}`).length;
     const opened = opens();
@@ -2297,7 +2650,7 @@ it.effect("a read answering an older save than the held description lands nothin
 
     assert.equal(opens(), opened + 1, "the moved mark asked a read");
     assert.equal(
-      description(INVITES)?.document.body,
+      description(INVITES)?.description.body,
       mine,
       "the saved description stands over the older read",
     );
@@ -2323,7 +2676,7 @@ it.effect(
       service.open = (taskId) =>
         Effect.flatMap(open(taskId), (read) => Effect.as(Deferred.await(answered), read));
       service.tasks = [
-        { ...invites, updatedAt: 20, document: { ...invites.document, body: "Theirs." } },
+        { ...invites, updatedAt: 20, description: { ...invites.description, body: "Theirs." } },
       ];
       record.move();
       yield* TestClock.adjust(Duration.seconds(1));
@@ -2342,7 +2695,7 @@ it.effect(
       yield* TestClock.adjust(Duration.seconds(2));
       yield* followSettled;
       assert.equal(
-        description(INVITES)?.document.body,
+        description(INVITES)?.description.body,
         "Theirs.",
         "the save is read again after the pin",
       );
@@ -2833,7 +3186,7 @@ it.effect(
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
       service.revisions[1] = {
         seq: 1,
-        document: { body: "# Invites", assumptions: [] },
+        description: { body: "# Invites", assumptions: [] },
         previous: null,
       };
       const history = polledLive<"revisions">(["revisions"]);
@@ -3065,7 +3418,7 @@ it.effect(
           open?.status,
           open?.assignee,
           open?.repository,
-          open?.document.body,
+          open?.description.body,
           open?.updatedAt,
         ];
       };

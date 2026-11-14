@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import { AGENT_STATUS, type AgentTranscriptMessage } from "@repo/features/agent-wire";
-import { MESSAGE_ROLE } from "@repo/wire";
+import { MESSAGE_CHANNEL, MESSAGE_ROLE } from "@repo/wire";
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
@@ -84,6 +84,27 @@ test("Edit writes again every line that opened a turn, the first included, and a
       ["second-reply", "third-line"],
     ]),
   );
+});
+
+test("a reply reverts past a line said on a call that no turn took, to the next line that opened one", () => {
+  const smallTalk: AgentTranscriptMessage = {
+    ...message("small-talk", MESSAGE_ROLE.USER),
+    metadata: { channel: MESSAGE_CHANNEL.VOICE, voice_session_id: "call-1" },
+  };
+
+  const { revertsAt } = rewindPoints(
+    [
+      message("plan", MESSAGE_ROLE.USER),
+      message("first-reply", MESSAGE_ROLE.ASSISTANT),
+      smallTalk,
+      message("second-line", MESSAGE_ROLE.USER),
+      message("second-reply", MESSAGE_ROLE.ASSISTANT),
+    ],
+    false,
+    "user-1",
+  );
+
+  assert.equal(revertsAt.get("first-reply"), "second-line");
 });
 
 const roots: Root[] = [];

@@ -56,6 +56,7 @@ import {
   ListRow,
   type MarkdownVideo,
   menuWithout,
+  NoSelection,
   PATH_PART,
   previewMessages,
   ROW_ACTION_TONE,
@@ -67,6 +68,7 @@ import {
   ScopePicker,
   Screen,
   SplitView,
+  scopeMenu,
   THREAD_MEDIA,
   type ThreadMedia,
   type ThreadMessage,
@@ -103,7 +105,7 @@ import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, useListColumn, useListLook } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, useListColumn } from "./app-sidebar.js";
 import {
   NO_THREAD_ACTS,
   OpenAskCard,
@@ -919,7 +921,7 @@ function InboxStackList(words: InboxSearch) {
 
   const field = useRefilledSearchField(search);
 
-  // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does.
+  // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
   return (
     <>
       <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }}>
@@ -937,7 +939,7 @@ function InboxStackList(words: InboxSearch) {
       {choosing !== undefined ? null : <SettingsBarButton switcher={switcher} />}
       <Stack.Toolbar placement="right">
         {choosing !== undefined ? (
-          <Stack.Toolbar.Button variant="done" onPress={choosing.done.onPress}>
+          <Stack.Toolbar.Button variant="plain" onPress={choosing.done.onPress}>
             {choosing.done.label}
           </Stack.Toolbar.Button>
         ) : (
@@ -1029,33 +1031,38 @@ function InboxSplitScreen({
   );
 
   const threeColumns = useThreeColumns();
-  const look = useListLook();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
+  const rows =
+    listing.listed.length === 0 ? (
+      <InboxEmpty
+        show={show}
+        search={search}
+        feed={listing.feed}
+        onRetry={() => void acts.refresh()}
+      />
+    ) : (
+      <InboxRows
+        look={LIST_LOOK.PLAIN}
+        listed={listing.listed}
+        readerId={listing.readerId}
+        selected={selected}
+        onSelect={select}
+        onRefresh={acts.refresh}
+        onMark={acts.mark}
+        onRemind={remind.open}
+        onResolve={acts.resolve}
+        choosing={choosing?.rows}
+      />
+    );
+
+  // Note that beside the app sidebar the scopes leave the list for Mail's filter button in its bar, so the list starts at its first thread; a two-column window keeps the menu picker over the list.
   const list = {
-    view: (
+    view: threeColumns ? (
+      rows
+    ) : (
       <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
-        {listing.listed.length === 0 ? (
-          <InboxEmpty
-            show={show}
-            search={search}
-            feed={listing.feed}
-            onRetry={() => void acts.refresh()}
-          />
-        ) : (
-          <InboxRows
-            look={look}
-            listed={listing.listed}
-            readerId={listing.readerId}
-            selected={selected}
-            onSelect={select}
-            onRefresh={acts.refresh}
-            onMark={acts.mark}
-            onRemind={remind.open}
-            onResolve={acts.resolve}
-            choosing={choosing?.rows}
-          />
-        )}
+        {rows}
       </ScopePicker>
     ),
     // Note that Select mode names how many are chosen in the column's title, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
@@ -1063,6 +1070,9 @@ function InboxSplitScreen({
       choosing === undefined
         ? {
             title: INBOX_TITLE,
+            filter: threeColumns
+              ? scopeMenu(SCOPE_LABEL, scopes, show !== INBOX_SHOW.OPEN)
+              : undefined,
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
           }
@@ -1071,7 +1081,7 @@ function InboxSplitScreen({
 
   const detail =
     selected === undefined ? (
-      <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.INBOX} />
+      <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
     ) : (
       <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
     );

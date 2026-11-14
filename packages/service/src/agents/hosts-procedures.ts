@@ -1,5 +1,5 @@
 /**
- * hosts-procedures.ts -- the account's enrolled machines as Settings › Hosts reads and changes them: listed, removed, and a box's pairing read, approved, or denied by its code.
+ * hosts-procedures.ts -- the account's enrolled machines as Settings › Machines reads and changes them: listed, removed, each machine's own settings for agents changed, and a box's pairing read, approved, or denied by its code.
  *
  * A machine is any device of the account's that holds a device secret, a
  * box its approved pairing keyed and a Mac its desktop enrolled alike
@@ -15,7 +15,10 @@
  * leave on its own secret the same way (`removeAccountHost`). The apps each
  * of the account's machines always allow are read for an agent's `@` where
  * it is typed off that machine, and only while the reader has Computer use
- * on. Each host is
+ * on. Each of the account's machines, enrolled or one whose app only
+ * joined to take commands, has its own settings for agents' commands and
+ * apps changed from any device of the member's, which the machine follows
+ * live, and is removed the same way, as a host where it runs agents. Each host is
  * listed with whether its daemon is below the floor, where its setup
  * stands, where its update to a newer release stands, whether its program
  * has called in since it joined, and, for a Mac, the user it runs as, and
@@ -38,7 +41,12 @@
 import { randomUUID } from "node:crypto";
 import { runningTurnIds } from "@repo/database/models/abandoned-turns";
 import { accountExperimentOn } from "@repo/database/models/account-store";
-import { allowedAppsOf, devicesSeenSince } from "@repo/database/models/device-store";
+import {
+  allowedAppsOf,
+  changeMachine,
+  devicesSeenSince,
+  removeMachine,
+} from "@repo/database/models/device-store";
 import {
   approveHostPairing,
   denyHostPairing,
@@ -203,6 +211,23 @@ export function hostsProcedures(seams: HostsProcedureSeams) {
     }),
     remove: hosts.remove.effect(function* ({ context, input }) {
       return yield* removedOrNotFound(yield* removeAccountHost(context.userId, input.id));
+    }),
+    changeMachine: hosts.changeMachine.effect(function* ({ context, input }) {
+      const { id, ...change } = input;
+
+      return yield* removedOrNotFound(
+        yield* hostedStoreOrUnavailable(changeMachine(context.userId, id, change)),
+      );
+    }),
+    // Note that a machine that runs agents is removed as a host is, so its agents' running turns are settled lost with it; any other only stops being listed and routed to.
+    removeMachine: hosts.removeMachine.effect(function* ({ context, input }) {
+      const host = yield* removeAccountHost(context.userId, input.id);
+
+      if (host !== undefined) return { ...DONE, txid: host };
+
+      return yield* removedOrNotFound(
+        yield* hostedStoreOrUnavailable(removeMachine(context.userId, input.id)),
+      );
     }),
     readPairing: hosts.readPairing.effect(function* ({ context, input }) {
       const code = yield* codeOf(input.code);

@@ -5,7 +5,7 @@ import {
 } from "./task-wire.js";
 
 /**
- * description-document.ts -- a description kept as one free Markdown document: its sections, and who last changed each.
+ * description-sections.ts -- a description kept as one free Markdown text: its sections, and who last changed each.
  *
  * A description is one Markdown text the developer and the app both write, started
  * from the account's own template (`docs/TASKS.md`). The text has no title line,

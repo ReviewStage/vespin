@@ -19,7 +19,11 @@
  * (`../workspace-mcp/bearer.ts`): one no standing agent holds, a retired one's
  * among them, is refused, and so is a read naming a launch other than the
  * one its bearer was recorded as, so a launch a newer one replaced reads
- * nothing more, even under the bearer its sandbox's firewall now swaps in. An answer carries the lines whole,
+ * nothing more, even under the bearer its sandbox's firewall now swaps in.
+ * A held read reads the bearer again with each look, in the statement that
+ * reads the lines, so one a turn's-end stop retired while it was held is
+ * handed nothing queued past the retire (`runner-sessions.ts`'s
+ * `stoppedHolding`). An answer carries the lines whole,
  * at least one, up to `RUNNER_LINES_ANSWER.MAX_BYTES`, so a run of large
  * messages is read over several answers.
  */
@@ -43,7 +47,12 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
-import { admitRunnerBearer, presentedBearer, presentedLaunch } from "../workspace-mcp/bearer.js";
+import {
+  admitRunnerBearer,
+  presentedBearer,
+  presentedLaunch,
+  runnerTokenDigest,
+} from "../workspace-mcp/bearer.js";
 
 /** The path a runner reads its lines from. */
 export const RUNNER_LINES_PATH = "/api/agents/runner-lines";
@@ -122,6 +131,7 @@ const runnerLinesEndpoint = /* @__PURE__ */ Effect.fn("web/runnerLinesEndpoint")
       launch: query.value[RUNNER_LINES.QUERY.LAUNCH],
       after: query.value[RUNNER_LINES.QUERY.AFTER],
       limit: RUNNER_LINES_ANSWER.LIMIT,
+      runnerTokenHash: runnerTokenDigest(bearer),
     });
 
     const held = yield* hostedStoreOrUnavailable(

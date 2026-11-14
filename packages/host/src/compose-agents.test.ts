@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { ServiceReach } from "@repo/features";
 import { type AgentBoot, BOOT_PHASE } from "@repo/features/agent-boot";
@@ -35,9 +36,21 @@ import { GATEWAY_METHOD } from "@repo/gateway";
 import { entityPool } from "@repo/sync";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import { Deferred, Duration, Effect, Exit, Fiber, Predicate, Scope, SubscriptionRef } from "effect";
+import {
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Predicate,
+  Scope,
+  SubscriptionRef,
+} from "effect";
 import { TestClock } from "effect/testing";
+import { KEPT_CHARACTERS } from "./account-items-follow.js";
 import type { AppTranscript } from "./app-state.js";
+import { KEPT_READ, openEntityStore } from "./entity-store.js";
 import { taskListCollections } from "./task-list-collections.js";
 import {
   type ACCOUNT_PARTS,
@@ -66,8 +79,10 @@ import {
   WAITING,
   WORKSPACE_ID,
 } from "./testing/agents-subject.js";
+import { memoryFileSystem } from "./testing/memory-file-system.js";
 import type { PolledLive } from "./testing/polled-live.js";
 import { agentListRow } from "./testing/task-list-rows.js";
+import { testCipher } from "./testing/test-cipher.js";
 import { HELD_TRANSCRIPTS } from "./transcript-follow.js";
 
 it.effect("each method asks the service once and answers what it said, whole", () =>
@@ -2172,6 +2187,83 @@ it.effect(
         [true, true],
       );
     }),
+);
+
+/** A store of the account's lists over a disk of the test's own, opened in `scope`, as a launch opens it. */
+const keptStore = (scope: Scope.Scope) =>
+  Scope.provide(scope)(
+    openEntityStore({ directory: "/state", cipher: testCipher(), accountId: "user-dana" }),
+  );
+
+it.effect(
+  "the account's items kept on disk are drawn as the gate opens, before the service answers, and the answer takes their place: an item it no longer holds leaves, and a changed one is drawn as it answered",
+  () =>
+    Effect.gen(function* () {
+      const earlier = yield* Scope.make();
+      const kept = { ...HELD_ITEM, title: "Push to staging?" };
+
+      yield* (yield* keptStore(earlier)).keep(KEPT_READ.INBOX, {
+        items: [
+          { item: kept, planId: TASK_ID },
+          { item: OTHER_ITEM, planId: OTHER_TASK_ID },
+        ],
+        at: "7",
+      });
+      yield* Scope.close(earlier, Exit.void);
+
+      const { open, asked, sealItems, live, accountItems } = yield* subject({
+        entities: yield* keptStore(yield* Scope.make()),
+      });
+
+      sealItems(LIVE_ANSWERED);
+      deliverItems(live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+      yield* open;
+      yield* settled;
+
+      assert.deepEqual(accountItems(), [
+        byPlan({ [TASK_ID]: [kept], [OTHER_TASK_ID]: [OTHER_ITEM] }),
+        byPlan({ [TASK_ID]: [HELD_ITEM] }),
+      ]);
+      assert.equal(asked.includes("account-items-live:user-dana"), false, "asked past the kept id");
+    }).pipe(Effect.provide(Layer.merge(memoryFileSystem().layer, NodePath.layer))),
+);
+
+it.effect(
+  "the account's items are kept on disk only as far as the newest that fit, and then without the sync id, so the next launch reads them whole",
+  () =>
+    Effect.gen(function* () {
+      const quit = yield* Scope.make();
+
+      const { open, sealItems, live, accountItems } = yield* subject({
+        entities: yield* keptStore(quit),
+      });
+
+      // Each a little over a quarter of what fits, so the newest three fit and the oldest two do not.
+      const many = Array.from({ length: 5 }, (_, index) => ({
+        ...OTHER_ITEM,
+        id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        title: "x".repeat(KEPT_CHARACTERS / 4),
+        updatedAt: OTHER_ITEM.updatedAt + index,
+      }));
+
+      sealItems(LIVE_ANSWERED);
+      deliverItems(
+        live,
+        many.map((item) => stampOf(item, OTHER_TASK_ID)),
+        many,
+      );
+      yield* open;
+      yield* toldTimes(accountItems, 1);
+      yield* Scope.close(quit, Exit.void);
+
+      const stored = (yield* keptStore(yield* Scope.make())).stored(KEPT_READ.INBOX);
+
+      assert.deepEqual(
+        stored?.items.map((each) => each.item.id),
+        [many[4]?.id, many[3]?.id, many[2]?.id],
+      );
+      assert.equal(stored?.at, undefined);
+    }).pipe(Effect.provide(Layer.merge(memoryFileSystem().layer, NodePath.layer))),
 );
 
 it.effect("an item no stamp names any more is dropped, its plan told no more", () =>

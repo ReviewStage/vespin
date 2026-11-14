@@ -34,12 +34,33 @@ export const MACHINE_COMMAND_BOUNDS = {
   /** The most characters of stdout or stderr a result carries; the Mac cuts each to this. */
   MAX_OUTPUT_CHARS: 20_000,
   /**
+   * How long an ask stands from the moment the Mac shows it, before the
+   * call is answered as not answered. The command's own time to run starts
+   * once it is allowed, so a late Allow takes none of it.
+   */
+  ASK_SECONDS: 300,
+  /**
+   * The most an ask and the run after it may take together: the workspace
+   * MCP function's duration (`WORKSPACE_MCP_FUNCTION`) less the service's
+   * grace for the claim and the answer, and room for the store. A command
+   * that may run long is asked for that much less (`machineAskSeconds`).
+   */
+  ASK_AND_RUN_SECONDS: 720,
+  /**
    * The most bytes of one result's posted body: an app's window read at
    * every bound (`COMPUTER_BOUNDS`), under the 4.5 MB a function takes. A
    * Mac answers a result past it as not run rather than post it.
    */
   MAX_RESULT_BYTES: 4_000_000,
 } as const;
+
+/** How long the Mac's ask for a command that may run `timeoutSeconds` stands: `ASK_SECONDS`, less where the run would leave no room for it. */
+export function machineAskSeconds(timeoutSeconds: number): number {
+  return Math.min(
+    MACHINE_COMMAND_BOUNDS.ASK_SECONDS,
+    MACHINE_COMMAND_BOUNDS.ASK_AND_RUN_SECONDS - timeoutSeconds,
+  );
+}
 
 /**
  * What a command asks the Mac to do. Every Mac that reads runs `shell`, an
@@ -184,7 +205,8 @@ export const COMPUTER_RECORDING_BOUNDS = {
   MAX_BASE64_CHARS: 4 * Math.ceil(MAX_REQUEST_DATA_URL_BYTES / 3),
 } as const;
 
-const appName = EffectSchema.String.check(
+/** An app as agents and the settings name it: by its bundle id, or its name where it has none. */
+export const appName = EffectSchema.String.check(
   EffectSchema.isMinLength(1),
   EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_APP_CHARS),
 );
@@ -309,13 +331,18 @@ export type MacComputerAction = typeof macComputerActionSchema.Type;
 
 /**
  * One action waiting for the Mac: its id, the conversation of the agent that
- * asked, which the Mac's Allow once holds an app for, the action, and how long the developer
- * may take to allow the app and the action to run, together.
+ * asked, which the Mac's Allow once holds an app for, that agent where the
+ * conversation is one, whose turn's end puts the agent's cursor away, the
+ * action, and how long the developer may take to allow the app and the
+ * action to run, together. Note that an older desktop ignores the agent, as
+ * an answer ignores a key a newer service added, and its cursor fades on the
+ * helper's own clock.
  */
 const macComputerCommandSchema = EffectSchema.Struct({
   id: wireUuidSchema,
   kind: EffectSchema.Literal(MACHINE_COMMAND_KIND.COMPUTER),
   conversationId: wireUuidSchema,
+  agentId: EffectSchema.optionalKey(wireUuidSchema),
   action: macComputerActionSchema,
   timeoutSeconds: commandTimeout,
 });
@@ -330,10 +357,14 @@ export const machineCommandSchema = EffectSchema.Union([
 
 /**
  * What a computer command asks, as the queue keeps it in the text a shell
- * command's command stands in: its conversation and its action, as JSON.
+ * command's command stands in: its conversation, its agent, and its action, as JSON.
  */
 const storedComputerRequestSchema = EffectSchema.fromJsonString(
-  EffectSchema.Struct({ conversationId: wireUuidSchema, action: macComputerActionSchema }),
+  EffectSchema.Struct({
+    conversationId: wireUuidSchema,
+    agentId: EffectSchema.optionalKey(wireUuidSchema),
+    action: macComputerActionSchema,
+  }),
 );
 
 const decodeStoredComputerRequest = EffectSchema.decodeUnknownOption(storedComputerRequestSchema);
@@ -349,12 +380,12 @@ export interface StoredMachineCommand {
 
 /** What a command asks, as the queue keeps it. */
 export function storedMachineCommandText(command: MachineCommand): string {
-  return command.kind === MACHINE_COMMAND_KIND.SHELL
-    ? command.command
-    : encodeStoredComputerRequest({
-        conversationId: command.conversationId,
-        action: command.action,
-      });
+  if (command.kind === MACHINE_COMMAND_KIND.SHELL) return command.command;
+  const { conversationId, agentId, action } = command;
+
+  return encodeStoredComputerRequest(
+    agentId === undefined ? { conversationId, action } : { conversationId, agentId, action },
+  );
 }
 
 /** A command the queue kept, read back; none where a computer request no longer reads, which no Mac could run. */
@@ -365,7 +396,10 @@ export function machineCommandOfStored(stored: StoredMachineCommand): MachineCom
 
   return Option.match(decodeStoredComputerRequest(command), {
     onNone: () => undefined,
-    onSome: ({ conversationId, action }) => ({ id, kind, conversationId, action, timeoutSeconds }),
+    onSome: ({ conversationId, agentId, action }) =>
+      agentId === undefined
+        ? { id, kind, conversationId, action, timeoutSeconds }
+        : { id, kind, conversationId, agentId, action, timeoutSeconds },
   });
 }
 
@@ -460,16 +494,38 @@ export function computerPermissionsNamed(permissions: readonly ComputerPermissio
 }
 
 /**
+ * How a call that ran nothing came to run nothing, as data beside the
+ * words the model reads, so the transcript names each case in its own
+ * words: the developer's answer to an ask, no answer to it in time, or no
+ * word back from the machine at all. A refusal of another kind names none.
+ */
+export const MACHINE_REFUSAL = {
+  /** The developer denied the ask. */
+  DECLINED: "declined",
+  /** No one answered the ask before it closed. */
+  UNANSWERED: "unanswered",
+  /** The machine never said what the command came to, so it may or may not have run. */
+  NO_ANSWER: "no-answer",
+} as const;
+
+export type MachineRefusal = (typeof MACHINE_REFUSAL)[keyof typeof MACHINE_REFUSAL];
+
+export const machineRefusalSchema = EffectSchema.Literals(Object.values(MACHINE_REFUSAL));
+
+/**
  * A command the Mac would not run, such as one of a kind it cannot run, and
  * why, in words the agent can act on; for an action refused because the Mac
  * lacks a grant it needs, those grants too, so the transcript can offer the
- * place they are turned on.
+ * place they are turned on; and for an ask that was declined or went
+ * unanswered, which (`outcome`). Note that a service older than `outcome`
+ * refuses the key, which the service, deployed first, never is.
  */
 const machineCommandRefusalSchema = EffectSchema.Struct({
   refused: EffectSchema.String.check(
     EffectSchema.isMinLength(1),
     EffectSchema.isMaxLength(MACHINE_COMMAND_BOUNDS.MAX_OUTPUT_CHARS),
   ),
+  outcome: EffectSchema.optionalKey(machineRefusalSchema),
   missingPermissions: EffectSchema.optionalKey(
     EffectSchema.Array(EffectSchema.Literals(Object.values(COMPUTER_PERMISSION))).check(
       EffectSchema.isMinLength(1),
@@ -619,6 +675,31 @@ export const MACHINE_COMMAND_MODE_LIST: readonly MachineCommandMode[] =
 export const machineCommandModeSchema = EffectSchema.Literals(MACHINE_COMMAND_MODE_LIST);
 
 /**
+ * Why a call reached no machine, as its refusal names it beside the words
+ * the model reads (`why`), so the transcript can say it in its own words
+ * and offer the machines that could take it (`others`). Note that a
+ * refusal the Mac itself answers, as a developer's Deny, names none.
+ */
+export const MACHINE_UNREACHED = {
+  /** The machine has not listened lately: off, asleep, or not running the app. */
+  OFFLINE: "offline",
+  /** The machine's owner does not let this task's agents use their machines. */
+  NOT_LET: "not-let",
+  /** The machine is set to Never, so it runs no terminal command. */
+  COMMANDS_NEVER: "commands-never",
+  /** The machine's switch that lets agents use its apps is off, so it takes no computer use. */
+  APPS_OFF: "apps-off",
+  /** The agent's default machine was removed, or its owner no longer lets the task's agents use it. */
+  DEFAULT_GONE: "default-gone",
+  /** The call named a machine this task's agents may not use. */
+  UNKNOWN_MACHINE: "unknown-machine",
+  /** No default was set and none of the owner's machines could take it. */
+  NO_MACHINE: "no-machine",
+} as const;
+
+export type MachineUnreached = (typeof MACHINE_UNREACHED)[keyof typeof MACHINE_UNREACHED];
+
+/**
  * One command the Mac heard of over Realtime, claimed by its id (POST), as
  * the device it joined as, where it did: a device claims what was queued
  * for it or for none, a Mac naming none only what was queued for none.
@@ -641,14 +722,19 @@ export const machineCommandListeningAnswerSchema = EffectSchema.Struct({
 /**
  * A machine's own say over agents' terminal commands and computer use, as
  * the service keeps it for the device: how commands run there, the same
- * three modes its own setting names, and the apps agents use there without
- * asking, by bundle id, or by name where an app has none.
+ * three modes its own setting names, the apps agents use there without
+ * asking, by bundle id, or by name where an app has none, and whether
+ * agents may use its apps at all, its own switch beside the mode. Note
+ * that the switch is absent from a desktop older than it, whose join and
+ * writes leave the service's as it stands, and from a service older than
+ * it, or one that holds none for the device yet.
  */
 export const machineDeviceSettingsSchema = EffectSchema.Struct({
   commandMode: machineCommandModeSchema,
   alwaysAllowedApps: EffectSchema.Array(appName).check(
     EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_APPS),
   ),
+  computerUse: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 export type MachineDeviceSettings = typeof machineDeviceSettingsSchema.Type;

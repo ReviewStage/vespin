@@ -324,6 +324,13 @@ export function workingTime(elapsedMs: number): string {
   return twoUnits(Math.floor(hours / DAY_HOURS), "d", hours % DAY_HOURS, "h");
 }
 
+/** How long is left until a moment that closes, as a clock counts down: "4:12", minutes and seconds, never below "0:00". */
+export function timeLeftText(leftMs: number): string {
+  const seconds = Math.ceil(Math.max(0, leftMs) / SECOND_MS);
+
+  return `${Math.floor(seconds / MINUTE_SECONDS)}:${String(seconds % MINUTE_SECONDS).padStart(2, "0")}`;
+}
+
 /** What a finished turn's last line says: how long it worked, and the day and time it ended, as a call's header says it from `now`: "Worked for 1m 18s · Today, 3:42 PM". */
 export function workedForText(startedAt: number, endedAt: number, now: number): string {
   const ended = callHeading(endedAt, now);
