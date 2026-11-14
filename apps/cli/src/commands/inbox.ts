@@ -71,7 +71,7 @@ function threadsOf(
 ): readonly ListedThread[] {
   return read.items
     .flatMap((entry) => {
-      const task = tasks.get(entry.planId);
+      const task = tasks.get(entry.taskId);
 
       if (task === undefined) return [];
 
@@ -83,7 +83,7 @@ function threadsOf(
           asking: entry.asking !== false,
           agentId: entry.agentId,
           agent: entry.agentTitle ?? entry.agentModel,
-          taskId: entry.planId,
+          taskId: entry.taskId,
           task,
           updatedAt: entry.updatedAt,
         },
@@ -244,12 +244,12 @@ const listCommand = Command.make(
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
       const read = yield* askService(hosted.inbox.account, {});
-      const { plans } = yield* askService(hosted.tasks.list, {});
+      const { tasks: plans } = yield* askService(hosted.tasks.list, {});
 
       const tasks = new Map(
         plans
-          .filter((plan) => plan.workspaceId === workspace.id)
-          .map((plan) => [plan.id, plan.name]),
+          .filter((task) => task.workspaceId === workspace.id)
+          .map((task) => [task.id, task.name]),
       );
 
       const threads = threadsOf(read, tasks).filter((thread) => !unread || thread.unread);

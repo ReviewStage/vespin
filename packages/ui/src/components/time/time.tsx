@@ -6,6 +6,7 @@ import {
   provenanceText,
   scheduledText,
   sinceText,
+  timeLeftText,
   untilText,
   workingTime,
 } from "@repo/features/time-format";
@@ -18,7 +19,7 @@ import { useMinute, useSecond } from "./time-clock.js";
  * Every look is `time-format.ts`'s words, so a sidebar row, an Inbox row, a
  * version row, a file note, and a card all say "3h" for the same save. A
  * time counts from the window's minute (`useMinute`), or from the second
- * for a run's length (`useSecond`), so a row drawing one need not be drawn
+ * for a run's length or the time left (`useSecond`), so a row drawing one need not be drawn
  * again for its time to move; given a `now` it counts from that and ticks
  * no clock. The full moment hangs in the window's pill rather than the
  * system's `title`, as every other hint here does. Note that a time on a
@@ -50,9 +51,14 @@ export const TIME_LOOK = {
   MOMENT: "moment",
   /** How long a run has gone since `at`, counted each second: "1m 12s". */
   DURATION: "duration",
+  /** How long is left until `at`, counted down each second as a clock: "4:12", stopping at "0:00". */
+  LEFT: "left",
 } as const;
 
 export type TimeLook = (typeof TIME_LOOK)[keyof typeof TIME_LOOK];
+
+/** The looks that count each second: a run's length, and the time left. */
+const SECOND_LOOKS: readonly TimeLook[] = [TIME_LOOK.DURATION, TIME_LOOK.LEFT];
 
 /** The looks whose full moment hangs on hover unless said otherwise: an age alone leaves the day out. */
 const HINTED_LOOKS: readonly TimeLook[] = [TIME_LOOK.SINCE, TIME_LOOK.AGO];
@@ -88,6 +94,8 @@ function wordsOf(look: TimeLook, at: number, now: number): string {
       return momentText(at);
     case TIME_LOOK.DURATION:
       return workingTime(now - at);
+    case TIME_LOOK.LEFT:
+      return timeLeftText(at - now);
   }
 }
 
@@ -97,7 +105,7 @@ export function Time(props: TimeProps): React.JSX.Element {
 
   if (now !== undefined) return <TimeAt {...props} look={look} now={now} />;
 
-  return look === TIME_LOOK.DURATION ? (
+  return SECOND_LOOKS.includes(look) ? (
     <SecondTime {...props} look={look} />
   ) : (
     <MinuteTime {...props} look={look} />
@@ -117,15 +125,16 @@ function SecondTime(props: Omit<TimeAtProps, "now">): React.JSX.Element {
 type TimeAtProps = TimeProps & { look: TimeLook; now: number };
 
 function TimeAt({ at, look, now, className, hint }: TimeAtProps): React.JSX.Element {
-  const duration = look === TIME_LOOK.DURATION;
+  const counts = SECOND_LOOKS.includes(look);
+  const span = look === TIME_LOOK.LEFT ? at - now : now - at;
 
   // Note that a count is a timer to a reader rather than a live region, because a count announced each second drowns everything else.
   const time = (
     <time
       className={className === undefined ? "ui-time" : `ui-time ${className}`}
-      dateTime={duration ? durationDateTime(now - at) : new Date(at).toISOString()}
-      role={duration ? "timer" : undefined}
-      aria-live={duration ? "off" : undefined}
+      dateTime={counts ? durationDateTime(span) : new Date(at).toISOString()}
+      role={counts ? "timer" : undefined}
+      aria-live={counts ? "off" : undefined}
     >
       {wordsOf(look, at, now)}
     </time>

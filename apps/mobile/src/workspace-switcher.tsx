@@ -13,12 +13,15 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import type { ComponentProps } from "react";
+import { type ComponentProps, useMemo } from "react";
 import { useWindowDimensions } from "react-native";
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "./settings-button.js";
 import { WINDOW_SIZE_CLASS, windowSizeClass } from "./window-size-class.js";
+
+/** No workspaces read yet, one list for every render. */
+const NO_WORKSPACES: readonly Workspace[] = [];
 
 /** What the switcher is drawn from, which a tab's root bar draws it by. */
 export type SwitcherProps = ComponentProps<typeof WorkspaceSwitcher>;
@@ -73,38 +76,61 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
   const router = useRouter();
   const openSettings = useOpenSettings();
   const account = useSettingsAccount();
-  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+
+  const { data: workspaces = NO_WORKSPACES } = useQuery({
+    ...appStateQuery,
+    select: selectWorkspaces,
+  });
+
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const { chosen, choose } = useChosenWorkspace(workspaces);
   const { width, height } = useWindowDimensions();
+  const signedIn = account !== undefined;
+  const accountName = account?.name;
+  const accountPicture = account?.picture;
+  const accountAddress = account?.address;
 
-  if (chosen === undefined) return undefined;
-  const first = workspaces[0]?.id;
+  // Note that a phone turned on its side is wide enough for a regular window but too short for the popover's list, so the popover takes a window regular both ways, as an iPad's is.
+  const presentation =
+    windowSizeClass(width) === WINDOW_SIZE_CLASS.REGULAR &&
+    windowSizeClass(height) === WINDOW_SIZE_CLASS.REGULAR
+      ? SWITCHER_PRESENTATION.POPOVER
+      : SWITCHER_PRESENTATION.SHEET;
 
-  const drawn = workspaces.map((workspace) =>
-    switcherWorkspace(workspace, workspace.id === first, photos),
-  );
+  // Note that the switcher is drawn from the same props while nothing it shows moved, so every tab root's switcher and its SwiftUI host draw nothing anew when the screen around it does, as an Inbox screen does on each delivery.
+  return useMemo(() => {
+    if (chosen === undefined) return undefined;
+    const first = workspaces[0]?.id;
 
-  return {
-    workspaces: drawn,
-    chosen: switcherWorkspace(chosen, chosen.id === first, photos),
-    onChoose: choose,
-    account:
-      account === undefined
-        ? undefined
-        : {
-            name: account.name,
-            picture: account.picture,
-            address: account.address,
-            onPress: account.onPress,
-          },
-    actions: [newWorkspaceAction(() => router.push("/new-workspace"))],
-    onWorkspaceSettings: () => openSettings(SETTINGS_ROUTE.WORKSPACE),
-    // Note that a phone turned on its side is wide enough for a regular window but too short for the popover's list, so the popover takes a window regular both ways, as an iPad's is.
-    presentation:
-      windowSizeClass(width) === WINDOW_SIZE_CLASS.REGULAR &&
-      windowSizeClass(height) === WINDOW_SIZE_CLASS.REGULAR
-        ? SWITCHER_PRESENTATION.POPOVER
-        : SWITCHER_PRESENTATION.SHEET,
-  };
+    return {
+      workspaces: workspaces.map((workspace) =>
+        switcherWorkspace(workspace, workspace.id === first, photos),
+      ),
+      chosen: switcherWorkspace(chosen, chosen.id === first, photos),
+      onChoose: choose,
+      account: signedIn
+        ? {
+            name: accountName ?? "",
+            picture: accountPicture,
+            address: accountAddress,
+            onPress: () => openSettings(),
+          }
+        : undefined,
+      actions: [newWorkspaceAction(() => router.push("/new-workspace"))],
+      onWorkspaceSettings: () => openSettings(SETTINGS_ROUTE.WORKSPACE),
+      presentation,
+    };
+  }, [
+    workspaces,
+    photos,
+    chosen,
+    choose,
+    signedIn,
+    accountName,
+    accountPicture,
+    accountAddress,
+    openSettings,
+    router,
+    presentation,
+  ]);
 }

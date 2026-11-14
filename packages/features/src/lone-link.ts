@@ -100,8 +100,8 @@ export function loneLinkOf(target: string): LoneLink | undefined {
   const place = readLink(target)?.place;
 
   if (place?.kind === LINK_DESTINATION.PAGE) {
-    return "planId" in place
-      ? { kind: LONE_LINK.PAGE, taskId: place.planId, pageId: place.pageId }
+    return "taskId" in place
+      ? { kind: LONE_LINK.PAGE, taskId: place.taskId, pageId: place.pageId }
       : { kind: LONE_LINK.PAGE, agentId: place.agentId, pageId: place.pageId };
   }
 

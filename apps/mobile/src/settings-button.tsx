@@ -5,6 +5,7 @@ import { selectAccount } from "@repo/host/app-state-reads";
 import { AccountButton, type BarAccount, WorkspaceSwitcher } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
+import { useCallback } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
 import type { SwitcherProps } from "./workspace-switcher.js";
 
@@ -48,7 +49,11 @@ export function useOpenSettings(): (route?: SettingsRoute) => void {
   const router = useRouter();
 
   // Note that a page is pushed with its stack's anchor, so Settings opened on Workspace stands its main list under it and Back goes there.
-  return (route = SETTINGS_ROUTE.MAIN) => router.push(route, { withAnchor: true });
+  // Note that it is one function while the router stands, so a bar item handed it draws nothing anew when the screen around it does.
+  return useCallback(
+    (route: SettingsRoute = SETTINGS_ROUTE.MAIN) => router.push(route, { withAnchor: true }),
+    [router],
+  );
 }
 
 /** The signed-in account as its photo button, opening Settings as a sheet over the tabs; none while nobody is signed in. */

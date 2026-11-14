@@ -31,7 +31,7 @@ import {
   presentationDragIndicator,
 } from "@expo/ui/swift-ui/modifiers";
 import { WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
-import { type ReactNode, useEffect, useState } from "react";
+import { memo, type ReactNode, useEffect, useState } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar } from "./marks.js";
@@ -366,7 +366,9 @@ function SwitcherFace({
  * presented while the popover or the sheet is still leaving is refused, and
  * a choice redrawing every screen as it left made it stutter.
  */
-export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
+export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
+  props: WorkspaceSwitcherProps,
+) {
   const {
     chosen,
     look = SWITCHER_LOOK.NAMED,
@@ -457,7 +459,7 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
       </Popover.Content>
     </Popover>
   );
-}
+});
 
 /**
  * The switcher for a screen's own navigation bar, the stack's header, which
@@ -470,13 +472,13 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
  * than the bar's title view, because a host sized to its contents drew at
  * no size at all in the native stack's title on iOS 27.
  */
-export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
+export const WorkspaceSwitcher = memo(function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
   return (
     <Host matchContents>
       <WorkspaceSwitcherItem {...props} look={SWITCHER_LOOK.TILE} />
     </Host>
   );
-}
+});
 
 /** The list's act that makes a workspace, as the panel words it. */
 export function newWorkspaceAction(onPress: () => void): SwitcherAction {

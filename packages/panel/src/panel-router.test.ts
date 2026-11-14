@@ -35,15 +35,15 @@ const LINKS: readonly (readonly [LinkDestination, Landing])[] = [
     { routeId: "/places/$workspace/tasks", params: { workspace: W } },
   ],
   [
-    { kind: LINK_DESTINATION.TASK, planId: "42" },
+    { kind: LINK_DESTINATION.TASK, taskId: "42" },
     { routeId: "/places/$workspace/task/$taskId/", params: { workspace: W, taskId: "42" } },
   ],
   [
-    { kind: LINK_DESTINATION.SECTION, planId: "42", anchor: "rollout" },
+    { kind: LINK_DESTINATION.SECTION, taskId: "42", anchor: "rollout" },
     { routeId: "/places/$workspace/task/$taskId/", params: { workspace: W, taskId: "42" } },
   ],
   [
-    { kind: LINK_DESTINATION.COMMENT, planId: "42", threadId: "1234" },
+    { kind: LINK_DESTINATION.COMMENT, taskId: "42", threadId: "1234" },
     {
       routeId: "/places/$workspace/task/$taskId/",
       params: { workspace: W, taskId: "42" },
@@ -51,14 +51,14 @@ const LINKS: readonly (readonly [LinkDestination, Landing])[] = [
     },
   ],
   [
-    { kind: LINK_DESTINATION.VERSION, planId: "42", revision: 3 },
+    { kind: LINK_DESTINATION.VERSION, taskId: "42", revision: 3 },
     {
       routeId: "/version-history/$workspace/task/$taskId/version/$revision/",
       params: { workspace: W, taskId: "42", revision: "3" },
     },
   ],
   [
-    { kind: LINK_DESTINATION.PAGE, planId: "42", pageId: "p1" },
+    { kind: LINK_DESTINATION.PAGE, taskId: "42", pageId: "p1" },
     {
       routeId: "/places/$workspace/task/$taskId/page/$pageId",
       params: { workspace: W, taskId: "42", pageId: "p1" },
@@ -76,7 +76,7 @@ const LINKS: readonly (readonly [LinkDestination, Landing])[] = [
     { routeId: "/places/$workspace/agent/$agentId/", params: { workspace: W, agentId: "a1" } },
   ],
   [
-    { kind: LINK_DESTINATION.AGENT, planId: "42", agentId: "a1" },
+    { kind: LINK_DESTINATION.AGENT, taskId: "42", agentId: "a1" },
     {
       routeId: "/places/$workspace/task/$taskId/agent/$agentId/",
       params: { workspace: W, taskId: "42", agentId: "a1" },
@@ -90,7 +90,7 @@ const LINKS: readonly (readonly [LinkDestination, Landing])[] = [
     },
   ],
   [
-    { kind: LINK_DESTINATION.WORKER, planId: "42", agentId: "a1", callId: "c1" },
+    { kind: LINK_DESTINATION.WORKER, taskId: "42", agentId: "a1", callId: "c1" },
     {
       routeId: "/places/$workspace/task/$taskId/agent/$agentId/worker/$callId",
       params: { workspace: W, taskId: "42", agentId: "a1", callId: "c1" },
@@ -104,7 +104,7 @@ const LINKS: readonly (readonly [LinkDestination, Landing])[] = [
     },
   ],
   [
-    { kind: LINK_DESTINATION.CHANGES, planId: "42", agentId: "a1" },
+    { kind: LINK_DESTINATION.CHANGES, taskId: "42", agentId: "a1" },
     {
       routeId: "/places/$workspace/task/$taskId/agent/$agentId/changes/",
       params: { workspace: W, taskId: "42", agentId: "a1" },
@@ -125,7 +125,7 @@ const LINKS: readonly (readonly [LinkDestination, Landing])[] = [
   [
     {
       kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
-      planId: "42",
+      taskId: "42",
       agentId: "a1",
       threadId: "PRRT_kw1",
       view: PULL_REQUEST_THREAD_VIEW.CONVERSATION,
@@ -149,7 +149,7 @@ const LINKS: readonly (readonly [LinkDestination, Landing])[] = [
     },
   ],
   [
-    { kind: LINK_DESTINATION.MESSAGE, planId: "42", agentId: "a1", messageId: "m1" },
+    { kind: LINK_DESTINATION.MESSAGE, taskId: "42", agentId: "a1", messageId: "m1" },
     {
       routeId: "/places/$workspace/task/$taskId/agent/$agentId/message/$messageId",
       params: { workspace: W, taskId: "42", agentId: "a1", messageId: "m1" },
@@ -160,7 +160,7 @@ const LINKS: readonly (readonly [LinkDestination, Landing])[] = [
     { routeId: "/places/$workspace/inbox/", params: { workspace: W } },
   ],
   [
-    { kind: LINK_DESTINATION.INBOX, planId: "42" },
+    { kind: LINK_DESTINATION.INBOX, taskId: "42" },
     { routeId: "/places/$workspace/inbox/task/$taskId", params: { workspace: W, taskId: "42" } },
   ],
   [
@@ -168,7 +168,7 @@ const LINKS: readonly (readonly [LinkDestination, Landing])[] = [
     { routeId: "/places/$workspace/inbox/$itemId", params: { workspace: W, itemId: "i1" } },
   ],
   [
-    { kind: LINK_DESTINATION.INBOX_ITEM, planId: "42", itemId: "i1" },
+    { kind: LINK_DESTINATION.INBOX_ITEM, taskId: "42", itemId: "i1" },
     {
       routeId: "/places/$workspace/task/$taskId/inbox/$itemId",
       params: { workspace: W, taskId: "42", itemId: "i1" },

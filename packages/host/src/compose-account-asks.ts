@@ -33,6 +33,7 @@ import { samePrefix } from "@repo/features/allowed-command-model";
 import { HOSTS_READ } from "@repo/features/host-live";
 import type { DevicePresenceAnswer } from "@repo/features/host-wire";
 import type { LIVE_READ } from "@repo/features/live-wire";
+import { MACHINE_ASKS_READ } from "@repo/features/machine-ask-live";
 import { MACHINES_READ } from "@repo/features/machine-live";
 import { WORKSPACE_MEMORIES_READ } from "@repo/features/memory-live";
 import { CHATGPT_DEVICE_LOGIN, type ProviderKeysAnswer } from "@repo/features/provider-key-wire";
@@ -59,6 +60,7 @@ import { type HostActTable, liveTold } from "./host-acts.js";
 import type { HostKernel } from "./host-kernel.js";
 import { heldHosts, hostRemove } from "./hosts-follow.js";
 import type { HeldSlice } from "./live-collection.js";
+import { heldMachineAsks } from "./machine-asks-follow.js";
 import { heldMachines, machineChange, machineRemove } from "./machines-follow.js";
 import { heldMemories, memoryForget, memorySave } from "./memory-follow.js";
 import type { WindowFocus } from "./window-focus.js";
@@ -72,6 +74,7 @@ export type AccountAsksClient = Pick<
   | "removeHost"
   | "changeMachine"
   | "removeMachine"
+  | "answerMachineAsk"
   | "readHostPairing"
   | "approveHostPairing"
   | "denyHostPairing"
@@ -131,13 +134,18 @@ export type AccountAsksAgentAct =
   | "HOSTS_REMOVE"
   | "MACHINES_CHANGE"
   | "MACHINES_REMOVE"
+  | "MACHINE_ASK_ANSWER"
   | "HOSTS_ALLOWED_APPS"
   | "HOSTS_PAIRING_READ"
   | "HOSTS_PAIRING_APPROVE"
   | "HOSTS_PAIRING_DENY";
 
 /** The agents' live follows this composer answers: the account's hosts, and their devices' beats. */
-export type AccountAsksAgentFollow = "HOSTS_FOLLOW" | "HOSTS_PRESENCE_FOLLOW" | "MACHINES_FOLLOW";
+export type AccountAsksAgentFollow =
+  | "HOSTS_FOLLOW"
+  | "HOSTS_PRESENCE_FOLLOW"
+  | "MACHINES_FOLLOW"
+  | "MACHINE_ASKS_FOLLOW";
 
 /** The acts this composer answers: the account's own asks, the hosts' and their pairing's, and the live follows of a workspace's memories, the account's hosts, and their devices' beats. */
 type AccountAsksActs = HostActTable<typeof ACCOUNT_ASK_ACTS> &
@@ -166,6 +174,10 @@ interface LiveFollows {
   readonly machines: HeldSlice<string>;
   /** The windows' one hold on the machines, under the account signed in. */
   readonly machinesHold: AccountHeld;
+  /** The asks the account's machines hold for its answer, by the account. */
+  readonly machineAsks: HeldSlice<string>;
+  /** The windows' one hold on the asks, under the account signed in. */
+  readonly machineAsksHold: AccountHeld;
 }
 
 /** The reads the host fetches for the windows that hold them, and the windows' holds on them. */
@@ -250,12 +262,23 @@ function liveFollows(
       tell: liveTold(kernel.emit, AGENT_FOLLOWS.MACHINES_FOLLOW),
     });
 
+    const machineAsks = yield* heldMachineAsks({
+      seal: (userId, poll, after) =>
+        asked(client.liveRead(MACHINE_ASKS_READ, { userId }, poll ? { after } : undefined)),
+      accountId,
+      gate,
+      pool,
+      tell: liveTold(kernel.emit, AGENT_FOLLOWS.MACHINE_ASKS_FOLLOW),
+    });
+
     return {
       memories,
       hosts,
       hostsHold: yield* accountHeld(hosts, accountId),
       machines,
       machinesHold: yield* accountHeld(machines, accountId),
+      machineAsks,
+      machineAsksHold: yield* accountHeld(machineAsks, accountId),
     };
   });
 }
@@ -505,7 +528,7 @@ function retriedFor(
 function actsOf(
   dependencies: AccountAsksDependencies,
   asked: Asked,
-  { memories, hosts, hostsHold, machines, machinesHold }: LiveFollows,
+  { memories, hosts, hostsHold, machines, machinesHold, machineAsks, machineAsksHold }: LiveFollows,
   fetched: FetchedReads,
   commandsInTurn: <A>(write: Effect.Effect<A>) => Effect.Effect<A>,
 ): AccountAsksActs {
@@ -599,6 +622,13 @@ function actsOf(
       machineRemove((id) => asked(client.removeMachine(id))),
       { read: ({ id }) => Effect.succeed(id) },
     ),
+    // Note that an ask's answer is the service's to settle, first answer standing, and the held asks show it as the read carries it.
+    MACHINE_ASK_ANSWER: (answer) => asked(client.answerMachineAsk(answer)),
+    // The asks are held for the windows while one could draw them, under the account signed in.
+    MACHINE_ASKS_FOLLOW: {
+      hold: () => machineAsksHold.hold,
+      retry: () => retriedFor(dependencies.accountId, machineAsks),
+    },
     // The machines are held for the windows while Settings › Machines draws them, under the account signed in.
     MACHINES_FOLLOW: {
       hold: () => machinesHold.hold,
@@ -649,7 +679,9 @@ export function composeAccountAsks(
     const asked = askedOf(dependencies, yield* HttpClient.HttpClient);
     const follows = yield* liveFollows(dependencies, asked);
     const fetched = yield* fetchedReads(dependencies, asked);
-    const { memories, hosts, hostsHold, machines, machinesHold } = follows;
+
+    const { memories, hosts, hostsHold, machines, machinesHold, machineAsks, machineAsksHold } =
+      follows;
 
     const { presence, presenceHold, keys, keysHold, token, tokenHold, commands, commandsHold } =
       fetched;
@@ -670,6 +702,7 @@ export function composeAccountAsks(
         yield* presenceHold.open;
         yield* hostsHold.open;
         yield* machinesHold.open;
+        yield* machineAsksHold.open;
         yield* keysHold.open;
         yield* tokenHold.open;
         yield* commandsHold.open;
@@ -679,6 +712,7 @@ export function composeAccountAsks(
         yield* memories.end;
         yield* hosts.end;
         yield* machines.end;
+        yield* machineAsks.end;
         yield* presence.end;
         yield* keys.end;
         yield* token.end;

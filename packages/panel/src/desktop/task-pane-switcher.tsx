@@ -24,7 +24,7 @@ import { PhoneHead } from "./phone-head.js";
  * Nothing here is held apart from the column and the side panel: the
  * screens read what they already hold. Overview is the panel shut over the
  * column on its Overview, the task's description, which leads with the task's
- * agents (`plan-agents.tsx`); an agent is the panel shut over the column on
+ * agents (`overview-agents.tsx`); an agent is the panel shut over the column on
  * its tab, a draft's among them; and a tab of the panel, opened from a link
  * or an agent's ⋯, is the panel open over either, full screen. So the tabs
  * a phone opens are the same tabs, kept the same way (`use-main-tabs.ts`,

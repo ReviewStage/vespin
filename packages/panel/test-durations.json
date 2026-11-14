@@ -53,7 +53,7 @@
   "src/desktop/offline-mark.test.ts": 140,
   "src/desktop/origin-senders.test.ts": 2009,
   "src/desktop/person-page.test.ts": 8472,
-  "src/desktop/plan-agents.test.ts": 169,
+  "src/desktop/overview-agents.test.ts": 169,
   "src/desktop/shell-room.test.ts": 7092,
   "src/desktop/side-panel.test.ts": 272,
   "src/desktop/sidebar-admin.test.ts": 565,
