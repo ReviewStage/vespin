@@ -1982,6 +1982,7 @@ export function TaskScreen() {
   // Note that a task deleted from its own page gives way to the list it stood in, rather than saying it is not found.
   const deletion = useDeleteAsk(remove, () => router.back());
   const newSubTask = useNewSubTask();
+  const newAgent = useNewAgent();
   const openRelation = useOpenRelation();
   const moveDoor = useMoveTaskDoor();
   const { refreshTasks } = useInboxActs();
@@ -2020,7 +2021,7 @@ export function TaskScreen() {
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      {menu === undefined ? null : (
+      {menu === undefined || overview === undefined ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
             {(menu.submenus ?? []).map((submenu) => (
@@ -2062,6 +2063,12 @@ export function TaskScreen() {
               </Stack.Toolbar.MenuAction>
             ))}
           </Stack.Toolbar.Menu>
+          {/* Note that New agent stands as a glyph before ⋯, as a split view's detail bar stands a page's main act; it is written after ⋯ because a right bar's first item stands at its edge. */}
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.AGENT)}
+            accessibilityLabel={WORDS.NEW_AGENT}
+            onPress={() => newAgent(overview.task)}
+          />
         </Stack.Toolbar>
       )}
       <Screen>
