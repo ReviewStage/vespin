@@ -27,7 +27,7 @@ import {
   TASK_STATUS,
   type Task,
 } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import {
   IDLE_TASKS_VIEW,
   TASK_CALL_FAILURE,
@@ -37,7 +37,7 @@ import {
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
-  type AppDescriptionDocuments,
+  type AppHeldTasks,
   type AppInboxTask,
   type AppInboxTaskHolding,
   type AppStateSnapshot,
@@ -71,7 +71,7 @@ import { type AutomationsRoute, useAutomationsRoute } from "../automations-route
 import { useHomeNewTask } from "../desktop/desktop-welcome.js";
 import { type InboxRoute, type InboxView, useInboxRoute, useInboxView } from "../inbox-route.js";
 import { useCopyLink } from "../links-at-hand.js";
-import { descriptionDocumentQuery } from "../live-reads.js";
+import { heldTaskQuery } from "../live-reads.js";
 import {
   installPanelSpanRecorder,
   PANEL_SPAN,
@@ -185,11 +185,11 @@ const LISTING: TasksView = {
 };
 
 /** The descriptions the host holds for the window as a test's tab opens on them: the open task's, unless a test names others. */
-const HELD_DESCRIPTIONS: AppDescriptionDocuments = { [TASK.id]: { rows: { task: TASK } } };
+const HELD_DESCRIPTIONS: AppHeldTasks = { [TASK.id]: { rows: { task: TASK } } };
 
 /**
  * Lays `descriptions` over whatever document the window was handed, as the host
- * holds them for it (`LIVE_READ.DESCRIPTION_DOCUMENT`), for a surface that reads
+ * holds them for it (`LIVE_READ.HELD_TASK`), for a surface that reads
  * the document from here on.
  */
 /** Main's read of the inbox on `document`, holding what the standing says waits and which tasks hold items. */
@@ -197,13 +197,13 @@ function inboxRead(document: AppStateSnapshot, standing: Standing): AppStateSnap
   return { ...document.inbox, waiting: standing.inboxWaiting, tasks: standing.inboxTasks };
 }
 
-function handDescriptions(descriptions: AppDescriptionDocuments): void {
+function handDescriptions(descriptions: AppHeldTasks): void {
   const handed = fakeAppBridgeCalls().requestAppState;
   fakeAppBridge({
     ...fakeAppBridgeCalls(),
     requestAppState: async () => ({
       ...(handed === undefined ? stateWith({}, {}) : await handed()),
-      [LIVE_READ.DESCRIPTION_DOCUMENT]: descriptions,
+      [LIVE_READ.HELD_TASK]: descriptions,
     }),
   });
 }
@@ -233,8 +233,8 @@ interface Standing {
   room: ShellRoom;
   /** Whether the window's history stands over the tab, as the panel's root keeps it. */
   history: boolean;
-  /** The descriptions the host holds for the window as the tab mounts (`LIVE_READ.DESCRIPTION_DOCUMENT`). */
-  descriptions: AppDescriptionDocuments;
+  /** The descriptions the host holds for the window as the tab mounts (`LIVE_READ.HELD_TASK`). */
+  descriptions: AppHeldTasks;
   /** Whether Admin stands over the tab, as the router stands it (`admin-route.ts`). */
   admin?: boolean;
   /** The address the window's page was loaded at, holding no step; `/app` where none is named. */
@@ -772,7 +772,7 @@ test("New plan opens its dialog over the open plan, which stays open; a second p
   act(() => tab.control().newTask.onOpenIn("acme/web"));
   assert.equal(tab.control().newTask.open, true);
   assert.deepEqual(tab.control().newTask.preset, { repository: "acme/web" });
-  assert.equal(tab.control().page, TASKS_PAGE.DOCUMENT, "the plan behind the dialog stays open");
+  assert.equal(tab.control().page, TASKS_PAGE.TASK, "the plan behind the dialog stays open");
   assert.ok(!tab.told.includes(ACT_KIND.TASKS_CLOSE), "nothing left the plan");
   act(() => tab.control().newTask.onOpen());
   assert.deepEqual(
@@ -1223,7 +1223,7 @@ it.effect(
       const held = (taskId: string) =>
         testQueryClientNow()
           .getQueryCache()
-          .find({ queryKey: descriptionDocumentQuery(taskId).queryKey })
+          .find({ queryKey: heldTaskQuery(taskId).queryKey })
           ?.isActive() === true;
 
       const crossed = "7e2f3a4b-5c6d-4e7f-8a9b-0c1d2e3f4a5b";
@@ -2567,7 +2567,7 @@ test("a Vespin link to a version of a task the service will not hand the reader 
   tab.stand({ tasks: { ...OPEN, activeTaskId: OTHER_TASK_ID } });
 
   assert.equal(tab.control().history.open, false);
-  assert.equal(tab.control().region.kind, DOCUMENT_REGION.MISSING);
+  assert.equal(tab.control().region.kind, TASK_REGION.MISSING);
 });
 
 test("a task whose description the host holds opens on its description in its first frame again, and one never held reads it", async () => {
@@ -2578,10 +2578,10 @@ test("a task whose description the host holds opens on its description in its fi
   const unheld = tab.control().region.kind;
   tab.stand({ tasks: OPEN });
 
-  assert.equal(unheld, DOCUMENT_REGION.READING);
+  assert.equal(unheld, TASK_REGION.READING);
   assert.deepEqual(
     tab.control().region,
-    { kind: DOCUMENT_REGION.READY, task: TASK },
+    { kind: TASK_REGION.READY, task: TASK },
     "no skeleton stands before it",
   );
 });
@@ -4182,7 +4182,7 @@ const readAgentNamed = Schema.decodeUnknownOption(
 const AGENT_TASK: TasksView = { ...OPEN, activeTaskId: OTHER_TASK_ID };
 
 /** The descriptions the host holds once Agent mode's task started: the started task's beside the open one's. */
-const AGENT_DESCRIPTIONS: AppDescriptionDocuments = {
+const AGENT_DESCRIPTIONS: AppHeldTasks = {
   ...HELD_DESCRIPTIONS,
   [OTHER_TASK_ID]: {
     rows: { task: { ...TASK, id: OTHER_TASK_ID, name: "Untitled", repository: "acme/web" } },

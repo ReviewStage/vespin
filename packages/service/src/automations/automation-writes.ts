@@ -216,7 +216,7 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
     id: automation.id,
     // Note that no automation stands on a task, and the wire still names one because a released desktop reads it.
     taskId: null,
-    planName: null,
+    taskName: null,
     workspaceId: automation.organizationId,
     name: automation.name,
     enabled: automation.enabled,

@@ -178,7 +178,7 @@ function keptOf(held: Held, at: string): KeptInbox {
 }
 
 /** No item on any plan, as the feed is told before it first answers. */
-const NO_ITEMS: AppInboxItems = { [INBOX_SCOPE_KIND.PLAN]: {} };
+const NO_ITEMS: AppInboxItems = { [INBOX_SCOPE_KIND.TASK]: {} };
 
 /**
  * The plans `told` once the items `moved` names are drawn again: each plan
@@ -212,7 +212,7 @@ function inboxItemsPatched(
     else items.push(shown);
   }
 
-  const next = { ...told[INBOX_SCOPE_KIND.PLAN] };
+  const next = { ...told[INBOX_SCOPE_KIND.TASK] };
 
   for (const taskId of touched) {
     const items = lists.get(taskId);
@@ -221,7 +221,7 @@ function inboxItemsPatched(
     else next[taskId] = inboxInOrder(items);
   }
 
-  return { [INBOX_SCOPE_KIND.PLAN]: next };
+  return { [INBOX_SCOPE_KIND.TASK]: next };
 }
 
 /**

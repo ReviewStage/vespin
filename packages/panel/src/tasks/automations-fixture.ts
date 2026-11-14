@@ -201,7 +201,7 @@ const RUNS: ReadonlyMap<string, readonly AutomationRunSummary[]> = new Map([
 function automations(workspaceId: string): readonly AutomationSummary[] {
   const common = {
     taskId: null,
-    planName: null,
+    taskName: null,
     workspaceId,
     enabled: true,
     pausedReason: null,

@@ -11,7 +11,7 @@ import {
 } from "@repo/features/agent-wire";
 import { pageFrameUrl } from "@repo/features/page-frame";
 import type { Task } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import {
@@ -135,9 +135,9 @@ async function mountEveryTab(
   pullRequests: AgentsControl["pullRequests"] = new Map(),
 ): Promise<HTMLElement> {
   const control = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: TASK },
+    region: { kind: TASK_REGION.READY, task: TASK },
     mainTabs: {
       ...tasksControl().mainTabs,
       tabs: [MAIN_TAB.OVERVIEW, agentTab(AGENT.id), draftTab("draft-1")],

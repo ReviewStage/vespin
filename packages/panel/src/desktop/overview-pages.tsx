@@ -12,7 +12,7 @@ import { PAGE_ROW_CELLS, PageListRow } from "./page-list-row.js";
 import { useChosen, useChosenOf } from "./tasks-selection.js";
 
 /**
- * plan-pages.tsx -- the open task's pages in its Overview, under the agents, as a group: one row each in a task's row's anatomy, a page's glyph, its title, and when it was last written, hanging the card its tab hangs.
+ * overview-pages.tsx -- the open task's pages in its Overview, under the agents, as a group: one row each in a task's row's anatomy, a page's glyph, its title, and when it was last written, hanging the card its tab hangs.
  *
  * The pages are the task's, not any one agent's, so they stand in the
  * Overview beside its agents, the same shape every group of the head takes,
@@ -45,7 +45,7 @@ const OPEN_IN_TABS = "Open in new tabs";
  * the task holds them; nothing while they are read or for a task with none.
  * A row's press is handed to `onOpenPage` by its page's id.
  */
-export function PlanPages({
+export function OverviewPages({
   pages,
   place,
   shown,
@@ -114,7 +114,7 @@ export function PlanPages({
 
   return (
     // Note that the group is pulled out by a row's inset on each side, as the agents' is, so its marks stand on the title's edge.
-    <div className="plan-pages -mx-row-inset mb-block-gap">
+    <div className="overview-pages -mx-row-inset mb-block-gap">
       <ReplayUnmask>
         <GroupHeader
           heading={GROUP_HEADING.NONE}

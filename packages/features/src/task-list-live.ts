@@ -305,7 +305,7 @@ export const TASK_LIST_READ = liveRead({
   params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER, liveSince: LIVE_PARAM.SERVED },
   mode: LIVE_MODE.DELTA,
   parts: {
-    plans: liveRows({
+    tasks: liveRows({
       row: taskLiveRowSchema,
       key: "id",
       order: [
@@ -362,7 +362,7 @@ export const TASK_ROWS_READ = liveRead({
   params: { id: LIVE_PARAM.ID, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
-    plans: TASK_LIST_READ.parts.plans,
+    tasks: TASK_LIST_READ.parts.tasks,
     agents: TASK_LIST_READ.parts.agents,
   },
 });
@@ -383,7 +383,7 @@ export const TASK_RELATIONS_READ = liveRead({
   params: { id: LIVE_PARAM.ID, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
-    plans: TASK_LIST_READ.parts.plans,
+    tasks: TASK_LIST_READ.parts.tasks,
     agents: TASK_LIST_READ.parts.agents,
   },
 });
@@ -407,7 +407,7 @@ export const TASK_SEARCH_READ = liveRead({
   params: { query: LIVE_PARAM.TEXT, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
-    plans: TASK_LIST_READ.parts.plans,
+    tasks: TASK_LIST_READ.parts.tasks,
     agents: TASK_LIST_READ.parts.agents,
   },
 });
@@ -446,7 +446,7 @@ export const TASK_PAGE_READ = liveRead({
   },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
-    plans: TASK_LIST_READ.parts.plans,
+    tasks: TASK_LIST_READ.parts.tasks,
     agents: TASK_LIST_READ.parts.agents,
   },
 });
@@ -516,7 +516,7 @@ export const PERSON_PAGE_READ = liveRead({
       key: "personId",
       order: [["personId", ORDER.ASC]],
     }),
-    plans: TASK_LIST_READ.parts.plans,
+    tasks: TASK_LIST_READ.parts.tasks,
     agents: TASK_LIST_READ.parts.agents,
   },
 });
@@ -1071,7 +1071,7 @@ export function taskListOfLiveRows(rows: TaskListLiveRows, now: number): TaskLis
   }
 
   return {
-    plans: rows.plans.toSorted(newestFirst).map((row) => {
+    tasks: rows.tasks.toSorted(newestFirst).map((row) => {
       const agents = byTask.get(row.id);
       const pullRequestTotal = lines.get(row.id)?.length ?? 0;
 
