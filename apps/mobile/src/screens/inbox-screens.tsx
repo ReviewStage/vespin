@@ -36,6 +36,7 @@ import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { CHOOSE_AN_ITEM_WORDS, SELECTION_WORDS, selectedWords } from "@repo/features/words";
+import { ACT_KIND } from "@repo/host/acts";
 import {
   INBOX_FEED,
   type InboxFeed,
@@ -82,6 +83,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useHostActs } from "../host/host-provider.js";
+import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
   useInboxActs,
@@ -528,6 +531,13 @@ function ThreadDetail({
   const messages = useMemo(
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
+  );
+
+  const hostActs = useHostActs();
+
+  // Note that the closers are named from the thread's own workspace's members, followed here, since a link may open a thread outside the workspace the phone works in.
+  useLiveFollow(holder.task.workspaceId, (id) =>
+    hostActs[ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]({ workspaceId: id }),
   );
 
   const memberFace = useMemberFaces(holder.task.workspaceId);
