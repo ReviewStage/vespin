@@ -40,8 +40,6 @@ export const TUNNEL_KIND = {
   MIRROR: "mirror",
 } as const;
 
-export type TunnelKind = (typeof TUNNEL_KIND)[keyof typeof TUNNEL_KIND];
-
 /** The ports a forward may name: none a service needs root to bind. */
 export const FORWARD_PORT = { MIN: 1024, MAX: 65_535 } as const;
 

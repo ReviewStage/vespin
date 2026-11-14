@@ -24,13 +24,13 @@ import {
 } from "../testing/voice-callers.js";
 import { LIVE_SIDEBAND_EVENT } from "./live-sideband.js";
 import { VOICE_CALL_LEASE } from "./voice-call-bounds.js";
+import type { VoiceCallObserver } from "./voice-call-holder.js";
 import {
   holdVoiceCall,
   VOICE_CALL_HELD,
   type VoiceCallLeaseMessage,
   VoiceCallLeaseNotPublished,
   VoiceCallLeases,
-  type VoiceCallObserver,
 } from "./voice-call-lease.js";
 
 /**

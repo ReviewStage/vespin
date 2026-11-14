@@ -444,7 +444,6 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
     "a save whose body is not sent as JSON is refused as an invalid request, keeps nothing, and asks GitHub nothing",
     () =>
       Effect.gen(function* () {
-        // Note that the old group read any body as JSON; oRPC reads one only under a JSON content type.
         const { owner, ask, send, checks } = yield* openMembers;
 
         const untyped = new Request(new URL(TOKEN_PATH, ORIGIN), {
