@@ -858,6 +858,9 @@ type InboxSearch = { readonly search: string; readonly setSearch: (search: strin
 function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
+
+  if (listing.listed.length > 0) globalThis.__perfMark?.("inbox-rows", { rows: listing.listed.length });
+
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
   const remind = useRemindSheet();

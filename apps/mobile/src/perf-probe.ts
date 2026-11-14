@@ -42,6 +42,15 @@ setInterval(() => {
 }, 16);
 
 setInterval(flush, 1000);
+
+// The launch's phases, each once, by name: the bundle starting, the host's start asked and answered, its document read, and the Inbox's first rows drawn.
+const marked = new Set();
+globalThis.__perfMark = (name, data = {}) => {
+  if (marked.has(name)) return;
+  marked.add(name);
+  stamp("mark", { name, ...data });
+};
+globalThis.__perfMark("bundle");
 stamp("probe-hook", { hooked: globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__?.renderers?.size ?? -1 });
 
 // Native events as they reach JS, before React handles them; continuous ones are left out.

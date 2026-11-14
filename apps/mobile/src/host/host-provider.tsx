@@ -129,8 +129,10 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
     let started: StandingMobileHost | undefined;
     let stopFollowing: (() => void) | undefined;
     setStanding(undefined);
+    globalThis.__perfMark?.("host-start");
     startMobileHost(launchOptions()).then(
       async (host) => {
+        globalThis.__perfMark?.("host-started");
         started = host;
         const client = new QueryClient();
         const following = followAppStateInto(host.bridge, client);
@@ -144,6 +146,8 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
             error,
           );
         }
+
+        globalThis.__perfMark?.("document-read");
 
         if (live) {
           setStanding({
