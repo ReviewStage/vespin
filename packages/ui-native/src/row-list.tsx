@@ -1,6 +1,16 @@
 // row-list.tsx -- a list of rows and its sections, as SwiftUI's own List draws them, each section under a small muted header that folds.
 
-import { Button, HStack, Image, List, Menu, Section, Spacer, Text } from "@expo/ui/swift-ui";
+import {
+  Button,
+  HStack,
+  Image,
+  List,
+  Menu,
+  Overlay,
+  Section,
+  Spacer,
+  Text,
+} from "@expo/ui/swift-ui";
 import type { ModifierConfig } from "@expo/ui/swift-ui/modifiers";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
@@ -23,7 +33,6 @@ import {
   listStyle,
   monospacedDigit,
   onGeometryChange,
-  padding,
   refreshable,
   scrollContentBackground,
   scrollDismissesKeyboard,
@@ -330,7 +339,6 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
   if (only === undefined) return null;
 
   // Note that the target's frame and shape stand on the glyph, the button's label, since a borderless button or a menu answers only where its label is hit.
-  // Note that the target then gives back its height past the glyph's, so the 44 pt press reaches over the header's own margins rather than standing the header 44 pt tall, which parted a section with a + further from its neighbors than one without.
   const glyph = (
     <Image
       {...glyphImage(GLYPH.ADD)}
@@ -339,7 +347,6 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
       modifiers={[
         frame({ minWidth: ADD_TARGET.WIDTH, minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),
         SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-        padding({ vertical: -Math.max(0, ADD_TARGET.HEIGHT - size) / 2 }),
       ]}
     />
   );
@@ -429,14 +436,17 @@ export function ListSection({
       <HStack modifiers={[dropLink(onDropLink)]}>{pressable}</HStack>
     );
 
+  // Note that the + stands over the header's trailing end rather than beside it, so its 44 pt target lays out nothing and the header keeps its title's height, as a section with no + does; a press is taken across the whole of the overlay's own frame, where a target padded back to its glyph's height answered only inside it.
   const header =
     dropped === undefined || add === undefined ? (
       dropped
     ) : (
-      <HStack spacing={0}>
+      <Overlay alignment="trailing">
         {dropped}
-        <SectionAddButton add={add} />
-      </HStack>
+        <Overlay.Content>
+          <SectionAddButton add={add} />
+        </Overlay.Content>
+      </Overlay>
     );
 
   // Note that a page's grouped list fills each row with the system's card gray, so its sections clear it, standing their rows on the brand's ground as a plain list does.
