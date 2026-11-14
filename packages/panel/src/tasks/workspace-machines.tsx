@@ -3,9 +3,11 @@ import { DEVICE_STANDING } from "@repo/features/agent-wire";
 import type { DevicePlatform } from "@repo/features/device-agent-wire";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { type WorkspaceMachine, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { MACHINE_COMMAND_MODE_LABEL } from "@repo/settings";
+import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import {
   HOVER_CARD_ROW_LOOK,
   HoverCard,
@@ -25,10 +27,12 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
 import { workspaceToolsQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { useOpenSettings } from "../open-settings.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { appStateQuery, selectAccount, selectWorkspaces } from "../use-app-state.js";
 import { TranscriptAgent } from "./line-cards.js";
 import { DeviceGlyph, DeviceStandingGlyph } from "./runs-on.js";
+import { useOpenLink } from "./use-open-link.js";
 
 /**
  * workspace-machines.tsx -- the machines of a workspace's members, as the `@` list offers them and a machine's chip draws one: its platform's glyph wearing its online dot, its owner's face, its name, and its card.
@@ -196,6 +200,30 @@ export function useMachineOwnerHeard(
   const owner = members?.find((member) => member.userId === machine.userId)?.name;
 
   return owner === undefined ? undefined : ` (${owner}'s)`;
+}
+
+/**
+ * What a press on a machine's chip does: the reader's own machine opens
+ * Settings › Machines at it, unfolded and lit; a teammate's opens their
+ * person page at it, as a person's chip opens their page; one unread opens
+ * nothing.
+ */
+export function useMachinePress(
+  machineId: string | undefined,
+  workspace: string,
+): (() => void) | undefined {
+  const { machine } = useMachine(machineId, workspace);
+  const readerId = useReaderId();
+  const openSettings = useOpenSettings();
+  const openLink = useOpenLink();
+
+  if (machine === undefined) return undefined;
+  const { id, userId } = machine;
+
+  if (userId === readerId) return () => openSettings({ page: SETTINGS_VIEW.HOSTS, machineId: id });
+
+  return () =>
+    openLink(linkOf({ kind: LINK_DESTINATION.PERSON, userId, machineId: id }, workspace));
 }
 
 /** What a machine's card says. */

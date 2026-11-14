@@ -14,16 +14,17 @@
  * (`narrow-backs.ts`): whether a list is the step behind is its answer, so
  * the window fills in `behind` beside the two once its history stands.
  *
- * Three routes remember something no address holds, for as long as the
+ * Four routes remember something no address holds, for as long as the
  * window lives: the Inbox's items as a door chose them, the automations seen
- * deleted, and the names a person's page was opened with and the machine it
- * was last opened at. Each is one
+ * deleted, the names a person's page was opened with and the machine it
+ * was last opened at, and the machine Settings › Machines was last opened
+ * at. Each is one
  * TanStack Store per window (`RoutedMemory`), so every caller of a route
  * hook, the tasks tab and the window's history among them, reads and writes
  * the same one.
  */
 
-import { Store } from "@tanstack/react-store";
+import { Store, useSelector } from "@tanstack/react-store";
 import { createContext, createElement, type ReactNode, useContext, useState } from "react";
 import type { InboxChoice } from "../tasks/use-tasks-tab.js";
 import type { StepsBehind } from "./narrow-backs.js";
@@ -48,6 +49,8 @@ export interface RoutedMemory {
   readonly personNames: Store<ReadonlyMap<string, string>>;
   /** The machine a person's page was last opened at, which it scrolls to and lights, and how many times a page was opened. */
   readonly personLanding: Store<PersonLandings>;
+  /** The machine Settings › Machines was last opened at, which it unfolds, scrolls to and lights, and how many times Settings was opened. */
+  readonly settingsMachine: Store<MachineLandings>;
 }
 
 /** How many times the window opened a person's page, which only grows, so no ask is ever numbered twice, and the machine the last opened it at, none where it named none. */
@@ -59,6 +62,18 @@ export interface PersonLandings {
 /** A machine a person's page was opened at: whose page, which machine, and the how-manyeth ask it is, so each ask lands again. */
 export interface PersonLanding {
   readonly userId: string;
+  readonly machineId: string;
+  readonly ask: number;
+}
+
+/** How many times the window opened Settings, which only grows, so no ask is ever numbered twice, and the machine the last opened it at, none where it named none. */
+export interface MachineLandings {
+  readonly asks: number;
+  readonly at: MachineLanding | undefined;
+}
+
+/** A machine Settings › Machines was opened at, and the how-manyeth ask it is, so each ask lands again. */
+export interface MachineLanding {
   readonly machineId: string;
   readonly ask: number;
 }
@@ -94,6 +109,18 @@ export function useRoutedMemory(): RoutedMemory {
   return useRouted().memory;
 }
 
+/** Where the machine Settings › Machines was last opened at is kept: the window's, or, outside a window's root, as a page drawn alone is, one of the caller's own. */
+export function useSettingsMachineStore(): Store<MachineLandings> {
+  const [own] = useState(() => new Store<MachineLandings>({ asks: 0, at: undefined }));
+
+  return useContext(RoutedExitsContext)?.memory.settingsMachine ?? own;
+}
+
+/** The machine Settings › Machines was last opened at, none where it was opened at none. */
+export function useSettingsMachineLanding(): MachineLanding | undefined {
+  return useSelector(useSettingsMachineStore(), (held) => held.at);
+}
+
 /** Holds one window's routed exits, leaving and staying nowhere and holding no step behind until the window fills them in, and its memory, each made once. */
 export function RoutedExitsProvider({ children }: { readonly children?: ReactNode }): ReactNode {
   const [routed] = useState(() => ({
@@ -107,6 +134,7 @@ export function RoutedExitsProvider({ children }: { readonly children?: ReactNod
       deletedAutomations: new Store<ReadonlyMap<string, true>>(new Map()),
       personNames: new Store<ReadonlyMap<string, string>>(new Map()),
       personLanding: new Store<PersonLandings>({ asks: 0, at: undefined }),
+      settingsMachine: new Store<MachineLandings>({ asks: 0, at: undefined }),
     },
   }));
 

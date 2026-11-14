@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { IconButton } from "../button/button.js";
 import {
   DISCLOSURE_BODY,
@@ -130,13 +130,15 @@ export function SettingsFoldRow({
  * column whether it folds or not. A head that stands its chevron among its
  * controls, before its ⋯, rather than last asks for no room (`room` false),
  * since its ⋯ already ends the row's column, and is handed nothing where it
- * folds nothing.
+ * folds nothing. Each new `opened` opens it, as a link landing on what it
+ * folds asks.
  */
 export function SettingsRowsFold({
   label,
   head,
   rows,
   room = true,
+  opened,
 }: {
   /** The chevron's name, which a sighted reader has from the head row ("GitHub's accounts"). */
   label: string;
@@ -146,9 +148,14 @@ export function SettingsRowsFold({
   rows?: ReactNode;
   /** Whether a head that folds nothing is handed the chevron's room, as one whose chevron stands last is; false where it stands before the row's ⋯. */
   room?: boolean | undefined;
+  /** The ask that opens it, a new one each time it is asked; none where nothing asked. */
+  opened?: number | undefined;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const folds = rows !== undefined && rows !== null && rows !== false;
+  useEffect(() => {
+    if (opened !== undefined) setOpen(true);
+  }, [opened]);
 
   return (
     <>
