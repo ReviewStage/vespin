@@ -6,6 +6,7 @@ import {
   GITHUB_ACCOUNT_TYPE,
   GITHUB_INSTALLATION_STATUS,
 } from "@repo/database/github-installation-vocabulary";
+import { recordAgentPullRequests } from "@repo/database/models/agent-pull-requests";
 import {
   type Agent,
   createAgent,
@@ -22,7 +23,12 @@ import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { fakeWorkspaceSeams, getTestDB, leaveWorkspace, startTask } from "@repo/database/testing";
-import { AGENT_PAYER, type AgentPullRequest } from "@repo/features/agent-wire";
+import {
+  AGENT_PAYER,
+  type AgentPullRequest,
+  CHECK_SUMMARY,
+  PULL_REQUEST_STATE,
+} from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_DEFAULT_GUARDS,
@@ -53,6 +59,7 @@ import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
   connectWorkspaceGitHub,
   type FakeGitHub,
+  fixtureGitHubApp,
   GITHUB_APP_SETTINGS,
   GITHUB_FIXTURE,
   GITHUB_FIXTURE_MEMBER,
@@ -455,6 +462,50 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         assert.equal(inQueue?.state, "open");
         assert.equal(inQueue?.queued, true);
         assert.equal(left?.queued, undefined);
+      }),
+  );
+
+  it.effect(
+    "a delivery reads again only the linked pull requests from the branch it names, leaving the agent's other open ones to their own deliveries",
+    () =>
+      Effect.gen(function* () {
+        const pull: PullRequestFixture = { state: "open", merged: false, conclusion: "success" };
+        const { github, ref, owner, agent } = yield* openAgent(pull);
+        const earlier = `${ref}-earlier`;
+
+        yield* recordAgentPullRequests(owner, agent.id, [
+          {
+            repository: RELAY_FULL_NAME,
+            headBranch: earlier,
+            pullRequest: {
+              number: 57,
+              title: "Invitation emails",
+              url: `https://github.com/${RELAY_FULL_NAME}/pull/57`,
+              state: PULL_REQUEST_STATE.OPEN,
+              checks: CHECK_SUMMARY.PASSING,
+              additions: 30,
+              deletions: 2,
+              changedFiles: 3,
+            },
+          },
+        ]);
+
+        const readsOf57 = () =>
+          github.sent.filter((sent) => new URL(sent.url).pathname.endsWith("/pulls/57")).length;
+
+        yield* answer(
+          github,
+          SECRET,
+          delivery("pull_request", pullRequestDelivery("synchronize", ref)),
+        );
+        const onOwnBranch = readsOf57();
+        yield* answer(
+          github,
+          SECRET,
+          delivery("pull_request", pullRequestDelivery("synchronize", earlier)),
+        );
+
+        assert.deepEqual([onOwnBranch, readsOf57()], [0, 1]);
       }),
   );
 
@@ -1523,7 +1574,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         yield* connectWorkspaceGitHub(workspaceId, installation);
         // A slug spelled with a hyphen, as the deployed App's is.
         const slug = "luke-agent";
-        const app = GitHubApp.layer({ ...GITHUB_APP_SETTINGS, slug });
+        const app = fixtureGitHubApp({ ...GITHUB_APP_SETTINGS, slug });
         const github = githubReaching([installation], app);
         const commentId = 31_337;
 

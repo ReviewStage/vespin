@@ -18,16 +18,17 @@ import {
   type CommitAuthor,
   coAuthorCredited,
 } from "@repo/settings";
-import { Data, Effect, Option, type Redacted, Result } from "effect";
+import { Data, Effect, Option, Predicate, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
-  GITHUB_HTTP_STATUS,
   GitHubApp,
+  type GitHubBearer,
   type GitHubTokenAccess,
   type GitHubUser,
   noreplyAddress,
   REPOSITORY_SET_UNREACHED,
 } from "../../github/github-app.js";
+import { GITHUB_API_FAILURE_TAGS } from "../../github/github-refusal.js";
 import {
   agentMember,
   agentWorkspace as workspaceOfAgent,
@@ -170,9 +171,9 @@ const readAuthor = /* @__PURE__ */ Effect.fn("web/agentReadAuthor")(function* (
     ),
     Effect.catchTag("GitHubSignInRequired", () => Effect.succeed(AGENT_AUTHOR.APP_UNLINKED)),
     // Note that GitHub refusing the token outright is a sign-in it no longer honors, whatever the row says.
-    Effect.catchTag("GitHubUnavailable", (failure) =>
+    Effect.catchTag(GITHUB_API_FAILURE_TAGS, (failure) =>
       Effect.succeed(
-        failure.status === GITHUB_HTTP_STATUS.UNAUTHORIZED
+        Predicate.isTagged(failure, "GitHubUnauthorized")
           ? AGENT_AUTHOR.APP_UNLINKED
           : AGENT_AUTHOR.APP_UNREAD,
       ),
@@ -244,7 +245,7 @@ const coAuthorOf = /* @__PURE__ */ Effect.fn("web/agentCoAuthorOf")(function* (
   // Note that an agent on its starter's own token reads the bot on that token, which stands where their sign-in may not.
   const token =
     author === AGENT_AUTHOR.TOKEN
-      ? (yield* agentRepositoryToken(target, agent)).token
+      ? (yield* agentRepositoryToken(target, agent)).bearer
       : yield* app.userToken(target.userId);
 
   const bot = yield* app.appBot(token);
@@ -312,7 +313,7 @@ export const agentRepositoryToken = /* @__PURE__ */ Effect.fn("web/agentReposito
     named?: string,
   ): Effect.fn.Return<
     {
-      readonly token: Redacted.Redacted;
+      readonly bearer: GitHubBearer;
       readonly defaultBranch: string;
       readonly fullName: string;
       /** Whose the token is: the App's, or the starter's own with their GitHub login. */
@@ -355,10 +356,10 @@ export const agentRepositoryToken = /* @__PURE__ */ Effect.fn("web/agentReposito
 
     if (Option.isNone(reached))
       return yield* new CheckoutRefused({ reason: CODER_REFUSAL.NOT_REACHABLE });
-    const { repository, token, access } = reached.value;
+    const { repository, bearer, access } = reached.value;
 
     return {
-      token,
+      bearer,
       defaultBranch: repository.defaultBranch,
       fullName: repository.fullName,
       access,
@@ -377,9 +378,8 @@ export const agentFirewallSources = /* @__PURE__ */ Effect.fn("web/agentFirewall
     agent: Agent,
   ): Effect.fn.Return<FirewallSources, CheckoutRefused, CheckoutServices> {
     if (!hasRepository(agent)) return {};
-    const { token, fullName, access } = yield* agentRepositoryToken(target, agent);
 
-    return { github: { token, fullName, access } };
+    return { github: repositoryCredentialOf(yield* agentRepositoryToken(target, agent)) };
   },
 );
 
@@ -419,13 +419,13 @@ const agentRepositoriesToken = Effect.fnUntraced(function* (
     });
   }
 
-  const { repositories: reached, token, access } = minted.value.success;
+  const { repositories: reached, bearer, access } = minted.value.success;
   const one = reached[answered];
 
   if (one === undefined)
     return yield* Effect.die("a set of repositories answered fewer than asked");
 
-  return { token, defaultBranch: one.defaultBranch, fullName: one.fullName, access };
+  return { bearer, defaultBranch: one.defaultBranch, fullName: one.fullName, access };
 });
 
 /**
@@ -441,12 +441,12 @@ const commitIdentity = /* @__PURE__ */ Effect.fn("web/agentCommitIdentity")(func
   target: ConversationTarget,
   agent: WithRepository<Agent>,
   author: AgentAuthor,
-  credential: RepositoryCredential,
+  minted: MintedRepository,
 ): Effect.fn.Return<CheckoutIdentity, CheckoutRefused, CheckoutServices> {
   const app = yield* GitHubApp;
 
-  if (author === AGENT_AUTHOR.TOKEN && credential.access.kind === GITHUB_ACCESS.TOKEN) {
-    return identityOf(yield* app.tokenUser(credential.token).pipe(Effect.mapError(refusedBy)));
+  if (author === AGENT_AUTHOR.TOKEN && minted.access.kind === GITHUB_ACCESS.TOKEN) {
+    return identityOf(yield* app.tokenUser(minted.bearer).pipe(Effect.mapError(refusedBy)));
   }
 
   if (author === AGENT_AUTHOR.DEVELOPER) {
@@ -459,7 +459,7 @@ const commitIdentity = /* @__PURE__ */ Effect.fn("web/agentCommitIdentity")(func
     );
   }
 
-  const bot = yield* app.appBot(credential.token).pipe(Effect.mapError(refusedBy));
+  const bot = yield* app.appBot(minted.bearer).pipe(Effect.mapError(refusedBy));
 
   return { name: bot.login, email: noreplyAddress(bot) };
 });
@@ -468,10 +468,10 @@ const commitIdentity = /* @__PURE__ */ Effect.fn("web/agentCommitIdentity")(func
 const identityOn = (
   target: ConversationTarget,
   agent: WithRepository<Agent>,
-  credential: RepositoryCredential,
+  minted: MintedRepository,
 ) =>
   Effect.flatMap(agentAuthor(target, agent), (author) =>
-    commitIdentity(target, agent, author, credential),
+    commitIdentity(target, agent, author, minted),
   );
 
 /** A refusal of the repository's shell, as the checkout's own. */
@@ -484,9 +484,12 @@ export interface AgentRepositoryRead {
   readonly workspaceId: string;
   readonly fullName: string;
   readonly defaultBranch: string;
-  readonly token: Redacted.Redacted;
+  readonly bearer: GitHubBearer;
   readonly access: GitHubTokenAccess;
 }
+
+/** A repository's token as minted for the agent: its bearer, the repository as GitHub spells it, and whose the token is. */
+type MintedRepository = Pick<AgentRepositoryRead, "bearer" | "fullName" | "access">;
 
 /**
  * The agent's repository as its workspace reaches it now, read on the one
@@ -514,8 +517,8 @@ export const agentRepositoryRead = /* @__PURE__ */ Effect.fn("web/agentRepositor
 });
 
 /** The agent's write token as the firewall carries it, from the read its start made. */
-export function repositoryCredentialOf(read: AgentRepositoryRead): RepositoryCredential {
-  return { token: read.token, fullName: read.fullName, access: read.access };
+export function repositoryCredentialOf(read: MintedRepository): RepositoryCredential {
+  return { token: read.bearer.token, fullName: read.fullName, access: read.access };
 }
 
 /**
@@ -542,7 +545,7 @@ export const cloneAgentRepository = /* @__PURE__ */ Effect.fn("web/cloneAgentRep
         defaultBranch: agent.startBranch ?? read.defaultBranch,
         recordedAs: agent.repository,
       },
-      read.token,
+      read.bearer.token,
       { access: read.access },
     ).pipe(Effect.mapError(refusedWith));
   },
@@ -576,7 +579,7 @@ export const claimAgentCheckout = /* @__PURE__ */ Effect.fn("web/claimAgentCheck
       recordedAs: agent.repository,
       folder,
     },
-    read.token,
+    read.bearer.token,
     read.access,
   ).pipe(Effect.mapError(refusedWith));
 
@@ -625,9 +628,12 @@ export interface AgentCheckoutPlan {
 export const agentCheckoutPlan = /* @__PURE__ */ Effect.fn("web/agentCheckoutPlan")(function* (
   target: ConversationTarget,
   agent: WithRepository<Agent>,
-  credential: RepositoryCredential,
+  read: AgentRepositoryRead,
 ): Effect.fn.Return<AgentCheckoutPlan, CheckoutRefused | StoreFailure, CheckoutServices> {
-  return { credential, identity: yield* identityOn(target, agent, credential) };
+  return {
+    credential: repositoryCredentialOf(read),
+    identity: yield* identityOn(target, agent, read),
+  };
 });
 
 /**

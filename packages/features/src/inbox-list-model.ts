@@ -1602,3 +1602,257 @@ export function waitingByAgent(
 
   return byAgent;
 }
+
+/**
+ * Whether a member resolved the item without an answer while that close
+ * stands, as its row's card says it (`inboxSettledStanding`), which the
+ * thread says in a line of its own among its messages (`ThreadEvent`).
+ */
+function resolvedByMember(item: InboxItem): boolean {
+  return inboxSettledStanding(item) === INBOX_SETTLED_STANDING.RESOLVED;
+}
+
+/** What a line of what happened to the thread says: a member resolved it, or the agent withdrew or replaced one of its asks. */
+export const INBOX_THREAD_EVENT = {
+  RESOLVED: "resolved",
+  WITHDRAWN: "withdrawn",
+  REPLACED: "replaced",
+} as const;
+
+/** The member who resolved the thread, by their id, and by the name the read gives them where it gives one. */
+export interface InboxCloser {
+  readonly userId: string;
+  readonly name: string | undefined;
+}
+
+/**
+ * A line of what happened to the thread, drawn among its messages: a member
+ * resolving it without an answer, by whom where that is known, and the note
+ * the close carried, where it carried one; the agent withdrawing an ask, and why; or the agent replacing one, by the
+ * post that replaced it where the thread read carries it. Each says when,
+ * where that is known, and is keyed by what it is about: the ask's message,
+ * or the item for the standing close of a thread that held no ask open.
+ */
+export type InboxThreadEventLine = { readonly key: string } & (
+  | {
+      readonly kind: typeof INBOX_THREAD_EVENT.RESOLVED;
+      readonly closer: InboxCloser | undefined;
+      readonly note: InboxMessage | undefined;
+      readonly at: number | undefined;
+    }
+  | {
+      readonly kind: typeof INBOX_THREAD_EVENT.WITHDRAWN;
+      readonly reason: string;
+      readonly at: number | undefined;
+    }
+  | {
+      readonly kind: typeof INBOX_THREAD_EVENT.REPLACED;
+      readonly by: InboxMessage | undefined;
+      readonly at: number | undefined;
+    }
+);
+
+/** Each line of what happened to the thread, by the index of the message it follows; -1 before every message read. */
+export type InboxThreadEventsAfter = ReadonlyMap<number, readonly InboxThreadEventLine[]>;
+
+/** Where a line dated `at` stands: after the last message written by then, and never before the message at `from` it is about. */
+function standsAfter(
+  thread: readonly InboxMessage[],
+  from: number,
+  at: number | undefined,
+): number {
+  if (at === undefined) return from;
+
+  return Math.max(
+    from,
+    thread.findLastIndex((message) => message.createdAt <= at),
+  );
+}
+
+/**
+ * The note a member's close carried, which the service writes as their
+ * message in the close's own write, so stamped with the close's very time:
+ * a member's message written then that answers nothing, by the closer where
+ * the close names one; none where the close carried no note.
+ */
+function closeNote(
+  thread: readonly InboxMessage[],
+  at: number | undefined,
+  closerId: string | undefined,
+): InboxMessage | undefined {
+  if (at === undefined) return undefined;
+
+  return thread.find(
+    (message) =>
+      message.author === INBOX_MESSAGE_AUTHOR.MEMBER &&
+      message.answers === undefined &&
+      message.createdAt === at &&
+      (closerId === undefined || message.member?.userId === closerId),
+  );
+}
+
+/** Who a close names by id, by the name the item or the close's note gives them; the note's writer where the close names nobody. */
+function closerOf(
+  item: InboxItem,
+  closerId: string | undefined,
+  note: InboxMessage | undefined,
+): InboxCloser | undefined {
+  if (closerId === undefined) return note?.member;
+  const named = [item.closedBy, note?.member].find((ref) => ref?.userId === closerId);
+
+  return { userId: closerId, name: named?.name };
+}
+
+/**
+ * Where the post that replaced the ask at `index` stands: the agent's next
+ * post that asks, since a follow-up asking nothing on a thread still asking
+ * leaves its ask open; or, where none does, its next post, as a deployment
+ * that replaced an ask with a post asking nothing left it; -1 where the
+ * thread read carries neither.
+ */
+function replacingPost(thread: readonly InboxMessage[], index: number): number {
+  const later = (message: InboxMessage, at: number) =>
+    at > index && message.author === INBOX_MESSAGE_AUTHOR.AGENT;
+
+  const asked = thread.findIndex((message, at) => later(message, at) && message.ask !== undefined);
+
+  return asked === -1 ? thread.findIndex(later) : asked;
+}
+
+/**
+ * Whether the ask at `index` is the one the member's close that still
+ * stands withdrew, with no why: the ask withdrawn at the close's stamp, or,
+ * for an ask withdrawn before its time was kept, the latest ask, since a
+ * post asking since would have opened the item again.
+ */
+function withdrawnByStandingClose(
+  item: InboxItem,
+  thread: readonly InboxMessage[],
+  index: number,
+): boolean {
+  const ask = thread[index]?.ask;
+
+  if (!resolvedByMember(item) || ask?.status !== INBOX_ASK_STATUS.WITHDRAWN) return false;
+
+  if (ask.withdrawnReason !== undefined) return false;
+
+  if (ask.withdrawnAt !== undefined) return ask.withdrawnAt === item.settledAt;
+
+  return thread.findLastIndex((message) => message.ask !== undefined) === index;
+}
+
+/**
+ * The line a settled ask's message gives the thread, and where it stands:
+ * for a replaced one, just before the post that replaced it
+ * (`replacingPost`), dated as that post, or right after it where the thread
+ * read no longer carries that post; for one withdrawn with why, where it was
+ * withdrawn; and for one withdrawn with none, which a member's close leaves,
+ * the line saying who resolved it without an answer, where they did. The
+ * ask names its closer for good, since the item forgets them once a post
+ * opens it again; one withdrawn before closers were kept on the ask is
+ * named by the close that still stands where it is that close's
+ * (`withdrawnByStandingClose`), else by the note it carried.
+ */
+function askEvent(
+  item: InboxItem,
+  thread: readonly InboxMessage[],
+  index: number,
+): { readonly after: number; readonly line: InboxThreadEventLine } | undefined {
+  const message = thread[index];
+  const ask = message?.ask;
+
+  if (message === undefined || ask === undefined) return undefined;
+  const key = message.id;
+
+  if (ask.status === INBOX_ASK_STATUS.REPLACED) {
+    const next = replacingPost(thread, index);
+    const by = next === -1 ? undefined : thread[next];
+    const line = { key, kind: INBOX_THREAD_EVENT.REPLACED, by, at: by?.createdAt } as const;
+
+    return { after: next === -1 ? index : next - 1, line };
+  }
+
+  if (ask.status !== INBOX_ASK_STATUS.WITHDRAWN) return undefined;
+
+  if (ask.withdrawnReason !== undefined) {
+    const reason = ask.withdrawnReason;
+    const line = { key, kind: INBOX_THREAD_EVENT.WITHDRAWN, reason, at: ask.withdrawnAt } as const;
+
+    return { after: standsAfter(thread, index, ask.withdrawnAt), line };
+  }
+
+  const standing = withdrawnByStandingClose(item, thread, index);
+  const at = ask.withdrawnAt ?? (standing ? item.settledAt : undefined);
+  const closerId = ask.withdrawnBy ?? (standing ? item.closedBy?.userId : undefined);
+  const note = closeNote(thread, at, closerId);
+
+  const line = {
+    key,
+    kind: INBOX_THREAD_EVENT.RESOLVED,
+    closer: closerOf(item, closerId, note),
+    note,
+    at,
+  } as const;
+
+  return { after: standsAfter(thread, index, at), line };
+}
+
+/**
+ * Every line of what happened to the thread, by the message each follows:
+ * what became of each settled ask (`askEvent`), a member's close among them;
+ * then, where a member's close stands that withdrew no ask, as a notice's,
+ * that close, after the last message written by the time of the close,
+ * since a settled item still takes messages, or at the thread's end where
+ * that time is not known.
+ */
+export function inboxThreadEvents(
+  item: InboxItem,
+  thread: readonly InboxMessage[],
+): InboxThreadEventsAfter {
+  const events = new Map<number, InboxThreadEventLine[]>();
+
+  const add = (after: number, line: InboxThreadEventLine) => {
+    events.set(after, [...(events.get(after) ?? []), line]);
+  };
+
+  thread.forEach((_, index) => {
+    const event = askEvent(item, thread, index);
+
+    if (event !== undefined) add(event.after, event.line);
+  });
+  const askless = !thread.some((_, index) => withdrawnByStandingClose(item, thread, index));
+
+  if (resolvedByMember(item) && askless) {
+    const settled = item.settledAt;
+
+    const after =
+      settled === undefined
+        ? thread.length - 1
+        : thread.findLastIndex((message) => message.createdAt <= settled);
+
+    const note = closeNote(thread, settled, item.closedBy?.userId);
+    add(after, {
+      key: item.id,
+      kind: INBOX_THREAD_EVENT.RESOLVED,
+      closer: closerOf(item, item.closedBy?.userId, note),
+      note,
+      at: settled,
+    });
+  }
+
+  return events;
+}
+
+/** The messages a close's line draws as its note, which the thread draws there rather than as messages of their own. */
+export function inboxCloseNotes(events: InboxThreadEventsAfter): ReadonlySet<string> {
+  const notes = new Set<string>();
+
+  for (const lines of events.values()) {
+    for (const line of lines) {
+      if (line.kind === INBOX_THREAD_EVENT.RESOLVED && line.note !== undefined)
+        notes.add(line.note.id);
+    }
+  }
+
+  return notes;
+}

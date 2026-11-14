@@ -19,7 +19,7 @@ import {
   DESCRIPTION_FILE_TYPE,
   type DescriptionFile,
 } from "@repo/features/description-attachment-wire";
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
 import { PICTURE_BOUNDS, PICTURE_MEDIA_TYPE, PICTURE_TYPE } from "@repo/features/picture-wire";
 import { unparsedWire } from "@repo/wire";
 import { paddedTo, webmBytes } from "@repo/wire/testing";

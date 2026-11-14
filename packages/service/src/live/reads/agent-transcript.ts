@@ -10,6 +10,7 @@ import { agentQueue } from "@repo/database/schemas/agent-queue";
 import { user } from "@repo/database/schemas/auth";
 import { deviceAgentLine } from "@repo/database/schemas/device-agent";
 import { conversations, messages, standingLine, turns } from "@repo/database/schemas/storage";
+import { voiceCallTable } from "@repo/database/schemas/voice-call";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import {
   agentBootSync,
@@ -25,6 +26,7 @@ import {
   taskSync,
   turnsSync,
   userSync,
+  voiceCallSync,
 } from "@repo/database/sync/tables";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
 import {
@@ -56,7 +58,7 @@ import {
 import { countAnswerBytes, countAnswerWait } from "../transcript-metrics.js";
 
 /**
- * agent-transcript.ts -- a coding agent's transcript bound (`AGENT_TRANSCRIPT_READ`): what it is read from, written for Neon Realtime, so a reader hears the moment a page past its cursor would say something new, the tables they read, the topics that wake it, and where its cursor stands.
+ * agent-transcript.ts -- a coding agent's transcript bound (`AGENT_TRANSCRIPT_READ`): what it is read from, so a reader hears the moment a page past its cursor would say something new, the tables they read, the topics that wake it, and where its cursor stands.
  *
  * A page of the transcript (`transcript.ts`) is assembled from many reads,
  * some priced against the model catalog, which lives outside Postgres, so
@@ -71,11 +73,12 @@ import { countAnswerBytes, countAnswerWait } from "../transcript-metrics.js";
  * landing, the agent's own (`agent`) or a worker's, or a worker's
  * delegation being recorded (`workers`), and, for an agent on a device, its
  * newest launch line being claimed, stepping, or settling (`launch`), which
- * is where the page reads what the agent's start waits on. Each reads only the rows of the
+ * is where the page reads what the agent's start waits on, and a voice call
+ * opening on the agent or closing (`calls`), which the page names. Each reads only the rows of the
  * account that started the agent, as the held read does, and only while
  * the reader is a member of the agent's workspace: the membership is joined
  * in the statement, so a member taken out of the workspace stops hearing
- * anything at once, as Neon's guide asks, rather than at the next seal.
+ * anything at once rather than at the next seal.
  * The newest messages themselves are followed too, as rows (`window`): the
  * last `TRANSCRIPT_WINDOW` by sequence, one row a message keyed by its id,
  * each with what the page carries beside it joined in rather than read
@@ -87,7 +90,7 @@ import { countAnswerBytes, countAnswerWait } from "../transcript-metrics.js";
  * reader's to ask for at the end of its hold.
  */
 
-/** A number Postgres holds as `bigint`, as a number rather than the text Realtime would carry. */
+/** A number Postgres holds as `bigint`, as a number rather than the text it would answer. */
 const asNumber = (value: SQL): SQL<number> => sql<number>`(${value})::float8`;
 
 /** When a turn last changed: the latest of the stamps its opening, start, settling, and Stop write. */
@@ -552,6 +555,24 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
       ),
   );
 
+  // The voice calls standing on the agent, by their rows, read on its own transcript alone.
+  const calls = liveRowsStatement(
+    AGENT_TRANSCRIPT_READ.parts.calls,
+    { ordered: false, columns: { id: voiceCallTable.id } },
+    (selection) =>
+      queryBuilder
+        .select(selection)
+        .from(voiceCallTable)
+        .innerJoin(agentTable, eq(agentTable.id, voiceCallTable.agentId))
+        .where(
+          and(
+            eq(agentTable.conversationId, conversationId),
+            eq(agentTable.userId, userId),
+            reached,
+          ),
+        ),
+  );
+
   return {
     messages: written,
     turns: run,
@@ -561,6 +582,7 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
     queueRevision,
     launch,
     boot,
+    calls,
     window: windowOf(target, reached, past),
     windowParts: windowPartsOf(target, reached, past),
   };
@@ -585,7 +607,8 @@ const callIdOf = /* @__PURE__ */ Effect.fnUntraced(function* (call: string) {
  * rather than wait for it. It is woken by a write to the transcript's
  * messages, turns, or conversation, to a worker's conversation or
  * delegation under the agent's, to the agent itself, its queue, or a line
- * queued for its device, and to what admits the reader to its workspace or
+ * queued for its device, to a voice call on the agent opening or closing,
+ * and to what admits the reader to its workspace or
  * repository; the agent's task is read for the reader's reach of it
  * (`agentVisibleTo`) and wakes nothing, as a task's reach moves with what
  * admits the reader. It is looked at every second where nothing wakes it,
@@ -625,6 +648,7 @@ export const agentTranscriptRead = bindLiveRead(AGENT_TRANSCRIPT_READ, {
     agentQueueSync,
     deviceAgentLineSync,
     agentBootSync,
+    voiceCallSync,
   ],
   topics: ({ conversationId, parentConversationId, agentId, userId }) => {
     const parent: readonly SyncTopic[] =

@@ -9,7 +9,7 @@ import { user } from "../../schemas/auth.js";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "../../storage-vocabulary.js";
 import { getTestDB, startTask } from "../../testing/index.js";
 import { settleRunnerLostTurns } from "../abandoned-turns.js";
-import { createAgent } from "../agent-store.js";
+import { createAgent, recordAgentRunnerToken } from "../agent-store.js";
 import {
   acceptRunnerLine,
   clearRunnerLines,
@@ -78,6 +78,30 @@ const textsPast = (userId: string, agentId: string, launch: number, after = 0) =
   );
 
 it.layer(getTestDB())("the runner line store", (it) => {
+  it.effect("a runner's read hands nothing once its agent no longer records its bearer", () =>
+    Effect.gen(function* () {
+      const { userId, agentId } = yield* openAccount;
+      yield* recordAgentRunnerToken(userId, agentId, "digest-of-the-runner's-bearer");
+      yield* queueRunnerLine(userId, { agentId, launch: LAUNCH.FIRST, text: "before" });
+
+      const read = (runnerTokenHash: string) =>
+        Effect.map(
+          runnerLinesPast(userId, agentId, {
+            launch: LAUNCH.FIRST,
+            after: 0,
+            limit: LIMIT,
+            runnerTokenHash,
+          }),
+          (lines) => lines.map((line) => line.text),
+        );
+
+      assert.deepEqual(yield* read("digest-of-the-runner's-bearer"), ["before"]);
+      yield* recordAgentRunnerToken(userId, agentId, null);
+      yield* queueRunnerLine(userId, { agentId, launch: LAUNCH.FIRST, text: "after" });
+      assert.deepEqual(yield* read("digest-of-the-runner's-bearer"), []);
+    }),
+  );
+
   it.effect("a launch reads its lines past its cursor, a message queued again once", () =>
     Effect.gen(function* () {
       const { userId, agentId } = yield* openAccount;

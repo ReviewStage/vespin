@@ -1,5 +1,6 @@
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 import { cn } from "../cn.js";
+import { MenuCardFrame } from "../components/card/card.js";
 import { TOOLTIP_GAP, TOOLTIP_MARGIN, TOOLTIP_SURFACE } from "./tooltip.js";
 
 /**
@@ -51,9 +52,10 @@ function HoverCardContent({
       >
         <PreviewCardPrimitive.Popup
           data-slot="hover-card-content"
+          render={(frame) => <MenuCardFrame {...frame} />}
           className={cn(
             TOOLTIP_SURFACE,
-            "ui-tooltip-card pointer-events-auto flex w-tooltip-card cursor-default flex-col items-stretch gap-1 rounded-menu border border-border-strong bg-popover px-tooltip-card-inline py-1.5 font-text text-popover-foreground shadow-menu wrap-normal select-text",
+            "ui-tooltip-card pointer-events-auto flex w-tooltip-card cursor-default flex-col items-stretch gap-1 px-tooltip-card-inline py-1.5 font-text text-popover-foreground wrap-normal select-text",
             className,
           )}
           {...props}

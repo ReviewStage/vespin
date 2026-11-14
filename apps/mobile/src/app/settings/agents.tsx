@@ -43,13 +43,13 @@ import {
   Screen,
   SettingsForm,
   ToggleRow,
-  useAsyncAction,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { effortOptions, modelOptions, useModelCatalog } from "../../tasks/use-start.js";
+import { useLatestWrites } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
@@ -119,13 +119,12 @@ export default function AgentsScreen() {
   const { data: settings } = useQuery({ ...appStateQuery, select: selectAppSettingsView });
   const { data: capabilities = [] } = useQuery({ ...appStateQuery, select: selectCapabilities });
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
-  const write = useAsyncAction(rejectionWords);
-  const setting = useAsyncAction(rejectionWords);
-  // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was dropped or refused redraws its section, which reads the stored choice again.
+  // Note that each pick goes at once, even while an earlier one is out, such as an effort right after a model, since the host draws the default and a setting as they are sent.
+  const write = useLatestWrites<string, ModelChoice | undefined>(rejectionWords);
+  const setting = useLatestWrites<string, string>(rejectionWords);
+  // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was refused redraws its section, which reads the stored choice again.
   const [defaultRound, setDefaultRound] = useState(0);
   const [settingRound, setSettingRound] = useState(0);
-  // The setting last written, whose section says why a refusal was given; none once a model write came after it.
-  const [written, setWritten] = useState<AppSettingField | undefined>(undefined);
   const standard = current === undefined ? undefined : standardModelIdOf(current.model);
   const speeds = standard === undefined ? [] : speedsOffered(catalog, standard);
   const speed = current === undefined ? MODEL_SPEED.STANDARD : modelSpeedOf(current.model);
@@ -139,6 +138,10 @@ export default function AgentsScreen() {
           capabilities,
         };
 
+  // Note that the newest choice sent stands until it is answered, so a pick made before the host's draw of an earlier one reaches the screen, such as an effort right after a model, builds on it rather than on the default drawn.
+  const latest = (): ModelChoice | undefined =>
+    write.newest(ACT_KIND.AGENTS_DEFAULT_WRITE, current);
+
   const choose = (choice: ModelChoice | undefined) => {
     if (choice === undefined) {
       setDefaultRound((round) => round + 1);
@@ -146,33 +149,33 @@ export default function AgentsScreen() {
       return;
     }
 
-    // Note that a model write is now the last in the New agents group, so its refusal is the one the group's footer says.
-    setWritten(undefined);
+    // Note that the model, effort and speed write the one default, so they follow each other as one row's writes.
     void write
-      .run(() => acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined))
+      .run(ACT_KIND.AGENTS_DEFAULT_WRITE, choice, () =>
+        acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined),
+      )
       .then((landed) => {
-        if (landed) return;
-        // Note that the refusal that lands last owns the group's footer, whichever write began last.
-        setWritten(undefined);
-        setDefaultRound((round) => round + 1);
+        if (!landed) setDefaultRound((round) => round + 1);
       });
   };
 
   const atSpeed = (next: ModelSpeed) => {
-    if (current === undefined || standard === undefined) return;
-    choose(choiceAt(catalog, modelIdAtSpeed(standard, next), current));
+    const now = latest();
+
+    // Note that the speed is compared with the newest choice sent, not the one drawn, so a second speed picked before the first is drawn still goes.
+    if (now === undefined || modelSpeedOf(now.model) === next) return;
+    choose(choiceAt(catalog, modelIdAtSpeed(standardModelIdOf(now.model), next), now));
   };
 
   const store = (field: AppSettingField, token: string) => {
     if (view === undefined) return;
     const value = settingFromOption(field, token, view);
-    setWritten(field);
     void setting
-      .run(() => acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(() => undefined))
+      .run(field, token, () =>
+        acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(() => undefined),
+      )
       .then((landed) => {
-        if (landed) return;
-        setWritten(field);
-        setSettingRound((round) => round + 1);
+        if (!landed) setSettingRound((round) => round + 1);
       });
   };
 
@@ -187,9 +190,10 @@ export default function AgentsScreen() {
   const newAgentRows = rowsOf(SCHEMA_GROUP.NEW_AGENTS);
   const preferenceRows = rowsOf(SCHEMA_GROUP.PREFERENCES);
 
-  // The refusal said for the setting last written, under the group that holds its row.
-  const refusalOf = (rows: readonly SchemaRow[]) =>
-    rows.some((row) => row.field === written) ? setting.refusal : undefined;
+  // The refusals said for a group's settings, each by its own field, under the group that holds its row.
+  const refusalOf = (rows: readonly SchemaRow[], also: readonly string[] = []) =>
+    [...also, ...rows.flatMap((row) => setting.refusals.get(row.field) ?? [])].join(" ") ||
+    undefined;
 
   const pickRow = ({ field, entry, control }: SchemaRow) =>
     control === undefined ? null : (
@@ -201,7 +205,7 @@ export default function AgentsScreen() {
           options={control.options.map((option) => ({ id: option.value, label: option.label }))}
           picked={control.value}
           onPick={(token) => {
-            if (token !== control.value) store(field, token);
+            if (token !== setting.newest(field, control.value)) store(field, token);
           }}
         />
       </Fragment>
@@ -214,7 +218,7 @@ export default function AgentsScreen() {
           <ListSection
             key={defaultRound}
             title={DEFAULT_WORDS.SECTION}
-            footer={refusalOf(newAgentRows) ?? write.refusal}
+            footer={refusalOf(newAgentRows, write.said)}
           >
             {current === undefined || standard === undefined ? null : (
               <>
@@ -223,7 +227,11 @@ export default function AgentsScreen() {
                   options={modelOptions(catalog)}
                   picked={standard}
                   onPick={(id) => {
-                    if (id !== standard) choose(modelPicked(catalog, id, current));
+                    const now = latest();
+
+                    if (now !== undefined && id !== standardModelIdOf(now.model)) {
+                      choose(modelPicked(catalog, id, now));
+                    }
                   }}
                 />
                 {effortOptions(catalog, current.model).length <= 1 ? null : (
@@ -232,13 +240,19 @@ export default function AgentsScreen() {
                     options={effortOptions(catalog, current.model)}
                     picked={current.effort}
                     onPick={(effort) => {
-                      if (effort === current.effort) return;
+                      const now = latest();
+
+                      if (now === undefined) return;
+                      // Note that the efforts drawn are the drawn model's, so one picked while a newer model waits is fitted to that model's, as a model pick fits its effort.
+                      const fitted = effortFor(effortsOf(catalog, now.model), effort);
+
+                      if (fitted === undefined || fitted === now.effort) return;
                       choose({
-                        model: current.model,
-                        effort,
-                        ...(current.contextWindow === undefined
+                        model: now.model,
+                        effort: fitted,
+                        ...(now.contextWindow === undefined
                           ? undefined
-                          : { contextWindow: current.contextWindow }),
+                          : { contextWindow: now.contextWindow }),
                       });
                     }}
                   />
@@ -258,7 +272,7 @@ export default function AgentsScreen() {
                     onPick={(picked) => {
                       const next = speeds.find((each) => each === picked);
 
-                      if (next !== undefined && next !== speed) atSpeed(next);
+                      if (next !== undefined) atSpeed(next);
                     }}
                   />
                 ) : null}

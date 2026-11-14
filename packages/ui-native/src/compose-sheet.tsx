@@ -117,7 +117,7 @@ function ChipLabel({ label, symbol, harness }: ChipLead & { readonly label: stri
   if (harness !== undefined) {
     return (
       <HStack spacing={SPACE.TIGHT + 2}>
-        <HarnessMark harness={harness} size={markSize} />
+        <HarnessMark provider={harness} size={markSize} />
         {words}
       </HStack>
     );
