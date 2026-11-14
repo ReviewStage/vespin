@@ -26,7 +26,12 @@ builds a control of its own.
   a path, a page's main acts as glyphs in the bar's one glass before its ⋯
   (two or three, dimmed rather than gone with nothing picked, the rest left
   in ⋯ by `menuWithout`), a list's scopes as Mail's filter button
-  (`scopeMenu`, beside the app sidebar only), a `BarMenu` such as the ⋯ menu, an
+  (`scopeMenu`, beside the app sidebar only), a subtitle under its title
+  such as the narrowing scope's "Filtered by:" line (`scopeSubtitle`), as
+  Mail's, which `Screen`'s `subtitle` sets under a compact screen's stack bar
+  too (`barSubtitle`, the one modifier both go through: SwiftUI's
+  `navigationSubtitle` and the stack's `UINavigationItem.subtitle`), a
+  `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says, and `SplitOverTabs`, the one split view a window wide enough
   for three columns stands over the hidden tabs, in front of a tab's root and

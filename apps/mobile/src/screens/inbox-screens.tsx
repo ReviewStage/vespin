@@ -69,6 +69,7 @@ import {
   Screen,
   SplitView,
   scopeMenu,
+  scopeSubtitle,
   THREAD_MEDIA,
   type ThreadMedia,
   type ThreadMessage,
@@ -1072,6 +1073,8 @@ function InboxSplitScreen({
       choosing === undefined
         ? {
             title: INBOX_TITLE,
+            // Note that beside the app sidebar the scope leaves the list for the filter button, so the bar names a narrowing one under its title, as Mail's "Filtered by: Unread"; elsewhere the scopes stand over the list and say it themselves.
+            subtitle: threeColumns ? scopeSubtitle(scopes, show !== INBOX_SHOW.OPEN) : undefined,
             filter: threeColumns
               ? scopeMenu(SCOPE_LABEL, scopes, show !== INBOX_SHOW.OPEN)
               : undefined,

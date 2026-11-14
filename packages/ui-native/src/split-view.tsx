@@ -33,12 +33,16 @@ import { BarContent } from "./bar-content.js";
 import type { Scope } from "./button.js";
 import { GLYPH, type Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
+import { barSubtitle } from "./interactions.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 import { useColors } from "./tokens/colors.js";
 
 /** What the first column holds, so it is drawn afresh as that changes. */
 const FIRST_COLUMN = { APP_SIDEBAR: "app-sidebar", LIST: "list" } as const;
+
+/** What a bar's subtitle opens with while a filter narrows its list, as Mail's does. */
+const FILTERED_BY = "Filtered by:";
 
 /** Where the split view stands against the tabs' screens: over a tab's root, or behind the page a tab pushed over it. */
 const LAYER = { FRONT: 1, BEHIND: 0 } as const;
@@ -122,6 +126,8 @@ export type BarPath = {
  */
 export type ColumnBar = {
   readonly title?: string | undefined;
+  /** A line under the title, as Mail names its filter under Inbox; set with `barSubtitle`, which a compact screen's `Screen` takes too. */
+  readonly subtitle?: string | undefined;
   readonly leading?: ReactNode | undefined;
   /** Glyph acts at the bar's leading edge, sharing one glass, as Mail's expand and compose stand over a message. */
   readonly lead?: readonly BarAction[] | undefined;
@@ -251,6 +257,13 @@ export function scopeMenu(label: string, scopes: readonly Scope[], narrowed: boo
   };
 }
 
+/** What a bar says under its title while its filter narrows the list, as Mail's "Filtered by: Unread"; nothing while it shows the list whole. */
+export function scopeSubtitle(scopes: readonly Scope[], narrowed: boolean): string | undefined {
+  const chosen = scopes.find((scope) => scope.selected);
+
+  return narrowed && chosen !== undefined ? `${FILTERED_BY} ${chosen.label}` : undefined;
+}
+
 /** A menu with the acts a bar already stands as glyphs left out, so ⋯ holds only the rest. */
 export function menuWithout(menu: BarMenu, acts: readonly BarAction[]): BarMenu {
   const barred = new Set(acts.map((act) => act.label));
@@ -339,6 +352,7 @@ function Column({
               navigationTitle(bar.title),
               toolbarTitleDisplayMode(sidebar ? "inline" : "inlineLarge"),
             ]),
+        ...(bar.subtitle === undefined ? [] : [barSubtitle(bar.subtitle)]),
       ]}
     >
       {view}
