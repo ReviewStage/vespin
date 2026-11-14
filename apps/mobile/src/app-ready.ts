@@ -55,6 +55,9 @@ export function useAppReadyCount(shown: boolean): void {
       setActive(state === "active"),
     );
 
+    // Note that the state is read again once subscribed, since the app can come active between the first render and this effect, and the listener never replays it.
+    setActive(AppState.currentState === "active");
+
     return () => subscription.remove();
   }, []);
   useEffect(() => {
