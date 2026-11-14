@@ -138,7 +138,7 @@ function glyphs(rows: readonly Element[]): string[] {
 test("a run whose agent works on a task opens the agent on its task, its tab chosen, not its own page", async () => {
   const taskId = "0f6a2c4e-8b1d-4f3a-9c5e-7d2b4a6c8e10";
   world.liveAgents = [
-    { ...CI_DIGEST, planId: taskId, workspaceId: WORKSPACE.id, repository: null },
+    { ...CI_DIGEST, taskId: taskId, workspaceId: WORKSPACE.id, repository: null },
   ];
   world.runs = [
     {

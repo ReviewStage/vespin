@@ -265,7 +265,7 @@ test("⌘Z puts back the reminder a new one replaced, through the undo stack", a
       {
         [LIVE_READ.INBOX_ITEMS]: {
           rows: {
-            [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [{ ...item(X, false), remindAt }] },
+            [INBOX_SCOPE_KIND.TASK]: { [TASK.id]: [{ ...item(X, false), remindAt }] },
           },
         },
       },

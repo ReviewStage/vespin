@@ -1,5 +1,6 @@
 // pull-request-screens.tsx -- one agent's pull request on its own screen: where it stands, its checks and reviews held live, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and Open on GitHub in the bar's ⋯.
 
+import { githubAvatarUrl } from "@repo/features/account-picture";
 import {
   type AgentOverviewPullRequest,
   CHECK_STATE,
@@ -44,10 +45,13 @@ import {
   CHECK_SUMMARY_LOOK,
   ConfirmAsk,
   EmptyState,
+  FACE_KIND,
   GLYPH,
+  githubFace,
   glyphSymbol,
   LIST_LOOK,
   ListSection,
+  MARK_FACE,
   MarkRow,
   MergeActRow,
   markdownShows,
@@ -122,6 +126,18 @@ function checkDetail(check: PullRequestCheck): string {
   }
 
   return CHECK_WORDS[check.state];
+}
+
+/** The App that runs a check, by the logo GitHub's avatar host serves for it, beside the check's mark, as the panel's check rows draw it; none where it has no such avatar. */
+function checkFace(check: PullRequestCheck) {
+  const picture = githubAvatarUrl(check.avatarUrl);
+
+  if (picture === undefined) return undefined;
+
+  return {
+    of: { name: check.app ?? check.name, picture, kind: FACE_KIND.APP },
+    stands: MARK_FACE.BESIDE,
+  };
 }
 
 /** Copies the pull request's GitHub address, with the system's tap of success, or says on the console why it could not. */
@@ -366,7 +382,7 @@ export function PullRequestScreen() {
           {
             agentId: id,
             workspaceId: agent.workspaceId,
-            taskId: agent.planId,
+            taskId: agent.taskId,
             number: key.number,
             title,
           },
@@ -463,6 +479,19 @@ export function PullRequestScreen() {
                   ? mergeSentence(pullRequest, action, { queueShown: true })
                   : undefined
               }
+              opened={
+                pullRequest === undefined
+                  ? undefined
+                  : {
+                      by:
+                        pullRequest.author === undefined
+                          ? undefined
+                          : githubFace(pullRequest.author),
+                      at: pullRequest.createdAt,
+                      mergedAt: pullRequest.mergedAt,
+                    }
+              }
+              labels={pullRequest?.labels}
             />
             {press === undefined ? null : (
               <MergeActRow
@@ -533,9 +562,10 @@ export function PullRequestScreen() {
                   key={check.url ?? check.name}
                   id={check.url ?? check.name}
                   mark={CHECK_LOOK[check.state]}
-                  said={CHECK_WORDS[check.state]}
                   title={check.name}
                   detail={checkDetail(check)}
+                  standing={CHECK_WORDS[check.state]}
+                  face={checkFace(check)}
                   goes={check.url === null ? undefined : PUSH_ROW_GOES.OUT}
                 />
               ))
@@ -549,6 +579,7 @@ export function PullRequestScreen() {
                 mark={REVIEW_LOOK[reviewer.state]}
                 title={reviewer.by.login}
                 detail={REVIEW_WORDS[reviewer.state]}
+                face={{ of: githubFace(reviewer.by), stands: MARK_FACE.LEAD }}
               />
             ))}
             <MarkRow

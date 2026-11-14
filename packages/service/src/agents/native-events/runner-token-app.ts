@@ -143,7 +143,7 @@ const runnerTokenEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTokenEndpoint")
       target.userId,
       ring.success,
       CODEX_TOKEN_MARGIN,
-      codex?.subscriptionId ?? undefined,
+      codex.subscriptionId ?? undefined,
     ),
   );
 

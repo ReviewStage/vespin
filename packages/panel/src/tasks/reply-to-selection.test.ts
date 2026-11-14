@@ -486,7 +486,7 @@ test("with a mouse, a selection resting is offered nothing until the pointer let
 /** An agent of the developer's, handed a prompt and answered with one turn. */
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+  taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Release plan",

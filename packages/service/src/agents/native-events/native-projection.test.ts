@@ -7,6 +7,8 @@ import {
   NATIVE_WRITE,
   projectMoments,
   turnProgressed,
+  withCallAccounts,
+  withTurnAccounts,
 } from "./native-projection.js";
 import { toolAnswerSettlement } from "./runner-moments.js";
 
@@ -49,6 +51,57 @@ test("an unknown tool's call settled with a new input, as Codex settles one, kee
     [
       [RUN_EVENT.TOOL_CALL_STARTED, "unknown_tool", { name: "edit_plan", input: {} }],
       [RUN_EVENT.TOOL_CALL_SETTLED, "unknown_tool", undefined],
+    ],
+  );
+});
+
+test("a turn's call of an integration's tool names the account it ran on, as the owner called it when the turn started; a call on an account the turn names none for is left as it was", () => {
+  const opened = projectMoments(
+    heldProjection(null),
+    [{ kind: NATIVE_MOMENT.TOOL_STARTED, callId: "call_ls", name: "Bash", input: {} }],
+    {
+      conversationId: "c_accounts",
+      sequence: 0,
+      now: 0,
+      attempt: 1,
+      queuedTurnId: undefined,
+      model: undefined,
+      ownKey: false,
+      registered: () => false,
+      report: () => undefined,
+    },
+  );
+
+  const enqueued = opened.writes.find((write) => write.kind === NATIVE_WRITE.ENQUEUE);
+  assert.ok(enqueued?.kind === NATIVE_WRITE.ENQUEUE, "the call opens a turn");
+  const state = withTurnAccounts(opened.state, enqueued.turnId, { "linear-2": "Acme" });
+
+  const call = (callId: string, name: string, connection: string | undefined) => ({
+    kind: NATIVE_MOMENT.TOOL_STARTED,
+    callId,
+    name,
+    input: {
+      remoteTool: "save_issue",
+      parentCallId: callId,
+      input: {},
+      ...(connection === undefined ? undefined : { connection }),
+    },
+  });
+
+  assert.deepEqual(
+    withCallAccounts(state, [
+      call("call_acme", "linear_remote", "linear-2"),
+      call("call_notion", "notion_remote", undefined),
+    ]).map((moment) => (moment.kind === NATIVE_MOMENT.TOOL_STARTED ? moment.input : undefined)),
+    [
+      {
+        remoteTool: "save_issue",
+        parentCallId: "call_acme",
+        input: {},
+        connection: "linear-2",
+        account: "Acme",
+      },
+      { remoteTool: "save_issue", parentCallId: "call_notion", input: {} },
     ],
   );
 });

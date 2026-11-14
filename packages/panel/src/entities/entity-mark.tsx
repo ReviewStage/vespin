@@ -230,7 +230,7 @@ const SERVER_MARK: EntityMark<EntityOf<typeof ENTITY_KIND.SERVER | typeof ENTITY
 const ENTITY_MARK: EntityMarks = {
   [ENTITY_KIND.PLAN]: (plan) => <PlanMark taskId={plan.taskId} />,
   [ENTITY_KIND.SECTION]: () => <EntityGlyph kind={ENTITY_KIND.SECTION} />,
-  [ENTITY_KIND.VERSION]: (version) => <PlanMark taskId={version.planId} />,
+  [ENTITY_KIND.VERSION]: (version) => <PlanMark taskId={version.taskId} />,
   [ENTITY_KIND.COMMENT]: () => <EntityGlyph kind={ENTITY_KIND.COMMENT} />,
   [ENTITY_KIND.PAGE]: () => <EntityGlyph kind={ENTITY_KIND.PAGE} />,
   [ENTITY_KIND.AGENT]: (agent, at) => <AgentEntityMark agent={agent} at={at} />,
