@@ -133,7 +133,12 @@ export function useAgentPorts(agentId: string): AgentPorts {
       .then(() => queries.setQueryData(sharedKey, shared));
 
   /** Sends one pick, laying the service's answer over the link read; whether it landed. */
-  const sent = (port: number | null): Promise<boolean> => {
+  // Note that a refusal is said only while its pick is still the newest, so one a later pick overtook never stands beside what that pick shared.
+  const sayFor = (turn: number) => (words: string) => {
+    if (turn === newest.current) setNote(words);
+  };
+
+  const sent = (port: number | null, turn: number): Promise<boolean> => {
     if (port === null) {
       return write(
         () =>
@@ -145,7 +150,7 @@ export function useAgentPorts(agentId: string): AgentPorts {
         {
           refused: (answer) => ("shared" in answer ? undefined : AGENT_PORTS_WORDS.NOT_UNSHARED),
           unanswered: AGENT_PORTS_WORDS.NOT_UNSHARED,
-          inPlace: setNote,
+          inPlace: sayFor(turn),
           went: BUZZ.SUCCESS,
         },
       );
@@ -161,7 +166,7 @@ export function useAgentPorts(agentId: string): AgentPorts {
       {
         refused: (answer) => ("url" in answer ? undefined : AGENT_PORTS_WORDS.NOT_SHARED),
         unanswered: AGENT_PORTS_WORDS.NOT_SHARED,
-        inPlace: setNote,
+        inPlace: sayFor(turn),
         went: BUZZ.SUCCESS,
       },
     );
@@ -176,7 +181,7 @@ export function useAgentPorts(agentId: string): AgentPorts {
 
     queue.current = queue.current.then(async () => {
       if (turn !== newest.current) return;
-      await sent(port);
+      await sent(port, turn);
 
       if (turn === newest.current) setPicked(undefined);
     });

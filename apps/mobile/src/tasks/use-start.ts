@@ -348,7 +348,7 @@ interface Hearer {
 const hearing = new Map<string, Set<Hearer>>();
 
 /** The tasks a start opened whose answer is still on its way. */
-const awaiting = new Set<string>();
+const awaiting = new Map<string, number>();
 
 /**
  * How long an answer that found no page standing is kept for one that
@@ -363,7 +363,7 @@ const unheard = new Map<string, { readonly landed: StartLanded; readonly at: num
 
 /** Marks the task a start just opened, or started an agent on, as awaiting what the start comes to. */
 export function awaitStart(taskId: string): void {
-  awaiting.add(taskId);
+  awaiting.set(taskId, (awaiting.get(taskId) ?? 0) + 1);
 }
 
 /**
@@ -374,7 +374,12 @@ export function awaitStart(taskId: string): void {
  * back.
  */
 export function startLanded(taskId: string, landed: StartLanded): void {
-  if (!awaiting.delete(taskId)) return;
+  const waits = awaiting.get(taskId);
+
+  if (waits === undefined) return;
+
+  if (waits > 1) awaiting.set(taskId, waits - 1);
+  else awaiting.delete(taskId);
 
   const hearers = [...(hearing.get(taskId) ?? [])].filter(({ kinds }) =>
     kinds.includes(landed.kind),

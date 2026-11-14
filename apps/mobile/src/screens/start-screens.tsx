@@ -478,6 +478,7 @@ function useStartAtOnce(
   setNote: (note: string | undefined) => void,
 ): UseStartAtOnceResult {
   const router = useRouter();
+  const onTab = useOnTab();
   const write = useWrite();
   const startAgent = useStartAgent(taskId);
 
@@ -494,6 +495,8 @@ function useStartAtOnce(
     awaitStart(taskId);
     kept.release();
     router.dismiss();
+    // Note that the task's page is brought in front, as New task's start brings it, so its overview stands to open the agent or New agent again, wherever New agent was opened from, such as the menu bar over another agent's page.
+    router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: taskId })));
 
     void write(
       () =>
