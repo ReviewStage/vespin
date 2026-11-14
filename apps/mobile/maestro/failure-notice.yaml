@@ -42,7 +42,7 @@ appId: dev.vespin.ios
 # says it could not be marked done.
 - longPressOn: "Weekly digest email"
 - tapOn: "Mark done"
-- tapOn: "Stop agents"
+- tapOn: "Stop agent"
 - assertVisible: "The task could not be marked done. Try again."
 - assertVisible: "Weekly digest email"
 - takeScreenshot: failure-notice-mark-done
