@@ -55,38 +55,48 @@ function askShown(
   );
 }
 
+/** The asks given, but one the developer took back out of them. */
+function without(asks: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  const next = new Set(asks);
+  next.delete(id);
+
+  return next;
+}
+
 export function MachineAskCard(): React.JSX.Element | null {
   const names = useMachineNames();
   const [answered, setAnswered] = useState<ReadonlySet<string>>(new Set());
-  const asks = useOtherMachinesAsks().filter((ask) => !answered.has(ask.id));
   const [opened, setOpened] = useState<string | undefined>(undefined);
-  const shown = askShown(asks, opened, useSecond());
-  const { mutate: answerAsk } = useMutation(pressMutation(ACT_KIND.MACHINE_ASK_ANSWER));
+  const chosen = askShown(useOtherMachinesAsks(), opened, useSecond());
+  // Note that an ask answered here closes its card at once, but stays the one opened over until the read takes it down, so an answer that did not land opens it again, its window closed or not.
+  const shown = chosen !== undefined && answered.has(chosen.id) ? undefined : chosen;
+  const press = pressMutation(ACT_KIND.MACHINE_ASK_ANSWER);
+
+  const { mutate: answerAsk } = useMutation({
+    ...press,
+    onError: (cause, variables, ...rest) => {
+      setAnswered((was) => without(was, variables.id));
+      press.onError?.(cause, variables, ...rest);
+    },
+  });
+
   // Note that the card is drawn for the ask it opened over until its fade has run, so its words do not change under its own exit.
   const { held: ask, onExited } = useHeldThroughExit(shown);
 
   // Note that the ask opened over is kept, so its card stays through its window's close rather than giving way to none.
-  useEffect(() => setOpened(shown?.id), [shown?.id]);
+  useEffect(() => setOpened(chosen?.id), [chosen?.id]);
 
   if (ask === undefined) return null;
 
   const machineName = names.get(ask.deviceId) ?? SOME_MACHINE;
   const open = shown?.id === ask.id;
 
-  // Note that an answer that did not reach the service puts the card back, so it can be given again.
+  // Note that an answer that did not reach the service puts the card back (the mutation's `onError`), so it can be given again.
   const answer = (decision: MachineAskDecision, note?: string) => {
     const { id } = ask;
 
     setAnswered((was) => new Set(was).add(id));
-    answerAsk(note === undefined ? { id, decision } : { id, decision, note }, {
-      onError: () =>
-        setAnswered((was) => {
-          const next = new Set(was);
-          next.delete(id);
-
-          return next;
-        }),
-    });
+    answerAsk(note === undefined ? { id, decision } : { id, decision, note });
   };
 
   const deny = (note: string | undefined) => answer(MACHINE_ASK_DECISION.DENY, note);
