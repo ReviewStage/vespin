@@ -337,7 +337,8 @@ export function useSettleUndo(): (
 /** A thread's box as its screen draws and presses it. */
 export interface ThreadAnswer {
   readonly draft: InboxDraft;
-  readonly onDraft: (draft: InboxDraft) => void;
+  /** Sets the draft, or changes it from the one the box holds now, which a change that lands later, such as the photo picker's, reads rather than the draft it was opened on. */
+  readonly onDraft: (draft: InboxDraft | ((now: InboxDraft) => InboxDraft)) => void;
   /** What the box's last send said where it did not go: what the answer lacks, or the refusal. */
   readonly note: string | undefined;
   /** Whether Send stands lit with no words typed: the draft holds an answer to send, or a number whose words a press says read as none. */
@@ -382,7 +383,12 @@ export function useThreadAnswer(
   const thread = item.thread ?? [];
 
   const onDraft = useCallback(
-    (next: InboxDraft) => hold(itemId, (was) => ({ ...was, draft: next, note: undefined })),
+    (next: InboxDraft | ((now: InboxDraft) => InboxDraft)) =>
+      hold(itemId, (was) => ({
+        ...was,
+        draft: Predicate.isFunction(next) ? next(was.draft) : next,
+        note: undefined,
+      })),
     [itemId],
   );
 
@@ -391,7 +397,10 @@ export function useThreadAnswer(
     hold(itemId, (was) => {
       const sending = new Map(was.sending);
       sending.delete(key);
-      const typed = was.draft.note.trim() === "" ? sent : was.draft;
+
+      // Note that pictures attached since count as typed, so a refusal never takes them off.
+      const typed =
+        was.draft.note.trim() === "" && was.draft.attachments.length === 0 ? sent : was.draft;
 
       return { ...was, draft: typed, sending, note: words };
     });
@@ -533,30 +542,40 @@ export function useThreadAnswer(
     starting.add(itemId);
     const before = held.get(itemId)?.started;
     const key = before?.words === text ? before.key : randomUUID();
+    // The pictures the box holds go as the new thread's first message's, as the panel's start carries its files.
+    const { attachments } = draft;
     let startedId: string | undefined;
     hold(itemId, (was) => ({
       ...was,
-      draft: { ...was.draft, note: "" },
+      draft: { ...was.draft, note: "", attachments: [] },
       note: undefined,
       started: { key, words: text },
     }));
     void write(
       () =>
-        acts[ACT_KIND.AGENTS_INBOX_START]({ agentId: item.agentId, text, clientKey: key }).then(
-          (answer) => {
-            if (!("failure" in answer)) startedId = answer.item.id;
+        acts[ACT_KIND.AGENTS_INBOX_START]({
+          agentId: item.agentId,
+          text,
+          ...(attachments.length === 0 ? undefined : { attachments: [...attachments] }),
+          clientKey: key,
+        }).then((answer) => {
+          if (!("failure" in answer)) startedId = answer.item.id;
 
-            return answer;
-          },
-        ),
+          return answer;
+        }),
       {
         refused: (answer) => ("failure" in answer ? refusedWords(answer.failure) : undefined),
         unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
-        // Note that the words go back as a new thread's, the box turned back to one, so a later Send never posts them as a reply.
+        // Note that the words and pictures go back as a new thread's, the box turned back to one, so a later Send never posts them as a reply.
         inPlace: (words) =>
           hold(itemId, (was) =>
-            was.draft.note.trim() === ""
-              ? { ...was, asNew: true, draft: { ...was.draft, note: draft.note }, note: words }
+            was.draft.note.trim() === "" && was.draft.attachments.length === 0
+              ? {
+                  ...was,
+                  asNew: true,
+                  draft: { ...was.draft, note: draft.note, attachments },
+                  note: words,
+                }
               : { ...was, note: words },
           ),
         went: BUZZ.SUCCESS,
