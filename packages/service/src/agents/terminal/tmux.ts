@@ -191,22 +191,43 @@ function processOf(run: RunActionStart): readonly string[] {
 /**
  * Starts a run action detached in the agent's checkout, under its id, its
  * command the pane's own process, with the workspace's variables, named for
- * the action's label and marked with its id. Note that the pane is kept on
- * exit by a command of the same list, because tmux runs a list whole before
- * it hears a process end, so even a command that ends at once leaves its
- * pane and its status standing.
+ * the action's label and marked with its id. An ordinary shell standing
+ * under the id, as a tab's attach makes one afresh after a stop forgot the
+ * action's (`attachTerminal`), is ended first, so the action's id is never
+ * lost to it; one marked for a run action, as a press made at once beside
+ * this one starts, is left, and tmux refuses this start. Note that the mark
+ * is read by tmux in the start's own list (`if-shell -F`), because the
+ * server runs a client's list whole, so a press beside this one never marks
+ * the session between the read and the end of the shell; and that the shell
+ * ends in that list too, because a server left with no session exits, and a
+ * start sent after would reach it as it goes. The pane is kept on exit by a
+ * command of the same list, because tmux runs a list whole before it hears
+ * a process end, so even a command that ends at once leaves its pane and its
+ * status standing.
  */
 export function startRunAction(terminalId: string, run: RunActionStart): CommandAsk {
   const target = optionTargetOf(terminalId);
+  const unmarked = `#{==:#{${TMUX.RUN_ACTION_OPTION}},}`;
 
-  return tmux([
-    ...["new-session", "-d", "-s", sessionOf(terminalId), "-c", TMUX.START_DIRECTORY],
-    ...environmentOf(run),
-    ...processOf(run),
-    ...[";", "set-option", "-w", "-t", target, TMUX.REMAIN_OPTION, "on"],
-    ...[";", "set-option", "-t", target, TMUX.TITLE_OPTION, literal(run.label)],
-    ...[";", "set-option", "-t", target, TMUX.RUN_ACTION_OPTION, run.actionId],
-  ]);
+  return script(
+    [
+      "target=$1 && shift",
+      // A session not there has nothing to end, and the list's read of its mark would fail on it.
+      `if tmux has-session -t "$target" 2>/dev/null; then`,
+      `  exec tmux -L ${TMUX.SOCKET} if-shell -F -t "$target:" '${unmarked}' "kill-session -t $target" ";" "$@"`,
+      "fi",
+      `exec tmux -L ${TMUX.SOCKET} "$@"`,
+    ].join("\n"),
+    [
+      targetOf(terminalId),
+      ...["new-session", "-d", "-s", sessionOf(terminalId), "-c", TMUX.START_DIRECTORY],
+      ...environmentOf(run),
+      ...processOf(run),
+      ...[";", "set-option", "-w", "-t", target, TMUX.REMAIN_OPTION, "on"],
+      ...[";", "set-option", "-t", target, TMUX.TITLE_OPTION, literal(run.label)],
+      ...[";", "set-option", "-t", target, TMUX.RUN_ACTION_OPTION, run.actionId],
+    ],
+  );
 }
 
 /**
@@ -257,15 +278,17 @@ export function signalRunAction(terminalId: string, signal: RunActionSignal): Co
  * does not stand, as after its sandbox stopped, is made afresh in the
  * agent's checkout under the tab's id and attached (`new-session -A`), so a
  * tab always connects to a live shell. Note that the read-only client still
- * sizes the window, as `-r` would not.
+ * sizes the window, as `-r` would not. Note that each `exec` names the
+ * socket itself, because `exec` runs the binary and never the script's
+ * `tmux` function, which is what names it for every other command.
  */
 export function attachTerminal(terminalId: string): CommandAsk {
   return script(
     [
       `if [ -n "$(tmux show-options -qv -t "$2" ${TMUX.RUN_ACTION_OPTION} 2>/dev/null)" ]; then`,
-      `  exec tmux attach-session -f read-only -t "$1"`,
+      `  exec tmux -L ${TMUX.SOCKET} attach-session -f read-only -t "$1"`,
       "fi",
-      `exec tmux new-session -A -s "$3" -c "$4"`,
+      `exec tmux -L ${TMUX.SOCKET} new-session -A -s "$3" -c "$4"`,
     ].join("\n"),
     [targetOf(terminalId), optionTargetOf(terminalId), sessionOf(terminalId), TMUX.START_DIRECTORY],
   );

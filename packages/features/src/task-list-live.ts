@@ -253,7 +253,7 @@ const agentLiveRowSchema = EffectSchema.Struct({
  * plans and its agents, each by id, newest started first as the held read
  * orders them, and the issues plans linked, which answer no rows and stand
  * for a released desktop that follows them, and which this build keeps
- * none of. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
+ * none of; beside them, the workspaces holding any task it reaches. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
  * The service answers `unavailable` where its deployment's Realtime is
  * misconfigured.
  */
@@ -285,6 +285,15 @@ export const TASK_LIST_READ = liveRead({
       order: [["id", ORDER.ASC]],
       optional: true,
     }),
+  },
+  beside: {
+    /**
+     * The workspaces in which the account reaches any task, whatever the
+     * list holds of them: whether it has ever had a task there, which the
+     * first-run welcome and a workspace's "No tasks yet." read. Absent from a
+     * service before it was answered.
+     */
+    taskWorkspaces: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   },
 });
 
@@ -418,6 +427,50 @@ export function settledPageCursorOf(
 
   return last;
 }
+
+/** How many of a person's tasks one page of `PERSON_PAGE_READ` answers of each section, Assigned and Created, the newest first. */
+export const PERSON_PAGE_TASKS = 5;
+
+/** How many of a person's agents one page of `PERSON_PAGE_READ` answers the tasks of, the newest started first. */
+export const PERSON_PAGE_AGENTS = 50;
+
+/**
+ * A person's tasks and agents in a workspace, read once rather than
+ * followed, for their page, which lists what of theirs the window holds
+ * and, past it, what only the service does: how many tasks are assigned
+ * to them, how many more they created that are assigned to someone else
+ * or no one, and how many agents they started on a task, none archived
+ * (`counts`, one row), each as the reader may read them; and a page of
+ * rows, the newest `PERSON_PAGE_TASKS` of each section by their last save
+ * and the tasks of their newest `PERSON_PAGE_AGENTS` agents, each with
+ * every agent of it, as the list's plans and agents answer them and on
+ * their rule of who may read them. A person the reader shares no task
+ * with is counted as having none.
+ */
+export const PERSON_PAGE_READ = liveRead({
+  name: "personPage",
+  path: HOSTED_SERVICE_PATH.LIVE_PERSON_PAGE,
+  params: {
+    workspaceId: LIVE_PARAM.TEXT,
+    personId: LIVE_PARAM.TEXT,
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+  },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    counts: liveRows({
+      row: EffectSchema.Struct({
+        personId: EffectSchema.String,
+        assigned: countedNumber,
+        created: countedNumber,
+        agents: countedNumber,
+      }),
+      key: "personId",
+      order: [["personId", ORDER.ASC]],
+    }),
+    plans: TASK_LIST_READ.parts.plans,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
 
 /** The plan list's rows as Realtime delivers them, decoded at the boundary before anything reads them. */
 export type TaskListLiveRows = typeof TASK_LIST_READ.rows.Type;

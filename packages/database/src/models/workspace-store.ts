@@ -348,6 +348,35 @@ const findMemberWorkspaceIds = SqlSchema.findAll({
     ),
 });
 
+/**
+ * The workspaces of the account holding a task it reaches, on the task
+ * list's own rule of who reads a task (`taskReachableBy`), each at its
+ * first such task, so a workspace of thousands is read no further.
+ */
+const findWorkspacesWithTasks = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: Schema.Struct({ organizationId: Schema.String }),
+  execute: (userId) =>
+    Database.use((db) =>
+      db
+        .select({ organizationId: member.organizationId })
+        .from(member)
+        .where(
+          and(
+            eq(member.userId, userId),
+            exists(
+              db
+                .select({ one: task.id })
+                .from(task)
+                .where(
+                  and(eq(task.organizationId, member.organizationId), taskReachableBy(userId)),
+                ),
+            ),
+          ),
+        ),
+    ),
+});
+
 const WorkspaceAgentConversationSchema = Schema.Struct({
   agentId: Schema.String,
   userId: Schema.String,
@@ -923,6 +952,13 @@ export function claimSoleWorkspace(
 /** The ids of every workspace the account is a member of, in no order. */
 export function memberWorkspaceIds(userId: string): WorkspaceStoreEffect<readonly string[]> {
   return Effect.map(findMemberWorkspaceIds(userId), (rows) =>
+    rows.map((row) => row.organizationId),
+  );
+}
+
+/** The ids of the workspaces in which the account reaches any task, in no order: whether it has ever had a task there, whatever list a window holds. */
+export function workspacesWithTasks(userId: string): WorkspaceStoreEffect<readonly string[]> {
+  return Effect.map(findWorkspacesWithTasks(userId), (rows) =>
     rows.map((row) => row.organizationId),
   );
 }

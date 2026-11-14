@@ -4,7 +4,11 @@ import { sandboxNamedFor } from "@repo/database/models/agent-sandboxes";
 import { PULL_REQUEST_OF_AGENT_BRANCH } from "@repo/database/models/agent-store";
 import { taskMadeByRun } from "@repo/database/models/run-tasks";
 import { taskBlockedFor, taskBlockIdsFor } from "@repo/database/models/task-block-store";
-import { agentVisibleTo, taskReachableBy } from "@repo/database/models/workspace-store";
+import {
+  agentVisibleTo,
+  taskReachableBy,
+  workspacesWithTasks,
+} from "@repo/database/models/workspace-store";
 import {
   agentPin,
   agentPullRequest,
@@ -51,6 +55,9 @@ import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-w
 import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
 import {
   NO_TASK_OWNER,
+  PERSON_PAGE_AGENTS,
+  PERSON_PAGE_READ,
+  PERSON_PAGE_TASKS,
   SETTLED_PAGE_SIZE,
   TASK_LIST_READ,
   TASK_PAGE_READ,
@@ -75,7 +82,8 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { Duration } from "effect";
+import { Duration, Effect } from "effect";
+import { hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import type { SyncMoved } from "../../sync/live-query.js";
 import { readerAndWorkspaceTopics } from "../../sync/reader-topics.js";
 import { failureWordOf, lastSettledAtIn, latestTurnOf, sessionEndedOf } from "../agent-standing.js";
@@ -210,6 +218,44 @@ function tasksStatement(userId: string, narrowed: SQL = sql`true`) {
         .leftJoin(assignee, eq(assignee.id, task.assigneeId))
         .where(and(taskReachableBy(userId), narrowed)),
   );
+}
+
+/**
+ * The tasks of the account's own pins, whatever their status or age: each
+ * it pinned, and each with an agent it pinned. Note that a tab pinned to
+ * the sidebar is kept in the window's own storage, never here, so the
+ * window reads a pinned tab's task outside the list itself.
+ */
+function pinnedTaskOf(userId: string): SQL {
+  const pinnedAgentTasks = queryBuilder
+    .select({ taskId: agentTable.taskId })
+    .from(agentPin)
+    .innerJoin(agentTable, eq(agentTable.id, agentPin.agentId))
+    .where(eq(agentPin.userId, userId));
+
+  return (
+    or(
+      exists(
+        queryBuilder
+          .select({ one: sql`1` })
+          .from(taskPin)
+          .where(and(eq(taskPin.taskId, task.id), eq(taskPin.userId, userId))),
+      ),
+      sql`${task.id} in (${pinnedAgentTasks})`,
+    ) ?? sql`false`
+  );
+}
+
+/**
+ * Which tasks the account's list follows live (`tasksRead`), of those it
+ * reaches: the tasks of its own pins (`pinnedTaskOf`), which Pinned draws
+ * whatever their status or age, and the active and recent ones. Note that
+ * every task is still active and recent here, so the list follows every
+ * task it reaches; the narrowing to active and recent ones replaces that
+ * `true` alone, and the pins stay live beside it.
+ */
+function liveTaskOf(userId: string): SQL {
+  return or(pinnedTaskOf(userId), sql`true`) ?? sql`true`;
 }
 
 /**
@@ -379,7 +425,7 @@ const PENDING_APPROVALS_OF_AGENT = sql<
 /**
  * The plans what moved could move: their own rows, the reader's pins and
  * read marks, a block either way, a follower, a plan a moved plan blocks,
- * and a plan naming a moved member.
+ * a plan whose agent's pin moved, and a plan naming a moved member.
  */
 function movedPlans(moved: SyncMoved): SQL {
   const plans = moved.keys(taskSync, task.id);
@@ -389,6 +435,12 @@ function movedPlans(moved: SyncMoved): SQL {
     .select({ id: taskBlock.blockedTaskId })
     .from(taskBlock)
     .where(liveKeysIn(taskBlock.blockerTaskId, plans))})`;
+
+  // A pin of an agent moves its task into the live set or out of it, so its task is read again.
+  const ofPinnedAgent = sql`(${queryBuilder
+    .select({ taskId: agentTable.taskId })
+    .from(agentTable)
+    .where(liveKeysIn(agentTable.id, moved.keys(agentPinSync, agentPin.agentId)))})`;
 
   return (
     or(
@@ -401,6 +453,7 @@ function movedPlans(moved: SyncMoved): SQL {
         ...moved.keys(taskFollowerSync, taskFollower.taskId),
       ]),
       sql`${task.id} in ${blockedByMoved}`,
+      sql`${task.id} in ${ofPinnedAgent}`,
       liveKeysIn(task.userId, members),
       liveKeysIn(task.assigneeId, members),
     ) ?? sql`false`
@@ -484,12 +537,17 @@ const TASK_LIST_TABLES = [
  * they name, and narrow the agents to the one of that conversation the
  * reader reaches. Its plans and its agents are each part's own rows, and a
  * write to its account's membership or GitHub access answers it whole.
+ *
+ * Beside them, every answer carries the workspaces in which the account
+ * reaches any task (`workspacesWithTasks`), on the plans' own rule, so a
+ * window tells a workspace that never had a task from one whose tasks the
+ * list does not hold.
  */
 export const tasksRead = bindLiveRead(TASK_LIST_READ, {
   reads: TASK_LIST_TABLES,
   topics: ({ userId }) => readerAndWorkspaceTopics(userId),
   statements: ({ userId }) => ({
-    plans: tasksStatement(userId),
+    plans: tasksStatement(userId, liveTaskOf(userId)),
     agents: agentsStatement(userId),
     issues: issuesStatement(),
   }),
@@ -498,11 +556,15 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
     anyTopic: [messagesSync, conversationsSync],
     own: { plans: taskSync, agents: agentSync },
     statements: ({ userId }, moved) => ({
-      plans: tasksStatement(userId, movedPlans(moved)),
+      plans: tasksStatement(userId, and(liveTaskOf(userId), movedPlans(moved)) ?? sql`false`),
       agents: agentsStatement(userId, movedAgents(moved)),
       issues: issuesStatement(),
     }),
   },
+  beside: ({ params }) =>
+    Effect.map(hostedStoreOrUnavailable(workspacesWithTasks(params.userId)), (taskWorkspaces) => ({
+      taskWorkspaces,
+    })),
 });
 
 /**
@@ -724,6 +786,82 @@ export const taskPageRead = bindLiveRead(TASK_PAGE_READ, {
     const page = settledPage(userId, workspaceId, beforeAt, beforeId);
 
     return {
+      plans: tasksStatement(userId, sql`${task.id} in (${page})`),
+      agents: agentsStatement(userId, sql`${agentTable.taskId} in (${page})`),
+    };
+  },
+});
+
+/** Whether a task is assigned to the person. */
+function assignedTo(personId: string): SQL {
+  return sql`${task.assigneeId} = ${personId}`;
+}
+
+/** Whether the person created a task that is not assigned to them, as their page's Created lists it. */
+function createdOnlyBy(personId: string): SQL {
+  return sql`(${task.userId} = ${personId} and ${task.assigneeId} is distinct from ${personId})`;
+}
+
+/** Whether an agent is one the person started, not archived, on a task of the workspace the account reaches. */
+function agentOfPerson(userId: string, workspaceId: string, personId: string): SQL {
+  const reached = queryBuilder
+    .select({ id: task.id })
+    .from(task)
+    .where(and(taskReachableBy(userId), eq(task.organizationId, workspaceId)));
+
+  return sql`(${agentTable.userId} = ${personId} and ${agentTable.archivedAt} is null and ${agentTable.taskId} in (${reached}))`;
+}
+
+/** The newest `PERSON_PAGE_TASKS` of the workspace's tasks the account reaches that `which` holds, by their last save. */
+function personTasks(userId: string, workspaceId: string, which: SQL) {
+  return queryBuilder
+    .select({ id: task.id })
+    .from(task)
+    .where(and(taskReachableBy(userId), eq(task.organizationId, workspaceId), which))
+    .orderBy(desc(task.updatedAt), desc(task.id))
+    .limit(PERSON_PAGE_TASKS);
+}
+
+/** The tasks of the person's newest `PERSON_PAGE_AGENTS` agents (`agentOfPerson`). */
+function personAgentTasks(userId: string, workspaceId: string, personId: string) {
+  return queryBuilder
+    .select({ id: agentTable.taskId })
+    .from(agentTable)
+    .where(agentOfPerson(userId, workspaceId, personId))
+    .orderBy(desc(agentTable.createdAt), desc(agentTable.id))
+    .limit(PERSON_PAGE_AGENTS);
+}
+
+/**
+ * A person's tasks and agents in a workspace (`personPage`): how many the
+ * account reads of each of their page's sections, and the list's own
+ * statements narrowed to a page of their newest tasks and every agent of
+ * them, on the list's rule of who reads them, so a task the account does
+ * not reach is neither counted nor read. It is read once, as the page asks,
+ * and never followed.
+ */
+export const personPageRead = bindLiveRead(PERSON_PAGE_READ, {
+  reads: TASK_LIST_TABLES,
+  topics: ({ userId }) => readerAndWorkspaceTopics(userId),
+  statements: ({ userId, workspaceId, personId }) => {
+    const theirs = (which: SQL) =>
+      sql<number>`(select count(*)::int from ${task} where ${taskReachableBy(userId)} and ${task.organizationId} = ${workspaceId} and ${which})`;
+
+    const page = sql`(${personTasks(userId, workspaceId, assignedTo(personId))}) union (${personTasks(userId, workspaceId, createdOnlyBy(personId))}) union (${personAgentTasks(userId, workspaceId, personId)})`;
+
+    return {
+      counts: liveRowsStatement(
+        PERSON_PAGE_READ.parts.counts,
+        {
+          columns: {
+            personId: sql<string>`${personId}::text`,
+            assigned: theirs(assignedTo(personId)),
+            created: theirs(createdOnlyBy(personId)),
+            agents: sql<number>`(select count(*)::int from ${agentTable} where ${agentOfPerson(userId, workspaceId, personId)})`,
+          },
+        },
+        (selection) => queryBuilder.select(selection).from(sql`(select 1) as "one"`),
+      ),
       plans: tasksStatement(userId, sql`${task.id} in (${page})`),
       agents: agentsStatement(userId, sql`${agentTable.taskId} in (${page})`),
     };

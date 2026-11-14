@@ -53,14 +53,19 @@ import {
   SandboxUnavailable,
 } from "@repo/sandbox";
 import { Context, Duration, Effect, Layer, Option, Result, Schema } from "effect";
-import { agentSandboxOf, openAgentSandboxPromptly, reopenedOf } from "../agent-sandbox-open.js";
+import {
+  agentSandboxName,
+  agentSandboxOf,
+  openAgentSandboxPromptly,
+  reopenedOf,
+} from "../agent-sandbox-open.js";
 import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
 import {
   type FirewallSession,
   type RepositoryCredential,
   sandboxFirewall,
 } from "../sandbox-firewall.js";
-import { recordedTerminalOpened } from "../sandbox-use.js";
+import { recordedTerminalEnded, recordedTerminalOpened } from "../sandbox-use.js";
 import { listeningPortsOf, readSocketTables } from "./listening-ports.js";
 import {
   FORGET_RECORD,
@@ -204,11 +209,12 @@ export interface AgentSandboxService {
   /** The agent's sandbox opened again, as its next turn opens it, answering where it stands after; one never opened stays starting, as does one made again on an image still being prepared, opened after the answer. */
   readonly resume: (sessionId: string) => Effect.Effect<SandboxState, SandboxError>;
   /**
-   * A Terminal tab's connection to its shell: the sandbox resumed first where
-   * it stopped, as its Resume does, the tab's hold on it recorded, and the
-   * sandbox's PTY minted, whose attach makes the tab's tmux session afresh
-   * where it is not there, as after a stop (`attachTerminal`); where the
-   * sandbox stands instead, where it was never opened or is still starting.
+   * A Terminal tab's connection to its shell: the tab's hold on the sandbox
+   * recorded, the sandbox resumed where it stopped, as its Resume does, the
+   * tab's tmux session made afresh where it is not there, as after a stop,
+   * the hold written again once it stands, and the sandbox's PTY minted
+   * (`attachTerminal`); where the sandbox stands instead, where it was never
+   * opened or is still starting, the hold let go.
    */
   readonly attach: (
     sessionId: string,
@@ -502,6 +508,15 @@ function agentSandboxOver(
     kill: (sessionId, terminalId) => onShell(sessionId, killTerminal(terminalId)),
     attach: (sessionId, terminalId) =>
       Effect.gen(function* () {
+        const sandboxName = agentSandboxName(sessionId);
+
+        const held = Effect.provideContext(
+          recordedTerminalOpened(sandboxName, terminalId),
+          context,
+        );
+
+        // Note that the tab holds its sandbox before it wakes it, so a stop as a turn ends never takes the sandbox from under the attach.
+        yield* held;
         // Note that a tab connecting to a stopped sandbox wakes it, as its Resume does.
         const found = yield* standing(sessionId);
 
@@ -513,24 +528,32 @@ function agentSandboxOver(
         const { sandbox, state, sandboxSessionId, running } = woken;
 
         if (sandbox === undefined || running === undefined || sandboxSessionId === undefined) {
+          // A sandbox that does not run holds no shell, so the tab lets go.
+          yield* Effect.provideContext(recordedTerminalEnded(sandboxName, terminalId), context);
+
           return {
             state: state === SANDBOX_STATE.STOPPED ? SANDBOX_STATE.STOPPED : SANDBOX_STATE.STARTING,
           };
         }
 
-        const held = yield* api.run(running, holdsTerminal(terminalId));
+        const standingShell = yield* api.run(running, holdsTerminal(terminalId));
 
         // A tmux that could not be started or asked is an outage the tab may retry; a shell not there is made afresh below.
-        if (held.exitCode !== 0 && held.exitCode !== TMUX_EXIT.NO_SESSION) {
+        if (standingShell.exitCode !== 0 && standingShell.exitCode !== TMUX_EXIT.NO_SESSION) {
           return yield* Effect.fail(new SandboxUnavailable({}));
         }
 
-        // Note that the tab holds its sandbox while it stands, whether its shell was made here or before a stop forgot it.
-        yield* Effect.provideContext(recordedTerminalOpened(sandbox.name, terminalId), context);
+        // A shell a stop forgot is made here, before its PTY attaches, so the hold written again below follows a shell that stands. Note that a start refused because another attach made it first leaves that one.
+        if (standingShell.exitCode === TMUX_EXIT.NO_SESSION) {
+          yield* api.run(running, startTerminal(terminalId, undefined));
+        }
+
+        // Note that the hold is written again once the shell stands, so a list that read before it started, and pruned it, never leaves it unheld.
+        yield* held;
         // The run's own PTY, which never resumes the sandbox.
         const shell = yield* api.openInteractive(running);
         // A shell the check names a run action for is that action's, which nothing typed reaches.
-        const readOnly = held.exitCode === 0 && held.stdout.trim() !== "";
+        const readOnly = standingShell.exitCode === 0 && standingShell.stdout.trim() !== "";
 
         return {
           state: SANDBOX_STATE.RUNNING,

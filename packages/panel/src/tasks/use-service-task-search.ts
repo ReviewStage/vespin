@@ -10,24 +10,21 @@
  * the list's.
  */
 
-import { TASK_SEARCH_QUERY_MAX_CHARS } from "@repo/features/tasks-view";
+import { serviceTaskSearchQuery, TASK_SEARCH_PAUSE_MILLIS } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { useEffect } from "react";
 import { tellAct } from "../act.js";
 
-/** How long typing pauses before its words are asked of the host, so a word typed out reads once rather than once a letter. */
-const SEARCH_PAUSE_MILLIS = 250;
-
 /** Asks the host for the tasks `query` finds past its list once typing pauses, while `asked`; see the module's head. */
 export function useServiceTaskSearch(query: string, asked: boolean): void {
-  const words = query.trim().slice(0, TASK_SEARCH_QUERY_MAX_CHARS);
+  const words = serviceTaskSearchQuery(query);
 
   useEffect(() => {
-    if (!asked || words.length === 0) return;
+    if (!asked || words === undefined) return;
 
     const pause = setTimeout(
       () => tellAct(ACT_KIND.TASKS_SEARCH, { query: words }),
-      SEARCH_PAUSE_MILLIS,
+      TASK_SEARCH_PAUSE_MILLIS,
     );
 
     return () => clearTimeout(pause);
