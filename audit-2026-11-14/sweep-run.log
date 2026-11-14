@@ -10,3 +10,15 @@ iphone-iphone-light wrap-agent.yaml: fails 0 shots 24
 iphone-iphone-dark wrap-agent.yaml: fails 0 shots 24 
   ax none on iphone: contrast disabled transparency-key 
 iphone-iphone-light wrap-tasks.yaml: fails 0 shots 30 
+iphone-iphone-dark wrap-tasks.yaml: fails 0 shots 30 
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-accessibility.yaml: fails 2 shots 3   Assert that ".*walked the invite flow.*" is visible... FAILED
+iphone-iphone-dark wrap-accessibility.yaml: fails 2 shots 3   Assert that ".*walked the invite flow.*" is visible... FAILED
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-workspace.yaml: fails 0 shots 4 
+iphone-iphone-dark wrap-workspace.yaml: fails 0 shots 4 
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-search.yaml: fails 0 shots 4 
+iphone-iphone-dark wrap-search.yaml: fails 0 shots 4 
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-pull-request.yaml: fails 2 shots 13   Assert that "Send the invite email from the workspace.*" is not visible... FAILED
