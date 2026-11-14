@@ -253,7 +253,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   provider's own mark, the desktop's vector (`INTEGRATION_MARK_ASSET`), and
   its one act is a small bordered capsule at its end; what went wrong is a
   `ProblemLine`, muted words led by the alert glyph in the attention ink,
-  never red words, wherever a refusal stands under a row or a field; what a section means is said in its
+  never red words, wherever a refusal stands under a row or a field, an
+  ask's `AskNote` for a send that did not go among them; what a section means is said in its
   footer, never in a line under a switch; a row that leaves the app ends in
   the arrow out; and the Account page heads with the
   account's photo, name and address centered on the ground, closing with
