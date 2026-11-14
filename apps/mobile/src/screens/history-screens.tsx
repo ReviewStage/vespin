@@ -22,6 +22,7 @@ import {
   Screen,
   useColors,
   useFailureNotices,
+  useMinute,
   VERSION_WRITER,
   VersionRow,
   type VersionWriter,
@@ -97,7 +98,7 @@ export function HistoryScreen() {
   const onOwnTab = useOnOwnTab();
   const history = useTaskHistory(id);
   const pictureOf = useMemberPictures();
-  const now = Date.now();
+  const now = useMinute();
   const revisions = history.page?.revisions ?? [];
   const earlier = history.page?.earlier;
   const newest = revisions[0]?.seq;
