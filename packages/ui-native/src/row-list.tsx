@@ -31,6 +31,7 @@ import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
+import { ProblemLine } from "./problem-line.js";
 import { RowOpenContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
@@ -191,7 +192,7 @@ type ListSectionProps = {
   readonly foldable?: boolean | undefined;
   /** A line under the section, in the system's footnote. */
   readonly footer?: string | undefined;
-  /** What the footer says: a note on the section, in the footnote's own ink, or why a send did not go, in the danger's ink and told to VoiceOver at once. */
+  /** What the footer says: a note on the section, in the footnote's own ink, or why a send did not go, as every refusal reads (`ProblemLine`) and told to VoiceOver at once. */
   readonly footerTone?: FooterTone | undefined;
   /** Called with the link a row dragged onto the header carries (`RowFrame`'s `link`), such as a task's to move it into the section; the header takes no drop where none is given. */
   readonly onDropLink?: ((url: string) => void) | undefined;
@@ -350,13 +351,12 @@ export const FOOTER_TONE = {
 
 export type FooterTone = (typeof FOOTER_TONE)[keyof typeof FOOTER_TONE];
 
-/** A section's footer: a note in the system's footnote ink, or a failure in the danger's ink, told to VoiceOver as it stands since it stands because something did not go. */
+/** A section's footer: a note in the system's footnote ink, or a failure as every refusal reads, muted words led by the alert glyph in the attention ink rather than red words (`ProblemLine`), told to VoiceOver as it stands since it stands because something did not go. */
 function SectionFooter({ words, tone }: { readonly words: string; readonly tone: FooterTone }) {
-  const colors = useColors();
   const failure = tone === FOOTER_TONE.FAILURE;
   useAnnounced(failure ? words : undefined, true);
 
-  return <Text modifiers={failure ? [foregroundStyle(colors.DANGER_TEXT)] : []}>{words}</Text>;
+  return failure ? <ProblemLine text={words} /> : <Text>{words}</Text>;
 }
 
 /**
