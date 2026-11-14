@@ -75,6 +75,7 @@ export const WRITE_SUBJECT = {
   THREAD_READ: "thread-read",
   THREAD_REMINDER: "thread-reminder",
   TASK_STATUS: "task-status",
+  TASK_DESCRIPTION: "task-description",
   TASK_PRIORITY: "task-priority",
   TASK_ASSIGNEE: "task-assignee",
   TASK_PIN: "task-pin",

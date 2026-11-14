@@ -25,7 +25,7 @@ import {
   WordsRow,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
@@ -36,7 +36,7 @@ import {
   useTaskHistory,
   useTaskVersion,
 } from "../tasks/use-history.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** The route a version is opened on: the task by its id, and the version by its number in the query. */
 export const VERSION_ROUTE = "/tasks/version/[id]";
@@ -205,15 +205,6 @@ function Version({
   // The version that stands now, as the history beneath this screen follows it, else as the list stood when it was left.
   const standingNow = useNewestVersion(taskId) ?? newest;
   const current = standingNow === seq;
-  // Whether the screen still stands, since a restore that lands after it was left must not go back from the screen in front.
-  const standing = useRef(true);
-  useEffect(() => {
-    standing.current = true;
-
-    return () => {
-      standing.current = false;
-    };
-  }, []);
   const answer = version.data;
   const read = answer === undefined || "failure" in answer ? undefined : answer.revision;
   const { pictureSource, videoAt } = useDescriptionPictures(read?.description.body);
@@ -223,6 +214,8 @@ function Version({
     // Note that the Undo puts back the version that stood when the restore was pressed, as the panel's does.
     const undoTo = standingNow;
     setRestoring(true);
+    // Note that every restore of this task's description, an Undo among them, is newer than a refused one, whose Try again then sends nothing.
+    const subject = { kind: WRITE_SUBJECT.TASK_DESCRIPTION, id: taskId };
 
     const undo =
       undoTo === undefined || undoTo === seq
@@ -231,22 +224,24 @@ function Version({
             void write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq: undoTo }), {
               refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.UNDO_REFUSED),
               unanswered: VERSION_HISTORY_WORDS.UNDO_REFUSED,
+              subject,
               went: BUZZ.SUCCESS,
             });
 
     void write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq }), {
       refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.RESTORE_REFUSED),
       unanswered: VERSION_HISTORY_WORDS.RESTORE_REFUSED,
+      // Note that a refused restore offers Try again, as its words say, since the screen has gone back and nothing else sends it again.
+      retry: true,
+      subject,
       went: BUZZ.SUCCESS,
-    }).then((went) => {
-      setRestoring(false);
+      // Note that Restored and its Undo are said on the restore that landed, a Try again's included.
+      done: () =>
+        notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo }),
+    }).then(() => setRestoring(false));
 
-      if (!went) return;
-      notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo });
-
-      // Note that a link pressed in the version while its restore was out stands in front of it, and is left where it is.
-      if (standing.current && navigation.isFocused()) router.back();
-    });
+    // Note that the screen goes back as the restore is sent rather than once it lands, which waits on the service and then on the change reaching the app: the description takes the version as it arrives, Restored stands with its Undo then, and a refusal says why in the failure notice.
+    if (navigation.isFocused()) router.back();
   };
 
   const body = version.isPending ? (

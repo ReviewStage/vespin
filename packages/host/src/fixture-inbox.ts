@@ -34,6 +34,7 @@ import {
   type AgentTranscriptOlderAnswer,
   type AgentTranscriptOlderParams,
   INBOX_SCOPE_KIND,
+  MEMORY_SAVE_FAILURE,
 } from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
@@ -1079,6 +1080,9 @@ const MEMBERS: WorkspaceMembersAnswer = {
     },
   ],
 };
+
+/** What a memory's save answers in a run that refuses writes, as the service answers one it refused: the workspace holds all it may. */
+export const MEMORY_SAVE_REFUSED = { failure: MEMORY_SAVE_FAILURE.MEMORY_FULL } as const;
 
 /** The id a memory the fixture is asked to keep anew is kept under. */
 export const NEW_MEMORY_ID = "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a64";
