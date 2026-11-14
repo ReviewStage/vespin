@@ -334,8 +334,6 @@ export function rowPlacement(
     ...(selected ? [background(colors.SELECTED)] : []),
     listRowSeparator("hidden", "top"),
     listRowSeparatorTint(colors.CHIP_EDGE),
-    // Note that a row hides the hairline over it, which SwiftUI draws only over a section's first row where no header stands, since iOS's own plain lists, such as Mail's search results, start with their first row.
-    listRowSeparator("hidden", "top"),
     alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT),
   ];
 }
