@@ -1,17 +1,9 @@
-// choice-list.tsx -- a decide ask's options as a compact bordered card: one radio row each, the recommended one tagged, a detail line under its label, and the media it carries under it.
+// choice-list.tsx -- a decide ask's options as a compact bordered card: one row each, checked at its end in copper once picked, as iOS's Settings checks a choice, the recommended one tagged, a detail line under its label, and the media it carries under it.
 
-import {
-  Button,
-  Divider,
-  HStack,
-  Image,
-  RNHostView,
-  Spacer,
-  Text,
-  VStack,
-} from "@expo/ui/swift-ui";
+import { Button, HStack, RNHostView, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityAddTraits,
   accessibilityLabel,
   background,
   buttonStyle,
@@ -23,10 +15,12 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
 import { Fragment } from "react";
+import { useAccessibilitySize } from "./accessibility.js";
+import { CARD_WORDS_INSET, CardDivider } from "./ask-card.js";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
-import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { PickedCheck } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
+import { RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 export type Choice = {
@@ -51,7 +45,7 @@ type ChoiceListProps = {
   readonly recommended?: readonly string[] | undefined;
   /** The labels picked so far. */
   readonly picked: readonly string[];
-  /** Whether a person may pick several, which draws Reminders' round checks once picked; the caller says so in `title`, since an unpicked row reads as a circle either way. */
+  /** Whether a person may pick several, each pick checked at its row's end; the caller says so in `title`, since the rows read the same either way. */
   readonly multiple?: boolean | undefined;
   /** Called with the labels picked once a row is pressed. */
   readonly onChange: (picked: readonly string[]) => void;
@@ -63,13 +57,6 @@ type ChoiceListProps = {
 
 /** How thick the card's and the tag's edges are drawn. */
 const HAIRLINE = 0.5;
-
-/** The mark leading an option, 18 pt: a ring filled with the accent at its heart once picked, or, where several may be picked, Reminders' round check, since iOS has no square checkbox. */
-function pickMark(picked: boolean, multiple: boolean): Glyph {
-  if (multiple) return picked ? GLYPH.ROUND_BOX_TICKED : GLYPH.ROUND_BOX;
-
-  return picked ? GLYPH.RADIO_PICKED : GLYPH.ROUND_BOX;
-}
 
 /** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked. */
 function RecommendedTag() {
@@ -106,21 +93,27 @@ function nextPicked(
   return picked.includes(label) ? picked.filter((each) => each !== label) : [...picked, label];
 }
 
-/** One option's row: its mark, its label in 15 pt with the tag, and its detail in 13 pt muted. */
+/** One option's row: its label in 15 pt with the tag beside it, or under it at an accessibility size, its detail in 13 pt muted, and the copper check at its end once picked. */
 function ChoiceRow({
   choice,
   picked,
   recommended,
-  multiple,
   onPress,
 }: {
   readonly choice: Choice;
   readonly picked: boolean;
   readonly recommended: boolean;
-  readonly multiple: boolean;
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+  // Note that at an accessibility size the tag stands under the label rather than beside it, so the label keeps its lines instead of wrapping around a tag.
+  const stacked = useAccessibilitySize();
+
+  const label = (
+    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT)]}>
+      {choice.label}
+    </Text>
+  );
 
   return (
     <Button
@@ -128,39 +121,32 @@ function ChoiceRow({
       modifiers={[
         buttonStyle("plain"),
         accessibilityLabel(
-          [
-            choice.label,
-            recommended ? RECOMMENDED : undefined,
-            picked ? "picked" : undefined,
-            choice.detail,
-          ]
+          [choice.label, recommended ? RECOMMENDED : undefined, choice.detail]
             .filter((part) => part !== undefined)
             .join(", "),
         ),
+        ...(picked ? [accessibilityAddTraits(["isSelected"])] : []),
       ]}
     >
       <HStack
         spacing={SPACE.ROW}
-        alignment="top"
         modifiers={[
           padding({ horizontal: SPACE.EDGE - 2, vertical: SPACE.ROW + 1 }),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         ]}
       >
-        <Image
-          {...glyphImage(pickMark(picked, multiple))}
-          size={MARK_SIZE.LEAD}
-          color={picked ? colors.ACCENT : colors.TEXT_MUTED}
-        />
         <VStack alignment="leading" spacing={2}>
-          <HStack spacing={SPACE.TIGHT + 2}>
-            <Text
-              modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT)]}
-            >
-              {choice.label}
-            </Text>
-            {recommended ? <RecommendedTag /> : null}
-          </HStack>
+          {stacked ? (
+            <VStack alignment="leading" spacing={SPACE.TIGHT}>
+              {label}
+              {recommended ? <RecommendedTag /> : null}
+            </VStack>
+          ) : (
+            <HStack spacing={SPACE.TIGHT + 2}>
+              {label}
+              {recommended ? <RecommendedTag /> : null}
+            </HStack>
+          )}
           {choice.detail === undefined ? null : (
             <Text
               modifiers={[
@@ -173,6 +159,7 @@ function ChoiceRow({
           )}
         </VStack>
         <Spacer />
+        {picked ? <PickedCheck /> : null}
       </HStack>
     </Button>
   );
@@ -189,9 +176,10 @@ function ChoiceMediaBlock({ media }: { readonly media: readonly ChoiceMedia[] })
 
 /**
  * A decide ask's options as a compact card on the surface inside a hairline:
- * a radio row each, pressed to pick it, the recommended one tagged, with a
- * hairline between the rows. The picked mark is drawn in the accent, since
- * an ask is for you.
+ * a row each, pressed to pick it, the recommended one tagged, with a hairline
+ * between the rows. Each pick is checked at its row's end in copper, as
+ * `PickRows` and iOS's own Settings check a choice, with no mark leading an
+ * unpicked row, whether one or several may be picked.
  */
 export function ChoiceList(props: ChoiceListProps) {
   const { choices, recommended = [], picked, multiple = false, onChange, title, none } = props;
@@ -229,12 +217,11 @@ export function ChoiceList(props: ChoiceListProps) {
       >
         {choices.map((choice, index) => (
           <Fragment key={choice.label}>
-            {index === 0 ? null : <Divider />}
+            {index === 0 ? null : <CardDivider inset={CARD_WORDS_INSET.BARE} />}
             <ChoiceRow
               choice={choice}
               picked={picked.includes(choice.label)}
               recommended={recommended.includes(choice.label)}
-              multiple={multiple}
               onPress={() => onChange(nextPicked(picked, choice.label, multiple))}
             />
             {choice.media === undefined || choice.media.length === 0 ? null : (
@@ -244,12 +231,11 @@ export function ChoiceList(props: ChoiceListProps) {
         ))}
         {none === undefined ? null : (
           <>
-            <Divider />
+            <CardDivider inset={CARD_WORDS_INSET.BARE} />
             <ChoiceRow
               choice={{ label: none.label }}
               picked={none.picked}
               recommended={false}
-              multiple={multiple}
               onPress={none.onPress}
             />
           </>

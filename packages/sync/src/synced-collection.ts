@@ -62,7 +62,7 @@ const readRows = new WeakMap<object, object>();
 
 /**
  * A row as the collection holds it, without the virtual fields TanStack
- * reads it out with (`$synced`, `$origin`, and the rest) and without a key a
+ * reads it out with (`$hasPendingWrites`, `$origin`, `$key`, and `$collectionId`) and without a key a
  * whole-row change left undefined, so it is the row as the read answered it.
  * Note that a row read again while it stands is the very object read
  * before, so a reader of a row that did not move holds the same object.
@@ -101,6 +101,12 @@ export interface SyncedCollection<Row extends object, Key extends string> {
    * the keys it wrote.
    */
   readonly take: (next: ReadonlyMap<Key, Row>) => readonly Key[];
+  /**
+   * Takes `upserted` and lets `deleted`, none of them, go, leaving every other row as it
+   * is: one sync transaction writing each that moved, as `take` does, in
+   * work as large as the change rather than the collection.
+   */
+  readonly patch: (upserted: ReadonlyMap<Key, Row>, deleted: readonly Key[]) => readonly Key[];
 }
 
 /** A collection of rows keyed by `getKey`, ready and empty until rows are first taken, for as long as the scope stands. */
@@ -109,7 +115,8 @@ export function syncedCollection<Row extends object, Key extends string>(
 ): Effect.Effect<SyncedCollection<Row, Key>, never, Scope.Scope> {
   return Effect.gen(function* () {
     let writer: SyncWriter<Row, Key> | undefined;
-    let held: ReadonlyMap<Key, Row> = new Map();
+    // Note that `held` is the collection's own, written in place by `patch`, so `take` holds a copy of the map it is handed.
+    let held = new Map<Key, Row>();
 
     const collection = yield* scopedCollection(() =>
       createCollection<Row, Key>({
@@ -132,22 +139,53 @@ export function syncedCollection<Row extends object, Key extends string>(
       }),
     );
 
-    const take = (next: ReadonlyMap<Key, Row>): readonly Key[] => {
-      const changes = rowChanges(held, next);
-
-      if (writer === undefined || changes.length === 0) return [];
+    /** Writes `changes` in one sync transaction, answering their keys; none where the collection is not synced yet or nothing moved. */
+    const written = (changes: readonly RowChange<Row, Key>[]): readonly Key[] | undefined => {
+      if (writer === undefined || changes.length === 0) return undefined;
       writer.begin();
 
       for (const change of changes) writer.write(change);
       // Note that the receipt is never awaited, since a commit held behind a standing transaction lands only once that transaction settles.
       writer.commit();
-      held = next;
 
       return changes.map((change) =>
         change.type === "delete" ? change.key : getKey(change.value),
       );
     };
 
-    return { collection, held: () => held, take };
+    const take = (next: ReadonlyMap<Key, Row>): readonly Key[] => {
+      const keys = written(rowChanges(held, next));
+
+      if (keys === undefined) return [];
+      held = new Map(next);
+
+      return keys;
+    };
+
+    const patch = (upserted: ReadonlyMap<Key, Row>, deleted: readonly Key[]): readonly Key[] => {
+      const changes: RowChange<Row, Key>[] = deleted.flatMap((key) =>
+        held.has(key) ? [{ type: "delete" as const, key }] : [],
+      );
+
+      for (const [key, row] of upserted) {
+        const was = held.get(key);
+
+        if (was === undefined) changes.push({ type: "insert", value: row });
+        else if (!Equal.equals(was, row)) changes.push({ type: "update", value: row });
+      }
+
+      const keys = written(changes);
+
+      if (keys === undefined) return [];
+
+      for (const change of changes) {
+        if (change.type === "delete") held.delete(change.key);
+        else held.set(getKey(change.value), change.value);
+      }
+
+      return keys;
+    };
+
+    return { collection, held: () => held, take, patch };
   });
 }

@@ -33,7 +33,7 @@ import { dropLink } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
 import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** Whether a foldable section stands open, in VoiceOver's own words for a disclosure. */
@@ -45,8 +45,8 @@ const FOLD_HINT = "Shows or hides the rows it holds";
 /** The fold chevron's size, a little under the header's words. */
 const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
 
-/** The least a section's + answers a press across, in points, wider than it draws so a finger finds it beside the header's small words. */
-const ADD_TARGET = { WIDTH: 36, HEIGHT: 28 } as const;
+/** The least a section's + answers a press across, in points: Apple's least target, wider than it draws so a finger finds it beside the header's small words. */
+const ADD_TARGET = { WIDTH: PRESS_SIZE, HEIGHT: PRESS_SIZE } as const;
 
 /**
  * How a list stands: plain rows on a screen of its own, as the panel's lists
@@ -319,15 +319,20 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
 
   if (only === undefined) return null;
 
+  // Note that the target's frame and shape stand on the glyph, the button's label, since a borderless button or a menu answers only where its label is hit.
   const glyph = (
-    <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
+    <Image
+      {...glyphImage(GLYPH.ADD)}
+      size={MARK_SIZE.GLYPH}
+      color={colors.TEXT_MUTED}
+      modifiers={[
+        frame({ minWidth: ADD_TARGET.WIDTH, minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+      ]}
+    />
   );
 
-  const target = [
-    buttonStyle("borderless"),
-    frame({ minWidth: ADD_TARGET.WIDTH, minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),
-    SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-  ];
+  const target = [buttonStyle("borderless")];
 
   if (rest.length === 0) {
     return (
@@ -367,12 +372,14 @@ export function ListSection({
   children,
 }: ListSectionProps) {
   const [folded, setFolded] = useState(false);
+  // Note that a header holding none shows no count, as Mail's groups stand, rather than a 0 beside its title.
+  const shown = count === 0 ? undefined : count;
 
   const label =
     title === undefined ? undefined : (
       <GroupHeader
         title={title}
-        count={count}
+        count={shown}
         progress={progress}
         mark={mark}
         folded={foldable ? folded : undefined}
@@ -388,7 +395,7 @@ export function ListSection({
         modifiers={[
           buttonStyle("plain"),
           accessibilityAddTraits(["isHeader"]),
-          accessibilityLabel(`${title}${count === undefined ? "" : `, ${count}`}`),
+          accessibilityLabel(`${title}${shown === undefined ? "" : `, ${shown}`}`),
           accessibilityValue(folded ? FOLD_HEARD.SHUT : FOLD_HEARD.OPEN),
           accessibilityHint(FOLD_HINT),
         ]}

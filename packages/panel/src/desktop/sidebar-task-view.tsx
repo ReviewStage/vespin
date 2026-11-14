@@ -37,8 +37,7 @@ import { FILTERED } from "./tasks-page-options.js";
  * window's menu: Group by, a choice of Repository or None; Show completed
  * sub-tasks, a switch that stands each parent's completed sub-tasks back
  * under it, muted, as Linear's Always hide completed sub-issues turned off
- * does; and, in a shared workspace, Assigned to: Me, Following where the
- * workspace has Following on, Anyone, or each member by face. The head
+ * does; and, in a shared workspace, Assigned to: Me, Following, Anyone, or each member by face. The head
  * itself says whose tasks the list holds, "My tasks", "Tasks I follow",
  * "Everyone's tasks", or one member's, and while it holds anything but the
  * reader's own the button wears a dot, so a list of someone else's never
@@ -82,12 +81,11 @@ function filteredActor(
   return creatorActor(named ?? { ownerId: userId }, reader, undefined);
 }
 
-/** Assigned to's choices: Me, Following where the workspace has it on, Anyone, then each other member, the one chosen checked. */
+/** Assigned to's choices: Me, Following, Anyone, then each other member, the one chosen checked. */
 function assignedToChoices(
   chosen: AssignedTo,
   onChoose: (assignedTo: AssignedTo) => void,
   reader: ReturnType<typeof useMemberDirectory>,
-  following: boolean,
 ): MenuAction[] {
   const people = peopleFilterActions({
     members: reader.members,
@@ -113,8 +111,7 @@ function assignedToChoices(
   });
 
   // Note that a member is keyed by their id and Me and Anyone are not, so only a member's name is masked.
-  // A Following kept while the workspace has it off reads as Me, which stays checked, as the list draws the reader's own.
-  const followingChosen = following && chosen.kind === ASSIGNED_TO.FOLLOWING;
+  const followingChosen = chosen.kind === ASSIGNED_TO.FOLLOWING;
 
   const choices = people.map((item) => {
     const offered = followingChosen ? { ...item, checked: false } : item;
@@ -123,8 +120,6 @@ function assignedToChoices(
       ? offered
       : { ...offered, replayMasked: true, icon: <ReplayMask>{item.icon}</ReplayMask> };
   });
-
-  if (!following) return choices;
 
   const followed: MenuAction = {
     label: FOLLOWING_CHOICE,
@@ -142,7 +137,6 @@ function viewEntries(
   control: TaskListViewControl,
   shared: boolean,
   reader: ReturnType<typeof useMemberDirectory>,
-  following: boolean,
 ): MenuEntry[][] {
   const { view } = control;
 
@@ -173,7 +167,7 @@ function viewEntries(
           label: commandHead(PANEL_COMMAND.ASSIGNED_TO).label,
           placeholder: ASSIGNED_TO_PLACEHOLDER,
           noMatch: noMatchWords(TERM.MEMBER),
-          actions: assignedToChoices(view.assignedTo, control.onAssignedTo, reader, following),
+          actions: assignedToChoices(view.assignedTo, control.onAssignedTo, reader),
           note: memberReadNote(reader),
           replayUnmasked: true,
         }),
@@ -191,7 +185,6 @@ export function TaskViewOptions({
   shown,
   control,
   shared,
-  following,
   filtered,
 }: {
   /** Whether the sidebar is on screen, for the menu not to outlive it. */
@@ -199,8 +192,6 @@ export function TaskViewOptions({
   control: TaskListViewControl;
   /** Whether the workspace is shared, which alone filters by person. */
   shared: boolean;
-  /** Whether the workspace has Following on, which offers the tasks the reader follows among Assigned to's choices. */
-  following: boolean;
   /** Whether the list holds anything but the reader's own, which keeps the button standing and dotted. */
   filtered: boolean;
 }): React.JSX.Element {
@@ -223,7 +214,7 @@ export function TaskViewOptions({
           label={VIEW_OPTIONS}
           menu={menu.drawn}
           replayUnmasked
-          groups={viewEntries(control, shared, reader, following)}
+          groups={viewEntries(control, shared, reader)}
           onClose={menu.close}
         />
       )}

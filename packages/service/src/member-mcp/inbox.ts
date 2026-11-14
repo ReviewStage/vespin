@@ -60,7 +60,7 @@ import {
 import { INBOX_ASK_ANSWER, markInboxRead, workspaceInboxItems } from "../inbox/inbox-store.js";
 
 /** The inbox tools by name, each the name a model calls it by. */
-export const MEMBER_INBOX_TOOL = {
+const MEMBER_INBOX_TOOL = {
   READ: MEMBER_MCP_TOOL.READ_INBOX,
   ANSWER: MEMBER_MCP_TOOL.ANSWER_ASK,
   ACKNOWLEDGE: MEMBER_MCP_TOOL.ACKNOWLEDGE_THREAD,

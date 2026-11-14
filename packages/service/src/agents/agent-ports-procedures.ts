@@ -7,6 +7,7 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import { AGENT_PORTS_FORWARDING } from "@repo/features/contract";
 import type { Sandbox } from "@repo/sandbox";
 import { Effect, type Layer } from "effect";
 import type { HttpClient } from "effect/http";
@@ -18,7 +19,9 @@ import {
   sharedAgentPort,
   unshareAgentPort,
 } from "./agent-ports.js";
+import { sandboxLetGo } from "./coder-host/runner-sessions.js";
 import type { AgentSandbox } from "./terminal/agent-sandbox.js";
+import { reachedAgentSession } from "./terminal/sandbox-reach.js";
 
 export interface AgentPortsProcedureSeams {
   resolveUserId: UserIdResolver;
@@ -35,9 +38,27 @@ export function agentPortsProcedures(seams: AgentPortsProcedureSeams) {
   const signedIn = hosted.agentPorts.use(accountMiddleware(seams.resolveUserId));
 
   return {
-    /** The ports listened on in the agent's sandbox, and whether it is running. */
+    /** The ports listened on in the agent's sandbox, and whether it is running; a read from a Mac forwarding them holds the sandbox up, and one from a Mac that stopped lets go, which stops the sandbox where nothing else holds it. */
     list: signedIn.list.effect(function* ({ input, context }) {
-      return yield* Effect.provide(listAgentPorts(context.userId, input.id), seams.sandbox);
+      const answer = yield* Effect.provide(
+        listAgentPorts(
+          context.userId,
+          input.id,
+          input.forwarding === undefined || input.forwarder === undefined
+            ? undefined
+            : { forwarding: input.forwarding, forwarder: input.forwarder },
+        ),
+        seams.sandbox,
+      );
+
+      // Note that forwarding may have been the running sandbox's last hold, with no turn running.
+      if (input.forwarding === AGENT_PORTS_FORWARDING.OFF && answer.running) {
+        const { sessionId } = yield* reachedAgentSession(context.userId, input.id);
+
+        if (sessionId !== undefined) yield* sandboxLetGo(sessionId);
+      }
+
+      return answer;
     }),
     /** The port shared by a public link; a sandbox not running is refused as stopped. */
     share: signedIn.share.effect(function* ({ input, context }) {

@@ -418,7 +418,7 @@ const issueOfPlace = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   if (Option.isNone(reached)) return null;
 
-  const found = yield* issueByNumber(reached.value.token, place.repository, number).pipe(
+  const found = yield* issueByNumber(reached.value.bearer, place.repository, number).pipe(
     markRefusedToken(reached.value.access),
   );
 

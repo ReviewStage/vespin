@@ -34,8 +34,8 @@ import {
 /**
  * One attached shell as the relay pipes it, over sockets and a sandbox that
  * answer from a script, on the test clock: an agent the account does not
- * reach is gone, one with no sandbox yet is starting, a stopped sandbox is
- * never woken, and a running one is attached through tmux, typing and
+ * reach is gone, one with no sandbox yet is starting, a sandbox the attach
+ * leaves stopped closes as that, and a running one is attached through tmux, typing and
  * resizes reaching the PTY and its output reaching the desktop; the shell's
  * exit ends the connection as exited; an open connection touches its
  * sandbox, typed in or not; and the GitHub token at the firewall is
@@ -89,7 +89,6 @@ function world(options: {
   readonly sandbox?: SandboxState;
   readonly pty: Scripted;
   /** Whether tmux holds no such shell. */
-  readonly shellGone?: boolean;
   /** Whether the shell is a run action's, which takes nothing typed. */
   readonly readOnly?: boolean;
   /** How many of the first mints GitHub refuses. */
@@ -139,10 +138,6 @@ function world(options: {
       Effect.sync(() => {
         asked.attached += 1;
         const state = options.sandbox ?? SANDBOX_STATE.RUNNING;
-
-        if (state === SANDBOX_STATE.RUNNING && options.shellGone === true) {
-          return { state, gone: true } as const;
-        }
 
         return state === SANDBOX_STATE.RUNNING
           ? {
@@ -278,20 +273,7 @@ it.effect(
     }),
 );
 
-it.effect("a shell tmux does not hold closes as gone, and is never started by an attach", () =>
-  Effect.gen(function* () {
-    const pty = yield* scriptedSocket;
-    const device = yield* scriptedSocket;
-    const missing = world({ pty, shellGone: true });
-
-    yield* Effect.scoped(relayTerminal(device.socket, ASK, missing.deps));
-
-    assert.deepEqual(device.closed, [TERMINAL_RELAY_CLOSE.GONE]);
-    assert.deepEqual(pty.sent, [], "no start frame reaches a PTY");
-  }),
-);
-
-it.effect("a stopped sandbox closes as stopped, is never woken, and is not touched", () =>
+it.effect("a sandbox the attach leaves stopped closes as stopped, and is not touched", () =>
   Effect.gen(function* () {
     const pty = yield* scriptedSocket;
     const device = yield* scriptedSocket;

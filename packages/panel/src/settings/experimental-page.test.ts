@@ -138,18 +138,18 @@ test("the workspace's experiments and the account's own stand in two groups, eac
   assert.deepEqual(
     [...page.querySelectorAll('[role="switch"]')].map((each) => each.getAttribute("aria-label")),
     [
-      "Following",
       "Memory",
-      "Run actions",
       "Suggestions",
       "Task descriptions",
       "Computer use",
       "Done and follow-ups",
       "Goals",
       "Merge queue",
+      "Move agents",
       "Rewind restores files",
       "Skills",
       "Turn changes",
+      "Voice",
     ],
   );
 });
@@ -224,18 +224,18 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
     for (const button of feedback) button.click();
   });
   assert.deepEqual(feedbackAbout, [
-    EXPERIMENT.FOLLOWING,
     EXPERIMENT.MEMORY,
-    EXPERIMENT.RUN_ACTIONS,
     EXPERIMENT.REPLY_BUTTONS,
     EXPERIMENT.DESCRIPTIONS,
     EXPERIMENT.COMPUTER_USE,
     EXPERIMENT.TURN_END,
     EXPERIMENT.GOALS,
     EXPERIMENT.MERGE_QUEUE,
+    EXPERIMENT.MOVE_AGENTS,
     EXPERIMENT.REWIND_FILES,
     EXPERIMENT.SKILLS,
     EXPERIMENT.TURN_CHANGES,
+    EXPERIMENT.VOICE,
   ]);
 });
 

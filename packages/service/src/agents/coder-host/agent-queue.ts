@@ -26,7 +26,6 @@
  * as a queue's next receive takes back a message whose visibility ran out.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
 import {
   agentBootHandedOff,
   agentBootOf,
@@ -53,24 +52,13 @@ import { AGENT_MACHINE, AGENT_STATUS } from "@repo/features/agent-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { MESSAGE_CHANNEL, TURN_STATUS } from "@repo/wire";
 import { Clock, DateTime, Effect, Option } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
 import { recordServerEvent, SERVER_EVENT } from "../../events/server-events.js";
 import { type HostedRefusal, hostedStoreOrUnavailable } from "../../http/http-effect.js";
-import type { AgentSessions, TypedTurn } from "../sessions/agent-sessions.js";
 import { CARRY_ON_OUTCOME, carriedOn, decidedCarryOn } from "./carry-on.js";
-import { routedSessions } from "./runtime-sessions.js";
+import { type QueueSessions, routedSessions } from "./runtime-sessions.js";
 import { agentStatusOf, startedBlank } from "./status.js";
 import { STEER_DELIVERY, steerAgentWritten } from "./steer.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
-
-/** The agents' sessions as the service reaches them acting for one member, whose queued message goes as theirs, or the refusal where it cannot. */
-export type QueueSessions = (
-  account: string,
-) => Effect.Effect<
-  AgentSessions<TypedTurn>,
-  HostedRefusal,
-  HttpClient.HttpClient | DatabaseServices
->;
 
 /** The name a line diverted while the agent booted goes under where no member typed it, as its row keeps it (`senderNameOf`), or the product's for its own; none for a member's own. */
 function from(line: QueuedLine | undefined): { readonly name: string } | undefined {

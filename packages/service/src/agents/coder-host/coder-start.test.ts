@@ -190,7 +190,7 @@ const startedOnDrive = (holdsRepository: boolean) =>
         ),
       ),
       Effect.provideService(WorkspaceDriveBuilds, {
-        publish: (workspace) => Effect.sync(() => void published.push(workspace)),
+        publish: (message) => Effect.sync(() => void published.push(message.workspaceId)),
       }),
     );
 

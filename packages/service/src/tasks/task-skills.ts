@@ -43,7 +43,7 @@ import { Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { readRepositorySkills, skillFilePath } from "../agents/repository-skills.js";
 import { type GitHubApp, markRefusedToken } from "../github/github-app.js";
-import { logGitHubReadFailure } from "../github/github-refusal.js";
+import { GITHUB_API_FAILURE_TAGS, logGitHubReadFailure } from "../github/github-refusal.js";
 import { reachTaskRepository, refused } from "./task-file.js";
 
 /** The source an installed skill is offered under, by its scope. */
@@ -99,8 +99,8 @@ const readRepository = /* @__PURE__ */ Effect.fn("web/taskSkillsRead")(function*
   const reach = yield* reachTaskRepository(organizationId, repository, member);
 
   if ("refused" in reach) return reach.refused;
-  const { token, repository: confirmed, access } = reach.reached;
-  const skills = yield* readRepositorySkills(token, confirmed).pipe(markRefusedToken(access));
+  const { bearer, repository: confirmed, access } = reach.reached;
+  const skills = yield* readRepositorySkills(bearer, confirmed).pipe(markRefusedToken(access));
 
   return {
     branch: confirmed.defaultBranch,
@@ -173,7 +173,7 @@ export function readWorkspaceSkills(
       repository === null
         ? { branch: null, reserved: new Set<string>(), skills: [] }
         : yield* readRepository(workspaceId, repository, member).pipe(
-            Effect.catchTag("GitHubUnavailable", (failure) =>
+            Effect.catchTag(GITHUB_API_FAILURE_TAGS, (failure) =>
               Effect.as(logGitHubReadFailure(failure), refused(TASK_FILE_REFUSAL.UNAVAILABLE)),
             ),
           );

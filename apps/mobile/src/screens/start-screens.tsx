@@ -4,7 +4,7 @@ import { hasWordsOrFiles } from "@repo/features/agent-wire";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
-import { agentName } from "@repo/features/model-label";
+import { agentName, providerOf } from "@repo/features/model-label";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
@@ -232,6 +232,7 @@ function ModelChip({ pick }: { readonly pick: ModelPick }) {
   return (
     <MenuChip
       label={effort === undefined ? model : `${model}${JOINED}${effort}`}
+      harness={pick.shown === undefined ? undefined : providerOf(pick.shown.model)}
       menu={{ groups }}
     />
   );
@@ -364,7 +365,7 @@ function useSheetStart(
         kept.release();
         router.dismiss();
         router.navigate(
-          onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: answer.taskId })),
+          onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })),
         );
 
         if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
@@ -406,14 +407,14 @@ export function NewAgentScreen({
   const sendSuggestion = useSuggestionSender();
   const suggester = useShownAgent(opened?.suggestion.agentId ?? "");
   // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
-  const suggestedTask = suggester?.planId;
+  const suggestedTask = suggester?.taskId;
   const placed = opened === undefined || suggestedTask !== undefined;
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
-  const skills = useSkillOffer(prompt, setPrompt, { planId: taskId });
+  const skills = useSkillOffer(prompt, setPrompt, { taskId: taskId });
 
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
   const startSuggested = async (

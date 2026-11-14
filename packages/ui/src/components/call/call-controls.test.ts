@@ -8,8 +8,9 @@ import { CALL_DEVICE, CallMute, TalkButton } from "./call-controls.js";
 /**
  * call-controls.test.ts -- Talk with no OpenAI API key reads as unavailable
  * and says what a call needs, yet still hands its press to the owner, who
- * opens the settings the key is saved in; and a mute is named for what its
- * press will do, announced as on while muted.
+ * opens the settings the key is saved in; a mute is named for what its
+ * press will do, announced as on while muted; and the call bar offers Stop
+ * only while the agent works.
  */
 
 declare global {

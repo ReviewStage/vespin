@@ -12,12 +12,12 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import {
-  DOCUMENT_REGION,
   deleteTaskWords,
   RENAME_FAILED_NOTE,
   SETTLED_STATUS,
   settleOffered,
   TASK_MARK,
+  TASK_REGION,
   type TaskMark,
 } from "@repo/features/tasks-model";
 import { EXPERIMENT } from "@repo/settings";
@@ -313,7 +313,7 @@ export function openedTaskOf(
 ): OpenedTask | undefined {
   const { region } = tasks;
 
-  return region.kind === DOCUMENT_REGION.READY
+  return region.kind === TASK_REGION.READY
     ? { task: region.task, agents: tasks.agents }
     : undefined;
 }
@@ -384,16 +384,15 @@ function pinAction(
 
 /**
  * Follow or Unfollow, offered as whichever way the reader does not stand
- * yet, as the Following chip's foot offers it, while the task's workspace
- * has Following on and the task carries its followers; Unfollow dimmed for
- * the assignee, who follows while assigned.
+ * yet, as the Following chip's foot offers it, while the task carries its
+ * followers; Unfollow dimmed for the assignee, who follows while assigned.
  */
 function followAction(
   task: TaskSummary | undefined,
   readerId: string | undefined,
-  following: { readonly on: boolean; readonly follow: () => void; readonly unfollow: () => void },
+  following: { readonly follow: () => void; readonly unfollow: () => void },
 ): MenuAction[] {
-  if (!following.on || task?.followers === undefined || readerId === undefined) return [];
+  if (task?.followers === undefined || readerId === undefined) return [];
   const reader = task.followers.find((each) => each.userId === readerId);
 
   if (reader === undefined) {
@@ -734,8 +733,7 @@ function moveToEntries(
  * Rename, Version history, and Mark as unread or read; then Status,
  * Priority, and Assignee; then Task relation, the add menu as the menu's
  * panel, and Remove parent where the task has one, New sub-task being the
- * add menu's and ⌘K's; then Pin, Follow or Unfollow where the workspace
- * has Following on, Move to section, and Move to workspace where the task
+ * add menu's and ⌘K's; then Pin, Follow or Unfollow, Move to section, and Move to workspace where the task
  * may be moved; then Change repository, which says Choose a
  * repository on a task with none. Permanently delete is last and alone.
  * Each item prints its chord where the chord acts on `subject`, the task
@@ -759,7 +757,7 @@ function taskActionGroups(
     section: MenuEntry | undefined;
     /** The task's pin, which Pin and Unpin ask. */
     pins: Pick<PinWrites, "onMarkTask">;
-    /** Follow or Unfollow, offered beside Pin while the task's workspace has Following on. */
+    /** Follow or Unfollow, offered beside Pin. */
     follow: MenuAction[];
     /** Status, Priority, and Assignee as a row's submenus, where the task has them; none for a task from a service before statuses. */
     standing: readonly MenuSubmenu[];
@@ -1020,9 +1018,7 @@ export function useTaskMenuItems(
   const writes = useTaskRelationWrites();
   const descriptions = useWorkspaceExperiment(task?.workspaceId, EXPERIMENT.DESCRIPTIONS);
   const assignees = useAssigneeRows(task?.assignee);
-  const followingOn = useWorkspaceExperiment(task?.workspaceId, EXPERIMENT.FOLLOWING);
-  const followerWrites = useFollowerWrites(taskId);
-  const follow = followAction(task, tasks.me, { on: followingOn, ...followerWrites });
+  const follow = followAction(task, tasks.me, useFollowerWrites(taskId));
 
   const standing =
     task !== undefined

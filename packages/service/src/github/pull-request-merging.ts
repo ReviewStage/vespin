@@ -8,10 +8,10 @@
  * commit, what its required reviews say, and its head's checks as one word.
  * It runs on the installation token the App minted for the agent's one
  * repository (`github-app.ts`'s `repositoryPullRequestToken`), as every
- * other overview read does, over the App module's own kit (`githubPost`,
- * `send`, `readBody`). An answer GitHub gave in no shape this reads, errors
- * among it, is unreadable, which the caller answers as no merge box rather
- * than failing the header it rides with.
+ * other overview read does, on that token's `@repo/github` client. An
+ * answer GitHub gave in no shape this reads, or with errors, fails, which
+ * the caller answers as no merge box rather than failing the header it
+ * rides with.
  */
 
 import {
@@ -22,9 +22,9 @@ import {
   type ReviewDecision,
 } from "@repo/features/agent-wire";
 import { MERGE_METHOD, type MergeMethod } from "@repo/features/pull-request-write-wire";
-import { Effect, Option, type Redacted, Schema } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
-import { type GitHubUnavailable, githubPost, readBody, send } from "./github-app.js";
+import type { GitHubFailure } from "@repo/github";
+import { Effect, Option, Schema } from "effect";
+import type { GitHubBearer } from "./github-app.js";
 
 const MERGING_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
@@ -44,36 +44,34 @@ const MERGING_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
 }`;
 
 const MergingAnswerSchema = Schema.Struct({
-  data: Schema.Struct({
-    repository: Schema.NullOr(
-      Schema.Struct({
-        mergeCommitAllowed: Schema.Boolean,
-        squashMergeAllowed: Schema.Boolean,
-        rebaseMergeAllowed: Schema.Boolean,
-        autoMergeAllowed: Schema.Boolean,
-        pullRequest: Schema.NullOr(
-          Schema.Struct({
-            headRefOid: Schema.String,
-            isMergeQueueEnabled: Schema.Boolean,
-            mergeQueueEntry: Schema.NullOr(Schema.Struct({ position: Schema.Number })),
-            autoMergeRequest: Schema.NullOr(
-              Schema.Struct({ mergeMethod: Schema.NullOr(Schema.String) }),
-            ),
-            reviewDecision: Schema.NullOr(Schema.String),
-            commits: Schema.Struct({
-              nodes: Schema.Array(
-                Schema.Struct({
-                  commit: Schema.Struct({
-                    statusCheckRollup: Schema.NullOr(Schema.Struct({ state: Schema.String })),
-                  }),
+  repository: Schema.NullOr(
+    Schema.Struct({
+      mergeCommitAllowed: Schema.Boolean,
+      squashMergeAllowed: Schema.Boolean,
+      rebaseMergeAllowed: Schema.Boolean,
+      autoMergeAllowed: Schema.Boolean,
+      pullRequest: Schema.NullOr(
+        Schema.Struct({
+          headRefOid: Schema.String,
+          isMergeQueueEnabled: Schema.Boolean,
+          mergeQueueEntry: Schema.NullOr(Schema.Struct({ position: Schema.Number })),
+          autoMergeRequest: Schema.NullOr(
+            Schema.Struct({ mergeMethod: Schema.NullOr(Schema.String) }),
+          ),
+          reviewDecision: Schema.NullOr(Schema.String),
+          commits: Schema.Struct({
+            nodes: Schema.Array(
+              Schema.Struct({
+                commit: Schema.Struct({
+                  statusCheckRollup: Schema.NullOr(Schema.Struct({ state: Schema.String })),
                 }),
-              ),
-            }),
+              }),
+            ),
           }),
-        ),
-      }),
-    ),
-  }),
+        }),
+      ),
+    }),
+  ),
 });
 
 /** GitHub's word for each merge method, as GraphQL spells it. */
@@ -105,22 +103,19 @@ const GITHUB_ROLLUP = new Map<string, CheckSummary>([
  * is GitHub's to refuse, in its own words, when a merge names one.
  */
 export const pullRequestMerging = /* @__PURE__ */ Effect.fn("web/pullRequestMerging")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
-): Effect.fn.Return<Option.Option<PullRequestMerging>, GitHubUnavailable, HttpClient.HttpClient> {
+): Effect.fn.Return<Option.Option<PullRequestMerging>, GitHubFailure> {
   const [owner = "", name = ""] = fullName.split("/");
 
-  const request = githubPost("/graphql", token, {
-    query: MERGING_QUERY,
-    variables: { owner, name, number },
-  });
-
-  const answer = yield* Effect.scoped(
-    Effect.flatMap(send(request), (response) => readBody(response, MergingAnswerSchema)),
+  const answer = yield* bearer.client.graphql(
+    MERGING_QUERY,
+    { owner, name, number },
+    MergingAnswerSchema,
   );
 
-  const repository = answer.data.repository;
+  const repository = answer.repository;
   const pull = repository?.pullRequest;
 
   if (repository === null || pull === null || pull === undefined) return Option.none();
@@ -161,17 +156,15 @@ const QUEUED_QUERY = `query ${PULL_REQUEST_QUEUED_OPERATION}($owner: String!, $n
 }`;
 
 const QueuedAnswerSchema = Schema.Struct({
-  data: Schema.Struct({
-    repository: Schema.NullOr(
-      Schema.Struct({
-        pullRequest: Schema.NullOr(
-          Schema.Struct({
-            mergeQueueEntry: Schema.NullOr(Schema.Struct({ position: Schema.Number })),
-          }),
-        ),
-      }),
-    ),
-  }),
+  repository: Schema.NullOr(
+    Schema.Struct({
+      pullRequest: Schema.NullOr(
+        Schema.Struct({
+          mergeQueueEntry: Schema.NullOr(Schema.Struct({ position: Schema.Number })),
+        }),
+      ),
+    }),
+  ),
 });
 
 /**
@@ -183,20 +176,17 @@ const QueuedAnswerSchema = Schema.Struct({
  * queued.
  */
 export const pullRequestQueued = /* @__PURE__ */ Effect.fn("web/pullRequestQueued")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
-): Effect.fn.Return<boolean, GitHubUnavailable, HttpClient.HttpClient> {
+): Effect.fn.Return<boolean, GitHubFailure> {
   const [owner = "", name = ""] = fullName.split("/");
 
-  const request = githubPost("/graphql", token, {
-    query: QUEUED_QUERY,
-    variables: { owner, name, number },
-  });
-
-  const answer = yield* Effect.scoped(
-    Effect.flatMap(send(request), (response) => readBody(response, QueuedAnswerSchema)),
+  const answer = yield* bearer.client.graphql(
+    QUEUED_QUERY,
+    { owner, name, number },
+    QueuedAnswerSchema,
   );
 
-  return (answer.data.repository?.pullRequest?.mergeQueueEntry ?? null) !== null;
+  return (answer.repository?.pullRequest?.mergeQueueEntry ?? null) !== null;
 });

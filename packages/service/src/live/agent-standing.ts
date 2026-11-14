@@ -7,7 +7,7 @@ import { FAILURE_WORDS, SETTLED_FAILURES } from "../agents/coder-host/status.js"
 import { TURN_FAILURE, TURN_STATUS } from "../core.js";
 
 /**
- * agent-standing.ts -- what a coding agent's status is read from, written for Neon Realtime: its newest turn, and why it failed.
+ * agent-standing.ts -- what a coding agent's status is read from: its newest turn, and why it failed.
  *
  * Each is the same rule the held reads read an agent by
  * (`message-reads.ts`'s `findLatestTurns`, and

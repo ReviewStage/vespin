@@ -90,7 +90,7 @@ function sealedSql(statement: LiveStatement): string {
   return `with live_rows as materialized ${subqueryOf(statement)} select ${first(DIGEST_COLUMN)}, ${first(SNAPSHOT_COLUMN)}, live_rows.* from (select ${digestOver("live_rows")} as "${DIGEST_COLUMN}", ${SNAPSHOT} as "${SNAPSHOT_COLUMN}") as live_seal left join live_rows on true`;
 }
 
-/** The sealer that reads rather than seals, over the service's own database client. */
+/** The poll's sealer, over the service's own database client. */
 export function pollSealer(sql: SqlClient.SqlClient): LiveSealer {
   const refused = () => new SealRefused({ reason: "the statement could not be read" });
 

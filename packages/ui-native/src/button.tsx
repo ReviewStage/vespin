@@ -32,9 +32,12 @@ import {
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { labelFill } from "@repo/features/label-fill";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactNode } from "react";
+import { useColorScheme } from "react-native";
+import { useScaledSize } from "./accessibility.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
@@ -54,8 +57,9 @@ export const BUTTON_LOOK = {
 
 export type ButtonLook = (typeof BUTTON_LOOK)[keyof typeof BUTTON_LOOK];
 
-/** How big a button is drawn: a row's, or a screen's own act. */
+/** How big a button is drawn: a capsule inside a list row, a row's, or a screen's own act. */
 export const BUTTON_SIZE = {
+  SMALL: "small",
   REGULAR: "regular",
   LARGE: "large",
 } as const;
@@ -107,6 +111,8 @@ export function Button(props: ButtonProps) {
       modifiers={[
         buttonStyle(look),
         controlSize(size),
+        // Note that a small button stands in a list row as a capsule, as the App Store's Get and Settings' Add do.
+        ...(size === BUTTON_SIZE.SMALL ? [SwiftModifiers.buttonBorderShape("capsule")] : []),
         ...(accent ? [tint(filled ? colors.ACCENT : colors.TEXT)] : []),
         ...(filled ? [foregroundStyle(colors.ON_ACCENT)] : []),
         disabledModifier(props.disabled === true),
@@ -309,7 +315,7 @@ export type FieldMenu = {
 };
 
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
-function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
+function fieldMark(props: FieldChipProps, colors: BrandColors, glyphSize: number): ReactNode {
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
 
   if (props.face !== undefined) {
@@ -317,9 +323,7 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   }
 
   if (props.symbol !== undefined) {
-    return (
-      <Image {...glyphImage(props.symbol)} size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />
-    );
+    return <Image {...glyphImage(props.symbol)} size={glyphSize} color={colors.TEXT_MUTED} />;
   }
 
   if (props.mark !== undefined) {
@@ -342,6 +346,7 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
  */
 export function FieldChip(props: FieldChipProps) {
   const colors = useColors();
+  const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
   const { menu } = props;
 
   const capsule = (
@@ -354,7 +359,7 @@ export function FieldChip(props: FieldChipProps) {
           : []),
       ]}
     >
-      {fieldMark(props, colors)}
+      {fieldMark(props, colors, glyphSize)}
       <CapsuleWords label={props.label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
     </HStack>
   );
@@ -393,6 +398,48 @@ export function StatusChip({
   readonly menu?: FieldMenu | undefined;
 }) {
   return <FieldChip label={TASK_STATUS_WORDS[status]} status={status} menu={menu} />;
+}
+
+/**
+ * A label filled with its provider's color, as the panel's header draws a
+ * pull request's labels: in the light appearance its color solid, edged a
+ * shade darker, its words dark or white by how light it reads, and in the
+ * dark a tint of it, its words in the color lifted to read
+ * (`@repo/features/label-fill`). A color spelled any other way than six hex
+ * digits draws the plain chip. It takes no press, and is heard as its name.
+ */
+export function LabelChip({ name, color }: { readonly name: string; readonly color: string }) {
+  const colors = useColors();
+  const dark = useColorScheme() === "dark";
+  const inks = labelFill(color);
+  const shown = inks === undefined ? undefined : dark ? inks.dark : inks.light;
+
+  return (
+    <HStack
+      modifiers={[
+        ...(shown === undefined
+          ? capsuleModifiers(colors, false)
+          : [
+              padding(CAPSULE_PADDING),
+              background(shown.fill, SwiftModifiers.shapes.capsule()),
+              strokeBorder({
+                content: shown.edge,
+                // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+                shape: "capsule",
+                style: { lineWidth: HAIRLINE },
+              }),
+            ]),
+        accessibilityElement("ignore"),
+        accessibilityLabel(name),
+      ]}
+    >
+      <CapsuleWords
+        label={name}
+        ink={shown?.words ?? colors.TEXT_BODY}
+        countInk={colors.TEXT_MUTED}
+      />
+    </HStack>
+  );
 }
 
 /** How far each face of a face pile tucks under the one after it, in points. */

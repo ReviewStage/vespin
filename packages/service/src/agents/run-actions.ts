@@ -1,5 +1,5 @@
 /**
- * run-actions.ts -- the run action a call names, as one of an agent's repository's, found only for a cloud agent with a repository in a workspace with the Run actions experiment on, where the action may run in the cloud, and that action run or stopped in the agent's sandbox.
+ * run-actions.ts -- the run action a call names, as one of an agent's repository's, found only for a cloud agent with a repository, where the action may run in the cloud, and that action run or stopped in the agent's sandbox.
  *
  * A repository's run actions are kept with its cloud setup
  * (`workspace-sandbox-setup-wire.ts`), and a member runs one in a cloud
@@ -24,22 +24,23 @@ import {
   type RunAction,
   runActionRunsIn,
 } from "@repo/features/workspace-sandbox-setup-wire";
-import { EXPERIMENT } from "@repo/settings";
 import { Effect, Result } from "effect";
 import {
   HOSTED_REFUSAL,
   type HostedRefusal,
   hostedStoreOrUnavailable,
 } from "../http/http-effect.js";
+import { agentSandboxName } from "./agent-sandbox-open.js";
 import { workspaceEnvironmentOf } from "./coder-host/runner-sessions.js";
+import { recordedTerminalEnded, recordedTerminalOpened } from "./sandbox-use.js";
 import { AgentSandbox } from "./terminal/agent-sandbox.js";
 import {
   listedShells,
   reachedAgentSession,
   sandboxOrUpstream,
   shellRefusal,
+  startedWaking,
 } from "./terminal/sandbox-reach.js";
-import { experimentOnIn } from "./workspace-experiment-on.js";
 
 /** What of an agent names its run actions: where it runs, its workspace, and its repository. */
 interface RunActionAgent {
@@ -48,15 +49,11 @@ interface RunActionAgent {
   readonly repository: string | null;
 }
 
-/** The agent's repository, where it has run actions at all: a cloud agent with one, in a workspace with the experiment on; not found otherwise. */
+/** The agent's repository, where it has run actions at all: a cloud agent with one; not found otherwise. */
 const runActionRepositoryOf = /* @__PURE__ */ Effect.fnUntraced(function* (agent: RunActionAgent) {
   const repository = agent.repository;
 
   if (agent.machine === AGENT_MACHINE.DEVICE || repository === null) {
-    return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  }
-
-  if (!(yield* experimentOnIn(agent.organizationId, EXPERIMENT.RUN_ACTIONS))) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
 
@@ -89,9 +86,9 @@ const runActionOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
- * One of the agent's repository's run actions run in its running sandbox,
- * as the member, with the workspace's variables, answering its shell; a
- * stopped sandbox is refused rather than woken.
+ * One of the agent's repository's run actions run in its sandbox, as the
+ * member, with the workspace's variables, answering its shell; a stopped
+ * sandbox is resumed first (`startedWaking`).
  */
 export const ranRunAction = Effect.fn("web/ranRunAction")(function* (
   userId: string,
@@ -108,18 +105,32 @@ export const ranRunAction = Effect.fn("web/ranRunAction")(function* (
   );
 
   const sandbox = yield* AgentSandbox;
+  const sandboxName = agentSandboxName(sessionId);
+
+  // Note that the action's shell, a Terminal tab like any other, holds the sandbox before it starts, so a stop as a turn ends never takes the sandbox from under it.
+  yield* recordedTerminalOpened(sandboxName, action.id);
 
   const ran = yield* sandboxOrUpstream(
-    // Note that the action's shell is started under the action's own id, so two presses at once start one shell, never two.
-    sandbox.run(sessionId, action.id, {
-      actionId: action.id,
-      label: action.label,
-      command: action.command,
-      environment,
-    }),
+    startedWaking(
+      sessionId,
+      // Note that the action's shell is started under the action's own id, so two presses at once start one shell, never two.
+      sandbox.run(sessionId, action.id, {
+        actionId: action.id,
+        label: action.label,
+        command: action.command,
+        environment,
+      }),
+    ),
   );
 
-  if (Result.isFailure(ran)) return yield* Effect.fail(shellRefusal(ran.failure));
+  if (Result.isFailure(ran)) {
+    yield* recordedTerminalEnded(sandboxName, action.id);
+
+    return yield* Effect.fail(shellRefusal(ran.failure));
+  }
+
+  // Note that the hold is written again under the shell's own id once it stands, so a list that read before it started, and pruned it, never leaves it unheld.
+  yield* recordedTerminalOpened(sandboxName, ran.success.id);
 
   return { terminal: ran.success };
 });
