@@ -7,7 +7,7 @@ import {
   withTaskId,
 } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
-import { DOCUMENT_REGION } from "@repo/features/tasks-model";
+import { TASK_REGION } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import type { SettingsView } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -165,7 +165,7 @@ export function inboxItemPlace(chosen: InboxChoice): LinkDestination {
 function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
   const { region } = tasks;
 
-  if (region.kind !== DOCUMENT_REGION.READY) return [];
+  if (region.kind !== TASK_REGION.READY) return [];
   const { task: drawn } = region;
   const workspace = slugOf(tasks.workspaces, drawn.workspaceId);
   // Note that the task's links name it by its number, where it has one, as every link to it is written.

@@ -396,7 +396,7 @@ function fedItemsOf(
   fed: AppInboxItems | undefined,
   taskId: string | undefined,
 ): readonly InboxItem[] | undefined {
-  return fed === undefined || taskId === undefined ? undefined : fed[INBOX_SCOPE_KIND.PLAN][taskId];
+  return fed === undefined || taskId === undefined ? undefined : fed[INBOX_SCOPE_KIND.TASK][taskId];
 }
 
 /** An Inbox's pictures as its cards read them: by the item, as the scope the window keeps them under, and the attachment. */
@@ -554,14 +554,14 @@ export function useHeldTaskInbox(input: {
   // listed, one started on another Mac, posted.
   const readable = (agents.heldIds?.length ?? 0) > 0 || waiting;
   const active = shown && taskId !== undefined && readable;
-  const holderKey = active ? { kind: INBOX_SCOPE_KIND.PLAN, id: taskId } : undefined;
+  const holderKey = active ? { kind: INBOX_SCOPE_KIND.TASK, id: taskId } : undefined;
   const holder = useQuery(holderInboxQuery(holderKey));
   const { mutate: retryHolder } = useMutation(holderInboxRetryMutation());
   // Note that Try again moves with the holder alone, as the read's own did, since a render builds its key anew.
   const holderId = holderKey?.id;
 
   const onRetry = useCallback(() => {
-    if (holderId !== undefined) retryHolder({ kind: INBOX_SCOPE_KIND.PLAN, id: holderId });
+    if (holderId !== undefined) retryHolder({ kind: INBOX_SCOPE_KIND.TASK, id: holderId });
   }, [retryHolder, holderId]);
 
   const feed = useQuery(inboxItemsQuery());

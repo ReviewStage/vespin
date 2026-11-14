@@ -244,12 +244,12 @@ const listCommand = Command.make(
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
       const read = yield* askService(hosted.inbox.account, {});
-      const { plans } = yield* askService(hosted.tasks.list, {});
+      const { tasks: plans } = yield* askService(hosted.tasks.list, {});
 
       const tasks = new Map(
         plans
-          .filter((plan) => plan.workspaceId === workspace.id)
-          .map((plan) => [plan.id, plan.name]),
+          .filter((task) => task.workspaceId === workspace.id)
+          .map((task) => [task.id, task.name]),
       );
 
       const threads = threadsOf(read, tasks).filter((thread) => !unread || thread.unread);

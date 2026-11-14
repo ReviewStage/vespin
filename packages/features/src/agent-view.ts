@@ -58,6 +58,7 @@ import {
   liveActivityEndedRequestSchema,
   liveActivityTokenRequestSchema,
 } from "./live-activity-wire.js";
+import { machineAskAnswerRequestSchema } from "./machine-ask-wire.js";
 import { memoryIdSchema, memorySaveRequestSchema } from "./memory-wire.js";
 import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
@@ -424,6 +425,14 @@ export type HostDoneAnswerView = typeof hostDoneAnswerViewSchema.Type;
 
 /** What removing a host names: its id. */
 export const hostIdParamsSchema = hostIdRequestSchema;
+
+/** An ask one of the account's machines holds, answered from this device: the answer that stands, or why not. */
+export const machineAskAnsweredViewSchema = answerView(hostsContract.answerMachineAsk);
+
+export type MachineAskAnsweredView = typeof machineAskAnsweredViewSchema.Type;
+
+/** What answering an ask names: its id, the decision, and a denial's words. */
+export const machineAskAnswerParamsSchema = machineAskAnswerRequestSchema;
 
 /** What changing one of the account's machines names: its id, and each setting changed, or an app taken back from those it always allows. */
 export const machineChangeParamsSchema = machineChangeRequestSchema;
@@ -1256,13 +1265,13 @@ export type LiveActivityEndedAnswerView = typeof liveActivityEndedAnswerViewSche
 
 /** Whose inbox is followed: a plan's, or one agent's. */
 export const INBOX_SCOPE_KIND = {
-  PLAN: "plan",
+  TASK: "task",
 } as const;
 
-/** The kind of holder an inbox item is on: a plan. */
+/** The kind of holder an inbox item is on: a task. */
 export type InboxScopeKind = (typeof INBOX_SCOPE_KIND)[keyof typeof INBOX_SCOPE_KIND];
 
-/** One plan's inbox, as the window follows it: which kind, and the plan's id. */
+/** One task's inbox, as the window follows it: which kind, and the task's id. */
 export const agentInboxScopeSchema = EffectSchema.Struct({
   kind: EffectSchema.Literals(Object.values(INBOX_SCOPE_KIND)),
   id: EffectSchema.NonEmptyString,
