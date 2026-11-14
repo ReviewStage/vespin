@@ -146,8 +146,8 @@ const MERGE_ASK: MergeAsk = { title: MERGE_WORDS.MERGE_QUESTION };
 interface MergePress {
   readonly words: string;
   readonly prominent: boolean;
-  /** The change to send; none where the queue takes it out, as Remove from queue does. */
-  readonly request: PullRequestActionRequest | undefined;
+  /** The change it sends. */
+  readonly request: PullRequestActionRequest;
   /** What it asks before it sends; none where it only takes back what was asked for, as Disable auto-merge does. */
   readonly ask: MergeAsk | undefined;
 }
@@ -195,7 +195,7 @@ function mergePressOf(
       return {
         words: MERGE_WORDS.DEQUEUE,
         prominent: false,
-        request: undefined,
+        request: { action: PULL_REQUEST_ACTION.DEQUEUE },
         ask: { title: MERGE_WORDS.DEQUEUE_QUESTION, message: QUEUE_WARNING },
       };
     // Note that the page offers no bypass of the base's rules, which asks first; GitHub's own does.
@@ -205,13 +205,21 @@ function mergePressOf(
   }
 }
 
-/** The merge's press as a screen draws it: its words, busy in its own while a change is out, what it asks first, and what sends it once asked. */
+/** The merge's press as a screen draws it: its words, busy in its own while a change is out, what it asks first, and the change it sends. */
 interface ShownPress {
   readonly words: string;
   readonly prominent: boolean;
   readonly disabled: boolean;
   readonly ask: MergeAsk | undefined;
-  readonly send: () => void;
+  readonly request: PullRequestActionRequest;
+}
+
+/** A press whose question stands, as it was when pressed: what the pull request offered, the change it sends, and its question's words, so a live read landing under the question changes neither what it says nor what it sends. */
+interface AskedPress {
+  readonly action: MergeAction;
+  readonly request: PullRequestActionRequest;
+  readonly words: string;
+  readonly ask: MergeAsk;
 }
 
 /** The merge the pull request offers as it stands, by GitHub's live state; none where it isn't live. */
@@ -227,7 +235,7 @@ function offeredActionOf(
 function shownPressOf(
   pullRequest: AgentOverviewPullRequest | undefined,
   method: MergeMethod | undefined,
-  writes: PullRequestWrites,
+  pending: PullRequestWrites["pending"],
 ): ShownPress | undefined {
   const press = mergePressOf(
     offeredActionOf(pullRequest),
@@ -236,17 +244,14 @@ function shownPressOf(
   );
 
   if (press === undefined) return undefined;
-  const pending = isMergeWrite(writes.pending) ? writes.pending : undefined;
-  const { request } = press;
+  const busy = isMergeWrite(pending) ? pending : undefined;
 
   return {
-    words: pending === undefined ? press.words : MERGE_BUSY_WORDS[pending],
+    words: busy === undefined ? press.words : MERGE_BUSY_WORDS[busy],
     prominent: press.prominent,
-    disabled: writes.pending !== undefined,
+    disabled: pending !== undefined,
     ask: press.ask,
-    send: () => {
-      void writes.write(request ?? { action: PULL_REQUEST_ACTION.DEQUEUE });
-    },
+    request: press.request,
   };
 }
 
@@ -335,7 +340,7 @@ export function PullRequestScreen() {
   const writes = usePullRequestWrites(key);
   const [chosen, setChosen] = useState<MergeMethod | undefined>(undefined);
   // The merge whose question stands, by what the pull request offered when it was pressed.
-  const [asked, setAsked] = useState<MergeAction | undefined>(undefined);
+  const [asked, setAsked] = useState<AskedPress | undefined>(undefined);
   const pullRequest = landedOf(parts.pullRequest)?.pullRequest ?? undefined;
   const checks = landedOf(parts.checks)?.pullRequest?.checks;
   const conversation = landedOf(parts.conversation)?.pullRequest ?? undefined;
@@ -346,12 +351,12 @@ export function PullRequestScreen() {
   const title = pullRequest?.title ?? listed?.title;
   const state = pullRequest?.state ?? listed?.state;
   const url = pullRequest?.url ?? listed?.url;
-  const press = shownPressOf(pullRequest, method, writes);
+  const press = shownPressOf(pullRequest, method, writes.pending);
   const offered = offeredActionOf(pullRequest);
 
   // Note that a question is dropped as soon as the pull request no longer offers what it asks about, rather than only when its alert says it went, so it never stands again by itself the next time it offers that.
   useEffect(() => {
-    if (asked !== offered) setAsked(undefined);
+    if (asked !== undefined && asked.action !== offered) setAsked(undefined);
   }, [asked, offered]);
   useScreenActivity((workspaces) =>
     agent === undefined || title === undefined
@@ -468,8 +473,16 @@ export function PullRequestScreen() {
                   onPress: () => setChosen(each),
                 }))}
                 onPress={() => {
-                  if (press.ask === undefined) press.send();
-                  else setAsked(offered);
+                  if (press.ask === undefined || offered === undefined) {
+                    void writes.write(press.request);
+                  } else {
+                    setAsked({
+                      action: offered,
+                      request: press.request,
+                      words: press.words,
+                      ask: press.ask,
+                    });
+                  }
                 }}
               />
             )}
@@ -547,13 +560,14 @@ export function PullRequestScreen() {
         </RowList>
       </Screen>
       <ConfirmAsk
-        title={press?.ask?.title ?? MERGE_WORDS.MERGE_QUESTION}
-        message={press?.ask?.message ?? `#${key.number} ${title}`}
-        act={press?.words ?? ""}
-        presented={asked !== undefined && asked === offered && press?.ask !== undefined}
+        title={asked?.ask.title ?? MERGE_WORDS.MERGE_QUESTION}
+        message={asked?.ask.message ?? `#${key.number} ${title}`}
+        act={asked?.words ?? ""}
+        presented={asked !== undefined && asked.action === offered}
         onAct={() => {
           setAsked(undefined);
-          press?.send();
+
+          if (asked !== undefined) void writes.write(asked.request);
         }}
         onDismiss={() => setAsked(undefined)}
       />

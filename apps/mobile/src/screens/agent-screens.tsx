@@ -181,7 +181,7 @@ const MODE_SYMBOL = {
   [AGENT_PERMISSION_MODE.FULL_ACCESS]: GLYPH.FULL_ACCESS,
 } as const satisfies Record<AgentPermissionMode, Glyph>;
 
-/** What a pull request's card offers beside Review where it may merge now, and what that asks first. */
+/** What a pull request's card offers beside Review where it may merge now. */
 const MERGE_WORD = "Merge";
 
 /** The agent's address on vespin.dev, under its workspace and its task, once the agent is read; none before its workspace is known. */
