@@ -494,6 +494,7 @@ export function RowFrame({
 export function RowHead({
   unread,
   faded,
+  fold,
   lead,
   title,
   ink,
@@ -501,6 +502,8 @@ export function RowHead({
 }: {
   readonly unread: boolean;
   readonly faded: boolean;
+  /** A parent's fold chevron, standing before its lead mark; none for a row that folds nothing. */
+  readonly fold?: ReactNode;
   readonly lead: ReactNode;
   readonly title: string;
   readonly ink: string;
@@ -527,7 +530,11 @@ export function RowHead({
     <HStack spacing={SPACE.TIGHT} alignment="center">
       <UnreadDot unread={unread} faded={faded} />
       <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
-        <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        {/* Note that the fold and the mark stand centered on each other, so the chevron, laid out at no height, sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
+        <HStack spacing={SPACE.ROW} alignment="center">
+          {fold}
+          <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        </HStack>
         {stacked ? (
           <VStack alignment="leading" spacing={2}>
             {words}
@@ -774,16 +781,27 @@ function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou"
   }
 }
 
-/** How far each level of sub-tasks stands in, in points: past a parent's mark, so a sub-task's mark stands under its parent's name. */
+/** How far each level of sub-tasks stands in, in points: past a parent's fold, so a sub-task's mark stands under its parent's. */
 const SUB_TASK_INDENT = MARK_SIZE.LEAD + SPACE.ROW;
 
 /** What a parent's chevron is heard as, folded and open. */
 const SHOW_SUB_TASKS = "Show sub-tasks";
 const HIDE_SUB_TASKS = "Hide sub-tasks";
 
-/** A parent's fold in its ring's place: a chevron that opens its sub-tasks under it, so a press on the row itself still opens the task. */
+/** The least a fold chevron answers a press across, in points, as the system asks of every target. */
+const FOLD_TARGET = 44;
+
+/**
+ * A parent's fold before its status ring, as the panel's chevron stands
+ * before a task's name: it opens the sub-tasks under the row, while a press
+ * on the row itself still opens the task. Note that the chevron lays out a
+ * lead mark's width, so a sub-task's ring stands under its parent's, but
+ * answers a press across a 44 pt square, its overhang laid out at no size
+ * so the row stands no taller than its siblings.
+ */
 function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPress: () => void }) {
   const colors = useColors();
+  const overhang = { across: (FOLD_TARGET - MARK_SIZE.LEAD) / 2, down: FOLD_TARGET / 2 };
 
   return (
     <Button
@@ -797,7 +815,16 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
         {...glyphImage(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
         size={MARK_SIZE.GLYPH - 4}
         color={colors.TEXT_MUTED}
-        modifiers={[frame({ width: MARK_SIZE.LEAD, height: MARK_SIZE.LEAD })]}
+        modifiers={[
+          frame({ width: FOLD_TARGET, height: FOLD_TARGET }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          padding({
+            leading: -overhang.across,
+            trailing: -overhang.across,
+            top: -overhang.down,
+            bottom: -overhang.down,
+          }),
+        ]}
       />
     </Button>
   );
@@ -807,7 +834,7 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
  * One task on a single line, as Linear's rows stand: the dot while it has
  * news, its status ring, its name in 15 pt, and at the line's end what its
  * agents say and its key. A task with sub-tasks leads with the panel's fold
- * in its ring's place, whose press opens them; its caller draws them as rows
+ * before its ring, whose press opens them; its caller draws them as rows
  * of their own under it, a level deeper. Note that SwiftUI's disclosure is
  * not used, because a press on its row folds it rather than picking the row.
  */
@@ -820,13 +847,10 @@ export function TaskRow(props: TaskRowProps) {
       <RowHead
         unread={unread}
         faded={finished}
-        lead={
-          fold === undefined ? (
-            <TaskStatusMark status={status} />
-          ) : (
-            <SubTaskFold open={fold.open} onPress={fold.onToggle} />
-          )
+        fold={
+          fold === undefined ? undefined : <SubTaskFold open={fold.open} onPress={fold.onToggle} />
         }
+        lead={<TaskStatusMark status={status} />}
         title={name}
         ink={titleInk(colors, unread, finished)}
         end={

@@ -188,7 +188,7 @@ export function TaskHead(props: TaskHeadProps) {
         priority={priority}
         assignee={assignee}
         following={following}
-        summary={createdBy}
+        byline={createdBy}
         menus={menus}
       />
     </VStack>

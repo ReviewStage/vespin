@@ -5,6 +5,7 @@ import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
+import { cardTitle } from "@repo/features/plain-words";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
@@ -308,7 +309,11 @@ function RepositoryChip({
 
 type UseSheetStartResult = {
   readonly starting: boolean;
-  readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
+  readonly go: (
+    start: () => Promise<StartAnswer>,
+    refusal?: string | undefined,
+    brief?: string | undefined,
+  ) => void;
 };
 
 type Started = { answer?: StartAnswer };
@@ -330,7 +335,11 @@ function useSheetStart(
   const write = useWrite();
   const [starting, setStarting] = useState(false);
 
-  const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
+  const go = (
+    start: () => Promise<StartAnswer>,
+    refusal?: string | undefined,
+    brief?: string | undefined,
+  ) => {
     if (starting) return;
 
     if (refusal !== undefined) {
@@ -367,7 +376,15 @@ function useSheetStart(
           onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })),
         );
 
-        if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
+        // Note that the agent's page is handed the title its brief reads as, which names it in the bar until the task list does, rather than a bare "Agent"; the title alone travels in the route, never the brief's whole words.
+        const title = brief === undefined ? "" : cardTitle(brief);
+
+        if (answer.agentId !== undefined) {
+          router.push({
+            pathname: onTab(iosAgentRoute(answer.agentId)),
+            params: title === "" ? {} : { brief: title },
+          });
+        }
       })
       .finally(() => setStarting(false));
   };
@@ -443,6 +460,8 @@ export function NewAgentScreen({
             })
           : startSuggested(opened.suggestion),
       pictures.refusal,
+      // Note that a suggestion's start is named by its own title where it has one, as the service names the agent.
+      opened?.suggestion.title ?? prompt.trim(),
     );
 
   return (
@@ -726,6 +745,7 @@ export function NewTaskScreen({
           ...place,
         }),
       pictures.refusal,
+      prompt.trim(),
     );
   };
 

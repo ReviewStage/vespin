@@ -471,7 +471,14 @@ export function AgentScreen() {
     id = "",
     suggestedBy,
     button,
-  } = useLocalSearchParams<{ id: string; suggestedBy?: string; button?: string }>();
+    brief,
+  } = useLocalSearchParams<{
+    id: string;
+    suggestedBy?: string;
+    button?: string;
+    /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
+    brief?: string;
+  }>();
 
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
   const router = useRouter();
@@ -595,9 +602,10 @@ export function AgentScreen() {
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
 
-  const title = cardTitle(
-    shown === undefined ? (transcript?.word?.title ?? UNLISTED_AGENT) : agentName(shown),
-  );
+  // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
+  const title =
+    cardTitle(shown === undefined ? (transcript?.word?.title ?? brief ?? "") : agentName(shown)) ||
+    UNLISTED_AGENT;
 
   useScreenActivity((workspaces) =>
     shown === undefined
