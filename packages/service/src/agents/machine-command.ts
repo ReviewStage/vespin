@@ -28,6 +28,7 @@ import {
   type MachineRefusal,
   type MachineUnreached,
   type MacShellResult,
+  machineAskSeconds,
   machineCommandSchema,
 } from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -275,13 +276,18 @@ function commandTopics(userId: string): readonly SyncTopic[] {
   return [[TOPIC.ACCOUNT, userId]];
 }
 
-/** The command's result once a Mac settles it, looked for again as each write to the account's commands lands, until the deadline; nothing past it. */
+/**
+ * The command's result once a Mac settles it, looked for again as each
+ * write to the account's commands lands, until the deadline; nothing past
+ * it. The deadline outlasts the Mac's ask, its own time to run once allowed,
+ * and the grace, so a late Allow is still heard.
+ */
 function awaitedResult(
   userId: string,
   queued: MachineCommand,
 ): TaskStoreEffect<Option.Option<MachineCommandResult>> {
   const deadline = Duration.sum(
-    Duration.seconds(queued.timeoutSeconds),
+    Duration.seconds(queued.timeoutSeconds + machineAskSeconds(queued.timeoutSeconds)),
     MACHINE_COMMAND_SERVICE.ANSWER_GRACE,
   );
 

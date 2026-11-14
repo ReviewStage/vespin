@@ -16,7 +16,8 @@
  *
  * Three routes remember something no address holds, for as long as the
  * window lives: the Inbox's items as a door chose them, the automations seen
- * deleted, and the names a person's page was opened with. Each is one
+ * deleted, and the names a person's page was opened with and the machine it
+ * was last opened at. Each is one
  * TanStack Store per window (`RoutedMemory`), so every caller of a route
  * hook, the tasks tab and the window's history among them, reads and writes
  * the same one.
@@ -45,6 +46,21 @@ export interface RoutedMemory {
   readonly deletedAutomations: Store<ReadonlyMap<string, true>>;
   /** Each name a person's page was opened with, by the person, which the address leaves out. */
   readonly personNames: Store<ReadonlyMap<string, string>>;
+  /** The machine a person's page was last opened at, which it scrolls to and lights, and how many times a page was opened. */
+  readonly personLanding: Store<PersonLandings>;
+}
+
+/** How many times the window opened a person's page, which only grows, so no ask is ever numbered twice, and the machine the last opened it at, none where it named none. */
+export interface PersonLandings {
+  readonly asks: number;
+  readonly at: PersonLanding | undefined;
+}
+
+/** A machine a person's page was opened at: whose page, which machine, and the how-manyeth ask it is, so each ask lands again. */
+export interface PersonLanding {
+  readonly userId: string;
+  readonly machineId: string;
+  readonly ask: number;
 }
 
 /** The history a window holds before its own stands: no step behind, so each way back stands its list. */
@@ -90,6 +106,7 @@ export function RoutedExitsProvider({ children }: { readonly children?: ReactNod
       inboxChoices: new Store<ReadonlyMap<string, InboxChoice>>(new Map()),
       deletedAutomations: new Store<ReadonlyMap<string, true>>(new Map()),
       personNames: new Store<ReadonlyMap<string, string>>(new Map()),
+      personLanding: new Store<PersonLandings>({ asks: 0, at: undefined }),
     },
   }));
 

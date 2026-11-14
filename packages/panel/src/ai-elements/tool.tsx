@@ -157,8 +157,8 @@ export interface ToolHeaderProps {
   place?: ReactNode | undefined;
   /** Where the call ran as a chip, drawn as itself at the line's end with no tag around it, as a machine's mention chip is (`place`'s stand-in where given); none for the rest. */
   placeChip?: ReactNode | undefined;
-  /** Where the call stands in a word or two of the muted ink at the line's end, as a held call's "Waiting for approval" and its answer's "Allowed"; none for the rest. */
-  status?: string | undefined;
+  /** Where the call stands in a word or two of the muted ink at the line's end, as a held call's "Waiting for approval" and its answer's "Allowed", or a call waiting on the Mac's ask, "Waiting for you · 4:12"; none for the rest. */
+  status?: ReactNode | undefined;
   /** Whether the call is held, not working, so the working mark gives way to its status. */
   paused?: boolean | undefined;
 }

@@ -47,6 +47,7 @@ import { WORKSPACE_ACTS, WORKSPACE_FOLLOWS, workspaceActsContract } from "./work
 
 export {
   MACHINE_COMMAND_DECISION,
+  MACHINE_COMMAND_NOTE_MAX_CHARS,
   type MachineCommandAnswer,
   type MachineCommandDecision,
 } from "../machine-command-ask.js";

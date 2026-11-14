@@ -3,6 +3,7 @@
 import { act, createElement, type ReactNode, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { leavingPlace } from "../../testing/leaving-place.js";
 import { ListMotion } from "../list-motion/list-motion.js";
 import { SettingsSection } from "../settings-section/settings-section.js";
 import { Reveal, RevealArea, RevealChoice, revealArea } from "./reveal.js";
@@ -54,7 +55,7 @@ let played: Played[] = [];
 
 /** Whether an element stands in the layout, rather than laid over it as it leaves. */
 function laidOut(element: Element): boolean {
-  return element instanceof HTMLElement && element.style.position !== "absolute";
+  return element instanceof HTMLElement && leavingPlace(element) === undefined;
 }
 
 /** How tall the layout given draws an element: a row's height, or its laid-out children's together. */
@@ -70,9 +71,9 @@ function topOf(element: Element): number {
 
   if (parent === null || element.matches(".ui-settings-section-card")) return 0;
 
-  if (element instanceof HTMLElement && element.style.position === "absolute") {
-    return topOf(parent) + Number.parseFloat(element.style.top);
-  }
+  const place = leavingPlace(element);
+
+  if (place !== undefined && place !== "gone") return topOf(parent) + place.top;
 
   const before = [...parent.children].slice(0, [...parent.children].indexOf(element));
 

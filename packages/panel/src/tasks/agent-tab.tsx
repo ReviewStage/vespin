@@ -327,6 +327,7 @@ import {
   ThreadLineHead,
   TranscriptAgent,
 } from "./line-cards.js";
+import { useMachineAskHeld } from "./machine-ask-waiting.js";
 import { MachineRefusalCard } from "./machine-refusal-card.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, linkChip } from "./mention-chip.js";
 import {
@@ -748,8 +749,9 @@ function ToolCallView({
   const appIcon = useComputerIcon(part.callId, view.appIcon);
   // A computer call's window stands in its body, so a turn's many reads keep the transcript to one line each.
   const inBody = part.tool === AGENT_TOOL.COMPUTER;
-  // A call the agent holds for an answer says so on its own row, its answers under it.
-  const held = useCallHeld(part.callId);
+  // A call the agent holds for an answer says so on its own row, its answers under it, as does one this Mac's ask holds.
+  const askHeld = useMachineAskHeld(part);
+  const held = useCallHeld(part.callId) ?? askHeld;
   // A worker the plan's limit ended draws the limit's notice in its answer's place.
   const limit = callUsageLimit(part);
   const server = useServerName(view);
