@@ -1,32 +1,40 @@
-== bundle A base e799afd4b3
+== bundle A base 2beab692c4
+Auto-merging apps/mobile/src/screens/start-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/start-screens.tsx
 Auto-merging apps/mobile/src/screens/task-screens.tsx
-  merged #9147 23455cd235
+Auto-merging apps/mobile/src/tasks/use-start.ts
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9147 238fdf834a conflict: apps/mobile/src/screens/start-screens.tsx 
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging packages/ui-native/AGENTS.md
 Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/workspace-switcher.tsx
   merged #8992 b160d51ae9
 Auto-merging packages/ui-native/src/transcript.tsx
   merged #9007 6f116e0409
 Auto-merging apps/mobile/src/screens/inbox-screens.tsx
 Auto-merging packages/ui-native/src/row-list.tsx
   merged #9021 d801c11cce
+Auto-merging apps/mobile/src/screens/pull-request-screens.tsx
 Auto-merging packages/features/package.json
 Auto-merging packages/ui-native/src/index.ts
   merged #9041 b6dd57a6b2
 Auto-merging apps/mobile/src/screens/search-screens.tsx
   merged #9048 fd5f58186b
+Auto-merging apps/mobile/src/tasks/use-comments.ts
   merged #9139 8c89643352
   merged #9140 e4459498c5
-Auto-merging apps/mobile/src/host/fixture-host.ts
-CONFLICT (content): Merge conflict in apps/mobile/src/host/fixture-host.ts
-Auto-merging apps/mobile/src/screens/history-screens.tsx
 Auto-merging apps/mobile/src/use-write.ts
-CONFLICT (content): Merge conflict in apps/mobile/src/use-write.ts
-Automatic merge failed; fix conflicts and then commit the result.
-  SKIPPED #9141 6799bbf895 conflict: apps/mobile/src/host/fixture-host.ts apps/mobile/src/use-write.ts 
+Auto-merging packages/host/src/fixture-inbox.ts
+  merged #9141 897172794d
+Auto-merging packages/ui-native/src/index.ts
+  merged #9253 df7a376c9b
 Auto-merging apps/mobile/src/use-write.ts
 Auto-merging packages/ui-native/src/index.ts
   merged #9143 28a37c2153
-  merged #9186 296eb56d45
-  merged #9144 b67953cebd
+Auto-merging packages/panel/src/settings/experimental-page.tsx
+  merged #9186 540104e114
+  merged #9144 375771bcee
 Auto-merging apps/mobile/src/screens/comment-screens.tsx
 Auto-merging apps/mobile/src/tasks/use-comments.ts
   merged #9145 708b36d45f
@@ -35,6 +43,7 @@ Auto-merging apps/mobile/src/screens/task-screens.tsx
   merged #9057 4e15148c6e
 Auto-merging packages/ui-native/src/settings-form.tsx
   merged #8986 2d602bfcea
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
 Auto-merging apps/mobile/src/screens/start-screens.tsx
 Auto-merging packages/ui-native/src/marks.tsx
 Auto-merging packages/ui-native/src/transcript.tsx
@@ -44,7 +53,7 @@ Auto-merging packages/ui-native/src/composer.tsx
   merged #9066 8d5cac158b
   merged #9080 b18b2728d6
   merged #8694 4ad87091d1
-  built 9deeec7c2b
+  built 078183288c2
   install 0
   export 0
   signed 0
