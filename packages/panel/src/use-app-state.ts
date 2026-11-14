@@ -1,5 +1,5 @@
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
-import type { AppStateSnapshot } from "@repo/host/app-state";
+import type { AppStateDelivery, AppStateSnapshot } from "@repo/host/app-state";
 import {
   type AppStateBridgeReads,
   followAppStateOver,
@@ -160,25 +160,31 @@ export interface AppStateFollowing {
  * into, whose staged acts read the run from it (`act.ts`).
  *
  * Every document written into the client is handed on to the task list's
- * collections in the same breath, the list it lists from (`selectListedTasks`)
- * under its version, so they and the client never disagree and the bridge
- * is still heard once; a staging that throws leaves their rows standing and
- * says so on them.
+ * collections in the same breath, so they and the client never disagree and
+ * the bridge is still heard once: a delivery as the rows it moved, and a
+ * whole read or a fixture run's staging as the list it lists from
+ * (`selectListedTasks`) under its version; a staging that throws leaves
+ * their rows standing and says so on them.
  */
 export function followAppState(client: QueryClient): AppStateFollowing {
   let following = true;
   let staging: Promise<void> | undefined;
   const taskList = taskListFollowing();
 
-  const shown = (state: AppStateSnapshot): void => {
+  const shown = (state: AppStateSnapshot, delivery?: AppStateDelivery): void => {
     client.setQueryData(appStateQuery.queryKey, state);
-    taskList.write(state.version, selectListedTasks(state));
+
+    if (delivery === undefined) taskList.write(state.version, selectListedTasks(state));
+    else taskList.deliver(delivery);
   };
 
   // Answers the staging the state waits on in a fixture run, and nothing where it is written at once.
-  const write = (state: AppStateSnapshot): Promise<void> | undefined => {
+  const write = (
+    state: AppStateSnapshot,
+    delivery?: AppStateDelivery,
+  ): Promise<void> | undefined => {
     if (!state.run.fixtureMode && staging === undefined) {
-      shown(state);
+      shown(state, delivery);
 
       return undefined;
     }
