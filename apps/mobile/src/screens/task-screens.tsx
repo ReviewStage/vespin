@@ -59,7 +59,14 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { provenanceText } from "@repo/features/time-format";
-import { countWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
+import {
+  CHOOSE_AN_ITEM_WORDS,
+  countWords,
+  readFailedWords,
+  readingWords,
+  TERM,
+  VERB,
+} from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -171,9 +178,6 @@ import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./rela
 
 /** The Tasks tab's name, at its head and on its back button. */
 const TASKS_TITLE = "Tasks";
-
-/** What the task's column says before a task is picked, in a regular window. */
-const SELECT_A_TASK = "Select a task";
 
 /** What a pushed task's screen says where the read list holds no task its link names, such as one deleted since. */
 const TASK_NOT_FOUND = "Task not found";
@@ -1926,11 +1930,11 @@ export function useTaskDetail(
         onArchiveAgent={archiveAsk.archive}
       />
     ) : selected === undefined ? (
-      <NoSelection title={SELECT_A_TASK} />
+      <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (
-      <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
+      <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
     );
 
   const acts = taskActs(overview?.task, { newAgent, newSubTask });
@@ -2110,7 +2114,8 @@ export function TaskScreen() {
   // Note that a number a link names in its workspace is handed to the split view only once found, as the task's id, since the split view's selection names no workspace; one not found stays here to say so.
   const handing = numberedIn(id, workspace) ? found.taskId : id;
   const handed = useHandToSplit(SPLIT_TAB.TASKS, handing) && handing !== undefined;
-  useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);
+  // Note that the open is told apart by the task's id, as the split view's is, so a number found and handed over on an unfold carries the same open; a number not yet found shows no task to count.
+  useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
 
   if (handed) return null;
@@ -2149,7 +2154,7 @@ export function TaskScreen() {
                 {submenu.actions.map((action) => (
                   <Stack.Toolbar.MenuAction
                     key={action.label}
-                    icon={glyphSymbol(action.symbol)}
+                    {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
                     destructive={action.destructive === true}
                     onPress={action.onPress}
                   >
@@ -2161,7 +2166,7 @@ export function TaskScreen() {
             {menu.actions.map((action) => (
               <Stack.Toolbar.MenuAction
                 key={action.label}
-                icon={glyphSymbol(action.symbol)}
+                {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
                 destructive={action.destructive === true}
                 onPress={action.onPress}
               >
@@ -2181,7 +2186,7 @@ export function TaskScreen() {
         ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         ) : (
-          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
+          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
         )}
       </Screen>
       <StatusQuestionAsk question={question} />
