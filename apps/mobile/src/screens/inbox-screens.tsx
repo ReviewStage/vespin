@@ -80,7 +80,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
@@ -170,6 +170,8 @@ type InboxRowsProps = {
   readonly onResolve: (item: InboxItem) => void;
   /** The list's Select mode, while it stands in one. */
   readonly choosing?: RowChoosing | undefined;
+  /** What stands over the list while it lists no thread: why, and the way on. */
+  readonly empty?: ReactNode | undefined;
 };
 
 /**
@@ -191,6 +193,7 @@ function InboxRows({
   onRemind,
   onResolve,
   choosing,
+  empty,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
   const pictureOf = useMemberPictures();
@@ -202,6 +205,7 @@ function InboxRows({
       onSelect={onSelect}
       onRefresh={onRefresh}
       choosing={choosing}
+      empty={empty}
     >
       <InboxItemRows
         listed={listed}
@@ -999,32 +1003,34 @@ function InboxStackList(words: InboxSearch) {
       )}
       <Screen>
         <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-          {listing.listed.length === 0 ? (
-            <InboxEmpty
-              show={show}
-              search={search}
-              feed={listing.feed}
-              counts={listing.counts}
-              onRetry={() => void acts.refresh()}
-              onShow={choose}
-            />
-          ) : (
-            <InboxRows
-              look={LIST_LOOK.PLAIN}
-              listed={listing.listed}
-              readerId={listing.readerId}
-              onSelect={(id) =>
-                router.push(
-                  onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
-                )
-              }
-              onRefresh={acts.refresh}
-              onMark={acts.mark}
-              onRemind={remind.open}
-              onResolve={acts.resolve}
-              choosing={choosing?.rows}
-            />
-          )}
+          {/* Note that the list stands even with no thread, its empty state over it, so a pull still reads the Inbox again. */}
+          <InboxRows
+            look={LIST_LOOK.PLAIN}
+            listed={listing.listed}
+            readerId={listing.readerId}
+            onSelect={(id) =>
+              router.push(
+                onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
+              )
+            }
+            onRefresh={acts.refresh}
+            onMark={acts.mark}
+            onRemind={remind.open}
+            onResolve={acts.resolve}
+            choosing={choosing?.rows}
+            empty={
+              listing.listed.length === 0 ? (
+                <InboxEmpty
+                  show={show}
+                  search={search}
+                  feed={listing.feed}
+                  counts={listing.counts}
+                  onRetry={() => void acts.refresh()}
+                  onShow={choose}
+                />
+              ) : undefined
+            }
+          />
         </ScopePicker>
       </Screen>
       {remind.sheet}
@@ -1056,30 +1062,32 @@ function InboxSplitScreen({
   const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
-  const rows =
-    listing.listed.length === 0 ? (
-      <InboxEmpty
-        show={show}
-        search={search}
-        feed={listing.feed}
-        counts={listing.counts}
-        onRetry={() => void acts.refresh()}
-        onShow={choose}
-      />
-    ) : (
-      <InboxRows
-        look={LIST_LOOK.PLAIN}
-        listed={listing.listed}
-        readerId={listing.readerId}
-        selected={selected}
-        onSelect={select}
-        onRefresh={acts.refresh}
-        onMark={acts.mark}
-        onRemind={remind.open}
-        onResolve={acts.resolve}
-        choosing={choosing?.rows}
-      />
-    );
+  const rows = (
+    <InboxRows
+      look={LIST_LOOK.PLAIN}
+      listed={listing.listed}
+      readerId={listing.readerId}
+      selected={selected}
+      onSelect={select}
+      onRefresh={acts.refresh}
+      onMark={acts.mark}
+      onRemind={remind.open}
+      onResolve={acts.resolve}
+      choosing={choosing?.rows}
+      empty={
+        listing.listed.length === 0 ? (
+          <InboxEmpty
+            show={show}
+            search={search}
+            feed={listing.feed}
+            counts={listing.counts}
+            onRetry={() => void acts.refresh()}
+            onShow={choose}
+          />
+        ) : undefined
+      }
+    />
+  );
 
   // Note that beside the app sidebar the scopes leave the list for Mail's filter button in its bar, so the list starts at its first thread; a two-column window keeps the menu picker over the list.
   const list = {
