@@ -4,10 +4,20 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { VERB } from "@repo/features/words";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
-import { BUTTON_LOOK, EmptyState, GLYPH, glyphSymbol, Screen, SealedPage } from "@repo/ui-native";
+import {
+  BUTTON_LOOK,
+  DetailPage,
+  EmptyState,
+  GLYPH,
+  glyphSymbol,
+  HostedFill,
+  Screen,
+  SealedPage,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { usePageHtml } from "../agents/use-agent.js";
+import { PUSHED_PAGE, useHandToDetail } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari } from "../open-link.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -17,6 +27,7 @@ import { useTasksWorkspace } from "../tasks/use-tasks.js";
 const PAGE_WORDS = {
   READING: "Reading the page",
   FAILED: "The page could not be read.",
+  MORE: "More",
   TRY_AGAIN: "Try again",
 } as const;
 
@@ -37,11 +48,21 @@ function usePageAddress(
   );
 }
 
+/** A page's version, by its task and its workspace, and the name it is opened under until its own is read. */
+type PageOpened = {
+  readonly workspaceId: string | undefined;
+  readonly taskId: string | undefined;
+  readonly pageId: string;
+  readonly version: number;
+  readonly title: string;
+};
+
 /**
  * One version of a page, opened whole in the app's one web view, sealed
  * from the network and from navigation, under the system's header naming
- * it, with a ⋯ that opens it in the browser. It reads until its task is
- * known.
+ * it, with a ⋯ that opens it in the browser, or, `inColumn`, as a page
+ * pushed over a split view's detail under the column's own bar. It reads
+ * until its task is known.
  */
 export function PageScreen({
   workspaceId,
@@ -49,24 +70,65 @@ export function PageScreen({
   pageId,
   version,
   title,
-}: {
-  readonly workspaceId: string | undefined;
-  readonly taskId: string | undefined;
-  readonly pageId: string;
-  readonly version: number;
-  readonly title: string;
+  inColumn = false,
+}: PageOpened & {
+  /** Whether it stands pushed over a split view's detail rather than on a stack over the window. */
+  readonly inColumn?: boolean | undefined;
 }) {
   useSurfaceOpen(PRODUCT_SURFACE.PAGE, pageId);
   const { read, again } = usePageHtml(taskId, pageId, version);
   const address = usePageAddress(workspaceId, taskId, pageId);
   const named = "title" in read && read.title !== "" ? read.title : title;
 
+  const empty = (
+    <EmptyState
+      title={"failed" in read ? PAGE_WORDS.FAILED : PAGE_WORDS.READING}
+      symbol={"failed" in read ? GLYPH.FAILED : GLYPH.PAGE}
+      loading={!("failed" in read)}
+      action={
+        "failed" in read
+          ? { label: PAGE_WORDS.TRY_AGAIN, onPress: again, look: BUTTON_LOOK.BORDERED }
+          : undefined
+      }
+    />
+  );
+
+  if (inColumn) {
+    const menu =
+      address === undefined
+        ? undefined
+        : {
+            label: PAGE_WORDS.MORE,
+            symbol: GLYPH.MORE,
+            choices: [],
+            actions: [
+              {
+                label: VERB.OPEN_IN_BROWSER,
+                symbol: GLYPH.OPEN_EXTERNALLY,
+                onPress: () => openInSafari(address),
+              },
+            ],
+          };
+
+    return (
+      <DetailPage bar={{ name: named, menu }}>
+        {"html" in read ? (
+          <HostedFill>
+            <SealedPage html={read.html} title={named} />
+          </HostedFill>
+        ) : (
+          empty
+        )}
+      </DetailPage>
+    );
+  }
+
   return (
     <>
       <Stack.Screen options={{ title: named }} />
       {address === undefined ? null : (
         <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel="More">
+          <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={PAGE_WORDS.MORE}>
             <Stack.Toolbar.MenuAction
               icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
               onPress={() => openInSafari(address)}
@@ -77,22 +139,7 @@ export function PageScreen({
         </Stack.Toolbar>
       )}
       {/* Note that the page stands as the screen's root, outside its SwiftUI host, since the web view sizes itself to the screen. */}
-      {"html" in read ? (
-        <SealedPage html={read.html} title={named} />
-      ) : (
-        <Screen>
-          <EmptyState
-            title={"failed" in read ? PAGE_WORDS.FAILED : PAGE_WORDS.READING}
-            symbol={"failed" in read ? GLYPH.FAILED : GLYPH.PAGE}
-            loading={!("failed" in read)}
-            action={
-              "failed" in read
-                ? { label: PAGE_WORDS.TRY_AGAIN, onPress: again, look: BUTTON_LOOK.BORDERED }
-                : undefined
-            }
-          />
-        </Screen>
-      )}
+      {"html" in read ? <SealedPage html={read.html} title={named} /> : <Screen>{empty}</Screen>}
     </>
   );
 }
@@ -113,15 +160,38 @@ export function TaskPageScreen() {
     title: string;
   }>();
 
-  const chosen = useTasksWorkspace();
+  const handed = useHandToDetail({
+    kind: PUSHED_PAGE.TASK_PAGE,
+    pageId: id,
+    taskId: task,
+    workspaceId: workspace === "" ? undefined : workspace,
+    version: Number(version),
+    title,
+  });
+
+  if (handed) return null;
 
   return (
-    <PageScreen
-      workspaceId={workspace === "" ? chosen?.id : workspace}
-      taskId={task}
+    <TaskPage
       pageId={id}
+      taskId={task}
+      workspaceId={workspace === "" ? undefined : workspace}
       version={Number(version)}
       title={title}
     />
   );
+}
+
+/** A page a task's Overview lists, in its task's own workspace, or the one chosen where it names none; `inColumn` pushed over a split view's detail. */
+export function TaskPage({
+  workspaceId,
+  inColumn,
+  ...opened
+}: Omit<PageOpened, "taskId"> & {
+  readonly taskId: string;
+  readonly inColumn?: boolean | undefined;
+}) {
+  const chosen = useTasksWorkspace();
+
+  return <PageScreen {...opened} workspaceId={workspaceId ?? chosen?.id} inColumn={inColumn} />;
 }
