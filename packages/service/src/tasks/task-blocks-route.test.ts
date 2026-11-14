@@ -125,10 +125,10 @@ it.layer(getTestDB())("a member's blocks on a task", (it) => {
 
         assert.equal(blockedBy.status, 200, JSON.stringify(blockedBy.body));
         assert.deepEqual(
-          [blockedBy.body.plan.blockedBy, blockedBy.body.plan.blocks],
+          [blockedBy.body.task.blockedBy, blockedBy.body.task.blocks],
           [[schema], []],
         );
-        assert.deepEqual([blocks.body.plan.blockedBy, blocks.body.plan.blocks], [[schema], [mark]]);
+        assert.deepEqual([blocks.body.task.blockedBy, blocks.body.task.blocks], [[schema], [mark]]);
         assert.deepEqual(
           yield* readTaskBlocks(owner, mark),
           Option.some({ blockedBy: [panel], blocks: [] }),
@@ -140,7 +140,7 @@ it.layer(getTestDB())("a member's blocks on a task", (it) => {
           taskId: schema,
         });
 
-        assert.deepEqual([removed.body.plan.blockedBy, removed.body.plan.blocks], [[], [mark]]);
+        assert.deepEqual([removed.body.task.blockedBy, removed.body.task.blocks], [[], [mark]]);
       }),
   );
 
@@ -246,7 +246,7 @@ it.layer(getTestDB())("a member's parent and relations on a task", (it) => {
         const byStranger = yield* parent(leaf, "Bearer stranger", top);
 
         assert.equal(set.status, 200, JSON.stringify(set.body));
-        assert.equal(set.body.plan.parentTaskId, top);
+        assert.equal(set.body.task.parentTaskId, top);
         assert.notEqual(set.body.txid, undefined);
         assert.deepEqual(loop, {
           status: 409,
@@ -261,7 +261,7 @@ it.layer(getTestDB())("a member's parent and relations on a task", (it) => {
 
         const cleared = yield* parent(leaf, "Bearer owner", null);
 
-        assert.equal(cleared.body.plan.parentTaskId, undefined);
+        assert.equal(cleared.body.task.parentTaskId, undefined);
         assert.equal(yield* parentOf(owner, leaf), null);
       }),
   );
@@ -306,9 +306,9 @@ it.layer(getTestDB())("a member's parent and relations on a task", (it) => {
         assert.equal(toParent.status, 200, JSON.stringify(toParent.body));
         assert.deepEqual(
           [
-            toParent.body.plan.blockedBy,
-            toParent.body.plan.blocks,
-            toParent.body.plan.parentTaskId,
+            toParent.body.task.blockedBy,
+            toParent.body.task.blocks,
+            toParent.body.task.parentTaskId,
           ],
           [[], [apart], schema],
         );

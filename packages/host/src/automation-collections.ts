@@ -153,7 +153,7 @@ export function answeredRow(automation: AutomationSummary): AutomationRow {
     id: automation.id,
     userId: automation.creatorId ?? "",
     taskId: automation.taskId,
-    taskName: automation.planName,
+    taskName: automation.taskName,
     organizationId: automation.workspaceId ?? null,
     taskRepository: null,
     createdAt: automation.createdAt,

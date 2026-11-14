@@ -11,7 +11,9 @@
  * listens, naming its kinds as the held read does. A Mac joins as the
  * device its commands are claimed by, carrying its own settings up the
  * first time, and writes them as the member changes them on it; the claim
- * and the presence then name that device. A result or a claim
+ * and the presence then name that device. An ask the Mac shows is posted,
+ * said closed as its window runs out, and taken down once answered
+ * (`machine-ask-wire.ts`). A result or a claim
  * for a command the account does not hold, claimed or waiting, is refused
  * as not found; the read and the presence refuse only as any procedure
  * may. The outputs are the wire schemas flipped, so oRPC's output check encodes the
@@ -21,6 +23,12 @@
 import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
+import {
+  machineAskClosedAnswerSchema,
+  machineAskIdRequestSchema,
+  machineAskRequestSchema,
+  machineAskStandsSchema,
+} from "../machine-ask-wire.js";
 import {
   COMPUTER_RECORDING_BOUNDS,
   MACHINE_COMMAND_BOUNDS,
@@ -62,6 +70,9 @@ const DEVICE_BODY_BYTES = 64 * 1_024;
 
 /** A device's allowed apps' names and icons: at most every icon's characters, with the names and room to spare. */
 const APP_LOOKS_BODY_BYTES = MACHINE_COMMAND_BOUNDS.MAX_RESULT_BYTES;
+
+/** An ask's body: an app's icon at its bound, and room for the rest. */
+const ASK_BODY_BYTES = 128 * 1_024;
 
 export const machineCommandsContract = {
   waiting: declaredProcedure
@@ -123,4 +134,20 @@ export const machineCommandsContract = {
     )
     .input(exactInput(machineDeviceAppLooksRequestSchema))
     .output(EffectSchema.flip(machineDeviceSettingsAnswerSchema)),
+  ask: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(bodyCap(ASK_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_ASK }))
+    .input(exactInput(machineAskRequestSchema))
+    .output(EffectSchema.flip(machineAskStandsSchema)),
+  lapseAsk: declaredProcedure
+    .meta(bodyCap(CLAIM_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_ASK_LAPSE }))
+    .input(exactInput(machineAskIdRequestSchema))
+    .output(EffectSchema.flip(machineAskStandsSchema)),
+  closeAsk: declaredProcedure
+    .meta(bodyCap(CLAIM_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_ASK_CLOSE }))
+    .input(exactInput(machineAskIdRequestSchema))
+    .output(EffectSchema.flip(machineAskClosedAnswerSchema)),
 };

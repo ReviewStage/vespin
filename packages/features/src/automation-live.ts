@@ -310,7 +310,7 @@ export function automationsOfLiveRows(
     withWebhookUrl(serviceBaseUrl, {
       id: row.id,
       taskId: row.taskId,
-      planName: row.taskName,
+      taskName: row.taskName,
       ...(row.organizationId === null ? undefined : { workspaceId: row.organizationId }),
       name: row.name,
       enabled: row.enabled,

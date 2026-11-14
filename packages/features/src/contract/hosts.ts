@@ -11,7 +11,9 @@
  * procedure matches, an older one without their path, which the window
  * has always read as not found; a remove refuses a host the account does
  * not hold as not found, and a machine's change or remove one it does not
- * hold, or removed, as not found; and a pairing's read, approve, or deny refuses a
+ * hold, or removed, as not found; an ask a machine of the account holds is
+ * answered from any device, the first answer standing, and one the account
+ * does not hold is not found; and a pairing's read, approve, or deny refuses a
  * code no pending pairing has as not found and an account past its guesses
  * as held, with until when.
  */
@@ -30,12 +32,16 @@ import {
   machineAllowedAppsAnswerSchema,
   machineChangeRequestSchema,
 } from "../host-wire.js";
+import { machineAskAnsweredSchema, machineAskAnswerRequestSchema } from "../machine-ask-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
 import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
 
 /** Every body here: an id or a code, and room to spare. */
 const BODY_BYTES = 1_024;
+
+/** An ask's answer: a denial's words at their bound, and room for the rest. */
+const ANSWER_BODY_BYTES = 16 * 1_024;
 
 export const hostsContract = {
   list: declaredProcedure
@@ -62,6 +68,12 @@ export const hostsContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_CHANGE }))
     .input(exactInput(machineChangeRequestSchema))
     .output(EffectSchema.flip(hostDoneAnswerSchema)),
+  answerMachineAsk: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(bodyCap(ANSWER_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_ASK_ANSWER }))
+    .input(exactInput(machineAskAnswerRequestSchema))
+    .output(EffectSchema.flip(machineAskAnsweredSchema)),
   removeMachine: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(bodyCap(BODY_BYTES))

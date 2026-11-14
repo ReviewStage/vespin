@@ -74,7 +74,7 @@ const ITEM: InboxItem = {
 
 /** The account's feed holding the plans given. */
 function fed(plans: Readonly<Record<string, readonly InboxItem[]>>) {
-  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans } };
+  return { rows: { [INBOX_SCOPE_KIND.TASK]: plans } };
 }
 
 function mount(holdings: readonly InboxHolding[]) {

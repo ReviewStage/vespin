@@ -23,10 +23,6 @@ import { SENTRY_LEVEL, SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "./trigger-
  * automation did or did not act. The shapes here are what the store keeps
  * as JSON (`packages/database/src/schemas/automation.ts`) and what the
  * routes answer, declared once.
- *
- * Note that `planName` keeps the wire's legacy spelling of a task, because a
- * released desktop sends and reads it; it is renamed with the wire in a
- * follow-up, with no alias.
  */
 
 export const AUTOMATION_BOUNDS = {
@@ -572,7 +568,7 @@ const automationSummarySchema = EffectSchema.Struct({
   id: wireUuidSchema,
   /** The task it was made on; null for an automation made on its workspace with no task, which its repositories stand in for. */
   taskId: EffectSchema.NullOr(wireUuidSchema),
-  planName: EffectSchema.NullOr(EffectSchema.String),
+  taskName: EffectSchema.NullOr(EffectSchema.String),
   /** The workspace it belongs to, whose members its scope lets reach it; absent from a service before it. */
   workspaceId: EffectSchema.optionalKey(EffectSchema.String),
   name: EffectSchema.String,

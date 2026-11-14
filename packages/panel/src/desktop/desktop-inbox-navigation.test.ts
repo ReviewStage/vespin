@@ -104,7 +104,7 @@ test("the Inbox draws each task held whole by the account's feed from it, follow
 
   for (const task of [BILLING, INVITES]) {
     assert.equal(
-      world.main.isFollowed({ kind: INBOX_SCOPE_KIND.PLAN, id: task.id }),
+      world.main.isFollowed({ kind: INBOX_SCOPE_KIND.TASK, id: task.id }),
       false,
       `${task.name} is drawn from the feed alone`,
     );

@@ -8,7 +8,7 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import type { Task } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { agentTab } from "@repo/ui/tab-strip-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { act, createElement } from "react";
@@ -105,11 +105,9 @@ const ROW = {
 function opened(input: { read: boolean; listed: boolean }): TasksControl {
   return tasksControl({
     tasks: [ROW],
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: TASK.id,
-    region: input.read
-      ? { kind: DOCUMENT_REGION.READY, task: TASK }
-      : { kind: DOCUMENT_REGION.READING },
+    region: input.read ? { kind: TASK_REGION.READY, task: TASK } : { kind: TASK_REGION.READING },
     mainTabs: {
       ...tasksControl().mainTabs,
       tabs: input.listed ? [agentTab(AGENT.id)] : [],
