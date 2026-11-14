@@ -1163,6 +1163,7 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
           ? { name: NO_ASSIGNEE_WORDS, nobody: true }
           : {
               name: task.assignee.name,
+              id: task.assignee.userId,
               picture: pictureOf(task.assignee.userId),
               nobody: false,
             }

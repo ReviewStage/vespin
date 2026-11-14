@@ -675,7 +675,7 @@ export function ListRow(props: ListRowProps) {
         end={
           <HStack spacing={SPACE.TIGHT + 2}>
             {face === undefined ? null : (
-              <Avatar name={face.name} picture={face.picture} size={MARK_SIZE.FACE} />
+              <Avatar name={face.name} id={face.id} picture={face.picture} size={MARK_SIZE.FACE} />
             )}
             {due !== undefined ? (
               <RowDue due={due} now={now} />
