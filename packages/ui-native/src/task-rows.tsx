@@ -494,6 +494,8 @@ type VersionRowProps = {
   readonly now: number;
   /** Whether it is the description as it stands, which its line says first. */
   readonly current: boolean;
+  /** Whether it heads its list, which then draws no hairline over it, as a plain list in Mail or Files begins. */
+  readonly first: boolean;
   readonly onPress: () => void;
 };
 
@@ -504,7 +506,16 @@ type VersionRowProps = {
  * "Current" leading it on the description as it stands. VoiceOver hears it
  * as one element, the writer then what it did and when, the time in words.
  */
-export function VersionRow({ writer, name, summary, at, now, current, onPress }: VersionRowProps) {
+export function VersionRow({
+  writer,
+  name,
+  summary,
+  at,
+  now,
+  current,
+  first,
+  onPress,
+}: VersionRowProps) {
   const colors = useColors();
   const said = current ? `${VERSION_HISTORY_WORDS.CURRENT} · ${summary}` : summary;
 
@@ -513,6 +524,8 @@ export function VersionRow({ writer, name, summary, at, now, current, onPress }:
       onPress={onPress}
       modifiers={[
         ...rowPlacement(colors),
+        // Note that a headless plain list draws a hairline over its first row, which iOS's own plain lists leave out.
+        ...(first ? [listRowSeparator("hidden", "top")] : []),
         buttonStyle("borderless"),
         accessibilityLabel(name),
         accessibilityValue([said, sinceHeard(at, now)].join(", ")),

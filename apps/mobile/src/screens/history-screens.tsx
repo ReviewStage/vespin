@@ -139,7 +139,7 @@ export function HistoryScreen() {
             history.older === HISTORY_READ.FAILED ? VERSION_HISTORY_WORDS.OLDER_UNREAD : undefined
           }
         >
-          {revisions.map((line) => (
+          {revisions.map((line, index) => (
             <VersionRow
               key={line.seq}
               writer={versionWriter(line.lastEdit, pictureOf, harnessOf(line.agentId))}
@@ -148,6 +148,7 @@ export function HistoryScreen() {
               at={line.lastEdit.at}
               now={now}
               current={line.seq === newest}
+              first={index === 0}
               onPress={() =>
                 router.push({
                   pathname: onOwnTab(VERSION_ROUTE),

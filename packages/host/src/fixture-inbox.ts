@@ -1575,7 +1575,10 @@ const INVITES_HISTORY: DescriptionRevisionsAnswer = {
 function invitesVersionBody(seq: number): string {
   const newest = INVITES_HISTORY.revisions[0]?.seq;
 
-  return seq === newest ? INVITES_DESCRIPTION : (INVITES_DESCRIPTION.split("\n\n")[0] ?? "");
+  // Note that an older version is the description as it stood before its Approach was written, a draft of several blocks, as a version page reads one whole.
+  return seq === newest
+    ? INVITES_DESCRIPTION
+    : INVITES_DESCRIPTION.slice(0, INVITES_DESCRIPTION.indexOf("\n## Approach"));
 }
 
 /** The pages the reference journey's agent showed, as its task's page lists them. */
