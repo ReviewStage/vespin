@@ -446,7 +446,14 @@ export function FailureNoticeProvider({
  * It keeps the bars drawn in the sheet apart from the root's, so its notice
  * stands over the sheet's own composer, never one on the screen under it.
  */
-export function FailureNoticeLayer({ children }: { readonly children: ReactNode }) {
+export function FailureNoticeLayer({
+  children,
+  inFront,
+}: {
+  readonly children: ReactNode;
+  /** Whether the sheet is the screen in front: false once a page opens over it, such as one a notification opened, so its notice stands where it is seen rather than in the sheet under that page. */
+  readonly inFront: boolean;
+}) {
   const stage = useContext(Stage);
   const layer = useId();
 
@@ -458,7 +465,7 @@ export function FailureNoticeLayer({ children }: { readonly children: ReactNode 
   const { height: windowHeight } = useWindowDimensions();
   const [placeFoot, setPlaceFoot] = useState(0);
 
-  useEffect(() => enter(layer), [enter, layer]);
+  useEffect(() => (inFront ? enter(layer) : undefined), [enter, layer, inFront]);
 
   // Note that a form sheet on an iPad stands short of the window's foot, which the window's measures of the bars under it are taken from.
   const onLayout = (_event: LayoutChangeEvent) =>
