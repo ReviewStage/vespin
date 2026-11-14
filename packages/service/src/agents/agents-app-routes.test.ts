@@ -383,7 +383,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         );
 
         const { agent } = readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started);
-        assert.equal(agent.planId, task.id);
+        assert.equal(agent.taskId, task.id);
         assert.equal(agent.model, AGENT_DEFAULT_CHOICE.model);
         assert.equal(agent.effort, AGENT_DEFAULT_CHOICE.effort);
         // The answer reads the agent once its opening queued the first turn, which awaits a runner.
@@ -458,7 +458,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           TASK_STATUS.IN_PROGRESS,
           "the task its agent started on is under way",
         );
-        assert.equal(agent.planId, plan.id);
+        assert.equal(agent.taskId, plan.id);
         assert.equal(agent.brief, AGENT_BRIEF.PROMPT);
         assert.equal(agent.status, AGENT_STATUS.RUNNING, "its first turn is queued");
         assert.deepEqual(
@@ -513,7 +513,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         );
 
         assert.equal(
-          readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).agent.planId,
+          readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).agent.taskId,
           task.id,
         );
         assert.equal(
@@ -649,7 +649,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
 
         assert.equal(started.agentRefusal, undefined);
         assert.equal(started.plan.repository, null);
-        assert.equal(started.agent?.planId, started.plan.id);
+        assert.equal(started.agent?.taskId, started.plan.id);
         assert.equal(github.sent.length, asked, "a start in no repository asks GitHub nothing");
         assert.deepEqual(
           planned,

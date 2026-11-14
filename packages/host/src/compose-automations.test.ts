@@ -83,7 +83,7 @@ const SCHEDULE = {
 
 const SUMMARY = {
   id: AUTOMATION_ID,
-  planId: null,
+  taskId: null,
   planName: null,
   workspaceId: WORKSPACE_ID,
   name: "Triage new issues",

@@ -405,7 +405,7 @@ const REFUSED_ITEM = fixtureId(2);
 
 /** Where the recorded thread's words draw its still from: the still's address on the thread, as an agent's post names a picture it attached. */
 const RECORDED_PICTURE_ADDRESS = inboxAttachmentAddress(
-  { kind: LINK_DESTINATION.INBOX_ITEM, planId: TASK.INVITES, itemId: RECORDED.ITEM },
+  { kind: LINK_DESTINATION.INBOX_ITEM, taskId: TASK.INVITES, itemId: RECORDED.ITEM },
   RECORDED.PICTURE,
   FIXTURE_WORKSPACE_SLUG,
 );
@@ -812,7 +812,7 @@ function agentOn(
 ): AgentSummary {
   return {
     id,
-    planId: taskId,
+    taskId: taskId,
     model: MODEL,
     effort: "high",
     title,
@@ -2284,7 +2284,7 @@ function pinnedAgents(
 
   const added = agents
     .filter(({ id }) => choices.get(id)?.pinned === true && !kept.some((pin) => pin.agentId === id))
-    .map(({ id, planId }) => ({ agentId: id, taskId: planId, pinnedAt: LANDED }));
+    .map(({ id, taskId }) => ({ agentId: id, taskId: taskId, pinnedAt: LANDED }));
 
   return [...kept, ...added];
 }
@@ -2569,9 +2569,9 @@ const ANSWERS: StagedAnswers = {
   // Note that a start with no agent, File for later's, is answered with the task made alone.
   [ACT_KIND.TASKS_START]: ({ agent }) =>
     agent === undefined
-      ? { planId: fixtureId(92) }
+      ? { taskId: fixtureId(92) }
       : {
-          planId: fixtureId(92),
+          taskId: fixtureId(92),
           agentStart: {
             agent: agentOn(
               fixtureId(93),
@@ -2586,10 +2586,10 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.TASKS_RENAME]: () => true,
   [ACT_KIND.TASKS_DELETE]: () => true,
   // Note that a reply is taken as the service takes one, answered with its thread as it then stands, though nothing here moves.
-  [ACT_KIND.TASKS_COMMENT_ACT]: ({ planId, threadId, action }) => {
+  [ACT_KIND.TASKS_COMMENT_ACT]: ({ taskId, threadId, action }) => {
     const thread = INVITES_THREADS.find((each) => each.id === threadId);
 
-    if (planId !== TASK.INVITES || thread === undefined) {
+    if (taskId !== TASK.INVITES || thread === undefined) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
     }
 

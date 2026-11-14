@@ -55,7 +55,7 @@ const SUMMARY: TaskSummary = {
 /** A coding agent on the task, and a second beside it. */
 const AGENT: AgentSummary = {
   id: "0b5f8c1e-4d3a-4e6b-8f2c-9a1d7e3b5c40",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Invite expiry",

@@ -849,7 +849,7 @@ export function DesktopVersionHistory({
       ? undefined
       : linkOf(
           numbered(
-            { kind: LINK_DESTINATION.VERSION, planId: linked.taskId, revision },
+            { kind: LINK_DESTINATION.VERSION, taskId: linked.taskId, revision },
             linked.place.workspace,
           ),
           linked.place.workspace,

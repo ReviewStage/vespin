@@ -169,10 +169,10 @@ function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
   const { task: drawn } = region;
   const workspace = slugOf(tasks.workspaces, drawn.workspaceId);
   // Note that the task's links name it by its number, where it has one, as every link to it is written.
-  const planId = taskLinkStep(drawn);
+  const taskId = taskLinkStep(drawn);
 
   const task: LinkAtHand = {
-    link: { workspace, place: { kind: LINK_DESTINATION.TASK, planId } },
+    link: { workspace, place: { kind: LINK_DESTINATION.TASK, taskId } },
     thing: LINK_THING.TASK,
     name: drawn.name,
   };
@@ -198,7 +198,7 @@ function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
     ? panelTabPlace({ taskId: drawn.id }, tasks.sidePanel.tab)
     : undefined;
 
-  const held = tabPlace === undefined ? undefined : withTaskId(tabPlace, planId);
+  const held = tabPlace === undefined ? undefined : withTaskId(tabPlace, taskId);
   const thing = held === undefined ? undefined : panelThing(held);
 
   const panel: LinkAtHand | undefined =

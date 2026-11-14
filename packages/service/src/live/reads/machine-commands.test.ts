@@ -26,7 +26,7 @@ import { machineCommandsRead } from "./machine-commands.js";
 /** The instant the clock reads now, which every command these tests queue is at or after. */
 const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis));
 
-/** The account's unclaimed commands of the kinds given as a Mac following them live decodes them, the statement run as Realtime runs it. */
+/** The account's unclaimed commands of the kinds given as a Mac following them live decodes them, the statement run as raw SQL. */
 const liveCommandsOf = (userId: string, kinds: readonly MachineCommandKind[]) =>
   Effect.gen(function* () {
     const statements = Option.getOrThrow(

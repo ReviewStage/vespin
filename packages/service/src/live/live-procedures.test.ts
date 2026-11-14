@@ -1232,7 +1232,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
         yield* beginAgentBoot(agent.id, new Date(0), undefined);
         const sql = yield* SqlClient.SqlClient;
 
-        // The boot's statement as Realtime runs it for `reader`, the agent's own transcript followed.
+        // The boot's statement run as raw SQL for `reader`, the agent's own transcript followed.
         const bootRowsFor = (reader: string) => {
           const statement = Option.getOrThrow(
             agentTranscriptRead.statements({

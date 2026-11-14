@@ -60,7 +60,7 @@ function agentNameNow(tasks: StepNameTasks, taskId: string, agentId: string): st
       : undefined;
 
   const listed = tasks.rows.agent(agentId);
-  const line = open ?? (listed?.planId === taskId ? listed : undefined);
+  const line = open ?? (listed?.taskId === taskId ? listed : undefined);
 
   return line === undefined ? undefined : agentName(line, tasks.agents.models);
 }

@@ -44,7 +44,7 @@ const PAIRING_CODE = "BCDF-GHJK";
 const STARTED = {
   agent: {
     id: AGENT_ID,
-    planId: TASK_ID,
+    taskId: TASK_ID,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,
