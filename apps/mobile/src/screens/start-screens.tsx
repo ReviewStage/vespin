@@ -114,7 +114,7 @@ interface FileForLater {
   readonly onFile: () => void;
 }
 
-/** The sheet's bar: its name, Cancel at its leading edge, and Start at its trailing one, lit once there are words or pictures to send and while no start is out, with File for later before it on New task; and the ask a Cancel or a swipe down raises while the sheet holds a draft. */
+/** The sheet's bar: its name, the system's ✕ at its leading edge (Cancel to VoiceOver), and Start at its trailing one, lit once there are words or pictures to send and while no start is out, with File for later before it on New task; and the ask the ✕ or a swipe down raises while the sheet holds a draft. */
 function SheetBar({
   title,
   ready,
@@ -145,7 +145,12 @@ function SheetBar({
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        {/* Note that the sheet closes with the system's ✕, as Mail's compose sheet does, its word kept for VoiceOver. */}
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={WORDS.CANCEL}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         {file === undefined ? null : (
