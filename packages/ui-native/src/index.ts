@@ -28,6 +28,7 @@ export {
   Chip,
   FieldChip,
   FollowingChip,
+  LabelChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -118,6 +119,7 @@ export {
 export {
   NO_WRITES,
   newestValue,
+  takesRowBack,
   type WriteSent,
   type WritesBook,
   writeSent,
