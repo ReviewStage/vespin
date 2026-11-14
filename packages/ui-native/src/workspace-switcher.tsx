@@ -374,8 +374,7 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
     presentation = SWITCHER_PRESENTATION.POPOVER,
   } = props;
 
-  const colors = useColors();
-  // Note that the popover stands over a regular window, so it draws on the lifted ground, its list with it.
+  // Note that the sheet and the popover stand over the window, so in dark they draw on the lifted ground, their list with them, as iOS lifts what it presents.
   const lifted = useColors(true);
   // Note that at an accessibility size the sheet opens at its full height, since at its half height the account's row, the way into Settings, stood below the fold.
   const detents = useAccessibilitySize() ? SHEET_DETENTS.WHOLE : SHEET_DETENTS.HALF_THEN_WHOLE;
@@ -424,10 +423,12 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
           modifiers={[
             presentationDetents([...detents]),
             presentationDragIndicator("visible"),
-            presentationBackground(colors.GROUPED),
+            presentationBackground(lifted.GROUPED),
           ]}
         >
-          <SwitcherList props={props} closed={closed} />
+          <ElevatedGround>
+            <SwitcherList props={props} closed={closed} />
+          </ElevatedGround>
         </Group>
       </BottomSheet>
     );
@@ -449,7 +450,7 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
           ]}
         >
           {opened || presented ? (
-            <ElevatedGround lifted>
+            <ElevatedGround>
               <SwitcherList props={props} closed={closed} onContentHeight={setMeasured} />
             </ElevatedGround>
           ) : null}

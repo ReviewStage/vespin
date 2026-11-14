@@ -116,11 +116,11 @@ builds a control of its own.
   screen and a list stand on the brand's `GROUND` and `SIDEBAR`, never the
   system's grays, and so do a split view's list and detail columns
   themselves (`containerBackground`) and a sheet or popover to its edge
-  (`presentationBackground`), a form sheet or popover over a window regular
-  both ways lifted in dark onto the panel's dialog fill (`useColors`'s lifted
-  theme, under `ElevatedGround` or a sheet's own `elevated`), every ground in
-  it included, as iOS lifts presented content, so it never stands darker
-  than the dimmed window behind it; a split view's sidebar paints nothing, so it
+  (`presentationBackground`), every sheet and popover, an iPhone's card as
+  much as an iPad's form sheet, lifted in dark onto the panel's dialog fill
+  (`useColors`'s lifted theme, under `ElevatedGround` or `useColors(true)`),
+  every ground in it included, as iOS lifts presented content, so it never
+  stands as black as the page behind it; a split view's sidebar paints nothing, so it
   stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
   inset cards; and the tint is the brand's copper, never the system's blue.
   Only a control's states and a label's hierarchy are the system's.

@@ -26,7 +26,7 @@ import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
 import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
-import { useSheetsFloat, useWindowSizeClass } from "../use-window-size-class.js";
+import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { VoiceCallProvider } from "../voice-call.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
@@ -53,7 +53,7 @@ const SHEET_ROUTE = {
   NEW_WORKSPACE: "new-workspace",
 } as const;
 
-/** The sheets drawn lifted when they stand as form sheets over a regular window. */
+/** The sheets, each drawn on the lifted ground in dark. */
 const LIFTED_SHEETS: ReadonlySet<string> = new Set(Object.values(SHEET_ROUTE));
 
 /**
@@ -118,9 +118,7 @@ function GuardedScreens() {
         sheetGrabberVisible: true,
       };
 
-  // Note that a sheet over a window regular both ways is a form sheet standing above the dimmed window, so in dark it draws on the lifted ground, as iOS lifts presented content; the app's own pages and an iPhone's full sheets, upright or on its side, keep the plain ground.
-  const lifted = useSheetsFloat();
-
+  // Note that every sheet stands over the window it was opened from, as a card on an iPhone and a form sheet on an iPad, so in dark it draws on the lifted ground, as iOS lifts what it presents; the app's own pages keep the plain ground.
   const sheetLayout = ({
     route,
     children,
@@ -128,11 +126,7 @@ function GuardedScreens() {
     route: { name: string };
     children: ReactElement;
   }): ReactElement =>
-    LIFTED_SHEETS.has(route.name) ? (
-      <ElevatedGround lifted={lifted}>{children}</ElevatedGround>
-    ) : (
-      children
-    );
+    LIFTED_SHEETS.has(route.name) ? <ElevatedGround>{children}</ElevatedGround> : children;
 
   return (
     <>

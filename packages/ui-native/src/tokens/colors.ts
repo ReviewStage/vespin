@@ -91,7 +91,7 @@ const STRONGER = {
 } as const;
 
 /**
- * The dark theme of a sheet or popover standing over a regular window, lifted
+ * The dark theme of a sheet or popover standing over the window, lifted
  * as iOS lifts presented content in dark: the panel's dialog fill
  * (`SURFACE`) as every ground it draws on (a plain page's, a list's, and a
  * form's alike, so no face of it drops back to black), and its rows on the
@@ -109,7 +109,7 @@ const ELEVATED_DARK = {
 
 const ELEVATED_STRONGER_DARK = strongerContrast(ELEVATED_DARK);
 
-/** Whether what is drawn stands in a sheet or popover lifted over a regular window. */
+/** Whether what is drawn stands in a sheet or popover, lifted over the window. */
 const ElevatedContext = createContext(false);
 
 /**
@@ -132,21 +132,12 @@ export function useColors(elevated?: boolean): BrandColors {
 
 /**
  * What stands in a sheet or popover, drawn on the lifted ground in dark
- * (`ELEVATED_DARK`) while `lifted`: while it stands as a form sheet or
- * popover over a window regular both ways, an iPad's or the open Duo's. A
- * full sheet on an iPhone, upright or on its side, stands over nothing it
- * must be told apart from, so it keeps the plain ground. Note that a sheet stays wrapped whichever it is, so a
- * window crossing the size classes changes the value alone and never
- * remounts what the sheet holds, words typed in it among them.
+ * (`ELEVATED_DARK`), as iOS lifts every view it presents: an iPhone's card,
+ * standing over the page it slid up from, as much as an iPad's form sheet or
+ * popover over the dimmed window, as Mail's and Settings' sheets stand.
  */
-export function ElevatedGround({
-  lifted,
-  children,
-}: {
-  readonly lifted: boolean;
-  readonly children: ReactNode;
-}) {
-  return createElement(ElevatedContext.Provider, { value: lifted }, children);
+export function ElevatedGround({ children }: { readonly children: ReactNode }) {
+  return createElement(ElevatedContext.Provider, { value: true }, children);
 }
 
 /** The ink a tone is drawn in. */
