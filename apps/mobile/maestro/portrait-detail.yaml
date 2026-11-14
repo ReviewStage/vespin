@@ -1,0 +1,71 @@
+# portrait-detail.yaml -- a portrait iPad's two columns: a task's agent and its pull request pushed inside the detail column beside the Tasks list, each under its own bar with the stack's Back, and Back returning to the task, as Mail opens a message's related pages in portrait; skipped on a compact window, which stands no list beside its detail.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that each wait for the screen to settle is capped at five seconds,
+# because the agent's page draws its turn still running, whose mark never
+# stops moving, so an uncapped wait always ran to Maestro's fifteen.
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+# Launched on the host's Inbox fixture, whose invitations task holds its
+# agent and the pull request #128 it opened (`@repo/host/fixture-inbox`);
+# nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- waitForAnimationToEnd:
+    timeout: 5000
+# A regular window in portrait stands "Choose an item" beside the Inbox's
+# list; a compact one stands the list alone, and skips the rest.
+- runFlow:
+    when:
+      visible: "Choose an item"
+    commands:
+      - setOrientation: PORTRAIT
+      - tapOn: "Tasks"
+      - tapOn: "Teammate invitations"
+      - assertVisible: "Agents"
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - takeScreenshot: portrait-task
+      # The agent opens inside the detail column, the Tasks list still
+      # beside it, under its own bar: its name, Archive and Pin, its ⋯, and
+      # the stack's Back, with the composer at the column's foot.
+      - tapOn: "Build teammate invitations"
+      - extendedWaitUntil:
+          visible: "Add a way to resend an invite that expired."
+          timeout: 30000
+      - assertVisible: "Teammate invitations"
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - takeScreenshot: portrait-agent
+      # Back pops the column alone, landing on the task's page.
+      - tapOn:
+          text: "Back"
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - assertVisible: "Agents"
+      - takeScreenshot: portrait-agent-back
+      # The pull request opens in the same column from its agent's row,
+      # its bar standing Open on GitHub and Refresh as glyphs, its merge
+      # under the checks.
+      - tapOn: "#128"
+      - extendedWaitUntil:
+          visible: "Ready to merge"
+          timeout: 30000
+      - assertVisible: "Teammate invitations"
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - takeScreenshot: portrait-pull-request
+      - tapOn:
+          text: "Back"
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - assertVisible: "Agents"
+      - takeScreenshot: portrait-pull-request-back

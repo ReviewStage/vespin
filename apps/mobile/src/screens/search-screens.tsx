@@ -40,7 +40,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useDetailStack } from "../detail-stack.js";
+import { useDetailStack, useStackRoot } from "../detail-stack.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useHandColumns } from "../place-columns.js";
@@ -457,7 +457,7 @@ function SearchSplitColumns({
   readonly root?: string | undefined;
 }) {
   const { query, setQuery, scope } = words;
-
+  useStackRoot(SIDEBAR_PLACE.SEARCH, root);
   useHandColumns(SIDEBAR_PLACE.SEARCH, {
     content,
     contentBar: {
