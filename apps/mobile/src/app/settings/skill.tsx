@@ -1,8 +1,8 @@
-// skill.tsx -- one installed skill's page under Settings' Skills, as the panel's Open shows it: its SKILL.md as written, and the files beside it, read once as the page opens.
+// skill.tsx -- one installed skill's page under Settings' Skills, as the panel's Open shows it: its SKILL.md's frontmatter keys, then its body as Markdown, and the files beside it, read once as the page opens.
 
 import type { InstalledSkillContent } from "@repo/features/installed-skill-route-wire";
 import { formatBytes } from "@repo/features/number-format";
-import { readSkillFile } from "@repo/features/skill-file";
+import { readSkillFile, SKILL_KEY } from "@repo/features/skill-file";
 import { fencedSkillFile, SKILLS_LINE } from "@repo/features/skills-settings-words";
 import { readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
@@ -28,18 +28,32 @@ type SkillRead =
 
 /**
  * The skill's words, then its files by path and size, as the panel's Open
- * lists them. Note that the body under its frontmatter is drawn as the
- * Markdown it is, so it wraps to the phone's width, rather than as one block
- * of code a reader scrolls sideways through; a file with no frontmatter to
- * read stands as written.
+ * lists them. Note that the frontmatter's keys stand as a list, each key in
+ * code beside its value, then the body under them as the Markdown it is, so
+ * both wrap to the phone's width rather than standing as one block of code
+ * a reader scrolls sideways through. The name is left out, since the page's
+ * heading says it. A file with no frontmatter to read, or none but its
+ * frontmatter, stands as written.
  */
 function skillWords(content: InstalledSkillContent): string {
   const files = content.files.map((file) => `- \`${file.path}\` · ${formatBytes(file.bytes)}`);
-  const body = readSkillFile(content.skillFile)?.body.trim();
-  const words = body === undefined ? fencedSkillFile(content.skillFile) : body;
+  const read = readSkillFile(content.skillFile);
+  const body = read?.body.trim() ?? "";
 
-  return [words, `**${SKILLS_LINE.FILES}**`, ...files].join("\n\n");
+  const keys = [...(read?.keys ?? [])]
+    .flatMap(([key, value]) => (key === SKILL_KEY.NAME ? [] : [`- \`${key}\`: ${value}`]))
+    .join("\n");
+
+  const words =
+    read === undefined || body.length === 0
+      ? [fencedSkillFile(content.skillFile)]
+      : [...(keys.length === 0 ? [] : [keys]), body];
+
+  return [...words, `**${SKILLS_LINE.FILES}**`, ...files].join("\n\n");
 }
+
+/** What the page says while it reads a skill it was opened on with no name. */
+const READING_UNNAMED = readingWords("the skill");
 
 /** The bar's title over a skill's page: none, since the page's own heading names the skill. */
 const NO_BAR_TITLE = "";
@@ -90,7 +104,11 @@ export default function SkillScreen() {
             }}
           />
         ) : (
-          <EmptyState title={readingWords(name)} symbol={GLYPH.SKILL} loading />
+          <EmptyState
+            title={name.length === 0 ? READING_UNNAMED : readingWords(name)}
+            symbol={GLYPH.SKILL}
+            loading
+          />
         )}
       </Screen>
     </>
