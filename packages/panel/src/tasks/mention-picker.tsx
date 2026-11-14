@@ -2120,10 +2120,12 @@ export function useMentionPicker({
     ? threadRows(feed.data, taskId, tasksWorkspace, listed.tasks)
     : [];
 
-  // Note that a thread of a task the window lists not is offered once the task is read into its list, each asked once while the list stands open.
+  // Note that a thread of a task the window lists not is offered once the task is read into its list, each asked once while the list stands open and again once it opens anew.
   const threadTasksOutside = threadsAsked ? unlistedThreadTasks(feed.data, listed.tasks) : [];
   const threadTasksAsked = useRef(new Set<string>());
   useEffect(() => {
+    if (!threadsAsked) threadTasksAsked.current.clear();
+
     for (const outside of threadTasksOutside) {
       if (threadTasksAsked.current.has(outside)) continue;
       threadTasksAsked.current.add(outside);
