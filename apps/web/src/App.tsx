@@ -1,4 +1,5 @@
 import { PANEL_ASSET_BASE } from "@repo/features/link-home";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   BUTTON_VARIANT,
   ButtonLink,
@@ -54,7 +55,13 @@ export function App(): React.JSX.Element {
         </>
       }
       close={{
-        title: "Free and open source.",
+        title: (
+          <>
+            Open Source.
+            <br />
+            Try {PRODUCT_NAME} today.
+          </>
+        ),
         actions: (
           <>
             <SiteDownload />

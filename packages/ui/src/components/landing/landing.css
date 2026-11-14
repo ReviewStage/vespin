@@ -39,9 +39,10 @@
   }
 
   /* A hairline across the page's whole width, between its parts. */
+  /* off-scale: the hairline at half the border's ink, barely there */
   .ui-landing-rule {
     height: 1px;
-    background: var(--ui-color-border);
+    background: color-mix(in srgb, var(--ui-color-border) 50%, transparent);
   }
 
   /* The bar: across the page at its top, then, once the page scrolls, a
@@ -248,6 +249,15 @@
      stands on under its row on the frame, and the Inbox's and a task's
      columns. It stands at one to one wherever the stage is wide enough,
      and a narrower stage scales it down whole (`--ui-hero-app-fit`). */
+  /* Inside the mockups every edge is drawn in the border's one gray, the
+     stronger edge a control or a card would take included, so the screens
+     read as quietly as the page around them. */
+  .ui-hero-app,
+  .ui-landing-desktop,
+  .ui-landing-phone-screen {
+    --ui-color-border-strong: var(--ui-color-border);
+  }
+
   .ui-hero-app-room {
     position: relative;
     /* off-scale: the app's height, a laptop window's */
@@ -278,7 +288,7 @@
     /* The window's edge is a ring of its shadow rather than a border, so
        nothing the window clips can paint over the edge's curve. */
     box-shadow:
-      0 0 0 1px var(--ui-color-border-strong),
+      0 0 0 1px var(--ui-color-border),
       0 48px 140px -24px var(--ui-color-shadow-deep);
   }
 
@@ -1054,7 +1064,7 @@
     width: 100%;
     aspect-ratio: 16 / 10;
     overflow: hidden;
-    border: 1px solid var(--ui-color-border-strong);
+    border: 1px solid var(--ui-color-border);
     border-radius: var(--ui-display-window-radius);
     background: var(--ui-color-sidebar);
     box-shadow: var(--ui-display-landing-screen-glow);
@@ -1108,7 +1118,7 @@
     border-radius: var(--ui-display-phone-radius);
     background: var(--ui-color-sidebar);
     box-shadow:
-      inset 0 0 0 1px var(--ui-color-border-strong),
+      inset 0 0 0 1px var(--ui-color-border),
       var(--ui-display-landing-screen-glow);
   }
 
@@ -1610,7 +1620,7 @@
 
   .ui-landing-devices-phone .ui-landing-phone {
     box-shadow:
-      inset 0 0 0 1px var(--ui-color-border-strong),
+      inset 0 0 0 1px var(--ui-color-border),
       0 0 0 2.5cqw var(--ui-color-ground),
       0 6cqw 16cqw var(--ui-color-shadow-deep);
   }
@@ -1730,16 +1740,16 @@
     .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) {
       padding: 0;
       overflow: hidden;
-      border-right: 1px solid var(--ui-color-border-strong);
-      border-bottom: 1px solid var(--ui-color-border-strong);
+      border-right: 1px solid var(--ui-color-border);
+      border-bottom: 1px solid var(--ui-color-border);
       border-radius: var(--ui-display-window-radius);
       aspect-ratio: var(--ui-landing-crop-w) / var(--ui-landing-crop-h);
     }
 
     .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) .ui-landing-scene {
       overflow: clip;
-      border-top: 1px solid var(--ui-color-border-strong);
-      border-left: 1px solid var(--ui-color-border-strong);
+      border-top: 1px solid var(--ui-color-border);
+      border-left: 1px solid var(--ui-color-border);
       border-top-left-radius: var(--ui-display-window-radius);
     }
 
