@@ -294,7 +294,7 @@ export interface CommentStart {
   readonly words: string;
   readonly onWords: (words: string) => void;
   readonly sendable: boolean;
-  readonly send: (refused: (start: RefusedStart) => void) => string | undefined;
+  readonly send: (refused: (start: RefusedStart, noticed: boolean) => void) => string | undefined;
   readonly note: string | undefined;
 }
 
@@ -364,7 +364,7 @@ export function useCommentStart(
   );
 
   return useMemo(() => {
-    const send = (refused: (start: RefusedStart) => void): string | undefined => {
+    const send = (refused: (start: RefusedStart, noticed: boolean) => void): string | undefined => {
       const kept = words.trim();
 
       if (kept === "" || inFlight.current || block === undefined || quote === undefined) {
@@ -408,9 +408,15 @@ export function useCommentStart(
                 ? commentRefusalNote(answer.refused)
                 : COMMENT_NOTE.NOT_POSTED,
           unanswered: COMMENT_NOTE.NOT_POSTED,
-          inPlace: (why) => {
-            keepStartDraft(taskId, block, { words: kept, sent: start, note: why });
-            refused({ ...start, note: why });
+          inPlace: (why, noticed) => {
+            const now = startDraftOf(taskId, block);
+
+            // Note that words typed toward this block since the send, in a field opened on it again, are kept over the refused ones.
+            if (now === undefined || now.words.trim() === "") {
+              keepStartDraft(taskId, block, { words: kept, sent: start, note: why });
+            }
+
+            refused({ ...start, note: why }, noticed);
           },
           went: BUZZ.SUCCESS,
         },
