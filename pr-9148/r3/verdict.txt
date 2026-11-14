@@ -1,0 +1,2 @@
+#9148 (in #9147 at 23455cd23). Round 3, bundle A (base e799afd4b, built 9deeec7c2), iPhone 18 Pro on Nov 12's native app (layout and behavior only). Judged from the pushed stills; the Mac's run logs weren't reachable this pass.
+PASS: new-task.yaml and failure-notice.yaml ran with no failed-step still. A refused start keeps New task on its words with "Could not connect. Check your internet connection." under them, the capsule row above the keyboard.

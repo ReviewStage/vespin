@@ -1,0 +1,2 @@
+#9057 at 4e15148c6. Round 3, bundle A (base e799afd4b, built 9deeec7c2), iPhone 18 Pro on Nov 12's native app (layout and behavior only). Judged from the pushed stills; the Mac's run logs weren't reachable this pass.
+PASS: tasks.yaml ran with no failed-step still (list, row menu, leading swipe, rename, delete ask, ⋯ menu, marked done). After Mark done, the list shows Pinned, Following, the sections and My tasks, with the task gone from its group.
