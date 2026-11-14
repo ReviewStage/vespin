@@ -272,7 +272,12 @@ appId: dev.vespin.ios
           direction: DOWN
           centerElement: true
 - waitForAnimationToEnd
-- tapOn: "What the expired invite page says"
+# Note that the row is tapped again where the screen does not change, because
+# on the folded Duo it stands in view at launch, so no scroll comes first, and
+# a tap there once left the list in front on both of the sweep's tries.
+- tapOn:
+    text: "What the expired invite page says"
+    retryTapIfNoChange: true
 - waitForAnimationToEnd
 - tapOn:
     text: "More"

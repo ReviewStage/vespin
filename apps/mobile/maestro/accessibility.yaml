@@ -49,7 +49,9 @@ appId: dev.vespin.ios
 - scrollUntilVisible:
     element: "Teammate invitations"
     direction: DOWN
-- tapOn: "Teammate invitations"
+- tapOn:
+    text: "Teammate invitations"
+    retryTapIfNoChange: true
 - assertVisible: "Created by .*"
 - waitForAnimationToEnd:
     timeout: 5000

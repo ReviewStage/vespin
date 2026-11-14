@@ -211,7 +211,9 @@ onFlowComplete:
 - scrollUntilVisible:
     element: "Invite funnel"
     direction: UP
-- tapOn: "Invite funnel"
+- tapOn:
+    text: "Invite funnel"
+    retryTapIfNoChange: true
 - extendedWaitUntil:
     visible: "Invites sent in the staging workspace.*"
     timeout: 90000
