@@ -15,6 +15,7 @@ import {
   HoverCardNote,
   HoverCardRow,
   STATUS_TONE,
+  type WordsMark,
 } from "@repo/ui";
 import { personActor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
@@ -178,6 +179,27 @@ export function MachineChipOwner({
   const { machine } = useMachine(machineId, workspace);
 
   return machine === undefined ? null : <MachineOwnerFace userId={machine.userId} />;
+}
+
+/**
+ * The face set inside words that end in a machine's name ("Simulator on
+ * Theo's MacBook Pro"), right before that name: its owner's, where it is a
+ * teammate's; none where the words do not end in the machine's name as the
+ * workspace's machines read names it, or the machine is unread.
+ */
+export function useMachineNameMark(
+  machineId: string | undefined,
+  workspace: string,
+  words: string,
+): WordsMark | undefined {
+  const { machine } = useMachine(machineId, workspace);
+
+  if (machine === undefined || !words.endsWith(` ${machine.name}`)) return undefined;
+
+  return {
+    at: words.length - machine.name.length,
+    mark: <MachineOwnerFace userId={machine.userId} />,
+  };
 }
 
 /**

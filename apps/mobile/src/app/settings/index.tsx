@@ -1,4 +1,4 @@
-// index.tsx -- Settings' main list, as iOS's own Settings stands and grouped as the panel's Settings sidebar groups its pages: the account at its head pushing to Account; Workspace, headed by the workspace the app works in pushing to its page, then its Cloud environment opening on vespin.dev and its Memory; Account, with Notifications pushing to its own page, Agents, Machines, Integrations, MCP, and Skills; and About with Send feedback.
+// index.tsx -- Settings' main list, as iOS's own Settings stands it, its groups untitled and each row led by the panel's glyph for its page, in the panel's sidebar order: the account at its head pushing to Account; the workspace the app works in pushing to its page, then its Cloud environment opening on vespin.dev and its Memory; Notifications pushing to its own page, Agents, Machines, Integrations, MCP, and Skills; and the build, What's new, Help, Send feedback, and Email us.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
@@ -15,17 +15,14 @@ import { SOCIAL_PROVIDER_LABEL } from "@repo/features/sign-in-provider";
 import { WORKSPACE_ROLE_WORDS } from "@repo/features/workspace-role";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
-import {
-  SETTINGS_PAGE_GROUP,
-  SETTINGS_PAGE_GROUP_HEADING,
-  SETTINGS_PAGE_TITLE,
-  SETTINGS_VIEW,
-} from "@repo/settings/settings-views";
+import { SETTINGS_PAGE_TITLE, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import {
   AccountRow,
+  GLYPH,
   ListSection,
   PUSH_ROW_GOES,
   PushRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   useColors,
@@ -53,7 +50,7 @@ import { selectPhotos, switcherWorkspace } from "../../workspace-switcher.js";
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
 /** What the row that writes the team a mail is called, as the panel's Help menu names it. */
-const CONTACT_WORDS = { EMAIL: "Email" } as const;
+const CONTACT_WORDS = { EMAIL: "Email us" } as const;
 
 /** Opens one of our public pages, the changelog or the docs, in the app's own Safari sheet, tinted copper, so the member stays in Settings. */
 function openInSheet(address: string, tint: string): void {
@@ -105,7 +102,7 @@ export default function SettingsScreen() {
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button onPress={() => router.back()}>Done</Stack.Toolbar.Button>
       </Stack.Toolbar>
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <SettingsForm>
           {account?.status === ACCOUNT_STATUS.SIGNED_IN ? (
             <ListSection>
@@ -119,7 +116,7 @@ export default function SettingsScreen() {
             </ListSection>
           ) : null}
           {chosen === undefined ? null : (
-            <ListSection title={SETTINGS_PAGE_GROUP_HEADING[SETTINGS_PAGE_GROUP.WORKSPACE]}>
+            <ListSection>
               <WorkspaceRow
                 workspace={switcherWorkspace(chosen, false, photos)}
                 role={WORKSPACE_ROLE_WORDS[chosen.role]}
@@ -127,11 +124,13 @@ export default function SettingsScreen() {
                 testId="settings-workspace"
               />
               <PushRow
+                symbol={GLYPH.ENVIRONMENT}
                 label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.ENVIRONMENT]}
                 goes={PUSH_ROW_GOES.OUT}
                 onPress={openCloudEnvironment}
               />
               <PushRow
+                symbol={GLYPH.MEMORY}
                 label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY]}
                 goes={PUSH_ROW_GOES.PAGE}
                 onPress={() => router.push(SETTINGS_ROUTE.MEMORY)}
@@ -139,9 +138,10 @@ export default function SettingsScreen() {
             </ListSection>
           )}
           {/* Note that the account's pages stand in the panel's order, Notifications in the place of its Preferences page, which holds the desktop's notifications. */}
-          <ListSection title={SETTINGS_PAGE_GROUP_HEADING[SETTINGS_PAGE_GROUP.ACCOUNT]}>
+          <ListSection>
             {notificationsShown ? (
               <PushRow
+                symbol={GLYPH.NOTIFICATIONS}
                 label={PUSH_NOTIFICATIONS_TITLE}
                 detail={notificationsDetail}
                 goes={PUSH_ROW_GOES.PAGE}
@@ -150,51 +150,60 @@ export default function SettingsScreen() {
               />
             ) : null}
             <PushRow
+              symbol={GLYPH.AGENT}
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.AGENTS]}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.AGENTS)}
             />
             <PushRow
+              symbol={GLYPH.HOST}
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.HOSTS]}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.MACHINES)}
             />
             <PushRow
+              symbol={GLYPH.PLUG}
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.INTEGRATIONS]}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.INTEGRATIONS)}
             />
             <PushRow
+              symbol={GLYPH.MCP_CLIENTS}
               label={MCP_CLIENTS_WORDS.TITLE}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.MCP)}
             />
             {chosen === undefined ? null : (
               <PushRow
+                symbol={GLYPH.SKILL}
                 label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.SKILLS]}
                 goes={PUSH_ROW_GOES.PAGE}
                 onPress={() => router.push(SETTINGS_ROUTE.SKILLS)}
               />
             )}
           </ListSection>
-          <ListSection title="About">
+          <ListSection>
             <ValueRow label="Version" value={buildWords()} />
             <PushRow
+              symbol={GLYPH.WHATS_NEW}
               label="What's new"
               goes={PUSH_ROW_GOES.OUT}
               onPress={() => openInSheet(LINK_PAGE.CHANGELOG, colors.TEXT)}
             />
             <PushRow
+              symbol={GLYPH.HELP}
               label="Help"
               goes={PUSH_ROW_GOES.OUT}
               onPress={() => openInSheet(LINK_PAGE.DOCS, colors.TEXT)}
             />
             <PushRow
+              symbol={GLYPH.FEEDBACK}
               label={FEEDBACK_WORDS.TITLE}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.FEEDBACK)}
             />
             <PushRow
+              symbol={GLYPH.EMAIL}
               label={CONTACT_WORDS.EMAIL}
               goes={PUSH_ROW_GOES.OUT}
               onPress={() => openInSafari(CONTACT_MAILTO)}
