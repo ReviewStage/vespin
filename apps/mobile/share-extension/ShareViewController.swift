@@ -8,9 +8,16 @@
 import SwiftUI
 import UIKit
 
+/// How tall the sheet asks to stand on an iPad, in points: its words, two pickers and a row of pictures, rather than a form sheet two-thirds empty.
+private let padSheetHeight: CGFloat = 480
+
 final class ShareViewController: UIViewController {
   override func viewDidLoad() {
     super.viewDidLoad()
+    // Note that an iPhone's share sheet stands at the system's own height, while an iPad's form sheet takes the height its controller asks for.
+    if traitCollection.userInterfaceIdiom == .pad {
+      preferredContentSize = CGSize(width: preferredContentSize.width, height: padSheetHeight)
+    }
     let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
     let sheet = ShareSheet(
       model: ShareSheetModel(snapshot: AppGroupFiles.snapshot()),
