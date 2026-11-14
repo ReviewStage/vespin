@@ -79,3 +79,12 @@ duo-folded-duo-light wrap-accessibility.yaml: fails 2 shots 3   Assert that ".*w
 duo-folded-duo-dark wrap-accessibility.yaml: fails 2 shots 3   Assert that ".*walked the invite flow.*" is visible... FAILED
   ax none on duo: contrast disabled transparency-key 
 duo-folded-duo-light wrap-workspace.yaml: fails 0 shots 4 
+duo-folded-duo-dark wrap-workspace.yaml: fails 2 shots 6   Tap on id: workspace-switcher... FAILED
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-search.yaml: fails 0 shots 4 
+duo-folded-duo-dark wrap-search.yaml: fails 0 shots 4 
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-pull-request.yaml: fails 2 shots 2   Scrolling UP until "Merge" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... FAILED
+duo-folded-duo-dark wrap-pull-request.yaml: fails 2 shots 4   Assert that "grace" is visible... FAILED
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-settings.yaml: fails 0 shots 11 
