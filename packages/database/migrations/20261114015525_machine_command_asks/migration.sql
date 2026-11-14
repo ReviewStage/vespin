@@ -2,6 +2,11 @@ DROP TRIGGER IF EXISTS "app_sync_update" ON "machine_command_ask";
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS "app_sync_write" ON "machine_command_ask";
 --> statement-breakpoint
+-- A Preview database that ran an earlier draft of this migration holds an older table and column; production never did, so these drop nothing there.
+DROP TABLE IF EXISTS "machine_command_ask";
+--> statement-breakpoint
+ALTER TABLE "machine_command" DROP COLUMN IF EXISTS "agent_id";
+--> statement-breakpoint
 CREATE TABLE "machine_command_ask" (
 	"id" uuid PRIMARY KEY,
 	"user_id" text NOT NULL,
