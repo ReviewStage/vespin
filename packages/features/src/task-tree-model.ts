@@ -144,7 +144,7 @@ export function taskTree(input: TaskTreeInput): TaskTree {
   const followed = followingTasks(unplaced, rest, DEFAULT_TASK_LIST_VIEW, readerId);
 
   const grouped = taskSections(
-    rest,
+    orderTasks(rest),
     TASK_GROUPING.REPOSITORY,
     (view.repositoryPins ?? []).map((pin) => pin.repository),
   );

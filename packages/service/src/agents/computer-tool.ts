@@ -17,6 +17,7 @@ import {
   COMPUTER_RECORDING_BOUNDS,
   COMPUTER_SCROLL_DIRECTION,
   type ComputerApp,
+  type ComputerCursor,
   type ComputerOutcome,
   type ComputerShot,
   MACHINE_COMMAND_KIND,
@@ -54,8 +55,9 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  * (`machine-routing.ts`): the machine the call names, or else the agent's
  * default. One call is one action, queued as a computer command for that
  * machine (`machine-command.ts`'s `askMachine`): the Mac asks the developer
- * about the app the first time it is used, and the call waits for that
- * answer and the action within `COMPUTER_TOOL_TIMEOUT_SECONDS`.
+ * about the app the first time it is used, for as long as its ask stands
+ * (`machineAskSeconds`), and the action then runs within
+ * `COMPUTER_TOOL_TIMEOUT_SECONDS`.
  *
  * Reading an app answers its window twice, as the browser's screenshot
  * does: a copy at most `COMPUTER_SHOTS.MODEL.edge` pixels long, which the
@@ -76,8 +78,8 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  * where it has one, so the agent can post it. The model is never handed it.
  */
 
-/** How long one call waits for the developer to allow the app and for the action to run, together. */
-export const COMPUTER_TOOL_TIMEOUT_SECONDS = 120;
+/** How long one action may run once its app is allowed; the ask before it stands apart (`machineAskSeconds`). */
+const COMPUTER_TOOL_TIMEOUT_SECONDS = 120;
 
 /** The two screenshots a read asks for: the model's copy, and the one kept beside the transcript. */
 const COMPUTER_SHOTS = {
@@ -321,6 +323,11 @@ type ActedOutcome = Exclude<
   { readonly recorded: unknown } | { readonly unrecorded: unknown }
 >;
 
+/** Where the agent's cursor stands once the action landed, as a share of the app's last read window, which the panel draws its pointer at; none where the Mac answered none. */
+function cursorOf(outcome: { readonly cursor?: ComputerCursor }): object | undefined {
+  return outcome.cursor === undefined ? undefined : { cursor: outcome.cursor };
+}
+
 /** What a call answers for what the action came to, its pictures kept or handed on; a recording started, how long it runs at most, as the browser's answers. */
 function answeredOutcome(
   transcript: ConversationTarget,
@@ -334,7 +341,7 @@ function answeredOutcome(
     const done =
       outcome.done === COMPUTER_ACTION.RECORD
         ? { done: outcome.done, maxSeconds: COMPUTER_RECORDING_BOUNDS.MAX_SECONDS }
-        : { done: outcome.done };
+        : { done: outcome.done, ...cursorOf(outcome) };
 
     if (acted === undefined) return Effect.succeed({ ...ran, ...done });
 
@@ -363,6 +370,7 @@ function answeredOutcome(
       window: outcome.window,
       elements: outcome.elements,
       truncated: outcome.truncated,
+      ...cursorOf(outcome),
       ...(shown === undefined
         ? undefined
         : {

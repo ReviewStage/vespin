@@ -1,10 +1,11 @@
 /**
- * workspaces.ts -- the account's workspaces (`workspace-wire.ts`): the list, a workspace created, renamed, given a photo, handed over, or deleted, and its members read, removed, given a role, or left.
+ * workspaces.ts -- the account's workspaces (`workspace-wire.ts`): the list, a workspace created, renamed, given a photo, handed over, or deleted, its members read, removed, given a role, or left, and its members' machines read.
  *
  * Every output is the wire schema flipped, so oRPC's output check encodes
  * the handler's value into the bytes the wire carries
  * (`packages/service/src/orpc/base.ts`); every JSON body is read whole
- * (`exactInput`), and the members read names its workspace in the query.
+ * (`exactInput`), and the members read names its workspace in the query,
+ * as the machines read names its workspace and, where it is one's alone, its member.
  * A workspace's photo, served as its bytes, stays on its own route.
  *
  * Each declares the refusals its handler answers beyond any procedure's
@@ -30,6 +31,8 @@ import {
   workspaceExperimentSetRequestSchema,
   workspaceLeaveAnswerSchema,
   workspaceLeaveRequestSchema,
+  workspaceMachinesAnswerSchema,
+  workspaceMachinesRequestSchema,
   workspaceMemberRemovalSchema,
   workspaceMemberRoleSchema,
   workspaceMembersAnswerSchema,
@@ -115,6 +118,11 @@ export const workspacesContract = {
     .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.WORKSPACES_MEMBERS }))
     .input(workspaceMembersQuerySchema)
     .output(EffectSchema.flip(workspaceMembersAnswerSchema)),
+  machines: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.WORKSPACES_MACHINES }))
+    .input(workspaceMachinesRequestSchema)
+    .output(EffectSchema.flip(workspaceMachinesAnswerSchema)),
   removeMember: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
     .meta(bodyCap(BODY_BYTES))

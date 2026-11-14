@@ -25,12 +25,16 @@ import { useMemo } from "react";
 import { AccountCell, AccountCellSkeleton } from "../accounts-table/accounts-table.js";
 import { useAdminDoors } from "../admin-doors.js";
 import { adminDayQuery, useAdminSignOut } from "../admin-queries.js";
-import { adminReadView } from "../admin-read-view.js";
+import {
+  type AdminRosterChoice,
+  type AdminScreenShell,
+  adminReadView,
+} from "../admin-read-view.js";
 import { activityFeatureLabel } from "../charts/activity-chart.js";
 import { AdminSection, STAT_LAYOUT, StatCards, type StatSpec } from "../charts/stat-card.js";
 import { AdminViewOptions } from "../chrome/controls.js";
 import { DayActivityNote, DayNote, retiredTitle } from "../chrome/notes.js";
-import { AdminPage, type AdminWayBack, type ViewerAccount } from "../chrome/page-header.js";
+import { AdminPage, type AdminWayBack } from "../chrome/page-header.js";
 import { PageSkeleton } from "../chrome/page-skeleton.js";
 import { ADMIN_TAB, dayReadQuery } from "../routing.js";
 
@@ -291,17 +295,12 @@ export function DayScreen({
   onBack,
   onOpenAccount,
   frame,
-}: {
-  day: string;
-  hideAdmins: boolean;
-  onHideAdminsChange: (hide: boolean) => void;
-  account: ViewerAccount | undefined;
-  onSignOut: () => Promise<void>;
-  onBack: () => void;
-  onOpenAccount: (id: string) => void;
-  /** Applied around every answer but the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
-}): React.JSX.Element {
+}: AdminScreenShell &
+  AdminRosterChoice & {
+    day: string;
+    onBack: () => void;
+    onOpenAccount: (id: string) => void;
+  }): React.JSX.Element {
   const { reads, gate } = useAdminDoors();
   const query = dayReadQuery(day, hideAdmins);
   const read = useQuery({ ...adminDayQuery(reads, query), enabled: !gate.heldAtGate() });

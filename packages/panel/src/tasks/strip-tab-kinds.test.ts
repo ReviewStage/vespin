@@ -289,7 +289,7 @@ describe("a strip tab's kind answers", () => {
       look: { kind: "page", title: "Page" },
       surface: PRODUCT_SURFACE.PAGE,
       of: PAGE,
-      link: { kind: LINK_DESTINATION.PAGE, planId: TASK, pageId: PAGE },
+      link: { kind: LINK_DESTINATION.PAGE, taskId: TASK, pageId: PAGE },
       drawsAgain: false,
       reopens: true,
       endsSession: false,

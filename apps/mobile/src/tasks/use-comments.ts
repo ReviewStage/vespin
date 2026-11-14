@@ -192,7 +192,7 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
       write(
         () =>
           acts[ACT_KIND.TASKS_COMMENT_ACT]({
-            planId: taskId,
+            taskId: taskId,
             threadId,
             action: { action: DESCRIPTION_COMMENT_ACTION.REPLY, clientKey: key, words: kept },
           }),
@@ -309,7 +309,7 @@ export function useCommentStart(
       void write(
         () =>
           acts[ACT_KIND.TASKS_COMMENT_START]({
-            planId: taskId,
+            taskId: taskId,
             start: {
               id: start.threadId,
               clientKey: start.key,

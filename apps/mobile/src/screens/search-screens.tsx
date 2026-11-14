@@ -21,13 +21,15 @@ import {
   glyphSymbol,
   LIST_LOOK,
   ListSection,
+  NoSelection,
   RowList,
+  type RowSubmenu,
   ScopePicker,
   Screen,
   UNDER_SPLIT_SCREEN,
 } from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useHandColumns } from "../place-columns.js";
@@ -40,7 +42,7 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
-import { useRemindSheet } from "./inbox-remind.js";
+import { useRemind } from "./inbox-remind.js";
 import { InboxItemRows } from "./inbox-screens.js";
 import { StatusQuestionAsk, TaskAgentRow, TaskRows, useAgentArchiveAsk } from "./task-screens.js";
 
@@ -57,7 +59,7 @@ const SCOPES: readonly SearchScope[] = Object.values(SEARCH_SCOPE);
 function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined> {
   return new Map([
     ...found.tasks.map(
-      (task) => [task.id, iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: task.id })] as const,
+      (task) => [task.id, iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: task.id })] as const,
     ),
     ...found.inbox.map(
       ({ holder, item }) =>
@@ -65,7 +67,7 @@ function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined
           item.id,
           iosAppRouteOf({
             kind: LINK_DESTINATION.INBOX_ITEM,
-            planId: holder.task.id,
+            taskId: holder.task.id,
             itemId: item.id,
           }),
         ] as const,
@@ -94,7 +96,7 @@ function FoundList({
   scope,
   listing,
   onOpen,
-  onRemind,
+  remindMenu,
   onArchiveAgent,
 }: {
   readonly found: SearchFound;
@@ -102,8 +104,8 @@ function FoundList({
   /** The Tasks listing a task's row acts through, its status asking first where it stops agents. */
   readonly listing: TasksListing;
   readonly onOpen: (id: string) => void;
-  /** Opens Remind me on a thread found, as the Inbox's row does. */
-  readonly onRemind: (item: InboxItem) => void;
+  /** Remind me's times on a thread found, as the Inbox's row offers them. */
+  readonly remindMenu: (item: InboxItem) => RowSubmenu;
   /** Asks to archive an agent found, once it rests, as a task's Agents do. */
   readonly onArchiveAgent: (agentId: string) => void;
 }) {
@@ -139,7 +141,7 @@ function FoundList({
             readerId={found.readerId}
             pictureOf={pictureOf}
             onMark={mark}
-            onRemind={onRemind}
+            remindMenu={remindMenu}
             onResolve={resolve}
           />
         </ListSection>
@@ -158,19 +160,26 @@ function FoundList({
   );
 }
 
+/** What Search draws before anything is typed, in either window. */
+const SEARCH_IDLE = (
+  <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
+);
+
 /**
- * What the Search tab reads and draws, in either window: the query, what it
- * finds of the workspace's tasks, the reader's Inbox, and the agents on its
- * tasks, each kind best first, the scopes over them once anything is typed,
- * and what opens a row found, each in its own tab; the questions and sheets
- * a found row's acts raise stand beside it.
+ * What the Search tab reads and draws once something is typed, in either
+ * window: what the query finds of the workspace's tasks, the reader's Inbox,
+ * and the agents on its tasks, each kind best first, under the scopes, and
+ * what opens a row found, each in its own tab; the questions and sheets a
+ * found row's acts raise stand beside it. Note that only a typed query mounts
+ * it, because the tab stays mounted behind the others, and building every
+ * listing on each delivery with nothing typed cost every tap in the app.
  */
-function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
+function useSearchScreen({ query, scope, setScope }: SearchWords) {
   const router = useRouter();
   const found = useSearchFound(query);
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
   const { listing, status, deletion } = useListingAsks(found.listing);
-  const remind = useRemindSheet();
+  const remind = useRemind();
   const archiveAsk = useAgentArchiveAsk();
   const routes = foundRoutes(found);
   const onTab = useOnTab();
@@ -190,37 +199,40 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
     onPress: () => setScope(each),
   }));
 
-  // Note that the scopes stand once anything is typed, and stay over a scope that found nothing, so another is one tap away.
-  const results =
-    query.trim() === "" ? (
-      <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
-    ) : (
-      <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-        {none ? (
-          <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
-        ) : (
-          <FoundList
-            found={found}
-            scope={scope}
-            listing={listing}
-            onOpen={open}
-            onRemind={remind.open}
-            onArchiveAgent={archiveAsk.archive}
-          />
-        )}
-      </ScopePicker>
-    );
+  // Note that the scopes stand over a scope that found nothing, so another is one tap away.
+  const results = (
+    <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
+      {none ? (
+        <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
+      ) : (
+        <FoundList
+          found={found}
+          scope={scope}
+          listing={listing}
+          onOpen={open}
+          remindMenu={(item) => remind.menu([item])}
+          onArchiveAgent={archiveAsk.archive}
+        />
+      )}
+    </ScopePicker>
+  );
 
-  return {
-    query,
-    setQuery,
-    placeholder: searchPlaceholder(scope),
-    results,
-    status,
-    deletion,
-    remind,
-    archiveAsk,
-  };
+  return { results, status, deletion, remind, archiveAsk };
+}
+
+/** What a typed query finds under the Stack's bar, with the questions and sheets its rows' acts raise beside it. */
+function SearchStackFound(words: SearchWords) {
+  const { results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
+
+  return (
+    <>
+      <Screen>{results}</Screen>
+      <StatusQuestionAsk question={status} />
+      <StatusQuestionAsk question={deletion} />
+      {archiveAsk.ask}
+      {remind.sheet}
+    </>
+  );
 }
 
 /**
@@ -232,9 +244,8 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
  * its results instead.
  */
 function SearchStackScreen(words: SearchWords) {
-  const { query, setQuery, placeholder, results, status, deletion, remind, archiveAsk } =
-    useSearchScreen(words);
-
+  const { query, setQuery, scope } = words;
+  const placeholder = searchPlaceholder(scope);
   const field = useRefilledSearchField(query);
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
@@ -271,11 +282,7 @@ function SearchStackScreen(words: SearchWords) {
           />
         </Stack.Toolbar>
       ) : null}
-      <Screen>{results}</Screen>
-      <StatusQuestionAsk question={status} />
-      <StatusQuestionAsk question={deletion} />
-      {archiveAsk.ask}
-      {remind.sheet}
+      {query.trim() === "" ? <Screen>{SEARCH_IDLE}</Screen> : <SearchStackFound {...words} />}
     </>
   );
 }
@@ -290,21 +297,47 @@ function SearchStackScreen(words: SearchWords) {
  * as the tabs change is a different view and is drawn anew.
  */
 function SearchSplitScreen(words: SearchWords) {
-  const { query, setQuery, placeholder, results, status, deletion, remind, archiveAsk } =
-    useSearchScreen(words);
-
-  useHandColumns(SIDEBAR_PLACE.SEARCH, {
-    content: results,
-    contentBar: {
-      title: SEARCH_TITLE,
-      search: { placeholder, text: query, onChange: setQuery },
-    },
-    detail: <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.SEARCH} />,
-  });
-
   return (
     <>
       <Stack.Screen options={UNDER_SPLIT_SCREEN} />
+      {words.query.trim() === "" ? (
+        <SearchSplitColumns words={words} content={SEARCH_IDLE} />
+      ) : (
+        <SearchSplitFound {...words} />
+      )}
+    </>
+  );
+}
+
+/** Hands the split view Search's list column, under the system's field in its bar, and the detail that says to pick a row. */
+function SearchSplitColumns({
+  words,
+  content,
+}: {
+  readonly words: SearchWords;
+  readonly content: ReactNode;
+}) {
+  const { query, setQuery, scope } = words;
+
+  useHandColumns(SIDEBAR_PLACE.SEARCH, {
+    content,
+    contentBar: {
+      title: SEARCH_TITLE,
+      search: { placeholder: searchPlaceholder(scope), text: query, onChange: setQuery },
+    },
+    detail: <NoSelection title={CHOOSE_AN_ITEM_WORDS} />,
+  });
+
+  return null;
+}
+
+/** What a typed query finds in the split view's list column, with the questions and sheets its rows' acts raise beside it. */
+function SearchSplitFound(words: SearchWords) {
+  const { results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
+
+  return (
+    <>
+      <SearchSplitColumns words={words} content={results} />
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
       {archiveAsk.ask}

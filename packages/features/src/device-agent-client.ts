@@ -1,7 +1,7 @@
 import type { AnyProcedureContract } from "@orpc/contract";
 import { Effect, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
-import type { CallCredential } from "./account-call.js";
+import type { HostedServiceTarget } from "./account-call.js";
 import { deviceAgentsContract } from "./contract/device-agents.js";
 import type {
   DeviceAgentAnswer,
@@ -211,17 +211,10 @@ function refused<Answer extends object>(answer: Answer): boolean {
   return "failure" in answer && answer.failure !== DEVICE_AGENT_FAILURE.UNANSWERED;
 }
 
-export interface HostedDeviceAgentClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-}
-
 export class HostedDeviceAgentClient {
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedDeviceAgentClientOptions) {
+  constructor(options: HostedServiceTarget) {
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
       credential: options.credential,
