@@ -28,7 +28,7 @@ const VIDEO_PLAYER_ID = "video-player";
 /** What a video not yet played is heard to do, as a press on its play mark starts it in place. */
 const PLAYS_IN_PLACE = "Plays the video";
 
-/** How tall the play mark's capsule stands, a press target's height. */
+/** How tall the play mark's capsule stands at least, a press target's height. */
 const PLAY_MARK_HEIGHT = 44;
 
 /** What Open in Safari is heard to do. */
@@ -47,8 +47,10 @@ const styles = StyleSheet.create({
   },
   spinner: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
   playMark: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
+  // Note that the capsule grows with its length's words at the accessibility sizes, and never stands wider than a narrow tile.
   playFace: {
-    height: PLAY_MARK_HEIGHT,
+    minHeight: PLAY_MARK_HEIGHT,
+    maxWidth: "90%",
     minWidth: PLAY_MARK_HEIGHT,
     paddingHorizontal: SPACE.ROW,
     borderRadius: PLAY_MARK_HEIGHT / 2,
@@ -78,18 +80,27 @@ function useVideoLength(player: VideoPlayer): number | undefined {
   return length;
 }
 
-/** Whether the player has ever played, so a video stands with its play mark until it is first played and leaves the system's controls to it after. */
-function usePlayedOnce(player: VideoPlayer): boolean {
-  const [played, setPlayed] = useState(player.playing);
+/**
+ * Whether the player has played the video it now plays, so a video stands
+ * with its play mark until it is first played and leaves the system's
+ * controls to it after. Note that the played source is kept rather than a
+ * flag, since expo-video loads a new source into the same player, so a new
+ * video in the same place stands its mark again.
+ */
+function usePlayedOnce(player: VideoPlayer, source: string): boolean {
+  const [playedSource, setPlayedSource] = useState<string | undefined>(
+    player.playing ? source : undefined,
+  );
+
   useEffect(() => {
     const listening = player.addListener("playingChange", ({ isPlaying }) => {
-      if (isPlaying) setPlayed(true);
+      if (isPlaying) setPlayedSource(source);
     });
 
     return () => listening.remove();
-  }, [player]);
+  }, [player, source]);
 
-  return played;
+  return playedSource === source;
 }
 
 /**
@@ -124,6 +135,7 @@ function PlayMark({
       />
       {runs === undefined ? null : (
         <Text
+          numberOfLines={1}
           style={{
             fontSize: TEXT_SIZE.FOOTNOTE,
             fontWeight: "600",
@@ -215,7 +227,7 @@ export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: V
   }, [player]);
   const failed = status === "error";
   const length = useVideoLength(player);
-  const played = usePlayedOnce(player);
+  const played = usePlayedOnce(player, source ?? "");
 
   // Note that a tile fills its tile at the tile's shape, and any other video stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
   const frame = tileAspect === undefined ? mediaFrame(natural) : undefined;
@@ -296,7 +308,8 @@ export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: V
         <View style={[styles.frame, tiled]}>
           <VideoView
             player={player}
-            nativeControls
+            // Note that the system's controls stand only once the video has played, so its own play button never shows under the play mark.
+            nativeControls={played}
             contentFit="contain"
             fullscreenOptions={{ enable: true }}
             allowsPictureInPicture
