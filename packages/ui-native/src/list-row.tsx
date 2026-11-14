@@ -318,7 +318,9 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
  * draws a row's background across the whole column, and on iPadOS 26 a
  * split view's list column runs on under the floating sidebar, so the gray
  * stood under the sidebar's glass to the window's edge. A row's own view
- * stays inside the column's safe area, as Mail's rows do.
+ * stays inside the column's safe area, as Mail's rows do. Note that a row
+ * draws no hairline over itself, only the one under it, because a list
+ * column's first row drew one under its search field, where Mail draws none.
  */
 export function rowPlacement(
   colors: BrandColors,
@@ -330,6 +332,7 @@ export function rowPlacement(
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
     padding({ leading: ROW_INSET.LEADING, trailing: SPACE.EDGE, top: vertical, bottom: vertical }),
     ...(selected ? [background(colors.SELECTED)] : []),
+    listRowSeparator("hidden", "top"),
     listRowSeparatorTint(colors.CHIP_EDGE),
     alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT),
   ];
