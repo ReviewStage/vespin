@@ -171,6 +171,8 @@ export interface FakeService extends TasksClient, WorkspacesClient {
   liveListReads: number;
   /** Whether a delete is refused, as a service that did not answer refuses it. */
   deleteFails: boolean;
+  /** Whether a read of one task outside the list goes unanswered, as a service that did not answer leaves it. */
+  taskRowsFail: boolean;
   /** What a delete's answer waits on, so a test can see what is drawn while it is out. */
   deleteAnswered: Effect.Effect<void>;
   /** Whether a relation's change is refused, as a service that did not answer refuses it. */
@@ -667,6 +669,7 @@ export function fakeService(tasks: Task[]): FakeService {
     agents: {},
     liveListReads: 0,
     deleteFails: false,
+    taskRowsFail: false,
     deleteAnswered: Effect.void,
     relationFails: false,
     relationAnswered: Effect.void,
@@ -1272,6 +1275,8 @@ export function fakeService(tasks: Task[]): FakeService {
         // One task outside the list, read with its agents, none of which the fake's tasks hold.
         if (read.name === TASK_ROWS_READ.name) {
           service.reads.push(`task-rows:${params.id}`);
+
+          if (service.taskRowsFail) return Effect.succeed(UNANSWERED_LIVE);
           const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
           rows.set({
             plans: service.tasks.filter((each) => each.id === params.id).map(rowOfTask),

@@ -1233,7 +1233,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   const coldRead = new Set<string>();
   /** The ids read outside the list now, which a sign-out meanwhile reads again for the session signing in. */
   const coldPending = new Set<string>();
-  /** The ids opened while the list could not be read outside of: signed out, or not answered yet, since until then every task is outside it. Each is read once the list answers, where it holds it not. */
+  /** The ids opened while the list could not be read outside of: signed out, or not answered yet, since until then every task is outside it, and those whose read the service did not answer. Each is read once the list answers, where it holds it not. */
   const coldWaiting = new Set<string>();
 
   /**
@@ -1268,7 +1268,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       const read = Effect.gen(function* () {
         const sealed = yield* served(client.liveRead(TASK_ROWS_READ, { id, userId }, {}));
 
-        if ("failure" in sealed) return;
+        // Note that a read the service did not answer waits for the list's next answer, which says the service answers again, as an open made before the list answered does.
+        if ("failure" in sealed) {
+          if (taskList.collections === collections && !inboxAsked.has(id)) coldWaiting.add(id);
+
+          return;
+        }
+
         const { plans, agents } = sealed.queries;
         const rows = decodeTaskRows({ plans: plans.rows, agents: agents.rows });
 

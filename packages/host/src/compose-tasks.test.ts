@@ -979,6 +979,63 @@ it.effect(
     }),
 );
 
+it.effect("a pinned tab's task outside the list is drawn in it once read, and left unopened", () =>
+  Effect.gen(function* () {
+    const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+    const billing = task(BILLING, "Billing export", "# Billing export", 20);
+    const service = fakeService([billing, invites]);
+    const { call, last } = yield* subject(service);
+    // The list holds the billing task alone, as one that keeps only recent tasks live.
+    yield* call("TASKS_REFRESH", undefined);
+    yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+
+    yield* call("TASKS_LOAD", { taskId: INVITES });
+
+    assert.deepEqual(
+      last()
+        ?.tasks.map((each) => each.id)
+        .toSorted(),
+      [BILLING, INVITES].toSorted(),
+      "the pinned tab's task is drawn beside the list's",
+    );
+    assert.equal(last()?.activeTaskId, undefined, "nothing is opened");
+  }),
+);
+
+it.effect(
+  "a task read outside the list the service did not answer is read again at the list's next answer",
+  () =>
+    Effect.gen(function* () {
+      const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+      const billing = task(BILLING, "Billing export", "# Billing export", 20);
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+
+      const listed = () =>
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted();
+
+      service.taskRowsFail = true;
+      yield* call("TASKS_LOAD", { taskId: INVITES });
+      assert.deepEqual(
+        listed(),
+        [BILLING],
+        "nothing is drawn of a read the service did not answer",
+      );
+
+      service.taskRowsFail = false;
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+      assert.deepEqual(
+        listed(),
+        [BILLING, INVITES].toSorted(),
+        "the task is drawn once read again",
+      );
+    }),
+);
+
 it.effect("a person's finished task outside the list is counted and read into it", () =>
   Effect.gen(function* () {
     const ada = { userId: "user-ada", name: "Ada Lovelace" };
