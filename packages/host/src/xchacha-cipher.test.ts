@@ -1,5 +1,5 @@
 /**
- * xchacha-cipher.test.ts -- the JavaScript cipher keeps the format the phones' files and tokens were sealed in: it opens a sealing `@noble/ciphers` made before the native sealer existed and one the native sealer made, and what it seals opens through `@noble/ciphers` as it stood.
+ * xchacha-cipher.test.ts -- the JavaScript cipher keeps the format the phones' files and tokens were sealed in: it opens a sealing `@noble/ciphers` made before the native sealer existed and one the native sealer made, and what it seals opens through `@noble/ciphers` as it stood; and opening kept text never makes a key, which would leave the file it was kept under unopenable for good.
  */
 
 import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
@@ -29,6 +29,20 @@ const cipher = xchachaCipher({ held: () => KEY, sealing: () => KEY }, undefined)
 
 it.each(Object.entries(SEALED))("opens what %s sealed", (_, sealed) => {
   expect(cipher.decrypt(Result.getOrThrow(Base64.decode(sealed)))).toBe(TEXT);
+});
+
+it("opens kept text only under the key held, never making one where none is held", () => {
+  const native = xchachaCipher(
+    {
+      held: () => {
+        throw new Error("No key is held.");
+      },
+      sealing: () => KEY,
+    },
+    { seal: () => SEALED.NATIVE, open: () => TEXT },
+  );
+
+  expect(() => native.openText?.(SEALED.NATIVE)).toThrow("No key is held.");
 });
 
 it("seals what @noble/ciphers' managed nonce opens", () => {

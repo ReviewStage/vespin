@@ -85,15 +85,17 @@ private func innerSealing(key: Data, nonce: [UInt8]) throws -> (SymmetricKey, Ch
   return (SymmetricKey(data: subkey), inner)
 }
 
-/// `plain` sealed under `key` with the extended `nonce`, as nonce, ciphertext, and tag.
-func xChaChaPolySeal(_ plain: Data, key: Data, nonce: [UInt8]) throws -> Data {
+/// `plain` sealed under `key` with the extended `nonce`, as nonce, ciphertext, and tag; the host seals with no associated data, which only the draft's test vector names.
+func xChaChaPolySeal(_ plain: Data, key: Data, nonce: [UInt8], authenticating: Data = Data())
+  throws -> Data
+{
   let (subkey, inner) = try innerSealing(key: key, nonce: nonce)
-  let box = try ChaChaPoly.seal(plain, using: subkey, nonce: inner)
+  let box = try ChaChaPoly.seal(plain, using: subkey, nonce: inner, authenticating: authenticating)
   return Data(nonce) + box.ciphertext + box.tag
 }
 
 /// What `sealed`, as nonce, ciphertext, and tag, holds under `key`; throws where it does not open.
-func xChaChaPolyOpen(_ sealed: Data, key: Data) throws -> Data {
+func xChaChaPolyOpen(_ sealed: Data, key: Data, authenticating: Data = Data()) throws -> Data {
   guard sealed.count >= xChaChaNonceBytes + tagBytes else { throw XChaChaPolyError.sealedLength }
   let bytes = [UInt8](sealed)
   let (subkey, inner) = try innerSealing(key: key, nonce: Array(bytes[0..<xChaChaNonceBytes]))
@@ -102,5 +104,5 @@ func xChaChaPolyOpen(_ sealed: Data, key: Data) throws -> Data {
     ciphertext: bytes[xChaChaNonceBytes..<(bytes.count - tagBytes)],
     tag: bytes[(bytes.count - tagBytes)...]
   )
-  return try ChaChaPoly.open(box, using: subkey)
+  return try ChaChaPoly.open(box, using: subkey, authenticating: authenticating)
 }

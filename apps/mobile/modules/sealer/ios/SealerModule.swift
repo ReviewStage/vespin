@@ -44,5 +44,10 @@ public final class SealerModule: Module {
       guard let sealed = Data(base64Encoded: sealedText) else { throw SealerError.sealedNotBase64 }
       return try String(decoding: xChaChaPolyOpen(sealed, key: keyData(key)), as: UTF8.self)
     }
+
+    // The draft's test vectors through the code above, for a launch's seal check alone.
+    Function("vectorLines") { () -> [String] in
+      sealerVectorLines()
+    }
   }
 }
