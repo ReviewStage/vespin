@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceTransparency } from "./accessibility.js";
+import { KeyboardDockArea } from "./keyboard-dock.js";
 import { useColors } from "./tokens/colors.js";
 import { READING_WIDTH, SPACE } from "./tokens/space.js";
 
@@ -26,6 +27,9 @@ const DockRoom = createContext(0);
 
 /** How far the system's keyboard stands over the dock a screen's content stands in, in points; none while it is down or outside a dock. */
 const DockKeyboard = createContext(0);
+
+/** Whether the dock the bar stands in lifts it natively, clear of the bottom safe area it keeps standing over; none outside the native dock. */
+const DockLifted = createContext(false);
 
 /** Tells the dock how tall the bar inside it stands, with its gap; nothing outside a dock. */
 const DockMeasure = createContext<((room: number) => void) | undefined>(undefined);
@@ -183,6 +187,7 @@ export function GlassBar({
   readonly modifiers?: readonly ModifierConfig[];
 }) {
   const keyboard = useKeyboardHeight() > 0;
+  const lifted = useContext(DockLifted);
   const measure = useContext(DockMeasure);
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
 
@@ -223,14 +228,89 @@ export function GlassBar({
       ? undefined
       : (event: LayoutChangeEvent) => measure(event.nativeEvent.layout.height + SPACE.ROW);
 
-  // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one.
+  // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one. The native dock lifts the bar only as far past that safe area as the keyboard stands, so the bar keeps it throughout, and a drag that pulls the keyboard down lowers the bar without a jump at its end.
   return (
     <SafeAreaView
-      edges={keyboard ? ["left", "right"] : ["bottom", "left", "right"]}
+      edges={keyboard && !lifted ? ["left", "right"] : ["bottom", "left", "right"]}
       style={styles.gap}
     >
       <View onLayout={onLayout}>{bar}</View>
     </SafeAreaView>
+  );
+}
+
+/** Whether the dock follows the keyboard frame by frame, as the native dock does; a list over it may then lower the keyboard under the reader's finger rather than at the first drag. */
+export const DOCK_FOLLOWS_KEYBOARD = KeyboardDockArea !== undefined;
+
+/** What a dock holds: the screen's content, and the bar pinned over its foot. */
+interface DockProps {
+  readonly children: ReactNode;
+  readonly bar: ReactNode;
+}
+
+/** The bar's column at the dock's foot, at the reading width in a wide window. */
+function DockColumn({
+  bar,
+  onRoom,
+}: {
+  readonly bar: ReactNode;
+  readonly onRoom: (room: number) => void;
+}) {
+  // Note that the column holds the window's side safe areas too, which the bar's own safe area view pads inside it, so its glass spans the reading width.
+  const { left, right } = useSafeAreaInsets();
+
+  return (
+    <View style={[styles.column, { maxWidth: READING_WIDTH + left + right }]}>
+      <DockMeasure.Provider value={onRoom}>{bar}</DockMeasure.Provider>
+    </View>
+  );
+}
+
+/**
+ * The dock where the app's native dock stands (`keyboard-dock.ts`): it lifts
+ * the bar with the keyboard frame by frame, through a drag that pulls the
+ * keyboard down, the suggestion strip's growth, and a form sheet's own lift,
+ * and tells how far the keyboard stands over its foot, which the content
+ * leaves room for. Note that the bar must stand last in it, since the native
+ * dock lifts its last child.
+ */
+function NativeDock({
+  area: Area,
+  children,
+  bar,
+}: DockProps & { readonly area: NonNullable<typeof KeyboardDockArea> }) {
+  const [overlap, setOverlap] = useState(0);
+  const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
+
+  return (
+    <Area style={styles.dock} onOverlap={(event) => setOverlap(event.nativeEvent.overlap)}>
+      <DockKeyboard.Provider value={overlap}>
+        <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
+      </DockKeyboard.Provider>
+      <View style={styles.docked}>
+        <DockLifted.Provider value={true}>
+          <DockColumn bar={bar} onRoom={setRoom} />
+        </DockLifted.Provider>
+      </View>
+    </Area>
+  );
+}
+
+/** The dock in a build without the native one: the bar lifted by the keyboard's height as the system announces it, rising and falling on the keyboard's own curve, but standing still through a drag that pulls the keyboard down. */
+function AnnouncedDock({ children, bar }: DockProps) {
+  // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
+  const keyboard = useKeyboardHeight();
+  const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
+
+  return (
+    <View style={styles.dock}>
+      <DockKeyboard.Provider value={keyboard}>
+        <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
+      </DockKeyboard.Provider>
+      <View style={[styles.docked, { bottom: keyboard }]}>
+        <DockColumn bar={bar} onRoom={setRoom} />
+      </View>
+    </View>
   );
 }
 
@@ -240,35 +320,21 @@ export function GlassBar({
  * bars do, and rising with the keyboard so the field stays above it. The
  * content leaves room at its own foot for the bar as tall as it stands
  * (`useDockRoom`): a composer's head, such as a call waiting on an answer
- * and the queue, grows it well past a bare field. In a wide window the bar
+ * and the queue, grows it well past a bare field, and for the keyboard as far
+ * as it stands over the dock (`useDockKeyboard`). In a wide window the bar
  * stands in the content's own centered column, at the reading width, as
  * Messages' field stands under its conversation, rather than across the
- * whole window.
+ * whole window. Where the build carries the native dock, the bar follows the
+ * keyboard frame by frame, so a list over it may lower the keyboard under the
+ * reader's finger.
  */
-export function GlassDock({
-  children,
-  bar,
-}: {
-  readonly children: ReactNode;
-  readonly bar: ReactNode;
-}) {
-  // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
-  const keyboard = useKeyboardHeight();
-  const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
-  // Note that the column holds the window's side safe areas too, which the bar's own safe area view pads inside it, so its glass spans the reading width.
-  const { left, right } = useSafeAreaInsets();
-
-  return (
-    <View style={styles.dock}>
-      <DockKeyboard.Provider value={keyboard}>
-        <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
-      </DockKeyboard.Provider>
-      <View style={[styles.docked, { bottom: keyboard }]}>
-        <View style={[styles.column, { maxWidth: READING_WIDTH + left + right }]}>
-          <DockMeasure.Provider value={setRoom}>{bar}</DockMeasure.Provider>
-        </View>
-      </View>
-    </View>
+export function GlassDock({ children, bar }: DockProps) {
+  return KeyboardDockArea === undefined ? (
+    <AnnouncedDock bar={bar}>{children}</AnnouncedDock>
+  ) : (
+    <NativeDock area={KeyboardDockArea} bar={bar}>
+      {children}
+    </NativeDock>
   );
 }
 
