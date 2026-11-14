@@ -79,6 +79,11 @@ final class KeyboardDockView: ExpoView {
 
   /// Follows the keyboard frame by frame while it stands.
   @objc private func keyboardDidShow() {
+    followFrames()
+  }
+
+  /// Starts following the keyboard each frame, where it is not already followed.
+  private func followFrames() {
     guard frames == nil, window != nil else { return }
     let link = CADisplayLink(target: self, selector: #selector(frameDrawn))
     link.add(to: .main, forMode: .common)
@@ -91,13 +96,20 @@ final class KeyboardDockView: ExpoView {
     follow()
   }
 
+  /// Reads the keyboard on each frame drawn. Note that the view is laid out first, so the guide's frame is the keyboard's of this frame rather than the last layout pass's.
   @objc private func frameDrawn() {
+    layoutIfNeeded()
     follow()
   }
 
+  /// Follows the keyboard again as the dock comes back into a window with the keyboard already standing, as a page does when the one over it goes back; stops following as it leaves.
   override func didMoveToWindow() {
     super.didMoveToWindow()
-    guard window == nil else { return }
+    guard window == nil else {
+      follow()
+      if (told ?? 0) > 0 { followFrames() }
+      return
+    }
     frames?.invalidate()
     frames = nil
     setDown()
