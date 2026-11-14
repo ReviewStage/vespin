@@ -119,6 +119,8 @@ export type ThreadMessage = {
   readonly media: readonly ThreadMedia[];
   /** What the answer it carries says it was, "Chose Both", and whether it went ahead, a check in the done tone, or held back, a turn back in the muted ink. */
   readonly stamp?: { readonly words: string; readonly ahead: boolean } | undefined;
+  /** The form's values the answer filled, each field's name and what was put in it, which stand under the stamp, as the panel lists them. */
+  readonly values?: readonly { readonly label: string; readonly words: string }[] | undefined;
 };
 
 type ThreadPageProps = {
@@ -297,6 +299,57 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
   );
 }
 
+/** The values an answer filled, one a line under its stamp, where the message's words start: each field's name muted, then what was put in it, as the panel's answered thread lists them; past an accessibility size the value stands under its name rather than beside it, so neither wraps to a narrow column, and each is heard as one element. */
+function AnswerValues({ values }: { readonly values: NonNullable<ThreadMessage["values"]> }) {
+  const colors = useColors();
+  const stacked = useAccessibilitySize();
+
+  const label = (words: string) => (
+    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}>
+      {words}
+    </Text>
+  );
+
+  const value = (words: string) => (
+    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}>
+      {words}
+    </Text>
+  );
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
+    >
+      {values.map(({ label: name, words }) =>
+        stacked ? (
+          <VStack
+            key={name}
+            alignment="leading"
+            spacing={2}
+            modifiers={[accessibilityElement("combine")]}
+          >
+            {label(name)}
+            {value(words)}
+          </VStack>
+        ) : (
+          <HStack
+            key={name}
+            alignment="firstTextBaseline"
+            spacing={SPACE.TIGHT * 2}
+            modifiers={[accessibilityElement("combine")]}
+          >
+            {label(name)}
+            {value(words)}
+            <Spacer />
+          </HStack>
+        ),
+      )}
+    </VStack>
+  );
+}
+
 /** One message, flat on the page: the writer's face or tile, name in 13 pt semibold and time, and under them its words and files. */
 function MessageView({
   message,
@@ -356,6 +409,7 @@ function MessageView({
           <Spacer />
         </HStack>
         {message.stamp === undefined ? null : <AnswerStamp stamp={message.stamp} />}
+        {message.values === undefined ? null : <AnswerValues values={message.values} />}
         <RNHostView matchContents={{ vertical: true }}>
           <View style={styles.words}>
             {message.words.trim() === "" ? null : (
