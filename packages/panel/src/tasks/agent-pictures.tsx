@@ -18,6 +18,7 @@ import {
   APP_ICON_SIZE,
   AppIcon,
   type AppIconSize,
+  type AppIconStandIn,
   isVideoDataUrl,
   PICTURE_SET_SHOWN,
   PictureSet,
@@ -490,17 +491,25 @@ function notKeptWords(byteCount: number): string {
  * model saw it all the same. The videos a browser call recorded stand
  * under them as a `show_image` call's would.
  */
-/** An app's icon a call kept beside the transcript, read through the transcript's door, in a call row's glyph seat; a screen's glyph stands there until it lands, and for good where no icon was kept. */
+/** An app's icon a call kept beside the transcript, read through the transcript's door, in a call row's glyph seat; its stand-in (`AppIcon`'s) stands there until it lands, and for good where no icon was kept. */
 export function KeptAppIcon({
   id,
   size = APP_ICON_SIZE.LINE,
+  standIn,
 }: {
   id: string | undefined;
   size?: AppIconSize | undefined;
+  standIn?: AppIconStandIn | undefined;
 }): ReactNode {
   const state = useKeptPicture(id);
 
-  return <AppIcon src={state.kind === PICTURE_STATE.READY ? state.url : undefined} size={size} />;
+  return (
+    <AppIcon
+      src={state.kind === PICTURE_STATE.READY ? state.url : undefined}
+      size={size}
+      standIn={standIn}
+    />
+  );
 }
 
 /** A picture a call kept, read through the transcript's door: its state while it is read, and its bytes once they land; none is read for no id. */

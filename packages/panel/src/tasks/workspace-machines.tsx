@@ -15,6 +15,7 @@ import {
   STATUS_TONE,
 } from "@repo/ui";
 import { personActor } from "@repo/ui/actor-model";
+import { GLYPH } from "@repo/ui/icons";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { Duration } from "effect";
 import { type ReactNode, useContext } from "react";
@@ -230,6 +231,7 @@ function MachineSettingsRows({ machine }: { machine: WorkspaceMachine }): React.
       {machine.commandMode === undefined ? null : (
         <HoverCardRow
           look={HOVER_CARD_ROW_LOOK.DETAIL}
+          glyph={<GLYPH.TERMINAL />}
           label={MACHINE_CARD_WORDS.COMMANDS}
           end={MACHINE_COMMAND_MODE_LABEL[machine.commandMode]}
         />
@@ -237,6 +239,7 @@ function MachineSettingsRows({ machine }: { machine: WorkspaceMachine }): React.
       {machine.computerUse === undefined ? null : (
         <HoverCardRow
           look={HOVER_CARD_ROW_LOOK.DETAIL}
+          glyph={<GLYPH.COMPUTER_USE />}
           label={MACHINE_CARD_WORDS.COMPUTER_USE}
           end={machine.computerUse ? MACHINE_CARD_WORDS.ON : MACHINE_CARD_WORDS.OFF}
         />

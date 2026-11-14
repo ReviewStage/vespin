@@ -284,7 +284,7 @@ const LUCIDE_SYMBOLS = {
   MESSAGE_SQUARE_PLUS: "message-square-plus",
   MIC: "mic",
   MIC_OFF: "mic-off",
-  MONITOR: "monitor",
+  MOUSE_POINTER_CLICK: "mouse-pointer-click",
   NETWORK: "network",
   OCTAGON_MINUS: "octagon-minus",
   PANEL_LEFT: "panel-left",
