@@ -337,7 +337,8 @@ export function useSettleUndo(): (
 /** A thread's box as its screen draws and presses it. */
 export interface ThreadAnswer {
   readonly draft: InboxDraft;
-  readonly onDraft: (draft: InboxDraft) => void;
+  /** Sets the draft, or changes it from the one the box holds now, which a change that lands later, such as the photo picker's, reads rather than the draft it was opened on. */
+  readonly onDraft: (draft: InboxDraft | ((now: InboxDraft) => InboxDraft)) => void;
   /** What the box's last send said where it did not go: what the answer lacks, or the refusal. */
   readonly note: string | undefined;
   /** Whether Send stands lit with no words typed: the draft holds an answer to send, or a number whose words a press says read as none. */
@@ -382,7 +383,12 @@ export function useThreadAnswer(
   const thread = item.thread ?? [];
 
   const onDraft = useCallback(
-    (next: InboxDraft) => hold(itemId, (was) => ({ ...was, draft: next, note: undefined })),
+    (next: InboxDraft | ((now: InboxDraft) => InboxDraft)) =>
+      hold(itemId, (was) => ({
+        ...was,
+        draft: Predicate.isFunction(next) ? next(was.draft) : next,
+        note: undefined,
+      })),
     [itemId],
   );
 
@@ -391,7 +397,10 @@ export function useThreadAnswer(
     hold(itemId, (was) => {
       const sending = new Map(was.sending);
       sending.delete(key);
-      const typed = was.draft.note.trim() === "" ? sent : was.draft;
+
+      // Note that pictures attached since count as typed, so a refusal never takes them off.
+      const typed =
+        was.draft.note.trim() === "" && was.draft.attachments.length === 0 ? sent : was.draft;
 
       return { ...was, draft: typed, sending, note: words };
     });

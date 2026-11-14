@@ -102,50 +102,73 @@ export interface AttachedPictures {
   readonly putBack: (pictures: readonly HeldPicture[]) => void;
 }
 
-/** The pictures a holder that keeps its own picked, and what the picker or a bound said of them. */
-export interface PickedPictures {
+/** Pictures read from the system's picker, as base64, or none for one the library could not read, not yet named or bounded. */
+export type PickedPictures = readonly (string | null | undefined)[];
+
+/** The pictures a holder that keeps its own takes of those picked, and what the library or a bound said of the rest. */
+export interface PicturesTaken {
   readonly files: readonly AgentAttachment[];
   readonly note: string | undefined;
 }
 
 /**
  * Opens the system's photo picker for a holder that keeps its pictures
- * itself, such as a thread's draft, whose sends and refusals hold them: the
- * pictures picked, each named past every picture's name it holds, so none
- * takes the name of one still held, and what a picture the library could
- * not read, or a bound the pictures held with them pass, says.
+ * itself, such as a thread's draft, whose sends and refusals hold them,
+ * offering as many as `held` leaves room for: the pictures picked, which
+ * `takePictures` names and bounds against what the holder holds once the
+ * picker answers, since a refusal may have put pictures back meanwhile.
  */
 export async function pickPictures(
-  held: readonly AgentAttachment[],
+  held: number,
   bounds: PictureBounds = MESSAGE_PICTURES,
 ): Promise<PickedPictures> {
   const picked = await launchImageLibraryAsync({
     mediaTypes: ["images"],
     allowsMultipleSelection: true,
-    selectionLimit: Math.max(1, bounds.most - held.length),
+    selectionLimit: Math.max(1, bounds.most - held),
     quality: bounds.quality,
     base64: true,
   });
 
-  if (picked.canceled) return { files: [], note: undefined };
+  return picked.canceled ? [] : picked.assets.map((asset) => asset.base64);
+}
+
+/**
+ * The pictures picked a holder holding `held` takes: each named past every
+ * picture's name it holds, so none takes the name of one still held, and
+ * taken while the holder stays within its bounds, one the library could not
+ * read, or one past a bound, left out, with what the first left out says.
+ */
+export function takePictures(
+  held: readonly AgentAttachment[],
+  picked: PickedPictures,
+  bounds: PictureBounds = MESSAGE_PICTURES,
+): PicturesTaken {
   const names = held.map((file) => file.name);
   const files: AgentAttachment[] = [];
-  let unread: string | undefined;
+  let note: string | undefined;
 
-  for (const asset of picked.assets) {
+  for (const base64 of picked) {
     const name = nextPictureName(names);
     names.push(name);
 
-    if (asset.base64 === null || asset.base64 === undefined) {
-      unread ??= PICTURE_REFUSAL.UNREADABLE(name);
-    } else {
-      files.push({ name, mediaType: AGENT_ATTACHMENT_TYPE.JPEG, data: asset.base64 });
+    if (base64 === null || base64 === undefined) {
+      note ??= PICTURE_REFUSAL.UNREADABLE(name);
+      continue;
     }
+
+    const file = { name, mediaType: AGENT_ATTACHMENT_TYPE.JPEG, data: base64 };
+
+    const refused = pictureRefusal(
+      [...held, ...files, file].map((each) => ({ id: each.name, file: each })),
+      bounds,
+    );
+
+    if (refused === undefined) files.push(file);
+    else note ??= refused;
   }
 
-  const all = [...held, ...files].map((file) => ({ id: file.name, file }));
-
-  return { files, note: unread ?? pictureRefusal(all, bounds) };
+  return { files, note };
 }
 
 /**

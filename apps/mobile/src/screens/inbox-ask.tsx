@@ -51,7 +51,7 @@ import {
 import { Predicate } from "effect";
 import { type ReactNode, useState } from "react";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
-import { pickPictures } from "../use-attached-pictures.js";
+import { pickPictures, takePictures } from "../use-attached-pictures.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
 /** The ⋯ menu a thread's bar holds. */
@@ -315,20 +315,29 @@ export function ThreadComposer({
   const { draft, onDraft, answerReady, send, asNew, setAsNew, start } = answer;
   const [pictureNote, setPictureNote] = useState<string | undefined>(undefined);
 
-  // Note that the draft is read as the picker answers, since nothing else changes it while the system's picker covers the box.
+  // Note that the pictures picked are named and bounded against the draft as it stands when the picker answers, since a refused send may have put words and pictures back while it stood open.
   const attach = () => {
-    pickPictures(draft.attachments)
-      .then(({ files, note }) => {
-        setPictureNote(note);
+    pickPictures(draft.attachments.length)
+      .then((picked) => {
+        if (picked.length === 0) return;
+        let note: string | undefined;
+        onDraft((now) => {
+          const taken = takePictures(now.attachments, picked);
+          note = taken.note;
 
-        if (files.length > 0) onDraft({ ...draft, attachments: [...draft.attachments, ...files] });
+          return { ...now, attachments: [...now.attachments, ...taken.files] };
+        });
+        setPictureNote(note);
       })
       .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
   };
 
   const detach = (name: string) => {
     setPictureNote(undefined);
-    onDraft({ ...draft, attachments: draft.attachments.filter((file) => file.name !== name) });
+    onDraft((now) => ({
+      ...now,
+      attachments: now.attachments.filter((file) => file.name !== name),
+    }));
   };
 
   const pictures = draft.attachments.map((file) => ({ id: file.name, name: file.name }));
