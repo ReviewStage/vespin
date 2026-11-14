@@ -705,7 +705,7 @@ export function AgentScreen() {
                 {COPY_TRANSCRIPT_WORDS.FULL}
               </Stack.Toolbar.MenuAction>
               <Stack.Toolbar.MenuAction
-                icon="square.and.arrow.up"
+                icon={glyphSymbol(GLYPH.SHARE)}
                 onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
               >
                 {COPY_TRANSCRIPT_WORDS.SHARE}
@@ -758,11 +758,7 @@ export function AgentScreen() {
           )}
           {agent === undefined || barActs ? null : (
             <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(GLYPH.ARCHIVE)}
-                destructive
-                onPress={askArchive}
-              >
+              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
                 {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
             </Stack.Toolbar.Menu>
@@ -869,7 +865,6 @@ export function AgentScreen() {
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}
         act={actions.archiveAsk.question.act}
-        destructive
         presented={archiving}
         onAct={() => {
           setArchiving(false);
