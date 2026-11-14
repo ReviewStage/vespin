@@ -161,16 +161,19 @@ export interface ToolHeaderProps {
   status?: ReactNode | undefined;
   /** Whether the call is held, not working, so the working mark gives way to its status. */
   paused?: boolean | undefined;
+  /** Whether the service answered the call without doing it, which the line marks as it marks a failure. */
+  refused?: boolean | undefined;
 }
 
 /**
  * What a call's line says: its icon, what it did, who it was about where it
  * names someone by their chip, and where it stands. Note that the chip
  * gives way before the label does, since a name cut at its end still reads,
- * and that the subject after it takes only what is left. A failure's mark
- * stands right after the label, by what failed, rather than at the line's
- * far end, where a reader scanning the verbs would miss it; the working
- * mark keeps the end, where it moves nothing as the call settles.
+ * and that the subject after it takes only what is left. A failure's mark,
+ * or a refusal's, stands in the icon's place, so a reader scanning down the
+ * icons finds every call that went wrong in one column and the sentence
+ * stays whole; the working mark keeps the line's end, where it moves nothing
+ * as the call settles.
  */
 export function ToolLine({
   state,
@@ -183,6 +186,7 @@ export function ToolLine({
   placeChip,
   status,
   paused = false,
+  refused = false,
 }: Pick<
   ToolHeaderProps,
   | "state"
@@ -195,13 +199,14 @@ export function ToolLine({
   | "placeChip"
   | "status"
   | "paused"
+  | "refused"
 >): ReactNode {
   const trailing = subject !== undefined || chip !== undefined;
-  const failed = state === TOOL_STATE.OUTPUT_ERROR;
+  const failed = state === TOOL_STATE.OUTPUT_ERROR || refused;
 
   return (
     <>
-      <GlyphSlot>{icon}</GlyphSlot>
+      <GlyphSlot>{failed ? <ToolStateMark state={TOOL_STATE.OUTPUT_ERROR} /> : icon}</GlyphSlot>
       {/* Note that the label keeps its space, so the line still reads as one sentence to find, copy, and a screen reader, though the flex gap sets it. */}
       <span className="flex min-w-0 flex-1 items-baseline gap-tight-gap">
         {label === undefined ? null : (
@@ -212,11 +217,6 @@ export function ToolLine({
             {trailing ? `${label} ` : label.replace(/:$/u, "")}
           </OneLine>
         )}
-        {failed ? (
-          <span className="flex flex-none self-center">
-            <ToolStateMark state={state} />
-          </span>
-        ) : null}
         {chip === undefined ? null : (
           <span className="tool-chip flex min-w-0 max-w-tool-chip flex-initial whitespace-nowrap">
             {chip}
@@ -285,6 +285,7 @@ export function ToolHeader({
   placeChip,
   status,
   paused,
+  refused,
 }: ToolHeaderProps): ReactNode {
   const previewed = useDisclosurePreviewShown(subjectInBody);
 
@@ -301,6 +302,7 @@ export function ToolHeader({
         placeChip={placeChip}
         status={status}
         paused={paused}
+        refused={refused}
       />
     </ToolSummary>
   );
