@@ -29,12 +29,12 @@ import {
 } from "./agent-wire.js";
 
 /** Who said a line on a call: the caller, whose words are theirs, or the voice, which answers them. */
-export const CALL_SPEAKER = {
+const CALL_SPEAKER = {
   CALLER: "caller",
   VOICE: "voice",
 } as const;
 
-export type CallSpeaker = (typeof CALL_SPEAKER)[keyof typeof CALL_SPEAKER];
+type CallSpeaker = (typeof CALL_SPEAKER)[keyof typeof CALL_SPEAKER];
 
 /** A line said on a call: who said it, the call it was said on, and when into the call it began and ended, where the row keeps it. */
 export interface SpokenLine {

@@ -261,7 +261,6 @@ const SANDBOX_LAYOUT: MachineLayout = {
   codexExecutable: CODEX_PIN.LINK,
   codexHome: CODEX_PIN.HOME,
   linesRead: true,
-  transcriptsKept: true,
   diskSessions: false,
   permissionModes: true,
 };

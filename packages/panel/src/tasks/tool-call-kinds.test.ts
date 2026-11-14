@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_TOOL, RETIRED_TOOL } from "@repo/features/agent-tools";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { toolCallView } from "@repo/features/tool-call-model";
 import { CALL_KIND } from "@repo/features/turn-rows";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
@@ -94,14 +95,14 @@ test("each of Vespin's tools that fell through to 'Used' reads as its own verb, 
   }
 });
 
-test("a call of an integration's tool says the tool it ran and the server it ran on, behind the server's mark", () => {
+test("a call of an integration's tool says the tool it ran behind the server's mark, and no tag for an account alone", () => {
   const words = rowOf(
     "linear_remote",
     { remoteTool: "list_issues", parentCallId: "wrapper", input: {} },
     NO_ANSWER,
   );
 
-  assert.equal(words, "Ran list_issues Linear");
+  assert.equal(words, "Ran list_issues");
 });
 
 test("every tool an agent is offered has a kind of its own, and an MCP call a native harness made reads on its server", () => {
@@ -117,8 +118,8 @@ test("every tool an agent is offered has a kind of its own, and an MCP call a na
   });
 
   assert.deepEqual(
-    [claudeCode.kind, claudeCode.subject, claudeCode.server],
-    [CALL_KIND.MCP_TOOL, "get_file_contents", "GitHub"],
+    [claudeCode.kind, claudeCode.subject, claudeCode.server, claudeCode.provider],
+    [CALL_KIND.MCP_TOOL, "get_file_contents", "GitHub", INTEGRATION_PROVIDER.GITHUB],
   );
 
   const codex = toolCallView({ tool: "notion-2.fetch", input: {}, output: undefined });

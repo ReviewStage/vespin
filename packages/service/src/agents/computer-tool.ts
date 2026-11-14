@@ -79,7 +79,7 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  */
 
 /** How long one action may run once its app is allowed; the ask before it stands apart (`machineAskSeconds`). */
-export const COMPUTER_TOOL_TIMEOUT_SECONDS = 120;
+const COMPUTER_TOOL_TIMEOUT_SECONDS = 120;
 
 /** The two screenshots a read asks for: the model's copy, and the one kept beside the transcript. */
 const COMPUTER_SHOTS = {

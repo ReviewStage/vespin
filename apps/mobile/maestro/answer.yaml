@@ -83,10 +83,10 @@ appId: dev.vespin.ios
           centerElement: true
 - waitForAnimationToEnd
 - tapOn: "Invite limits"
-- assertVisible: "Choose"
+- assertVisible: "Choose an item"
 - waitForAnimationToEnd
 - takeScreenshot: answer-fields
-- tapOn: "Choose"
+- tapOn: "Choose an item"
 - tapOn: "Every member \\(recommended\\)"
 - tapOn: "Email the sender when an invite is accepted.*"
 # The number comes last, since the decimal pad has no key that puts it away:
@@ -131,7 +131,7 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Submitted"
     timeout: 5000
-- assertNotVisible: "Choose"
+- assertNotVisible: "Choose an item"
 
 # A do: its steps as checkbox rows, one ticked by hand, then Mark done, which
 # sends at once with every step ticked.
@@ -273,6 +273,13 @@ appId: dev.vespin.ios
           centerElement: true
 - waitForAnimationToEnd
 - tapOn: "What the expired invite page says"
+# Note that the row is tapped again while the Inbox's scopes still stand, the list alone showing them, because a tap right after the list draws, as at launch on the folded Duo, can leave the list in front.
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Questions.*"
+    commands:
+      - tapOn: "What the expired invite page says"
 - waitForAnimationToEnd
 - tapOn:
     text: "More"

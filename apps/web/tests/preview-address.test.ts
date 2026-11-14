@@ -303,7 +303,7 @@ test("an earlier head redeployed and failed still resolves to its first build, w
   });
 });
 
-test("an agent's branch Vercel stays quiet on is taken as never asked for, after a grace that lets a just-asked preview show up", async (t) => {
+test("a branch Vercel stays quiet on is taken as never asked for, after a grace that lets a just-asked preview show up", async (t) => {
   const fixture = await rebasedBranch(t, "web v1\n");
   answer(fixture.answers, `repos/${REPOSITORY}/commits/${fixture.head}/status`, { statuses: [] });
   assert.equal(previewAddress(fixture, 1).status, EXIT_NOT_READY);

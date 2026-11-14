@@ -18,7 +18,7 @@ function namesAutomation(tasks: TasksControl): boolean {
   const listed = new Set(tasks.tasks.map((task) => task.id));
 
   const lines = (tasks.liveAgents ?? []).filter(
-    (agent) => agent.taskId !== null && listed.has(agent.taskId) && agent.archivedAt === undefined,
+    (agent) => listed.has(agent.taskId) && agent.archivedAt === undefined,
   );
 
   const agents = [...(tasks.agents.agents ?? []), ...(tasks.agents.archived ?? [])];
