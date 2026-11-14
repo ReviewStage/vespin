@@ -103,6 +103,8 @@ export { type Keeping, KeepingProvider } from "./held-menu.js";
 
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 
+export { INTEGRATION_MARK_ASSET, type IntegrationMarkAsset } from "./integration-marks.js";
+
 export {
   type HeldPicture,
   heldPicture,
@@ -161,6 +163,8 @@ export { RenameAsk, SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
+export { ProblemLine } from "./problem-line.js";
+
 export {
   PROVIDER_MARK_ASSET,
   ProviderButton,
@@ -191,7 +195,7 @@ export {
   WriteNoteRow,
 } from "./pull-request-page.js";
 
-export { RemindSheet } from "./remind-sheet.js";
+export { RemindPickSheet } from "./remind-sheet.js";
 
 export {
   LIST_LOOK,
@@ -242,10 +246,12 @@ export {
 
 export {
   type BarAction,
+  type BarFootItem,
   type BarMenu,
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  isBarMenu,
   KeptColumns,
   type KeptView,
   menuWithout,
