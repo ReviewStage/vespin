@@ -10,7 +10,6 @@ import {
   fixedSize,
   font,
   foregroundStyle,
-  glassEffect,
   layoutPriority,
   lineLimit,
   offset,
@@ -39,7 +38,7 @@ import {
   noticeOnline,
   type ShownNotice,
 } from "./failure-notice-model.js";
-import { BAR_RADIUS } from "./glass-bar.js";
+import { useBarGlass } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";
 import { useColors } from "./tokens/colors.js";
@@ -135,6 +134,7 @@ function NoticeBody({
   const colors = useColors();
   const ink = notice.kind === NOTICE_KIND.REFUSED ? colors.DANGER : colors.TEXT_MUTED;
   const press = noticePress(notice);
+  const glass = useBarGlass();
 
   return (
     <Host matchContents={{ vertical: true }} style={styles.banner}>
@@ -142,12 +142,7 @@ function NoticeBody({
         spacing={SPACE.ROW}
         modifiers={[
           padding({ leading: SPACE.EDGE, trailing: SPACE.ROW, vertical: SPACE.ROW + 2 }),
-          glassEffect({
-            glass: { variant: "regular" },
-            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-            shape: "roundedRectangle",
-            cornerRadius: BAR_RADIUS,
-          }),
+          ...glass,
           // Note that the banner contains its pieces as elements of their own, because an identifier on a plain stack passes down to them and stood over Try again's own.
           accessibilityElement("contain"),
           accessibilityIdentifier("failure-notice"),
