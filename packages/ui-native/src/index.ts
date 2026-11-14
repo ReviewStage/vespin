@@ -248,6 +248,9 @@ export {
   type LinkRowTone,
   RelationRow,
   TaskHead,
+  VERSION_WRITER,
+  VersionRow,
+  type VersionWriter,
   WordsRow,
 } from "./task-rows.js";
 
