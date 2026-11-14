@@ -6,6 +6,7 @@ import {
   Host,
   HStack,
   Image,
+  ScrollView,
   Spacer,
   Text,
   TextField,
@@ -23,13 +24,13 @@ import {
   monospacedDigit,
   padding,
   presentationBackground,
+  presentationDetents,
   presentationDragIndicator,
   textFieldStyle,
 } from "@expo/ui/swift-ui/modifiers";
 import { MACHINE_ASK_DECISION, type MachineAskDecision } from "@repo/features/machine-ask-wire";
 import { timeLeftText } from "@repo/features/time-format";
-import { useEffect, useState } from "react";
-import { useAccessibilitySize } from "./accessibility.js";
+import { type ReactNode, useEffect, useState } from "react";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
@@ -54,9 +55,6 @@ const MACHINE_ASK_WORDS = {
 
 /** How often the time left is drawn again: each second, as the panel's countdown ticks. */
 const TICK_MS = 1000;
-
-/** How many lines of a command show before it scrolls past: all of it at an accessibility size, since a reader allows what they can read. */
-const COMMAND_LINES = { REGULAR: 6, LARGE: 20 } as const;
 
 /** Which of its two faces the sheet shows: the ask, or Deny's words for the agent. */
 const ASK_FACE = { ASK: "ask", DENY: "deny" } as const;
@@ -156,7 +154,6 @@ function AskTitle({ words }: { readonly words: string }) {
 /** What the ask is about: the command whole in a code block, or what using the app lets the agent do. */
 function AskSubject({ subject }: { readonly subject: MachineAskSheetSubject }) {
   const colors = useColors();
-  const large = useAccessibilitySize();
 
   if (!("command" in subject)) {
     return (
@@ -173,7 +170,6 @@ function AskSubject({ subject }: { readonly subject: MachineAskSheetSubject }) {
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_TITLE, design: "monospaced" }),
         foregroundStyle(colors.TEXT),
-        lineLimit(large ? COMMAND_LINES.LARGE : COMMAND_LINES.REGULAR),
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
         padding({ all: SPACE.ROW + SPACE.TIGHT / 2 }),
         background(
@@ -184,6 +180,24 @@ function AskSubject({ subject }: { readonly subject: MachineAskSheetSubject }) {
     >
       {subject.command}
     </Text>
+  );
+}
+
+/** One face of the sheet: what it says, which scrolls where it runs past the sheet, as a long command does, over its acts, which stay at the foot. */
+function SheetFace({ says, acts }: { readonly says: ReactNode; readonly acts: ReactNode }) {
+  return (
+    <VStack spacing={SPACE.EDGE}>
+      <ScrollView>
+        <VStack
+          alignment="leading"
+          spacing={SPACE.EDGE}
+          modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]}
+        >
+          {says}
+        </VStack>
+      </ScrollView>
+      <VStack spacing={SPACE.ROW}>{acts}</VStack>
+    </VStack>
   );
 }
 
@@ -198,36 +212,44 @@ function AskFaceView({
   readonly onDenyAsk: () => void;
 }) {
   return (
-    <>
-      <AskHead machine={machine} expiresAt={expiresAt} />
-      <AskTitle
-        words={"command" in subject ? MACHINE_ASK_WORDS.SHELL : MACHINE_ASK_WORDS.app(subject.app)}
-      />
-      <AskSubject subject={subject} />
-      <VStack spacing={SPACE.ROW}>
-        <Button
-          label={MACHINE_ASK_WORDS.ONCE}
-          size={BUTTON_SIZE.LARGE}
-          wide
-          onPress={() => onAllow(MACHINE_ASK_DECISION.ALLOW_ONCE)}
-        />
-        <Button
-          label={MACHINE_ASK_WORDS.ALWAYS}
-          look={BUTTON_LOOK.BORDERED}
-          size={BUTTON_SIZE.LARGE}
-          wide
-          onPress={() => onAllow(MACHINE_ASK_DECISION.ALLOW_ALWAYS)}
-        />
-        <Button
-          label={MACHINE_ASK_WORDS.DENY_ASK}
-          look={BUTTON_LOOK.PLAIN}
-          size={BUTTON_SIZE.LARGE}
-          destructive
-          wide
-          onPress={onDenyAsk}
-        />
-      </VStack>
-    </>
+    <SheetFace
+      says={
+        <>
+          <AskHead machine={machine} expiresAt={expiresAt} />
+          <AskTitle
+            words={
+              "command" in subject ? MACHINE_ASK_WORDS.SHELL : MACHINE_ASK_WORDS.app(subject.app)
+            }
+          />
+          <AskSubject subject={subject} />
+        </>
+      }
+      acts={
+        <>
+          <Button
+            label={MACHINE_ASK_WORDS.ONCE}
+            size={BUTTON_SIZE.LARGE}
+            wide
+            onPress={() => onAllow(MACHINE_ASK_DECISION.ALLOW_ONCE)}
+          />
+          <Button
+            label={MACHINE_ASK_WORDS.ALWAYS}
+            look={BUTTON_LOOK.BORDERED}
+            size={BUTTON_SIZE.LARGE}
+            wide
+            onPress={() => onAllow(MACHINE_ASK_DECISION.ALLOW_ALWAYS)}
+          />
+          <Button
+            label={MACHINE_ASK_WORDS.DENY_ASK}
+            look={BUTTON_LOOK.PLAIN}
+            size={BUTTON_SIZE.LARGE}
+            destructive
+            wide
+            onPress={onDenyAsk}
+          />
+        </>
+      }
+    />
   );
 }
 
@@ -244,40 +266,46 @@ function DenyFaceView({
   const [words, setWords] = useState("");
 
   return (
-    <>
-      <AskTitle words={MACHINE_ASK_WORDS.DENY_TITLE} />
-      <TextField
-        text={note}
-        placeholder={MACHINE_ASK_WORDS.NOTE}
-        onTextChange={setWords}
-        modifiers={[
-          textFieldStyle("plain"),
-          font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-          foregroundStyle(colors.TEXT),
-          padding({ all: SPACE.ROW + SPACE.TIGHT / 2 }),
-          background(
-            colors.GROUPED,
-            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
-          ),
-        ]}
-      />
-      <VStack spacing={SPACE.ROW}>
-        <Button
-          label={MACHINE_ASK_WORDS.DENY}
-          size={BUTTON_SIZE.LARGE}
-          destructive
-          wide
-          onPress={() => onDeny(words.trim() === "" ? undefined : words.trim())}
-        />
-        <Button
-          label={MACHINE_ASK_WORDS.BACK}
-          look={BUTTON_LOOK.PLAIN}
-          size={BUTTON_SIZE.LARGE}
-          wide
-          onPress={onBack}
-        />
-      </VStack>
-    </>
+    <SheetFace
+      says={
+        <>
+          <AskTitle words={MACHINE_ASK_WORDS.DENY_TITLE} />
+          <TextField
+            text={note}
+            placeholder={MACHINE_ASK_WORDS.NOTE}
+            onTextChange={setWords}
+            modifiers={[
+              textFieldStyle("plain"),
+              font({ textStyle: TYPE_ROLE.ROW_TITLE }),
+              foregroundStyle(colors.TEXT),
+              padding({ all: SPACE.ROW + SPACE.TIGHT / 2 }),
+              background(
+                colors.GROUPED,
+                SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
+              ),
+            ]}
+          />
+        </>
+      }
+      acts={
+        <>
+          <Button
+            label={MACHINE_ASK_WORDS.DENY}
+            size={BUTTON_SIZE.LARGE}
+            destructive
+            wide
+            onPress={() => onDeny(words.trim() === "" ? undefined : words.trim())}
+          />
+          <Button
+            label={MACHINE_ASK_WORDS.BACK}
+            look={BUTTON_LOOK.PLAIN}
+            size={BUTTON_SIZE.LARGE}
+            wide
+            onPress={onBack}
+          />
+        </>
+      }
+    />
   );
 }
 
@@ -287,7 +315,9 @@ function DenyFaceView({
  * has left at the head, the question in a sheet's large bold, the command
  * whole in a code block (or what using the app lets the agent do), then
  * Allow once filled, Always allow, and Deny…, which turns the sheet to the
- * words the agent is handed. It sizes itself to what it holds. Dragged away,
+ * words the agent is handed. It opens at half the screen and drags to the
+ * whole; what it says scrolls where a long command runs past it, its acts
+ * held at the foot, so a command is read whole before it is allowed. Dragged away,
  * it sets the ask aside on this phone. Note that it stands in a host of its
  * own, the size of nothing, as `RemindSheet` does, so it opens over
  * whatever screen stands.
@@ -308,18 +338,19 @@ export function MachineAskSheet({
     <Host matchContents style={{ position: "absolute" }}>
       <BottomSheet
         isPresented={presented}
-        fitToContents
         onIsPresentedChange={(shown) => {
           if (!shown) onDismiss();
         }}
         onDismiss={() => setFace(ASK_FACE.ASK)}
       >
         <Group
-          modifiers={[presentationDragIndicator("visible"), presentationBackground(colors.RAISED)]}
+          modifiers={[
+            presentationDetents(["medium", "large"]),
+            presentationDragIndicator("visible"),
+            presentationBackground(colors.RAISED),
+          ]}
         >
           <VStack
-            alignment="leading"
-            spacing={SPACE.EDGE}
             modifiers={[
               padding({ horizontal: SPACE.PAGE, top: SPACE.PAGE + SPACE.ROW, bottom: SPACE.ROW }),
             ]}

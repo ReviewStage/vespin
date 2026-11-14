@@ -83,10 +83,12 @@ export function MachineAsks({ signedIn }: { readonly signedIn: boolean }) {
 
   const settle = () => setSettled((was) => new Set(was).add(shown.id));
 
-  const answer = (decision: MachineAskDecision, note?: string) => {
+  // Note that an answer that did not go puts the ask back, so it can be given again; one set aside by a drag stays aside.
+  const answer = async (decision: MachineAskDecision, note?: string) => {
     settle();
     const id = shown.id;
-    void write(
+
+    const went = await write(
       () =>
         acts[ACT_KIND.MACHINE_ASK_ANSWER](
           note === undefined ? { id, decision } : { id, decision, note },
@@ -96,6 +98,15 @@ export function MachineAsks({ signedIn }: { readonly signedIn: boolean }) {
         went: BUZZ.SUCCESS,
       },
     );
+
+    if (!went) {
+      setSettled((was) => {
+        const next = new Set(was);
+        next.delete(id);
+
+        return next;
+      });
+    }
   };
 
   const { subject } = shown;
@@ -107,8 +118,8 @@ export function MachineAsks({ signedIn }: { readonly signedIn: boolean }) {
       machine={names.get(shown.deviceId) ?? MACHINE_ASK_WORDS.SOME_MACHINE}
       subject={"command" in subject ? { command: subject.command } : { app: subject.app.name }}
       expiresAt={shown.expiresAt}
-      onAllow={(decision) => answer(decision)}
-      onDeny={(note) => answer(MACHINE_ASK_DECISION.DENY, note)}
+      onAllow={(decision) => void answer(decision)}
+      onDeny={(note) => void answer(MACHINE_ASK_DECISION.DENY, note)}
       onDismiss={settle}
     />
   );
