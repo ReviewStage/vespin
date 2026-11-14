@@ -73,12 +73,13 @@ import {
  * names. A third, the issues those plans linked (`issues`), answers no rows
  * now that a plan links none, and stands because a released desktop
  * requires it. Everything the held read derives from them is derived here,
- * from the rows and the agents whose starting grace has ended
- * (`AgentsPastGrace`), the one fact of an agent's status the clock alone
- * moves (`agent-status.ts`), which a reader following the rows holds as
- * data beside them and writes at each agent's `agentGraceEnd`, so nothing
- * here reads a clock. A reader that draws the list again and again
- * (`taskListDrawer`) builds again only what a row that moved, or a grace
+ * from the rows and whether each agent's starting grace has ended
+ * (`GracedAgent`), the one fact of an agent's status the clock alone moves
+ * (`agent-status.ts`), which a reader following the rows holds as data
+ * beside them and writes at each agent's `agentGraceEnd`, so nothing here
+ * reads a clock. Each value is built from one row, or one plan's agents, so
+ * a reader that draws the list again and again (the host's live queries,
+ * `task-list-tasks.ts`) builds again only what a row that moved, or a grace
  * that ended, reaches. Realtime keeps no order, so the list is ordered here
  * as the held read orders it.
  */
@@ -528,12 +529,13 @@ type TaskLiveRow = typeof taskLiveRowSchema.Type;
 type AgentLiveRow = typeof agentLiveRowSchema.Type;
 
 /**
- * The agents whose starting grace has ended, by id: the one fact of an
- * agent's status its row does not say, held beside the rows by their reader.
- * An agent it does not name reads as still inside its grace.
+ * An agent's row with whether its starting grace has ended: the one fact of
+ * an agent's status its row does not say, held beside the rows by their
+ * reader. An agent whose reader holds no end reads as still inside its grace.
  */
-export interface AgentsPastGrace {
-  readonly has: (agentId: string) => boolean;
+export interface GracedAgent {
+  readonly row: AgentLiveRow;
+  readonly pastGrace: boolean;
 }
 
 /** The statuses under which an agent is at work. */
@@ -588,8 +590,8 @@ function startOf(row: AgentLiveRow): StatusStart {
 }
 
 /** Where the agent stands, from its row and whether its starting grace has ended. */
-function statusOf(row: AgentLiveRow, pastGrace: AgentsPastGrace): AgentStatus {
-  return agentStatusOf(turnOf(row), startOf(row), pastGrace.has(row.id));
+function statusOf(row: AgentLiveRow, pastGrace: boolean): AgentStatus {
+  return agentStatusOf(turnOf(row), startOf(row), pastGrace);
 }
 
 /** When the run the status is read from began: the newest turn's start, or its queueing before a runner took it, and the agent's own before any turn. */
@@ -653,38 +655,40 @@ export function pullRequestLinesOf(rows: readonly AgentLiveRow[]): readonly Task
   );
 }
 
-/** One plan's agents, in the order the rows name them, and every pull request they opened (`pullRequestLinesOf`). */
-interface AgentGroup {
-  readonly agents: readonly AgentLiveRow[];
-  readonly pullRequests: readonly TaskPullRequestLine[];
-}
-
 /**
- * One plan's agents counted, as the held read counts them: the archived
- * left out, how many are at work and how many failed with no agent
- * started since (`standingFailures`), how many pull
- * requests they opened, and the latest settled activity of every agent,
- * archived or not. The agents and pull requests themselves are the
- * drawing's `taskAgents` and `taskPullRequests`.
+ * One plan's agents counted, in any order, as the held read counts them: the
+ * archived left out, how many are at work and how many failed with no agent
+ * started since (`standingFailures`), how many pull requests they opened
+ * (`pullRequestTotal`, its lines' count, `pullRequestLinesOf`), and the
+ * latest settled activity of every agent, archived or not. The agents and
+ * pull requests themselves are the list's `taskAgents` and
+ * `taskPullRequests`.
  */
-function agentsSummaryOf(group: AgentGroup, pastGrace: AgentsPastGrace): TaskAgentsSummary {
-  const { agents: rows, pullRequests } = group;
+export function agentsSummaryOf(
+  agents: readonly GracedAgent[],
+  pullRequestTotal: number,
+): TaskAgentsSummary {
+  const rows = agents.map((agent) => agent.row);
 
-  const standing = rows
-    .filter((row) => row.archivedAt === null)
-    .map((row) => ({
-      createdAt: row.createdAt,
-      status: statusOf(row, pastGrace),
-      at: turnOf(row) === undefined ? undefined : (row.settledAt ?? undefined),
-      failure: row.turnFailure ?? undefined,
-    }));
+  const standing = agents.flatMap(({ row, pastGrace }) =>
+    row.archivedAt === null
+      ? [
+          {
+            createdAt: row.createdAt,
+            status: statusOf(row, pastGrace),
+            at: turnOf(row) === undefined ? undefined : (row.settledAt ?? undefined),
+            failure: row.turnFailure ?? undefined,
+          },
+        ]
+      : [],
+  );
 
   return {
     total: standing.length,
     working: standing.filter(({ status }) => WORKING_STATUSES.has(status)).length,
     failed: standingFailures(standing, Math.max(...rows.map((row) => row.createdAt))),
     ...(rows.length === 0 ? undefined : { activityAt: Math.max(...rows.map(activityAt)) }),
-    pullRequestTotal: pullRequests.length,
+    pullRequestTotal,
   };
 }
 
@@ -725,11 +729,10 @@ function subTaskCountOf(row: TaskLiveRow): Pick<TaskSummary, "subTasks"> | undef
   return total === 0 ? undefined : { subTasks: { total, finished: row.finishedSubTaskCount ?? 0 } };
 }
 
-/** One plan as the list's row says it, its agents in brief where it has any. */
-function taskSummaryOf(
+/** One plan as the list's row says it, its agents in brief (`agentsSummaryOf`) where it has any. */
+export function taskSummaryOf(
   row: TaskLiveRow,
-  agents: AgentGroup | undefined,
-  pastGrace: AgentsPastGrace,
+  agents: TaskAgentsSummary | undefined,
 ): TaskSummary {
   return {
     id: row.id,
@@ -768,7 +771,7 @@ function taskSummaryOf(
     ...(row.blocks === undefined ? undefined : { blocks: row.blocks }),
     ...(row.madeByRun === true ? { madeByRun: true } : undefined),
     ...followersOf(row),
-    ...(agents === undefined ? undefined : { agents: agentsSummaryOf(agents, pastGrace) }),
+    ...(agents === undefined ? undefined : { agents }),
   };
 }
 
@@ -830,7 +833,7 @@ function sandboxOf(row: AgentLiveRow): Pick<AgentSummary, "sandbox"> | undefined
 /** One agent as the tabs draw it, on a plan or with none, as the service's summary of it says it, with the agents `continuedBy` from it. */
 function agentSummaryOf(
   row: AgentLiveRow,
-  pastGrace: AgentsPastGrace,
+  pastGrace: boolean,
   continuedBy: ContinuedBy | undefined,
 ): AgentSummary {
   const servers = (row.disabledServers ?? []).filter(
@@ -901,10 +904,10 @@ function agentSummaryOf(
   };
 }
 
-/** One agent on a plan as the list carries it, with its own workspace and repository, and when its newest turn ended where one has. */
-function listedAgentOf(
+/** One agent on a plan as the list carries it, with its own workspace and repository, and when its newest turn ended where one has, its status read with whether its starting grace has ended. */
+export function listedAgentOf(
   row: AgentLiveRow,
-  pastGrace: AgentsPastGrace,
+  pastGrace: boolean,
   continuedBy: ContinuedBy | undefined,
 ): ListedAgent {
   const settledAt = turnOf(row) === undefined ? null : row.settledAt;
@@ -926,26 +929,22 @@ function firstStarted(a: AgentLiveRow, b: AgentLiveRow): number {
 
 /**
  * The first instant the agent's starting grace has ended, which its reader
- * marks it past its grace at (`AgentsPastGrace`); none where its status
+ * marks it past its grace at (`GracedAgent`); none where its status
  * waits on no grace (`startingGraceEnd`).
  */
 export function agentGraceEnd(row: TaskListLiveRows["agents"][number]): number | undefined {
   return startingGraceEnd(turnOf(row), startOf(row));
 }
 
-/** The agents of `rows` whose starting grace has ended by `now`, as a reader at that one instant holds them. */
-function pastGraceAt(rows: TaskListLiveRows, now: number): AgentsPastGrace {
-  return new Set(
-    rows.agents.flatMap((row) => {
-      const end = agentGraceEnd(row);
+/** The agent's row with whether its starting grace has ended by `now`, as a reader at that one instant holds it. */
+function gracedAt(row: AgentLiveRow, now: number): GracedAgent {
+  const end = agentGraceEnd(row);
 
-      return end !== undefined && now >= end ? [row.id] : [];
-    }),
-  );
+  return { row, pastGrace: end !== undefined && now >= end };
 }
 
 /** The reader's pin of an agent; none for one unpinned or archived, since an archived agent stands in no list a pin is drawn in. */
-function agentPinOf(row: AgentLiveRow): TaskAgentPin | undefined {
+export function agentPinOf(row: AgentLiveRow): TaskAgentPin | undefined {
   const { planId, pinnedAt, pinPosition } = row;
 
   if (pinnedAt === null || row.archivedAt !== null) return undefined;
@@ -961,54 +960,8 @@ export function agentPullRequestOf(row: AgentLiveRow): ListedPullRequest | undef
   return marked === null ? undefined : { agentId: row.id, taskId: row.planId, pullRequest: marked };
 }
 
-/** Whether two lists hold the very same objects in one order. */
-function sameItems<Item>(a: readonly Item[], b: readonly Item[]): boolean {
-  return a.length === b.length && a.every((item, at) => item === b[at]);
-}
-
-/** `next`, or `held` where it holds the very same objects, so a list nothing in moved is the list drawn before. */
-function keptItems<Item>(
-  held: readonly Item[] | undefined,
-  next: readonly Item[],
-): readonly Item[] {
-  return held !== undefined && sameItems(held, next) ? held : next;
-}
-
-/** A value built from one row, as a drawing keeps it, with what else it was built from. */
-interface Built<Row, Value> {
-  readonly row: Row;
-  /** What else it was built from, each compared by identity: the agents started from an agent, or a plan's agents, and whether each agent's grace has ended. */
-  readonly beside: readonly unknown[];
-  readonly value: Value;
-}
-
-/** `held` where it was built from `row` and `beside`, else what `build` builds now. */
-function rebuilt<Row, Value>(
-  held: Built<Row, Value> | undefined,
-  row: Row,
-  beside: readonly unknown[],
-  build: () => Value,
-): Built<Row, Value> {
-  const holds = held !== undefined && held.row === row && sameItems(held.beside, beside);
-
-  return holds ? held : { row, beside, value: build() };
-}
-
-/** The plan list and every part drawn beside it, as the live rows stand at one instant. */
-export interface TaskListDrawing {
-  /** The plans newest started first, each with its agents in brief. */
-  readonly list: TaskListAnswer;
-  /** Every agent on a plan, the archived among them, first started first, with the workspace and repository its own row names. */
-  readonly taskAgents: readonly ListedAgent[];
-  /** The reader's pins of agents on a plan, the archived left out. */
-  readonly taskAgentPins: readonly TaskAgentPin[];
-}
-
-/** Each plan's pull request lines by its id (`pullRequestLinesOf`), as one object for as long as its agents' pull requests stand; none for a plan with none. */
-export type PullRequestLinesOf = (taskId: string) => readonly TaskPullRequestLine[] | undefined;
-
-/** The agents started from each agent by its id (`continuedByOf`), as one object for as long as their rows stand; none for an agent nothing was started from. */
-export type ContinuedByOf = (agentId: string) => ContinuedBy | undefined;
+/** The agents started from each agent by its id (`continuedByOf`); none for an agent nothing was started from. */
+type ContinuedByOf = (agentId: string) => ContinuedBy | undefined;
 
 /** The agents started from one agent as its summary names them, from their rows first started first. */
 export function continuedByOf(rows: readonly AgentLiveRow[]): ContinuedBy {
@@ -1036,127 +989,6 @@ function continuedByAt(rows: TaskListLiveRows): ContinuedByOf {
   return (agentId) => continued.get(agentId);
 }
 
-/** A plan with no pull request, as one object however often it is drawn. */
-const NO_PULL_REQUESTS: readonly TaskPullRequestLine[] = [];
-
-/**
- * Draws the plan list from its live rows again and again, building again
- * only what a row that moved reaches: an agent whose row, or the list of
- * the agents started from it, are other objects, a plan whose row, whose
- * agents' rows, or whose pull request lines are, and an agent, and its
- * plan, whose starting grace has ended since it was built. A plan's pull
- * request lines (`pullRequestsOf`) and each agent's list of the agents
- * started from it (`continuedOf`) are handed in, derived elsewhere as their
- * agents move. Everything else is the very object drawn before, and so is
- * every list nothing in moved, so a reader comparing one drawing with the
- * last stops at `===`. Note that it leans on a row that did not move being
- * the object it was, as the sync engine's pool hands it out (`@repo/sync`):
- * a row handed out equal but new is built again, which costs time and never
- * draws anything wrong.
- */
-export function taskListDrawer(): (
-  rows: TaskListLiveRows,
-  pastGrace: AgentsPastGrace,
-  pullRequestsOf: PullRequestLinesOf,
-  continuedOf: ContinuedByOf,
-) => TaskListDrawing {
-  let groups = new Map<string, AgentGroup>();
-  let listed = new Map<string, Built<AgentLiveRow, ListedAgent>>();
-  let summaries = new Map<string, Built<TaskLiveRow, TaskSummary>>();
-  let drawn: TaskListDrawing | undefined;
-
-  /** An agent's pin, built once for as long as its row stands. */
-  const pins = new WeakMap<AgentLiveRow, { readonly pin: TaskAgentPin | undefined }>();
-
-  const pinOf = (row: AgentLiveRow) => {
-    const held = pins.get(row);
-
-    if (held !== undefined) return held.pin;
-    const pin = agentPinOf(row);
-    pins.set(row, { pin });
-
-    return pin;
-  };
-
-  return (rows, pastGrace, pullRequestsOf, continuedOf) => {
-    // Each plan's agents in the order the rows name them, and their pull requests, built again only where either moved.
-    const byTask = new Map<string, AgentLiveRow[]>();
-
-    for (const row of rows.agents) {
-      const group = byTask.get(row.planId);
-
-      if (group === undefined) byTask.set(row.planId, [row]);
-      else group.push(row);
-    }
-
-    const nextGroups = new Map<string, AgentGroup>();
-
-    for (const [taskId, agents] of byTask) {
-      const held = groups.get(taskId);
-      const pullRequests = pullRequestsOf(taskId) ?? NO_PULL_REQUESTS;
-
-      const holds =
-        held !== undefined && held.pullRequests === pullRequests && sameItems(held.agents, agents);
-
-      nextGroups.set(taskId, holds ? held : { agents, pullRequests });
-    }
-
-    // Each agent as the tabs draw it, built again where its row or those started from it moved, or its grace ended.
-    const nextListed = new Map<string, Built<AgentLiveRow, ListedAgent>>();
-
-    for (const row of rows.agents) {
-      const continuedBy = continuedOf(row.id);
-
-      const built = rebuilt(listed.get(row.id), row, [continuedBy, pastGrace.has(row.id)], () =>
-        listedAgentOf(row, pastGrace, continuedBy),
-      );
-
-      nextListed.set(row.id, built);
-    }
-
-    // Each plan as the list's row says it, built again where its row or its agents moved, or one of their graces ended.
-    const nextSummaries = new Map<string, Built<TaskLiveRow, TaskSummary>>();
-
-    const plans = rows.plans.toSorted(newestFirst).map((row) => {
-      const group = nextGroups.get(row.id);
-      const graces = (group?.agents ?? []).map((agent) => pastGrace.has(agent.id));
-
-      const built = rebuilt(summaries.get(row.id), row, [group, ...graces], () =>
-        taskSummaryOf(row, group, pastGrace),
-      );
-
-      nextSummaries.set(row.id, built);
-
-      return built.value;
-    });
-
-    const held = drawn;
-    const keptPlans = keptItems(held?.list.plans, plans);
-    groups = nextGroups;
-    listed = nextListed;
-    summaries = nextSummaries;
-    drawn = {
-      list: held !== undefined && held.list.plans === keptPlans ? held.list : { plans: keptPlans },
-      taskAgents: keptItems(
-        held?.taskAgents,
-        [...nextListed.values()]
-          .toSorted((a, b) => firstStarted(a.row, b.row))
-          .map((built) => built.value),
-      ),
-      taskAgentPins: keptItems(
-        held?.taskAgentPins,
-        rows.agents.flatMap((row) => {
-          const pin = pinOf(row);
-
-          return pin === undefined ? [] : [pin];
-        }),
-      ),
-    };
-
-    return drawn;
-  };
-}
-
 /**
  * Every agent on a plan, the archived ones among them, each as the plan's
  * own list of agents names it with its status read at `now`, and with the
@@ -1166,8 +998,11 @@ export function taskListDrawer(): (
  * plan's agents again on a clock.
  */
 export function taskAgentsOfLiveRows(rows: TaskListLiveRows, now: number): readonly ListedAgent[] {
-  return taskListDrawer()(rows, pastGraceAt(rows, now), () => undefined, continuedByAt(rows))
-    .taskAgents;
+  const continuedOf = continuedByAt(rows);
+
+  return rows.agents
+    .toSorted(firstStarted)
+    .map((row) => listedAgentOf(row, gracedAt(row, now).pastGrace, continuedOf(row.id)));
 }
 
 /**
@@ -1225,10 +1060,25 @@ export function taskListOfLiveRows(rows: TaskListLiveRows, now: number): TaskLis
     taskPullRequestsOfLiveRows(rows).map(({ taskId, pullRequests }) => [taskId, pullRequests]),
   );
 
-  return taskListDrawer()(
-    rows,
-    pastGraceAt(rows, now),
-    (taskId) => lines.get(taskId),
-    continuedByAt(rows),
-  ).list;
+  const byTask = new Map<string, GracedAgent[]>();
+
+  for (const row of rows.agents) {
+    const graced = gracedAt(row, now);
+    const group = byTask.get(row.planId);
+
+    if (group === undefined) byTask.set(row.planId, [graced]);
+    else group.push(graced);
+  }
+
+  return {
+    plans: rows.plans.toSorted(newestFirst).map((row) => {
+      const agents = byTask.get(row.id);
+      const pullRequestTotal = lines.get(row.id)?.length ?? 0;
+
+      return taskSummaryOf(
+        row,
+        agents === undefined ? undefined : agentsSummaryOf(agents, pullRequestTotal),
+      );
+    }),
+  };
 }
