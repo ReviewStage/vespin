@@ -347,8 +347,6 @@ export function rowPlacement(
     ...(selected ? [background(colors.SELECTED)] : []),
     listRowSeparator("hidden", "top"),
     listRowSeparatorTint(colors.CHIP_EDGE),
-    // Note that a row hides the hairline over it, which SwiftUI draws only over a section's first row where no header stands, since iOS's own plain lists, such as Mail's search results, start with their first row.
-    listRowSeparator("hidden", "top"),
     alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT),
   ];
 }
@@ -690,7 +688,7 @@ export function ListRow(props: ListRowProps) {
         end={
           <HStack spacing={SPACE.TIGHT + 2}>
             {face === undefined ? null : (
-              <Avatar name={face.name} picture={face.picture} size={MARK_SIZE.FACE} />
+              <Avatar name={face.name} id={face.id} picture={face.picture} size={MARK_SIZE.FACE} />
             )}
             {due !== undefined ? (
               <RowDue due={due} now={now} />

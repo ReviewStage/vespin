@@ -47,6 +47,7 @@ const LISTED: TasksView = {
       turnId: null,
     }),
   ],
+  taskPullRequests: [{ taskId: INVITES.id, pullRequests: [] }],
   agentPullRequests: [],
   listStatus: TASKS_READ.READY,
   workspaces: [],
@@ -105,6 +106,7 @@ describe("the task list's collections", () => {
       [INVITES.id, BILLING.id, SEARCH.id].sort(),
     );
     expect(window.taskList.agents.get("agent-invites")?.taskId).toBe(INVITES.id);
+    expect(window.taskList.taskPullRequests.get(INVITES.id)?.pullRequests).toEqual([]);
   });
 
   it("write only the row a delivery moved, and delete the row that went", async () => {
