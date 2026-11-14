@@ -288,6 +288,7 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
     symbol: GLYPH.MOVE,
     choices: placing.sections.map((section) => ({
       label: section.title,
+      symbol: sectionGlyph(section.icon),
       on: section.id === standing,
       onPress: () => {
         if (section.id !== standing) placing.moveToSection(task.id, section.id);
