@@ -932,7 +932,7 @@ export function AgentPageScreen() {
  * the model lists, Fast only where the model has a fast version; its
  * permission mode, each with what it does, where its harness takes one,
  * which takes effect from its next turn; and the connected MCP servers it is
- * handed, each with its switch, a server connected in Settings. Done closes
+ * handed, each with its switch, a server connected in Settings. Its checkmark closes
  * it.
  */
 export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
@@ -963,9 +963,13 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
-          {OPTIONS_WORDS.DONE}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CONFIRM)}
+          variant="done"
+          tintColor={colors.ACCENT}
+          accessibilityLabel={OPTIONS_WORDS.DONE}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
@@ -1041,7 +1045,7 @@ const PORT_ACT_WORDS = {
   [PORT_ACT.STOP_SHARING]: AGENT_PORTS_WORDS.STOP_SHARING,
 } as const satisfies Record<PortAct, string>;
 
-/** The Ports sheet's own words: its close. */
+/** The Ports sheet's own words: what VoiceOver hears its checkmark as. */
 const PORTS_WORDS = { DONE: "Done" } as const;
 
 /**
@@ -1052,7 +1056,7 @@ const PORTS_WORDS = { DONE: "Done" } as const;
  * and Sharing, and offers Open link, which opens it in Safari, Copy link,
  * and Stop sharing; while one is shared, another offers nothing, and where
  * none is listed, the panel's line says why. A share that did not go says
- * why under the list. Done closes it.
+ * why under the list. Its checkmark closes it.
  */
 export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
   const colors = useColors();
@@ -1089,9 +1093,13 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
-          {PORTS_WORDS.DONE}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CONFIRM)}
+          variant="done"
+          tintColor={colors.ACCENT}
+          accessibilityLabel={PORTS_WORDS.DONE}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>

@@ -197,6 +197,8 @@ export const GLYPH = {
   FILTERED: system("line.3.horizontal.decrease.circle.fill"),
   DISCLOSURE: system("chevron.forward"),
   STOP_TURN: system("stop.fill"),
+  // A sheet's confirm, the system's checkmark in its prominent bar button, as iOS 26's own sheets close on it.
+  CONFIRM: system("checkmark"),
   // A task's status ring, the panel's own mark.
   STATUS_BACKLOG: statusMark(TASK_STATUS_SYMBOL.BACKLOG),
   STATUS_TODO: statusMark(TASK_STATUS_SYMBOL.TODO),
