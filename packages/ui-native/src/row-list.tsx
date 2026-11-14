@@ -384,7 +384,9 @@ function SectionMoreButton({ more }: { readonly more: SectionMore }) {
  * chevron turning to say so; it opens unfolded. A header given `onDropLink`
  * takes a row dragged onto it, on an iPad, and hands on the row's link. A
  * header given `add` ends in a + that adds to the section, so an empty
- * section stands as its header alone rather than a list of add rows.
+ * section stands as its header alone rather than a list of add rows. A
+ * header given `more` ends in a Show all that opens every row of a section
+ * the list cut short, as Mail's search sections do.
  */
 export function ListSection({
   title,
