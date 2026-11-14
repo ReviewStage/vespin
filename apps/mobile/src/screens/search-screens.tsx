@@ -17,6 +17,7 @@ import {
 import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
 import {
   type BarMenu,
+  type ColumnBar,
   EmptyState,
   GLYPH,
   glyphSymbol,
@@ -32,6 +33,7 @@ import {
 import { Stack, useFocusEffect, useIsFocused, useRouter } from "expo-router";
 import {
   type Dispatch,
+  type ReactNode,
   type SetStateAction,
   useCallback,
   useEffect,
@@ -218,15 +220,23 @@ function FoundList({
   );
 }
 
+/** What Search draws before anything is typed, in either window. */
+const SEARCH_IDLE = (
+  <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
+);
+
 /**
- * What the Search tab reads and draws, in either window: the query, what it
- * finds of the workspace's tasks, the reader's Inbox, and the agents on its
- * tasks, each kind best first, the scopes over them once anything is typed,
- * and what opens a row found, each in its own tab; the questions and sheets
- * a found row's acts raise stand beside it.
+ * What the Search tab reads and draws once something is typed, in either
+ * window: what the query finds of the workspace's tasks, the reader's Inbox,
+ * and the agents on its tasks, each kind best first, under the scopes, and
+ * what opens a row found, each in its own tab or, in a wide window, beside
+ * the results; the questions and sheets a found row's acts raise stand
+ * beside it. Note that only a typed query, or a wide window's pick, mounts
+ * it, because the tab stays mounted behind the others, and building every
+ * listing on each delivery with nothing typed cost every tap in the app.
  */
 function useSearchScreen(
-  { query, setQuery, scope, setScope }: SearchWords,
+  { query, scope, setScope }: SearchWords,
   pick?: SearchPicking | undefined,
 ) {
   const router = useRouter();
@@ -261,39 +271,41 @@ function useSearchScreen(
     onPress: () => setScope(each),
   }));
 
-  // Note that the scopes stand once anything is typed, and stay over a scope that found nothing, so another is one tap away.
-  const results =
-    query.trim() === "" ? (
-      <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
-    ) : (
-      <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-        {none ? (
-          <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
-        ) : (
-          <FoundList
-            found={found}
-            scope={scope}
-            listing={listing}
-            selected={pick?.picked?.id}
-            onOpen={open}
-            remindMenu={(item) => remind.menu([item])}
-            onArchiveAgent={archiveAsk.archive}
-          />
-        )}
-      </ScopePicker>
-    );
+  // Note that the scopes stand over a scope that found nothing, so another is one tap away.
+  const results = (
+    <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
+      {none ? (
+        <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
+      ) : (
+        <FoundList
+          found={found}
+          scope={scope}
+          listing={listing}
+          selected={pick?.picked?.id}
+          onOpen={open}
+          remindMenu={(item) => remind.menu([item])}
+          onArchiveAgent={archiveAsk.archive}
+        />
+      )}
+    </ScopePicker>
+  );
 
-  return {
-    query,
-    setQuery,
-    placeholder: searchPlaceholder(scope),
-    listing,
-    results,
-    status,
-    deletion,
-    remind,
-    archiveAsk,
-  };
+  return { listing, results, status, deletion, remind, archiveAsk };
+}
+
+/** What a typed query finds under the Stack's bar, with the questions and sheets its rows' acts raise beside it. */
+function SearchStackFound(words: SearchWords) {
+  const { results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
+
+  return (
+    <>
+      <Screen>{results}</Screen>
+      <StatusQuestionAsk question={status} />
+      <StatusQuestionAsk question={deletion} />
+      {archiveAsk.ask}
+      {remind.sheet}
+    </>
+  );
 }
 
 /**
@@ -305,9 +317,8 @@ function useSearchScreen(
  * its results instead.
  */
 function SearchStackScreen(words: SearchWords) {
-  const { query, setQuery, placeholder, results, status, deletion, remind, archiveAsk } =
-    useSearchScreen(words);
-
+  const { query, setQuery, scope } = words;
+  const placeholder = searchPlaceholder(scope);
   const field = useRefilledSearchField(query);
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
@@ -344,11 +355,7 @@ function SearchStackScreen(words: SearchWords) {
           />
         </Stack.Toolbar>
       ) : null}
-      <Screen>{results}</Screen>
-      <StatusQuestionAsk question={status} />
-      <StatusQuestionAsk question={deletion} />
-      {archiveAsk.ask}
-      {remind.sheet}
+      {query.trim() === "" ? <Screen>{SEARCH_IDLE}</Screen> : <SearchStackFound {...words} />}
     </>
   );
 }
@@ -420,8 +427,60 @@ function SearchSplitScreen({
   picking,
   ...words
 }: SearchWords & { readonly picking: SearchPicking }) {
-  const { query, setQuery, placeholder, listing, results, status, deletion, remind, archiveAsk } =
-    useSearchScreen(words, picking);
+  // Note that a pick still standing keeps what the query found mounted with the query cleared, since its detail draws from the listing.
+  const found = words.query.trim() !== "" || picking.picked !== undefined;
+
+  return (
+    <>
+      <Stack.Screen options={UNDER_SPLIT_SCREEN} />
+      {found ? (
+        <SearchSplitFound {...words} picking={picking} />
+      ) : (
+        <SearchSplitColumns words={words} content={SEARCH_IDLE} />
+      )}
+    </>
+  );
+}
+
+/** Hands the split view Search's list column, under the system's field in its bar, and the detail beside it: a pick's page, or the line that says to pick a row. */
+function SearchSplitColumns({
+  words,
+  content,
+  detail,
+  detailBar,
+  root,
+}: {
+  readonly words: SearchWords;
+  readonly content: ReactNode;
+  readonly detail?: ReactNode | undefined;
+  readonly detailBar?: ColumnBar | undefined;
+  readonly root?: string | undefined;
+}) {
+  const { query, setQuery, scope } = words;
+  useStackRoot(SIDEBAR_PLACE.SEARCH, root);
+  useHandColumns(SIDEBAR_PLACE.SEARCH, {
+    content,
+    contentBar: {
+      title: SEARCH_TITLE,
+      search: { placeholder: searchPlaceholder(scope), text: query, onChange: setQuery },
+    },
+    detail: detail ?? <NoSelection title={CHOOSE_AN_ITEM_WORDS} />,
+    detailBar,
+    root,
+  });
+
+  return null;
+}
+
+/** What the query finds in the split view's list column, the pick's page beside it, and the questions and sheets its rows' acts raise. */
+function SearchSplitFound({
+  picking,
+  ...words
+}: SearchWords & { readonly picking: SearchPicking }) {
+  const { listing, results, status, deletion, remind, archiveAsk } = useSearchScreen(
+    words,
+    picking,
+  );
 
   const { detail, detailBar, asks } = useSearchDetail(
     picking.picked,
@@ -430,21 +489,15 @@ function SearchSplitScreen({
     picking.choose,
   );
 
-  useStackRoot(SIDEBAR_PLACE.SEARCH, picking.picked?.id);
-  useHandColumns(SIDEBAR_PLACE.SEARCH, {
-    content: results,
-    contentBar: {
-      title: SEARCH_TITLE,
-      search: { placeholder, text: query, onChange: setQuery },
-    },
-    detail,
-    detailBar,
-    root: picking.picked?.id,
-  });
-
   return (
     <>
-      <Stack.Screen options={UNDER_SPLIT_SCREEN} />
+      <SearchSplitColumns
+        words={words}
+        content={words.query.trim() === "" ? SEARCH_IDLE : results}
+        detail={detail}
+        detailBar={detailBar}
+        root={picking.picked?.id}
+      />
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
       {archiveAsk.ask}
