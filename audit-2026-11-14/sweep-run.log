@@ -39,3 +39,10 @@ iphone-iphone-dark wrap-answer.yaml: fails 2 shots 13   Tap on "More", Index: -1
 iphone-iphone-light wrap-navigation.yaml: fails 3 shots 4     Tap on "Tasks"... FAILED
 iphone-iphone-dark wrap-navigation.yaml: fails 3 shots 4     Tap on "Tasks"... FAILED
   ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-markdown.yaml: fails 0 shots 4 
+iphone-iphone-dark wrap-markdown.yaml: fails 0 shots 4 
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-description-comment.yaml: fails 0 shots 3 
+iphone-iphone-dark wrap-description-comment.yaml: fails 0 shots 3 
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-undo.yaml: fails 3 shots 6     Tap on "More", Index: 1... FAILED
