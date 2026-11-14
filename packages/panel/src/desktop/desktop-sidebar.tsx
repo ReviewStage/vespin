@@ -538,7 +538,12 @@ function useChildCounts(): ChildCounts {
       q
         .from({ task: collections.tasks })
         .where(({ task }) => not(isUndefined(task.subTasks)))
-        .select(({ task }) => ({ id: task.id, status: task.status, subTasks: task.subTasks })),
+        .select(({ task }) => ({
+          id: task.id,
+          status: task.status,
+          parentTaskId: task.parentTaskId,
+          subTasks: task.subTasks,
+        })),
   });
 
   return useMemo(() => {
@@ -548,11 +553,11 @@ function useChildCounts(): ChildCounts {
       ),
     );
 
-    // Note that a finished parent is left out, since the view draws no finished task at the top to stand its sub-tasks under.
-    const unheld = counted.flatMap(({ id, status, subTasks }) =>
+    // Note that a finished parent at the top is left out, since the view draws none to stand its sub-tasks under, while a finished sub-task stands under its own parent and its children under it.
+    const unheld = counted.flatMap(({ id, status, parentTaskId, subTasks }) =>
       subTasks !== undefined &&
       (held.get(id)?.total ?? 0) < subTasks.total &&
-      (status === undefined || !SETTLED_STATUSES.includes(status))
+      (status === undefined || !SETTLED_STATUSES.includes(status) || parentTaskId !== undefined)
         ? [id]
         : [],
     );

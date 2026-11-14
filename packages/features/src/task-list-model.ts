@@ -560,16 +560,18 @@ export function subTasksOf(
 /**
  * A parent's sub-task count from the children the list holds and the count
  * the service carries on the parent's row (`TaskSummary.subTasks`): the
- * list's own where it holds at least as many as the service counted, since
- * it then holds every child and draws a write the service has not answered
- * yet, and the service's where it holds fewer, as a list that keeps only
- * some tasks live does; none where neither counts a child.
+ * list's own where it holds as many as the service counted, since it then
+ * holds every child and draws a status the service has not answered yet,
+ * and the service's wherever the two differ, as a list that keeps only some
+ * tasks live holds fewer, and one still holding a child read outside it
+ * that has since moved away or gone holds more; none where neither counts a
+ * child.
  */
 function countBeside(
   held: ChildTaskCount | undefined,
   counted: ChildTaskCount | undefined,
 ): ChildTaskCount | undefined {
-  if (counted === undefined || (held !== undefined && held.total >= counted.total)) return held;
+  if (counted === undefined || (held !== undefined && held.total === counted.total)) return held;
 
   return counted;
 }
