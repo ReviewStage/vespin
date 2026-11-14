@@ -25,6 +25,7 @@ import {
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_MACHINE, type AgentAttachment } from "@repo/features/agent-wire";
+import type { DevicePlatform } from "@repo/features/device-agent-wire";
 import { effortFor, effortLabel, effortsOf } from "@repo/features/model-effort";
 import { modelLabel } from "@repo/features/model-label";
 import {
@@ -139,6 +140,21 @@ export function effortOptions(
     id: effort,
     label: effortLabel(effort),
   }));
+}
+
+/**
+ * The platform of one of the account's devices, by its id, as the models'
+ * read lists the devices a task may run its agents on; none while that read
+ * hasn't landed, or for a device it doesn't name. Note that it reads what
+ * the host already holds and follows nothing, so an agent's row that asks
+ * draws the Mac's mark until a sheet has read the devices.
+ */
+export function useDevicePlatform(deviceId: string | undefined): DevicePlatform | undefined {
+  const { data } = useQuery({ ...appStateQuery, select: selectModels });
+
+  if (deviceId === undefined) return undefined;
+
+  return data?.rows?.macs?.find((device) => device.deviceId === deviceId)?.platform;
 }
 
 /** The models the account may start an agent on, followed while the screen that reads them stands, and the read itself: none before it lands. */
