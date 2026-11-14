@@ -254,12 +254,13 @@ export function StepList({
 /** A field's label, with "Optional" after it in the muted ink where it may be left empty, as the panel's form says it. */
 function FieldWords({
   label,
-  required,
+  optional,
   textStyle,
   ink,
 }: {
   readonly label: string;
-  readonly required: boolean;
+  /** Whether the label says the field is optional after it, where nothing else in the row does. */
+  readonly optional: boolean;
   readonly textStyle: (typeof TYPE_ROLE)[keyof typeof TYPE_ROLE];
   readonly ink: string;
 }) {
@@ -268,13 +269,13 @@ function FieldWords({
   return (
     <Text modifiers={[font({ textStyle, weight: "medium" }), foregroundStyle(ink)]}>
       <Text>{label}</Text>
-      {required ? null : (
+      {optional ? (
         <Text
           modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
         >
           {`  ${FIELD_WORDS.OPTIONAL}`}
         </Text>
-      )}
+      ) : null}
     </Text>
   );
 }
@@ -283,10 +284,10 @@ function FieldWords({
  * A text or number field: its label over the system's plain field, as the
  * panel stands a field's name over it, the field with no box of its own
  * inside the card's (one layer, as a Form's field stands in its row); a
- * required one prompts "Required" while it is empty, as iOS's account forms
- * do, so it never reads as a gap nor repeats the label over it, and an
- * optional one, whose label already says so, prompts nothing; heard by its
- * label, a number's with the decimal pad.
+ * field prompts "Required" or "Optional" while it is empty, as iOS's account
+ * forms do, so it never reads as a gap nor repeats the label over it, and
+ * its label says nothing more; heard by its label, a number's with the
+ * decimal pad.
  */
 function TypedFieldRow({
   field,
@@ -302,13 +303,13 @@ function TypedFieldRow({
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
       <FieldWords
         label={field.label}
-        required={field.required}
+        optional={false}
         textStyle={TYPE_ROLE.ROW_LINE}
         ink={colors.TEXT_MUTED}
       />
       <TextField
         text={text}
-        placeholder={field.required ? FIELD_WORDS.REQUIRED : ""}
+        placeholder={field.required ? FIELD_WORDS.REQUIRED : FIELD_WORDS.OPTIONAL}
         onTextChange={onChange}
         modifiers={[
           textFieldStyle("plain"),
@@ -345,7 +346,7 @@ function SelectRow({
     <HStack spacing={SPACE.ROW} modifiers={[padding(ROW_PADDING)]}>
       <FieldWords
         label={field.label}
-        required={field.required}
+        optional={!field.required}
         textStyle={TYPE_ROLE.ROW_TITLE}
         ink={colors.TEXT}
       />
@@ -389,7 +390,7 @@ function BooleanRow({
     >
       <FieldWords
         label={field.label}
-        required={field.required}
+        optional={!field.required}
         textStyle={TYPE_ROLE.ROW_TITLE}
         ink={colors.TEXT}
       />
