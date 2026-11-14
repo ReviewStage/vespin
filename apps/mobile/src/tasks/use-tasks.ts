@@ -466,8 +466,8 @@ function useServiceTaskSearch(search: string, listRead: boolean): boolean {
   const [answered, setAnswered] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    // Note that a field cleared forgets the last answer, so the same words typed again wait on their own search.
-    if (words === undefined) setAnswered(undefined);
+    // Note that each search starts by forgetting the last answer, so words typed again, or a search tried again after one failed, wait on their own search rather than an earlier one's answer.
+    setAnswered(undefined);
 
     if (!listRead || words === undefined) return;
     // Note that only the search of the words standing now records its answer, so an older one that answers late never marks newer words answered.
