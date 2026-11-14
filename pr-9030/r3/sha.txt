@@ -1,0 +1,81 @@
+== bundle A base 2beab692c4
+Auto-merging apps/mobile/src/screens/start-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/start-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging apps/mobile/src/tasks/use-start.ts
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9147 238fdf834a conflict: apps/mobile/src/screens/start-screens.tsx 
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/workspace-switcher.tsx
+  merged #8992 b160d51ae9
+Auto-merging packages/ui-native/src/transcript.tsx
+  merged #9007 6f116e0409
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging packages/ui-native/src/row-list.tsx
+  merged #9021 d801c11cce
+Auto-merging apps/mobile/src/screens/pull-request-screens.tsx
+Auto-merging packages/features/package.json
+Auto-merging packages/ui-native/src/index.ts
+  merged #9041 b6dd57a6b2
+Auto-merging apps/mobile/src/screens/search-screens.tsx
+  merged #9048 fd5f58186b
+Auto-merging apps/mobile/src/tasks/use-comments.ts
+  merged #9139 8c89643352
+  merged #9140 e4459498c5
+Auto-merging apps/mobile/src/use-write.ts
+Auto-merging packages/host/src/fixture-inbox.ts
+  merged #9141 897172794d
+Auto-merging packages/ui-native/src/index.ts
+  merged #9253 df7a376c9b
+Auto-merging apps/mobile/src/use-write.ts
+Auto-merging packages/ui-native/src/index.ts
+  merged #9143 28a37c2153
+Auto-merging packages/panel/src/settings/experimental-page.tsx
+  merged #9186 540104e114
+  merged #9144 375771bcee
+Auto-merging apps/mobile/src/screens/comment-screens.tsx
+Auto-merging apps/mobile/src/tasks/use-comments.ts
+  merged #9145 708b36d45f
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+  merged #9151 81bc04c8db
+  merged #9057 4e15148c6e
+Auto-merging packages/ui-native/src/settings-form.tsx
+  merged #8986 2d602bfcea
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+Auto-merging apps/mobile/src/screens/start-screens.tsx
+Auto-merging packages/ui-native/src/marks.tsx
+Auto-merging packages/ui-native/src/transcript.tsx
+  merged #9040 975936513e
+Auto-merging packages/ui-native/src/composer.tsx
+  merged #9054 1f1488b614
+  merged #9066 8d5cac158b
+  merged #9080 b18b2728d6
+  merged #8694 4ad87091d1
+  built 078183288c2
+  install 0
+  export 0
+  signed 0
+remote: 
+remote: GitHub found 5 vulnerabilities on ReviewStage/vespin's default branch (2 moderate, 3 low). To find out more, visit:        
+remote:      https://github.com/ReviewStage/vespin/security/dependabot        
+remote: 
+== bundle B base 26a2137701f
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging apps/mobile/src/screens/search-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/split-view.tsx
+  merged #8959 4d2b5f7b23e
+Auto-merging apps/mobile/maestro/tasks.yaml
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+  merged #9030 d2df1572636
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging apps/mobile/src/screens/relation-screens.tsx
+  merged #8977 c0e3b840dd3
+  built df0d1ce254d
+  install 0
+  export 0
+  signed 0
