@@ -1,0 +1,34 @@
+r1 y=139 SKIP list not in front
+r1 y=216 SKIP list not in front
+r1 y=294 SKIP list not in front
+r1 y=372 SKIP list not in front
+r1 y=449 SKIP list not in front
+r1 y=527 SKIP list not in front
+r1 y=605 SKIP list not in front
+r1 y=625 SKIP list not in front
+r1 y=650 SKIP list not in front
+r2 y=139 SKIP list not in front
+r2 y=216 SKIP list not in front
+r2 y=294 SKIP list not in front
+r2 y=372 SKIP list not in front
+r2 y=449 SKIP list not in front
+r2 y=527 SKIP list not in front
+r2 y=605 SKIP list not in front
+r2 y=625 SKIP list not in front
+r2 y=650 SKIP list not in front
+r3 y=139 SKIP list not in front
+r3 y=216 SKIP list not in front
+r3 y=294 SKIP list not in front
+r3 y=372 SKIP list not in front
+r3 y=449 SKIP list not in front
+r3 y=527 SKIP list not in front
+r3 y=605 SKIP list not in front
+r3 y=625 SKIP list not in front
+r3 y=650 SKIP list not in front
+pop wait=2s r1 tap=(184,605) pushed | hit {"title":null,"enabled":true,"pid":36433,"role_description":"text","subrole":null,"AXLabel":"What the expired invite page says","AXValue":"Needs you, Write an a
+pop wait=2s r2 tap=(184,605) pushed | hit {"type":"StaticText","help":null,"title":null,"custom_actions":["Remind me","Resolve","Mark as unread","Mark as unread","Resolve","Remind me"],"AXLabel":"What t
+pop wait=2s r3 tap=(184,605) pushed | hit {"title":null,"enabled":true,"pid":41112,"role_description":"text","subrole":null,"AXLabel":"What the expired invite page says","AXValue":"Needs you, Write an a
+pop wait=0.3s r1 tap=(184,605) pushed | hit {"type":"StaticText","help":null,"title":null,"custom_actions":["Remind me","Resolve","Mark as unread","Mark as unread","Resolve","Remind me"],"AXLabel":"What t
+pop wait=0.3s r2 tap=(184,605) pushed | hit {"title":null,"enabled":true,"pid":45645,"role_description":"text","subrole":null,"AXLabel":"What the expired invite page says","AXValue":"Needs you, Write an a
+pop wait=0.3s r3 tap=(184,605) pushed | hit {"type":"StaticText","help":null,"title":null,"custom_actions":["Remind me","Resolve","Mark as unread","Mark as unread","Resolve","Remind me"],"AXLabel":"What t
+DONE
