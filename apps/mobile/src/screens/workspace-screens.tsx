@@ -15,7 +15,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
@@ -28,9 +28,6 @@ const WORDS = {
   CREATE: "Create",
   CREATING: "Creating",
   CANCEL: "Cancel",
-  CLOSE: "Close",
-  /** What the sheet says once the workspace is made, while the account's list has yet to hold it. */
-  MADE: "Workspace created. It opens here as soon as your workspaces refresh.",
 } as const;
 
 /** What a flow finds the name field by. */
@@ -41,17 +38,15 @@ type Said = { words?: string };
 /**
  * New workspace: the team's name, then Create in the bar, lit once a name is
  * typed and while no create is out. The workspace is made by the host's own
- * act, as the panel's New workspace makes it, and once it is made the phone
- * works in it, so the Inbox and Tasks stand on the new team, and the sheet
- * closes once the account's list holds it. Note that the sheet waits on the
- * list, because the act answers before the workspaces' follow carries the new
- * one, and the choice falls back to the first workspace until it does; and
- * that Create stays dimmed while it waits, so a second press makes no second
- * workspace, and the sheet says the workspace was made with Close in Cancel's
- * place, so a list slow to refresh never leaves it saying nothing. A refusal
- * says why under the name and keeps the sheet. Its
- * teammates are invited from Workspace settings, as the panel's cards
- * invite them after the name.
+ * act, as the panel's New workspace makes it, and the sheet closes on the
+ * act's answer with the new workspace chosen, so the Inbox and Tasks move to
+ * the new team as the account's list carries it. Note that the sheet doesn't
+ * wait for the list too, because that is a second round trip the member
+ * would sit through; the kept choice is an id, so it takes hold the moment
+ * the list holds it (`chosen-workspace.ts`). Create stays dimmed while the
+ * act is out, so a second press makes no second workspace. A refusal says
+ * why under the name and keeps the sheet. Its teammates are invited from
+ * Workspace settings, as the panel's cards invite them after the name.
  */
 export function NewWorkspaceScreen() {
   const colors = useColors();
@@ -62,13 +57,25 @@ export function NewWorkspaceScreen() {
   const { choose } = useChosenWorkspace(workspaces);
   const [name, setName] = useState("");
   const create = useAsyncAction(() => ACT_UNREACHED_WORDS);
-  // The workspace made, until the account's list holds it.
-  const [made, setMade] = useState<string | undefined>(undefined);
-  const listed = made !== undefined && workspaces.some((workspace) => workspace.id === made);
+  // Whether the sheet still stands, so a create answered after Cancel or a swipe down closes nothing else.
+  const open = useRef(true);
+  // Note that Create stays dimmed while the sheet leaves, since the create is done but the name still stands typed.
+  const [closing, setClosing] = useState(false);
+
   useEffect(() => {
-    if (listed) router.back();
-  }, [listed, router]);
-  const waiting = create.running || made !== undefined;
+    open.current = true;
+
+    return () => {
+      open.current = false;
+    };
+  }, []);
+
+  const close = () => {
+    if (!open.current) return;
+    open.current = false;
+    setClosing(true);
+    router.back();
+  };
 
   const make = () => {
     // Note that a refusal says why in the sheet, under the name, in the host's own words rather than the error's.
@@ -78,8 +85,10 @@ export function NewWorkspaceScreen() {
       return write(
         () =>
           acts[ACT_KIND.WORKSPACE_CREATE]({ name: name.trim() }).then((workspace) => {
+            // Note that a create answered after Cancel leaves the workspace the member works in, since they turned away from it; the new one stands in the switcher.
+            if (!open.current) return;
             choose(workspace.id);
-            setMade(workspace.id);
+            close();
           }),
         {
           inPlace: (words) => {
@@ -104,26 +113,21 @@ export function NewWorkspaceScreen() {
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
-          {made === undefined ? WORDS.CANCEL : WORDS.CLOSE}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button onPress={close}>{WORDS.CANCEL}</Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button
           variant="prominent"
           tintColor={colors.ACCENT}
-          disabled={name.trim() === "" || waiting}
+          disabled={name.trim() === "" || create.running || closing}
           onPress={make}
         >
-          {waiting ? WORDS.CREATING : WORDS.CREATE}
+          {create.running ? WORDS.CREATING : WORDS.CREATE}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection
-            title={WORDS.WORKSPACE}
-            footer={create.refusal ?? (made === undefined ? undefined : WORDS.MADE)}
-          >
+          <ListSection title={WORDS.WORKSPACE} footer={create.refusal}>
             <WordsField
               placeholder={WORDS.TEAM_NAME}
               onWords={(words) => {
