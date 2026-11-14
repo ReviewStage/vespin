@@ -17,6 +17,7 @@
  * place module's to keep (`places/place-binding.ts`).
  */
 
+import { machineOfFragment } from "@repo/features/link-grammar";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
 import { useAutomationsPlace } from "./automations-route.js";
@@ -144,7 +145,17 @@ export function usePersonRoute(): PersonRoute {
   const userId = open ? here.params.userId : undefined;
   const name = useSelector(names, (held) => (userId === undefined ? undefined : held.get(userId)));
   const workspace = open ? here.params.workspace : undefined;
-  const landing = useSelector(landings, (held) => (held?.userId === userId ? held : undefined));
+  const asked = useSelector(landings, (held) => (held.at?.userId === userId ? held.at : undefined));
+  const neverAsked = useSelector(landings, (held) => held.asks === 0);
+
+  // Note that an address loaded whole, never opened by the window, lands on the machine its fragment names, once.
+  const loaded = machineOfFragment(here.href.split("#")[1] ?? "");
+
+  const landing =
+    asked ??
+    (neverAsked && userId !== undefined && loaded !== undefined
+      ? { userId, machineId: loaded, ask: 0 }
+      : undefined);
 
   const onOpen = (
     to: string,
@@ -155,9 +166,10 @@ export function usePersonRoute(): PersonRoute {
     if (named !== undefined) names.setState((held) => new Map(held).set(to, named));
 
     // Note that a machine asked for again lands again, on the page already standing too, and a page opened at none lands nowhere.
-    landings.setState((held) =>
-      machineId === undefined ? undefined : { userId: to, machineId, ask: (held?.ask ?? 0) + 1 },
-    );
+    landings.setState(({ asks }) => ({
+      asks: asks + 1,
+      at: machineId === undefined ? undefined : { userId: to, machineId, ask: asks + 1 },
+    }));
 
     if (to === userId && toWorkspace === workspace) {
       exits.stay();

@@ -46,8 +46,14 @@ export interface RoutedMemory {
   readonly deletedAutomations: Store<ReadonlyMap<string, true>>;
   /** Each name a person's page was opened with, by the person, which the address leaves out. */
   readonly personNames: Store<ReadonlyMap<string, string>>;
-  /** The machine a person's page was last opened at, which it scrolls to and lights, none until one is. */
-  readonly personLanding: Store<PersonLanding | undefined>;
+  /** The machine a person's page was last opened at, which it scrolls to and lights, and how many times a page was opened. */
+  readonly personLanding: Store<PersonLandings>;
+}
+
+/** How many times the window opened a person's page, which only grows, so no ask is ever numbered twice, and the machine the last opened it at, none where it named none. */
+export interface PersonLandings {
+  readonly asks: number;
+  readonly at: PersonLanding | undefined;
 }
 
 /** A machine a person's page was opened at: whose page, which machine, and the how-manyeth ask it is, so each ask lands again. */
@@ -100,7 +106,7 @@ export function RoutedExitsProvider({ children }: { readonly children?: ReactNod
       inboxChoices: new Store<ReadonlyMap<string, InboxChoice>>(new Map()),
       deletedAutomations: new Store<ReadonlyMap<string, true>>(new Map()),
       personNames: new Store<ReadonlyMap<string, string>>(new Map()),
-      personLanding: new Store<PersonLanding | undefined>(undefined),
+      personLanding: new Store<PersonLandings>({ asks: 0, at: undefined }),
     },
   }));
 
