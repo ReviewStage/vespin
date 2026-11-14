@@ -120,6 +120,12 @@ export const ACCOUNT_ASK_ACT_KIND = {
    */
   DICTATION_TRANSCRIBE: "dictation.transcribe",
   /**
+   * A voice call into an agent opened from the panel that carries its audio:
+   * the panel's SDP offer out, the call's id and GPT-Live's SDP answer back.
+   * Nothing on the way keeps either.
+   */
+  VOICE_OPEN: "voice.open",
+  /**
    * The member used this window just now: a key, a press, or a move of the
    * pointer, told at most once every `PRESENCE.BEAT_EVERY_MS`, which the
    * service stamps so their phone holds its pushes (`presence-wire.ts`).
@@ -192,6 +198,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_MODELS_RETRY: "agents.modelsRetry",
   /** The default drawn over the account's preferences at once and written; the panel draws it from app state (`LIVE_READ.ACCOUNT_PREFERENCES`). */
   AGENTS_DEFAULT_WRITE: "agents.defaultWrite",
+  /** One agent's default machine set on the service, where its terminal commands and computer use go when a call names none; answers its tools as they then stand, which the host lays on their slice (`LIVE_READ.WORKSPACE_TOOLS`), or why it is unchanged. */
+  AGENTS_SET_DEFAULT_MACHINE: "agents.setDefaultMachine",
   /** Whose API key chapters run on, drawn over the account's preferences at once and written; the panel draws it from app state (`LIVE_READ.ACCOUNT_PREFERENCES`). */
   AGENTS_CHAPTERS_PROVIDER_WRITE: "agents.chaptersProviderWrite",
   /** The account's preferences row, which the host holds for the session and the panel reads on app state, read again at once, as Try again asks. */
@@ -218,6 +226,28 @@ export const AGENT_ACT_KIND = {
   /** The beats a window holds asked again now, as the window comes back online. */
   HOSTS_PRESENCE_REFRESH: "hosts.presenceRefresh",
   HOSTS_REMOVE: "hosts.remove",
+  /**
+   * The account's machines as Settings › Machines reads and changes them,
+   * each with its own settings for agents' commands and apps: held for the
+   * window while it holds the stream open and a while after, read again at
+   * once as Try again asks, one changed, and one removed. The hold's stream
+   * carries nothing: what it holds reaches the panel on app state
+   * (`LIVE_READ.MACHINES`), where a change is drawn over its machine, and a
+   * removal drawn gone, the moment it is asked.
+   */
+  MACHINES_FOLLOW: "machines.follow",
+  MACHINES_RETRY: "machines.retry",
+  MACHINES_CHANGE: "machines.change",
+  MACHINES_REMOVE: "machines.remove",
+  /**
+   * The asks the account's machines hold for its answer: held for the
+   * window while it holds the stream open and a while after, read again at
+   * once as Try again asks, and one answered from this device. What it
+   * holds reaches the panel on app state (`LIVE_READ.MACHINE_ASKS`).
+   */
+  MACHINE_ASKS_FOLLOW: "machineAsks.follow",
+  MACHINE_ASKS_RETRY: "machineAsks.retry",
+  MACHINE_ASK_ANSWER: "machineAsks.answer",
   /** Run agents on this Mac turned on or off, from This Mac's row in Settings › Hosts; only the desktop answers it. */
   HOSTS_THIS_MAC_SET: "hosts.thisMacSet",
   HOSTS_PAIRING_READ: "hosts.pairingRead",
@@ -258,7 +288,7 @@ export const AGENT_ACT_KIND = {
   AGENTS_CLEAR: "agents.clear",
   /** An agent's failed first launch booted again, from its Retry (`coder-host/boot.ts`). */
   AGENTS_BOOT: "agents.boot",
-  /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
+  /** An agent's chat said shown, at once and then every minute while it stays shown, which holds its sandbox and keeps it warm for the next message, or said hidden as it stops being, which lets go (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
   /** A message of the member's the service refused let go, from its Delete or its Edit, which took its words back into the box (`agent-queue-writes.ts`). */
   AGENTS_UNSEND: "agents.unsend",
@@ -525,6 +555,8 @@ export const TASKS_ACT_KIND = {
   TASKS_ADD_FOLLOWER: "tasks.addFollower",
   /** A follower of the task taken away on the service, which the assignee may not be; answers as a follow does. */
   TASKS_REMOVE_FOLLOWER: "tasks.removeFollower",
+  /** The machines of a task's followers read of the service, as a follower's card lists them, held nowhere here; answers them, or why there is no answer. */
+  TASKS_FOLLOWER_MACHINES: "tasks.followerMachines",
   /** The developer's edit of the open task's document, saved on the service; answers saved, a conflict with the text as it stands now, or why nothing was saved. */
   TASKS_EDIT: "tasks.edit",
   /** A page of GitHub's opened in the browser: a repository, or where our GitHub App is installed. No other address opens through it. */
@@ -573,6 +605,16 @@ export const TASKS_ACT_KIND = {
   TASKS_COLOR_CODE: "tasks.colourCode",
   /** The id of the task a link names by its workspace and its number, found on the service before the link opens; answered to the window, never on the document. */
   TASKS_FIND: "tasks.find",
+  /** The tasks a search's words find on the service, read into the task list as cold tasks where it holds them not, so the window's own search finds them; answered once asked, never on the document. */
+  TASKS_SEARCH: "tasks.search",
+  /** The tasks related to a task, its sub-tasks, its parent, and its blocks, read from the service into the task list as cold tasks where it holds them not, as its card hangs; answered once asked, never on the document. */
+  TASKS_RELATIONS_READ: "tasks.relationsRead",
+  /** The task a tab pinned in a window stands on, read into the task list as a cold task where it holds it not, so the pin draws its task; answered once asked, never on the document. */
+  TASKS_LOAD: "tasks.load",
+  /** A page of a workspace's settled tasks, the newest finished first, read from the service into the task list as cold tasks (`task-list-collections.ts`); the cursor the next page reads past is answered to the list that asked, never on the document. */
+  TASKS_SETTLED_PAGE: "tasks.settledPage",
+  /** A person's tasks and agents in a workspace, their newest read from the service into the task list as cold tasks (`task-list-collections.ts`) and how many of each the service counts answered to their page, never on the document. */
+  TASKS_PERSON_PAGE: "tasks.personPage",
   /** A page of a description's history, read from the service and answered to the view; an older page is laid on the task's held history too (`LIVE_READ.HISTORY`) where it is held. */
   TASKS_REVISIONS: "tasks.revisions",
   /** A revision of the open description beside the one before it for its version history, read from the service; answered to the view, never on the document. */
@@ -596,11 +638,11 @@ export const TASKS_ACT_KIND = {
    * One task's description held followed while the window holds the stream open
    * for the task it has open, and a while after among those let go lately:
    * what it holds reaches the panel on app state
-   * (`LIVE_READ.DESCRIPTION_DOCUMENT`), so the stream carries nothing.
+   * (`LIVE_READ.HELD_TASK`), so the stream carries nothing.
    */
-  TASKS_DOCUMENT_FOLLOW: "tasks.documentFollow",
+  TASKS_HELD_FOLLOW: "tasks.heldFollow",
   /** A held task's description, which the panel reads on app state, read again at once, as Try again asks. */
-  TASKS_DOCUMENT_RETRY: "tasks.documentRetry",
+  TASKS_HELD_RETRY: "tasks.heldRetry",
   /**
    * One task's description history held followed while the window holds the stream
    * open for its version history, and a while after among those let go
@@ -856,6 +898,8 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_RUN_ACTIONS_PUT: "workspace.runActionsPut",
   /** Every pull request GitHub's merge queues hold across a workspace's repositories, read as the Merge queue page opens and again while it stands; refused while the account's Merge queue experiment is off. */
   WORKSPACE_MERGE_QUEUE_READ: "workspace.mergeQueueRead",
+  /** The machines of a workspace's members, as the @ list offers them and a machine's chip names its owner, read as a place drawing them opens. */
+  WORKSPACE_MACHINES_READ: "workspace.machinesRead",
 } as const;
 
 /**
@@ -909,6 +953,14 @@ export const WINDOW_SURFACE_ACT_KIND = {
    * member's iPhone as the phone's own screen for it would.
    */
   WINDOW_HANDOFF: "window.handoff",
+  /**
+   * The voice call the asking panel holds, told whenever its card would
+   * change, or none once it ends, so the floating call window draws it while
+   * no window of the app is in front.
+   */
+  WINDOW_VOICE_CALL: "window.voiceCall",
+  /** A press on the floating call window's card, which the Mac hands to the panel holding the call, or answers itself for the way back to the call's agent. */
+  VOICE_CALL_PRESS: "window.voiceCallPress",
   FEEDBACK_SEND: "feedback.send",
 } as const;
 
@@ -1010,6 +1062,7 @@ export const PORT_ACT_USE = {
   SOUND_REMOVE: ACT_USE.WRITE,
   SOUND_CHOOSE: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
+  VOICE_OPEN: ACT_USE.WRITE,
   ACCOUNT_ACTIVE: ACT_USE.WRITE,
   PUSH_DEVICE_REGISTER: ACT_USE.WRITE,
   PUSH_DEVICE_UNREGISTER: ACT_USE.WRITE,
@@ -1022,6 +1075,7 @@ export const PORT_ACT_USE = {
   AGENTS_MODELS_FOLLOW: ACT_USE.READ,
   AGENTS_MODELS_RETRY: ACT_USE.READ,
   AGENTS_DEFAULT_WRITE: ACT_USE.WRITE,
+  AGENTS_SET_DEFAULT_MACHINE: ACT_USE.WRITE,
   AGENTS_CHAPTERS_PROVIDER_WRITE: ACT_USE.WRITE,
   AGENTS_PREFERENCES_RETRY: ACT_USE.READ,
   HOSTS_FOLLOW: ACT_USE.READ,
@@ -1029,6 +1083,13 @@ export const PORT_ACT_USE = {
   HOSTS_PRESENCE_FOLLOW: ACT_USE.READ,
   HOSTS_PRESENCE_REFRESH: ACT_USE.READ,
   HOSTS_REMOVE: ACT_USE.WRITE,
+  MACHINES_FOLLOW: ACT_USE.READ,
+  MACHINES_RETRY: ACT_USE.READ,
+  MACHINES_CHANGE: ACT_USE.WRITE,
+  MACHINES_REMOVE: ACT_USE.WRITE,
+  MACHINE_ASKS_FOLLOW: ACT_USE.READ,
+  MACHINE_ASKS_RETRY: ACT_USE.READ,
+  MACHINE_ASK_ANSWER: ACT_USE.WRITE,
   HOSTS_THIS_MAC_SET: ACT_USE.WRITE,
   HOSTS_PAIRING_READ: ACT_USE.FETCH,
   HOSTS_ALLOWED_APPS: ACT_USE.FETCH,
@@ -1183,6 +1244,7 @@ export const PORT_ACT_USE = {
   TASKS_SET_FOLLOWER_MACHINES: ACT_USE.WRITE,
   TASKS_ADD_FOLLOWER: ACT_USE.WRITE,
   TASKS_REMOVE_FOLLOWER: ACT_USE.WRITE,
+  TASKS_FOLLOWER_MACHINES: ACT_USE.FETCH,
   TASKS_EDIT: ACT_USE.WRITE,
   GITHUB_OPEN: ACT_USE.WRITE,
   WEB_OPEN: ACT_USE.WRITE,
@@ -1201,14 +1263,19 @@ export const PORT_ACT_USE = {
   TASKS_BROWSER_TABS_FOLLOW: ACT_USE.READ,
   TASKS_COLOR_CODE: ACT_USE.FETCH,
   TASKS_FIND: ACT_USE.FETCH,
+  TASKS_SEARCH: ACT_USE.FETCH,
+  TASKS_RELATIONS_READ: ACT_USE.FETCH,
+  TASKS_LOAD: ACT_USE.FETCH,
+  TASKS_SETTLED_PAGE: ACT_USE.FETCH,
+  TASKS_PERSON_PAGE: ACT_USE.FETCH,
   TASKS_REVISIONS: ACT_USE.FETCH,
   TASKS_REVISION: ACT_USE.FETCH,
   TASKS_RESTORE: ACT_USE.WRITE,
   TASKS_PAGE_SOURCE: ACT_USE.FETCH,
   TASKS_PAGE_HTML: ACT_USE.FETCH,
   TASKS_PAGES_FOLLOW: ACT_USE.READ,
-  TASKS_DOCUMENT_FOLLOW: ACT_USE.READ,
-  TASKS_DOCUMENT_RETRY: ACT_USE.READ,
+  TASKS_HELD_FOLLOW: ACT_USE.READ,
+  TASKS_HELD_RETRY: ACT_USE.READ,
   TASKS_HISTORY_FOLLOW: ACT_USE.READ,
   TASKS_HISTORY_RETRY: ACT_USE.READ,
   TASKS_PICTURE_READ: ACT_USE.FETCH,
@@ -1246,6 +1313,8 @@ export const PORT_ACT_USE = {
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,
   WINDOW_MENU_OFFERS: ACT_USE.WRITE,
   WINDOW_HANDOFF: ACT_USE.WRITE,
+  WINDOW_VOICE_CALL: ACT_USE.WRITE,
+  VOICE_CALL_PRESS: ACT_USE.WRITE,
   FEEDBACK_SEND: ACT_USE.WRITE,
 
   WORKSPACE_CREATE: ACT_USE.WRITE,
@@ -1288,6 +1357,7 @@ export const PORT_ACT_USE = {
   WORKSPACE_REPOSITORY_SETUP_PUT: ACT_USE.WRITE,
   WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
   WORKSPACE_MERGE_QUEUE_READ: ACT_USE.FETCH,
+  WORKSPACE_MACHINES_READ: ACT_USE.FETCH,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
 
 /**

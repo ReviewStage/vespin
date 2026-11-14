@@ -77,7 +77,7 @@ export function useSkillOffer(
     enabled: asks,
     staleTime: SKILLS_FRESH_MS,
     queryFn: (): Promise<SkillsRead> =>
-      acts[ACT_KIND.TASKS_SKILLS](place ?? { planId: "" }).then(skillsReadOf, (cause: unknown) => {
+      acts[ACT_KIND.TASKS_SKILLS](place ?? { taskId: "" }).then(skillsReadOf, (cause: unknown) => {
         console.error("The skills were not read.", cause);
 
         return { unread: SKILLS_UNANSWERED };

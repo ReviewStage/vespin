@@ -32,7 +32,7 @@ import { SIDEBAR_OVERLAY } from "./sidebar-collapse.js";
 /**
  * Settings as the desktop draws it: the sidebar is the one list of pages,
  * grouped under the workspace the tasks' sidebar lists, Account, and This
- * Mac, opening on Account, and every option moved by the one-home layout is
+ * Mac, with Experimental alone under no heading at its foot, opening on Account, and every option moved by the one-home layout is
  * drawn on its new page and on no other, as the search finds it there too.
  * The Workspace page is titled with the listed workspace and follows the
  * sidebar. The Integrations page's own search stands beside the sidebar's:
@@ -49,20 +49,13 @@ const PAGE_GROUPS = [
   { heading: "Workspace", rows: ["Workspace", "Cloud environment"] },
   {
     heading: "Account",
-    rows: [
-      "Account",
-      "Preferences",
-      "Agents",
-      "Machines",
-      "Integrations",
-      "Vespin MCP & CLI",
-      "Experimental",
-    ],
+    rows: ["Account", "Preferences", "Agents", "Machines", "Integrations", "Vespin MCP & CLI"],
   },
   {
     heading: "This Mac",
     rows: ["Appearance", "This Mac", "About", "Keyboard shortcuts"],
   },
+  { heading: undefined, rows: ["Experimental"] },
 ];
 
 /** Every row the sidebar lists, which is also each page's title but the Workspace page's. */
@@ -102,7 +95,6 @@ const HOMES = [
   { words: "Open Vespin links in", page: "Preferences" },
   { words: "Commit author", page: "Preferences" },
   { words: "Show a notification", page: "Preferences" },
-  { words: "Let agents run commands on this Mac", page: "This Mac" },
   { words: "Prefer the Mac's microphone", page: "This Mac" },
   { words: "Open Vespin at login", page: "This Mac" },
   { words: "Check for updates", page: "About", found: "Updates" },
@@ -263,13 +255,17 @@ function spoken(element: Element): string {
   return copy.textContent ?? "";
 }
 
-/** The sidebar's groups as they read: each heading and the rows under it. */
-function pageGroups(page: HTMLElement): { heading: string; rows: string[] }[] {
+/** The sidebar's groups as they read: each heading, none for the unheaded group, and the rows under it. */
+function pageGroups(page: HTMLElement): { heading: string | undefined; rows: string[] }[] {
   return [...page.querySelectorAll('nav[aria-label="Settings pages"] .settings-nav-group')].map(
-    (group) => ({
-      heading: spoken(group.querySelector("h2") ?? assert.fail("a group without a heading")),
-      rows: [...group.querySelectorAll("li button")].map((each) => each.textContent ?? ""),
-    }),
+    (group) => {
+      const heading = group.querySelector("h2");
+
+      return {
+        heading: heading === null ? undefined : spoken(heading),
+        rows: [...group.querySelectorAll("li button")].map((each) => each.textContent ?? ""),
+      };
+    },
   );
 }
 
@@ -304,7 +300,7 @@ function openPage(page: HTMLElement, title: string): HTMLElement {
   return drawn;
 }
 
-test("Settings opens on Account, and its sidebar lists every page once under Workspace, Account, and This Mac where no workspace is listed", () => {
+test("Settings opens on Account, and its sidebar lists every page once under Workspace, Account, and This Mac where no workspace is listed, and Experimental alone under no heading", () => {
   const page = mount(createElement(SettingsHarness));
   assert.deepEqual(pageGroups(page), PAGE_GROUPS);
   const current = pageButtons(page).find((each) => each.getAttribute("aria-current") === "page");
@@ -338,7 +334,7 @@ test("the sidebar's first group is headed by the listed workspace's name, over i
   const page = mount(createElement(SettingsHarness, { workspace: listing(ACME) }));
   assert.deepEqual(
     pageGroups(page).map((group) => group.heading),
-    ["Acme", "Account", "This Mac"],
+    ["Acme", "Account", "This Mac", undefined],
   );
   assert.deepEqual(pageGroups(page)[0]?.rows, ["Workspace", "Cloud environment"]);
 });
@@ -416,7 +412,7 @@ test("the Settings search finds each moved option under its new page", () => {
   }
 });
 
-test("Open Vespin at login stands on This Mac under Startup, drawn as the choice already stored, and Appearance holds it no more", () => {
+test("Open Vespin at login stands on This Mac among its own rows, drawn as the choice already stored, and Appearance holds it no more", () => {
   const page = mount(
     createElement(SettingsHarness, {
       stored: settingsView({ openAtLogin: false }),
@@ -431,9 +427,6 @@ test("Open Vespin at login stands on This Mac under Startup, drawn as the choice
   );
 
   assert.ok(login, "This Mac draws the switch");
-  const group = login.closest("[aria-labelledby]");
-  const heading = group && document.getElementById(group.getAttribute("aria-labelledby") ?? "");
-  assert.equal(heading?.textContent, "Startup");
   assert.equal(login.getAttribute("aria-checked"), "false");
   assert.equal(appearance.includes("Open Vespin at login"), false);
 });
@@ -455,12 +448,10 @@ test("a platform without Mac commands or updates lists no This Mac page, draws A
   assert.equal(about.includes("Changelog"), true);
   assert.equal(about.includes("Check for updates"), false);
 
-  for (const words of ["Let agents run commands on this Mac", "Updates"]) {
-    assert.deepEqual(foundUnder(page, words), [], `${words} is found nowhere`);
-  }
+  assert.deepEqual(foundUnder(page, "Updates"), [], "Updates is found nowhere");
 });
 
-test("a browser, which is no installed app, draws Appearance without Zoom and This Mac without Startup, heads its last group This device, and its search finds neither, while it lists Keyboard shortcuts as the desktop does; the desktop draws them all", () => {
+test("a browser, which is no installed app, draws Appearance without Zoom and This Mac without Open Vespin at login, heads its device group This device, and its search finds neither, while it lists Keyboard shortcuts as the desktop does; the desktop draws them all", () => {
   const drawnOn = (capabilities: readonly HostCapability[]) => {
     const page = mount(createElement(SettingsHarness, { capabilities }));
     const groups = pageGroups(page);
@@ -477,10 +468,10 @@ test("a browser, which is no installed app, draws Appearance without Zoom and Th
     document.body.innerHTML = "";
 
     return {
-      last: groups.at(-1),
+      device: groups[2],
       zoom: appearance.includes("Zoom"),
       login: thisMac.includes("Open Vespin at login"),
-      startup: thisMac.includes("Startup"),
+      startup: thisMac.includes("Open Vespin at login"),
       found,
     };
   };
@@ -491,14 +482,14 @@ test("a browser, which is no installed app, draws Appearance without Zoom and Th
     DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.DESKTOP_APP),
   );
 
-  assert.equal(desktop.last?.heading, "This Mac");
-  assert.ok(desktop.last?.rows.includes("Keyboard shortcuts"));
+  assert.equal(desktop.device?.heading, "This Mac");
+  assert.ok(desktop.device?.rows.includes("Keyboard shortcuts"));
   assert.equal(desktop.zoom, true);
   assert.equal(desktop.login, true);
   assert.equal(desktop.startup, true);
   assert.notDeepEqual(desktop.found, []);
-  assert.equal(browser.last?.heading, "This device");
-  assert.ok(browser.last?.rows.includes("Keyboard shortcuts"));
+  assert.equal(browser.device?.heading, "This device");
+  assert.ok(browser.device?.rows.includes("Keyboard shortcuts"));
   assert.equal(browser.zoom, false);
   assert.equal(browser.login, false);
   assert.equal(browser.startup, false);
@@ -523,7 +514,6 @@ test("This Mac draws dictation's Microphone permission row and Prefer the Mac's 
     DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.MICROPHONE),
   );
 
-  assert.ok(desktop.words.includes("Dictation"));
   assert.ok(desktop.words.includes("Prefer the Mac's microphone"));
   assert.ok(desktop.words.includes("Microphone"));
   assert.ok(desktop.found.includes("This Mac"));

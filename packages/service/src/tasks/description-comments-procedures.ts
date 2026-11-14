@@ -53,13 +53,13 @@ import {
 /**
  * description-comments-procedures.ts -- a description's comment threads for the desktop: read them as they change, start one, and answer, edit, resolve, reopen, or delete one.
  *
- * `GET /api/plans/{id}/comments` reads every thread of the description, held while
+ * `GET /api/tasks/{id}/comments` reads every thread of the description, held while
  * nothing moved since the cursor `after` names (`http/held-read.ts`), as the
  * Inbox is read, and woken by Sync on the plan's topic, so a window
  * hears a teammate's or an agent's comment the moment it lands; `POST`
  * starts a thread with its first comment, anchored to words of the description's
  * text (`@repo/database/models/description-comments`).
- * `POST /api/plans/{id}/comments/{thread}` is one thing done to a thread,
+ * `POST /api/tasks/{id}/comments/{thread}` is one thing done to a thread,
  * answered with the thread as it now stands. Every member of the plan's
  * workspace reads and writes every thread; a plan the account does not reach,
  * or an archived one for a write, answers as not found, and a thread the description

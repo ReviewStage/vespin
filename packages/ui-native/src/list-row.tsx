@@ -293,12 +293,13 @@ export function RowTime({ at, now }: { readonly at: number; readonly now: number
 function RowDue({ due, now }: { readonly due: number; readonly now: number | undefined }) {
   const colors = useColors();
   const words = dueText(due, now ?? Date.now());
+  const clock = useScaledSize(MARK_SIZE.GLYPH - 4);
 
   return (
     <HStack spacing={SPACE.TIGHT}>
       <Image
         {...glyphImage(GLYPH.TIME)}
-        size={MARK_SIZE.GLYPH - 4}
+        size={clock}
         color={colors.ACCENT_TEXT}
         modifiers={[accessibilityHidden(true)]}
       />
@@ -507,6 +508,7 @@ export function RowHead({
   unread,
   faded,
   lead,
+  beside,
   title,
   ink,
   end,
@@ -514,6 +516,8 @@ export function RowHead({
   readonly unread: boolean;
   readonly faded: boolean;
   readonly lead: ReactNode;
+  /** What stands between the lead and the title, such as the avatar of the App that runs a check; nothing where none is given. */
+  readonly beside?: ReactNode;
   readonly title: string;
   readonly ink: string;
   readonly end: ReactNode;
@@ -540,6 +544,7 @@ export function RowHead({
       <UnreadDot unread={unread} faded={faded} />
       <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
         <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        {beside}
         {stacked ? (
           <VStack alignment="leading" spacing={2}>
             {words}
@@ -605,36 +610,41 @@ function TaskLine({ task }: { readonly task: NonNullable<ListRowProps["task"]> }
 }
 
 /**
- * An Inbox row's last line, under the title: an ask's glyph, where the task's
- * line leads the row rather than it, and the thread's last words, 13 pt in
- * the muted ink, as the panel's row reads: only the ask's glyph stands in the
- * attention ink.
+ * An Inbox row's last line, under the title: an ask's glyph in the lead
+ * column, where the task's line leads the row rather than it, and the
+ * thread's last words in the title's column, 13 pt in the muted ink, as the
+ * panel's row reads and as Mail's preview stands under its subject: only the
+ * ask's glyph stands in the attention ink. Note that it stands on the same
+ * columns as the title's line, the unread dot's left empty, so the words
+ * hang under the title at every size, a glyph or none before them.
  */
 function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
   const { line, summary, glyph } = props;
   const colors = useColors();
   const lines = useRowLines();
+  const leadWidth = useScaledSize(MARK_SIZE.LEAD);
   const words = summary?.trim() === "" ? undefined : summary;
 
   if (words === undefined) return null;
 
   return (
-    <HStack
-      spacing={SPACE.TIGHT + 1}
-      alignment="center"
-      modifiers={[padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING })]}
-    >
-      {glyph ? <LineGlyph line={line} /> : null}
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.ROW_LINE }),
-          foregroundStyle(colors.TEXT_MUTED),
-          lineLimit(lines.line),
-        ]}
-      >
-        {words}
-      </Text>
-      <Spacer />
+    <HStack spacing={SPACE.TIGHT} alignment="center">
+      <UnreadDot unread={false} />
+      <HStack spacing={SPACE.ROW} alignment="center">
+        <HStack modifiers={[frame({ width: leadWidth })]}>
+          {glyph ? <LineGlyph line={line} /> : null}
+        </HStack>
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            lineLimit(lines.line),
+          ]}
+        >
+          {words}
+        </Text>
+        <Spacer />
+      </HStack>
     </HStack>
   );
 }

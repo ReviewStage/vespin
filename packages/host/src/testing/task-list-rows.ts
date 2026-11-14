@@ -4,7 +4,7 @@
 
 import { AGENT_BRIEF } from "@repo/features/agent-wire";
 import { TASK_PRIORITY, TASK_STATUS } from "@repo/features/task-wire";
-import type { AgentRow, PlanRow } from "../task-list-collections.js";
+import type { AgentRow, PlanRow } from "../task-list-rows.js";
 
 /** One plan as the plans statement delivers its row, unpinned, unassigned, and still to do. */
 export function planListRow(id: string, name: string): PlanRow {
@@ -28,10 +28,10 @@ export function planListRow(id: string, name: string): PlanRow {
 }
 
 /** One agent of the plan, as the agents statement delivers its row, started at `createdAt`, with no turn yet. */
-export function agentListRow(planId: string, createdAt: number): AgentRow {
+export function agentListRow(taskId: string, createdAt: number): AgentRow {
   return {
     id: "3f1d2c4b-5a6e-4f70-8a91-b2c3d4e5f607",
-    planId,
+    taskId,
     workspaceId: "workspace-personal",
     model: "anthropic/claude-opus-5.5",
     effort: "high",

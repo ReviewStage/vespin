@@ -9,7 +9,7 @@
  * read on that token (`GitHubApp`'s `memberRepositoryReadable`), and the
  * answers are kept (`@repo/database/models/github-repository-reads`), which
  * every read of a task or an agent gates on. The sidebar's list asks first
- * (`plans.list`), so a teammate's token task shows there on the list after
+ * (`tasks.list`), so a teammate's token task shows there on the list after
  * it was made, and a repository the member's token gained or lost shows
  * within the hour. A member who keeps no verified token is asked nothing.
  */

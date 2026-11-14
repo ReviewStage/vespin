@@ -54,7 +54,7 @@ afterEach(() => {
 function taskWith(body: string, by: typeof DEAN, at: number): Task {
   return {
     ...DOCUMENT_TASK,
-    document: { body, assumptions: [] },
+    description: { body, assumptions: [] },
     lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, by, at, duringCall: false },
   };
 }

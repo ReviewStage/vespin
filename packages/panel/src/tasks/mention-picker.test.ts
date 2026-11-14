@@ -12,8 +12,10 @@ import { INBOX_STATUS, INBOX_WIRE_VERSION, type InboxItem } from "@repo/features
 import { LINK_DESTINATION, readLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { decodeMention, MENTION_KIND } from "@repo/features/mention-link";
-import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
+import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
+import { IDLE_TASKS_VIEW, type TasksView } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
+import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import { holdExits } from "@repo/ui/testing/held-exits";
@@ -29,6 +31,7 @@ import {
   holdMembers,
   withExperiments,
 } from "../testing/app-state.js";
+import { withQueryClient } from "../testing/copy-feedback.js";
 import { MentionNodeChip } from "./mention-chip.js";
 import { MENTION_MENU_SIDE, type MentionPicker, useMentionPicker } from "./mention-picker.js";
 
@@ -299,6 +302,85 @@ test("on a plan, a task's key typed whole leads the @ list with that task, its k
   });
 });
 
+test("on a plan, a Done task the window lists not is asked of the service as the typing pauses and offered once the host lays it in, and a chip naming one the window lists not asks for it and wears its status once it lands", async () => {
+  const told: { readonly kind: string; readonly payload: unknown }[] = [];
+  fakeActPort({
+    [ACT_KIND.TASKS_SEARCH]: (payload) => {
+      told.push({ kind: ACT_KIND.TASKS_SEARCH, payload });
+
+      return Promise.resolve();
+    },
+    [ACT_KIND.TASKS_LOAD]: (payload) => {
+      told.push({ kind: ACT_KIND.TASKS_LOAD, payload });
+
+      return Promise.resolve();
+    },
+  });
+  const listed = [task("plan-1", "workspace-stage", 1, "Ship the palette")];
+
+  const view = (tasks: readonly TaskSummary[]): TasksView => ({
+    ...IDLE_TASKS_VIEW,
+    workspaces: [workspace("workspace-stage", "Stage", "stage")],
+    tasks,
+  });
+
+  handState(experimentsOn(EXPERIMENT.DESCRIPTIONS), { tasks: view(listed) });
+  const reads = handHostReads({});
+  const { picker, page } = await mountedOnDescription([]);
+
+  act(() => picker().onTrigger(word("tidy")));
+  assert.ok(!rows(page).includes("Tidy the old meters"), "the list holds no such task yet");
+  await vi.waitFor(() =>
+    assert.deepEqual(told, [{ kind: ACT_KIND.TASKS_SEARCH, payload: { query: "tidy" } }]),
+  );
+
+  // The host lays the task the service found into the list as a cold task.
+  const meters = {
+    ...task("plan-9", "workspace-stage", 9, "Tidy the old meters"),
+    status: TASK_STATUS.DONE,
+  };
+
+  act(() => reads.deliverTasks(view([...listed, meters])));
+  await vi.waitFor(() => assert.ok(rows(page).includes("Tidy the old meters")));
+
+  // A chip naming a task the window lists not asks the host to read it in.
+  const box = document.body.appendChild(document.createElement("div"));
+  const boxRoot = createRoot(box);
+  act(() =>
+    boxRoot.render(
+      withQueryClient(
+        createElement(MentionNodeChip, {
+          mention: { name: "Retire the meter", target: "https://vespin.dev/stage/task/plan-8" },
+          doors: {
+            holder: { taskId: "plan-1" },
+            place: { workspace: "stage", repository: null },
+            anchors: new Set<string>(),
+            onOpenTask: () => undefined,
+            onOpenFile: undefined,
+          },
+        }),
+      ),
+    ),
+  );
+  await vi.waitFor(() =>
+    assert.deepEqual(told.at(-1), {
+      kind: ACT_KIND.TASKS_LOAD,
+      payload: { taskId: "plan-8" },
+    }),
+  );
+  const mark = () => box.querySelector(".ui-inline-ref-glyph .ui-task-status-mark");
+  assert.equal(mark(), null, "the chip wears no status while the task is out");
+
+  const retired = {
+    ...task("plan-8", "workspace-stage", 8, "Retire the meter"),
+    status: TASK_STATUS.DONE,
+  };
+
+  act(() => reads.deliverTasks(view([...listed, meters, retired])));
+  await vi.waitFor(() => assert.equal(mark()?.getAttribute("data-status"), TASK_STATUS.DONE));
+  act(() => boxRoot.unmount());
+});
+
 /** An open Inbox thread an agent posted, changed last at `updatedAt`. */
 const thread = (id: string, title: string, updatedAt: number): InboxItem => ({
   id,
@@ -331,7 +413,7 @@ test("on a plan, the workspace's Inbox threads are found by their title, the pla
       },
       [LIVE_READ.INBOX_ITEMS]: {
         rows: {
-          [INBOX_SCOPE_KIND.PLAN]: {
+          [INBOX_SCOPE_KIND.TASK]: {
             "plan-42": [thread("item-billing", "Keep the meter's old alerts?", 30)],
             "plan-1": [thread("item-palette", "Keep the palette's margins?", 10)],
             "plan-acme": [thread("item-acme", "Keep Acme's links?", 50)],
@@ -421,8 +503,8 @@ test("on a plan, the workspace's automations are found by their name, a pick wri
 
   const automation = (id: string, name: string) => ({
     id,
-    planId: null,
-    planName: null,
+    taskId: null,
+    taskName: null,
     workspaceId: "workspace-stage",
     name,
     enabled: true,

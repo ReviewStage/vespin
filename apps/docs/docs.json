@@ -66,12 +66,39 @@
         "pages": ["index", "install", "quickstart"]
       },
       {
+        "group": "Concepts",
+        "pages": ["tasks", "inbox", "pull-requests", "permissions"]
+      },
+      {
         "group": "Guides",
-        "pages": ["vespin-mcp", "cli", "automations", "slack"]
+        "pages": [
+          "cloud-environment",
+          "ports-and-terminal",
+          "vespin-mcp",
+          "cli",
+          "automations",
+          "slack"
+        ]
       },
       {
         "group": "Reference",
-        "pages": ["shortcuts"]
+        "pages": [
+          "shortcuts",
+          "mcp-tools",
+          {
+            "group": "CLI reference",
+            "pages": [
+              "cli/account",
+              "cli/tasks",
+              "cli/agents",
+              "cli/pull-requests",
+              "cli/inbox",
+              "cli/workspace",
+              "cli/automations",
+              "cli/mcp-and-api"
+            ]
+          }
+        ]
       }
     ]
   },

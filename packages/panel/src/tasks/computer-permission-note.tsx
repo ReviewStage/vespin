@@ -92,8 +92,9 @@ function useOnMachine(machineId: string | undefined): boolean {
  * Whether the window is the Mac an agent's calls go to now: the machine a
  * call naming none would go to (`workspaceTools.runOnMac`), as `useOnMachine`
  * tells it; whose Mac it is where the standing names no machine, or no agent
- * is given. None while the standing is still read, so nothing is offered as
- * this Mac's, or as another's, on a guess.
+ * is given. None while the standing is read, so nothing is offered as this
+ * Mac's, or as another's, on a guess; and not this Mac where its read failed,
+ * since only an answer naming it makes it so.
  */
 export function useOnThatMac(agentId: string | undefined): boolean | undefined {
   const runsCommands = useRunsCommands();
@@ -102,7 +103,9 @@ export function useOnThatMac(agentId: string | undefined): boolean | undefined {
   const standing = useQuery(workspaceToolsQuery(asked));
   const onMachine = useOnMachine(standing.data?.runOnMac?.machine?.id);
 
-  return asked !== undefined && standing.isPending ? undefined : onMachine;
+  if (asked === undefined || standing.data !== undefined) return onMachine;
+
+  return standing.isPending ? undefined : false;
 }
 
 /** The note under a computer call the Mac refused for a grant it lacked; nothing for any other call. */

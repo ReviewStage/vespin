@@ -32,6 +32,7 @@ import {
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { useState } from "react";
 import { Image as Photo, PixelRatio, View } from "react-native";
+import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { monogramOf } from "./monogram.js";
 import {
@@ -63,11 +64,12 @@ export function UnreadDot({
   readonly faded?: boolean;
 }) {
   const colors = useColors();
+  const dot = useScaledSize(MARK_SIZE.DOT);
 
   return (
     <Circle
       modifiers={[
-        frame({ width: MARK_SIZE.DOT, height: MARK_SIZE.DOT }),
+        frame({ width: dot, height: dot }),
         foregroundStyle(colors.ACCENT),
         opacity(unread ? (faded ? FADED_OPACITY : 1) : 0),
         unread ? accessibilityLabel("Unread") : accessibilityHidden(),
@@ -111,11 +113,12 @@ export function ToneGlyph({
  */
 export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
   const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
 
   return (
     <Image
       {...glyphImage(STATUS_MARK_SYMBOL[status])}
-      size={MARK_SIZE.GLYPH}
+      size={size}
       color={toneColor(colors, TASK_STATUS_TONE[status])}
       modifiers={[accessibilityLabel(TASK_STATUS_WORDS[status])]}
     />
@@ -141,10 +144,20 @@ export function TaskPriorityMark({ priority }: { readonly priority: TaskPriority
   );
 }
 
+/** What a face is of, which its shape says: a person, in a circle, or an App or its bot, in the rounded square the panel and GitHub draw one in. */
+export const FACE_KIND = {
+  PERSON: "person",
+  APP: "app",
+} as const;
+
+export type FaceKind = (typeof FACE_KIND)[keyof typeof FACE_KIND];
+
 /** A person as a mark draws them: their name, whose letters stand in for a picture, and their sign-in picture where one is known. */
 export type Face = {
   readonly name: string;
   readonly picture?: string | undefined;
+  /** What it is of, a person where none is given. */
+  readonly kind?: FaceKind | undefined;
 };
 
 type AvatarProps = {
@@ -195,29 +208,37 @@ export function AvatarPhoto({
  * A person's face on the brand's avatar tile: their photo where a picture is
  * given, from a host `@repo/features/account-picture` lets a picture load
  * from and asked for at the size it is drawn, and their letters otherwise.
- * Note that the letters stand only until the photo has drawn, so they show
- * while it loads and once it fails, which takes the photo away, but never
- * through a photo's transparent pixels.
+ * An App, or its bot, stands in a rounded square rather than a circle, as
+ * the panel and GitHub tell one from a person. Note that the letters stand
+ * only until the photo has drawn, so they show while it loads and once it
+ * fails, which takes the photo away, but never through a photo's
+ * transparent pixels.
  */
 export function Avatar({
   name,
   size = MARK_SIZE.AVATAR,
   picture,
+  kind = FACE_KIND.PERSON,
 }: AvatarProps & {
   /** The address of the person's photo, such as their sign-in picture; their letters alone where none is given. */
   readonly picture?: string | undefined;
+  readonly kind?: FaceKind | undefined;
 }) {
   const colors = useColors();
   const pinned = pinnedPictureUrl(picture);
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const [drawn, setDrawn] = useState<string | undefined>(undefined);
   const photoDrawn = pinned !== undefined && pinned === drawn && pinned !== failed;
+  const corner = kind === FACE_KIND.APP ? size * TILE_ROUNDING : size / 2;
 
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityLabel(name)]}>
       {photoDrawn ? null : (
         <>
-          <Circle modifiers={[foregroundStyle(colors.AVATAR_TILE)]} />
+          <RoundedRectangle
+            cornerRadius={corner}
+            modifiers={[foregroundStyle(colors.AVATAR_TILE)]}
+          />
           <Text
             modifiers={[
               font({ size: size * MONOGRAM_SCALE, weight: "semibold", design: "rounded" }),
@@ -233,6 +254,7 @@ export function Avatar({
         <AvatarPhoto
           address={accountPictureAt(pinned, size * PixelRatio.get())}
           size={size}
+          corner={corner}
           onLoad={() => setDrawn(pinned)}
           onFail={() => setFailed(pinned)}
         />
@@ -261,7 +283,7 @@ const TILE_MARK_SCALE = 0.72;
  * Clawd from the brand's path in its own clay, and Codex's picture from the
  * files the panel serves, each as the panel's `HarnessMark` draws it.
  */
-const HARNESS_MARK_ASSET = {
+export const HARNESS_MARK_ASSET = {
   [MODEL_PROVIDER.ANTHROPIC]: "ClawdMark",
   [MODEL_PROVIDER.OPENAI]: "CodexMark",
 } as const satisfies Record<ModelProvider, string>;
@@ -311,14 +333,31 @@ export function AgentTile({
   );
 }
 
+/** The mark of the harness a model runs in, as the panel leads a model's name with it: Claude Code's Clawd or Codex's picture, in its own colors, at `size`, unheard beside the name it leads. */
+export function HarnessMark({
+  provider,
+  size = MARK_SIZE.FACE,
+}: {
+  readonly provider: ModelProvider;
+  readonly size?: number | undefined;
+}) {
+  return (
+    <Image
+      assetName={HARNESS_MARK_ASSET[provider]}
+      modifiers={[resizable(), frame({ width: size, height: size }), accessibilityHidden()]}
+    />
+  );
+}
+
 /** The dot a row ends with where a thread of it waits on the reader, in the attention ink, heard as Needs you. */
 export function NeedsYouDot() {
   const colors = useColors();
+  const dot = useScaledSize(MARK_SIZE.DOT);
 
   return (
     <Circle
       modifiers={[
-        frame({ width: MARK_SIZE.DOT, height: MARK_SIZE.DOT }),
+        frame({ width: dot, height: dot }),
         foregroundStyle(colors.ATTENTION),
         accessibilityLabel(NEEDS_YOU.LABEL),
       ]}

@@ -38,8 +38,8 @@ export const descriptionRevision = pgTable(
     userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     /** The coding agent that wrote it; null for any other writer, and once the agent's row is gone. */
     agentId: uuid("agent_id").references(() => agentTable.id, { onDelete: "set null" }),
-    /** The plan's whole text after the revision. */
-    document: text("document").notNull(),
+    /** The description's whole text after the revision. */
+    description: text("description").notNull(),
     /** How many changes the revision's saves made: notes taken, summed over each save it holds. */
     changes: integer("changes").notNull(),
     /** The revision's first save. */
