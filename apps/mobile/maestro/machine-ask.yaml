@@ -1,0 +1,25 @@
+# machine-ask.yaml -- an ask Ada's MacBook holds for an agent's command, put to her in a sheet over whatever screen stands: the machine and the time left, the command, and Allow once, Always allow and Deny….
+#
+# No machine asks a simulator, so the launch asks the fixture run to hold
+# one (`-machineAsk true`, `src/host/fixture-host.ts`). The sheet opens over
+# the Inbox, the first screen; Allow once answers it, and it goes.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      machineAsk: "true"
+- extendedWaitUntil:
+    visible: "Run this command?"
+    timeout: 10000
+- assertVisible: "Ada's MacBook Pro"
+- assertVisible: "Deny…"
+- waitForAnimationToEnd
+- takeScreenshot: machine-ask
+- tapOn: "Deny…"
+- assertVisible: "Tell the agent why (optional)"
+- takeScreenshot: machine-ask-deny
+- tapOn: "Back"
+- tapOn: "Allow once"
+- assertNotVisible: "Run this command?"

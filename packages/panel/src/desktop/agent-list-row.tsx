@@ -1,5 +1,6 @@
 import { AGENT_BOUNDS, type AgentPullRequest, type AgentSummary } from "@repo/features/agent-wire";
 import { openerOf } from "@repo/features/link-standing-model";
+import { machineAsksByAgent } from "@repo/features/machine-ask-live";
 import {
   InlineEdit,
   RowHint,
@@ -13,7 +14,7 @@ import {
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { type ReactNode, useRef } from "react";
-import { machineAsksByAgent, useMachineAsks } from "../machine-asks.js";
+import { useMachineAsks } from "../machine-asks.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
 import type { AgentSubject } from "../tasks/agent-ref.js";
 import { useChangesPeople } from "../tasks/changes-people.js";

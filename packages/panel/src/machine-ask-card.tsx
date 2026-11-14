@@ -78,6 +78,10 @@ export function MachineAskCard(): React.JSX.Element | null {
       setAnswered((was) => without(was, variables.id));
       press.onError?.(cause, variables, ...rest);
     },
+    // Note that a refusal the service answers comes back as an answer, not an error, and puts the card back too.
+    onSuccess: (answered, variables) => {
+      if ("failure" in answered) setAnswered((was) => without(was, variables.id));
+    },
   });
 
   // Note that the card is drawn for the ask it opened over until its fade has run, so its words do not change under its own exit.

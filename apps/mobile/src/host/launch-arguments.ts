@@ -1,5 +1,5 @@
 /**
- * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, and `-sentryTest <js|native>`, which sends a test crash report.
+ * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity, `-machineAsk true`, which has a fixture run's machine ask for an agent's command, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, and `-sentryTest <js|native>`, which sends a test crash report.
  *
  * iOS registers a launch argument of the form `-key value` in the app's
  * `NSUserDefaults` argument domain, which React Native's `Settings` reads,
@@ -21,6 +21,7 @@ const LAUNCH_ARGUMENT = {
   PULL_REQUEST: "pullRequest",
   CONNECT: "connect",
   LIVE_ACTIVITY: "liveActivity",
+  MACHINE_ASK: "machineAsk",
   UPDATE_NEEDED: "updateNeeded",
   REFUSE_WRITES: "refuseWrites",
   SENTRY_TEST: "sentryTest",
@@ -89,6 +90,11 @@ function launchSaysTrue(key: string): boolean {
 /** Whether this launch starts a fixture run's own Live Activity, as `-liveActivity true` asks (`maestro/live-activity.yaml`); never on any other platform. */
 export function launchLiveActivity(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.LIVE_ACTIVITY);
+}
+
+/** Whether this launch's fixture run holds an ask of Ada's MacBook for an agent's command, as `-machineAsk true` asks (`maestro/machine-ask.yaml`); never on any other platform. */
+export function launchMachineAsk(): boolean {
+  return launchSaysTrue(LAUNCH_ARGUMENT.MACHINE_ASK);
 }
 
 /** Whether this launch stands a fixture run as the service's refusal of an old build leaves it, as `-updateNeeded true` asks (`maestro/update-needed.yaml`); never on any other platform. */

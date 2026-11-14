@@ -124,6 +124,8 @@ export {
   TaskRow,
 } from "./list-row.js";
 
+export { MachineAskSheet } from "./machine-ask-sheet.js";
+
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 
 export { markdownGithubPages, markdownReplyButtons } from "./markdown-model.js";

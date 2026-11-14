@@ -31,6 +31,7 @@ import {
   inboxAppState,
   inboxRemindersAppState,
   inboxTasksView,
+  machineAskAppState,
   NEW_MEMORY_ID,
   olderPageAnswer,
   olderPageAppState,
@@ -76,6 +77,15 @@ const REMINDERS = new WeakMap<object, InboxReminders>();
 /** No reminder set yet. */
 const NO_REMINDERS: InboxReminders = new Map();
 
+/** The runs that hold a machine's ask, as `-machineAsk true` asks, by the store each stages, since a stage after a press is asked with none of the launch's own. */
+const MACHINE_ASKED = new WeakSet<object>();
+
+/** The machines' asks each run answered, by the store the run stages, each set replaced whole as one is answered. */
+const ANSWERED_ASKS = new WeakMap<object, ReadonlySet<string>>();
+
+/** No ask answered yet. */
+const NO_ANSWERED_ASKS: ReadonlySet<string> = new Set();
+
 /** The words each run saved over the fixture's memories, by the store the run stages, each map replaced whole as one is saved. */
 const MEMORY_WORDS = new WeakMap<object, SavedMemoryWords>();
 
@@ -116,11 +126,16 @@ function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateS
  * live run. Where `updateNeeded`, as `-updateNeeded true` asks, the network
  * stands as the service's refusal of an old build leaves it, so a flow
  * shoots the screen that asks for the update (`maestro/update-needed.yaml`).
+ * Where `machineAsk`, as `-machineAsk true` asks, the run holds an ask of
+ * Ada's MacBook for an agent's command from then on (`maestro/machine-ask.yaml`).
  */
 export function stageFixture(
   state: Pick<AppStateStore, "snapshot" | "update">,
   updateNeeded = false,
+  machineAsk = false,
 ): void {
+  if (machineAsk) MACHINE_ASKED.add(state);
+
   const snapshot = state.snapshot();
 
   if (!snapshot.run.fixtureMode || snapshot.run.profile === RUN_PROFILE.IDLE) return;
@@ -134,10 +149,14 @@ export function stageFixture(
     OLDER_ASKS.get(state) ?? 0,
   );
 
-  const reminded = savedMemoriesAppState(
+  const saved = savedMemoriesAppState(
     inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS),
     MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
   );
+
+  const reminded = MACHINE_ASKED.has(state)
+    ? machineAskAppState(saved, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
+    : saved;
 
   const staged = {
     ...reminded,
@@ -158,6 +177,19 @@ function keepReminder(
   // SAFETY: the payload is the kind's, which the guard above names.
   const { itemId, until } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_REMIND>;
   REMINDERS.set(state, new Map(REMINDERS.get(state) ?? NO_REMINDERS).set(itemId, until));
+  stageFixture(state);
+}
+
+/** Keeps a machine's ask the fixture answered and takes it off the document at once, as the service's read drops it (`machineAskAppState`); nothing for any other act. */
+function keepMachineAnswer(
+  state: Pick<AppStateStore, "snapshot" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  if (kind !== ACT_KIND.MACHINE_ASK_ANSWER) return;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { id } = payload as PortActPayload<typeof ACT_KIND.MACHINE_ASK_ANSWER>;
+  ANSWERED_ASKS.set(state, new Set(ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS).add(id));
   stageFixture(state);
 }
 
@@ -302,6 +334,8 @@ export function fixtureActs(
         keepChoice(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepMemory(state, kind as PortActKind, payload);
+        // SAFETY: as above.
+        keepMachineAnswer(state, kind as PortActKind, payload);
 
         return Promise.resolve(staged.answer);
       };
