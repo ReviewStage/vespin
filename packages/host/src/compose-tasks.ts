@@ -41,6 +41,7 @@ import {
   TASK_RELATIONS_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_READ,
+  type TaskListLiveRows,
 } from "@repo/features/task-list-live";
 import { pagesOfLiveRows, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
@@ -1214,6 +1215,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           });
         },
         txWait: () => listWait,
+        readAgain: (id) => readTaskRows(id),
       }),
     );
 
@@ -1249,6 +1251,26 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   /** Whether a task outside the list can be read into it now: signed in, and the list answered, since until then every task is outside it. */
   const readableOutside = (): boolean =>
     gate() && dependencies.accountId() !== undefined && view.listStatus === TASKS_READ.READY;
+
+  /** The task or the agent `id` names read again for the list, as a task it let go while a read of it was out is (`task-list-collections.ts`); none where the service did not answer, which is read again at the list's next answer, as an open's read is. */
+  const readTaskRows = (id: string): Effect.Effect<TaskListLiveRows | undefined> =>
+    Effect.gen(function* () {
+      const userId = dependencies.accountId();
+      const { collections } = taskList;
+
+      if (userId === undefined) return undefined;
+      const sealed = yield* served(client.liveRead(TASK_ROWS_READ, { id, userId }, {}));
+
+      if ("failure" in sealed) {
+        if (taskList.collections === collections && !inboxAsked.has(id)) coldWaiting.add(id);
+
+        return undefined;
+      }
+
+      const { plans, agents } = sealed.queries;
+
+      return Option.getOrUndefined(decodeTaskRows({ plans: plans.rows, agents: agents.rows }));
+    });
 
   const readOutside = (id: string): Effect.Effect<void> =>
     Effect.suspend(() => {
