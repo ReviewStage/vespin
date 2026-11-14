@@ -6,8 +6,11 @@
  * is synchronous and seals whole files, an entity store's lists among them,
  * where `expo-secure-store` keeps short strings, so the Keychain here keeps
  * one random 256-bit key, made the first time something is sealed, and the
- * sealing is XChaCha20-Poly1305 under it, each sealing with a random nonce
- * written in front of it (`@noble/ciphers`' `managedNonce`).
+ * sealing is XChaCha20-Poly1305 under it (`@repo/host/xchacha-cipher`). A
+ * kept file is sealed and opened by the app's own native module, autolinked
+ * from `modules/sealer/`, in CryptoKit, since Hermes took about 0.8 s a
+ * megabyte for the cipher and the base64 together; a build without the
+ * module, such as Expo Go, seals in JavaScript, to the same bytes.
  *
  * The key is readable once the phone has been unlocked after a restart, so a
  * notification's action in the background can read the tokens and call the
@@ -18,11 +21,10 @@
  * out.
  */
 
-import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
-import { bytesToUtf8, managedNonce, utf8ToBytes } from "@noble/ciphers/utils.js";
-import type { SecretCipher } from "@repo/host";
+import { type NativeSealer, xchachaCipher } from "@repo/host/xchacha-cipher";
 import { Result } from "effect";
 import { Base64 } from "effect/encoding";
+import { type NativeModule, requireOptionalNativeModule } from "expo";
 import * as SecureStore from "expo-secure-store";
 
 /** The Keychain item the key is kept under, in the app's own Keychain. */
@@ -36,10 +38,16 @@ const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
 };
 
-const sealer = managedNonce(xchacha20poly1305);
+declare class SealerModule extends NativeModule implements NativeSealer {
+  seal(key: string, plainText: string): string;
+  open(key: string, sealedText: string): string;
+}
+
+/** The app's native sealer, or none in a build without it. */
+const sealerModule = requireOptionalNativeModule<SealerModule>("Sealer") ?? undefined;
 
 /** The key the Keychain holds, or none where none was ever made. */
-function heldKey(): Uint8Array | undefined {
+function keptKey(): Uint8Array | undefined {
   const held = SecureStore.getItem(KEY_ITEM, KEYCHAIN_OPTIONS);
 
   if (held === null) return undefined;
@@ -50,34 +58,25 @@ function heldKey(): Uint8Array | undefined {
   return key;
 }
 
-/** The key to seal with: the one held, or a new one kept in the Keychain first. */
-function sealingKey(): Uint8Array {
-  const held = heldKey();
-
-  if (held !== undefined) return held;
-  const made = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
-  SecureStore.setItem(KEY_ITEM, Base64.encode(made), KEYCHAIN_OPTIONS);
-
-  return made;
-}
-
 /** The cipher the host's account source seals with. Each member reaches the Keychain, and a member it refuses throws, which the stores read as a cipher unavailable or a value that will not open. */
-export const keychainCipher: SecretCipher = {
-  isAvailable: () => {
-    try {
-      sealingKey();
+export const keychainCipher = xchachaCipher(
+  {
+    held: () => {
+      const key = keptKey();
 
-      return true;
-    } catch {
-      return false;
-    }
+      if (key === undefined) throw new Error("The Keychain holds no key to open this with.");
+
+      return key;
+    },
+    sealing: () => {
+      const held = keptKey();
+
+      if (held !== undefined) return held;
+      const made = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
+      SecureStore.setItem(KEY_ITEM, Base64.encode(made), KEYCHAIN_OPTIONS);
+
+      return made;
+    },
   },
-  encrypt: (plainText) => sealer(sealingKey()).encrypt(utf8ToBytes(plainText)),
-  decrypt: (cipherText) => {
-    const key = heldKey();
-
-    if (key === undefined) throw new Error("The Keychain holds no key to open this with.");
-
-    return bytesToUtf8(sealer(key).decrypt(cipherText));
-  },
-};
+  sealerModule,
+);

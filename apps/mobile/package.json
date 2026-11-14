@@ -21,7 +21,6 @@
     "@formatjs/intl-numberformat": "10.0.3",
     "@formatjs/intl-pluralrules": "7.0.3",
     "@formatjs/intl-segmenter": "12.3.2",
-    "@noble/ciphers": "2.3.0",
     "@orpc/client": "catalog:",
     "@repo/brand": "workspace:*",
     "@repo/credentials": "workspace:*",

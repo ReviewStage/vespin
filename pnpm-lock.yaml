@@ -477,9 +477,6 @@ importers:
       '@formatjs/intl-segmenter':
         specifier: 12.3.2
         version: 12.3.2
-      '@noble/ciphers':
-        specifier: 2.3.0
-        version: 2.3.0
       '@orpc/client':
         specifier: 'catalog:'
         version: 2.0.0-beta.44
@@ -1064,6 +1061,9 @@ importers:
       '@effect/platform-node':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(redis@6.2.1)
+      '@noble/ciphers':
+        specifier: 2.3.0
+        version: 2.3.0
       '@orpc/client':
         specifier: 'catalog:'
         version: 2.0.0-beta.44
