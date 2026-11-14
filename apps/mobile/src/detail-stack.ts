@@ -332,6 +332,24 @@ export function useDetailLeave():
   };
 }
 
+/**
+ * Whether a page stands pushed over the view calling it inside a split
+ * view's detail: over the detail's root while any page is pushed, over a
+ * pushed page while another stands on top of it. A view outside a detail is
+ * never covered here, since a push over the window takes its focus instead.
+ */
+export function useDetailCovered(): boolean {
+  const place = useContext(DetailPlace);
+  const key = useContext(PageKey);
+
+  return useSyncExternalStore(subscribe, () => {
+    if (place === undefined) return false;
+    const top = stackOf(place).pages.at(-1)?.key;
+
+    return key === undefined ? top !== undefined : top !== key;
+  });
+}
+
 /** Whether a tab's route (its segments under the tab's group) is a page the detail's stack stands, as an agent's or a pull request's. */
 export function isStackedRoute(segments: readonly string[]): boolean {
   const [first, second] = segments;
