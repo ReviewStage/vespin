@@ -11,6 +11,7 @@ import {
   SettingsForm,
   useAsyncAction,
   useColors,
+  WORDS_LOOK,
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -121,6 +122,7 @@ export function NewWorkspaceScreen() {
         <SettingsForm>
           <ListSection title={WORDS.WORKSPACE} footer={create.refusal}>
             <WordsField
+              look={WORDS_LOOK.LINE}
               placeholder={WORDS.TEAM_NAME}
               onWords={(words) => {
                 setName(words);
