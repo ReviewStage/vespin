@@ -69,6 +69,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** What parts the pieces of an agent's line. */
 const LINE_PART = "· ";
 
+/** The same part's mark after what leads a line, such as an agent's task before what it is doing. */
+const LINE_PART_AFTER = " ·";
+
 /** What a pull request's number in an agent's line is heard to do. */
 const OPENS_PULL_REQUEST = "Opens the pull request";
 
@@ -215,6 +218,8 @@ type AgentRowProps = {
   readonly runsOn: string;
   /** How many of its threads wait on the reader; none said at none. */
   readonly waiting: number;
+  /** The task it works on, named first in its line where the list holds agents of many tasks, as ⌘K's agent rows name it; none on the task's own page. */
+  readonly task?: string | undefined;
   /** The pull request it opened, its state's glyph and number in its line, pressed to open it. */
   readonly pullRequest?:
     | {
@@ -291,7 +296,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
  * want you.
  */
 export function AgentRow(props: AgentRowProps) {
-  const { id, name, harness, state, runsOn, waiting, pullRequest } = props;
+  const { id, name, harness, state, runsOn, waiting, pullRequest, task } = props;
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
@@ -309,8 +314,19 @@ export function AgentRow(props: AgentRowProps) {
         ink={colors.TEXT}
         end={<EndWords words={runsOn} />}
       />
-      {!told && waiting === 0 ? null : (
+      {!told && waiting === 0 && task === undefined ? null : (
         <RowLine>
+          {task === undefined ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+                lineLimit(1),
+              ]}
+            >
+              {`${task}${(told || waiting > 0) && !stacked ? LINE_PART_AFTER : ""}`}
+            </Text>
+          )}
           {resting ? null : <AgentStateWords working={state === AGENT_ROW_STATE.WORKING} />}
           {pullRequest === undefined ? null : <PullRequestLink pullRequest={pullRequest} />}
           {waiting === 0 ? null : (

@@ -52,6 +52,8 @@ export interface SearchFound {
   readonly inboxReading: boolean;
   /** Whether the task list, which holds the tasks and the agents on them, is not yet read, or the service is still searched for the tasks past it, so a task or an agent it would find may not be held yet. */
   readonly tasksReading: boolean;
+  /** Every task the list holds, by its id, which an agent found is named by. */
+  readonly tasksById: ReadonlyMap<string, TaskSummary>;
 }
 
 /**
@@ -69,7 +71,7 @@ export function useSearchFound(typed: string): SearchFound {
   const waiting = useWaiting(workspace?.id);
 
   const ranked = useMemo(() => {
-    const names = new Map((view?.tasks ?? []).map((task) => [task.id, task.name]));
+    const tasksById = new Map((view?.tasks ?? []).map((task) => [task.id, task]));
 
     // Note that an archived agent is left out, as a task's page leaves it out of its Agents.
     const agents = (view?.taskAgents ?? []).filter(
@@ -85,8 +87,9 @@ export function useSearchFound(typed: string): SearchFound {
       // Note that a blank query ranks nothing, so the Inbox's every item, which it lists with nothing typed, stays out.
       inbox: rankedBySearch(inbox.listed, query, inboxSearchSubject),
       agents: rankedBySearch(agents, query, (agent) =>
-        agentSearchSubject(agent, names.get(agent.planId)),
+        agentSearchSubject(agent, tasksById.get(agent.planId)?.name),
       ).map((agent) => agentLine(agent, waiting.byAgent, view)),
+      tasksById,
     };
   }, [listing.found, inbox.listed, view, workspace, waiting, query]);
 
