@@ -230,7 +230,7 @@ why (`packages/service/src/agents/coder-host/reconcile.ts`); no read settles one
 ## Breaking the hosted wire
 
 The service deploys from `main` on merge, but the desktop, the host daemon,
-the CLI, and the iOS app ship only on their tags, and stay installed for
+the CLI, and the iOS app ship only on their releases, and stay installed for
 weeks. So a change a released client cannot read lands in three steps, never
 one:
 
@@ -243,7 +243,9 @@ one:
    needing an update they can now take.
 
 `[check: scripts/repository-checks.sh]` The floor may not pass the version
-the newest `v*`, `host-v*`, `cli-v*`, or `ios-v*` tag sends.
+the newest `v*`, `host-v*`, `cli-v*`, or `ios-v*` tag sends. `[review]` Before
+step 3, see each tag's release published and a TestFlight build from after
+step 1 in testers' hands: a dispatched Release iOS run has no tag to check.
 
 ## Testing
 
