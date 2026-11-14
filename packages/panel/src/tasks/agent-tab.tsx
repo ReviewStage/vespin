@@ -327,7 +327,6 @@ import {
   ThreadLineHead,
   TranscriptAgent,
 } from "./line-cards.js";
-import { MachineAskDock } from "./machine-ask-dock.js";
 import { useMachineAskHeld } from "./machine-ask-waiting.js";
 import { MachineRefusalCard } from "./machine-refusal-card.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, linkChip } from "./mention-chip.js";
@@ -3835,7 +3834,6 @@ function AgentTabView({
           doors={doors}
         />
         <ThreadsDock threads={threads} />
-        <MachineAskDock agentId={agent.id} />
         <FollowOfferDock
           taskId={agent.taskId}
           messages={kept}

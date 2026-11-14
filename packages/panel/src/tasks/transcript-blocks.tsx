@@ -1422,7 +1422,7 @@ export function useMacOwner(): Actor | undefined {
 const RoutedMachineContext = createContext<Pick<CallMachine, "id" | "name"> | undefined>(undefined);
 
 /** Where a call ran, as its row ends: the machine's chip, named as every list of machines names it (This Mac among them), its card and its press the chip's own. */
-export function OnMachine({ machine }: { machine: Pick<CallMachine, "id" | "name"> }): ReactNode {
+function OnMachine({ machine }: { machine: Pick<CallMachine, "id" | "name"> }): ReactNode {
   const thisMac = useThisMac();
   const doors = useMentionDoors();
   const words = machineName({ deviceId: machine.id, name: machine.name }, [], thisMac);
