@@ -6,13 +6,13 @@ import {
   type MachineAskDecision,
 } from "@repo/features/machine-ask-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { AppAsk, CommandAsk } from "@repo/ui";
+import { AppAsk, CommandAsk, useSecond } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { pressMutation } from "./act-mutations.js";
 import { copyThroughShell } from "./copy-feedback.js";
 import { machinesQuery } from "./live-reads.js";
-import { useMachineAsks } from "./machine-asks.js";
+import { useOtherMachinesAsks } from "./machine-asks.js";
 import { macAppIconAddress } from "./tasks/mac-apps.js";
 import { appStateQuery, selectAccount } from "./use-app-state.js";
 import { useHeldThroughExit } from "./use-held-through-exit.js";
@@ -44,20 +44,23 @@ function useMachineNames(): ReadonlyMap<string, string> {
   return new Map(machines.map((machine) => [machine.id, machine.name]));
 }
 
-/** The ask the card stands for: the one it opened over while it still waits, else the earliest whose window is open. */
+/** The ask the card stands for: the one it opened over while it still waits, else the earliest whose window is open by its machine's word and by the clock. */
 function askShown(
   asks: readonly MachineAskLine[],
   opened: string | undefined,
+  now: number,
 ): MachineAskLine | undefined {
-  return asks.find((ask) => ask.id === opened) ?? asks.find((ask) => !ask.lapsed);
+  return (
+    asks.find((ask) => ask.id === opened) ?? asks.find((ask) => !ask.lapsed && ask.expiresAt > now)
+  );
 }
 
 export function MachineAskCard(): React.JSX.Element | null {
   const names = useMachineNames();
   const [answered, setAnswered] = useState<ReadonlySet<string>>(new Set());
-  const asks = useMachineAsks().filter((ask) => !answered.has(ask.id));
+  const asks = useOtherMachinesAsks().filter((ask) => !answered.has(ask.id));
   const [opened, setOpened] = useState<string | undefined>(undefined);
-  const shown = askShown(asks, opened);
+  const shown = askShown(asks, opened, useSecond());
   const { mutate: answerAsk } = useMutation(pressMutation(ACT_KIND.MACHINE_ASK_ANSWER));
   // Note that the card is drawn for the ask it opened over until its fade has run, so its words do not change under its own exit.
   const { held: ask, onExited } = useHeldThroughExit(shown);
@@ -70,9 +73,20 @@ export function MachineAskCard(): React.JSX.Element | null {
   const machineName = names.get(ask.deviceId) ?? SOME_MACHINE;
   const open = shown?.id === ask.id;
 
+  // Note that an answer that did not reach the service puts the card back, so it can be given again.
   const answer = (decision: MachineAskDecision, note?: string) => {
-    setAnswered((was) => new Set(was).add(ask.id));
-    answerAsk(note === undefined ? { id: ask.id, decision } : { id: ask.id, decision, note });
+    const { id } = ask;
+
+    setAnswered((was) => new Set(was).add(id));
+    answerAsk(note === undefined ? { id, decision } : { id, decision, note }, {
+      onError: () =>
+        setAnswered((was) => {
+          const next = new Set(was);
+          next.delete(id);
+
+          return next;
+        }),
+    });
   };
 
   const deny = (note: string | undefined) => answer(MACHINE_ASK_DECISION.DENY, note);

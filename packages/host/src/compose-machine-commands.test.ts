@@ -2154,13 +2154,10 @@ const joinedAndAsked = (
   service: ReturnType<typeof scriptedService>,
   spawner: ReturnType<typeof scriptedSpawner>,
   command: MachineCommand,
+  gate: Gate = { mode: MACHINE_COMMAND_MODE.ASK, signedIn: true, device: { id: STUDIO, apps: [] } },
 ) =>
   Effect.gen(function* () {
-    const built = yield* subject(service, spawner, {
-      mode: MACHINE_COMMAND_MODE.ASK,
-      signedIn: true,
-      device: { id: STUDIO, apps: [] },
-    });
+    const built = yield* subject(service, spawner, gate);
 
     yield* built.composer.lifetime;
     yield* settled;
@@ -2271,6 +2268,38 @@ it.effect(
 
           assert.equal(spawner.spawned.length, 1, "the command ran on the answer");
           assert.equal(service.asks.has(COMMAND.id), false, "and the ask came down");
+        }),
+      );
+    }),
+);
+
+it.effect(
+  "an ask whose command is cut short while its post is still out is said closed once the post lands",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const slow = scriptedService({ askPostTakes: "303 seconds" });
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        device: { id: STUDIO, apps: [] },
+      };
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const built = yield* joinedAndAsked(slow, spawner, COMMAND, gate);
+          // Note that the window closes at five minutes, and the Mac then waits a few seconds on the post, which lands within them.
+          yield* TestClock.adjust("301 seconds");
+          gate.mode = MACHINE_COMMAND_MODE.NEVER;
+          yield* built.moved;
+          yield* TestClock.adjust("10 seconds");
+          yield* settled;
+
+          assert.equal(
+            slow.asks.get(COMMAND.id)?.lapsed,
+            true,
+            "the ask that landed is said closed",
+          );
         }),
       );
     }),
