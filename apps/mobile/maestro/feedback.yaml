@@ -35,5 +35,5 @@ appId: dev.vespin.ios
 - tapOn: "Send"
 - waitForAnimationToEnd
 # Settings' list stands again, Email beside Send feedback under About.
-- assertVisible: "Email"
+- assertVisible: "Email us"
 - takeScreenshot: feedback-sent
