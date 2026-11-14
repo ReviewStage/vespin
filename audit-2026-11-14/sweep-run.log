@@ -102,3 +102,16 @@ duo-folded-duo-dark wrap-answer.yaml: fails 2 shots 13   Assert that "Resolve" i
 duo-folded-duo-light wrap-navigation.yaml: fails 3 shots 4     Tap on "Tasks"... FAILED
 duo-folded-duo-dark wrap-navigation.yaml: fails 3 shots 4     Tap on "Tasks"... FAILED
   ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-markdown.yaml: fails 0 shots 4 
+duo-folded-duo-dark wrap-markdown.yaml: fails 0 shots 4 
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-description-comment.yaml: fails 0 shots 3 
+duo-folded-duo-dark wrap-description-comment.yaml: fails 0 shots 3 
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-undo.yaml: fails 2 shots 2   Scrolling DOWN until "acceptInvite can add a member twice" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... FAILED
+duo-folded-duo-dark wrap-undo.yaml: fails 2 shots 2   Scrolling DOWN until "acceptInvite can add a member twice" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... FAILED
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-sign-in.yaml: fails 0 shots 4 
+duo-folded-duo-dark wrap-sign-in.yaml: fails 0 shots 4 
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-update-needed.yaml: fails 0 shots 1 
