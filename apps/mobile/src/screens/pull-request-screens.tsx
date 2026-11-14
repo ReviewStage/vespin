@@ -51,6 +51,7 @@ import {
   MarkRow,
   MergeActRow,
   PATH_PART,
+  PUSH_ROW_GOES,
   PullRequestHead,
   REVIEW_LOOK,
   RowList,
@@ -416,7 +417,7 @@ export function PullRequestScreen() {
               }
               sentence={
                 pullRequest !== undefined && isLivePullRequest(pullRequest)
-                  ? mergeSentence(pullRequest, action)
+                  ? mergeSentence(pullRequest, action, { queueShown: true })
                   : undefined
               }
             />
@@ -468,8 +469,10 @@ export function PullRequestScreen() {
                   key={check.url ?? check.name}
                   id={check.url ?? check.name}
                   mark={CHECK_LOOK[check.state]}
+                  said={CHECK_WORDS[check.state]}
                   title={check.name}
                   detail={checkDetail(check)}
+                  goes={check.url === null ? undefined : PUSH_ROW_GOES.OUT}
                 />
               ))
             )}
@@ -494,7 +497,7 @@ export function PullRequestScreen() {
                     : PULL_REQUEST_READ_WORDS.READING_CONVERSATION
                   : PULL_REQUEST_READ_WORDS.commentCount(conversationCount(conversation))
               }
-              detail={url === undefined ? undefined : MENU_WORDS.OPEN_ON_GITHUB}
+              goes={url === undefined ? undefined : PUSH_ROW_GOES.OUT}
             />
           </ListSection>
         </RowList>

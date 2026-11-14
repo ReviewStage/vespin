@@ -38,6 +38,7 @@ import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { ToneGlyph } from "./marks.js";
+import { GoesMark, PUSH_ROW_GOES, type PushRowGoes } from "./settings-form.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -157,18 +158,26 @@ type MarkRowProps = {
   readonly id: string;
   /** Its leading mark: where the thing it names stands, in that tone. */
   readonly mark: MarkLook;
+  /** The mark in words, heard where `detail` doesn't say it, such as a check's "passed" beside how long it ran. */
+  readonly said?: string | undefined;
   readonly title: string;
   /** What ends its line, muted: where it stands in words, or how long it ran. */
   readonly detail?: string | undefined;
+  /** Where a press on it goes, marked at its end, such as out to GitHub; none where it takes no press. */
+  readonly goes?: PushRowGoes | undefined;
 };
+
+/** What a row that opens GitHub is heard to do, in the arrow's place. */
+const OPENS_ON_GITHUB = "Opens on GitHub";
 
 /**
  * A row of a pull request's page, such as a check or a reviewer: its mark
  * in the lead column, its name in 15 pt, and what ends its line, 12 pt and
  * muted, standing as every list row does, plain and edge to edge with a
- * hairline under the words.
+ * hairline under the words. VoiceOver hears it as one element: its name,
+ * then its mark, its detail and where a press goes, each said in words.
  */
-export function MarkRow({ id, mark, title, detail }: MarkRowProps) {
+export function MarkRow({ id, mark, said, title, detail, goes }: MarkRowProps) {
   const colors = useColors();
 
   const row: ReactElement = (
@@ -192,10 +201,20 @@ export function MarkRow({ id, mark, title, detail }: MarkRowProps) {
           </Text>
         )
       }
+      trail={goes === undefined ? null : <GoesMark goes={goes} />}
     />
   );
 
-  return <RowFrame id={id} row={row} />;
+  return (
+    <RowFrame
+      id={id}
+      row={row}
+      heard={{
+        label: title,
+        value: [said !== detail && said, detail, goes === PUSH_ROW_GOES.OUT && OPENS_ON_GITHUB],
+      }}
+    />
+  );
 }
 
 /**
