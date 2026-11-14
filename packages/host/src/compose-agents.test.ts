@@ -1707,7 +1707,7 @@ const ITEM_ROW = {
   settledAt: null,
 };
 
-const PLAN_SCOPE = { kind: "plan", id: TASK_ID } as const;
+const PLAN_SCOPE = { kind: "task", id: TASK_ID } as const;
 
 /** Steps taken until the host has told `times` inboxes, since a row's digest is the platform's own promise. */
 const toldTimes = (told: () => readonly unknown[], times: number) =>
@@ -1794,7 +1794,7 @@ it.effect(
 
       // Eight other holders held and let go push the plan out, and its read is let go with its rows.
       const others = Array.from({ length: 8 }, (_, at) => ({
-        kind: INBOX_SCOPE_KIND.PLAN,
+        kind: INBOX_SCOPE_KIND.TASK,
         id: `0000000${at}-1111-4a6b-9c33-0d1e2f3a4b5c`,
       }));
 
@@ -1933,7 +1933,7 @@ it.effect(
       yield* reset;
       yield* settled;
       assert.equal(live.scope.held(), 0, "a sign-out lets its poll go");
-      assert.deepEqual(told().at(-1), { plan: {} });
+      assert.deepEqual(told().at(-1), { task: {} });
 
       yield* open;
       yield* settled;
@@ -1959,8 +1959,8 @@ function deliverAccount(
 ) {
   live.account.set({
     items: rows.items ?? [],
-    planless: [],
-    plans: [],
+    taskless: [],
+    tasks: [],
     automations: [],
     failedRuns: rows.failedRuns ?? [],
   });
@@ -1984,8 +1984,8 @@ it.effect(
         { ...answered, cursor: "" },
         {
           items: [WAITING],
-          plans: [],
-          planless: [],
+          tasks: [],
+          taskless: [],
           automations: [],
           failedRuns: [FAILED_RUN],
           cursor: "",
@@ -2090,8 +2090,8 @@ function deliverItems(
 }
 
 /** The account's items as the window is told them, by plan. */
-function byPlan(plans: Readonly<Record<string, readonly InboxItem[]>>) {
-  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans } };
+function byPlan(tasks: Readonly<Record<string, readonly InboxItem[]>>) {
+  return { rows: { [INBOX_SCOPE_KIND.TASK]: tasks } };
 }
 
 it.effect(
@@ -2118,9 +2118,9 @@ it.effect(
 
       const otherPlanOf = (told: WireValue | undefined) => {
         const rows = isRecord(told) ? told.rows : undefined;
-        const plans = isRecord(rows) ? rows[INBOX_SCOPE_KIND.PLAN] : undefined;
+        const tasks = isRecord(rows) ? rows[INBOX_SCOPE_KIND.TASK] : undefined;
 
-        return isRecord(plans) ? plans[OTHER_TASK_ID] : undefined;
+        return isRecord(tasks) ? tasks[OTHER_TASK_ID] : undefined;
       };
 
       const [first, second] = accountItems();
@@ -2357,12 +2357,12 @@ function bothHold(
   // SAFETY: the account's items are told as wire values.
   const account = harness.accountItems().at(-1) as WireValue | undefined;
 
-  const plans =
-    isRecord(account) && isRecord(account.rows) ? account.rows[INBOX_SCOPE_KIND.PLAN] : undefined;
+  const tasks =
+    isRecord(account) && isRecord(account.rows) ? account.rows[INBOX_SCOPE_KIND.TASK] : undefined;
 
   return [
     firstOf(isRecord(plan) ? plan.rows : undefined),
-    firstOf(isRecord(plans) ? plans[TASK_ID] : undefined),
+    firstOf(isRecord(tasks) ? tasks[TASK_ID] : undefined),
   ];
 }
 
@@ -2471,8 +2471,8 @@ it.effect(
 
 /** The plan's inbox as one telling of the held inboxes holds it, by id; none where it holds none. */
 function planInboxOf(told: WireValue | undefined): ReadonlyMap<string, InboxItem> {
-  const plans = isRecord(told) ? told[PLAN_SCOPE.kind] : undefined;
-  const read = isRecord(plans) ? plans[PLAN_SCOPE.id] : undefined;
+  const tasks = isRecord(told) ? told[PLAN_SCOPE.kind] : undefined;
+  const read = isRecord(tasks) ? tasks[PLAN_SCOPE.id] : undefined;
   const rows = isRecord(read) ? read.rows : undefined;
 
   // SAFETY: a telling's rows are inbox items, as the window is told them.
@@ -2705,19 +2705,19 @@ it.effect(
       yield* call(GATEWAY_METHOD.AGENTS_ACCOUNT_INBOX_FOLLOW);
       yield* settled;
       const plan = { taskId: TASK_ID, items: 1, toDo: 1, updatedAt: ITEM.updatedAt };
-      const parts = { planless: [], automations: [], failedRuns: [] };
+      const parts = { taskless: [], automations: [], failedRuns: [] };
       const update = { ...WAITING, asking: false };
-      live.account.set({ ...parts, items: [update], plans: [plan] }, ["9100"]);
+      live.account.set({ ...parts, items: [update], tasks: [plan] }, ["9100"]);
       yield* toldTimes(accountInboxes, 1);
 
       /** What waits, and each task's count, as the account inbox was last told. */
       const waiting = () => {
         const told = accountInboxes().at(-1);
-        assert.ok(isRecord(told) && Array.isArray(told.items) && Array.isArray(told.plans));
+        assert.ok(isRecord(told) && Array.isArray(told.items) && Array.isArray(told.tasks));
 
         return {
           items: told.items.length,
-          toDo: told.plans.map((each) => (isRecord(each) ? each.toDo : undefined)),
+          toDo: told.tasks.map((each) => (isRecord(each) ? each.toDo : undefined)),
         };
       };
 
@@ -2733,11 +2733,11 @@ it.effect(
       assert.deepEqual(waiting(), { items: 0, toDo: [0] });
 
       // The read answers once more from before the close, which still stands over it.
-      live.account.set({ ...parts, items: [update], plans: [{ ...plan, updatedAt: NOW }] });
+      live.account.set({ ...parts, items: [update], tasks: [{ ...plan, updatedAt: NOW }] });
       yield* nextPoll;
       assert.deepEqual(waiting(), { items: 0, toDo: [0] });
 
-      live.account.set({ ...parts, items: [], plans: [{ ...plan, toDo: 0 }] }, ["9300"]);
+      live.account.set({ ...parts, items: [], tasks: [{ ...plan, toDo: 0 }] }, ["9300"]);
       yield* nextPoll;
       assert.deepEqual(waiting(), { items: 0, toDo: [0] });
     }),
@@ -2810,7 +2810,7 @@ it.effect(
         readAgain: () => Effect.succeed(undefined),
       });
 
-      yield* list.answer({ plans: [], agents: [{ ...agentListRow(TASK_ID, NOW), id: AGENT_ID }] });
+      yield* list.answer({ tasks: [], agents: [{ ...agentListRow(TASK_ID, NOW), id: AGENT_ID }] });
       const answered = yield* Deferred.make<void>();
       const { acts, holdChanges } = yield* subject({ pool });
       holdChanges(Deferred.await(answered));

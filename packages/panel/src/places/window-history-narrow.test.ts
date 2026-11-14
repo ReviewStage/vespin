@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import type { AppStateDelivery, AppStateSnapshot } from "@repo/host/app-state";
 import { EXPERIMENT } from "@repo/settings";
@@ -122,11 +122,11 @@ function tasksTab(
   const onTask = at.home !== true;
 
   return tasksControl({
-    page: onTask ? TASKS_PAGE.DOCUMENT : TASKS_PAGE.HOME,
+    page: onTask ? TASKS_PAGE.TASK : TASKS_PAGE.HOME,
     activeTaskId: onTask ? DOCUMENT_TASK.id : undefined,
     boundFor: onTask ? DOCUMENT_TASK.id : undefined,
     region: onTask
-      ? { kind: DOCUMENT_REGION.READY, task: { ...DOCUMENT_TASK, workspaceId: ACME.id } }
+      ? { kind: TASK_REGION.READY, task: { ...DOCUMENT_TASK, workspaceId: ACME.id } }
       : base.region,
     tasks: LISTED_TASKS,
     workspaces: [ACME],

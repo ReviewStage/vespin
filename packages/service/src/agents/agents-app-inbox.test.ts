@@ -377,7 +377,7 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
           [[posted.success.id, posted.success.revision]],
         );
         assert.deepEqual(
-          standing.plans.map((plan) => [plan.taskId, plan.items]),
+          standing.tasks.map((each) => [each.taskId, each.items]),
           [[task.id, 1]],
         );
         const included = yield* archivedToo();

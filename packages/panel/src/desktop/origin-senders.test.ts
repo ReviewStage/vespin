@@ -8,7 +8,7 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import type { Task } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { agentTab, subagentTab } from "@repo/ui/tab-strip-model";
 import { MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { act, createElement } from "react";
@@ -100,9 +100,9 @@ async function mount(input: {
 
   const control = tasksControl({
     me: input.reader,
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: TASK },
+    region: { kind: TASK_REGION.READY, task: TASK },
     mainTabs: {
       ...tasksControl().mainTabs,
       tabs: [agentTab(AGENT.id)],

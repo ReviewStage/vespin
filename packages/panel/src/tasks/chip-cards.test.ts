@@ -152,7 +152,7 @@ const DESCRIPTION_TEXT = "## Goal\n\nInvite by email.\n\n## Roll it out\n\nStore
 const SWEEP: AutomationSummary = {
   id: "3f0e6f5c-7d1a-4f6e-9a55-000000000001",
   taskId: null,
-  planName: null,
+  taskName: null,
   workspaceId: ACME.id,
   name: "Nightly sweep",
   enabled: true,
@@ -345,7 +345,7 @@ async function drawn(
   page: TaskMentionsValue = PAGE,
   state: AppStateSnapshot = STATE,
   feed: AppHostRead<AppInboxItems> = {
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK_ID]: [WAITING, ANSWERED, SWEPT] } },
+    rows: { [INBOX_SCOPE_KIND.TASK]: { [TASK_ID]: [WAITING, ANSWERED, SWEPT] } },
   },
 ): Promise<HTMLElement> {
   fakeAppBridge({

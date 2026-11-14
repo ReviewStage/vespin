@@ -71,10 +71,10 @@ const decodeRows = Schema.decodeUnknownOption(TASK_LIST_READ.rows);
 
 /** An answer's rows decoded; none where it carries none inline, and failed where a row does not decode. Note that its issues part carries none, for a released desktop alone. */
 function rowsOf(read: TaskListLiveAnswer): Option.Option<TaskListLiveRows> | "undecoded" {
-  const { plans, agents } = read.queries;
+  const { tasks, agents } = read.queries;
 
-  if (plans.rows === undefined || agents.rows === undefined) return Option.none();
-  const rows = decodeRows({ plans: plans.rows, agents: agents.rows });
+  if (tasks.rows === undefined || agents.rows === undefined) return Option.none();
+  const rows = decodeRows({ tasks: tasks.rows, agents: agents.rows });
 
   return Option.isSome(rows) ? rows : "undecoded";
 }
@@ -91,7 +91,7 @@ function followRows(
 
     return Option.isSome(rows)
       ? Effect.as(
-          dependencies.take(rows.value, syncStandingOf<"plans" | "agents">(read), {
+          dependencies.take(rows.value, syncStandingOf<"tasks" | "agents">(read), {
             ...(read.taskWorkspaces === undefined
               ? undefined
               : { taskWorkspaces: read.taskWorkspaces }),
@@ -117,7 +117,7 @@ function followRows(
     const { onTxWait, behind } = dependencies;
     // Note that the issues part, which answers no rows and a released desktop alone follows, is followed as every part is, though this build reads none of it.
     yield* Stream.runDrain(
-      liveRows<"plans" | "agents">(
+      liveRows<"tasks" | "agents">(
         { poll, behind, ...(onTxWait === undefined ? undefined : { onTxWait }) },
         first,
       ),

@@ -63,6 +63,7 @@ import type {
   TaskPullRequests,
 } from "@repo/features/task-wire";
 import {
+  type Answered,
   type Confirmation,
   type EntityPool,
   fieldKind,
@@ -83,12 +84,13 @@ import { confirmWrite, type SyncStanding, syncIdOf, type TxWait } from "./live-f
 import { taskListContinuations } from "./task-list-continuations.js";
 import { taskListPullRequests } from "./task-list-pull-requests.js";
 import { taskListTasks } from "./task-list-tasks.js";
+import { timeOrdered } from "./time-ordered.js";
 
 /** How many times a task the follow let go while a cold read of it was out is read again before it is left undrawn. */
 const RECHECKS = 3;
 
 /** A plan's row as the list's statement answers it. */
-export type PlanRow = TaskListLiveRows["plans"][number];
+export type PlanRow = TaskListLiveRows["tasks"][number];
 
 /** An agent's row as the list's statement answers it. */
 export type AgentRow = TaskListLiveRows["agents"][number];
@@ -181,51 +183,25 @@ function inChunks(
 }
 
 /**
- * The ids a part holds after an answer: a whole one's rows alone, and one
- * past a sync id joined onto those held, less those it names gone.
- */
-function joined(
-  held: readonly string[],
-  rows: readonly { readonly id: string }[],
-  standing: SyncStanding | undefined,
-): readonly string[] {
-  const answered = rows.map((row) => row.id);
-
-  if (standing?.past === undefined) return answered;
-  const gone = new Set(standing.gone);
-
-  return [...new Set([...held, ...answered])].filter((id) => !gone.has(id));
-}
-
-/**
- * The tasks of `planIds` that no longer stand live as of `liveSince`
- * (`standsLive`), each read as `planOf` shows it, a task pinned through
- * one of `agentIds`'s agents standing by that pin.
+ * The tasks of `candidates` that no longer stand live as of `liveSince`
+ * (`standsLive`), each read as `planOf` shows it, a task pinned through one
+ * of its agents (`pinnedThroughAgent`) standing by that pin.
  */
 function agedOut(
-  planIds: readonly string[],
-  agentIds: readonly string[],
+  candidates: Iterable<string>,
   planOf: (id: string) => PlanRow | undefined,
-  agentOf: (id: string) => AgentRow | undefined,
+  pinnedThroughAgent: (taskId: string) => boolean,
   liveSince: number,
 ): ReadonlySet<string> {
-  const pinnedThroughAgent = new Set(
-    agentIds.flatMap((id) => {
-      const agent = agentOf(id);
+  const left = new Set<string>();
 
-      return agent === undefined || agent.pinnedAt === null || agent.taskId === null
-        ? []
-        : [agent.taskId];
-    }),
-  );
+  for (const id of candidates) {
+    const plan = planOf(id);
 
-  return new Set(
-    planIds.filter((id) => {
-      const plan = planOf(id);
+    if (plan !== undefined && !standsLive(plan, pinnedThroughAgent(id), liveSince)) left.add(id);
+  }
 
-      return plan !== undefined && !standsLive(plan, pinnedThroughAgent.has(id), liveSince);
-    }),
-  );
+  return left;
 }
 
 /** The account's task list, empty until its follow first answers. */
@@ -234,9 +210,13 @@ export function taskListCollections(
 ): Effect.Effect<TaskListCollections, never, Scope.Scope> {
   return Effect.gen(function* () {
     const { pool } = dependencies;
-    /** The plans and the agents the list holds, by id, as its answers joined them. */
-    let planKeys: readonly string[] = [];
-    let agentKeys: readonly string[] = [];
+    /** The plans and the agents the list holds, by id, as its answers joined them, in the order they came. */
+    let planKeys = new Set<string>();
+    let agentKeys = new Set<string>();
+    // Note that an answer past a sync id names only what moved, so the list keeps, as each row is drawn, what it needs to settle one without walking every row: the plans that could age out, by when each was last touched, and the agents of each plan.
+    const mayAge = timeOrdered();
+    const agentsOfTask = new Map<string, Set<string>>();
+    const taskOfAgent = new Map<string, string>();
     /** How many answers the follow gave, and the answer each id it let go was let go at. */
     let answers = 0;
     const letGoAt = new Map<string, number>();
@@ -265,8 +245,18 @@ export function taskListCollections(
     const drawnAgents = yield* drawnRows<AgentRow>(AGENT.key);
 
     // Note that a plan the follow does not hold is drawn as its cold read left it, where one did.
-    const plansDrawn = (keys: readonly string[]) =>
+    const plansDrawn = (keys: readonly string[]) => {
+      for (const key of keys) {
+        const row = plans.row(key);
+
+        // Note that a plan stands live at every instant but its last touch only where it is settled and unpinned, so those alone may age out.
+        if (row === undefined || standsLive(row, false, Number.POSITIVE_INFINITY)) {
+          mayAge.delete(key);
+        } else mayAge.set(key, row.updatedAt);
+      }
+
       drawnPlans.drawn(keys, (key) => plans.row(key) ?? coldPlans.row(key));
+    };
 
     const plansRedraw: PoolRead<PlanRow>["redraw"] = (keys) =>
       Effect.suspend(() => {
@@ -283,8 +273,28 @@ export function taskListCollections(
     });
 
     // Note that an agent the follow does not hold is drawn as its cold read left it, where one did.
-    const agentsDrawn = (keys: readonly string[]) =>
+    const agentsDrawn = (keys: readonly string[]) => {
+      for (const key of keys) {
+        const taskId = agents.row(key)?.taskId ?? undefined;
+        const was = taskOfAgent.get(key);
+
+        if (was === taskId) continue;
+
+        if (was !== undefined) agentsOfTask.get(was)?.delete(key);
+
+        if (was !== undefined && agentsOfTask.get(was)?.size === 0) agentsOfTask.delete(was);
+
+        if (taskId === undefined) {
+          taskOfAgent.delete(key);
+          continue;
+        }
+
+        taskOfAgent.set(key, taskId);
+        agentsOfTask.set(taskId, (agentsOfTask.get(taskId) ?? new Set()).add(key));
+      }
+
       drawnAgents.drawn(keys, (key) => agents.row(key) ?? coldAgents.row(key));
+    };
 
     const agentsRedraw: PoolRead<AgentRow>["redraw"] = (keys) =>
       Effect.suspend(() => {
@@ -406,7 +416,7 @@ export function taskListCollections(
       const edge = gracesAt(at);
       const listed = tasks.plans();
 
-      if (list?.plans !== listed) list = { plans: listed };
+      if (list?.tasks !== listed) list = { tasks: listed };
 
       dependencies.draw({
         list,
@@ -452,7 +462,7 @@ export function taskListCollections(
 
         // Note that the follow answers a task deleted and one that only left its set alike, as gone, so one it let go while this read was out is neither drawn nor dropped but read again, asked after the let-go, whose answer settles which it was.
         const letGo = new Set([
-          ...rows.plans
+          ...rows.tasks
             .filter((row) => !plans.holds(row.id) && letGoSince(row.id) && !drawnLater(row.id))
             .map((row) => row.id),
           ...rows.agents
@@ -469,7 +479,7 @@ export function taskListCollections(
           for (const id of letGo) yield* FiberSet.run(rechecks, recheck(id, tries + 1));
         }
 
-        const planRows = rows.plans.filter((row) => !plans.holds(row.id) && standing(row));
+        const planRows = rows.tasks.filter((row) => !plans.holds(row.id) && standing(row));
 
         // Note that an agent stands only where its task's snapshot does, so an earlier read draws back no agent a later one of its task left out.
         const agentRows = rows.agents.filter(
@@ -507,77 +517,120 @@ export function taskListCollections(
     return {
       answer: (answeredRows, standing, liveSince) =>
         Effect.suspend(() => {
-          const joinedPlans = joined(planKeys, answeredRows.plans, standing);
-          const joinedAgents = joined(agentKeys, answeredRows.agents, standing);
-          const answeredPlans = new Map(answeredRows.plans.map((row) => [row.id, row]));
+          // Note that one past a sync id joins what it names onto the rows held, less those it lets go, and a whole one holds its rows alone.
+          const past = standing?.past !== undefined;
+          const gone = new Set(past ? standing.gone : []);
+          const answeredPlans = new Map(answeredRows.tasks.map((row) => [row.id, row]));
           const answeredAgents = new Map(answeredRows.agents.map((row) => [row.id, row]));
+          const planOf = (id: string) => answeredPlans.get(id) ?? plans.row(id);
           const agentOf = (id: string) => answeredAgents.get(id) ?? agents.row(id);
+
+          const holdsAgent = (id: string) =>
+            !gone.has(id) && (answeredAgents.has(id) || (past && agentKeys.has(id)));
+
+          const holdsPlan = (id: string) =>
+            !gone.has(id) && (answeredPlans.has(id) || (past && planKeys.has(id)));
+
+          const answeredOfTask = new Map<string, string[]>();
+
+          for (const row of answeredRows.agents) {
+            if (row.taskId === null) continue;
+            const ofTask = answeredOfTask.get(row.taskId) ?? [];
+            ofTask.push(row.id);
+            answeredOfTask.set(row.taskId, ofTask);
+          }
+
+          /** The agents of `taskId` the list holds once the answer is taken. */
+          const agentsOf = (taskId: string): readonly string[] => [
+            ...new Set(
+              [
+                ...(past ? (agentsOfTask.get(taskId) ?? []) : []),
+                ...(answeredOfTask.get(taskId) ?? []),
+              ].filter((id) => holdsAgent(id) && agentOf(id)?.taskId === taskId),
+            ),
+          ];
+
+          const pinnedThroughAgent = (taskId: string) =>
+            agentsOf(taskId).some((id) => (agentOf(id)?.pinnedAt ?? null) !== null);
 
           // Note that a task only ages out of the set, which logs nothing, so the list lets it go itself, at the instant the service bound, and its agents with it.
           const left =
             liveSince === undefined
               ? new Set<string>()
               : agedOut(
-                  joinedPlans,
-                  joinedAgents,
-                  (id) => answeredPlans.get(id) ?? plans.row(id),
-                  agentOf,
+                  [...(past ? mayAge.before(liveSince) : []), ...answeredPlans.keys()].filter(
+                    holdsPlan,
+                  ),
+                  planOf,
+                  pinnedThroughAgent,
                   liveSince,
                 );
 
-          const standsHere = (row: { readonly id: string }) => !left.has(row.id);
+          const leftAgents = new Set([...left].flatMap(agentsOf));
           const ofStanding = (row: AgentRow) => row.taskId === null || !left.has(row.taskId);
-          const nextPlans = joinedPlans.filter((id) => !left.has(id));
-
-          const nextAgents = joinedAgents.filter((id) => {
-            const agent = agentOf(id);
-
-            return agent === undefined || ofStanding(agent);
-          });
 
           const rows = {
-            plans: answeredRows.plans.filter(standsHere),
+            plans: answeredRows.tasks.filter((row) => !left.has(row.id)),
             agents: answeredRows.agents.filter(ofStanding),
           };
 
+          // Note that a whole answer lets go every row held but those it answers and keeps.
+          const plansGone = past
+            ? [...gone, ...left].filter((id) => planKeys.has(id))
+            : [...planKeys].filter((id) => !answeredPlans.has(id) || left.has(id));
+
+          const agentsGone = past
+            ? [...gone, ...leftAgents].filter((id) => agentKeys.has(id))
+            : [...agentKeys].filter((id) => !answeredAgents.has(id) || leftAgents.has(id));
+
           // Note that an answer past a sync id carrying no row and letting none go moves nothing, as most of a busy service's do, so neither the pool nor the list is walked: the edge armed stands, and a write settles on the follow's wait.
           const still =
-            standing?.past !== undefined &&
+            past &&
             rows.plans.length + rows.agents.length === 0 &&
-            nextPlans.length === planKeys.length &&
-            nextAgents.length === agentKeys.length;
+            plansGone.length + agentsGone.length === 0;
 
           if (still) return Effect.succeed(false);
           answers += 1;
-          const kept = new Set([...nextPlans, ...nextAgents]);
 
-          for (const id of [...planKeys, ...agentKeys]) {
-            if (!kept.has(id)) letGoAt.set(id, answers);
+          for (const id of [...plansGone, ...agentsGone]) letGoAt.set(id, answers);
+
+          if (!past) {
+            planKeys = new Set();
+            agentKeys = new Set();
           }
 
-          planKeys = nextPlans;
-          agentKeys = nextAgents;
-          const at = syncIdOf(standing);
+          for (const id of plansGone) planKeys.delete(id);
 
-          const answered = (held: readonly string[]) => ({
-            held,
-            ...(at === undefined ? undefined : { at }),
-          });
+          for (const id of agentsGone) agentKeys.delete(id);
+
+          for (const row of rows.plans) if (!gone.has(row.id)) planKeys.add(row.id);
+
+          for (const row of rows.agents) if (!gone.has(row.id)) agentKeys.add(row.id);
+
+          const at = syncIdOf(standing);
+          const sinceAt = at === undefined ? undefined : { at };
+
+          // Note that one past a sync id hands the pool only what moved and what it let go, the list's own and any a write's answer laid among its rows, so its work is as large as the change.
+          const answered = (held: ReadonlySet<string>, letGo: Iterable<string>): Answered =>
+            past ? { gone: [...new Set(letGo)], ...sinceAt } : { held: [...held], ...sinceAt };
+
+          const plansAnswered = answered(planKeys, [...gone, ...left]);
+          const agentsAnswered = answered(agentKeys, [...gone, ...leftAgents]);
 
           return Effect.gen(function* () {
-            const plansMoved = yield* plans.answer(rows.plans, answered(planKeys));
-            const agentsMoved = yield* agents.answer(rows.agents, answered(agentKeys));
+            const plansMoved = yield* plans.answer(rows.plans, plansAnswered);
+            const agentsMoved = yield* agents.answer(rows.agents, agentsAnswered);
             // Note that a cold task the follow now answers is the follow's alone, so one it later lets go is gone from the list too.
             yield* settleCold;
             yield* inChunks(plansMoved, plansDrawn);
             yield* inChunks(agentsMoved, agentsDrawn);
             // Note that a whole answer, the list's first or one read again, draws at once, and one past a sync id rides the tick, since a busy account's agents answer many a second.
-            yield* standing?.past === undefined ? ticks.drawn : ticks.soon;
+            yield* past ? ticks.soon : ticks.drawn;
 
             return plansMoved.length + agentsMoved.length > 0;
           });
         }),
-      synced: () => ({ plans: plans.synced(), agents: agents.synced() }),
+      synced: () => ({ tasks: plans.synced(), agents: agents.synced() }),
       holds: (id) =>
         plans.holds(id) || agents.holds(id) || coldPlans.holds(id) || coldAgents.holds(id),
       mark,

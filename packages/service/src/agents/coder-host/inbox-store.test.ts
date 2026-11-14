@@ -295,8 +295,8 @@ const liveAnswerOf = (userId: string, readAt: number) =>
     return accountInboxOfLiveRows(
       {
         items: yield* runLive(parts.items, declared.items.row),
-        planless: yield* runLive(parts.planless, declared.planless.row),
-        plans: yield* runLive(parts.plans, declared.plans.row),
+        taskless: yield* runLive(parts.taskless, declared.taskless.row),
+        tasks: yield* runLive(parts.tasks, declared.tasks.row),
         automations: yield* runLive(parts.automations, declared.automations.row),
         agents: yield* runLive(parts.agents, declared.agents.row),
         failedRuns: yield* runLive(parts.failedRuns, declared.failedRuns.row),
@@ -529,7 +529,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
 
         const shelvedRead = yield* liveAnswerOf(onTask.agent.userId, 0);
         assert.ok(
-          shelvedRead.plans.some((plan) => plan.taskId === shelved.id),
+          shelvedRead.tasks.some((task) => task.taskId === shelved.id),
           "the settled task is listed",
         );
         assert.ok(
@@ -537,7 +537,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
           "its item waits like any other",
         );
         const read = yield* accountInboxPast(teammate, INBOX_CURSOR_START);
-        assert.equal(read.items.length + (read.planless?.length ?? 0), 4);
+        assert.equal(read.items.length + (read.taskless?.length ?? 0), 4);
 
         const unreadOf = (answer: typeof read) =>
           answer.items.find((item) => item.id === first.id)?.unread;
@@ -651,7 +651,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
           "the asking item and the notice wait; the answered and the closed do not",
         );
         assert.deepEqual(
-          read.plans.map((plan) => plan.items),
+          read.tasks.map((task) => task.items),
           [4],
           "the task holds all four",
         );
@@ -1073,7 +1073,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
               item: Option.isSome(yield* readInboxItem(userId, posted.id)),
               task: (yield* taskInboxItems(userId, task.id)).length,
               agent: (yield* memberAgentInboxItems(userId, agent.agentId)).length,
-              account: account.items.length + account.plans.length,
+              account: account.items.length + account.tasks.length,
               stamps: (yield* accountWaitingStamps(userId)).length,
             };
           });
@@ -1807,8 +1807,8 @@ it.layer(getTestDB())("an inbox item's read state", (it) => {
         yield* updateTask(owner, shelved.id, { status: TASK_STATUS.DONE });
         yield* postedId(shelvedAgent, "shelved");
 
-        const toDoOf = (answer: { readonly plans: readonly AccountInboxTask[] }) =>
-          new Map(answer.plans.map((plan) => [plan.taskId, plan.toDo]));
+        const toDoOf = (answer: { readonly tasks: readonly AccountInboxTask[] }) =>
+          new Map(answer.tasks.map((plan) => [plan.taskId, plan.toDo]));
 
         for (const reader of [owner, teammate, stranger]) {
           const held = yield* accountInboxPast(reader, INBOX_CURSOR_START);
@@ -1830,7 +1830,7 @@ it.layer(getTestDB())("an inbox item's read state", (it) => {
           1,
           "the teammate counts their own ask alone, never the owner's",
         );
-        assert.deepEqual((yield* accountInboxPast(stranger, INBOX_CURSOR_START)).plans, []);
+        assert.deepEqual((yield* accountInboxPast(stranger, INBOX_CURSOR_START)).tasks, []);
 
         // Reading the settled thread still wakes the held read, and moves no count.
         yield* markInboxItemRead(owner, followed);
@@ -1985,7 +1985,7 @@ it.layer(getTestDB())("who an inbox item waits on", (it) => {
             accountWaitsOn: account.items.find((each) => each.id === itemId)?.waitsOn,
             toDo: {
               owner: toDoOf(yield* accountInboxTasks(owner)),
-              teammate: toDoOf(account.plans),
+              teammate: toDoOf(account.tasks),
             },
             cursors: {
               task: (yield* taskInboxPast(teammate, taskId, INBOX_CURSOR_START)).cursor,
@@ -2040,7 +2040,7 @@ it.layer(getTestDB())("who an inbox item waits on", (it) => {
 
         const left = {
           waitsOn: owners.items.find((each) => each.id === itemId)?.waitsOn,
-          toDo: owners.plans.find((each) => each.taskId === taskId)?.toDo,
+          toDo: owners.tasks.find((each) => each.taskId === taskId)?.toDo,
         };
 
         assert.deepEqual(left, { waitsOn: owner, toDo: 1 }, "an assignee who left hands it back");

@@ -6,7 +6,7 @@ import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { sectionAnchors } from "@repo/features/mention-link";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DescriptionRevisionLine } from "@repo/features/task-wire";
-import { DOCUMENT_REGION } from "@repo/features/tasks-model";
+import { TASK_REGION } from "@repo/features/tasks-model";
 import { readFailedWords, readingWords } from "@repo/features/words";
 import type { FormerMember, Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -735,7 +735,7 @@ const VERSION_LIST_PLACE = "versions";
 /** The open plan's history as the view's subject: its name, its agents, and the places in the window its revisions were written. */
 export function taskVersionSubject(tasks: TasksControl): VersionSubject {
   const { region, boundFor } = tasks;
-  const task = region.kind === DOCUMENT_REGION.READY ? region.task : undefined;
+  const task = region.kind === TASK_REGION.READY ? region.task : undefined;
   const workspace = tasks.workspaces.find((each) => each.id === task?.workspaceId);
 
   return {

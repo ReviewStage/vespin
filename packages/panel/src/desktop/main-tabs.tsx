@@ -42,6 +42,7 @@ import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { useDraftedAgents } from "../composer-drafts.js";
 import { useLinkItems } from "../copy-link-item.js";
 import { leftMark } from "../draft-mark.js";
+import { machineAsksByAgent, useMachineAsks } from "../machine-asks.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentCardReading } from "../tasks/agent-ref.js";
@@ -294,8 +295,10 @@ function agentTabs(input: {
   failed: readonly string[];
   /** The threads waiting on the developer, by the agent that posted them, which an agent's tab counts. */
   waiting: ReadonlyMap<string, readonly unknown[]> | undefined;
+  /** How many of the developer's machines' asks wait on them for each agent, which its tab counts beside its threads. */
+  asked: ReadonlyMap<string, number>;
 }): DrawnTab[] {
-  const { main, agents, unread, views, drafted, failed, waiting } = input;
+  const { main, agents, unread, views, drafted, failed, waiting, asked } = input;
   const chosen = (tab: MainTab) => main.tab !== undefined && sameTab(tab, main.tab);
   const models = agents.models ?? [];
 
@@ -321,7 +324,7 @@ function agentTabs(input: {
       ? undefined
       : (leftMark(failed.includes(agent.id), drafted.includes(agent.id)) ?? undefined);
 
-    const waits = waiting?.get(agent.id)?.length ?? 0;
+    const waits = (waiting?.get(agent.id)?.length ?? 0) + (asked.get(agent.id) ?? 0);
 
     return {
       tab,
@@ -642,10 +645,13 @@ export function MainTabBars({
   const drafted = useDraftedAgents();
   const failed = useFailedAgents();
 
+  // The asks the developer's machines hold for each agent, which its tab counts beside its threads.
+  const asked = machineAsksByAgent(useMachineAsks());
+
   // The agents' and the draft's tabs in the column's order, which the
   // developer's moves and their opening set (`use-main-tabs.ts`).
   const strip = inTaskOrder(
-    agentTabs({ main, agents, unread, views, drafted, failed, waiting }),
+    agentTabs({ main, agents, unread, views, drafted, failed, waiting, asked }),
     main.tabs,
     (entry) => entry.tab,
   );

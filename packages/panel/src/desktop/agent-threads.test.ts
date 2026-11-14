@@ -12,7 +12,7 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import type { Task } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { agentTab } from "@repo/ui/tab-strip-model";
 import { act, createElement } from "react";
@@ -125,7 +125,7 @@ async function mount(
     DOMRect.fromRect({ width: 1200, height: 800 }),
   );
   handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: items } },
+    rows: { [INBOX_SCOPE_KIND.TASK]: { [TASK.id]: items } },
   });
   pushedTranscripts(() => [
     { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
@@ -134,10 +134,10 @@ async function mount(
   const covered: (string | undefined)[] = [];
 
   const control = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     me,
     activeTaskId: TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: TASK },
+    region: { kind: TASK_REGION.READY, task: TASK },
     mainTabs: {
       ...tasksControl().mainTabs,
       tabs: [agentTab(AGENT.id)],

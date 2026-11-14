@@ -45,7 +45,7 @@ const MEMBERS: readonly WorkspaceMember[] = [
 const TRIAGE: AutomationSummary = {
   id: "3f0e6f5c-7d1a-4f6e-9a55-000000000001",
   taskId: null,
-  planName: null,
+  taskName: null,
   workspaceId: WORKSPACE.id,
   name: "Morning Sentry triage",
   enabled: true,
