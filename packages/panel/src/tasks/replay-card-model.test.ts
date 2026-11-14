@@ -7,10 +7,10 @@ import {
   START_NOTE_HEADING,
 } from "@repo/features/agent-replay";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
+import { messageFileChips } from "@repo/features/message-files";
 import { replayOpening } from "@repo/features/replay-card-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { test } from "vitest";
-import { messageFileChips } from "./attached-file-chips.js";
 
 /**
  * replay-card-model.test.ts -- the files an agent started from another

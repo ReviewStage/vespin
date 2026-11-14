@@ -554,6 +554,11 @@ interface RowDrawing {
 /** A pull request an agent opened, as the transcript lists it. */
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
 
+/** What a picture a sent line kept by its id is drawn from, read as the agent's shown ones are; `null` for one the line names no way to, which stands as could not be read. */
+function saidSource(drawing: RowDrawing, pictureId: string | undefined): string | null | undefined {
+  return pictureId === undefined ? null : drawing.mediaSource(pictureId);
+}
+
 /** What reads a picture or a recording again, by its id, where the transcript offers it. */
 function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
   const retry = drawing.onRetryMedia;
@@ -585,18 +590,31 @@ function TranscriptRow({
               {item.sender}
             </Text>
           )}
-          <CopyWordsMenu words={item.words}>
-            <View style={styles.saidHeld}>
-              <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
-                <Markdown
-                  words={item.words}
-                  typed
-                  repository={drawing.repository}
-                  onOpenLink={drawing.onOpenLink}
-                />
+          {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble, each by the media's one rule. */}
+          {(item.pictures ?? []).map((picture) => (
+            <Picture
+              key={picture.key}
+              source={picture.url ?? saidSource(drawing, picture.pictureId)}
+              alt={picture.name}
+              onRetry={
+                picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId)
+              }
+            />
+          ))}
+          {item.words.trim() === "" ? null : (
+            <CopyWordsMenu words={item.words}>
+              <View style={styles.saidHeld}>
+                <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
+                  <Markdown
+                    words={item.words}
+                    typed
+                    repository={drawing.repository}
+                    onOpenLink={drawing.onOpenLink}
+                  />
+                </View>
               </View>
-            </View>
-          </CopyWordsMenu>
+            </CopyWordsMenu>
+          )}
           {item.body === undefined ? null : <OriginBody body={item.body} />}
           {item.sent === undefined ? null : (
             <Text style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>
