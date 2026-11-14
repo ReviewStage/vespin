@@ -64,6 +64,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.MEDIA,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  atEnd: { alignSelf: "flex-end" },
   words: { flexShrink: 1, gap: 1 },
   facts: { flexDirection: "row", flexWrap: "wrap", columnGap: SPACE.ROW - 2 },
   viewer: { flex: 1 },
@@ -262,6 +263,10 @@ type FileChipProps = {
   readonly size: string | undefined;
   /** Reads the file again where its bytes could not be read, which a press on its chip then does; none offers nothing. */
   readonly onRetry?: (() => void) | undefined;
+  /** Whether it stands at its row's end, as a sent line's files do, rather than at its start. */
+  readonly atEnd?: boolean | undefined;
+  /** Whether its bytes are anywhere to open; one a line kept none of is drawn by its name and kind alone and opens nothing, as the panel's chip, whatever its source. */
+  readonly held?: boolean | undefined;
 };
 
 /** What a press on a chip whose file could not be read is heard to do. */
@@ -277,14 +282,24 @@ const READS_AGAIN = "Reads the file again";
  * system's spinner stands in its glyph's place and a press does nothing. At
  * an accessibility size its name wraps rather than cuts.
  */
-export function FileChip({ name, mediaType, source, size, onRetry }: FileChipProps) {
+export function FileChip({
+  name,
+  mediaType,
+  source,
+  size,
+  onRetry,
+  atEnd = false,
+  held = true,
+}: FileChipProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
   const [open, setOpen] = useState(false);
   const kind = kindOf(name, mediaType);
 
   // Note that a file whose bytes could not be read says so under its name in place of its kind, as the panel's chip does, and a press on it reads it again.
-  const unread = source === null;
+  const unread = held && source === null;
+  const waiting = held && source === undefined;
+  const opened = held ? (source ?? undefined) : undefined;
   const said = unread ? MEDIA_READ_WORDS.FILE_FAILED : kind;
 
   const heard = unread
@@ -295,16 +310,16 @@ export function FileChip({ name, mediaType, source, size, onRetry }: FileChipPro
   const viewed = isPdf(mediaType);
 
   const acts = useKeptActs(
-    source == null ? undefined : { kind: KEPT_KIND.FILE, source, name, mediaType },
+    opened === undefined ? undefined : { kind: KEPT_KIND.FILE, source: opened, name, mediaType },
   );
 
   const press = () => {
-    if (source === null) onRetry?.();
+    if (unread) onRetry?.();
 
-    if (source == null) return;
+    if (opened === undefined) return;
 
     if (viewed) setOpen(true);
-    else shareFile(source, name);
+    else shareFile(opened, name);
   };
 
   return (
@@ -312,14 +327,20 @@ export function FileChip({ name, mediaType, source, size, onRetry }: FileChipPro
       <HeldMenu acts={acts}>
         <Press
           onPress={press}
-          disabled={source === undefined || (unread && onRetry === undefined)}
+          disabled={waiting || !held || (unread && onRetry === undefined)}
           accessibilityRole="button"
           accessibilityLabel={heard}
-          accessibilityHint={unread ? READS_AGAIN : viewed ? FILE_WORDS.OPENS : FILE_WORDS.SHARES}
-          accessibilityState={{ busy: source === undefined }}
-          style={[styles.chip, { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE }]}
+          accessibilityHint={
+            !held ? undefined : unread ? READS_AGAIN : viewed ? FILE_WORDS.OPENS : FILE_WORDS.SHARES
+          }
+          accessibilityState={{ busy: waiting }}
+          style={[
+            styles.chip,
+            atEnd ? styles.atEnd : null,
+            { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
+          ]}
         >
-          {source === undefined ? (
+          {waiting ? (
             <ActivityIndicator color={colors.TEXT_MUTED} style={{ width: MARK_SIZE.LEAD }} />
           ) : (
             <SymbolView
@@ -350,8 +371,8 @@ export function FileChip({ name, mediaType, source, size, onRetry }: FileChipPro
           </View>
         </Press>
       </HeldMenu>
-      {source == null || !viewed ? null : (
-        <FileViewer source={source} name={name} visible={open} onClose={() => setOpen(false)} />
+      {opened === undefined || !viewed ? null : (
+        <FileViewer source={opened} name={name} visible={open} onClose={() => setOpen(false)} />
       )}
     </>
   );

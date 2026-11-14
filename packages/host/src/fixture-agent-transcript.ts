@@ -1,5 +1,5 @@
 /**
- * fixture-agent-transcript.ts -- the transcript the Inbox fixture's invitations agent holds, long enough to scroll: its words, its thinking, its calls, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn.
+ * fixture-agent-transcript.ts -- the transcript the Inbox fixture's invitations agent holds, long enough to scroll: its words, its thinking, its calls, a file the account sent, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn.
  *
  * The Inbox fixture lays it on the document where the host holds an
  * agent's transcript (`LIVE_READ.TRANSCRIPT`), so the panel's agent page
@@ -38,6 +38,14 @@ const KEPT = {
   RECORDING: "fixture-recording-accept",
 } as const;
 
+/** The file the account sent with its ask to resend an expired invite: the invites that expired, as a short CSV, so a sent line's file chip has a text file to count the lines of. */
+const EXPIRED_INVITES = {
+  type: "file",
+  mediaType: "text/csv",
+  filename: "expired-invites.csv",
+  url: "data:text/csv;base64,ZW1haWwsZXhwaXJlZAprYXRoZXJpbmVAZXhhbXBsZS5jb20sMjAyNi0xMS0wMgptYXJjb0BleGFtcGxlLmNvbSwyMDI2LTExLTA1Cg==",
+} as const;
+
 /** The fixture's picture as the service keeps one: a screenshot-sized PNG. */
 function keptPicture(id: string): WireRecord {
   return { id, mediaType: AGENT_ATTACHMENT_TYPE.PNG, width: 320, height: 180, byteCount: 7549 };
@@ -53,17 +61,18 @@ function runningPart(tool: string, callId: string, input: WireRecord): WireRecor
   return { type: `tool-${tool}`, toolCallId: callId, state: "input-available", input };
 }
 
-/** The account's line asking for a turn, `at` milliseconds into the run. */
+/** The account's line asking for a turn, `at` milliseconds into the run, with the files it sent after its words. */
 function asked(
   id: string,
   at: number,
   text: string,
   sender: { readonly userId: string; readonly name: string },
+  files: readonly WireRecord[] = [],
 ): AgentTranscriptMessage {
   return {
     id,
     role: MESSAGE_ROLE.USER,
-    parts: [{ type: "text", text }],
+    parts: [{ type: "text", text }, ...files],
     sentAt: at,
     sentBy: { kind: AGENT_SENDER.MEMBER, userId: sender.userId, name: sender.name },
   };
@@ -241,6 +250,7 @@ function transcriptMessages(
       startedAt + 70 * MINUTE,
       "Add a way to resend an invite that expired.",
       reader,
+      [EXPIRED_INVITES],
     ),
     {
       id: "fixture-invites-resend",

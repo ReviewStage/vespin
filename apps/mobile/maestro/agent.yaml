@@ -17,6 +17,9 @@ appId: dev.vespin.ios
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
 - assertVisible: "Add a way to resend an invite that expired."
+# The file the account sent with that line stands as its chip over the
+# line's bubble, its kind and its count of lines under its name.
+- assertVisible: "expired-invites.csv.*3 lines"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-latest

@@ -53,7 +53,7 @@ describe("transcriptItems", () => {
     });
   });
 
-  it("draws the pictures a line carried over its words, leaving a file that is no picture to the panel", () => {
+  it("draws the pictures a line carried over its words, and its other files as chips under them", () => {
     const shot = "data:image/png;base64,iVBORw0KGgo=";
 
     const items = transcriptItems(
@@ -64,6 +64,12 @@ describe("transcriptItems", () => {
           parts: [
             { type: "text", text: "The button is cut off." },
             { type: "file", mediaType: "image/png", filename: "bug.png", url: shot },
+            {
+              type: "file",
+              mediaType: "text/markdown",
+              filename: "notes.md",
+              url: "data:text/markdown;base64,YQpiCg==",
+            },
             { type: "file", mediaType: "application/pdf", filename: "plan.pdf", url: "" },
           ],
         },
@@ -75,6 +81,10 @@ describe("transcriptItems", () => {
       kind: TRANSCRIPT_ITEM.SAID,
       words: "The button is cut off.",
       pictures: [{ name: "bug.png", url: shot, pictureId: undefined }],
+      files: [
+        { name: "notes.md", base64: "YQpiCg==", size: "2 lines" },
+        { name: "plan.pdf", base64: undefined, size: undefined },
+      ],
     });
   });
 

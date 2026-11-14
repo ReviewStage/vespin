@@ -39,12 +39,13 @@ import {
   mediaReads,
   NO_TOGGLES,
   type OlderPages,
+  type ShownFile,
   transcriptItems,
 } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cachedVideo } from "../cached-media.js";
+import { cachedFile, cachedVideo } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useHostFollow } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -54,6 +55,12 @@ const AGENT_MEDIA_PREFIX = "agent";
 
 /** No media read yet, held as one value so a page that holds none reads the same each time. */
 const NO_SOURCES: ReadonlyMap<string, string | null> = new Map();
+
+/** What a file a member sent an agent is written under in the app's caches, beside its line's message. */
+const SENT_FILE_PREFIX = "sent";
+
+/** Where each file the agent's sent lines carried was written, by the line's message, then the file's place on it; `null` where it could not be. */
+type SentFiles = ReadonlyMap<string, ReadonlyMap<string, string | null>>;
 
 /** Says on the console a read the host refused, which the page draws without. */
 function refused(what: string): (cause: unknown) => void {
@@ -354,6 +361,63 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
   };
 
   return { sources: shown.agentId === agentId ? shown.sources : NO_SOURCES, retry };
+}
+
+/**
+ * Where each file the agent's sent lines carried was written for its chip,
+ * by the line's message and the file's place on it: the line's own bytes,
+ * written once under the app's caches (`cachedFile`), since the PDF viewer
+ * and the share sheet open a file on the device. One being written is
+ * absent, and one that could not be written is `null`, which its chip says.
+ * Note that each is written once while the page stands, however often the
+ * transcript moves, and that a write that lands after the page left is
+ * dropped.
+ */
+export function useSentFiles(
+  files: readonly ShownFile[],
+): (message: string, key: string) => string | null | undefined {
+  const [written, setWritten] = useState<SentFiles>(new Map());
+  const asked = useRef(new Map<string, Set<string>>());
+  const standing = useRef(true);
+
+  useEffect(() => {
+    standing.current = true;
+
+    return () => {
+      standing.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const land = (message: string, key: string, source: string | null) => {
+      if (!standing.current) return;
+
+      setWritten((held) => {
+        const next = new Map(held);
+        next.set(message, new Map(held.get(message)).set(key, source));
+
+        return next;
+      });
+    };
+
+    for (const { message, file } of files) {
+      const keys = asked.current.get(message) ?? new Set<string>();
+
+      if (keys.has(file.key) || file.base64 === undefined) continue;
+      keys.add(file.key);
+      asked.current.set(message, keys);
+
+      cachedFile(SENT_FILE_PREFIX, message, file.name, file.mediaType, file.base64).then(
+        (source) => land(message, file.key, source),
+        (cause: unknown) => {
+          console.error(`A file sent to the agent was not written (message ${message}). ${cause}`);
+          land(message, file.key, null);
+        },
+      );
+    }
+  }, [files]);
+
+  return (message, key) => written.get(message)?.get(key);
 }
 
 /** A cut part's whole read as held: the size it was asked at, and how it stands. */

@@ -61,6 +61,7 @@ import {
   SettingsForm,
   SkillSuggestions,
   SwitchRow,
+  shownFiles,
   shownMediaIds,
   type TRANSCRIPT_ITEM,
   type TranscriptItem,
@@ -83,6 +84,7 @@ import {
   useAgentTranscript,
   useFollowedAgent,
   useOlderPages,
+  useSentFiles,
   useShownAgent,
   useTranscriptRetry,
   useWholeParts,
@@ -549,6 +551,7 @@ export function AgentScreen() {
   useEffect(() => whole.ask(cuts), [whole, cuts]);
 
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
+  const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
   const drawn = useMemo(() => drawnCallIds(items), [items]);
   const approvals = useAgentApprovals(agent, id, drawn);
   const waitingWords = approvals.waiting?.words;
@@ -816,6 +819,7 @@ export function AgentScreen() {
           onToggle={(item) => setToggles((held) => toggledAt(held, item))}
           onOpenPage={openPage}
           mediaSource={(pictureId) => media.sources.get(pictureId)}
+          fileSource={sentFiles}
           onRetryMedia={media.retry}
           onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
           onOpenAddress={openInSafari}

@@ -48,6 +48,15 @@ import {
   type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
+import {
+  ATTACHMENT_VIEW,
+  attachmentText,
+  attachmentView,
+  chipBase64,
+  type FileChip,
+  linesLabel,
+  sizeLabel,
+} from "@repo/features/attachment-model";
 import { fileName } from "@repo/features/code-ref-words";
 import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
@@ -180,6 +189,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly words: string;
       /** The pictures the line carried, drawn over its words as the panel draws them; none where it carried none. */
       readonly pictures?: readonly SaidPicture[] | undefined;
+      /** The files the line carried that are no picture, such as a PDF, drawn under its words as their chips; none where it carried none. */
+      readonly files?: readonly SaidFile[] | undefined;
       /** Who sent it, where the reader did not. */
       readonly sender: string | undefined;
       /** Who sent an automation's prompt, or the agent whose suggestion a line was sent from, part by part; it stands over the sender. */
@@ -429,6 +440,42 @@ function saidPictures(line: AgentTranscriptMessage): readonly SaidPicture[] {
   );
 }
 
+/** A file a sent line carried that is no picture, such as a PDF or a text file: its place on the line, its name and type, its bytes where the line kept them, and its size in words. */
+export interface SaidFile {
+  readonly key: string;
+  readonly name: string;
+  readonly mediaType: string;
+  /** The file's bytes in base64; none where the line kept none, which leaves the chip its name alone. */
+  readonly base64: string | undefined;
+  readonly size: string | undefined;
+}
+
+/** What a sent file's chip says of its size, as the panel's: a text file's count of lines, any other file's bytes. */
+function saidSize(file: FileChip, base64: string): string {
+  return attachmentView(file) === ATTACHMENT_VIEW.TEXT
+    ? linesLabel(attachmentText(base64))
+    : sizeLabel(base64);
+}
+
+/** The files a sent line carried that are no picture, in order, as the panel lists a line's files (`messageFileChips`). */
+function saidFiles(line: AgentTranscriptMessage): readonly SaidFile[] {
+  return messageFileChips(line).flatMap((file, index): SaidFile[] => {
+    if (PICTURE_TYPES.has(file.mediaType)) return [];
+    const base64 = chipBase64(file);
+    const kept = base64 === "" ? undefined : base64;
+
+    return [
+      {
+        key: String(index),
+        name: file.name,
+        mediaType: file.mediaType,
+        base64: kept,
+        size: kept === undefined ? undefined : saidSize(file, kept),
+      },
+    ];
+  });
+}
+
 /** A line someone sent, as its item: one sent from a suggestion headed by who suggested it, its words without the lead that names that agent to the agent reading them. */
 function saidItem(
   line: AgentTranscriptMessage,
@@ -450,6 +497,7 @@ function saidItem(
     kind: TRANSCRIPT_ITEM.SAID,
     words: from === undefined ? words : suggestionWords(words),
     pictures: saidPictures(line),
+    files: saidFiles(line),
     sender: started ? undefined : sender,
     from,
     sent: line.sentAt === undefined ? undefined : callHeading(line.sentAt, reading.now),
@@ -959,6 +1007,23 @@ export function toggledAt(toggles: TranscriptToggles, item: TranscriptItem): Tra
 export function openCuts(items: readonly TranscriptItem[]): readonly AgentPartCut[] {
   return items.flatMap((item) =>
     item.kind === TRANSCRIPT_ITEM.CALL && item.cut !== undefined ? [item.cut] : [],
+  );
+}
+
+/** A file a sent line carried, as the app writes its bytes for the chip that opens it: the line's message, the file's place on it, and the file. */
+export interface ShownFile {
+  readonly message: string;
+  readonly file: SaidFile;
+}
+
+/** Every file the items' sent lines carried bytes of, which the app writes where the chip opens it from. */
+export function shownFiles(items: readonly TranscriptItem[]): readonly ShownFile[] {
+  return items.flatMap((item) =>
+    item.kind === TRANSCRIPT_ITEM.SAID
+      ? (item.files ?? []).flatMap((file) =>
+          file.base64 === undefined ? [] : [{ message: item.place.message, file }],
+        )
+      : [],
   );
 }
 
