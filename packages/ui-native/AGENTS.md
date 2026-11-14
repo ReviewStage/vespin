@@ -320,7 +320,10 @@ here once, so a screen gets them by composing these pieces.
   (unread, needs you, its status, its time by `sinceHeard`). A row holding a
   button of its own, such as `AgentRow`'s pull request, stays apart instead.
   A group header, a page's heading, and a message's writer line are headings;
-  a glyph its words already say is hidden. What happens out of the reader's
+  a glyph its words already say is hidden. A message's `Video` that can play
+  is one element, its name, which opens the system's player full screen, as
+  Messages does, since the inline player's own views stood a thread's
+  video in an iPad's split view past the depth XCTest can read. What happens out of the reader's
   sight is told with `useAnnounced`: an agent's change of state,
   a held call, and a send refused (`AskNote`). A line of Markdown offers
   each chip and link it holds as one of its VoiceOver actions ("Open …"),

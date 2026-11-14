@@ -221,8 +221,8 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
       ACT_KIND.TASKS_BROWSER_TABS_FOLLOW,
       kind === BROWSER_TABS_PLACE.TASK ? { taskId: String(id) } : { agentId: String(id) },
     ),
-  [LIVE_READ.DESCRIPTION_DOCUMENT]: ([taskId = ""]) =>
-    askAct(ACT_KIND.TASKS_DOCUMENT_FOLLOW, { taskId: String(taskId) }),
+  [LIVE_READ.HELD_TASK]: ([taskId = ""]) =>
+    askAct(ACT_KIND.TASKS_HELD_FOLLOW, { taskId: String(taskId) }),
   [LIVE_READ.DESCRIPTION_COMMENTS]: (_ids, meta) =>
     askAct(ACT_KIND.TASKS_COMMENTS_FOLLOW, readCommentSubject(meta?.follow)),
   [LIVE_READ.PULL_REQUEST]: pullRequestPartFollow(PULL_REQUEST_PART.PULL_REQUEST),
@@ -314,7 +314,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.LINK_STANDINGS,
   LIVE_READ.PAGES,
   LIVE_READ.BROWSER_TABS,
-  LIVE_READ.DESCRIPTION_DOCUMENT,
+  LIVE_READ.HELD_TASK,
   LIVE_READ.DESCRIPTION_COMMENTS,
   LIVE_READ.PULL_REQUEST,
   LIVE_READ.PULL_REQUEST_CHECKS,
@@ -577,8 +577,8 @@ export const browserTabsQuery = (place: BrowserTabsPlace | undefined) =>
   );
 
 /** One task's plan, by the task, which the window's open task holds. */
-export const descriptionDocumentQuery = (taskId: string | undefined) =>
-  liveReadQuery(LIVE_READ.DESCRIPTION_DOCUMENT, taskId === undefined ? undefined : [taskId]);
+export const heldTaskQuery = (taskId: string | undefined) =>
+  liveReadQuery(LIVE_READ.HELD_TASK, taskId === undefined ? undefined : [taskId]);
 
 /** The comments a surface holds, as the acts name them, with no page key where it reads the plan's. */
 function commentsFollowOf({ taskId, pageId }: CommentSubject): CommentSubject {
@@ -735,7 +735,7 @@ export const holderInboxRetryMutation = () => actMutation(ACT_KIND.AGENTS_INBOX_
 export const descriptionCommentsRetryMutation = () => actMutation(ACT_KIND.TASKS_COMMENTS_RETRY);
 
 /** Try again on a task's plan. */
-export const descriptionDocumentRetryMutation = () => actMutation(ACT_KIND.TASKS_DOCUMENT_RETRY);
+export const heldTaskRetryMutation = () => actMutation(ACT_KIND.TASKS_HELD_RETRY);
 
 /** Try again on one part of a pull request, named by its part, its agent, and its number, which answers once its ask has landed, so a write's read-back can wait on it. */
 export const pullRequestPartRetryMutation = () =>

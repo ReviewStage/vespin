@@ -90,12 +90,7 @@ import {
   TASK_TREE_ENTRY,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import {
-  DOCUMENT_REGION,
-  SETTLED_STATUS,
-  settleOffered,
-  TASK_MARK,
-} from "@repo/features/tasks-model";
+import { SETTLED_STATUS, settleOffered, TASK_MARK, TASK_REGION } from "@repo/features/tasks-model";
 import type { TasksTreeAnswer } from "@repo/features/tasks-view";
 import { TERMINAL_ASK } from "@repo/features/terminal-entry";
 import { noMatchWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
@@ -1159,7 +1154,7 @@ function archivedAgentRows(
         />
       ),
       terms: [look.label, ...(taskName === undefined ? [] : [taskName])],
-      onChoose: () => show(() => tasks.onShowAgent(agent.planId, agent.id)),
+      onChoose: () => show(() => tasks.onShowAgent(agent.taskId, agent.id)),
     };
   });
 }
@@ -1200,9 +1195,9 @@ function automationRows(
       icon: <ActorMark actor={automationActor(automation)} size={ACTOR_SIZE.INLINE} />,
       label: automation.name,
       // Note that its task's name, which finds it too, is said after what fires it, so a row it found says why.
-      detail: automation.planName === null ? trigger : `${trigger} · ${automation.planName}`,
+      detail: automation.taskName === null ? trigger : `${trigger} · ${automation.taskName}`,
       card: <AutomationCard automation={automation} workspaceName={workspaceName} />,
-      terms: [automation.name, trigger, automation.planName].filter((term) => term !== null),
+      terms: [automation.name, trigger, automation.taskName].filter((term) => term !== null),
       onChoose: () => open(automation.id),
     };
   });
@@ -1481,7 +1476,7 @@ function panelTabRows(
   inbox: InboxStanding,
   show: (pick: () => void) => void,
 ): readonly PaletteRow[] {
-  if (tasks.region.kind !== DOCUMENT_REGION.READY || !holdsTaskPanel(tasks, inbox)) return [];
+  if (tasks.region.kind !== TASK_REGION.READY || !holdsTaskPanel(tasks, inbox)) return [];
   const plan = openPlanStanding(tasks);
   const kinds = offeredPanelKinds(SIDE_PANEL_HOLDER.TASK);
 
@@ -1512,7 +1507,7 @@ function readMarkRows(
   reads: ReadMarks,
   choose: (run: () => void) => void,
 ): readonly PaletteRow[] {
-  if (tasks.region.kind !== DOCUMENT_REGION.READY) return [];
+  if (tasks.region.kind !== TASK_REGION.READY) return [];
   const { task } = tasks.region;
 
   if (task.id !== reads.watched) return [];

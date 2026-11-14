@@ -25,7 +25,8 @@ import { HOSTED_SERVICE_PATH } from "./service-paths.js";
  * was not removed, by name and then id. Each row says what the page draws:
  * its name, its platform, which machine it is and its model where its host
  * said, whether it runs agents as a host, whether its app listens for
- * commands now, and its own say over agents there, the same values its
+ * commands now, whether it is the member's default machine, and its own
+ * say over agents there, the same values its
  * app keeps under Settings › This Mac (`machineDeviceSettingsSchema`): how
  * terminal commands run, whether agents may use its apps, and the apps it
  * lets them use without asking. A machine whose app never joined holds
@@ -56,6 +57,8 @@ export const MACHINES_READ = liveRead({
         commandMode: Schema.NullOr(Schema.String),
         computerUse: Schema.NullOr(Schema.Boolean),
         alwaysAllowedApps: Schema.NullOr(Schema.Array(Schema.String)),
+        /** Whether it is the member's default machine, where an agent's call goes that names none and whose agent has no pick of its own. */
+        isDefault: Schema.Boolean,
       }),
       key: "id",
       order: [
@@ -87,6 +90,8 @@ export interface MachineLine {
   readonly model?: string;
   readonly host: boolean;
   readonly listening: boolean;
+  /** Whether it is the member's default machine; one of theirs at most. */
+  readonly isDefault: boolean;
   readonly settings?: MachineSettingsLine;
 }
 
@@ -120,6 +125,7 @@ export function machinesOfLiveRows(rows: readonly MachineLiveRow[]): readonly Ma
       ...(row.model === null ? undefined : { model: row.model }),
       host: row.host,
       listening: row.listening,
+      isDefault: row.isDefault,
       ...(settings === undefined ? undefined : { settings }),
     };
   });

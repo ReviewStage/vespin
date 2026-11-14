@@ -35,6 +35,15 @@ export {
   StatusChip,
 } from "./button.js";
 
+export {
+  CallAccessory,
+  CallCardRow,
+  type CallPresses,
+  COMPOSER_CALL,
+  type ComposerCall,
+  type StandingCallCard,
+} from "./call.js";
+
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";

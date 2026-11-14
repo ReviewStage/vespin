@@ -1,16 +1,17 @@
-/* port-table.css -- a cloud agent's ports as a table: the port's column
-   taking the room, each place's column its widest cell's width, a muted head
-   over each, and a cell's stop beside its action in room it keeps. */
+/* port-table.css -- a cloud agent's ports as a table as wide as what it
+   holds: each column its widest cell's width, a muted head over each, a
+   cell's stop beside its action in room it keeps, and a menu row's spacing,
+   one gap between columns and the row's inset at either end. */
 
 @layer components {
   .ui-port-table {
-    width: 100%;
     border-collapse: collapse;
     border-spacing: 0;
   }
 
+  /* Note that a column after the port's is set off by its start alone, so two columns are one gap apart, never two. */
   .ui-port-table-head {
-    padding: var(--ui-space-2) var(--ui-space-8);
+    padding: 0 0 var(--ui-space-2) var(--ui-space-12);
     color: var(--ui-color-text-muted);
     font-size: var(--ui-type-caption-size);
     font-weight: inherit;
@@ -29,9 +30,12 @@
     height: var(--ui-icon-16);
   }
 
+  .ui-port-table-head:first-child {
+    padding-inline-start: var(--ui-space-8);
+  }
+
   .ui-port-table-port {
-    width: 100%;
-    padding: var(--ui-space-6) var(--ui-space-8);
+    padding: var(--ui-space-4) 0 var(--ui-space-4) var(--ui-space-8);
     font-weight: inherit;
     text-align: start;
   }
@@ -51,8 +55,13 @@
   }
 
   .ui-port-table-cell {
-    padding: var(--ui-space-6) var(--ui-space-8);
+    padding: var(--ui-space-4) 0 var(--ui-space-4) var(--ui-space-12);
     white-space: nowrap;
+  }
+
+  /* Note that the last column ends at the row's inset less the stop's own, so its × stands where a menu row's end glyph does. */
+  .ui-port-table-cell:last-child {
+    padding-inline-end: var(--ui-space-4);
   }
 
   .ui-port-table-act {

@@ -62,7 +62,7 @@ test("a press on a machine a refused call offers makes it the agent's default, t
       return Promise.resolve({
         agent: {
           id: AGENT_ID,
-          planId: "task-1",
+          taskId: "task-1",
           model: "anthropic/claude-opus-5.5",
           effort: "high",
           title: null,

@@ -10,12 +10,29 @@
  * TanStack's custom sync (`begin`, `write`, `commit`), and only for the keys
  * the pool names as moved: those its own answer moved, took up, or let go,
  * and those a write or another read's answer drew again. Each is written as
- * the very row the pool draws, never copied, so no row is held twice.
+ * the very row the pool draws, never copied, so no row is held twice. A
+ * read takes a live query's rows as one list (`listedOf`), built again only
+ * after the query changed, and logged with the rows that changed
+ * (`list-moves.ts`).
  */
 
 import { KEPT_BY_SCOPE, type RowCollection, scopedCollection } from "@repo/sync";
-import { BasicIndex, createCollection, type SyncConfig } from "@tanstack/db";
+import {
+  BasicIndex,
+  type Collection,
+  createCollection,
+  type SyncConfig,
+  type UtilsRecord,
+  type WithVirtualProps,
+} from "@tanstack/db";
 import { Effect, type Scope } from "effect";
+import { type ListMove, listMoveLog } from "./list-moves.js";
+
+/** A live query's rows as another query joins them, each with TanStack's virtual fields. */
+export type QueryCollection<Row extends object> = Collection<
+  WithVirtualProps<Row, string | number>,
+  string | number
+>;
 
 /** What a sync config is handed to write a collection's rows with. */
 type SyncWriter<Row extends object> = Parameters<SyncConfig<Row, string>["sync"]>[0];
@@ -97,5 +114,78 @@ export function drawnRows<Row extends object>(
     };
 
     return { collection, drawn };
+  });
+}
+
+/**
+ * The values `pick` takes from each of `collection`'s rows, in the
+ * collection's order, as one list built again only once the collection
+ * changed, until the scope closes. Each list built is logged with the rows
+ * that moved since the one before (`list-moves.ts`), as the changes the
+ * collection told name them, so a reader of two lists is told what moved
+ * between them rather than walking both.
+ */
+export function listedOf<Row extends object, Value>(
+  collection: Collection<Row, string | number, UtilsRecord>,
+  pick: (row: Row) => Value | undefined,
+): Effect.Effect<() => readonly Value[], never, Scope.Scope> {
+  return Effect.gen(function* () {
+    const log = listMoveLog<Value>();
+    let listed: readonly Value[] | undefined;
+    /** The keys of the list last built, in its order. */
+    let listedKeys: readonly (string | number)[] = [];
+    /** Each row that moved since the list last built, by key, as it stood then and stands now. */
+    let moved = new Map<string | number, ListMove<Value>>();
+
+    const subscription = collection.subscribeChanges((changes) => {
+      listed = undefined;
+
+      for (const change of changes) {
+        // Note that a delete's value is the row as it stood, and an update's previous value too.
+        const stood = change.type === "delete" ? change.value : change.previousValue;
+
+        const was = moved.has(change.key)
+          ? moved.get(change.key)?.was
+          : stood === undefined
+            ? undefined
+            : pick(stood);
+
+        moved.set(change.key, {
+          was,
+          now: change.type === "delete" ? undefined : pick(change.value),
+        });
+      }
+    });
+
+    yield* Effect.addFinalizer(() => Effect.sync(() => subscription.unsubscribe()));
+
+    /** The list as the collection stands, logged with what moved since the one before. */
+    const build = (): readonly Value[] => {
+      const values: Value[] = [];
+      const keys: (string | number)[] = [];
+      let reordered = false;
+
+      for (const [key, row] of collection.entries()) {
+        const value = pick(row);
+
+        if (value === undefined) continue;
+        reordered ||= listedKeys[keys.length] !== key;
+        keys.push(key);
+        values.push(value);
+      }
+
+      reordered ||= keys.length !== listedKeys.length;
+      listedKeys = keys;
+      log.drawn(values, moved, reordered);
+      moved = new Map();
+
+      return values;
+    };
+
+    return () => {
+      listed ??= build();
+
+      return listed;
+    };
   });
 }

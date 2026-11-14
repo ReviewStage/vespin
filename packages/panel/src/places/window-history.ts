@@ -1015,9 +1015,9 @@ export function useWindowHistory(input: {
     const workspace = home?.slug ?? home?.id ?? task?.workspaceId;
 
     if (boundFor === undefined || workspace === undefined) return undefined;
-    const planId = task === undefined ? boundFor : taskLinkStep(task);
+    const taskId = task === undefined ? boundFor : taskLinkStep(task);
 
-    return addressOf({ workspace, place: { kind: LINK_DESTINATION.TASK, planId } });
+    return addressOf({ workspace, place: { kind: LINK_DESTINATION.TASK, taskId } });
   }, [linkedStands, linked, input.link, rows, tasks.workspace, tasks.workspaces, boundFor]);
 
   // Note that a link's address stands only until its task opens with its own link drawn, or another task is bound for.
@@ -1279,7 +1279,7 @@ export function useWindowHistory(input: {
       const panelLink =
         narrow && side?.link !== undefined ? withTaskId(side.link, at.task) : undefined;
 
-      const place = panelLink ?? { kind: LINK_DESTINATION.TASK, planId: at.task };
+      const place = panelLink ?? { kind: LINK_DESTINATION.TASK, taskId: at.task };
       const address = addressOf({ workspace: at.workspace, place });
 
       const wrote = visit(

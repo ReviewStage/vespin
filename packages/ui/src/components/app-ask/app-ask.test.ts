@@ -63,6 +63,8 @@ function asked(): Record<"once" | "always" | "deny", number> {
         onDeny: () => {
           heard.deny += 1;
         },
+        expiresAt: Date.now() + 300_000,
+        noteMaxLength: 2000,
       }),
     ),
   );

@@ -8,9 +8,9 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * Every control a port has stands on its own line, and each place it can
  * reach keeps one column under one head (its glyph and its name, "This Mac"
  * or "Team link"), so a reader reads across for a port and down for who can
- * open it. The table lays out its columns from what they hold: the port's
- * column takes the room, and each place's column is its widest cell's own
- * width, so a cell's action hugs its words. A cell keeps the room for its
+ * open it. The table is as wide as what it holds, each column its widest
+ * cell's own width, so a popover drawn at its width hugs it, and what serves
+ * a port wraps where its owner caps that width. A cell keeps the room for its
  * stop while there is nothing to stop, so the line never moves as a stop
  * comes and goes. With no port listed, a note says why in the table's place.
  *

@@ -28,7 +28,7 @@ const WORKSPACE_ID = "2a9c4e6f-1b3d-4f5a-8c7e-9d0b1a2c3e4f";
 
 const AGENT = {
   id: AGENT_ID,
-  planId: TASK_ID,
+  taskId: TASK_ID,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: null,
