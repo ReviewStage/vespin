@@ -352,6 +352,7 @@ export function composeDesktop(
       const notices = yield* linkClientNotices({
         state,
         host: operator.host,
+        taskList: host.taskListMoves,
         presenter: {
           openMachineCommandAsk: () => windows.panels.focusExpanded(),
           openPlace: (place) => {

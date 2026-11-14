@@ -17,6 +17,7 @@ import { SOUND_WHEN, type SoundWhen } from "@repo/settings";
 import type { CompletionSound } from "@repo/wire/app-settings";
 import { Clock, Context, Duration, Effect, FiberHandle, type Scope, Stream } from "effect";
 import type { AppInboxSlice, AppInboxWaitingItem } from "./app-state.js";
+import type { ListMove } from "./list-moves.js";
 
 /**
  * agent-notices.ts -- keeps where each coding agent stands and what waits across the account, for the window's marks and counts: the ledger of each agent's turn, fed by the plan list followed live, the follow of what waits, and the Dock's badge.
@@ -234,6 +235,17 @@ export interface AgentNotices {
   observeTaskGone(taskId: string): void;
   /** Every agent on a plan as the list followed live carries them, and the tasks it holds: an agent of any other plan, or one of a held plan the list no longer names, as one archived, is forgotten. */
   observeFollowed(agents: readonly AgentSummary[], taskIds: readonly string[]): void;
+  /**
+   * What one drawing of the list followed live moved since the one before,
+   * read as `observeFollowed` reads the list whole: the tasks that came or
+   * went, and each agent it came to name, still names as moved, or no longer
+   * names (`now` none), as one archived. Only the rows moved are read, and
+   * the agents no list has named yet.
+   */
+  observeFollowedMoved(
+    agents: readonly ListMove<AgentSummary>[],
+    tasks: readonly ListMove<{ readonly id: string }>[],
+  ): void;
   /** The panel said which agent's tab it shows, or none. */
   shown(agentId: string | null): void;
   /** The developer marked the agent as read by hand: its unseen dot goes, whichever page shows. */
@@ -392,7 +404,9 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     const unseen = new Set<string>();
     /** The agents on tasks the followed list last named, so one it stops naming is known to have left it rather than not reached it yet. */
     let followedAgents = new Set<string>();
-    /** How many pushes in a row have left out each agent the list has not named yet, as one only a Start answered. */
+    /** The tasks the followed list last held. */
+    let followedTasks = new Set<string>();
+    /** Each agent the ledger holds that the followed list does not name, as one only a Start answered, and how many pushes in a row have left it out. */
     const unnamedPushes = new Map<string, number>();
     let shownAgent: string | null = null;
     let focused = false;
@@ -664,6 +678,8 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         if (ledger.size === 0) holder = dependencies.signedInAs();
         ledger.set(agentId, next);
 
+        if (!followedAgents.has(agentId)) unnamedPushes.set(agentId, 0);
+
         return;
       }
 
@@ -700,18 +716,37 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       if (!stillWriting(next.status)) ended(agentId, held);
     }
 
-    /** Lets go of every agent `keep` refuses, their dots with them, as a plan or an agent deleted or an account left has no tab to clear one. */
-    function forget(keep: (agent: HeldAgent, agentId: string) => boolean): void {
+    /** Lets go of each agent of `agentIds`, their dots with them, as a plan or an agent deleted or an account left has no tab to clear one. */
+    function letGo(agentIds: Iterable<string>): void {
       let dotted = false;
 
-      for (const [agentId, agent] of ledger) {
-        if (keep(agent, agentId)) continue;
+      for (const agentId of agentIds) {
         ledger.delete(agentId);
+        unnamedPushes.delete(agentId);
 
         if (unseen.delete(agentId)) dotted = true;
       }
 
       if (dotted) publishUnseen();
+    }
+
+    /** Lets go of every agent `keep` refuses. */
+    function forget(keep: (agent: HeldAgent, agentId: string) => boolean): void {
+      letGo([...ledger].flatMap(([agentId, agent]) => (keep(agent, agentId) ? [] : [agentId])));
+    }
+
+    /**
+     * One more push of the followed list that leaves out the agent no list
+     * named yet: whether it is still kept. One only a Start answered is kept
+     * through a push or two that leave it out, since a push of the tasks may
+     * carry agents from before that Start, and let go after that, as one
+     * archived before the list ever named it.
+     */
+    function pushedUnnamed(agentId: string): boolean {
+      const pushes = (unnamedPushes.get(agentId) ?? 0) + 1;
+      unnamedPushes.set(agentId, pushes);
+
+      return pushes <= UNNAMED_PUSHES_KEPT;
     }
 
     function seen(agentId: string | null): void {
@@ -748,30 +783,54 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       },
       observeTaskGone: (taskId) => forget((agent) => agent.taskId !== taskId),
       observeFollowed: (agents, taskIds) => {
-        const held = new Set(taskIds);
+        followedTasks = new Set(taskIds);
         // The list names every agent on its tasks but the archived, so one it named and no longer
-        // does takes its dot with it. One only a Start answered is kept through a push or two that
-        // leave it out, since a push of the tasks may carry agents from before that Start, and let go
-        // after that, as one archived before the list ever named it.
+        // does takes its dot with it, and one it never named is let go as `pushedUnnamed` says.
         const named = new Set(agents.map((agent) => agent.id));
         forget((agent, agentId) => {
-          if (!held.has(agent.taskId)) return false;
+          if (!followedTasks.has(agent.taskId)) return false;
 
           if (named.has(agentId)) return true;
 
           if (followedAgents.has(agentId)) return false;
-          const pushes = (unnamedPushes.get(agentId) ?? 0) + 1;
-          unnamedPushes.set(agentId, pushes);
 
-          return pushes <= UNNAMED_PUSHES_KEPT;
+          return pushedUnnamed(agentId);
         });
 
-        for (const agentId of unnamedPushes.keys()) {
-          if (named.has(agentId) || !ledger.has(agentId)) unnamedPushes.delete(agentId);
-        }
+        for (const agentId of named) unnamedPushes.delete(agentId);
 
         followedAgents = named;
         notices.observeAgents(agents);
+      },
+      observeFollowedMoved: (agents, tasks) => {
+        for (const { was, now } of tasks) {
+          if (now !== undefined) followedTasks.add(now.id);
+          else if (was !== undefined) followedTasks.delete(was.id);
+        }
+
+        // Note that a push is counted as the list's agents move, as the whole list's is.
+        if (agents.length === 0) return;
+        const named: AgentSummary[] = [];
+        const gone: string[] = [];
+
+        for (const { was, now } of agents) {
+          if (now !== undefined) {
+            followedAgents.add(now.id);
+            unnamedPushes.delete(now.id);
+            named.push(now);
+          } else if (was !== undefined && followedAgents.delete(was.id)) gone.push(was.id);
+        }
+
+        for (const [agentId] of unnamedPushes) {
+          const agent = ledger.get(agentId);
+
+          if (agent === undefined || !followedTasks.has(agent.taskId) || !pushedUnnamed(agentId)) {
+            gone.push(agentId);
+          }
+        }
+
+        letGo(gone);
+        notices.observeAgents(named);
       },
       shown: (agentId) => {
         shownAgent = agentId;
