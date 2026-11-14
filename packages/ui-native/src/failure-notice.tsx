@@ -371,7 +371,14 @@ export function FailureNoticeProvider({ children }: { readonly children: ReactNo
  * the notice over them while this sheet is the one on top, so a write
  * refused inside a sheet, or under it, is seen rather than hidden behind it.
  */
-export function FailureNoticeLayer({ children }: { readonly children: ReactNode }) {
+export function FailureNoticeLayer({
+  children,
+  inFront,
+}: {
+  readonly children: ReactNode;
+  /** Whether the sheet is the screen in front: false once a page opens over it, such as one a notification opened, so its notice stands where it is seen rather than in the sheet under that page. */
+  readonly inFront: boolean;
+}) {
   const stage = useContext(Stage);
   const layer = useId();
 
@@ -379,7 +386,7 @@ export function FailureNoticeLayer({ children }: { readonly children: ReactNode 
 
   const { enter, top, shown, gone } = stage;
 
-  useEffect(() => enter(layer), [enter, layer]);
+  useEffect(() => (inFront ? enter(layer) : undefined), [enter, layer, inFront]);
 
   return (
     <View style={styles.layer}>
