@@ -504,7 +504,7 @@ export function ReplayCard({
             openPlace(
               taskId === undefined
                 ? { kind: LINK_DESTINATION.AGENT, agentId }
-                : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId },
+                : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId },
             );
 
   const left = leftOutLine(replay);

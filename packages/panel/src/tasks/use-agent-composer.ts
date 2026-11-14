@@ -31,7 +31,7 @@ import {
   SENT_LINE_STATE,
   type SentLine,
 } from "./agent-model.js";
-import { type HeldUpdate, putBackRefused } from "./refused-send.js";
+import { type BoxHeld, type HeldUpdate, heldUpdateOver, putBackRefused } from "./refused-send.js";
 
 /**
  * use-agent-composer.ts -- the message box under an agent's transcript as one control: the words being written, and the lines the member sent, drawn from the one record of their messages on their way the host holds.
@@ -104,13 +104,15 @@ export type ComposerNote = Failure & { readonly cause?: unknown };
 
 /** Everything the composer draws and presses. */
 export interface AgentComposerControl {
-  /** The words in the box. */
-  draft: string;
-  setDraft: (text: string) => void;
-  /** The files that go with the words, in the order attached. */
-  attachments: readonly AgentAttachment[];
-  /** Changes the files from those the box holds as the change lands, which a read that lands late needs. */
-  setAttachments: (next: (held: readonly AgentAttachment[]) => readonly AgentAttachment[]) => void;
+  /** The words in the box and the files that go with them, in the order attached, as the box's draft keeps them. */
+  held: BoxHeld;
+  /**
+   * Moves the box's words and files on together from what its draft holds as
+   * the change lands (`refused-send.ts`). Every change the box makes goes
+   * through it, typed, attached, queued, or put back, so no box writes its
+   * words its own way.
+   */
+  updateHeld: HeldUpdate;
   /** Whether a send holds the box until it answers, during which the box takes nothing: New task's, whose send opens the task; an agent's box never holds. */
   sending: boolean;
   /** Why the last Revert did not go, or the newest message refused where what mends it is elsewhere, said under the box beside that remedy and Retry; nothing while neither waits. Every message refused says so on its own line too. */
@@ -296,8 +298,6 @@ export interface HeldComposer extends AgentComposerControl {
   readonly cut: ReadonlySet<string> | undefined;
   /** The ids of the lines still on their way, whose rows the service may yet withdraw, so no rewind lands on them. */
   readonly going: ReadonlySet<string>;
-  /** Moves the box's words and files on together from what its draft holds as the change lands, as a refused send put back does (`refused-send.ts`). */
-  readonly updateHeld: HeldUpdate;
   /** The suggestion in another agent's reply the box was filled in from, which its send goes through; none for any other draft. */
   readonly suggestion: DraftSuggestion | undefined;
   /** Lets the box's suggestion go, its words kept, so the box sends them as a line of the developer's own. */
@@ -341,7 +341,7 @@ export function useAgentComposer(input: {
     | undefined;
 }): HeldComposer {
   const { agentId, messages, sending } = input;
-  const kept = useDraft({ kind: DRAFT_PLACE.AGENT, planId: input.taskId, agentId });
+  const kept = useDraft({ kind: DRAFT_PLACE.AGENT, taskId: input.taskId, agentId });
   const queryClient = useQueryClient();
   const [held, setHeld] = useState<Held>(() => fresh(agentId));
 
@@ -373,13 +373,7 @@ export function useAgentComposer(input: {
 
   const { update } = kept;
 
-  /** Moves the box's words and files on together from what its draft holds as the change lands. */
-  const updateHeld: HeldUpdate = (next) =>
-    kept.update((was) => {
-      const moved = next(was);
-
-      return moved === undefined ? was : { ...was, ...moved };
-    });
+  const updateHeld = heldUpdateOver(kept.update);
 
   const at = latest.current;
 
@@ -732,11 +726,7 @@ export function useAgentComposer(input: {
   const remediedNote = remedied === undefined ? undefined : noteOf(remedied);
 
   return {
-    draft: shown.text,
-    setDraft: (text) => kept.update((was) => ({ ...was, text })),
-    attachments: shown.attachments,
-    setAttachments: (next) =>
-      kept.update((was) => ({ ...was, attachments: next(was.attachments) })),
+    held: shown,
     updateHeld,
     sending: suggesting,
     note: closed === undefined ? (held.revertFailed?.note ?? remediedNote) : undefined,

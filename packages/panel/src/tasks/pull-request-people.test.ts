@@ -53,7 +53,7 @@ const WORKSPACE = { id: "workspace-acme", memberCount: 2 };
 
 const AGENT: AgentSummary = {
   id: "1e3c5a7b-9d2f-4b6e-8a1c-3e5f7a9b1d2c",
-  planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+  taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Expiry job",

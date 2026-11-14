@@ -341,7 +341,7 @@ export function mentionableAgent(
     id: agent.id,
     name,
     actor: agentActor(agent, name),
-    task: { id: agent.planId, name: names.get(agent.planId) },
+    task: { id: agent.taskId, name: names.get(agent.taskId) },
     archived: agent.archivedAt !== undefined,
     summary: agent,
   };

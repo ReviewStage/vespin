@@ -122,7 +122,7 @@ test("a press on the agent that showed the version opens its tab, on the page's 
   const shower = container.querySelector<HTMLElement>(".ui-hover-card-row [data-actor-ref]");
   assert.equal(shower?.tagName, "BUTTON", "the agent's name is a press");
   act(() => shower?.click());
-  assert.deepEqual(opened, [{ kind: LINK_DESTINATION.AGENT, planId: TASK, agentId }]);
+  assert.deepEqual(opened, [{ kind: LINK_DESTINATION.AGENT, taskId: TASK, agentId }]);
 });
 
 test("the preview's page is handed the window's theme when it asks, with the room its tab keeps", () => {

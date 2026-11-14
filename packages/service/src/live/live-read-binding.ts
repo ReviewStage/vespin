@@ -90,7 +90,6 @@ export const WATCHED_LOOK = Duration.seconds(1);
 /** A selection's columns: each a column or a typed expression, under the key its row names it by. */
 type LiveColumns = Readonly<Record<string, SQLWrapper>>;
 
-/** No instants. */
 type NoInstants = Readonly<Record<never, SQLWrapper>>;
 
 /** What a selection's rows answer, by key. */

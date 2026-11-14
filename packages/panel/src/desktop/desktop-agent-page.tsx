@@ -58,12 +58,12 @@ function useAgentFound(tasks: TasksControl, agentId: string): AgentFound {
   const listed = tasks.liveAgents?.find((each) => each.id === agentId);
   const read = useQuery({ ...agentPageQueryOptions(agentId), enabled: listed === undefined });
 
-  if (listed !== undefined) return { taskId: listed.planId };
+  if (listed !== undefined) return { taskId: listed.taskId };
 
   if (read.isPending) return { reading: true };
   const answer = read.data;
 
-  if (answer !== undefined && !("failure" in answer)) return { taskId: answer.agent.planId };
+  if (answer !== undefined && !("failure" in answer)) return { taskId: answer.agent.taskId };
 
   if (answer !== undefined && answer.failure === AGENT_CALL_FAILURE.NOT_FOUND) {
     return { missing: true };

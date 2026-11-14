@@ -366,7 +366,7 @@ function LastRun({
                 : () =>
                     openPlace({
                       kind: LINK_DESTINATION.AGENT,
-                      planId: agent.taskId,
+                      taskId: agent.taskId,
                       agentId: agent.id,
                     })
             }
