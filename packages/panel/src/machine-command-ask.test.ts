@@ -17,6 +17,7 @@ import {
   refusedOnPort,
 } from "./testing/app-bridge.js";
 import { deliveryOf, handState, stateWith } from "./testing/app-state.js";
+import { type } from "./testing/automations-page.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
 import { standingToastWords } from "./testing/toast.js";
 import { ToastHost } from "./toast.js";
@@ -33,12 +34,14 @@ const FIRST: MachineCommandAsk = {
   id: "2f6a1c7e-9b3d-4e8f-a5c1-7d2e9b4f6a03",
   command: "node --version",
   askedAt: 1_800_000_000_000,
+  expiresAt: 1_800_000_300_000,
 };
 
 const SECOND: MachineCommandAsk = {
   id: "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
   command: "pnpm --version",
   askedAt: 1_800_000_001_000,
+  expiresAt: 1_800_000_301_000,
 };
 
 const roots: Root[] = [];
@@ -140,6 +143,19 @@ test("the earliest ask is drawn with its command, and each answer goes back by t
     { id: FIRST.id, decision: MACHINE_COMMAND_DECISION.ALLOW_ALWAYS },
     { id: FIRST.id, decision: MACHINE_COMMAND_DECISION.ALLOW_ONCE },
     { id: FIRST.id, decision: MACHINE_COMMAND_DECISION.DENY },
+  ]);
+});
+
+test("words written for the agent go back with Deny, which says it denies with a note", async () => {
+  const answered = await mount([FIRST]);
+  type(
+    document.querySelector<HTMLInputElement>('input[placeholder="Tell the agent why (optional)"]'),
+    " Use staging ",
+  );
+
+  await act(async () => button("Deny with note").click());
+  assert.deepEqual(answered, [
+    { id: FIRST.id, decision: MACHINE_COMMAND_DECISION.DENY, note: "Use staging" },
   ]);
 });
 

@@ -1,4 +1,4 @@
-import type { ComputerAppKept } from "@repo/features/agent-parts";
+import type { ComputerApps } from "@repo/features/agent-parts";
 import {
   calledPicturesOf,
   recordedVideosOf,
@@ -83,26 +83,23 @@ const AgentPicturesContext = createContext<AgentPictureDoor | undefined>(undefin
 /** Hands the transcript under it the door its pictures are read through. */
 export const AgentPicturesProvider = AgentPicturesContext.Provider;
 
-const ComputerIconsContext = createContext<ReadonlyMap<string, string>>(new Map());
+const NO_COMPUTER_APPS: ComputerApps = { byCall: new Map(), bySpelling: new Map() };
 
-/** Hands the transcript under it the icon each of its `computer` calls wears, by its call (`computerIconsByCall`). */
-export const ComputerIconsProvider = ComputerIconsContext.Provider;
+const ComputerAppsContext = createContext(NO_COMPUTER_APPS);
 
-const NO_KEPT_APPS: ReadonlyMap<string, ComputerAppKept> = new Map();
+/** Hands what stands under it the apps the conversation's `computer` calls used, each named once (`computerAppsOf`): a call's row wears its app's icon by it, and a mention of an app is named and drawn by it where the window lists none of its own. */
+export const ComputerAppsProvider = ComputerAppsContext.Provider;
 
-const KeptAppsContext = createContext(NO_KEPT_APPS);
-
-/** Hands what stands under it the apps the conversation's `computer` calls used, by bundle id (`computerAppsKept`), which a mention of one is named and drawn by where the window lists none of its own. */
-export const KeptAppsProvider = KeptAppsContext.Provider;
-
-/** The apps the conversation's `computer` calls used, by bundle id, each with its name and the icon a call kept; none outside a conversation. */
-export function useKeptApps(): ReadonlyMap<string, ComputerAppKept> {
-  return useContext(KeptAppsContext);
+/** The apps the conversation's `computer` calls used, each named once; none outside a conversation. */
+export function useComputerApps(): ComputerApps {
+  return useContext(ComputerAppsContext);
 }
 
-/** The icon a `computer` call's row wears: the one the transcript's earlier calls lend it, or its own; none where neither kept one. */
+/** The icon a `computer` call's row wears: its own, or the newest a call on its app kept; none where no call on its app kept one. */
 export function useComputerIcon(callId: string, own: string | undefined): string | undefined {
-  return useContext(ComputerIconsContext).get(callId) ?? own;
+  const lent = useContext(ComputerAppsContext).byCall.get(callId)?.icon;
+
+  return own ?? lent;
 }
 
 /**
@@ -514,6 +511,11 @@ export function useKeptPicture(id: string | undefined): PictureState {
   return usePicture(pictureQuery(door?.owner ?? "", id ?? "", read), pictureUnread);
 }
 
+/** Several pictures calls kept, read through the transcript's door, each standing as it is read: an app's icons, say; none is read for no id. */
+export function useKeptPictures(ids: readonly (string | undefined)[]): readonly PictureState[] {
+  return usePictureStates(useContext(AgentPicturesContext), ids);
+}
+
 /** The viewer over pictures the calls kept, opened from one of them, and the viewer while it stands; nothing opens outside the transcript's door. */
 export function useKeptPictureViewer(): PictureViewer {
   return useViewer(useContext(AgentPicturesContext));
@@ -695,8 +697,8 @@ function useKeptChips(files: readonly MessageFileChip[]): FileChip[] {
  * (`SentWords`), and to its files' row, which leaves those out; a press opens
  * a file over the window, walking the files in the order the words name
  * them. A line whose words name none of its files, as every line sent before
- * markers, draws as it did. While the line is on its way, its files wear the
- * upload's cover.
+ * markers, draws as it did. While the line is on its way, its files' row
+ * wears the upload's cover, and the chips in its words open nothing.
  */
 export function MessageFiles({
   message,

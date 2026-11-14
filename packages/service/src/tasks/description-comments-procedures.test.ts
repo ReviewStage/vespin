@@ -132,7 +132,7 @@ const onHub = Effect.gen(function* () {
   /** The description's comments read as the account, past the cursor where one is named. */
   const read = (userId: string, taskId: string, after?: string) =>
     Effect.gen(function* () {
-      const url = new URL(`/api/plans/${taskId}/comments`, ORIGIN);
+      const url = new URL(`/api/tasks/${taskId}/comments`, ORIGIN);
 
       if (after !== undefined) url.searchParams.set("after", after);
 

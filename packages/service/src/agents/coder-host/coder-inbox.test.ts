@@ -780,7 +780,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           ["/tmp/report.pdf", `${tooLarge} /tmp/report.pdf`],
           [
             "/tmp/video/flow.mkv",
-            "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM video that states its size, or a PDF: /tmp/video/flow.mkv",
+            "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM or H.264 MP4 video that states its size, or a PDF: /tmp/video/flow.mkv",
           ],
         ] as const;
 
@@ -816,7 +816,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           ],
           [
             drawing("notes.txt"),
-            "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM video that states its size, or a PDF: notes.txt",
+            "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM or H.264 MP4 video that states its size, or a PDF: notes.txt",
           ],
           [
             drawing(...Array.from({ length: 9 }, (_none, at) => `shots/${at}.png`)),

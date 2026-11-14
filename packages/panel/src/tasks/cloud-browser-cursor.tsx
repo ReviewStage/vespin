@@ -9,14 +9,14 @@
  * `--ui-spring-fast`, about the beat, so it arrives as the action lands. It is
  * drawn as a compact arrowhead in the brand's amber with a white edge, in the
  * dark mode's brighter amber over a dark page (`onDarkPage`). While
- * the agent is active on the tab it rocks gently about its tip, a loop
+ * the agent is active on the tab it sways gently about its tip, a loop
  * `--ui-loop-motion` holds still; a click presses it, with an amber ripple at
  * the point, and typing bobs it over an amber glow. It fades once the agent has done nothing
  * for `CLOUD_BROWSER_CURSOR_IDLE`, timed on the renderer's runtime, and back
  * in on its next move. Near the page's right or bottom edge it is mirrored
  * about its tip, so its body stays on the page rather than clipped past it.
  * It is hidden while a member drives the tab, since the
- * pointer is theirs then. Reduced motion holds it still: no rock, no bob,
+ * pointer is theirs then. Reduced motion holds it still: no sway, no bob,
  * no press, and a move jumps.
  *
  * The arrow takes no pointer events, and is no part of the frame the
@@ -143,7 +143,7 @@ export function CloudBrowserCursor({
       style={style}
     >
       <span className="cloud-browser-cursor-halo" />
-      <div className="cloud-browser-cursor-rock">
+      <div className="cloud-browser-cursor-sway">
         {/* Keyed by the move, so each click presses afresh. */}
         <svg
           key={cursor.at}

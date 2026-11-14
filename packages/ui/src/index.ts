@@ -20,6 +20,10 @@ export * from "./components/approval-actions/approval-actions.js";
 
 export * from "./components/arrival/arrival.js";
 
+export * from "./components/ask-deadline/ask-deadline.js";
+
+export * from "./components/ask-note/ask-note.js";
+
 export * from "./components/attachment-chip/attachment-chip.js";
 
 export * from "./components/attachment-ref/attachment-ref.js";
@@ -141,6 +145,8 @@ export * from "./components/drawer-swipe/use-drawer-swipe.js";
 export * from "./components/drop-line/drop-line.js";
 
 export * from "./components/drop-slot/drop-slot.js";
+
+export * from "./components/edge-clip/edge-clip.js";
 
 export * from "./components/edit-actions/edit-actions.js";
 
@@ -431,6 +437,8 @@ export * from "./components/tooltip/hint.js";
 export * from "./components/tooltip/tooltip.js";
 
 export * from "./components/track-list/track-list.js";
+
+export * from "./components/transcript-rail/transcript-rail.js";
 
 export * from "./components/turn-end/turn-end.js";
 

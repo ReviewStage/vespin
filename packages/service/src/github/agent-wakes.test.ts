@@ -49,6 +49,7 @@ import {
   GITHUB_FIXTURE_MEMBER,
   githubReaching,
   type InstallationFixture,
+  nextPageOf,
   openGithubUser,
 } from "../testing/github-app-fake.js";
 import { bootedAtOnce } from "../testing/native-harness-fake.js";
@@ -1047,7 +1048,9 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
           Match.orElse(() => 0),
         );
 
-        return Response.json(Array.from({ length: count }, (_, index) => comment(first + index)));
+        const listed = Array.from({ length: count }, (_, index) => comment(first + index));
+
+        return page === 1 ? Response.json(listed, nextPageOf(sent.url)) : Response.json(listed);
       }).layer;
 
       yield* wakeAgents(

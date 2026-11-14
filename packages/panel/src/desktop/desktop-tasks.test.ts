@@ -86,7 +86,7 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: null,
-  document: { body: "", assumptions: [] },
+  description: { body: "", assumptions: [] },
 };
 
 // A reply is drawn once the parser has landed, as the panel lands it after its first paint.
@@ -236,7 +236,7 @@ test("a task's comments are held from its open, so its first ready frame marks t
       windowRouter().provide(
         opened({
           kind: DOCUMENT_REGION.READY,
-          task: { ...TASK, document: { body, assumptions: [] } },
+          task: { ...TASK, description: { body, assumptions: [] } },
         }),
       ),
     ),
@@ -979,7 +979,7 @@ test("a chip in the plan naming a pull request one of the task's agents opened o
   const task: Task = {
     ...TASK,
     repository: "acme/relay",
-    document: {
+    description: {
       body: `## Rollout\n\nShipped in [@relay#42](${url}/), after [@relay#7](${other}) and [@relay#9](${archivedUrl}), beside [@billing#3](${elsewhere}).\n`,
       assumptions: [],
     },

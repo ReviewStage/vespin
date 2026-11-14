@@ -1,5 +1,5 @@
 /**
- * hosts.ts -- the account's hosts as Settings › Hosts draws them (`../host-wire.ts`): listed, removed, and a box's pairing read, approved, or denied by its code.
+ * hosts.ts -- the account's hosts and machines as Settings › Machines draws them (`../host-wire.ts`): listed, removed, each machine's own settings changed, and a box's pairing read, approved, or denied by its code.
  *
  * Every procedure is the account's own, on its sign-in or its browser
  * session. The outputs are the wire schemas flipped, so oRPC's output
@@ -10,7 +10,8 @@
  * presence, and the apps the account's machines always allow refuse as not found only where the service answers before any
  * procedure matches, an older one without their path, which the window
  * has always read as not found; a remove refuses a host the account does
- * not hold as not found; and a pairing's read, approve, or deny refuses a
+ * not hold as not found, and a machine's change or remove one it does not
+ * hold, or removed, as not found; and a pairing's read, approve, or deny refuses a
  * code no pending pairing has as not found and an account past its guesses
  * as held, with until when.
  */
@@ -27,6 +28,7 @@ import {
   hostPairingCodeRequestSchema,
   hostsAnswerSchema,
   machineAllowedAppsAnswerSchema,
+  machineChangeRequestSchema,
 } from "../host-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
@@ -52,6 +54,18 @@ export const hostsContract = {
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(bodyCap(BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.HOST_REMOVE }))
+    .input(exactInput(hostIdRequestSchema))
+    .output(EffectSchema.flip(hostDoneAnswerSchema)),
+  changeMachine: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(bodyCap(BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_CHANGE }))
+    .input(exactInput(machineChangeRequestSchema))
+    .output(EffectSchema.flip(hostDoneAnswerSchema)),
+  removeMachine: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(bodyCap(BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_REMOVE }))
     .input(exactInput(hostIdRequestSchema))
     .output(EffectSchema.flip(hostDoneAnswerSchema)),
   readPairing: declaredProcedure

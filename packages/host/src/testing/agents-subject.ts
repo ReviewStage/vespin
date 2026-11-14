@@ -76,6 +76,7 @@ import { TestClock } from "effect/testing";
 import { type AppTranscript, type AppTranscripts, OWN_TRANSCRIPT } from "../app-state.js";
 import { type AccountAsksClient, composeAccountAsks } from "../compose-account-asks.js";
 import { type AgentClient, composeAgents } from "../compose-agents.js";
+import type { EntityStore } from "../entity-store.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "../kept-content.js";
 import { windowFocus } from "../window-focus.js";
 import { type PolledLive, polledLive } from "./polled-live.js";
@@ -427,7 +428,8 @@ function fakeService() {
       const settled = (answer: ItemsAnswer) =>
         itemsStalledAt ?? answer.queries.stamps.digest ?? "0";
 
-      if (sync === "") {
+      // Note that a read past an id the fake never answered, as one kept on disk by an earlier launch, is answered whole, as the service answers a reader too far behind.
+      if (sync === "" || !itemsBySync.at.has(sync)) {
         const whole = live.items.first();
 
         return Effect.succeed(
@@ -525,6 +527,8 @@ function fakeService() {
           Effect.sync(() => removeAnswer),
         ),
       ),
+    changeMachine: () => Effect.succeed({ failure: "unanswered" }),
+    removeMachine: () => Effect.succeed({ failure: "unanswered" }),
     machineAllowedApps: () => Effect.succeed({ machines: [] }),
     readHostPairing: () => Effect.succeed({ failure: "unanswered" }),
     approveHostPairing: () => Effect.succeed({ failure: "unanswered" }),
@@ -746,6 +750,7 @@ function fakeService() {
         return REVIEW_OPTIONS;
       }),
     workspaceTools: () => Effect.die("no Vespin tools read in this suite"),
+    setDefaultMachine: () => Effect.die("no default machine set in this suite"),
     overviewChecks: (agentId) =>
       Effect.sync(() => {
         asked.push(`overview-checks:${agentId}`);
@@ -886,6 +891,7 @@ function fakeService() {
 
         return { text: "Run the tests" };
       }),
+    openVoiceSession: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     inboxAttachment: (itemId, attachmentId) =>
       Effect.sync(() => {
         asked.push(`attachment:${itemId}:${attachmentId}`);
@@ -1329,6 +1335,7 @@ export function subject(
     agentListed?: (agentId: string) => AgentSummary | undefined;
     repositoriesMoved?: Effect.Effect<void>;
     pool?: EntityPool;
+    entities?: EntityStore;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -1366,6 +1373,7 @@ export function subject(
       },
       ...(options.listed === undefined ? undefined : { listed: options.listed }),
       ...(options.agentListed === undefined ? undefined : { agentListed: options.agentListed }),
+      ...(options.entities === undefined ? undefined : { entities: () => options.entities }),
       pool,
     }).pipe(Effect.provide(noNetwork));
 

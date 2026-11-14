@@ -46,8 +46,12 @@ export interface TaskListFollowDependencies {
   readonly live: (sync: string | undefined) => Effect.Effect<Sealed>;
   /** The sync id the list already drawn was read at, as the entity store kept it, which the first read asks past; every read after asks whole. */
   readonly from?: string;
-  /** Takes each answer's rows, both parts, decoded, as its poll answers, with where it stands by sync id. */
-  readonly take: (rows: TaskListLiveRows, standing?: SyncStanding) => Effect.Effect<void>;
+  /** Takes each answer's rows, both parts, decoded, as its poll answers, with where it stands by sync id and the workspaces it says hold any task, where it says. */
+  readonly take: (
+    rows: TaskListLiveRows,
+    standing?: SyncStanding,
+    taskWorkspaces?: readonly string[],
+  ) => Effect.Effect<void>;
   /** That the list could not be read, each time a read goes unanswered; the list already drawn stands. */
   readonly failed: () => void;
   /**
@@ -83,7 +87,14 @@ function followRows(
     if (rows === "undecoded") return Effect.succeed(false);
 
     return Option.isSome(rows)
-      ? Effect.as(dependencies.take(rows.value, syncStandingOf<"plans" | "agents">(read)), true)
+      ? Effect.as(
+          dependencies.take(
+            rows.value,
+            syncStandingOf<"plans" | "agents">(read),
+            read.taskWorkspaces,
+          ),
+          true,
+        )
       : Effect.succeed(true);
   };
 

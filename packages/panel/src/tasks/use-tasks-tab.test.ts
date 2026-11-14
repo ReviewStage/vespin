@@ -78,6 +78,7 @@ import {
   PANEL_SPAN_ATTRIBUTE,
   type PanelSpan,
 } from "../panel-spans.js";
+import { useHistoryRows } from "../places/history-rows.js";
 import { useLinkDestinationLandings } from "../places/link-landings.js";
 import { useLinkReads } from "../places/link-reads.js";
 import { PLACE_BINDING, usePlaceArrivals, usePlaceBinding } from "../places/place-binding.js";
@@ -126,6 +127,7 @@ import {
   writeExperiments,
 } from "../testing/app-state.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
+import { standingTaskList } from "../testing/history-rows.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { listedAgent } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
@@ -164,7 +166,7 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: null,
-  document: { body: "# Teammate invitations", assumptions: [] },
+  description: { body: "# Teammate invitations", assumptions: [] },
 };
 
 const OPEN: TasksView = {
@@ -415,6 +417,7 @@ function mount(
       versionHistory,
       inbox,
       room,
+      rows: useHistoryRows(),
       tasks,
     });
     // The ways back read the history, as the window's root hands it its routed exits.
@@ -552,6 +555,8 @@ function mount(
   document.body.append(container);
   // The window's toast stands beside the tab, as the app draws it.
   const surface = createElement(Fragment, null, createElement(Probe), createElement(ToastHost));
+  // The window's task-list collections, standing on the tasks the tab lists, as the window's follow writes them.
+  const taskList = standingTaskList(standing.tasks);
   const root = createRoot(container);
   roots.push(root);
 
@@ -570,7 +575,7 @@ function mount(
     writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), {
       inbox: inboxRead(stateWith({}, {}), standing),
     });
-    root.render(held.provide(withQueryClient(surface)));
+    root.render(held.provide(withQueryClient(taskList.provide(surface))));
   });
 
   return {
@@ -600,6 +605,7 @@ function mount(
     stand: (patch: Partial<Standing>) => {
       standing = { ...standing, ...patch };
       act(() => {
+        taskList.stand(standing.tasks);
         const client = testQueryClientNow();
         const held = client.getQueryData(appStateQuery.queryKey) ?? stateWith({}, {});
         client.setQueryData(appStateQuery.queryKey, {
@@ -3611,7 +3617,7 @@ test("an agent profile opens its task on the agent it stages, beside the agent's
 
 /** The task as the list names it. */
 function listed(): TasksView["tasks"][number] {
-  const { document: _document, ...summary } = TASK;
+  const { description: _document, ...summary } = TASK;
 
   return summary;
 }
@@ -4822,7 +4828,7 @@ test("a task opened is timed from the press to its document drawn ready, and one
       {
         name: PANEL_SPAN.TASK_OPEN,
         waited: 650,
-        attributes: { [PANEL_SPAN_ATTRIBUTE.DESCRIPTION_CHARS]: TASK.document.body.length },
+        attributes: { [PANEL_SPAN_ATTRIBUTE.DESCRIPTION_CHARS]: TASK.description.body.length },
       },
     ],
   );

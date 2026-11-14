@@ -1,20 +1,20 @@
 /**
  * task-files-procedures.ts -- what a plan's tabs read beside its text, and a picture kept on it, as the hosted oRPC router answers them.
  *
- * `GET /api/plans/{id}/file` is a window of one file of the task's
+ * `GET /api/tasks/{id}/file` is a window of one file of the task's
  * repository for the File tab, read from GitHub as it stands now, or at the
  * commit an inbox item's code reference pins, through the App, under the
  * rule a shown file is held to (`tasks/task-file.ts`);
- * `/api/plans/{id}/tree` one folder of it for the tree beside that tab,
- * listed where and as the file is read (`tasks/task-tree.ts`); and `/api/plans/{id}/skills` the skills a
+ * `/api/tasks/{id}/tree` one folder of it for the tree beside that tab,
+ * listed where and as the file is read (`tasks/task-tree.ts`); and `/api/tasks/{id}/skills` the skills a
  * developer may choose of that repository, read where and as the file is
- * (`tasks/task-skills.ts`). `/api/plans/{id}/pages` is the pages agents
+ * (`tasks/task-skills.ts`). `/api/tasks/{id}/pages` is the pages agents
  * wrote for the task, each by its newest version, and
- * `/api/plans/{id}/pages/{page}/versions/{version}` one version's HTML,
+ * `/api/tasks/{id}/pages/{page}/versions/{version}` one version's HTML,
  * answered inside JSON so no page is ever a document of this origin
  * (`@repo/database/models/task-pages`), and `…/versions/{version}/frame`
  * a browser's frame of it, sent on to the sandbox's own site
- * (`../pages/page-frame.ts`). `POST /api/plans/{id}/attachments`
+ * (`../pages/page-frame.ts`). `POST /api/tasks/{id}/attachments`
  * keeps one picture on the description, pasted, dropped, or chosen into its text by
  * any member of its workspace, and answers the id the text then names it by
  * (201), or refuses in band where the description holds its bound of pictures

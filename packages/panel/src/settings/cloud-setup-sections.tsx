@@ -42,6 +42,7 @@ import {
   RepositoryPicture,
   SETTINGS_ORDER_HANDLE,
   SETTINGS_ROW_CONTROLS,
+  SETTINGS_SECTION_FRAME,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
   SettingsOrderedRows,
@@ -50,6 +51,7 @@ import {
   type SettingsRowSkeletonLayout,
   SettingsRowsSkeleton,
   SettingsSection,
+  Stack,
   TEXT_ELEMENT,
   TEXT_TONE,
   TEXT_VARIANT,
@@ -106,7 +108,8 @@ import { SECTION, settingsSectionDrawn, settingsSectionHead } from "./settings-s
  * empty row where none is saved
  * yet, adds a setup script from a repository picked in the menu a
  * task's repository is picked in, and removes one from its ⋯, a removal
- * asking first. Each save answers the setup as it then stands, which the
+ * asking first; a saved script emptied removes it too, its Save standing as
+ * a red Delete script that asks the same question. Each save answers the setup as it then stands, which the
  * sections draw at once. Under a saved script's name stands how it last ran in
  * a cloud sandbox, so an owner sees whether it works without starting an
  * agent: when, in which agent's sandbox, whose name opens the agent so its
@@ -147,9 +150,14 @@ function sameRepository(one: string, other: string): boolean {
   return one.toLowerCase() === other.toLowerCase();
 }
 
+/** Whether a script holds nothing to run: empty, or only whitespace, which the service takes as removing it. */
+function blank(script: string): boolean {
+  return script.trim() === "";
+}
+
 /** Whether a script may be saved as typed: words, within the bound. */
 function savable(script: string): boolean {
-  return script.trim() !== "" && script.length <= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_SCRIPT_CHARS;
+  return !blank(script) && script.length <= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_SCRIPT_CHARS;
 }
 
 /** Why a row's last save was refused, as the line under it says it; nothing while none was. */
@@ -277,8 +285,8 @@ function ScriptEditor({
   label: string;
   value: string;
   onChange: (script: string) => void;
-  /** What it offers while empty, by which script it is (`PLACEHOLDER`). */
-  placeholder: string;
+  /** What it offers while empty, by which script it is (`PLACEHOLDER`); none where a script is saved, so an emptied one does not read as still standing. */
+  placeholder: string | undefined;
   /** Whether the reader may change it: an owner or admin. */
   editable: boolean;
   /** Whether a save of it is out, which holds it still. */
@@ -373,7 +381,11 @@ function LastRun({
 /**
  * One script's row: its name and the script under it, which an owner or
  * admin edits in place, Discard and Save standing at the row's end once it
- * differs from what is saved, and a ⋯ with Delete once one is saved. The
+ * differs from what is saved, and a ⋯ with Delete once one is saved. A
+ * saved script emptied is deleted rather than saved: Save stands as a red
+ * Delete script, which ⌘S presses too, asking the ⋯'s question, and the
+ * editor offers no placeholder, which would read as the script still
+ * standing. The
  * install script's row stands with an empty script where none is saved, so
  * the first is typed in place as any edit is; a setup script just added
  * stands the same way, the caret in it and Cancel at its end until it is
@@ -419,7 +431,12 @@ function ScriptRow({
   const changed = edited !== undefined && edited !== script;
 
   const removeAct = useConfirmAct(saving, {
-    send: () => saving.mutateAsync({ target, script: "" }),
+    send: () => {
+      // Note that an edit of only whitespace is emptied, so the empty script the delete leaves agrees with it and lets it go; an edit with words in it is kept, whatever the delete answers.
+      setEdited((now) => (now !== undefined && blank(now) ? "" : now));
+
+      return saving.mutateAsync({ target, script: "" });
+    },
     answered: () => ACCEPTED,
     failed: rejected,
   });
@@ -435,11 +452,13 @@ function ScriptRow({
     setEdited(undefined);
   };
 
-  const save = () => saving.mutate({ target, script: shown });
+  // A saved script emptied is deleted, asking first, rather than saved.
+  const emptied = script !== "" && changed && blank(shown);
+  const save = emptied ? removal.ask : () => saving.mutate({ target, script: shown });
   const editing = changed || added !== undefined;
   const leave = added === undefined ? discard : added.onCancel;
-  // Note that ⌘S and ⌘↩ answer only what the row's Save would: an edit that may be saved, with no save already out.
-  const saveKey = editing && savable(shown) && !saving.isPending ? save : undefined;
+  // Note that ⌘S and ⌘↩ answer only what the row's Save would: an edit that may be saved or deletes, with no save already out.
+  const saveKey = editing && (savable(shown) || emptied) && !saving.isPending ? save : undefined;
 
   const actions =
     manages && script !== ""
@@ -485,6 +504,7 @@ function ScriptRow({
               canSave={savable(shown)}
               onLeave={leave}
               onSave={save}
+              deletes={emptied ? "Delete script" : undefined}
             />
           ) : manages ? (
             // Note that a row an owner may edit already stands as tall as the Discard and Save its edit brings, so their arrival moves nothing.
@@ -496,7 +516,11 @@ function ScriptRow({
               value={shown}
               onChange={setEdited}
               placeholder={
-                target.repository === undefined ? PLACEHOLDER.INSTALL : PLACEHOLDER.SETUP
+                script !== ""
+                  ? undefined
+                  : target.repository === undefined
+                    ? PLACEHOLDER.INSTALL
+                    : PLACEHOLDER.SETUP
               }
               editable={manages}
               busy={saving.isPending}
@@ -542,9 +566,9 @@ function AddRepositoryButton({
   onPick,
 }: {
   workspaceId: string;
-  /** The press's words: Add script, Add action. */
+  /** The press's words: Add script, Add repository. */
   label: string;
-  /** The repositories the menu leaves out: those with a setup script saved or being added. */
+  /** The repositories the menu leaves out: those already listed, saved or being added. */
   taken: readonly string[];
   onPick: (repository: string) => void;
 }): React.JSX.Element {
@@ -1193,12 +1217,13 @@ interface AddedRunAction {
 }
 
 /**
- * Each repository's run actions: a row
- * for the repository with its Add action, and its actions under it in their
- * order, each edited in place. An owner or admin adds one from Add action,
- * to a repository already listed or one picked in the repository menu,
- * drags one by its grip to another place or moves it from its ⋯, and makes
- * one the default or removes it there; every change saves the repository's whole list.
+ * Each repository's run actions, a card for each, as Agents draws a card for
+ * each provider's subscriptions: the repository's row, its Add action, over
+ * its actions in their order, each edited in place. An owner or admin adds
+ * one from a card's Add action, or to a repository not yet listed from the
+ * head's Add repository, drags one by its grip to another place or moves it
+ * from its ⋯, and makes one the default or removes it there; every change
+ * saves the repository's whole list.
  */
 function RunActionsSection({
   workspaceId,
@@ -1245,11 +1270,6 @@ function RunActionsSection({
       ),
   ];
 
-  // A repository whose list is full is left out of Add action's menu, as its own row's Add action stands still, so no row opens on a save the service would refuse.
-  const full = repositories.filter(
-    (repository) => countOf(repository) >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS,
-  );
-
   return (
     <SettingsSection
       {...settingsSectionHead(SECTION.ENVIRONMENT_RUN_ACTIONS)}
@@ -1258,16 +1278,20 @@ function RunActionsSection({
         manages ? (
           <AddRepositoryButton
             workspaceId={workspaceId}
-            label="Add action"
-            taken={full}
+            label="Add repository"
+            taken={repositories}
             onPick={add}
           />
         ) : undefined
       }
+      frame={SETTINGS_SECTION_FRAME.NONE}
     >
-      {read ?? (
-        <>
-          {repositories.length === 0 ? <SettingsLine>No run actions yet.</SettingsLine> : null}
+      {read !== undefined || repositories.length === 0 ? (
+        <SettingsSection>
+          {read ?? <SettingsLine>No run actions yet.</SettingsLine>}
+        </SettingsSection>
+      ) : (
+        <Stack gap={GAP.SECTION}>
           {repositories.map((repository) => (
             <RunActionsOfRepository
               key={repository.toLowerCase()}
@@ -1282,7 +1306,7 @@ function RunActionsSection({
               onLetGo={letGo}
             />
           ))}
-        </>
+        </Stack>
       )}
     </SettingsSection>
   );
@@ -1293,7 +1317,7 @@ function runActionsOf(lists: RunActionLists, repository: string): readonly RunAc
   return lists.find((each) => sameRepository(each.repository, repository))?.actions ?? [];
 }
 
-/** One repository's row, its saved run actions under it, dragged by their grips, and those added to it not yet saved after them. */
+/** One repository's card: its row and Add action, its saved run actions under it, dragged by their grips, and those added to it not yet saved after them. */
 function RunActionsOfRepository({
   saving,
   repository,
@@ -1327,36 +1351,37 @@ function RunActionsOfRepository({
   const refused = saving.variables?.repository === repository ? saving.error : null;
 
   return (
-    <>
+    <SettingsSection>
       <MenuRow
         thing={repository}
-        alone
-        actions={
-          manages
-            ? [
-                {
-                  label: "Add action",
-                  icon: <PlusIcon />,
-                  disabled: full,
-                  onSelect: onAdd,
-                },
-              ]
-            : []
-        }
+        actions={[]}
         row={{
-          label: (
-            <Inline gap={GAP.ICON}>
-              <GlyphSlot line>
+          // Note that the owner's picture leads the row in its mark column, as each action's icon does, so the picture centers over their icons and the name starts where their labels do.
+          leading: (
+            <SettingsRowMark>
+              <GlyphSlot>
                 <RepositoryPicture
                   repository={repository}
                   pictures={pictures}
                   size={AVATAR_SIZE.GLYPH}
                 />
               </GlyphSlot>
-              <ReplayMask>{repository}</ReplayMask>
-            </Inline>
+            </SettingsRowMark>
           ),
+          label: <ReplayMask>{repository}</ReplayMask>,
           error: saveRefusal(refused),
+          controls: SETTINGS_ROW_CONTROLS.BESIDE_UNTIL_NARROW,
+          control: manages ? (
+            <Button
+              variant={BUTTON_VARIANT.OUTLINE}
+              icon={<PlusIcon />}
+              label={`Add action to ${repository}`}
+              disabled={full}
+              onClick={onAdd}
+            >
+              Add action
+            </Button>
+          ) : undefined,
         }}
       />
       {order.ordered.length === 0 ? null : (
@@ -1398,7 +1423,7 @@ function RunActionsOfRepository({
           }))}
         />
       )}
-    </>
+    </SettingsSection>
   );
 }
 

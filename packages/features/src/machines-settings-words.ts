@@ -20,12 +20,43 @@ export const MACHINES_WORDS = {
   TITLE: "Your machines",
   NONE: "No machines yet.",
   REMOVE: "Remove",
+  /** What the chevron that folds a machine's own settings open is called. */
+  settingsOf: (machine: string) => `${machine}'s settings`,
   REMOVE_FAILED: "Could not remove this machine. Try again.",
   /** What Remove adds for a machine that reads offline, which hears it was removed only once it is online again, and the command for one that never is. */
   REMOVED_OFFLINE:
     "It's offline, so it does that the next time it's online. If it won't be, run this on it:",
   UNINSTALL_FIELD: "Uninstall command",
 } as const;
+
+/** What the page says of each machine's own say over agents there, which any of the member's devices changes. */
+export const MACHINE_SETTINGS_WORDS = {
+  TITLE: "What agents may do",
+  CAPTION:
+    "Each machine's own settings for agents' terminal commands and apps. A machine takes a change as soon as it's online.",
+  NONE: `No machine has joined yet. Sign in to ${PRODUCT_NAME} on a Mac to add it here.`,
+  COMMANDS: "Terminal commands",
+  APPS: "Computer use",
+  /** What the chevron that folds a machine's always-allowed apps open is called. */
+  ALLOWED_APPS: "Always-allowed apps",
+  /** Computer use as a machine's folded row says it where it is off. */
+  APPS_OFF: "Computer use off",
+  /** Computer use as a machine's folded row says it where it is on and no app is always allowed. */
+  APPS_ON: "Computer use on",
+  /** A machine's apps as its folded row counts them where some are always allowed. */
+  appsAllowed: (count: number) => `${count} ${count === 1 ? "app" : "apps"} always allowed`,
+  CHANGE_FAILED: "Could not change this machine. Try again.",
+} as const;
+
+/** What a machine's Remove asks of the machine called `label` that runs no agents: it stops taking commands, and stands again where the app still runs there. */
+export function removeCommandMachineQuestion(label: string) {
+  return {
+    title: `Remove ${label}?`,
+    body: `Agents' terminal commands and computer use stop going to it. If ${PRODUCT_NAME} still runs on it, it's added back the next time it starts.`,
+    verb: "Remove machine",
+    running: "Removing",
+  } as const;
+}
 
 /** What a machine's line leads with, by where it stands; a standing not yet told says nothing. */
 export const MACHINE_STANDING_WORDS = {

@@ -2,7 +2,7 @@ import { AGENT_STATUS } from "@repo/features/agent-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { describe, expect, it } from "vitest";
 import type { AppStateSnapshot } from "./app-state.js";
-import { selectAgentNames, shareAppState } from "./app-state-reads.js";
+import { answerKeeper, selectAgentNames, shareAppState } from "./app-state-reads.js";
 import { initialAppState } from "./client/app-state-store.js";
 import { runModeFor } from "./run-mode.js";
 
@@ -30,6 +30,40 @@ describe("shareAppState", () => {
     expect(shared).toEqual(write);
     expect(shared.tasks[0]).toBe(kept);
     expect(shared.tasks[1]).toBe(changed);
+  });
+
+  it("answers a list a row joined at its head with the document's own rows, not each row laid over its neighbor", () => {
+    const by = { userId: "user-ada", name: "Ada" };
+    const first = { id: "first", title: "First", sentBy: { ...by }, files: [] };
+    const second = { id: "second", title: "Second", sentBy: { ...by }, files: [] };
+    const joined = { id: "joined", title: "Joined", sentBy: { ...by }, files: [] };
+    const document = { threads: [joined, first, second] };
+
+    const shared = shareAppState({ threads: [first, second] }, document);
+
+    expect(shared).toBe(document);
+  });
+
+  it("keeps a held row whose id repeats an earlier row's while another row changes", () => {
+    const repeated = { id: "a", value: 2 };
+    const held = [{ id: "a", value: 1 }, repeated, { id: "b" }];
+
+    const shared = shareAppState(held, [{ id: "a", value: 1 }, { id: "a", value: 2 }, { id: "c" }]);
+
+    expect(shared[1]).toBe(repeated);
+  });
+});
+
+describe("answerKeeper", () => {
+  it("answers the last answer again while a new one equals it, and the new one once it moves", () => {
+    const keep = answerKeeper<{ readonly rows: readonly { readonly id: string }[] }>();
+    const first = keep({ rows: [{ id: "a" }, { id: "b" }] });
+    const same = keep({ rows: [{ id: "a" }, { id: "b" }] });
+    const moved = keep({ rows: [{ id: "a" }, { id: "c" }] });
+
+    expect(same).toBe(first);
+    expect(moved.rows.map(({ id }) => id)).toEqual(["a", "c"]);
+    expect(moved.rows[0]).toBe(first.rows[0]);
   });
 });
 

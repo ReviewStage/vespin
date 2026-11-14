@@ -52,7 +52,7 @@ enum ShareStart {
   }
 
   /// The path New task's start is sent to (`HOSTED_SERVICE_PATH.TASKS`).
-  private static let path = "/api/plans"
+  private static let path = "/api/tasks"
   /// How long the sheet waits on the service, in all, before it keeps the draft instead, and how much longer each picture it sends adds.
   private static let limit: Duration = .seconds(20)
   private static let limitPerPicture: Duration = .seconds(10)

@@ -1411,15 +1411,37 @@ export const agentMessageAnswerSchema = EffectSchema.Struct({
   queued: EffectSchema.optionalKey(agentQueueSchema),
 });
 
+/** Whether a window or device shows an agent's chat now, as its warm call says: shown holds the sandbox up, and hidden lets go of that window's hold at once. */
+export const AGENT_CHAT = {
+  SHOWN: "shown",
+  HIDDEN: "hidden",
+} as const;
+
+export type AgentChat = (typeof AGENT_CHAT)[keyof typeof AGENT_CHAT];
+
+/** The most characters a chat holder's id is: one window's or one app launch's. */
+const AGENT_CHAT_HOLDER_MAX_CHARS = 64;
+
+/** What a warm call says of the chat that asks it: whether it is shown, and the window or device showing it. */
+export const agentChatHoldSchema = EffectSchema.Struct({
+  chat: EffectSchema.Literals(Object.values(AGENT_CHAT)),
+  holder: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(AGENT_CHAT_HOLDER_MAX_CHARS)),
+});
+
+export type AgentChatHold = typeof agentChatHoldSchema.Type;
+
 /**
- * A warm call taken (`POST /api/agents/{id}/warm`): a client says the agent
- * is on screen, at once and then every minute while it stays there. The
- * service answers at once and keeps a cloud agent's sandbox and runner
- * warm past it, launching the runner with no message where none runs, so
- * a message goes straight into the running session; it lets them go five
- * minutes after the later of the agent's last turn's end and the last such
- * call. A Mac's agent, an archived one, and one the caller may not message
- * are answered the same and kept warm by nothing.
+ * A warm call taken (`POST /api/agents/{id}/warm`): a client says the
+ * agent's chat is shown, at once and then every minute while it stays
+ * shown, and says once that it is hidden as it stops being. A shown chat
+ * holds the cloud agent's sandbox up as one beat of its window or device
+ * (`agentChatHoldSchema`), and the service wakes the sandbox and launches
+ * its runner with no message where none runs, so a message goes straight
+ * into the running session. A hidden chat lets go of its hold at once, and
+ * the sandbox stops where nothing else keeps it up. A call that names no
+ * chat, from a build older than the hold, wakes and holds nothing past
+ * the turn. A Mac's agent, an archived one, and one the caller may not
+ * message are answered the same and kept warm by nothing.
  */
 export const agentWarmAnswerSchema = EffectSchema.Struct({
   warm: EffectSchema.Literal(true),
@@ -2719,6 +2741,15 @@ const agentSubagentTitleSchema = EffectSchema.Struct({
 
 export type AgentSubagentTitle = typeof agentSubagentTitleSchema.Type;
 
+/** A voice call standing on the agent, as its row says while the call stands: the call's id, the member on it, and when it opened, in epoch milliseconds. */
+const agentStandingCallSchema = EffectSchema.Struct({
+  callId: EffectSchema.String,
+  callerId: EffectSchema.String,
+  startedAt: countedNumber,
+});
+
+export type AgentStandingCall = typeof agentStandingCallSchema.Type;
+
 /**
  * Where the launch a local agent's transcript waits on stands, as its page
  * says it (`agentMessagesAnswerSchema`'s `launch`): written and waiting for
@@ -2813,6 +2844,14 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
    * the agent has delegated nothing, and from a service older than it.
    */
   subagents: EffectSchema.optionalKey(EffectSchema.Array(agentSubagentStandingSchema)),
+  /**
+   * The voice calls standing on the agent, oldest first, read from each
+   * call's row, which stands exactly while the call does, so every window
+   * on the agent draws a call from the moment it opens, before anyone
+   * speaks, and draws none of them ended. Absent on a worker's page, while
+   * none stands, and from a service older than it.
+   */
+  calls: EffectSchema.optionalKey(EffectSchema.Array(agentStandingCallSchema)),
   title: EffectSchema.NullOr(EffectSchema.String),
   failureReason: EffectSchema.optionalKey(agentFailureSchema),
   /**
