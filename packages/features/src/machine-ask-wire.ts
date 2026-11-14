@@ -6,9 +6,10 @@
  * allowed, posts the ask under the command's id, and the account's own
  * devices, that machine among them, follow it (`machine-ask-live.ts`). The
  * first answer the service takes is the answer, from whichever device; the
- * machine takes it, or its own window's, and takes the ask down. An ask
- * outlives the window its call waits through (`MACHINE_ASK_BOUNDS`), so an
- * answer that comes late still reaches the machine. Only the account that
+ * machine takes it and takes the ask down. A window that runs out, the
+ * machine says closed; the ask stands a while longer, and an Allow given
+ * then stands as a grant: the agent is told to try again, and its next ask
+ * of the same on that machine is answered with it. Only the account that
  * owns the machine posts, reads, answers, or takes down its asks.
  */
 
@@ -22,23 +23,17 @@ export const MACHINE_ASK_BOUNDS = {
   MAX_WINDOW_SECONDS: 900,
   /**
    * How long an ask stands from when it was asked, past its window, so an
-   * answer given late still reaches its machine; the scheduled sweep takes
-   * down one standing longer.
+   * answer given late may still let the agent try again; the scheduled
+   * sweep takes down one standing longer.
    */
   STANDS_SECONDS: 3_600,
+  /** How long past its window an ask whose machine never said it closed counts as closed, as a machine that quit leaves one. */
+  LAPSE_GRACE_SECONDS: 60,
   /** The most characters of the words a denial hands the agent. */
   MAX_NOTE_CHARS: 2_000,
   /** The most characters of an app's bundle id. */
   MAX_BUNDLE_ID_CHARS: 255,
 } as const;
-
-/** What an ask is of: a shell command to run, or an app to use. */
-export const MACHINE_ASK_KIND = {
-  SHELL: "shell",
-  APP: "app",
-} as const;
-
-export type MachineAskKind = (typeof MACHINE_ASK_KIND)[keyof typeof MACHINE_ASK_KIND];
 
 /**
  * What the owner answers an ask: run it this once, run it and every later
@@ -90,6 +85,14 @@ export const machineAskSubjectSchema = EffectSchema.Union([shellAskSchema, appAs
 
 export type MachineAskSubject = typeof machineAskSubjectSchema.Type;
 
+/** An app as a machine keys the apps it always allows: by its bundle id where it has one, else its name. */
+export function machineAskAppKey(app: {
+  readonly name: string;
+  readonly bundleId?: string;
+}): string {
+  return app.bundleId ?? app.name;
+}
+
 /**
  * An ask a machine posts as it shows it (POST): the claimed command's id,
  * which the ask goes by, the machine that claimed it, what it asks, and how
@@ -116,28 +119,45 @@ export const machineAskAnswerRequestSchema = EffectSchema.Struct({
 
 export type MachineAskAnswerRequest = typeof machineAskAnswerRequestSchema.Type;
 
-/** An ask taken down by its machine (POST), once it took an answer or its call stopped waiting. */
-export const machineAskCloseRequestSchema = EffectSchema.Struct({ id: wireUuidSchema });
+/** One ask by its id (POST): taken down by its machine once it took an answer or was withdrawn, or said closed as its window ran out. */
+export const machineAskIdRequestSchema = EffectSchema.Struct({ id: wireUuidSchema });
 
-/** That the service holds the ask, answering the transaction it was written in, which a device's read waits for. */
-export const machineAskPostedAnswerSchema = EffectSchema.Struct({
-  posted: EffectSchema.Literal(true),
-  txid: EffectSchema.String,
-});
-
-/**
- * The answer that stands on the ask: this one where it was the first, or
- * the one given before it, which a device draws in its place; and the
- * transaction it was written in.
- */
-export const machineAskAnsweredSchema = EffectSchema.Struct({
+/** An answer as it stands on an ask: the decision, and for a denial, the owner's words. */
+const standingAnswerSchema = EffectSchema.Struct({
   decision: machineAskDecisionSchema,
   note: EffectSchema.optionalKey(machineAskNoteSchema),
-  first: EffectSchema.Boolean,
+});
+
+export type MachineAskStandingAnswer = typeof standingAnswerSchema.Type;
+
+/**
+ * What a post or a window's close answers: the answer that already stands
+ * on the ask, where one does, which the machine takes as given in time,
+ * such as the owner's late Allow of the same ask before; none while it
+ * waits, or once it was said closed.
+ */
+export const machineAskStandsSchema = EffectSchema.Struct({
+  answer: EffectSchema.optionalKey(standingAnswerSchema),
+});
+
+/** The answer that stands on the ask, this one or one given before it, and the transaction this one was written in, which a device's read waits for. */
+export const machineAskAnsweredSchema = EffectSchema.Struct({
+  ...standingAnswerSchema.fields,
   txid: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 export type MachineAskAnswered = typeof machineAskAnsweredSchema.Type;
+
+/**
+ * The words an agent is handed, as its owner's, once its ask was allowed
+ * after its window closed and its call was answered as not answered: what
+ * was allowed, and to try again, which its machine now lets through.
+ */
+export function lateAllowedWords(subject: MachineAskSubject): string {
+  const allowed = "command" in subject ? "the command you asked to run" : subject.app.name;
+
+  return `I allowed ${allowed} on my machine after your request timed out. Try it again.`;
+}
 
 /** That the ask is down, whether or not it still stood. */
 export const machineAskClosedAnswerSchema = EffectSchema.Struct({

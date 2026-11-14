@@ -1,24 +1,27 @@
 import {
   MACHINE_ASK_BOUNDS,
   MACHINE_ASK_DECISION,
-  MACHINE_ASK_KIND,
   type MachineAskDecision,
-  type MachineAskKind,
+  type MachineAskStandingAnswer,
   type MachineAskSubject,
+  machineAskAppKey,
   machineAskDecisionSchema,
+  machineAskSubjectSchema,
 } from "@repo/features/machine-ask-wire";
-import { and, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
+import { and, eq, isNotNull, isNull, lt, ne, or, type SQL, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
-import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
+import { TXID_RETURNING } from "../core/txid.js";
 import { device } from "../schemas/device.js";
 import { machineCommand } from "../schemas/machine-command.js";
 import { machineCommandAsk } from "../schemas/machine-command-ask.js";
+import { changeMachine } from "./device-store.js";
 import type { TaskStoreEffect } from "./task-store.js";
 
 /**
- * machine-command-ask-store.ts -- the asks an account's machines hold for its answer: posted by the machine, answered once from any of its devices, and taken down.
+ * machine-command-ask-store.ts -- the asks an account's machines hold for its answer: posted by the machine, answered once from any of its devices, said closed as the window runs out, and taken down.
  *
  * Every function is an effect over the ambient `SqlClient`, keyed by the
  * account, so no account posts, answers, or takes down another's asks, and
@@ -27,23 +30,39 @@ import type { TaskStoreEffect } from "./task-store.js";
  * account's it claimed, as a device of that account, so no ask stands for a
  * command it does not hold. The first answer written stands: the update
  * that writes one takes only an ask still waiting, so of two answers given
- * at once the database keeps one, and the other is answered with it.
+ * at once, or an answer and the machine saying the window closed, the
+ * database keeps one, and the other is answered with it.
+ *
+ * An ask its machine said closed, or one past its window and a grace whose
+ * machine never said, is late. A late Allow once stands as a grant, which
+ * the same agent's next ask of the same on the same machine takes as its
+ * answer, until the sweep takes it down with the rest; a late Always allow
+ * is written to the machine's own settings, which it follows, and a late
+ * Deny only takes the ask down, since nothing waits on it.
  */
 
 const AskKeySchema = Schema.Struct({ userId: Schema.String, id: Schema.String });
 
-/** One ask as its machine posts it, flattened onto the row's columns. */
+const DecisionSchema = Schema.NullOr(machineAskDecisionSchema);
+
+/** One ask as its machine posts it. */
 const PostedRowSchema = Schema.Struct({
   ...AskKeySchema.fields,
   deviceId: Schema.String,
-  kind: Schema.Literals(Object.values(MACHINE_ASK_KIND)),
-  command: Schema.NullOr(Schema.String),
-  appName: Schema.NullOr(Schema.String),
-  appBundleId: Schema.NullOr(Schema.String),
-  appIconPng: Schema.NullOr(Schema.String),
+  subject: machineAskSubjectSchema,
   now: Schema.Date,
   expiresAt: Schema.Date,
 });
+
+/** The app an ask's subject names, by the key its machine allows it by, as the column holds it. */
+const SUBJECT_APP = sql`coalesce(${machineCommandAsk.subject} -> 'app' ->> 'bundleId', ${machineCommandAsk.subject} -> 'app' ->> 'name')`;
+
+/** Whether an ask asks the same as `subject`: the same command's words, or the same app by its key, never by how it is drawn. */
+function sameSubject(subject: MachineAskSubject): SQL {
+  return "command" in subject
+    ? sql`${machineCommandAsk.subject} ->> 'command' = ${subject.command}`
+    : sql`${SUBJECT_APP} = ${machineAskAppKey(subject.app)}`;
+}
 
 /**
  * Writes the ask, where the account holds the command claimed and the
@@ -53,7 +72,7 @@ const PostedRowSchema = Schema.Struct({
  */
 const insertAsk = SqlSchema.findAll({
   Request: PostedRowSchema,
-  Result: TxidRowSchema,
+  Result: Schema.Struct({ agentId: Schema.NullOr(Schema.String) }),
   execute: (row) =>
     Database.use((db) =>
       db
@@ -65,11 +84,7 @@ const insertAsk = SqlSchema.findAll({
               userId: sql<string>`${machineCommand.userId}`.as("user_id"),
               deviceId: sql<string>`${device.id}`.as("device_id"),
               agentId: sql<string | null>`${machineCommand.agentId}`.as("agent_id"),
-              kind: sql<MachineAskKind>`${row.kind}`.as("kind"),
-              command: sql<string | null>`${row.command}::text`.as("command"),
-              appName: sql<string | null>`${row.appName}::text`.as("app_name"),
-              appBundleId: sql<string | null>`${row.appBundleId}::text`.as("app_bundle_id"),
-              appIconPng: sql<string | null>`${row.appIconPng}::text`.as("app_icon_png"),
+              subject: sql<MachineAskSubject>`${JSON.stringify(row.subject)}::jsonb`.as("subject"),
               askedAt: sql<Date>`${row.now}::timestamptz`.as("asked_at"),
               expiresAt: sql<Date>`${row.expiresAt}::timestamptz`.as("expires_at"),
             })
@@ -87,25 +102,61 @@ const insertAsk = SqlSchema.findAll({
             ),
         )
         .onConflictDoNothing({ target: machineCommandAsk.id })
-        .returning(TXID_RETURNING),
+        .returning({ agentId: machineCommandAsk.agentId }),
     ),
 });
 
-/** The answer that stands on an ask. */
-const StandingSchema = Schema.Struct({
-  decision: machineAskDecisionSchema,
-  note: Schema.NullOr(Schema.String),
+/**
+ * Takes the grant a late Allow once left for the same agent's ask of the
+ * same on the same machine, the new ask itself aside; the rows it took. Note
+ * that a grant is deleted as it is taken, so of two asks posted at once only
+ * one takes it.
+ */
+const takeGrant = SqlSchema.findAll({
+  Request: Schema.Struct({
+    ...AskKeySchema.fields,
+    deviceId: Schema.String,
+    agentId: Schema.String,
+    subject: machineAskSubjectSchema,
+  }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, id, deviceId, agentId, subject }) =>
+    Database.use((db) =>
+      db
+        .delete(machineCommandAsk)
+        .where(
+          and(
+            eq(machineCommandAsk.userId, userId),
+            eq(machineCommandAsk.deviceId, deviceId),
+            eq(machineCommandAsk.agentId, agentId),
+            ne(machineCommandAsk.id, id),
+            isNotNull(machineCommandAsk.lapsedAt),
+            eq(machineCommandAsk.decision, MACHINE_ASK_DECISION.ALLOW_ONCE),
+            sameSubject(subject),
+          ),
+        )
+        .returning({ id: machineCommandAsk.id }),
+    ),
 });
 
-/** Writes the answer on the account's ask, where none stands yet; the answer written and its transaction, or none. */
+/** Writes the answer on the account's ask, where none stands yet; the answer written, whether the ask was late, and the transaction, or none. */
 const writeAnswer = SqlSchema.findAll({
   Request: Schema.Struct({
     ...AskKeySchema.fields,
     decision: machineAskDecisionSchema,
     note: Schema.NullOr(Schema.String),
+    lateBefore: Schema.Date,
   }),
-  Result: Schema.Struct({ ...StandingSchema.fields, txid: Schema.String }),
-  execute: ({ userId, id, decision, note }) =>
+  Result: Schema.Struct({
+    decision: machineAskDecisionSchema,
+    note: Schema.NullOr(Schema.String),
+    deviceId: Schema.String,
+    agentId: Schema.NullOr(Schema.String),
+    subject: machineAskSubjectSchema,
+    late: Schema.Boolean,
+    txid: Schema.String,
+  }),
+  execute: ({ userId, id, decision, note, lateBefore }) =>
     Database.use((db) =>
       db
         .update(machineCommandAsk)
@@ -120,23 +171,56 @@ const writeAnswer = SqlSchema.findAll({
         .returning({
           decision: machineCommandAsk.decision,
           note: machineCommandAsk.note,
+          deviceId: machineCommandAsk.deviceId,
+          agentId: machineCommandAsk.agentId,
+          subject: machineCommandAsk.subject,
+          late: sql<boolean>`(${machineCommandAsk.lapsedAt} is not null or ${machineCommandAsk.expiresAt} < ${lateBefore}::timestamptz)`,
           ...TXID_RETURNING,
         }),
+    ),
+});
+
+/** Says the account's ask closed, where no answer stands on it yet; the rows it said so of. */
+const writeLapse = SqlSchema.findAll({
+  Request: Schema.Struct({ ...AskKeySchema.fields, now: Schema.Date }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, id, now }) =>
+    Database.use((db) =>
+      db
+        .update(machineCommandAsk)
+        .set({ lapsedAt: now })
+        .where(
+          and(
+            eq(machineCommandAsk.id, id),
+            eq(machineCommandAsk.userId, userId),
+            isNull(machineCommandAsk.decision),
+          ),
+        )
+        .returning({ id: machineCommandAsk.id }),
     ),
 });
 
 /** The answer standing on the account's ask, null while it waits; none where the account holds no such ask. */
 const findAnswer = SqlSchema.findOneOption({
   Request: AskKeySchema,
-  Result: Schema.Struct({
-    decision: Schema.NullOr(machineAskDecisionSchema),
-    note: Schema.NullOr(Schema.String),
-  }),
+  Result: Schema.Struct({ decision: DecisionSchema, note: Schema.NullOr(Schema.String) }),
   execute: ({ userId, id }) =>
     Database.use((db) =>
       db
         .select({ decision: machineCommandAsk.decision, note: machineCommandAsk.note })
         .from(machineCommandAsk)
+        .where(and(eq(machineCommandAsk.id, id), eq(machineCommandAsk.userId, userId))),
+    ),
+});
+
+/** Writes the answer a grant carried onto the new ask. */
+const writeGranted = SqlSchema.void({
+  Request: Schema.Struct({ ...AskKeySchema.fields, decision: machineAskDecisionSchema }),
+  execute: ({ userId, id, decision }) =>
+    Database.use((db) =>
+      db
+        .update(machineCommandAsk)
+        .set({ decision })
         .where(and(eq(machineCommandAsk.id, id), eq(machineCommandAsk.userId, userId))),
     ),
 });
@@ -163,26 +247,23 @@ const deleteStale = SqlSchema.findAll({
     ),
 });
 
-/** An ask's subject flattened onto the row's columns. */
-function columnsOf(subject: MachineAskSubject) {
-  if ("command" in subject) {
-    return {
-      kind: MACHINE_ASK_KIND.SHELL,
-      command: subject.command,
-      appName: null,
-      appBundleId: null,
-      appIconPng: null,
-    };
-  }
+/** An answer as a row holds it, as the wire carries it; none while the row waits. */
+function standingOf(row: {
+  readonly decision: MachineAskDecision | null;
+  readonly note: string | null;
+}): MachineAskStandingAnswer | undefined {
+  if (row.decision === null) return undefined;
 
-  return {
-    kind: MACHINE_ASK_KIND.APP,
-    command: null,
-    appName: subject.app.name,
-    appBundleId: subject.app.bundleId ?? null,
-    appIconPng: subject.app.iconPng ?? null,
-  };
+  return row.note === null
+    ? { decision: row.decision }
+    : { decision: row.decision, note: row.note };
 }
+
+/** The answer standing on the account's ask; none while it waits, or where the account holds no such ask. */
+const standingAnswer = (userId: string, id: string) =>
+  Effect.map(findAnswer({ userId, id }), (found) =>
+    Option.isNone(found) ? undefined : standingOf(found.value),
+  );
 
 /** One ask a machine posts: the claimed command's id, the device that claimed it, what it asks, and how long its window runs from now. */
 export interface PostedMachineAsk {
@@ -192,76 +273,159 @@ export interface PostedMachineAsk {
   readonly windowSeconds: number;
 }
 
+/** What a post or a window's close found: whether the ask stands, and the answer that stands on it already, where one does. */
+export interface MachineAskStands {
+  readonly stands: boolean;
+  readonly answer?: MachineAskStandingAnswer;
+}
+
 /**
  * Posts the ask a machine shows for a command it claimed, its window
- * closing `windowSeconds` from now, on the service's clock; answers the
- * transaction it stands in, or none where the account holds no such
- * command claimed or the device is not its own and standing.
+ * closing `windowSeconds` from now, on the service's clock, and answers it
+ * at once where a late Allow left a grant for the same agent's ask of the
+ * same on that machine, which it takes. An ask posted again answers as it
+ * stands. Stands not where the account holds no such command claimed or
+ * the device is not its own and standing.
  */
 export function postMachineAsk(
   userId: string,
   ask: PostedMachineAsk,
-): TaskStoreEffect<string | undefined> {
-  return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    Effect.map(
-      insertAsk({
-        userId,
-        id: ask.id,
-        deviceId: ask.deviceId,
-        ...columnsOf(ask.subject),
-        now,
-        expiresAt: new Date(now.getTime() + ask.windowSeconds * 1000),
+): TaskStoreEffect<MachineAskStands> {
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        const now = yield* DateTime.nowAsDate;
+
+        const [posted] = yield* insertAsk({
+          userId,
+          id: ask.id,
+          deviceId: ask.deviceId,
+          subject: ask.subject,
+          now,
+          expiresAt: new Date(now.getTime() + ask.windowSeconds * 1000),
+        });
+
+        if (posted === undefined) {
+          const found = yield* findAnswer({ userId, id: ask.id });
+
+          if (Option.isNone(found)) return { stands: false };
+          const answer = standingOf(found.value);
+
+          return answer === undefined ? { stands: true } : { stands: true, answer };
+        }
+
+        if (posted.agentId === null) return { stands: true };
+
+        const taken = yield* takeGrant({
+          userId,
+          id: ask.id,
+          deviceId: ask.deviceId,
+          agentId: posted.agentId,
+          subject: ask.subject,
+        });
+
+        if (taken.length === 0) return { stands: true };
+        const answer = { decision: MACHINE_ASK_DECISION.ALLOW_ONCE };
+        yield* writeGranted({ userId, id: ask.id, decision: answer.decision });
+
+        return { stands: true, answer };
       }),
-      ([posted]) => posted?.txid,
     ),
   );
 }
 
-/** The answer that stands on an ask once one was given: the decision, a denial's words, whether it was this answer, and the transaction this one was written in. */
-export interface MachineAskStanding {
-  readonly decision: MachineAskDecision;
-  readonly note?: string;
-  readonly first: boolean;
-  readonly txid?: string;
+/**
+ * Says the account's ask closed as its machine's window ran out with no
+ * answer, so an answer given after it is late; answers the answer that beat
+ * it, where one did, which the machine takes as given in time.
+ */
+export function lapseMachineAsk(
+  userId: string,
+  id: string,
+): TaskStoreEffect<MachineAskStandingAnswer | undefined> {
+  return Effect.gen(function* () {
+    const now = yield* DateTime.nowAsDate;
+    const [lapsed] = yield* writeLapse({ userId, id, now });
+
+    if (lapsed !== undefined) return undefined;
+
+    return yield* standingAnswer(userId, id);
+  });
 }
+
+/**
+ * The answer that stands on an ask once one was given, and the transaction
+ * this one was written in; and where this answer was the first and came
+ * after the ask's window closed, what it asked and the agent it was for,
+ * where it names one.
+ */
+export interface MachineAskStanding {
+  readonly answer: MachineAskStandingAnswer;
+  readonly txid?: string;
+  readonly late?: { readonly agentId?: string; readonly subject: MachineAskSubject };
+}
+
+/** A late Always allow written to the machine's own settings: every command run without asking, or the app used without asking. */
+const allowedAlways = (userId: string, deviceId: string, subject: MachineAskSubject) =>
+  changeMachine(
+    userId,
+    deviceId,
+    "command" in subject
+      ? { commandMode: MACHINE_COMMAND_MODE.ALWAYS }
+      : { addApp: machineAskAppKey(subject.app) },
+  );
 
 /**
  * Answers the account's ask, as any of its devices may: the first answer
  * written stands, and a later one is answered with it, written nowhere. A
- * note is kept only with a denial. Answers none where the account holds no
- * such ask, as one taken down, or another account's.
+ * note is kept only with a denial. A late Allow once stays as a grant; a
+ * late Always allow is written to the machine's settings and a late Deny
+ * changes nothing, and both take the ask down, since no machine waits on it.
+ * Answers none where the account holds no such ask, as one taken down, or
+ * another account's.
  */
 export function answerMachineAsk(
   userId: string,
   answer: { readonly id: string; readonly decision: MachineAskDecision; readonly note?: string },
 ): TaskStoreEffect<MachineAskStanding | undefined> {
   return Effect.gen(function* () {
+    const now = yield* DateTime.nowAsDate;
     const note = answer.decision === MACHINE_ASK_DECISION.DENY ? (answer.note ?? null) : null;
+    const lateBefore = new Date(now.getTime() - MACHINE_ASK_BOUNDS.LAPSE_GRACE_SECONDS * 1000);
 
     const [written] = yield* writeAnswer({
       userId,
       id: answer.id,
       decision: answer.decision,
       note,
+      lateBefore,
     });
 
-    if (written !== undefined) {
-      return {
-        decision: written.decision,
-        ...(written.note === null ? undefined : { note: written.note }),
-        first: true,
-        txid: written.txid,
-      };
+    if (written === undefined) {
+      const standing = yield* standingAnswer(userId, answer.id);
+
+      return standing === undefined ? undefined : { answer: standing };
     }
 
-    const standing = Option.getOrUndefined(yield* findAnswer({ userId, id: answer.id }));
+    const given = standingOf(written) ?? { decision: written.decision };
 
-    if (standing === undefined || standing.decision === null) return undefined;
+    if (!written.late) return { answer: given, txid: written.txid };
+
+    if (written.decision === MACHINE_ASK_DECISION.ALLOW_ALWAYS) {
+      yield* allowedAlways(userId, written.deviceId, written.subject);
+    }
+
+    if (written.decision !== MACHINE_ASK_DECISION.ALLOW_ONCE) {
+      yield* deleteAsk({ userId, id: answer.id });
+    }
 
     return {
-      decision: standing.decision,
-      ...(standing.note === null ? undefined : { note: standing.note }),
-      first: false,
+      answer: given,
+      txid: written.txid,
+      late: {
+        subject: written.subject,
+        ...(written.agentId === null ? undefined : { agentId: written.agentId }),
+      },
     };
   });
 }

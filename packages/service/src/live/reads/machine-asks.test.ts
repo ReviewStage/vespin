@@ -71,12 +71,19 @@ it.layer(getTestDB())("the account's machine asks' live read", (it) => {
       const asks = yield* liveAsksOf(owner.userId);
 
       assert.deepEqual(
-        asks.map(({ id, deviceId, subject, answer }) => ({ id, deviceId, subject, answer })),
+        asks.map(({ id, deviceId, subject, lapsed, answer }) => ({
+          id,
+          deviceId,
+          subject,
+          lapsed,
+          answer,
+        })),
         [
           {
             id: owner.id,
             deviceId: owner.deviceId,
             subject: { command: "git push" },
+            lapsed: false,
             answer: { decision: MACHINE_ASK_DECISION.DENY, note: "Not on main" },
           },
         ],

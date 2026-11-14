@@ -7,16 +7,12 @@ CREATE TABLE "machine_command_ask" (
 	"user_id" text NOT NULL,
 	"device_id" uuid NOT NULL,
 	"agent_id" uuid,
-	"kind" text NOT NULL,
-	"command" text,
-	"app_name" text,
-	"app_bundle_id" text,
-	"app_icon_png" text,
+	"subject" jsonb NOT NULL,
 	"asked_at" timestamp with time zone NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
+	"lapsed_at" timestamp with time zone,
 	"decision" text,
-	"note" text,
-	CONSTRAINT "machine_command_ask_subject" CHECK (("kind" = 'shell' and "command" is not null) or ("kind" = 'app' and "app_name" is not null))
+	"note" text
 );
 --> statement-breakpoint
 ALTER TABLE "machine_command" ADD COLUMN "agent_id" uuid;--> statement-breakpoint
@@ -57,4 +53,4 @@ $app_sync$;
 --> statement-breakpoint
 CREATE TRIGGER "app_sync_write" AFTER INSERT OR DELETE ON "machine_command_ask" FOR EACH ROW EXECUTE FUNCTION "app_sync_machine_command_ask"();
 --> statement-breakpoint
-CREATE TRIGGER "app_sync_update" AFTER UPDATE ON "machine_command_ask" FOR EACH ROW WHEN (OLD."id" IS DISTINCT FROM NEW."id" OR OLD."user_id" IS DISTINCT FROM NEW."user_id" OR OLD."device_id" IS DISTINCT FROM NEW."device_id" OR OLD."agent_id" IS DISTINCT FROM NEW."agent_id" OR OLD."kind" IS DISTINCT FROM NEW."kind" OR OLD."command" IS DISTINCT FROM NEW."command" OR OLD."app_name" IS DISTINCT FROM NEW."app_name" OR OLD."app_bundle_id" IS DISTINCT FROM NEW."app_bundle_id" OR OLD."app_icon_png" IS DISTINCT FROM NEW."app_icon_png" OR OLD."asked_at" IS DISTINCT FROM NEW."asked_at" OR OLD."expires_at" IS DISTINCT FROM NEW."expires_at" OR OLD."decision" IS DISTINCT FROM NEW."decision" OR OLD."note" IS DISTINCT FROM NEW."note") EXECUTE FUNCTION "app_sync_machine_command_ask"();
+CREATE TRIGGER "app_sync_update" AFTER UPDATE ON "machine_command_ask" FOR EACH ROW WHEN (OLD."id" IS DISTINCT FROM NEW."id" OR OLD."user_id" IS DISTINCT FROM NEW."user_id" OR OLD."device_id" IS DISTINCT FROM NEW."device_id" OR OLD."agent_id" IS DISTINCT FROM NEW."agent_id" OR OLD."subject" IS DISTINCT FROM NEW."subject" OR OLD."asked_at" IS DISTINCT FROM NEW."asked_at" OR OLD."expires_at" IS DISTINCT FROM NEW."expires_at" OR OLD."lapsed_at" IS DISTINCT FROM NEW."lapsed_at" OR OLD."decision" IS DISTINCT FROM NEW."decision" OR OLD."note" IS DISTINCT FROM NEW."note") EXECUTE FUNCTION "app_sync_machine_command_ask"();

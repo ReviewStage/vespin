@@ -2,12 +2,9 @@
  * machine-ask-live.ts -- the asks the account's machines hold for its answer, as each of its devices follows them over the service's held poll: the read declared, and the asks as a reader draws them.
  *
  * The service answers one statement, every ask a machine of the account's
- * posted that it has not taken down (`machine-ask-wire.ts`), each with
- * the machine and the agent it is for, what it asks, when it was asked
- * and when its window closes in epoch milliseconds, and the answer that
- * stands on it, where one does. A device draws the ones still waiting; the
- * machine that holds one takes its answer from here. Only the account that
- * owns the machines reads them, never a teammate.
+ * posted and has not taken down (`machine-ask-wire.ts`), with what a device
+ * draws of it and the answer that stands on it, where one does. Only the
+ * account that owns the machines reads them, never a teammate.
  */
 
 import { Option, Schema } from "effect";
@@ -23,10 +20,10 @@ import {
 } from "./live-read.js";
 import { LIVE_READ, LIVE_USER_QUERY } from "./live-wire.js";
 import {
-  MACHINE_ASK_KIND,
   type MachineAskDecision,
   type MachineAskSubject,
   machineAskDecisionSchema,
+  machineAskSubjectSchema,
 } from "./machine-ask-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber } from "./service-wire.js";
@@ -43,13 +40,11 @@ export const MACHINE_ASKS_READ = liveRead({
         id: Schema.String,
         deviceId: Schema.String,
         agentId: Schema.NullOr(Schema.String),
-        kind: Schema.String,
-        command: Schema.NullOr(Schema.String),
-        appName: Schema.NullOr(Schema.String),
-        appBundleId: Schema.NullOr(Schema.String),
-        appIconPng: Schema.NullOr(Schema.String),
+        subject: Schema.Unknown,
         askedAt: countedNumber,
         expiresAt: countedNumber,
+        /** Whether its machine said the window closed with no answer, so an answer now lets the agent try again. */
+        lapsed: Schema.Boolean,
         decision: Schema.NullOr(Schema.String),
         note: Schema.NullOr(Schema.String),
       }),
@@ -86,27 +81,13 @@ export interface MachineAskLine {
   readonly subject: MachineAskSubject;
   readonly askedAt: number;
   readonly expiresAt: number;
+  readonly lapsed: boolean;
   readonly answer?: MachineAskAnswerLine;
 }
 
 const readDecision = Schema.decodeUnknownOption(machineAskDecisionSchema);
 
-/** What a row asks about; none for a kind this build does not know or a row missing what its kind needs. */
-function subjectOf(row: MachineAskLiveRow): MachineAskSubject | undefined {
-  if (row.kind === MACHINE_ASK_KIND.SHELL) {
-    return row.command === null ? undefined : { command: row.command };
-  }
-
-  if (row.kind !== MACHINE_ASK_KIND.APP || row.appName === null) return undefined;
-
-  return {
-    app: {
-      name: row.appName,
-      ...(row.appBundleId === null ? undefined : { bundleId: row.appBundleId }),
-      ...(row.appIconPng === null ? undefined : { iconPng: row.appIconPng }),
-    },
-  };
-}
+const readSubject = Schema.decodeUnknownOption(machineAskSubjectSchema);
 
 /** The answer a row holds; none while it waits, or for a decision this build does not know. */
 function answerOf(row: MachineAskLiveRow): MachineAskAnswerLine | undefined {
@@ -125,19 +106,20 @@ export function machineAsksOfLiveRows(
   rows: readonly MachineAskLiveRow[],
 ): readonly MachineAskLine[] {
   return orderedLiveRows(MACHINE_ASKS_READ.parts.asks, rows).flatMap((row) => {
-    const subject = subjectOf(row);
+    const subject = readSubject(row.subject);
     const answer = answerOf(row);
 
-    if (subject === undefined) return [];
+    if (Option.isNone(subject)) return [];
 
     return [
       {
         id: row.id,
         deviceId: row.deviceId,
         ...(row.agentId === null ? undefined : { agentId: row.agentId }),
-        subject,
+        subject: subject.value,
         askedAt: row.askedAt,
         expiresAt: row.expiresAt,
+        lapsed: row.lapsed,
         ...(answer === undefined ? undefined : { answer }),
       },
     ];

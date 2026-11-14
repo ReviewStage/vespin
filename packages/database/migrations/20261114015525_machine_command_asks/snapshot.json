@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "b053ae4b-e0b6-4d2c-b77d-b2ffb7aef5e2",
+  "id": "3269f942-0651-4b11-af79-23856db94a69",
   "prevIds": ["a01280d0-c41a-42b0-bc15-df3c5c00f100"],
   "ddl": [
     {
@@ -9858,66 +9858,14 @@
       "table": "machine_command_ask"
     },
     {
-      "type": "text",
+      "type": "jsonb",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "kind",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "machine_command_ask"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "command",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "machine_command_ask"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "app_name",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "machine_command_ask"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "app_bundle_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "machine_command_ask"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "app_icon_png",
+      "name": "subject",
       "entityType": "columns",
       "schema": "public",
       "table": "machine_command_ask"
@@ -9944,6 +9892,19 @@
       "generated": null,
       "identity": null,
       "name": "expires_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "machine_command_ask"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "lapsed_at",
       "entityType": "columns",
       "schema": "public",
       "table": "machine_command_ask"
@@ -22418,13 +22379,6 @@
       "entityType": "checks",
       "schema": "public",
       "table": "machine_command"
-    },
-    {
-      "value": "(\"kind\" = 'shell' and \"command\" is not null) or (\"kind\" = 'app' and \"app_name\" is not null)",
-      "name": "machine_command_ask_subject",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "machine_command_ask"
     },
     {
       "value": "\"parent_task_id\" <> \"id\"",

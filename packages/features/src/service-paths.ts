@@ -309,6 +309,8 @@ export const HOSTED_SERVICE_PATH = {
   MACHINE_ASK: "/api/mac-commands/asks",
   /** An ask taken down by its machine, once it took an answer or its call stopped waiting (POST). */
   MACHINE_ASK_CLOSE: "/api/mac-commands/asks/close",
+  /** An ask whose window ran out on its machine with no answer, said closed (POST), answered with an answer that beat it, where one did. */
+  MACHINE_ASK_LAPSE: "/api/mac-commands/asks/lapse",
   /**
    * The commands of the kinds named that no Mac of the account has claimed,
    * sealed for following (GET), or with `?poll=true` their rows inline.

@@ -11,7 +11,9 @@
  * listens, naming its kinds as the held read does. A Mac joins as the
  * device its commands are claimed by, carrying its own settings up the
  * first time, and writes them as the member changes them on it; the claim
- * and the presence then name that device. A result or a claim
+ * and the presence then name that device. An ask the Mac shows is posted,
+ * said closed as its window runs out, and taken down once answered
+ * (`machine-ask-wire.ts`). A result or a claim
  * for a command the account does not hold, claimed or waiting, is refused
  * as not found; the read and the presence refuse only as any procedure
  * may. The outputs are the wire schemas flipped, so oRPC's output check encodes the
@@ -23,9 +25,9 @@ import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import {
   machineAskClosedAnswerSchema,
-  machineAskCloseRequestSchema,
-  machineAskPostedAnswerSchema,
+  machineAskIdRequestSchema,
   machineAskRequestSchema,
+  machineAskStandsSchema,
 } from "../machine-ask-wire.js";
 import {
   COMPUTER_RECORDING_BOUNDS,
@@ -137,10 +139,15 @@ export const machineCommandsContract = {
     .meta(bodyCap(ASK_BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_ASK }))
     .input(exactInput(machineAskRequestSchema))
-    .output(EffectSchema.flip(machineAskPostedAnswerSchema)),
+    .output(EffectSchema.flip(machineAskStandsSchema)),
+  lapseAsk: declaredProcedure
+    .meta(bodyCap(CLAIM_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_ASK_LAPSE }))
+    .input(exactInput(machineAskIdRequestSchema))
+    .output(EffectSchema.flip(machineAskStandsSchema)),
   closeAsk: declaredProcedure
     .meta(bodyCap(CLAIM_BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_ASK_CLOSE }))
-    .input(exactInput(machineAskCloseRequestSchema))
+    .input(exactInput(machineAskIdRequestSchema))
     .output(EffectSchema.flip(machineAskClosedAnswerSchema)),
 };

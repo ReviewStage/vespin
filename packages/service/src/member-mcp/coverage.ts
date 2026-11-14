@@ -422,6 +422,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     saveDeviceSettings: INTERNAL,
     saveDeviceAppLooks: INTERNAL,
     ask: INTERNAL,
+    lapseAsk: INTERNAL,
     closeAsk: INTERNAL,
   },
   pullRequests: { reviewOptions: SCREEN_ONLY },
