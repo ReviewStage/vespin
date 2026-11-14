@@ -28,9 +28,12 @@ import {
   LIST_LOOK,
   LinkRow,
   ListSection,
+  PUSH_ROW_GOES,
+  PushRow,
   RelationRow,
   RowList,
   Screen,
+  SettingsForm,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -115,21 +118,22 @@ function candidatesFor(
     }));
 }
 
-/** The kinds the sheet opens on where none is named, each by its glyph and what choosing it does. */
+/** The kinds the sheet opens on where none is named, each by its glyph and what choosing it does, as one grouped card of the form's own rows, each going on to its tasks, as a sheet that picks stands (the Move sheet's form). */
 function KindRows({ onKind }: { readonly onKind: (kind: TaskRelationKind) => void }) {
   return (
-    <RowList look={LIST_LOOK.PLAIN}>
+    <SettingsForm>
       <ListSection>
         {TASK_RELATION_ORDER.map((kind) => (
-          <LinkRow
+          <PushRow
             key={kind}
             symbol={RELATION_KIND_SYMBOL[kind]}
             label={TASK_RELATION_VERBS[kind].choose}
+            goes={PUSH_ROW_GOES.PAGE}
             onPress={() => onKind(kind)}
           />
         ))}
       </ListSection>
-    </RowList>
+    </SettingsForm>
   );
 }
 
@@ -166,7 +170,8 @@ export function TaskRelationScreen({
           headerShown: true,
           headerTintColor: colors.TEXT,
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.SIDEBAR },
+          // Note that the kinds stand as a grouped card on the form's ground, and the tasks to pick from as a plain list on the sheet's.
+          contentStyle: { backgroundColor: kind === undefined ? colors.GROUPED : colors.SIDEBAR },
         }}
       >
         {/* Note that the title is the bar's own (`Stack.Title`), as its search and Cancel are, since the root stack's title for the sheet stood over one set in the options. */}
