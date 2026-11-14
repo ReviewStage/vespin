@@ -155,7 +155,11 @@ function KeptScreens() {
  * screen for the whole launch while the app answers under it. So the root
  * takes it down as well; a hide with no splash standing does nothing.
  */
+// MEASUREMENT ONLY: the root layout and every screen module it imports evaluated.
+globalThis.__perfMark?.("evaluated-root-layout");
+
 export default function RootLayout() {
+  globalThis.__perfMark?.("root-layout-render");
   useEffect(() => hideSplash(), []);
 
   return (

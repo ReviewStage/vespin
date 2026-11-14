@@ -149,3 +149,6 @@ export const crashReportsErrorReporting: Layer.Layer<never> = sentryReporterLaye
 });
 
 startCrashReports();
+
+// MEASUREMENT ONLY: this module and everything it imports evaluated.
+globalThis.__perfMark?.("evaluated-crash-reports");
