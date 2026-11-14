@@ -99,6 +99,8 @@ export type BarMenu = {
   }[];
   /** Menus within it, after its acts, such as a task's Status. */
   readonly submenus?: readonly BarMenu[] | undefined;
+  /** Whether the menu stands dimmed and opens on nothing, as a bar's act does while it can't act. */
+  readonly disabled?: boolean | undefined;
 };
 
 /** A list's search, the system's field over its column: what it says before anything is typed, what is typed now, and what is called with each change. */
@@ -182,7 +184,10 @@ export function BarMenuButton({
   const colors = useColors();
 
   return (
-    <Menu label={menuLabel(menu.label, menu.symbol)} modifiers={[...modifiers]}>
+    <Menu
+      label={menuLabel(menu.label, menu.symbol)}
+      modifiers={[...modifiers, disabled(menu.disabled === true)]}
+    >
       {menu.choices.map((choice) => (
         <Toggle
           key={choice.label}

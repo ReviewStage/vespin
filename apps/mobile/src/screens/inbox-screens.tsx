@@ -419,9 +419,9 @@ function moreMenu(
   };
 }
 
-/** A menu whose every act stands dimmed while `dim` holds, so a bar keeps its place for it, as Mail's edit bar stands Remind me dimmed until a message is chosen. */
+/** A menu standing dimmed while `dim` holds, so a bar keeps its place for it and VoiceOver hears it as dimmed, as Mail's edit bar stands Remind me until a message is chosen. */
 function dimmedWhile(dim: boolean, menu: BarMenu): BarMenu {
-  return dim ? { ...menu, actions: menu.actions.map((act) => ({ ...act, disabled: true })) } : menu;
+  return dim ? { ...menu, disabled: true } : menu;
 }
 
 /**
@@ -1007,7 +1007,11 @@ function InboxStackList(words: InboxSearch) {
             ...(at === 0 ? [] : [<Stack.Toolbar.Spacer key={at} />]),
             // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass.
             isBarMenu(act) ? (
-              <Stack.Toolbar.Menu key={act.label} accessibilityLabel={act.label}>
+              <Stack.Toolbar.Menu
+                key={act.label}
+                accessibilityLabel={act.label}
+                disabled={act.disabled === true}
+              >
                 <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
                 {toolbarMenuActions(act)}
               </Stack.Toolbar.Menu>
