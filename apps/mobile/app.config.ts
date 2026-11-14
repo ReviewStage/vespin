@@ -1,6 +1,13 @@
 // app.config.ts -- the iOS app's whole native configuration: Expo generates `ios/` from it on every build, and none is committed.
 
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
@@ -101,6 +108,16 @@ const IMAGE_SETS = [
     TEMPLATE: false,
   },
 ] as const;
+
+// Where each integration's mark is kept, as the desktop draws it, by its
+// provider: `<provider>.svg`, and `<provider>-dark.svg` beside it for a brand
+// that names one ink per ground; a mark with no dark file drawn in
+// `currentColor` is a template, drawn in the ink of the row it leads. Each is
+// written under the catalog's `IntegrationMarks` folder, which names its
+// images, so `@repo/ui-native`'s `INTEGRATION_MARK_ASSET` reads
+// `IntegrationMarks/<provider>`.
+const INTEGRATION_MARKS = "../../packages/ui-native/assets/provider-marks";
+const INTEGRATION_MARKS_FOLDER = "IntegrationMarks";
 
 // The pictures `AgentTile` draws that have no vector: Codex's, OpenAI's own
 // picture in its own colors, from the files the panel serves, at one, two,
@@ -270,6 +287,11 @@ const SHARE_EXTENSION: AppExtension = {
 // The build number TestFlight orders uploads by: release-ios.yml names its
 // run in it, and a local build, which never uploads, is build 1.
 const BUILD_NUMBER = process.env.VESPIN_IOS_BUILD_NUMBER ?? "1";
+
+// The camera's purpose string. The app never opens the camera, but WebRTC's
+// library, which a call's audio rides on, links the camera's APIs, and App
+// Store Connect refuses a build that links them without this key (ITMS-90683).
+const CAMERA_USAGE = "Vespin never uses the camera: a call with an agent is audio only.";
 
 // What the system's microphone prompt says, the first time Talk calls an
 // agent (`src/voice-call.tsx`): the one use the app has for the microphone.
@@ -749,6 +771,55 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
 
+      const marksFolder = join(catalog, INTEGRATION_MARKS_FOLDER);
+      mkdirSync(marksFolder, { recursive: true });
+
+      writeFileSync(
+        join(marksFolder, "Contents.json"),
+        `${JSON.stringify({ info: { author: "xcode", version: 1 }, properties: { "provides-namespace": true } }, null, 2)}\n`,
+      );
+
+      const marks = join(projectRoot, INTEGRATION_MARKS);
+
+      const providers = readdirSync(marks)
+        .filter((file) => file.endsWith(".svg") && !file.endsWith("-dark.svg"))
+        .map((file) => basename(file, ".svg"));
+
+      for (const name of providers) {
+        const imageSet = join(marksFolder, `${name}.imageset`);
+        mkdirSync(imageSet, { recursive: true });
+        const light = readFileSync(join(marks, `${name}.svg`), "utf8");
+        const darkFile = join(marks, `${name}-dark.svg`);
+        const dark = existsSync(darkFile) ? readFileSync(darkFile, "utf8") : undefined;
+
+        writeFileSync(join(imageSet, `${name}.svg`), light);
+
+        if (dark !== undefined) writeFileSync(join(imageSet, `${name}-dark.svg`), dark);
+
+        const contents = {
+          images: [
+            { filename: `${name}.svg`, idiom: "universal" },
+            ...(dark === undefined
+              ? []
+              : [
+                  {
+                    appearances: [{ appearance: "luminosity", value: "dark" }],
+                    filename: `${name}-dark.svg`,
+                    idiom: "universal",
+                  },
+                ]),
+          ],
+          info: { author: "xcode", version: 1 },
+          properties: {
+            "preserves-vector-representation": true,
+            "template-rendering-intent":
+              dark === undefined && light.includes("currentColor") ? "template" : "original",
+          },
+        };
+
+        writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
+      }
+
       for (const set of PICTURE_SETS) {
         const imageSet = join(catalog, `${set.NAME}.imageset`);
         mkdirSync(imageSet, { recursive: true });
@@ -854,21 +925,25 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
     plugins: [
       "expo-router",
       // A message's photo is picked in the system's photo picker, which reads
-      // only what the person picks, so no camera is asked for; the microphone
-      // is a call's alone, and the picker names it in a call's words, since
-      // its plugin otherwise writes or clears the key over WebRTC's.
+      // only what the person picks, so the camera is never asked for. Both
+      // purpose strings are still named here, since the picker's plugin
+      // otherwise writes or clears each key over WebRTC's: a cleared camera
+      // key is what App Store Connect refused build 32 for.
       [
         "expo-image-picker",
         {
           photosPermission: "Vespin attaches the photos you pick to a message to an agent.",
-          cameraPermission: false,
+          cameraPermission: CAMERA_USAGE,
           microphonePermission: MICROPHONE_USAGE,
         },
       ],
       // A voice call's audio rides on WebRTC (`src/voice-call.tsx`), its
       // native module linked from the app's dependencies; the plugin writes
-      // the microphone's prompt and turns bitcode off.
-      ["@config-plugins/react-native-webrtc", { microphonePermission: MICROPHONE_USAGE }],
+      // the microphone's and the camera's purpose strings and turns bitcode off.
+      [
+        "@config-plugins/react-native-webrtc",
+        { cameraPermission: CAMERA_USAGE, microphonePermission: MICROPHONE_USAGE },
+      ],
       [
         "expo-splash-screen",
         {

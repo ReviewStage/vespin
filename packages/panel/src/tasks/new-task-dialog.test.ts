@@ -861,6 +861,17 @@ test("a refusal keeps the card and the words, says why under it, and Retry start
   assert.equal(card.starts.length, 2);
 });
 
+test("a refusal's note goes once the words are edited, and stays while they stand", async () => {
+  const card = await mount("Vespin cannot reach acme/web.");
+  card.type("Dark mode toggle");
+  await card.key("Enter");
+  assert.match(card.note() ?? "", /Vespin cannot reach acme\/web\./u);
+
+  card.type(" for the sidebar");
+  await settle();
+  assert.equal(card.note(), undefined);
+});
+
 test("a start refused for a missing credential says which harness to connect, and the card offers the same press the draft agent tab does, opening Settings at its row", async () => {
   const card = await mount({
     reason: FAILURE_REASON.CONNECT_AGENTS,

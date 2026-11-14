@@ -56,16 +56,16 @@
   --diff-removed-ground: color-mix(in srgb, var(--diff-removed-mark) 14%, transparent);
   --diff-added-word: color-mix(in srgb, var(--diff-added-mark) 34%, transparent);
   --diff-removed-word: color-mix(in srgb, var(--diff-removed-mark) 34%, transparent);
-  /* A Terminal tab's screen (`terminal/`): the side panel's well for its
-     ground, the code's ink for its words and cursor, its selection in the
+  /* A Terminal tab's screen (`terminal/`): the code ground every code
+     surface stands on for its ground, the code's ink for its words and cursor, its selection in the
      code's blue, and the sixteen ANSI colors a program prints in, from the
      same GitHub theme the code is colored with. The terminal draws on a
      canvas, which reads none of this itself, so the bundle reads the color
      each resolves to off the host and draws again when the appearance flips
      (`terminal/terminal-theme.ts`). */
-  /* The well read through its brand role, so a change of brand
+  /* The code ground read through its brand role, so a change of brand
      (`@repo/brand`'s `brand-palette.mjs`) recolors the screen with it. */
-  --terminal-ground: var(--ui-color-well);
+  --terminal-ground: var(--ui-color-code-ground);
   --terminal-text: var(--code-text);
   --terminal-cursor: var(--code-text);
   --terminal-selection: light-dark(rgba(9, 105, 218, 0.2), rgba(56, 139, 253, 0.4));

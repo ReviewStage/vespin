@@ -21,7 +21,7 @@
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, type LinkDestination, taskLinkStep } from "@repo/features/link-grammar";
-import { DOCUMENT_REGION } from "@repo/features/tasks-model";
+import { TASK_REGION } from "@repo/features/tasks-model";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { StripTab } from "@repo/ui/tab-strip-model";
 import { type HistoryLocation, useRouter } from "@tanstack/react-router";
@@ -223,14 +223,14 @@ function withinLink(place: LinkDestination, thing: LinkThing, workspace: string)
 function versionLinks({ tasks, at }: PlaceLinks): readonly LinkAtHand[] {
   const { region } = tasks;
 
-  if (region.kind !== DOCUMENT_REGION.READY) return [];
+  if (region.kind !== TASK_REGION.READY) return [];
   const { task: drawn } = region;
   const workspace = slugOf(tasks.workspaces, drawn.workspaceId);
   // Note that the task's links name it by its number, where it has one, as every link to it is written.
-  const planId = taskLinkStep(drawn);
+  const taskId = taskLinkStep(drawn);
 
   const task: LinkAtHand = {
-    link: { workspace, place: { kind: LINK_DESTINATION.TASK, planId } },
+    link: { workspace, place: { kind: LINK_DESTINATION.TASK, taskId } },
     thing: LINK_THING.TASK,
     name: drawn.name,
   };
@@ -242,7 +242,7 @@ function versionLinks({ tasks, at }: PlaceLinks): readonly LinkAtHand[] {
   if (revision === undefined || listedAlone) return [{ ...task, step: true }];
 
   return [
-    stepLink({ kind: LINK_DESTINATION.VERSION, planId, revision }, LINK_THING.VERSION, workspace),
+    stepLink({ kind: LINK_DESTINATION.VERSION, taskId, revision }, LINK_THING.VERSION, workspace),
     task,
   ];
 }
@@ -634,7 +634,7 @@ export const ROUTED_PLACE = {
       const inboxPlace: LinkDestination =
         at.inboxTask === undefined
           ? { kind: LINK_DESTINATION.INBOX }
-          : { kind: LINK_DESTINATION.INBOX, planId: at.inboxTask };
+          : { kind: LINK_DESTINATION.INBOX, taskId: at.inboxTask };
 
       const inbox = stepLink(inboxPlace, LINK_THING.INBOX, listed);
       const chosen = listedInboxChoice(views.inbox.chosen, tasks);

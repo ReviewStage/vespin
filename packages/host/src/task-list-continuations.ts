@@ -16,7 +16,7 @@ import { KEPT_BY_SCOPE, type RowCollection, scopedCollection } from "@repo/sync"
 import { createLiveQueryCollection, eq, groupKeys, isNull, not, toArray } from "@tanstack/db";
 import { Effect, type Scope } from "effect";
 import type { QueryCollection } from "./drawn-rows.js";
-import type { AgentRow } from "./task-list-collections.js";
+import type { AgentRow } from "./task-list-rows.js";
 
 /** One agent another was started from, and the agents started from it as its summary names them (`continuedBy`). */
 export interface Continued {

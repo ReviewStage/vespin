@@ -71,7 +71,7 @@ import {
 import { HOSTED_REFUSAL, type HostedRefusal } from "../http/http-effect.js";
 
 /** The part of a pull request one read answers. */
-export const PULL_REQUEST_PART = {
+const PULL_REQUEST_PART = {
   OVERVIEW: "overview",
   CHECKS: "checks",
   CONVERSATION: "conversation",
@@ -120,7 +120,7 @@ const PULL_REQUEST_TOOL_REFUSAL = {
 } as const;
 
 /** The pull request a call names: an agent's by the agent's id, or a repository's by its number, beside the workspace the caller names. */
-export const PULL_REQUEST_FIELDS = {
+const PULL_REQUEST_FIELDS = {
   agentId: Schema.optionalKey(
     describeWire(
       wireUuidSchema,

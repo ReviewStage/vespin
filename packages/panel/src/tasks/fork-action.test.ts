@@ -45,7 +45,7 @@ afterEach(() => {
 function summary(id: string, extra: Partial<AgentSummary> = {}): AgentSummary {
   return {
     id,
-    planId: TASK,
+    taskId: TASK,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,

@@ -915,7 +915,7 @@ export function PagePane({
   const [view, setView] = useState<PageView>(PAGE_VIEW.PAGE);
 
   const commenting = useCommenting(
-    comments === undefined ? undefined : pageDraftPlace(comments.control.planId, page.id),
+    comments === undefined ? undefined : pageDraftPlace(comments.control.taskId, page.id),
   );
 
   const frame = useRef<HTMLIFrameElement>(null);
@@ -1036,7 +1036,7 @@ export function PagePane({
       ? []
       : [
           openPageInBrowserItem(
-            { kind: LINK_DESTINATION.PAGE, planId: place.taskId, pageId: page.id },
+            { kind: LINK_DESTINATION.PAGE, taskId: place.taskId, pageId: page.id },
             workspace,
           ),
         ];
