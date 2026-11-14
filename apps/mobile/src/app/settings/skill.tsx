@@ -2,7 +2,9 @@
 
 import type { InstalledSkillContent } from "@repo/features/installed-skill-route-wire";
 import { formatBytes } from "@repo/features/number-format";
+import { readSkillFile } from "@repo/features/skill-file";
 import { fencedSkillFile, SKILLS_LINE } from "@repo/features/skills-settings-words";
+import { readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { EmptyState, GLYPH, MarkdownPage, SCREEN_GROUND, Screen } from "@repo/ui-native";
 import { Stack, useLocalSearchParams } from "expo-router";
@@ -24,12 +26,23 @@ type SkillRead =
   | { readonly kind: typeof SKILL_READ.READ; readonly content: InstalledSkillContent }
   | { readonly kind: typeof SKILL_READ.FAILED };
 
-/** The skill's file as written, then its files by path and size, as the panel's Open lists them. */
+/**
+ * The skill's words, then its files by path and size, as the panel's Open
+ * lists them. Note that the body under its frontmatter is drawn as the
+ * Markdown it is, so it wraps to the phone's width, rather than as one block
+ * of code a reader scrolls sideways through; a file with no frontmatter to
+ * read stands as written.
+ */
 function skillWords(content: InstalledSkillContent): string {
   const files = content.files.map((file) => `- \`${file.path}\` · ${formatBytes(file.bytes)}`);
+  const body = readSkillFile(content.skillFile)?.body.trim();
+  const words = body === undefined ? fencedSkillFile(content.skillFile) : body;
 
-  return [fencedSkillFile(content.skillFile), `**${SKILLS_LINE.FILES}**`, ...files].join("\n\n");
+  return [words, `**${SKILLS_LINE.FILES}**`, ...files].join("\n\n");
 }
+
+/** The bar's title over a skill's page: none, since the page's own heading names the skill. */
+const NO_BAR_TITLE = "";
 
 export default function SkillScreen() {
   const { skill = "", name = "" } = useLocalSearchParams<{ skill: string; name: string }>();
@@ -63,7 +76,7 @@ export default function SkillScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: name }} />
+      <Stack.Screen options={{ title: NO_BAR_TITLE }} />
       <Screen ground={SCREEN_GROUND.GROUPED}>
         {read.kind === SKILL_READ.READ ? (
           <MarkdownPage title={name} words={skillWords(read.content)} onOpenLink={openLink} />
@@ -77,7 +90,7 @@ export default function SkillScreen() {
             }}
           />
         ) : (
-          <EmptyState title={name} symbol={GLYPH.SKILL} loading />
+          <EmptyState title={readingWords(name)} symbol={GLYPH.SKILL} loading />
         )}
       </Screen>
     </>
