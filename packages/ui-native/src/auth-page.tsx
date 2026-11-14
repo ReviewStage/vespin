@@ -1,7 +1,8 @@
-// auth-page.tsx -- a page a person signs in on: the Keel mark, the page's title, its ways in, and what went wrong, as the web's sign-in card lays them out.
+// auth-page.tsx -- a page a person signs in on: the Keel mark, the page's title, then its ways in at the foot and what went wrong, as Apple's own first screens lay them out.
 
-import { Text, VStack } from "@expo/ui/swift-ui";
+import { ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import {
+  accessibilityAddTraits,
   font,
   foregroundStyle,
   frame,
@@ -9,6 +10,8 @@ import {
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode } from "react";
+import { useWindowDimensions } from "react-native";
+import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { BrandMark } from "./brand-mark.js";
 import { Spacer } from "./screen.js";
 import { useColors } from "./tokens/colors.js";
@@ -18,6 +21,15 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** The mark's size over the title, in points. */
 const AUTH_MARK_SIZE = 56;
 
+/** How tall the page stands at most, centered on a taller window such as an iPad's, so its buttons stay near its title, as iPadOS's own first screens keep them. */
+const AUTH_TALLEST = 640;
+
+/** A window at least this wide, in points, an iPad's or the open Duo's, holds the page to AUTH_TALLEST; a phone's keeps its buttons at its foot. */
+const WIDE_WINDOW = 700;
+
+/** A window shorter than this, in points, scrolls the page rather than squeezing it between its spacers. */
+const SHORT_WINDOW = 520;
+
 /** How wide the column stands at most, so a wide window keeps the buttons a phone's width. */
 const AUTH_COLUMN_WIDTH = 360;
 
@@ -25,65 +37,132 @@ type AuthPageProps = {
   readonly title: string;
   /** The ways in, each a `ProviderButton`. */
   readonly children: ReactNode;
-  /** Why the last attempt did not finish, in the danger color under the buttons. */
+  /** Why the last attempt did not finish, in the danger color under the buttons, said aloud by VoiceOver as it comes. */
   readonly error?: string | undefined;
   /** A quiet line at the foot of the column. */
   readonly footnote?: string | undefined;
 };
 
-/**
- * The column centered on the screen's ground, a phone's width at most on a
- * wider window, such as an iPad's, and centered there too: the mark, the title in the
- * system's title type, the buttons a person signs in with, and a line under
- * them where the last attempt went wrong. It stands inside a `Screen`.
- */
-export function AuthPage({ title, children, error, footnote }: AuthPageProps) {
+/** The mark and the title, which head the page. */
+function AuthHead({ title }: Pick<AuthPageProps, "title">) {
   const colors = useColors();
+  const centered = multilineTextAlignment("center");
 
   return (
-    <VStack
-      spacing={SPACE.PAGE}
-      modifiers={[
-        frame({ maxWidth: AUTH_COLUMN_WIDTH }),
-        padding({ horizontal: SPACE.PAGE }),
-        frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
-      ]}
-    >
-      <Spacer />
+    <VStack spacing={SPACE.TIGHT * 2}>
       <BrandMark size={AUTH_MARK_SIZE} />
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
           foregroundStyle(colors.TEXT),
-          multilineTextAlignment("center"),
+          centered,
+          accessibilityAddTraits(["isHeader"]),
         ]}
       >
         {title}
       </Text>
+    </VStack>
+  );
+}
+
+/** The ways in, what went wrong, and the footnote, which stand at the foot of the page. */
+function AuthFoot({
+  children,
+  error,
+  footnote,
+}: Pick<AuthPageProps, "children" | "error" | "footnote">) {
+  const colors = useColors();
+  const centered = multilineTextAlignment("center");
+
+  return (
+    <VStack spacing={SPACE.PAGE}>
       <VStack spacing={SPACE.TIGHT * 2}>{children}</VStack>
       {error === undefined ? null : (
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.ROW_LINE }),
             foregroundStyle(colors.DANGER_TEXT),
-            multilineTextAlignment("center"),
+            centered,
           ]}
         >
           {error}
         </Text>
       )}
-      <Spacer />
       {footnote === undefined ? null : (
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.ROW_LINE }),
             foregroundStyle(colors.TEXT_MUTED),
-            multilineTextAlignment("center"),
+            centered,
           ]}
         >
           {footnote}
         </Text>
       )}
+    </VStack>
+  );
+}
+
+/**
+ * A page a person signs in on, on the screen's ground, a phone's width at
+ * most on a wider window, such as an iPad's, and centered there: the mark,
+ * the title in the system's title type in the middle,
+ * and the buttons a person signs in with at the foot, in the thumb's reach,
+ * as Apple's own first screens stand them, with a line under them where the
+ * last attempt went wrong. At an accessibility size, or on a short window, the page scrolls, its
+ * parts one after another, so nothing is cut off on a short window. It stands
+ * inside a `Screen`.
+ */
+export function AuthPage({ title, children, error, footnote }: AuthPageProps) {
+  // Note that the page scrolls at an accessibility size and on a window too short for it, such as a landscape iPhone's or the folded Duo's, so its foot is never cut off.
+  const { width, height } = useWindowDimensions();
+  const large = useAccessibilitySize() || height < SHORT_WINDOW;
+  useAnnounced(error);
+
+  const column = [
+    frame({ maxWidth: AUTH_COLUMN_WIDTH }),
+    padding({ horizontal: SPACE.PAGE, vertical: SPACE.PAGE }),
+    frame({ maxWidth: Number.POSITIVE_INFINITY }),
+  ];
+
+  const head = <AuthHead title={title} />;
+
+  const foot = (
+    <AuthFoot error={error} footnote={footnote}>
+      {children}
+    </AuthFoot>
+  );
+
+  if (large) {
+    return (
+      <ScrollView>
+        <VStack spacing={SPACE.PAGE * 2} modifiers={column}>
+          {head}
+          {foot}
+        </VStack>
+      </ScrollView>
+    );
+  }
+
+  // Note that the page fills a phone's height, its buttons at the foot, and stands at most AUTH_TALLEST high, centered, on a wide window.
+  return (
+    <VStack
+      modifiers={[
+        frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+      ]}
+    >
+      <VStack
+        spacing={SPACE.PAGE}
+        modifiers={[
+          ...column,
+          frame({ maxHeight: width >= WIDE_WINDOW ? AUTH_TALLEST : Number.POSITIVE_INFINITY }),
+        ]}
+      >
+        <Spacer />
+        {head}
+        <Spacer />
+        {foot}
+      </VStack>
     </VStack>
   );
 }

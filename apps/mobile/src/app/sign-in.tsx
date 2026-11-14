@@ -1,4 +1,4 @@
-// sign-in.tsx -- the sign-in screen: the Keel mark on the brand's ground, and a way in through Google and through GitHub, each in the system's authentication session.
+// sign-in.tsx -- the sign-in screen: the Keel mark on the brand's ground and a way in through Google and through GitHub at its foot, each in the system's authentication session.
 
 import { ACCOUNT_PROVIDER, type AccountProvider } from "@repo/credentials/snapshot";
 import { PRODUCT_NAME } from "@repo/features/product-name";
