@@ -454,8 +454,9 @@ type FailedReadRowProps = {
 
 /**
  * A row saying a part of a page could not be read: the failed glyph in the
- * danger ink, as the panel's error state and an agent's failed mark draw it,
- * hidden from VoiceOver since the words say it, the words muted, and its one
+ * attention ink, the one look of every problem line in the app (a status
+ * mark such as an agent's failed ring keeps its red), hidden from VoiceOver
+ * since the words say it, the words muted, and its one
  * act at the line's end as the system's small bordered capsule in the ink, as
  * Mail says a message could not be loaded. Note that only the capsule takes a press, so the row reads
  * as a line that says, with the act beside it.
@@ -471,7 +472,7 @@ export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
         lead={
           <Image
             {...glyphImage(GLYPH.FAILED)}
-            color={colors.DANGER}
+            color={colors.ATTENTION}
             modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), accessibilityHidden(true)]}
           />
         }
