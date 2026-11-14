@@ -738,6 +738,8 @@ private let CURSOR_SWAY_DEGREES = 4.5
 private let CURSOR_SWAY_SECONDS = 2.0
 /// How often the cursor's window redraws while it sways: 30 a second, which a sway of a few degrees over seconds needs no more than, so a cursor held a while costs little.
 private let CURSOR_FRAME_NANOSECONDS: UInt64 = 33_333_333
+/// How many frames pass between restacks of the cursor over its app's window: about two a second.
+private let CURSOR_RESTACK_FRAMES = 15
 /// The cursor's box, and where in it the arrow's tip stands.
 private let CURSOR_BOX = CGSize(width: 36, height: 36)
 private let CURSOR_TIP = CGPoint(x: 8, y: 6)
@@ -984,11 +986,15 @@ private final class AgentCursor {
         }
         if swaying == nil {
             swaying = Task { @MainActor [weak self] in
+                var frame = 0
                 while !Task.isCancelled {
                     // Note that a cursor faded out, or not yet shown, is never redrawn.
                     if let panel = self?.panel, panel.isVisible, panel.alphaValue > 0 {
                         panel.contentView?.needsDisplay = true
                     }
+                    // Note that it is stacked again a few times a second too, because a window minimized or restored while its app stays active tells no notification.
+                    frame += 1
+                    if frame % CURSOR_RESTACK_FRAMES == 0 { self?.stack() }
                     try? await Task.sleep(nanoseconds: CURSOR_FRAME_NANOSECONDS)
                 }
             }
