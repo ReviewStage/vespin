@@ -1,7 +1,7 @@
 // detail-stack.ts -- the pages each place pushes over its detail inside the detail's own column, in a window wide enough for three columns, as Mail opens a message's related pages beside its list with a Back there.
 
 import { IOS_TAB, type IosTab, iosRouteOnTab } from "@repo/features/ios-app-links";
-import { type Href, useRouter } from "expo-router";
+import { type Href, useIsFocused, useRouter } from "expo-router";
 import {
   createContext,
   useCallback,
@@ -397,11 +397,16 @@ export function isStackedRoute(segments: readonly string[]): boolean {
  * detail would, as `useHandToSplit` hands a thread or a task to its list.
  * Nothing is handed while `page` is none. Note that the page is pushed once
  * however often the route draws, since the router pops it a few renders
- * after the push.
+ * after the push. Note too that only the page in front hands over, as
+ * `useHandToSplit` does, because the hand-off pops every page above the
+ * tab's root: a turn to three columns under a sheet, or under another page
+ * pushed over this one, would close them and drop their drafts. A page
+ * behind keeps drawing, and hands over once it next comes in front.
  */
 export function useHandToDetail(page: PushedPage | undefined): boolean {
   const router = useRouter();
-  const handing = useThreeColumns();
+  const focused = useIsFocused();
+  const handing = useThreeColumns() && focused;
   const own = useOwnTab();
   const place = placeOfRoute(own) ?? SIDEBAR_PLACE.TASKS;
   const handed = useRef(false);
