@@ -1322,10 +1322,11 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
                   relation={TASK_RELATION_WORDS[kind]}
                   relationMark={{
                     glyph: RELATION_KIND_SYMBOL[kind],
-                    // Note that a blocker still open wants the reader, as the panel's pill draws it, until it's done or canceled.
+                    // Note that a blocker known to be still open wants the reader, as the panel's pill draws it, until it's done or canceled; one the list doesn't hold is never known open, so it stands in the ink.
                     attention:
                       kind === TASK_RELATION_KIND.BLOCKED_BY &&
-                      !(other !== undefined && taskFinished(other)),
+                      other !== undefined &&
+                      !taskFinished(other),
                   }}
                   trailingActions={relationSwipes(task.id, id, kind, relations)}
                 />
