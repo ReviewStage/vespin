@@ -7,9 +7,9 @@
 // reads (a PDF, a text file, an image, a spreadsheet), Markup, and its own
 // share button, whose sheet holds Copy and Save Image. Note that a press on a
 // thumbnail hands its frame in the window, so the preview grows from the
-// thumbnail and shrinks back into it as the system's own do; a frame of none
-// opens it with the system's plain transition. A file Quick Look can't read
-// answers false, and the app shares it instead.
+// thumbnail and shrinks back into it as the system's own do on the iPhone; a
+// frame of none, and every iPad, open it with the system's plain transition.
+// A file Quick Look can't read answers false, and the app shares it instead.
 
 import ExpoModulesCore
 import QuickLook
@@ -91,7 +91,9 @@ public final class QuickLookModule: Module {
         let presenter = topmost(window)
       else { return false }
 
-      let frame = from.flatMap { rect in
+      // Note that an iPad opened the preview grown from its thumbnail in Quick Look's immersive mode, its bar and Done hidden with no tap bringing them back, so there it opens from no frame, inside a navigation controller of its own whose bar always holds Done.
+      let pad = UIDevice.current.userInterfaceIdiom == .pad
+      let frame = pad ? nil : from.flatMap { rect in
         rect.count == 4 ? CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]) : nil
       }
       let preview = Preview(item: item, from: frame, window: window) { [weak self] closed in
@@ -101,7 +103,25 @@ public final class QuickLookModule: Module {
       controller.dataSource = preview
       controller.delegate = preview
       shown.append(preview)
-      presenter.present(controller, animated: true)
+
+      guard pad else {
+        presenter.present(controller, animated: true)
+        return true
+      }
+
+      let navigation = UINavigationController(rootViewController: controller)
+      navigation.modalPresentationStyle = .fullScreen
+      presenter.present(navigation, animated: true) {
+        // Quick Look sets its own Done where it finds itself presented; one it left out is added, closing the whole preview.
+        guard controller.navigationItem.leftBarButtonItem == nil else { return }
+        controller.navigationItem.leftBarButtonItem = UIBarButtonItem(
+          systemItem: .done,
+          primaryAction: UIAction { [weak navigation, weak preview] _ in
+            navigation?.dismiss(animated: true)
+            if let preview { preview.onDismiss(preview) }
+          }
+        )
+      }
       return true
     }.runOnQueue(.main)
   }
