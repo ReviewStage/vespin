@@ -1243,7 +1243,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           }),
         ).agent;
 
-        assert.equal(forked.planId, sweep.id);
+        assert.equal(forked.taskId, sweep.id);
         assert.deepEqual(replayed(), ["Said: Fixed the shared temp dir."]);
 
         const before = agentSessions.opened.length;
@@ -1317,7 +1317,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           }),
         ).agent;
 
-        assert.equal(fromTask.planId, task.id);
+        assert.equal(fromTask.taskId, task.id);
         assert.equal(Option.getOrThrow(yield* readAgent(owner, fromTask.id)).taskId, task.id);
 
         // A retry is answered with the agent its key made though the source is gone since.

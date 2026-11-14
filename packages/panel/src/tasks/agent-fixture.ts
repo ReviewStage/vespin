@@ -328,7 +328,7 @@ const HELD_CALL: AgentPendingApproval = {
 function agentSummary(taskId: string, running = false, held = false): AgentSummary {
   const summary: AgentSummary = {
     id: FIXTURE_AGENT_ID,
-    planId: taskId,
+    taskId: taskId,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Add teammate invitations",

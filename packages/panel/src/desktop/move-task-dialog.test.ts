@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import type { Task } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { agentTab } from "@repo/ui/tab-strip-model";
 import { act, createElement } from "react";
@@ -74,12 +74,12 @@ const TASK: Task = {
   updatedAt: 2,
   repository: "acme-corp/relay",
   ownerId: DANA,
-  document: { body: "# Checkout retries", assumptions: [] },
+  description: { body: "# Checkout retries", assumptions: [] },
 };
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Retry the webhook",
@@ -123,11 +123,11 @@ function openTab(
   onMoveTask: TasksControl["onMoveTask"] = () => Promise.resolve(false),
 ): TasksControl {
   return tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     me: DANA,
     tasks: [task],
     activeTaskId: task.id,
-    region: { kind: DOCUMENT_REGION.READY, task: task },
+    region: { kind: TASK_REGION.READY, task: task },
     workspaces,
     workspace: workspaces.find((workspace) => workspace.id === task.workspaceId),
     onMoveTask,
@@ -271,6 +271,17 @@ test("the dialog lists the other workspaces, disables one whose GitHub cannot re
 
   assert.deepEqual(moves, [[TASK.id, ACME.id]]);
   assert.equal(dialog(), null, "a move landed puts the dialog away");
+});
+
+test("where no other workspace's GitHub reaches the repository, the dialog says so and Move stays off", () => {
+  openMenu(openTab(TASK, [STUDIO, NORTHWIND, OCTO]));
+  const moving = chooseMove();
+
+  assert.ok(
+    moving.textContent?.includes("No other workspace can reach acme-corp/relay on GitHub."),
+    "the dialog says why no workspace can take the plan",
+  );
+  assert.equal(button(moving, "Move").disabled, true, "Move stays off");
 });
 
 test("a row calls the account's own first workspace personal while no one else is in it, and counts the one member of a team no one has joined yet", () => {

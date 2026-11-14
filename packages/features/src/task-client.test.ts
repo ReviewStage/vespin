@@ -35,7 +35,7 @@ const OTHER_TASK = "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a";
 
 const TASK = {
   ...SUMMARY,
-  document: {
+  description: {
     body: "# Teammate invitations",
     assumptions: [{ text: "Members and admins can both invite." }],
   },
@@ -53,7 +53,7 @@ function client(): HostedTaskClient {
 
 it.effect("opens one plan with its saved document", () =>
   Effect.gen(function* () {
-    const api = fakeCloudApi({ [`GET /api/tasks/${TASK_ID}`]: { answer: () => ({ plan: TASK }) } });
+    const api = fakeCloudApi({ [`GET /api/tasks/${TASK_ID}`]: { answer: () => ({ task: TASK }) } });
 
     const opened = yield* Effect.provide(client().open(TASK_ID), api.layer);
 
@@ -74,24 +74,24 @@ it.effect(
           answer: () => {
             sent += 1;
 
-            return sent === 1 ? { plan: saved } : conflict;
+            return sent === 1 ? { task: saved } : conflict;
           },
         },
       });
 
-      const edit = { document: { base: "## Goal\n", value: "## Goal\n\n - Mine. \n" } };
+      const edit = { description: { base: "## Goal\n", value: "## Goal\n\n - Mine. \n" } };
 
       const first = yield* Effect.provide(client().edit(TASK_ID, edit), api.layer);
       const second = yield* Effect.provide(client().edit(TASK_ID, edit), api.layer);
 
       const blank = yield* Effect.provide(
         client().edit(TASK_ID, {
-          document: { base: "", value: "x".repeat(TASK_BOUNDS.MAX_BODY_CHARS + 1) },
+          description: { base: "", value: "x".repeat(TASK_BOUNDS.MAX_BODY_CHARS + 1) },
         }),
         api.layer,
       );
 
-      assert.deepEqual(first, { ok: true, answer: { plan: saved } });
+      assert.deepEqual(first, { ok: true, answer: { task: saved } });
       assert.deepEqual(second, { ok: true, answer: conflict });
       assert.deepEqual(blank, { ok: false, failure: TASK_CALL_FAILURE.UNANSWERED });
       assert.deepEqual(
@@ -125,11 +125,15 @@ it.effect(
   "a start naming an agent answers the task with the agent started on it, or with why it was refused as a Start reads it; one asking for planning beside it is never sent",
   () =>
     Effect.gen(function* () {
-      const task = { ...TASK, repository: "acme/relay", document: { body: "", assumptions: [] } };
+      const task = {
+        ...TASK,
+        repository: "acme/relay",
+        description: { body: "", assumptions: [] },
+      };
 
       const agent = {
         id: "3c9e1d2a-6b7f-4e8a-9c0d-1e2f3a4b5c6d",
-        planId: TASK_ID,
+        taskId: TASK_ID,
         model: "anthropic/claude-opus-5.5",
         effort: "high",
         title: null,
@@ -146,12 +150,12 @@ it.effect(
           answer: () => {
             sent += 1;
 
-            if (sent === 1) return { plan: task, agent };
+            if (sent === 1) return { task, agent };
 
             return sent === 2
-              ? { plan: task, agentRefusal: { error: HOSTED_API_ERROR.INVALID_REQUEST } }
+              ? { task, agentRefusal: { error: HOSTED_API_ERROR.INVALID_REQUEST } }
               : {
-                  plan: task,
+                  task,
                   agentRefusal: { error: HOSTED_API_ERROR.AGENT_PLAN_LIMIT_REACHED, resetsAt },
                 };
           },
@@ -386,7 +390,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const api = fakeCloudApi({
-        "GET /api/tasks": { answer: () => ({ plans: [{ ...SUMMARY, archivedAt: 5 }] }) },
+        "GET /api/tasks": { answer: () => ({ tasks: [{ ...SUMMARY, archivedAt: 5 }] }) },
         [`GET /api/tasks/${TASK_ID}/description/revisions/3`]: {
           status: 404,
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
@@ -396,7 +400,7 @@ it.effect(
       const listed = yield* Effect.provide(client().list(), api.layer);
       const revision = yield* Effect.provide(client().readRevision(TASK_ID, 3), api.layer);
 
-      assert.deepEqual(listed, { ok: true, answer: { plans: [SUMMARY] } });
+      assert.deepEqual(listed, { ok: true, answer: { tasks: [SUMMARY] } });
       assert.equal(revision, undefined);
       assert.deepEqual(recordedRoutes(api.requests()), [
         "GET /api/tasks?archived=include",

@@ -12,7 +12,7 @@ import { decodedLiveRows, type LiveBroken, type LiveFailure, type TxWait } from 
  * The service answers one statement a part (`task-record-live.ts`), each a
  * mark that moves as its rows do and carries none of their words. The host
  * follows them (`live-follow.ts`) for as long as a window holds the task's
- * description (`description-document-reads.ts`), and answers each delivery that moved the
+ * description (`held-task-reads.ts`), and answers each delivery that moved the
  * description with when it was last saved, which the caller reads again from the
  * service, and a write of the description waits on the record for its transaction. The pages, calls, and code
  * parts the service still answers for a released desktop are compared by no

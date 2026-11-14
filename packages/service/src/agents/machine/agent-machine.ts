@@ -39,10 +39,10 @@ import type { CheckoutDiffRange } from "@repo/agent-runner/checkout-diff";
 import type { LaunchPath } from "@repo/agent-runner/protocol";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
-import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
+import type { CheckoutRestoreSnapshot } from "@repo/features/checkout-restore";
 import type { CommandExit, SandboxError, SandboxFile } from "@repo/sandbox";
 import {
   type Brand,
@@ -513,7 +513,7 @@ export interface AgentMachineService {
    */
   readonly restoreCheckout: (
     session: string,
-    snapshot: TurnCheckoutSnapshot,
+    snapshot: CheckoutRestoreSnapshot,
   ) => Effect.Effect<RestoreOutcome, SandboxError | LaunchRefused, DatabaseServices | AgentSandbox>;
   /**
    * The diff of the session's checkout between two snapshots its runner

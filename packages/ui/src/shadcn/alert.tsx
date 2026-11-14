@@ -1,6 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
 import { cn } from "../cn.js";
+import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, Card } from "../components/card/card.js";
 import { STATUS_TONE, type StatusTone } from "../status-tone.js";
 
 /**
@@ -45,7 +46,7 @@ const alertVariants = cva("ui-banner flex-none @container/ui-banner", {
     look: {
       strip:
         "border-b border-banner-strip-edge bg-banner-strip py-banner-strip-block pr-banner-strip-end pl-banner-strip-start",
-      card: "box-border rounded-dialog border border-border-strong bg-well p-banner-card pl-banner-card-start",
+      card: "box-border p-banner-card pl-banner-card-start",
       row: "",
       inset: "py-banner-strip-block pr-banner-strip-end pl-banner-strip-start",
     },
@@ -127,6 +128,24 @@ function Alert({
   tone,
   ...props
 }: React.ComponentProps<"section"> & { look: AlertLook; tone: AlertTone }) {
+  // Note that a card's notice is `@repo/ui`'s `Card`, which draws its edge, ground, corner, and shadow as every card's.
+  if (look === "card") {
+    return (
+      <Card
+        {...props}
+        as={CARD_ELEMENT.SECTION}
+        corner={CARD_CORNER.DIALOG}
+        padding={CARD_PADDING.NONE}
+        className={cn(alertVariants({ look }), className)}
+        data-slot="alert"
+        data-tone={tone}
+        data-banner-look={look}
+      >
+        {props.children}
+      </Card>
+    );
+  }
+
   return (
     <section
       data-slot="alert"

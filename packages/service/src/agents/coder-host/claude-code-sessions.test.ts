@@ -13,6 +13,7 @@ import {
   PERMISSION_MODE,
   RUNNER_END,
   RUNNER_ENV,
+  RUNNER_EVENT,
   RUNNER_HARNESS,
 } from "@repo/agent-runner/protocol";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
@@ -31,6 +32,10 @@ import {
   readAgentRunnerRecord,
   writeAgentRunnerRecord,
 } from "@repo/database/models/agent-runner-record";
+import {
+  recordAgentSandboxTerminalEnded,
+  recordAgentSandboxTerminalOpened,
+} from "@repo/database/models/agent-sandbox-holds";
 import {
   type Agent,
   createAgent,
@@ -70,13 +75,20 @@ import {
 } from "@repo/database/models/workspace-sandbox-script-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable, type StoredStartedFrom } from "@repo/database/schemas/agent";
+import { agentSandboxTable } from "@repo/database/schemas/agent-sandbox";
 import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { BOOT_PHASE } from "@repo/features/agent-boot";
-import { AGENT_FAILURE, AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
+import {
+  AGENT_CHAT,
+  AGENT_FAILURE,
+  AGENT_MACHINE,
+  AGENT_PAYER,
+  type AgentChat,
+} from "@repo/features/agent-wire";
 import {
   DEVICE_AGENT_LINE_KIND,
   DEVICE_CAPABILITY,
@@ -119,7 +131,8 @@ import {
   Result,
   Schema,
 } from "effect";
-import type { HttpClient } from "effect/http";
+import { type HttpClient, HttpRouter } from "effect/http";
+import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { USER_ROLE } from "../../admin/admin-access.js";
@@ -143,6 +156,7 @@ import {
   GITHUB_FIXTURE_INSTALLATION_TOKEN,
   githubReaching,
   type InstallationFixture,
+  NO_GITHUB,
   type SentToGitHub,
 } from "../../testing/github-app-fake.js";
 import {
@@ -156,6 +170,7 @@ import {
   runnerTook,
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
+import { warmedAgent } from "../agent-lifecycle.js";
 import {
   AGENT_TAG,
   agentSandboxName,
@@ -168,6 +183,7 @@ import { claimedDeviceAgentLine } from "../device-agent.js";
 import { AgentMachine, type AgentMachineService } from "../machine/agent-machine.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
 import { type SandboxRunner, sandboxMachineLayer } from "../machine/sandbox-machine.js";
+import { RUNNER_EVENTS_PATH, runnerEventsApp } from "../native-events/runner-events-app.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import {
@@ -180,13 +196,19 @@ import {
 } from "../sessions/agent-sessions.js";
 import { WORKSPACE_DRIVE, WorkspaceDriveFills, workspaceDriveName } from "../workspace-drive.js";
 import { consumeWorkspaceDriveBuild } from "../workspace-drive-builds.js";
-import { runnerTokenDigest } from "../workspace-mcp/bearer.js";
+import { launchUrl, runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { AgentImage } from "./agent-image.js";
 import { turnPayerOf } from "./agent-runtime-choice.js";
 import { CODER } from "./bounds.js";
 import { claudeCodeSessions } from "./claude-code-sessions.js";
 import { reconcileAgent } from "./reconcile.js";
-import { RUNNER_ENDED, type RunnerSessionsOptions, runnerEnded } from "./runner-sessions.js";
+import {
+  RUNNER_ENDED,
+  type RunnerSessionsOptions,
+  runnerEnded,
+  runnerIdled,
+  sandboxLetGo,
+} from "./runner-sessions.js";
 import { RUNNER_ANSWER, RUNNER_CHOICE, TURN_HANDOVER } from "./runtime-sessions.js";
 import { agentFailureOf } from "./status.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
@@ -1051,7 +1073,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           ],
           transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
           integrations: [LINEAR_SERVER],
-          allowedDomains: [],
           installedSkills: "/opt/agent/installed-skills",
           warm: true,
         });
@@ -2263,6 +2284,342 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.equal(late, RUNNER_ENDED.STALE);
         assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+      }),
+  );
+
+  it.effect(
+    "a turn's end stops its sandbox where nothing holds it, but not while a message keeps its runner at work or a Terminal tab holds it; the last tab's end stops it",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const { sessionId } = opened;
+        const target = { userId, conversationId: agent.conversationId };
+        const sandboxName = agentSandboxName(sessionId);
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+
+        const settled = Effect.flatMap(Clock.currentTimeMillis, (now) =>
+          settleRunnerLostTurns(writer, agent.conversationId, now),
+        );
+
+        const idled = runnerIdled({ target, sessionId, sequence: 41 }).pipe(
+          Effect.provide(api.layer),
+        );
+
+        yield* runnerTook(agent.id);
+        yield* settled;
+
+        // A message sent as the turn ended keeps the runner at work, so the IDLE stops nothing.
+        const sent = yield* sessions.send(sessionId, yield* writtenLine(agent, "Now the emails."));
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(yield* idled, false);
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+        yield* runnerTook(agent.id);
+        yield* settled;
+
+        // A Terminal tab open in the sandbox holds it past the turn's end.
+        yield* recordAgentSandboxTerminalOpened(
+          sandboxName,
+          "tab-1",
+          new Date(yield* Clock.currentTimeMillis),
+        );
+        assert.equal(yield* idled, false);
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+
+        // The last tab's end, with no turn running, stops it, and the task list reads it off.
+        yield* recordAgentSandboxTerminalEnded(sandboxName, "tab-1");
+        yield* sandboxLetGo(sessionId).pipe(Effect.provide(api.layer));
+        assert.equal(sandboxOfAgent(api, agent)?.status, "stopped");
+
+        const [row] = yield* (yield* Database)
+          .select({ usedAt: agentSandboxTable.usedAt })
+          .from(agentSandboxTable)
+          .where(eq(agentSandboxTable.sandboxName, sandboxName));
+
+        // The task list reads a sandbox running until five minutes past its last use, so it reads off now.
+        assert.ok(
+          row !== undefined &&
+            row.usedAt.getTime() + 5 * 60_000 <= (yield* Clock.currentTimeMillis),
+        );
+      }),
+  );
+
+  it.effect(
+    "a turn's end whose stop fails keeps its runner recorded and its bearer standing, so the next message is written to it rather than to a second runner launched beside it",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const target = { userId, conversationId: agent.conversationId };
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* runnerTook(agent.id);
+        yield* settleRunnerLostTurns(writer, agent.conversationId, yield* Clock.currentTimeMillis);
+
+        api.failStop.remaining = 1;
+
+        const idled = yield* Effect.exit(
+          runnerIdled({ target, sessionId: opened.sessionId, sequence: 41 }).pipe(
+            Effect.provide(api.layer),
+          ),
+        );
+
+        assert.ok(Exit.isFailure(idled));
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+        const bearer = launchBearer(api, api.commands[0], SERVICE_HOST);
+        assert.ok(bearer !== undefined);
+        const routing = Option.getOrThrow(yield* readAgentRouting(userId, agent.id));
+        assert.equal(routing.runnerTokenHash, runnerTokenDigest(bearer));
+        const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(api.commands.length, 1);
+      }),
+  );
+
+  it.effect(
+    "a turn's-end stop interrupted before Vercel answered keeps its runner's bearer standing, so the runner reads the next message at once",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const target = { userId, conversationId: agent.conversationId };
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* runnerTook(agent.id);
+        yield* settleRunnerLostTurns(writer, agent.conversationId, yield* Clock.currentTimeMillis);
+        const bearer = launchBearer(api, api.commands[0], SERVICE_HOST);
+        assert.ok(bearer !== undefined);
+        const { config } = yield* launchRead(api.commands[0], readClaudeCodeConfig);
+
+        // Vercel holds the stop, its runner retired by then, until the call gives up.
+        let reached: () => void = () => undefined;
+
+        const stopping = new Promise<void>((settle) => {
+          reached = settle;
+        });
+
+        api.hooks.onStop = () => {
+          reached();
+
+          return new Promise<void>(() => undefined);
+        };
+
+        const idling = yield* Effect.forkChild(
+          runnerIdled({ target, sessionId: opened.sessionId, sequence: 41 }).pipe(
+            Effect.provide(api.layer),
+          ),
+        );
+
+        yield* Effect.promise(() => stopping);
+        yield* Fiber.interrupt(idling);
+        api.hooks.onStop = undefined;
+
+        const sent = yield* sessions.send(
+          opened.sessionId,
+          yield* writtenLine(agent, "Now the emails."),
+        );
+
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+
+        const read = yield* runnerLinesPast(userId, agent.id, {
+          launch: config.firstSequence,
+          after: 0,
+          limit: 50,
+          runnerTokenHash: runnerTokenDigest(bearer),
+        });
+
+        assert.ok(read.some((line) => line.text.includes("Now the emails.")));
+        assert.equal(api.commands.length, 1);
+      }),
+  );
+
+  it.effect("a turn's end stops a sandbox nothing holds, and the next message resumes it", () =>
+    Effect.gen(function* () {
+      vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+      const api = runnerSandboxApi();
+      const { userId, agent } = yield* openAgent;
+      const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(api)));
+
+      const opened = yield* deliveredOpen(
+        sessions,
+        yield* writtenLine(agent, "Fix the invitations."),
+      );
+
+      assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+      const target = { userId, conversationId: agent.conversationId };
+      const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+      yield* runnerTook(agent.id);
+      yield* settleRunnerLostTurns(writer, agent.conversationId, yield* Clock.currentTimeMillis);
+
+      const idled = yield* runnerIdled({ target, sessionId: opened.sessionId, sequence: 41 }).pipe(
+        Effect.provide(api.layer),
+      );
+
+      assert.equal(idled, true);
+      assert.equal(sandboxOfAgent(api, agent)?.status, "stopped");
+      const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
+      assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+      assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+      assert.equal(api.commands.length, 2);
+    }),
+  );
+
+  it.effect(
+    "a message sent while a turn's-end stop is under way is never taken by the runner the stop ends, and its turn's delivery resumes the sandbox and launches a runner on it",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const target = { userId, conversationId: agent.conversationId };
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* runnerTook(agent.id);
+        yield* settleRunnerLostTurns(writer, agent.conversationId, yield* Clock.currentTimeMillis);
+        const bearer = launchBearer(api, api.commands[0], SERVICE_HOST);
+        assert.ok(bearer !== undefined);
+        const launch = yield* runnerLaunchOf(agent.id);
+
+        // The runner's events route over the test's store, which its ACCEPTED is posted to under its bearer.
+        const web = HttpRouter.toWebHandler(
+          runnerEventsApp({}).pipe(
+            HttpRouter.provideRequest(
+              Layer.mergeAll(
+                memorySandbox().layer,
+                Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
+                Layer.succeed(Database, yield* Database),
+                Layer.succeed(Clock.Clock, yield* Clock.Clock),
+                NO_GITHUB,
+              ),
+            ),
+          ),
+          { disableLogger: true },
+        );
+
+        yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
+        const context = yield* Effect.context<DatabaseServices>();
+
+        // The next message lands as Vercel takes the stop, while the runner still runs, and the
+        // runner, its read of its lines held open, takes it at once and posts its ACCEPTED.
+        api.hooks.onStop = async () => {
+          const line = await Effect.runPromiseWith(context)(writtenLine(agent, "Now the emails."));
+          await Effect.runPromiseWith(context)(sessions.send(opened.sessionId, line));
+
+          await web.handler(
+            new Request(launchUrl(`https://${SERVICE_HOST}${RUNNER_EVENTS_PATH}`, launch), {
+              method: "POST",
+              headers: { "content-type": "application/json", authorization: `Bearer ${bearer}` },
+              body: JSON.stringify({
+                events: [
+                  { sequence: 42, message: { type: RUNNER_EVENT.ACCEPTED, uuid: line.lineId } },
+                ],
+              }),
+            }),
+          );
+        };
+
+        const idled = yield* runnerIdled({
+          target,
+          sessionId: opened.sessionId,
+          sequence: 41,
+        }).pipe(Effect.provide(api.layer));
+
+        assert.equal(idled, true);
+        yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+        assert.equal(api.commands.length, 2);
+        assert.equal(api.commands[1]?.exitCode, null);
+
+        assert.ok(
+          JSON.stringify(yield* handedLines(userId, api.commands[1])).includes("Now the emails."),
+        );
+      }),
+  );
+
+  it.effect(
+    "a shown chat holds its sandbox up past its turn's end, and hiding it stops the sandbox",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const target = { userId, conversationId: agent.conversationId };
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* runnerTook(agent.id);
+        yield* settleRunnerLostTurns(writer, agent.conversationId, yield* Clock.currentTimeMillis);
+
+        const chat = (shown: AgentChat) =>
+          warmedAgent(userId, agent.id, { chat: shown, holder: "window-1" }).pipe(
+            Effect.provide(api.layer),
+          );
+
+        yield* chat(AGENT_CHAT.SHOWN);
+
+        const idled = yield* runnerIdled({
+          target,
+          sessionId: opened.sessionId,
+          sequence: 41,
+        }).pipe(Effect.provide(api.layer));
+
+        assert.equal(idled, false);
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+        yield* chat(AGENT_CHAT.HIDDEN);
+        assert.equal(sandboxOfAgent(api, agent)?.status, "stopped");
       }),
   );
 

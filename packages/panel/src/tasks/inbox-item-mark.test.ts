@@ -56,7 +56,7 @@ test("an item an archived agent posted wears the harness that agent ran on, as t
         taskAgents: [
           listedAgent({
             id: ARCHIVED,
-            planId: TASK_ID,
+            taskId: TASK_ID,
             model: "openai/gpt-6.1-sol",
             effort: "high",
             title: "Retired sweep",

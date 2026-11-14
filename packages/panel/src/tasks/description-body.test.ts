@@ -48,7 +48,7 @@ beforeEach(() => handState(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
 
 const TASK: Task = {
   ...DOCUMENT_TASK,
-  document: { body: "## Goal\nInvite a teammate by email.", assumptions: [] },
+  description: { body: "## Goal\nInvite a teammate by email.", assumptions: [] },
 };
 
 const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
@@ -75,7 +75,7 @@ const MEMBERS: readonly WorkspaceMember[] = [
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Fix auth flow",
@@ -581,7 +581,7 @@ test("a description read and not edited names itself by one h1, its title, with 
 });
 
 test("an empty description that cannot be edited draws no line saying to write it", async () => {
-  const view = await draw({ ...TASK, document: { body: "", assumptions: [] } });
+  const view = await draw({ ...TASK, description: { body: "", assumptions: [] } });
 
   assert.ok(!view.textContent?.includes("Write the description"), "no line under the byline");
 });
@@ -589,7 +589,7 @@ test("an empty description that cannot be edited draws no line saying to write i
 test("a save that writes a section above the one the keyboard stands on leaves Tab entering at that section", async () => {
   const opened: Task = {
     ...TASK,
-    document: {
+    description: {
       body: "## Goal\nInvite a teammate by email.\n\n## Approach\nModel an invite as a pending membership.",
       assumptions: [],
     },
@@ -597,9 +597,9 @@ test("a save that writes a section above the one the keyboard stands on leaves T
 
   const saved: Task = {
     ...opened,
-    document: {
-      ...opened.document,
-      body: `## Context\nIt came up in support.\n\n${opened.document.body}`,
+    description: {
+      ...opened.description,
+      body: `## Context\nIt came up in support.\n\n${opened.description.body}`,
     },
   };
 

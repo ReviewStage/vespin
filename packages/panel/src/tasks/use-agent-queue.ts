@@ -261,10 +261,7 @@ export interface QueueEditing {
  * went under, so queueing it again as it went can never queue it twice.
  */
 export function useQueueEditing(
-  composer: Pick<
-    HeldComposer,
-    "draft" | "setDraft" | "attachments" | "setAttachments" | "updateHeld"
-  >,
+  composer: Pick<HeldComposer, "held" | "updateHeld">,
   queue: Pick<AgentQueueControl, "change" | "listed">,
   files: AgentPictureDoor,
 ): QueueEditing {
@@ -295,8 +292,7 @@ export function useQueueEditing(
   const { change } = queue;
 
   const giveBack = (stash: Stashed) => {
-    composer.setDraft(stash.text);
-    composer.setAttachments(() => stash.attachments);
+    composer.updateHeld(() => ({ text: stash.text, attachments: stash.attachments }));
     setStashed(undefined);
   };
 
@@ -323,15 +319,14 @@ export function useQueueEditing(
   return {
     editing: stashed?.id,
     queue: () => {
-      const text = composer.draft.trim();
-      const { attachments } = composer;
+      const text = composer.held.text.trim();
+      const { attachments } = composer.held;
 
       if (!hasWordsOrFiles(text, attachments)) return;
       const again = refused.current;
       const id = again !== undefined && again.text === text ? again.id : crypto.randomUUID();
       refused.current = undefined;
-      composer.setDraft("");
-      composer.setAttachments(() => []);
+      composer.updateHeld(() => ({ text: "", attachments: [] }));
       void change({
         change: QUEUE_CHANGE.ADD,
         id,
@@ -360,14 +355,13 @@ export function useQueueEditing(
 
       const kept = stashed ?? {
         id: message.id,
-        text: composer.draft,
-        attachments: composer.attachments,
+        text: composer.held.text,
+        attachments: composer.held.attachments,
       };
 
       const stash = { ...kept, id: message.id };
       setStashed(stash);
-      composer.setDraft(message.text);
-      composer.setAttachments(() => []);
+      composer.updateHeld(() => ({ text: message.text, attachments: [] }));
       // A message the queue would not mark, already on its way, is no longer the box's to edit.
       void change({ change: QUEUE_CHANGE.HOLD, messageId: message.id, held: true }).then(
         (answer) => {
@@ -383,13 +377,13 @@ export function useQueueEditing(
         reading.current = undefined;
 
         if (read === undefined) return cancelOf(stash);
-        composer.setAttachments((added) => [...read, ...added]);
+        composer.updateHeld((now) => ({ ...now, attachments: [...read, ...now.attachments] }));
       });
     },
     save: () => {
       if (stashed === undefined || reading.current === stashed.id) return;
-      const text = composer.draft.trim();
-      const { attachments } = composer;
+      const text = composer.held.text.trim();
+      const { attachments } = composer.held;
 
       if (!hasWordsOrFiles(text, attachments)) return cancel();
       closing(stashed, {
@@ -401,8 +395,8 @@ export function useQueueEditing(
     },
     steer: () => {
       if (stashed === undefined || reading.current === stashed.id) return;
-      const text = composer.draft.trim();
-      const { attachments } = composer;
+      const text = composer.held.text.trim();
+      const { attachments } = composer.held;
 
       if (!hasWordsOrFiles(text, attachments)) return cancel();
       closing(stashed, {

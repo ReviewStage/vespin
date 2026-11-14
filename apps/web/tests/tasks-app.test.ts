@@ -56,9 +56,9 @@ import { tasksApp } from "@repo/service/tasks/tasks-app";
 import { tasksProcedures } from "@repo/service/tasks/tasks-procedures";
 import {
   INVITATIONS_TEXT,
-  makeDocumentTask,
-  makeSavedDocumentTask,
-} from "@repo/service/testing/description-documents";
+  makeDescriptionTask,
+  makeSavedDescriptionTask,
+} from "@repo/service/testing/descriptions";
 import {
   connectWorkspaceGitHub,
   type FakeGitHub,
@@ -329,7 +329,7 @@ function readAnswer<S extends Schema.ConstraintDecoder<unknown>>(
 
 /** The started task's id, failing the test where the answer is not a started task. */
 function startedId(started: Answer): string {
-  return readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).plan.id;
+  return readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).task.id;
 }
 
 const refusal = (status: number, error: string): Answer => ({ status, body: { error } });
@@ -422,15 +422,15 @@ it.layer(getTestDB())("the plan routes", (it) => {
       const opened = yield* ask(request(ONE_TASK(taskId), owner));
 
       assert.deepEqual(
-        readAnswer(heldTaskListAnswerSchema, HOSTED_HTTP_STATUS.OK, listed).plans.map((task) => [
+        readAnswer(heldTaskListAnswerSchema, HOSTED_HTTP_STATUS.OK, listed).tasks.map((task) => [
           task.id,
           task.name,
         ]),
         [[taskId, RELAY.name]],
       );
       assert.deepEqual(
-        readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.OK, opened).plan.document,
-        saved.status === DESCRIPTION_SAVE_STATUS.SAVED ? saved.document : undefined,
+        readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.OK, opened).task.description,
+        saved.status === DESCRIPTION_SAVE_STATUS.SAVED ? saved.description : undefined,
       );
     }),
   );
@@ -445,7 +445,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           ask(request(TASKS, owner, { method: "POST", body }));
 
         const nameOf = (answer: Answer) =>
-          readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answer).plan.name;
+          readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answer).task.name;
 
         const unnamed = yield* start({});
         const blank = yield* start({ name: "   " });
@@ -518,12 +518,12 @@ it.layer(getTestDB())("the plan routes", (it) => {
       const personal = yield* personalWorkspaceOf(owner);
       assert.ok(Option.isSome(personal));
       assert.equal(
-        readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).plan.workspaceId,
+        readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).task.workspaceId,
         personal.value,
       );
       const listed = yield* ask(request(TASKS, owner));
       assert.deepEqual(
-        readAnswer(heldTaskListAnswerSchema, HOSTED_HTTP_STATUS.OK, listed).plans.map(
+        readAnswer(heldTaskListAnswerSchema, HOSTED_HTTP_STATUS.OK, listed).tasks.map(
           (task) => task.workspaceId,
         ),
         [personal.value, personal.value],
@@ -542,12 +542,12 @@ it.layer(getTestDB())("the plan routes", (it) => {
       );
 
       assert.equal(
-        readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).plan.workspaceId,
+        readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).task.workspaceId,
         shared,
       );
       const listed = yield* ask(request(TASKS, owner));
       assert.deepEqual(
-        readAnswer(heldTaskListAnswerSchema, HOSTED_HTTP_STATUS.OK, listed).plans.map((task) => [
+        readAnswer(heldTaskListAnswerSchema, HOSTED_HTTP_STATUS.OK, listed).tasks.map((task) => [
           task.name,
           task.workspaceId,
         ]),
@@ -575,7 +575,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
 
         const ownersOf = (bearer: string) =>
           Effect.map(ask(request(TASKS, bearer)), (listed) =>
-            readAnswer(heldTaskListAnswerSchema, HOSTED_HTTP_STATUS.OK, listed).plans.map(
+            readAnswer(heldTaskListAnswerSchema, HOSTED_HTTP_STATUS.OK, listed).tasks.map(
               (task) => [task.ownerId, task.createdBy],
             ),
           );
@@ -584,7 +584,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(ONE_TASK(taskId), other)),
-        ).plan;
+        ).task;
 
         const creator = { userId: owner, name: "Charles Pan" };
 
@@ -618,7 +618,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         assert.deepEqual(unknown, notFound);
         const listed = yield* ask(request(TASKS, owner));
         assert.deepEqual(
-          readAnswer(heldTaskListAnswerSchema, HOSTED_HTTP_STATUS.OK, listed).plans,
+          readAnswer(heldTaskListAnswerSchema, HOSTED_HTTP_STATUS.OK, listed).tasks,
           [],
         );
       }),
@@ -630,7 +630,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts();
         const started = yield* ask(request(TASKS, owner, { method: "POST", body: RELAY }));
-        const plain = readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).plan;
+        const plain = readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).task;
         assert.deepEqual([plain.status, plain.priority], [TASK_STATUS.TODO, TASK_PRIORITY.NONE]);
 
         const filed = readAnswer(
@@ -642,7 +642,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
               body: { ...RELAY, status: TASK_STATUS.BACKLOG, priority: TASK_PRIORITY.LOW },
             }),
           ),
-        ).plan;
+        ).task;
 
         assert.deepEqual([filed.status, filed.priority], [TASK_STATUS.BACKLOG, TASK_PRIORITY.LOW]);
         assert.equal(filed.number, (plain.number ?? 0) + 1);
@@ -654,7 +654,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* patch(owner, { status: TASK_STATUS.DONE, priority: TASK_PRIORITY.URGENT }),
-        ).plan;
+        ).task;
 
         assert.deepEqual(
           [changed.status, changed.priority, changed.number],
@@ -674,7 +674,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* patch(owner, { archived: true }),
-        ).plan;
+        ).task;
 
         assert.equal(settled.status, TASK_STATUS.DONE);
         assert.equal("archivedAt" in settled, false, "no archive is answered");
@@ -683,7 +683,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
             taskAnswerSchema,
             HOSTED_HTTP_STATUS.OK,
             yield* patch(owner, { priority: TASK_PRIORITY.LOW }),
-          ).plan.priority,
+          ).task.priority,
           TASK_PRIORITY.LOW,
         );
         // A member's move to Done or Canceled is counted where it changed the status, once each, and a refused one or an unchanged status is not.
@@ -717,7 +717,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* start({ ...RELAY, workspaceId: shared, assigneeId: other }),
-        ).plan;
+        ).task;
 
         assert.deepEqual(assigned.assignee, { userId: other, name: "Test User" });
         assert.deepEqual(
@@ -732,7 +732,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* patch({ assigneeId: owner }),
-        ).plan;
+        ).task;
 
         assert.equal(reassigned.assignee?.userId, owner);
         assert.deepEqual(
@@ -744,7 +744,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* patch({ assigneeId: null }),
-        ).plan;
+        ).task;
 
         assert.equal(unassigned.assignee, undefined);
 
@@ -752,7 +752,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           heldTaskListAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(TASKS, owner)),
-        ).plans;
+        ).tasks;
 
         assert.deepEqual(
           listed.map((task) => task.assignee),
@@ -775,7 +775,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
       );
       assert.deepEqual(yield* ask(request(TASKS, other)), {
         status: HOSTED_HTTP_STATUS.OK,
-        body: { plans: [] },
+        body: { tasks: [] },
       });
       assert.equal((yield* ask(request(ONE_TASK(taskId), owner))).status, HOSTED_HTTP_STATUS.OK);
 
@@ -811,7 +811,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
             taskId,
             seq: 1_000,
             actor: sql`'a-later-writer'`,
-            document: "## Goal\n\nInvite a teammate.\n",
+            description: "## Goal\n\nInvite a teammate.\n",
             changes: 1,
             startedAt: now,
             at: now,
@@ -878,7 +878,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
             heldTaskListAnswerSchema,
             HOSTED_HTTP_STATUS.OK,
             yield* ask(request(TASKS, owner)),
-          ).plans,
+          ).tasks,
           [],
         );
       }),
@@ -895,7 +895,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         );
 
         const body = {
-          document: { base: "", value: "Mine now.\n" },
+          description: { base: "", value: "Mine now.\n" },
         };
 
         assert.deepEqual(
@@ -940,11 +940,11 @@ it.layer(getTestDB())("the plan routes", (it) => {
         });
 
         assert.equal(
-          readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, fromLinear).plan.name,
+          readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, fromLinear).task.name,
           RELAY.name,
         );
         assert.equal(
-          readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, linking).plan.name,
+          readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, linking).task.name,
           LEDGER.name,
         );
         assert.deepEqual(network.sent, []);
@@ -978,7 +978,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         );
         assert.deepEqual(yield* ask(request(TASKS, owner)), {
           status: HOSTED_HTTP_STATUS.OK,
-          body: { plans: [] },
+          body: { tasks: [] },
         });
       }),
   );
@@ -1025,13 +1025,13 @@ it.layer(getTestDB())("the plan routes", (it) => {
           yield* ask(request(ONE_TASK(taskId), owner)),
         );
 
-        assert.deepEqual([opened.plan.name, opened.plan.repository], [RELAY.name, null]);
+        assert.deepEqual([opened.task.name, opened.task.repository], [RELAY.name, null]);
         assert.equal(
           readAnswer(
             heldTaskListAnswerSchema,
             HOSTED_HTTP_STATUS.OK,
             yield* ask(request(TASKS, owner)),
-          ).plans.length,
+          ).tasks.length,
           1,
         );
       }),
@@ -1279,7 +1279,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
             taskAnswerSchema,
             HOSTED_HTTP_STATUS.OK,
             yield* ask(request(ONE_TASK(taskId), owner)),
-          ).plan.name,
+          ).task.name,
           RELAY.name,
         );
       }),
@@ -1460,7 +1460,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
         );
 
-        yield* makeSavedDocumentTask(taskId, INVITATIONS_TEXT);
+        yield* makeSavedDescriptionTask(taskId, INVITATIONS_TEXT);
         const value = INVITATIONS_TEXT.replace("Only an admin", "Only an owner");
 
         const answered = readAnswer(
@@ -1469,7 +1469,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           yield* ask(
             request(EDIT(taskId), owner, {
               method: "POST",
-              body: { document: { base: INVITATIONS_TEXT, value } },
+              body: { description: { base: INVITATIONS_TEXT, value } },
             }),
           ),
         );
@@ -1486,10 +1486,10 @@ it.layer(getTestDB())("the plan routes", (it) => {
           yield* ask(request(REVISION(taskId, 2), owner)),
         );
 
-        assert.ok("plan" in answered);
-        const { plan: task } = answered;
+        assert.ok("task" in answered);
+        const { task } = answered;
         const at = task.lastEdit?.at ?? assert.fail("the edit names no last edit");
-        assert.deepEqual(task.document, { body: value, assumptions: [] });
+        assert.deepEqual(task.description, { body: value, assumptions: [] });
         // A host waits on the transaction the edit answers before it lets a delivery of the plan land.
         assert.match(answered.txid ?? "", /^\d+$/u);
         assert.equal(task.lastEdit?.actor, DESCRIPTION_ACTOR.DEVELOPER);
@@ -1505,7 +1505,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
             [1, DESCRIPTION_ACTOR.EARLIER, 0],
           ],
         );
-        assert.deepEqual(revision.document, { body: value, assumptions: [] });
+        assert.deepEqual(revision.description, { body: value, assumptions: [] });
         assert.deepEqual(revision.previous, { body: INVITATIONS_TEXT, assumptions: [] });
       }),
   );
@@ -1521,13 +1521,13 @@ it.layer(getTestDB())("the plan routes", (it) => {
         );
 
         const appText = `${INVITATIONS_TEXT}- An accepted invite is never reused.\n`;
-        yield* makeDocumentTask(taskId, appText);
+        yield* makeDescriptionTask(taskId, appText);
 
         const edit = (id: string, value: string) =>
           ask(
             request(EDIT(id), owner, {
               method: "POST",
-              body: { document: { base: INVITATIONS_TEXT, value } },
+              body: { description: { base: INVITATIONS_TEXT, value } },
             }),
           );
 
@@ -1550,12 +1550,12 @@ it.layer(getTestDB())("the plan routes", (it) => {
           INVITATIONS_TEXT.replace("Only an admin", "Only a workspace admin"),
         );
 
-        assert.ok("plan" in merged);
+        assert.ok("task" in merged);
         const mergedText = appText.replace("Only an admin", "Only an owner");
-        assert.equal(merged.plan.document.body, mergedText);
+        assert.equal(merged.task.description.body, mergedText);
         assert.deepEqual(conflicted, {
           status: HOSTED_HTTP_STATUS.OK,
-          body: { conflict: { current: mergedText, by: merged.plan.lastEdit } },
+          body: { conflict: { current: mergedText, by: merged.task.lastEdit } },
         });
         assert.deepEqual(oversized, {
           status: HOSTED_HTTP_STATUS.OK,
@@ -1578,13 +1578,15 @@ it.layer(getTestDB())("the plan routes", (it) => {
           ),
         );
 
-        yield* makeSavedDocumentTask(taskId, INVITATIONS_TEXT);
+        yield* makeSavedDescriptionTask(taskId, INVITATIONS_TEXT);
         const db = yield* Database;
         yield* db.update(user).set({ name: "Charles Pan" }).where(eq(user.id, other));
 
         const edit = (as: string, base: string, value: string) =>
           Effect.map(
-            ask(request(EDIT(taskId), as, { method: "POST", body: { document: { base, value } } })),
+            ask(
+              request(EDIT(taskId), as, { method: "POST", body: { description: { base, value } } }),
+            ),
             (answered) => readAnswer(descriptionEditAnswerSchema, HOSTED_HTTP_STATUS.OK, answered),
           );
 
@@ -1633,7 +1635,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           ask(request(ONE_TASK(taskId), owner, { method: "PATCH", body: { repository } }));
 
         const repositoryOf = (status: number, answered: Answer) =>
-          readAnswer(taskAnswerSchema, status, answered).plan.repository;
+          readAnswer(taskAnswerSchema, status, answered).task.repository;
 
         const ofOtherOwner = unreachable({
           reason: REPOSITORY_UNREACHED.OTHER_OWNER,
@@ -1682,7 +1684,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           yield* ask(request(ONE_TASK(personal), owner)),
         );
 
-        assert.equal(opened.plan.repository, null);
+        assert.equal(opened.task.repository, null);
 
         const listed = readAnswer(
           heldTaskListAnswerSchema,
@@ -1690,7 +1692,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           yield* ask(request(TASKS, owner)),
         );
 
-        assert.equal(listed.plans.length, 3);
+        assert.equal(listed.tasks.length, 3);
       }),
   );
 
@@ -1750,7 +1752,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
             connectedTo: "octocat",
           }),
         );
-        const moved = readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.OK, toAcme).plan;
+        const moved = readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.OK, toAcme).task;
         assert.deepEqual([moved.workspaceId, moved.repository], [acme, "acme/relay"]);
         // The teammate was in the workspace the task left, not the one it moved to.
         assert.deepEqual(

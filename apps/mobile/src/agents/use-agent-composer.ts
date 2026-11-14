@@ -167,8 +167,8 @@ export function useAgentComposer(
 
   // Note that a message sent to the agent now denies a call it holds for an answer, while one queued waits behind it.
   const sendQueues = suggested === undefined && writing && enterQueues && controlsQueue;
-  const planId = agent?.planId;
-  const skills = useSkillOffer(words, setWords, planId === undefined ? undefined : { planId });
+  const taskId = agent?.taskId;
+  const skills = useSkillOffer(words, setWords, taskId === undefined ? undefined : { taskId });
 
   // Whether the screen still stands, since a refusal may land after it was left.
   const mounted = useRef(true);
@@ -273,7 +273,7 @@ export function useAgentComposer(
       clientKey: sent.id,
       ...attachments,
       steers: writing,
-      ...(planId === undefined ? undefined : { taskId: planId }),
+      ...(taskId === undefined ? undefined : { taskId: taskId }),
     });
 
     onMessage?.(

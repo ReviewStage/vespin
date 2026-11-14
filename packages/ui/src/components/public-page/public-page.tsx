@@ -1,5 +1,6 @@
 import { type ReactNode, useId } from "react";
 import { said } from "../../said.js";
+import { CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
 import { EDGE_CLIP_LAYOUT, EdgeClip } from "../edge-clip/edge-clip.js";
 import { SiteFrame, SiteRule } from "../landing/site-frame.js";
 import { TEXT_VARIANT } from "../text/text.js";
@@ -131,9 +132,13 @@ export function PublicSection({
  */
 export function PublicMedia({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <div className="ui-public-media mx-public-media-reach [*+&]:mt-ui-48 border border-border rounded-public-media shadow-public-media">
+    <Card
+      look={CARD_LOOK.OUTLINE}
+      padding={CARD_PADDING.FLUSH}
+      className="ui-public-media mx-public-media-reach [*+&]:mt-ui-48"
+    >
       <EdgeClip layout={EDGE_CLIP_LAYOUT.BLOCK}>{children}</EdgeClip>
-    </div>
+    </Card>
   );
 }
 

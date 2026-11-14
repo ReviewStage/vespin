@@ -43,6 +43,9 @@ export interface NoticeState {
   readonly offlineSaid: boolean;
 }
 
+/** The sentence a refusal's shared words end with where the panel, which offers no button, tells the reader to try again. */
+const TRY_AGAIN_SENTENCE = /\s+Try again\.$/;
+
 /** Nothing shown yet, and the phone taken as online. */
 export const NO_NOTICE: NoticeState = { shown: undefined, serial: 0, offlineSaid: false };
 
@@ -50,14 +53,20 @@ export const NO_NOTICE: NoticeState = { shown: undefined, serial: 0, offlineSaid
  * The notice once `asked` is asked: a refusal stands in place of whatever
  * stood, as the newest, even in the same words; the offline notice stands
  * only where it has not been said since the phone was last online, so
- * however many writes fail while it is offline, it is said once.
+ * however many writes fail while it is offline, it is said once. Note that
+ * a notice offering Try again as its button drops the words' own closing
+ * "Try again.", which the panel's toast keeps since it offers no button, so
+ * the banner says it once.
  */
 export function noticeAsked(state: NoticeState, asked: NoticeAsk): NoticeState {
   if (asked.kind === NOTICE_KIND.OFFLINE && state.offlineSaid) return state;
   const serial = state.serial + 1;
 
+  const words =
+    asked.retry === undefined ? asked.words : asked.words.replace(TRY_AGAIN_SENTENCE, "");
+
   return {
-    shown: { ...asked, serial },
+    shown: { ...asked, words, serial },
     serial,
     offlineSaid: state.offlineSaid || asked.kind === NOTICE_KIND.OFFLINE,
   };

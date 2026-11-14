@@ -367,7 +367,7 @@ it.effect(
       const below = yield* Effect.promise(() =>
         handle(
           new Request(new URL("/api/tasks/ABC/edits", ORIGIN), {
-            headers: { [CLIENT_HEADER.CLIENT]: "ios/0.1.0", [CLIENT_HEADER.API_VERSION]: "0" },
+            headers: { [CLIENT_HEADER.CLIENT]: "ios/0.1.0", [CLIENT_HEADER.API_VERSION]: "1" },
           }),
           services,
         ),
@@ -377,7 +377,7 @@ it.effect(
         [below.status, yield* Effect.promise(() => below.json())],
         [
           HOSTED_HTTP_STATUS.UPGRADE_REQUIRED,
-          { error: HOSTED_API_ERROR.HOST_UPGRADE_NEEDED, minimumVersion: "1" },
+          { error: HOSTED_API_ERROR.HOST_UPGRADE_NEEDED, minimumVersion: "2" },
         ],
       );
 

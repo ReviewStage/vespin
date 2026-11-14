@@ -366,7 +366,7 @@ function useSheetStart(
     kept.release();
     awaitStart(taskId);
     router.dismiss();
-    router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: taskId })));
+    router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
 
     void write(
       () =>
@@ -442,7 +442,7 @@ function useSheetStart(
         kept.release();
         router.dismiss();
         router.navigate(
-          onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: answer.taskId })),
+          onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })),
         );
 
         if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
@@ -496,7 +496,7 @@ function useStartAtOnce(
     kept.release();
     router.dismiss();
     // Note that the task's page is brought in front, as New task's start brings it, so its overview stands to open the agent or New agent again, wherever New agent was opened from, such as the menu bar over another agent's page.
-    router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: taskId })));
+    router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
 
     void write(
       () =>
@@ -564,7 +564,7 @@ export function NewAgentScreen({
   const sendSuggestion = useSuggestionSender();
   const suggester = useShownAgent(opened?.suggestion.agentId ?? "");
   // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
-  const suggestedTask = suggester?.planId;
+  const suggestedTask = suggester?.taskId;
   const placed = opened === undefined || suggestedTask !== undefined;
   const [note, setNote] = useState<string | undefined>(draft?.note);
   const pictures = useAttachedPictures(setNote);
@@ -572,7 +572,7 @@ export function NewAgentScreen({
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
   const atOnce = useStartAtOnce(taskId, kept, pictures, setNote);
-  const skills = useSkillOffer(prompt, setPrompt, { planId: taskId });
+  const skills = useSkillOffer(prompt, setPrompt, { taskId: taskId });
   // The refused draft's pictures, put back once as the sheet first draws.
   const [restored, setRestored] = useState(draft === undefined);
 

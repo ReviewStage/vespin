@@ -585,13 +585,13 @@ export function useStartTask(
     if ("failure" in answer) return { refused: startFailureNote(answer.failure) };
     const started = answer.agentStart;
 
-    if (started === undefined) return { taskId: answer.planId };
+    if (started === undefined) return { taskId: answer.taskId };
 
     if ("failure" in started) {
-      return { taskId: answer.planId, note: startRefusalWords(started) };
+      return { taskId: answer.taskId, note: startRefusalWords(started) };
     }
 
-    return { agentId: started.agent.id, taskId: answer.planId };
+    return { agentId: started.agent.id, taskId: answer.taskId };
   };
 }
 
@@ -618,6 +618,6 @@ export function useFileTask(
 
     if ("failure" in answer) return { refused: startFailureNote(answer.failure) };
 
-    return { taskId: answer.planId };
+    return { taskId: answer.taskId };
   };
 }
