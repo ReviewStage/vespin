@@ -530,8 +530,11 @@ export function RowHead({
     <HStack spacing={SPACE.TIGHT} alignment="center">
       <UnreadDot unread={unread} faded={faded} />
       <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
-        {fold}
-        <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        {/* Note that the fold and the mark stand centered on each other, so the chevron, laid out at no height, sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
+        <HStack spacing={SPACE.ROW} alignment="center">
+          {fold}
+          <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        </HStack>
         {stacked ? (
           <VStack alignment="leading" spacing={2}>
             {words}
@@ -778,7 +781,7 @@ function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou"
   }
 }
 
-/** How far each level of sub-tasks stands in, in points: past a parent's mark, so a sub-task's mark stands under its parent's name. */
+/** How far each level of sub-tasks stands in, in points: past a parent's fold, so a sub-task's mark stands under its parent's. */
 const SUB_TASK_INDENT = MARK_SIZE.LEAD + SPACE.ROW;
 
 /** What a parent's chevron is heard as, folded and open. */
