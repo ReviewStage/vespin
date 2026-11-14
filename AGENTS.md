@@ -29,12 +29,7 @@ desktop app's tests on a Mac: the release job (`release.yml`'s `macos-15` job,
 run on a `v*` tag push or a manual dispatch) only builds, signs, notarizes,
 and verifies the app. A green PR says nothing about either app on a device.
 
-No push builds a Vercel Preview: only `main` deploys from Git (`vercel.json`'s
-`git.deploymentEnabled`). When the user asks for a Preview, or you want them
-to look at a change on one, deploy the branch yourself with `vercel deploy`
-from its checkout, or the Vercel connection's deployment tool, and give them
-its address. Deploy only when someone will look at it, since each one costs a
-build.
+No push builds a Vercel Preview; run `vercel deploy` if one is needed.
 
 A release is dated in Eastern time (America/New_York), never UTC or the
 author's own zone: its `CHANGELOG.md` heading carries the day its tag is
