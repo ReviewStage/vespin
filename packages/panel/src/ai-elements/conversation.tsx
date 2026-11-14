@@ -1,4 +1,6 @@
 import {
+  BUTTON_CORNERS,
+  BUTTON_VARIANT,
   cn,
   cssCustomProperties,
   Fill,
@@ -19,6 +21,7 @@ import {
   type UIEvent,
   useCallback,
   useContext,
+  useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
@@ -67,6 +70,9 @@ import {
 
 /** The theme's room at a log's end (tasks.css), registered as a length so it reads in pixels. */
 const LOG_END_PROPERTY = "--conversation-log-end";
+
+/** How near its end, in pixels, a log must stand to keep to it as its box shrinks: the rounding of a scroll that reached it. */
+const SHRINK_END_PX = 8;
 
 /** How near its top, in screens of the box, a log asks for the lines older than its first (`onNearTop`): one, so they land before the reader reaches them. */
 const NEAR_TOP_SCREENS = 1;
@@ -160,6 +166,27 @@ export function Conversation({
   const scrollToBottom = useCallback(() => {
     rows.current?.current?.scrollToEnd();
   }, []);
+
+  // Note that a log standing at its end keeps to it as its box shrinks, as a phone's keyboard shrinks it, because the box's foot would otherwise rise over the newest line, an Inbox thread's reply box being typed in among it, and leave it under the keyboard. Where it stood is read against the box's height before the shrink, since the scroll has not moved.
+  useEffect(() => {
+    const box = list.current;
+
+    if (box === null) return;
+    let height = box.clientHeight;
+
+    const heard = new ResizeObserver(() => {
+      const was = height;
+      height = box.clientHeight;
+
+      if (height < was && box.scrollHeight - box.scrollTop - was <= SHRINK_END_PX) {
+        rows.current?.current?.scrollToEnd();
+      }
+    });
+
+    heard.observe(box);
+
+    return () => heard.disconnect();
+  }, [list]);
 
   const onScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
@@ -404,9 +431,9 @@ export function ConversationLead({
 
 /**
  * What floats over a log in a slot of its own, centered across it, on a
- * ground of its own ringed and lifted off the lines: the way back to the
- * newest line over its foot, and the line saying earlier lines could not be
- * read over its top, so neither moves a row of the log as it comes and goes.
+ * ground of its own ringed and lifted off the lines: the line saying earlier
+ * lines could not be read, over its top, so it moves no row of the log as it
+ * comes and goes.
  */
 export const FLOATING_OVER_LOG_CLASS =
   "absolute left-1/2 -translate-x-1/2 rounded-control shadow-floating-edge";
@@ -416,8 +443,10 @@ const SCROLL_LABEL = "Scroll to the newest line";
 
 /**
  * The way back to the newest line, shown while the reader has scrolled away
- * from it: the shared icon button, floating over the lines on a ground of
- * its own.
+ * from it: the shared icon button, round, floating over the lines on a
+ * ground of its own in the log's bottom right corner, as phone chat apps
+ * stand theirs, so it covers at most a line's end rather than the middle of
+ * the words, or a reply box being typed in.
  */
 export function ConversationScrollButton(): ReactNode {
   const { isAtBottom, scrollToBottom } = useConversation();
@@ -426,12 +455,12 @@ export function ConversationScrollButton(): ReactNode {
 
   return (
     // Its ground is the button's own (`--ui-button-ground`), which the button's lit fill is laid over as a title bar's is.
-    <div
-      className={`conversation-scroll ${FLOATING_OVER_LOG_CLASS} bottom-conversation-scroll flex bg-button-ground [--ui-button-ground:var(--ui-color-well)]`}
-    >
+    <div className="conversation-scroll absolute right-content-inset bottom-conversation-scroll flex rounded-disc bg-button-ground shadow-floating-edge [--ui-button-ground:var(--ui-color-well)]">
       <Tooltip label={SCROLL_LABEL}>
         <IconButton
           label={SCROLL_LABEL}
+          corners={BUTTON_CORNERS.ROUND}
+          variant={BUTTON_VARIANT.OUTLINE}
           icon={<ArrowDownIcon aria-hidden="true" />}
           onClick={scrollToBottom}
         />

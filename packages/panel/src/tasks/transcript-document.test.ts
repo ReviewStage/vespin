@@ -47,7 +47,7 @@ const REPOSITORY = "acme/relay";
 const COMMIT = "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39";
 const PULL_REQUEST = `https://github.com/${REPOSITORY}/pull/42`;
 const LINES = `https://github.com/${REPOSITORY}/blob/${COMMIT}/apps/web/rollout-store.ts#L3-L5`;
-const PAGE = linkOf({ kind: LINK_DESTINATION.PAGE, planId: TASK_ID, pageId: PAGE_ID }, "acme");
+const PAGE = linkOf({ kind: LINK_DESTINATION.PAGE, taskId: TASK_ID, pageId: PAGE_ID }, "acme");
 const LINEAR = "https://linear.app/acme/issue/ACME-142";
 
 /** A picture's bytes as its read answers them. */
@@ -92,7 +92,7 @@ function pictureReader(
 /** An item's own picture's address, under its task. */
 function pictureOf(itemId: string, attachmentId: string): string {
   return inboxAttachmentAddress(
-    { kind: LINK_DESTINATION.INBOX_ITEM, planId: TASK_ID, itemId },
+    { kind: LINK_DESTINATION.INBOX_ITEM, taskId: TASK_ID, itemId },
     attachmentId,
     "acme",
   );

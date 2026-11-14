@@ -413,7 +413,7 @@ test("on a plan, the workspace's Inbox threads are found by their title, the pla
       },
       [LIVE_READ.INBOX_ITEMS]: {
         rows: {
-          [INBOX_SCOPE_KIND.PLAN]: {
+          [INBOX_SCOPE_KIND.TASK]: {
             "plan-42": [thread("item-billing", "Keep the meter's old alerts?", 30)],
             "plan-1": [thread("item-palette", "Keep the palette's margins?", 10)],
             "plan-acme": [thread("item-acme", "Keep Acme's links?", 50)],
@@ -503,8 +503,8 @@ test("on a plan, the workspace's automations are found by their name, a pick wri
 
   const automation = (id: string, name: string) => ({
     id,
-    planId: null,
-    planName: null,
+    taskId: null,
+    taskName: null,
     workspaceId: "workspace-stage",
     name,
     enabled: true,

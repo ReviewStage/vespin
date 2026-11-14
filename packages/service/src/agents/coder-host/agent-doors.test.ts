@@ -477,7 +477,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
               ?.attachmentId;
 
             assert.ok(attachmentId);
-            const place = { kind: LINK_DESTINATION.INBOX_ITEM, planId: on.taskId, itemId: item.id };
+            const place = { kind: LINK_DESTINATION.INBOX_ITEM, taskId: on.taskId, itemId: item.id };
             const address = inboxAttachmentAddress(place, attachmentId, "acme");
 
             return yield* runAgentLookAtPicture(

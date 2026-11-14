@@ -575,7 +575,7 @@ export function useEditorPictures(
       const failed = (reason: string) =>
         settled(taken.upload, { kind: UPLOAD.FAILED, url, reason, taken, again: true });
 
-      const kept = await sendKeep({ planId: taskId, picture: url }).catch(() => undefined);
+      const kept = await sendKeep({ taskId: taskId, picture: url }).catch(() => undefined);
 
       if (kept === undefined || "failure" in kept) {
         return failed(keepFailedWords(kept?.failure, url));

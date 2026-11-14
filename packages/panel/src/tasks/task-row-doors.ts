@@ -25,7 +25,7 @@ type TaskRowKind =
 
 /** The rows a task's row write reads at the call: the tasks `drawn` answers, and the plans `client` holds for the window. */
 function drawnTaskRows(drawn: () => TasksView, client: QueryClient): TaskRows {
-  return { tasks: drawn(), held: appStateIn(client)?.[LIVE_READ.DESCRIPTION_DOCUMENT] };
+  return { tasks: drawn(), held: appStateIn(client)?.[LIVE_READ.HELD_TASK] };
 }
 
 /**

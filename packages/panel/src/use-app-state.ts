@@ -27,7 +27,6 @@ export {
   memoizedSelect,
   type SignedInAccount,
   sameAccount,
-  selectAccess,
   selectAccount,
   selectAdminAccess,
   selectAdminAccessPending,

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { ServiceReach } from "@repo/features";
 import { type AgentBoot, BOOT_PHASE } from "@repo/features/agent-boot";
@@ -35,9 +36,21 @@ import { GATEWAY_METHOD } from "@repo/gateway";
 import { entityPool } from "@repo/sync";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import { Deferred, Duration, Effect, Exit, Fiber, Predicate, Scope, SubscriptionRef } from "effect";
+import {
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Predicate,
+  Scope,
+  SubscriptionRef,
+} from "effect";
 import { TestClock } from "effect/testing";
+import { KEPT_CHARACTERS } from "./account-items-follow.js";
 import type { AppTranscript } from "./app-state.js";
+import { KEPT_READ, openEntityStore } from "./entity-store.js";
 import { taskListCollections } from "./task-list-collections.js";
 import {
   type ACCOUNT_PARTS,
@@ -66,8 +79,10 @@ import {
   WAITING,
   WORKSPACE_ID,
 } from "./testing/agents-subject.js";
+import { memoryFileSystem } from "./testing/memory-file-system.js";
 import type { PolledLive } from "./testing/polled-live.js";
 import { agentListRow } from "./testing/task-list-rows.js";
+import { testCipher } from "./testing/test-cipher.js";
 import { HELD_TRANSCRIPTS } from "./transcript-follow.js";
 
 it.effect("each method asks the service once and answers what it said, whole", () =>
@@ -1692,7 +1707,7 @@ const ITEM_ROW = {
   settledAt: null,
 };
 
-const PLAN_SCOPE = { kind: "plan", id: TASK_ID } as const;
+const PLAN_SCOPE = { kind: "task", id: TASK_ID } as const;
 
 /** Steps taken until the host has told `times` inboxes, since a row's digest is the platform's own promise. */
 const toldTimes = (told: () => readonly unknown[], times: number) =>
@@ -1779,7 +1794,7 @@ it.effect(
 
       // Eight other holders held and let go push the plan out, and its read is let go with its rows.
       const others = Array.from({ length: 8 }, (_, at) => ({
-        kind: INBOX_SCOPE_KIND.PLAN,
+        kind: INBOX_SCOPE_KIND.TASK,
         id: `0000000${at}-1111-4a6b-9c33-0d1e2f3a4b5c`,
       }));
 
@@ -1918,7 +1933,7 @@ it.effect(
       yield* reset;
       yield* settled;
       assert.equal(live.scope.held(), 0, "a sign-out lets its poll go");
-      assert.deepEqual(told().at(-1), { plan: {} });
+      assert.deepEqual(told().at(-1), { task: {} });
 
       yield* open;
       yield* settled;
@@ -1944,8 +1959,8 @@ function deliverAccount(
 ) {
   live.account.set({
     items: rows.items ?? [],
-    planless: [],
-    plans: [],
+    taskless: [],
+    tasks: [],
     automations: [],
     failedRuns: rows.failedRuns ?? [],
   });
@@ -1969,8 +1984,8 @@ it.effect(
         { ...answered, cursor: "" },
         {
           items: [WAITING],
-          plans: [],
-          planless: [],
+          tasks: [],
+          taskless: [],
           automations: [],
           failedRuns: [FAILED_RUN],
           cursor: "",
@@ -2043,11 +2058,11 @@ const OTHER_ITEM: InboxItem = {
   updatedAt: ITEM.updatedAt - 60_000,
 };
 
-/** Where an item on `planId` stands as its stamp carries it, waiting on Dana with nothing on its thread, unless `moved` says otherwise. */
-function stampOf(item: InboxItem, planId: string, moved: WireRecord = {}) {
+/** Where an item on `taskId` stands as its stamp carries it, waiting on Dana with nothing on its thread, unless `moved` says otherwise. */
+function stampOf(item: InboxItem, taskId: string, moved: WireRecord = {}) {
   return {
     id: item.id,
-    planId,
+    taskId,
     agentId: item.agentId,
     revision: item.revision,
     version: item.version,
@@ -2075,8 +2090,8 @@ function deliverItems(
 }
 
 /** The account's items as the window is told them, by plan. */
-function byPlan(plans: Readonly<Record<string, readonly InboxItem[]>>) {
-  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans } };
+function byPlan(tasks: Readonly<Record<string, readonly InboxItem[]>>) {
+  return { rows: { [INBOX_SCOPE_KIND.TASK]: tasks } };
 }
 
 it.effect(
@@ -2103,9 +2118,9 @@ it.effect(
 
       const otherPlanOf = (told: WireValue | undefined) => {
         const rows = isRecord(told) ? told.rows : undefined;
-        const plans = isRecord(rows) ? rows[INBOX_SCOPE_KIND.PLAN] : undefined;
+        const tasks = isRecord(rows) ? rows[INBOX_SCOPE_KIND.TASK] : undefined;
 
-        return isRecord(plans) ? plans[OTHER_TASK_ID] : undefined;
+        return isRecord(tasks) ? tasks[OTHER_TASK_ID] : undefined;
       };
 
       const [first, second] = accountItems();
@@ -2172,6 +2187,83 @@ it.effect(
         [true, true],
       );
     }),
+);
+
+/** A store of the account's lists over a disk of the test's own, opened in `scope`, as a launch opens it. */
+const keptStore = (scope: Scope.Scope) =>
+  Scope.provide(scope)(
+    openEntityStore({ directory: "/state", cipher: testCipher(), accountId: "user-dana" }),
+  );
+
+it.effect(
+  "the account's items kept on disk are drawn as the gate opens, before the service answers, and the answer takes their place: an item it no longer holds leaves, and a changed one is drawn as it answered",
+  () =>
+    Effect.gen(function* () {
+      const earlier = yield* Scope.make();
+      const kept = { ...HELD_ITEM, title: "Push to staging?" };
+
+      yield* (yield* keptStore(earlier)).keep(KEPT_READ.INBOX, {
+        items: [
+          { item: kept, taskId: TASK_ID },
+          { item: OTHER_ITEM, taskId: OTHER_TASK_ID },
+        ],
+        at: "7",
+      });
+      yield* Scope.close(earlier, Exit.void);
+
+      const { open, asked, sealItems, live, accountItems } = yield* subject({
+        entities: yield* keptStore(yield* Scope.make()),
+      });
+
+      sealItems(LIVE_ANSWERED);
+      deliverItems(live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+      yield* open;
+      yield* settled;
+
+      assert.deepEqual(accountItems(), [
+        byPlan({ [TASK_ID]: [kept], [OTHER_TASK_ID]: [OTHER_ITEM] }),
+        byPlan({ [TASK_ID]: [HELD_ITEM] }),
+      ]);
+      assert.equal(asked.includes("account-items-live:user-dana"), false, "asked past the kept id");
+    }).pipe(Effect.provide(Layer.merge(memoryFileSystem().layer, NodePath.layer))),
+);
+
+it.effect(
+  "the account's items are kept on disk only as far as the newest that fit, and then without the sync id, so the next launch reads them whole",
+  () =>
+    Effect.gen(function* () {
+      const quit = yield* Scope.make();
+
+      const { open, sealItems, live, accountItems } = yield* subject({
+        entities: yield* keptStore(quit),
+      });
+
+      // Each a little over a quarter of what fits, so the newest three fit and the oldest two do not.
+      const many = Array.from({ length: 5 }, (_, index) => ({
+        ...OTHER_ITEM,
+        id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        title: "x".repeat(KEPT_CHARACTERS / 4),
+        updatedAt: OTHER_ITEM.updatedAt + index,
+      }));
+
+      sealItems(LIVE_ANSWERED);
+      deliverItems(
+        live,
+        many.map((item) => stampOf(item, OTHER_TASK_ID)),
+        many,
+      );
+      yield* open;
+      yield* toldTimes(accountItems, 1);
+      yield* Scope.close(quit, Exit.void);
+
+      const stored = (yield* keptStore(yield* Scope.make())).stored(KEPT_READ.INBOX);
+
+      assert.deepEqual(
+        stored?.items.map((each) => each.item.id),
+        [many[4]?.id, many[3]?.id, many[2]?.id],
+      );
+      assert.equal(stored?.at, undefined);
+    }).pipe(Effect.provide(Layer.merge(memoryFileSystem().layer, NodePath.layer))),
 );
 
 it.effect("an item no stamp names any more is dropped, its plan told no more", () =>
@@ -2265,12 +2357,12 @@ function bothHold(
   // SAFETY: the account's items are told as wire values.
   const account = harness.accountItems().at(-1) as WireValue | undefined;
 
-  const plans =
-    isRecord(account) && isRecord(account.rows) ? account.rows[INBOX_SCOPE_KIND.PLAN] : undefined;
+  const tasks =
+    isRecord(account) && isRecord(account.rows) ? account.rows[INBOX_SCOPE_KIND.TASK] : undefined;
 
   return [
     firstOf(isRecord(plan) ? plan.rows : undefined),
-    firstOf(isRecord(plans) ? plans[TASK_ID] : undefined),
+    firstOf(isRecord(tasks) ? tasks[TASK_ID] : undefined),
   ];
 }
 
@@ -2379,8 +2471,8 @@ it.effect(
 
 /** The plan's inbox as one telling of the held inboxes holds it, by id; none where it holds none. */
 function planInboxOf(told: WireValue | undefined): ReadonlyMap<string, InboxItem> {
-  const plans = isRecord(told) ? told[PLAN_SCOPE.kind] : undefined;
-  const read = isRecord(plans) ? plans[PLAN_SCOPE.id] : undefined;
+  const tasks = isRecord(told) ? told[PLAN_SCOPE.kind] : undefined;
+  const read = isRecord(tasks) ? tasks[PLAN_SCOPE.id] : undefined;
   const rows = isRecord(read) ? read.rows : undefined;
 
   // SAFETY: a telling's rows are inbox items, as the window is told them.
@@ -2612,20 +2704,20 @@ it.effect(
       sealAccount(LIVE_ANSWERED);
       yield* call(GATEWAY_METHOD.AGENTS_ACCOUNT_INBOX_FOLLOW);
       yield* settled;
-      const plan = { planId: TASK_ID, items: 1, toDo: 1, updatedAt: ITEM.updatedAt };
-      const parts = { planless: [], automations: [], failedRuns: [] };
+      const plan = { taskId: TASK_ID, items: 1, toDo: 1, updatedAt: ITEM.updatedAt };
+      const parts = { taskless: [], automations: [], failedRuns: [] };
       const update = { ...WAITING, asking: false };
-      live.account.set({ ...parts, items: [update], plans: [plan] }, ["9100"]);
+      live.account.set({ ...parts, items: [update], tasks: [plan] }, ["9100"]);
       yield* toldTimes(accountInboxes, 1);
 
       /** What waits, and each task's count, as the account inbox was last told. */
       const waiting = () => {
         const told = accountInboxes().at(-1);
-        assert.ok(isRecord(told) && Array.isArray(told.items) && Array.isArray(told.plans));
+        assert.ok(isRecord(told) && Array.isArray(told.items) && Array.isArray(told.tasks));
 
         return {
           items: told.items.length,
-          toDo: told.plans.map((each) => (isRecord(each) ? each.toDo : undefined)),
+          toDo: told.tasks.map((each) => (isRecord(each) ? each.toDo : undefined)),
         };
       };
 
@@ -2641,11 +2733,11 @@ it.effect(
       assert.deepEqual(waiting(), { items: 0, toDo: [0] });
 
       // The read answers once more from before the close, which still stands over it.
-      live.account.set({ ...parts, items: [update], plans: [{ ...plan, updatedAt: NOW }] });
+      live.account.set({ ...parts, items: [update], tasks: [{ ...plan, updatedAt: NOW }] });
       yield* nextPoll;
       assert.deepEqual(waiting(), { items: 0, toDo: [0] });
 
-      live.account.set({ ...parts, items: [], plans: [{ ...plan, toDo: 0 }] }, ["9300"]);
+      live.account.set({ ...parts, items: [], tasks: [{ ...plan, toDo: 0 }] }, ["9300"]);
       yield* nextPoll;
       assert.deepEqual(waiting(), { items: 0, toDo: [0] });
     }),
@@ -2715,9 +2807,10 @@ it.effect(
         pool,
         draw: ({ taskAgents }) => void drawn.push(taskAgents),
         txWait: () => undefined,
+        readAgain: () => Effect.succeed(undefined),
       });
 
-      yield* list.answer({ plans: [], agents: [{ ...agentListRow(TASK_ID, NOW), id: AGENT_ID }] });
+      yield* list.answer({ tasks: [], agents: [{ ...agentListRow(TASK_ID, NOW), id: AGENT_ID }] });
       const answered = yield* Deferred.make<void>();
       const { acts, holdChanges } = yield* subject({ pool });
       holdChanges(Deferred.await(answered));

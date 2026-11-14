@@ -27,6 +27,7 @@ import {
 import { confirmFailure } from "../failure-report.js";
 import { AgentComposer } from "./agent-composer.js";
 import { type LineAttachment, useLineAttachments } from "./agent-pictures.js";
+import type { HeldUpdate } from "./refused-send.js";
 import {
   FILES_RESTORED_WORDS,
   RESTORE_FILES_SHORT_WORDS,
@@ -208,6 +209,18 @@ export function EditComposer({
     );
   };
 
+  // Note that the box shows its own copy of the words rather than the draft's, because an edit emptied of every word is
+  // one the draft store keeps nothing of, and the box must not fall back to the line's words; every change still lands
+  // the one way every box's does, moved on from what the box holds as it lands (`refused-send.ts`).
+  const updateHeld: HeldUpdate = (next) => {
+    const moved = next(held.current);
+
+    if (moved === undefined) return;
+    setDraft(moved.text);
+    setAttachments(moved.attachments);
+    keep(moved.text, moved.attachments);
+  };
+
   // A picture that lands joins the box and its draft, as one there as it opened did.
   useEffect(() => {
     const landed = line.attachments.filter((each) => !offered.current.has(each.key));
@@ -215,9 +228,10 @@ export function EditComposer({
     if (landed.length === 0) return;
 
     for (const each of landed) offered.current.add(each.key);
-    const files = joined(held.current.attachments, landed, held.current.dropped);
-    setAttachments(files);
-    keep(held.current.text, files);
+    updateHeld((now) => ({
+      ...now,
+      attachments: joined(now.attachments, landed, held.current.dropped),
+    }));
   });
   // Note that the choice to put the files back is off each time the box opens, so an edit never puts them back unasked.
   const [restoreFiles, setRestoreFiles] = useState(false);
@@ -238,17 +252,8 @@ export function EditComposer({
   );
 
   const composer: AgentComposerControl = {
-    draft,
-    setDraft: (text) => {
-      setDraft(text);
-      keep(text, held.current.attachments);
-    },
-    attachments,
-    setAttachments: (next) => {
-      const files = next(held.current.attachments);
-      setAttachments(files);
-      keep(held.current.text, files);
-    },
+    held: { text: draft, attachments },
+    updateHeld,
     sending: false,
     note: undefined,
     closed: undefined,

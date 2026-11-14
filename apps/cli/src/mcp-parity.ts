@@ -17,12 +17,12 @@
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 
 /** Why a tool has no command of its own. */
-export const MCP_CLI_GAP = {
+const MCP_CLI_GAP = {
   /** Not written yet: `vespin api` reaches its procedures until a typed command does. */
   NOT_YET_BUILT: "not-yet-built",
 } as const;
 
-export type McpCliGap = (typeof MCP_CLI_GAP)[keyof typeof MCP_CLI_GAP];
+type McpCliGap = (typeof MCP_CLI_GAP)[keyof typeof MCP_CLI_GAP];
 
 /** One tool's row: the command path after `vespin`, or why there is none. */
 type McpCliRow = { readonly command: readonly [string, ...string[]] } | { readonly gap: McpCliGap };

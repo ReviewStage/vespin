@@ -38,7 +38,7 @@ function onTask(
   const base = tasksControl();
 
   return tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     tasks: [TASK],
     activeTaskId: TASK.id,
     boundFor: TASK.id,
