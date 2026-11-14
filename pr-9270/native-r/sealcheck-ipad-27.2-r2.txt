@@ -1,0 +1,197 @@
+2026-11-14 05:19:05.075 Vespin[22365:10503365] Session replay disabled via configuration
+2026-11-14 05:19:05.228 Vespin[22365:10503365] _setUpFeatureFlags called with release level 2
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+W1114 05:19:05.601649 1801695232 ReactInstance.cpp:312] ReactInstance: evaluateJavaScript() with JS bundle
+(audio_device_module_ios.mm:54): current platform is IOS
+(audio_device_module_ios.mm:55): iPhone Audio APIs will be utilized.
+(input_volume_stats_reporter.cc:95): Will not log any `WebRTC.Audio.Apm.AppliedInputVolume.*` histogram stats.
+(input_volume_stats_reporter.cc:95): Will not log any `WebRTC.Audio.Apm.RecommendedInputVolume.*` histogram stats.
+(audio_processing_impl.cc:484): Injected APM submodules:
+Echo control factory: 0
+Echo detector: 0
+Capture analyzer: 0
+Capture post processor: 0
+Render pre processor: 0
+Neural residual echo estimator 0
+(audio_processing_impl.cc:499): AudioProcessing: AudioProcessing::Config{ pipeline: { maximum_internal_processing_rate: 32000, multi_channel_render: 1, multi_channel_capture: 1 }, pre_amplifier: { enabled: 0, fixed_gain_factor: 1 },capture_level_adjustment: { enabled: 0, pre_gain_factor: 1, post_gain_factor: 1, analog_mic_gain_emulation: { enabled: 0, initial_level: 255 }}, high_pass_filter: { enabled: 0 }, echo_canceller: { enabled: 0, enforce_high_pass_filtering: 1 }, noise_suppression: { enabled: 0, level: Moderate }, transient_suppression: { enabled: 0 }, gain_controller1: { enabled: 0, mode: AdaptiveAnalog, target_level_dbfs: 3, compression_gain_db: 9, enable_limiter: 1, analog_gain_controller { enabled: 1, startup_min_volume: 0, clipped_level_min: 70, enable_digital_adaptive: 1, clipped_level_step: 15, clipped_ratio_threshold: 0.1, clipped_wait_frames: 300, clipping_predictor:  { enabled: 0, mode: 0, window_length: 5, reference_window_length: 5, reference_window_delay: 5, clipping_threshold: -1, crest_factor_margin: 3, use_predicted_step: 1 }}}, gain_controller2: { enabled: 0, fixed_digital: { gain_db: 0 }, adaptive_digital: { enabled: 0, headroom_db: 5, max_gain_db: 50, initial_gain_db: 15, max_gain_change_db_per_second: 6, max_output_noise_level_dbfs: -50 }, input_volume_control : { enabled 0}}
+(webrtc_voice_engine.cc:533): WebRtcVoiceEngine::WebRtcVoiceEngine
+(connection_context.cc:135): 
+***************************************************************
+* DEPRECATION: A worker thread distinct from the network      *
+* thread is configured. Support for a separate worker thread  *
+* is being removed. Applications must stop supplying          *
+* PeerConnectionFactoryDependencies::worker_thread.           *
+* PSA: https://groups.google.com/g/discuss-webrtc/c/Fs_Hd5XNJh0
+***************************************************************
+E1114 05:19:07.525743 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:19:07.525870 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:19:07.535148 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:19:07.535210 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:19:07.614542 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.614773 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.614888 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.614993 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.629240 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.629410 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.629531 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.632810 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.632983 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.633082 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.633168 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.634330 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.634481 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.634611 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.635265 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.635360 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.635432 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.635501 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.637189 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.637285 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.637369 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.637897 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.637979 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.638047 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.638113 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.639017 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.639124 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.639212 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.639926 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.640020 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.640113 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.640223 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.641081 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.641222 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.641341 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.641887 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.641978 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.642107 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.642198 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.643059 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.643153 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.643244 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.643807 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.643904 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.643982 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.644052 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.644869 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.644992 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.645087 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.646330 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.646458 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.646552 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.646643 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.647471 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.647590 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.647693 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.648494 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.648600 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.648686 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.648816 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.652733 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.652863 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.652972 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.667456 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: search
+E1114 05:19:07.716866 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.717031 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.718911 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.719146 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.719241 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.719373 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.719463 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.719727 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.719843 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.719921 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.720005 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.720291 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.720413 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:19:07.722777 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.723240 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.725207 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.725322 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.725746 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.725907 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.725981 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.726063 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.726136 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.726426 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.726717 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.726810 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.726933 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.727012 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.727085 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:19:07.727551 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.727921 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.728924 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.729032 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.729417 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.729614 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.729691 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.729761 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.729835 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.730038 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.730214 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.730314 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.730417 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.730500 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.730597 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.730692 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:19:07.731130 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.731505 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.732172 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.732270 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.732650 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.732784 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.732856 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.732946 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.733017 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.733271 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.733364 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.733459 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.735052 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.735179 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.735260 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.735354 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:19:07.736066 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.736466 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.737287 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.737406 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.737818 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.738003 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.738082 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.738237 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.738324 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.738601 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.738703 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.738807 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.738914 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.739012 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.739099 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:19:07.739619 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.740033 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:19:07.741349 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:19:07.741441 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:19:07.741658 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:19:07.741703 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:19:07.741864 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:19:07.741909 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:19:07.768149 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:19:07.768251 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:19:07.768440 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:19:07.768496 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:19:07.768695 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:19:07.768735 1801695232 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+I1114 05:19:08.334151 1801695232 UIManagerBinding.cpp:150] instanceHandle is null, event of type topHeaderHeightChange will be dropped
+I1114 05:19:08.334586 1801695232 UIManagerBinding.cpp:150] instanceHandle is null, event of type topHeaderHeightChange will be dropped
+dev.vespin.ios: 22365
+id_r did not find a match for uid 501
+Timestamp               Ty Process[PID:TID]
+2026-11-14 05:19:06.132 E  Vespin[22365:a04588] [com.facebook.react.log:javascript] [seal-check] PASS HChaCha20 (draft-irtf-cfrg-xchacha-03 2.2.1)
+2026-11-14 05:19:06.133 E  Vespin[22365:a04588] [com.facebook.react.log:javascript] [seal-check] PASS AEAD_XChaCha20_Poly1305 seal and open (draft-irtf-cfrg-xchacha-03 A.3.1)
+2026-11-14 05:19:06.149 E  Vespin[22365:a04588] [com.facebook.react.log:javascript] [seal-check] PASS a sealing noble made, as every earlier build wrote the kept file, opens natively
+2026-11-14 05:19:06.153 E  Vespin[22365:a04588] [com.facebook.react.log:javascript] [seal-check] PASS a native sealing opens in noble, as a build without the module opens it
+2026-11-14 05:19:06.165 E  Vespin[22365:a04588] [com.facebook.react.log:javascript] [seal-check] PASS a changed native sealing is refused
+2026-11-14 05:19:07.347 E  Vespin[22365:a04588] [com.facebook.react.log:javascript] [seal-check] 1.00 MB seal: noble and Base64 690 ms, native 5 ms
+2026-11-14 05:19:07.348 E  Vespin[22365:a04588] [com.facebook.react.log:javascript] [seal-check] 1.00 MB open: noble and Base64 475 ms, native 6 ms
+2026-11-14 05:19:07.349 E  Vespin[22365:a04588] [com.facebook.react.log:javascript] [seal-check] PASS 1 MB sealed and opened both ways for the timings
+2026-11-14 05:19:07.407 E  Vespin[22365:a04588] [com.facebook.react.log:javascript] [seal-check] DONE 6 passed, 0 failed; check key deleted
+2026-11-14 05:19:47.694 Df log[22872:0] [com.apple.log:] log run noninteractively, parent: 21887 (launchd_sim), args: 'log' 'show' '--last' '2m' '--style' 'compact' '--predicate' 'eventMessage CONTAINS "[seal-check]"'
