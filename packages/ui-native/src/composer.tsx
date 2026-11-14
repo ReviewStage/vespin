@@ -8,6 +8,7 @@ import {
   Menu,
   ProgressView,
   TextField,
+  type TextFieldSelection,
   Toggle,
   useNativeState,
   VStack,
@@ -323,6 +324,9 @@ function ComposerPieces(props: ComposerProps) {
   } = props;
 
   const text = useNativeState(held ?? "");
+  // Note that a field opening on words handed back, as a refused send's, stands its caret after them, as Messages keeps a draft's, rather than at their start.
+  const [opened] = useState(() => (held ?? "").length);
+  const caret = useNativeState<TextFieldSelection>({ start: opened, end: opened });
   const [typed, setTyped] = useState(held ?? "");
   const words = held ?? typed;
   // Note that the field is handed the holder's words only where they moved apart from what was typed, as a send empties them or a refusal hands them back.
@@ -360,6 +364,7 @@ function ComposerPieces(props: ComposerProps) {
         placeholder={placeholder}
         axis="vertical"
         autoFocus={props.autoFocus === true}
+        {...(opened > 0 && { selection: caret })}
         onTextChange={type}
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
