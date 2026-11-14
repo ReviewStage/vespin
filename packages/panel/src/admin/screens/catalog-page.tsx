@@ -77,7 +77,7 @@ export function CatalogPage({
 }
 
 /** One block of a detail's text: what it is, and its words. */
-export interface CatalogDetailBlock {
+interface CatalogDetailBlock {
   title: string;
   code: string;
 }
