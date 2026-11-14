@@ -36,6 +36,7 @@ import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
+import { useDetailOnly } from "../detail-only.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
@@ -43,7 +44,7 @@ import { openInSafari } from "../open-link.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -238,15 +239,24 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   // Note that Show or Hide Sidebar acts in any regular window, on the app sidebar where three columns stand and on the list beside its detail where two do.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const sidebarStands = signedIn && regular;
+  const detailOnly = useDetailOnly();
+  // Note that Expand Page acts only where the detail can stand alone, a window wide enough for three columns.
+  const threeColumns = useThreeColumns();
+  const detailStands = signedIn && threeColumns;
 
   const enabled = [
     ...subject.enabled,
     ...(workspaces.length > 0 ? [MENU_COMMAND.SWITCH_WORKSPACE] : []),
     ...(sidebarStands ? [MENU_COMMAND.SIDEBAR] : []),
+    ...(detailStands ? [MENU_COMMAND.DETAIL_ONLY] : []),
   ];
 
-  const toggled =
-    sidebarStands && !sidebar.shown ? [...subject.toggled, MENU_COMMAND.SIDEBAR] : subject.toggled;
+  const toggled = [
+    ...subject.toggled,
+    // Note that a detail standing alone hides the sidebar whatever its own choice, so the menu offers Show Sidebar then.
+    ...(sidebarStands && (!sidebar.shown || detailOnly.alone) ? [MENU_COMMAND.SIDEBAR] : []),
+    ...(detailStands && detailOnly.alone ? [MENU_COMMAND.DETAIL_ONLY] : []),
+  ];
 
   const working = useAgentsWorking(subject.task?.id);
   const [asking, setAsking] = useState<Ask>(ASK.NONE);
@@ -338,7 +348,16 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       case MENU_COMMAND.SEARCH:
         return router.navigate("/search");
       case MENU_COMMAND.SIDEBAR:
+        // Note that Show Sidebar over a detail standing alone brings the columns back with the sidebar, as the system's sidebar button does.
+        if (detailOnly.alone) {
+          detailOnly.setAlone(false);
+
+          return sidebar.setShown(true);
+        }
+
         return sidebar.toggle();
+      case MENU_COMMAND.DETAIL_ONLY:
+        return detailOnly.toggle();
       case MENU_COMMAND.MARK_DONE:
         if (working) setAsking(ASK.MARK_DONE);
         else markDone();

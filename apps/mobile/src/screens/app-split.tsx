@@ -9,6 +9,7 @@ import {
   SplitView,
 } from "@repo/ui-native";
 import { useEffect, useState } from "react";
+import { useDetailOnly } from "../detail-only.js";
 import { InFrontProvider, type PlaceColumns, usePlaceColumns } from "../place-columns.js";
 import {
   SIDEBAR_PLACE,
@@ -99,7 +100,7 @@ export function AppSplit({
   const columns = kept.get(standing);
   const compose = useComposeAction();
   // Note that the page stands alone until a person brings the columns back, by this button or the system's sidebar button, as Mail's expand holds.
-  const [detailOnly, setDetailOnly] = useState(false);
+  const { alone: detailOnly, setAlone: setDetailOnly } = useDetailOnly();
 
   const expand: BarAction = detailOnly
     ? { label: EXPAND_WORDS.COLLAPSE, symbol: GLYPH.COLLAPSE, onPress: () => setDetailOnly(false) }
