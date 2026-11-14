@@ -569,10 +569,12 @@ function CommentCount({ comments }: { readonly comments: WordsComments }) {
       modifiers={[buttonStyle("borderless"), accessibilityLabel(comments.heard)]}
     >
       {/* Note that the count stands in Apple's least target, the shape on that frame rather than on the button, since a borderless button takes a press only where its label is hit. */}
+      {/* Note that it stands at its target's top, set down a little, so it reads level with the block's first line, a heading's or a paragraph's, rather than 22 pt down the target's middle. */}
       <HStack
         spacing={SPACE.TIGHT}
         modifiers={[
-          frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+          padding({ top: SPACE.TIGHT }),
+          frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE, alignment: "top" }),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         ]}
       >
