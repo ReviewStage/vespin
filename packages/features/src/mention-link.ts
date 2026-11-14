@@ -576,12 +576,12 @@ function placeFields(place: LinkDestination, hash: string) {
     // Note that a task's link naming a comment thread names the task, as it did before threads had links.
     case LINK_DESTINATION.TASK:
     case LINK_DESTINATION.COMMENT:
-      return { kind: MENTION_KIND.TASK, taskId: place.planId };
+      return { kind: MENTION_KIND.TASK, taskId: place.taskId };
     case LINK_DESTINATION.SECTION:
-      return { kind: MENTION_KIND.SECTION, taskId: place.planId, anchor: place.anchor };
+      return { kind: MENTION_KIND.SECTION, taskId: place.taskId, anchor: place.anchor };
     case LINK_DESTINATION.PAGE:
-      return "planId" in place
-        ? { kind: MENTION_KIND.PAGE, taskId: place.planId, pageId: place.pageId }
+      return "taskId" in place
+        ? { kind: MENTION_KIND.PAGE, taskId: place.taskId, pageId: place.pageId }
         : { kind: MENTION_KIND.PAGE, agentId: place.agentId, pageId: place.pageId };
     // Note that an older link naming the agent under its task names the agent alone, as every link to one is written now.
     case LINK_DESTINATION.AGENT:
@@ -604,7 +604,7 @@ function appFields(url: URL) {
     const place = readLink(task.href)?.place;
 
     return place?.kind === LINK_DESTINATION.TASK && taskNumberOf(place) === undefined
-      ? { kind: MENTION_KIND.APP, taskId: place.planId }
+      ? { kind: MENTION_KIND.APP, taskId: place.taskId }
       : undefined;
   }
 
@@ -911,10 +911,10 @@ export function encodeMention(mention: Mention, place: MentionPlace): string {
     case MENTION_KIND.FOLDER:
       return repositoryTarget(mention.kind, mention.path, place, undefined);
     case MENTION_KIND.TASK:
-      return linkOf({ kind: LINK_DESTINATION.TASK, planId: mention.taskId }, workspace);
+      return linkOf({ kind: LINK_DESTINATION.TASK, taskId: mention.taskId }, workspace);
     case MENTION_KIND.SECTION:
       return linkOf(
-        { kind: LINK_DESTINATION.SECTION, planId: mention.taskId, anchor: mention.anchor },
+        { kind: LINK_DESTINATION.SECTION, taskId: mention.taskId, anchor: mention.anchor },
         workspace,
       );
     // An MCP server has no page of its own, so it keeps the app's own form, wherever it is written.
@@ -935,7 +935,7 @@ export function encodeMention(mention: Mention, place: MentionPlace): string {
             workspace,
           )
         : linkOf(
-            { kind: LINK_DESTINATION.PAGE, planId: mention.taskId, pageId: mention.pageId },
+            { kind: LINK_DESTINATION.PAGE, taskId: mention.taskId, pageId: mention.pageId },
             workspace,
           );
     // An agent stands under its workspace, whichever task it works on, as its own link does.
@@ -944,7 +944,7 @@ export function encodeMention(mention: Mention, place: MentionPlace): string {
     case MENTION_KIND.PERSON:
       return linkOf({ kind: LINK_DESTINATION.PERSON, userId: mention.userId }, workspace);
     case MENTION_KIND.APP:
-      return `${linkOf({ kind: LINK_DESTINATION.TASK, planId: mention.taskId }, workspace)}/${APP_STEP}`;
+      return `${linkOf({ kind: LINK_DESTINATION.TASK, taskId: mention.taskId }, workspace)}/${APP_STEP}`;
     // An app on a Mac has no page of its own, so it keeps the app's own form.
     case MENTION_KIND.MAC_APP:
       return schemeLinkOf(SCHEME_LINK_HOST.MAC_APP, encodedStep(mention.app));

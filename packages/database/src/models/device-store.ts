@@ -495,9 +495,10 @@ const changeSettings = SqlSchema.findAll({
     commandMode: Schema.UndefinedOr(machineCommandModeSchema),
     computerUse: Schema.UndefinedOr(Schema.Boolean),
     removeApp: Schema.UndefinedOr(Schema.String),
+    addApp: Schema.UndefinedOr(Schema.String),
   }),
   Result: TxidRowSchema,
-  execute: ({ userId, id, commandMode, computerUse, removeApp }) =>
+  execute: ({ userId, id, commandMode, computerUse, removeApp, addApp }) =>
     Database.use((db) =>
       db
         .update(device)
@@ -509,6 +510,12 @@ const changeSettings = SqlSchema.findAll({
           ...(removeApp === undefined
             ? undefined
             : { alwaysAllowedApps: sql`${device.alwaysAllowedApps} - ${removeApp}::text` }),
+          // Note that an app the machine already allows is kept once.
+          ...(addApp === undefined
+            ? undefined
+            : {
+                alwaysAllowedApps: sql`(coalesce(${device.alwaysAllowedApps}, '[]'::jsonb) - ${addApp}::text) || jsonb_build_array(${addApp}::text)`,
+              }),
         })
         .where(
           and(
@@ -915,11 +922,12 @@ export function saveCommandDeviceSettings(
   );
 }
 
-/** What a member changed of one of their machines from anywhere: each setting named, and an app taken back from those it always allows. */
+/** What a member changed of one of their machines from anywhere: each setting named, an app taken back from those it always allows, and one added, as a late Always allow adds it. */
 export interface MachineChange {
   readonly commandMode?: MachineCommandMode | undefined;
   readonly computerUse?: boolean | undefined;
   readonly removeApp?: string | undefined;
+  readonly addApp?: string | undefined;
   /** Whether the machine becomes the member's default machine (`isDefaultMachine`). */
   readonly makeDefault?: true | undefined;
 }
@@ -944,6 +952,7 @@ export function changeMachine(
       commandMode: change.commandMode,
       computerUse: change.computerUse,
       removeApp: change.removeApp,
+      addApp: change.addApp,
     });
 
     // Note that the default moves only once the machine is known to stand, so a pick of one gone leaves the default where it was.

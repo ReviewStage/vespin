@@ -95,8 +95,8 @@ function automation(
 ): AutomationSummary {
   return {
     id: `5a0c4d2e-0000-4c3a-9e7d-${String(n).padStart(12, "0")}`,
-    planId: null,
-    planName: null,
+    taskId: null,
+    taskName: null,
     workspaceId: "workspace-acme",
     name,
     enabled: true,
@@ -206,7 +206,7 @@ function followedOf(tasks: readonly TaskSummary[]): readonly ListedAgent[] {
           ...line,
           model: "anthropic/claude-opus-5.5",
           effort: "high",
-          planId: summary.id,
+          taskId: summary.id,
           createdAt: at,
           turnId: null,
           ...(line.status === AGENT_STATUS.RUNNING ? { runStartedAt: at } : { settledAt: at }),
@@ -330,7 +330,7 @@ beforeEach(() => {
       Promise.resolve({
         agent: {
           id: agentId,
-          planId: CACHE.id,
+          taskId: CACHE.id,
           model: "anthropic/claude-opus-5.5",
           effort: "high",
           title: CACHE_KEYS.title,
@@ -368,7 +368,7 @@ function feedNow(): AppHostRead<AppInboxItems> {
 
   return {
     rows: {
-      [INBOX_SCOPE_KIND.PLAN]: Object.fromEntries(
+      [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(
         [...INBOXES].filter(([, items]) => items.length > 0),
       ),
     },

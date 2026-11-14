@@ -95,7 +95,7 @@ function agentPlaceOf(params: PlaceParams, fields: Readonly<Record<string, WireB
   const { workspace, taskId, agentId } = params;
 
   if (workspace === undefined || agentId === undefined) return undefined;
-  const place = { ...fields, ...(taskId !== undefined && { planId: taskId }), agentId };
+  const place = { ...fields, ...(taskId !== undefined && { taskId: taskId }), agentId };
 
   return isLinkDestination(place) ? place : undefined;
 }
@@ -111,13 +111,13 @@ function taskPlaceOf({ params, search, hash }: LinkAddress): LinkDestination | u
     return undefined;
   }
 
-  return placeOf({ kind: LINK_DESTINATION.TASK, planId: params.taskId });
+  return placeOf({ kind: LINK_DESTINATION.TASK, taskId: params.taskId });
 }
 
 /** An Inbox item as its route's params name it: under its task, under its agent, or by its id alone. */
 function inboxItemOf({ taskId, agentId, itemId }: PlaceParams): LinkDestination | undefined {
   if (taskId !== undefined)
-    return placeOf({ kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId });
+    return placeOf({ kind: LINK_DESTINATION.INBOX_ITEM, taskId: taskId, itemId });
 
   if (agentId !== undefined) {
     return placeOf({ kind: LINK_DESTINATION.INBOX_ITEM, agentId, itemId });
@@ -157,7 +157,7 @@ export const LINK_ROUTED_PLACE = {
 
       return params.taskId === undefined || threadId === undefined
         ? undefined
-        : { kind: LINK_DESTINATION.COMMENT, planId: params.taskId, threadId };
+        : { kind: LINK_DESTINATION.COMMENT, taskId: params.taskId, threadId };
     },
   },
   SECTION: {
@@ -172,7 +172,7 @@ export const LINK_ROUTED_PLACE = {
 
       return anchor === undefined || anchor === ""
         ? undefined
-        : { kind: LINK_DESTINATION.SECTION, planId: params.taskId, anchor };
+        : { kind: LINK_DESTINATION.SECTION, taskId: params.taskId, anchor };
     },
   },
   PAGE: {
@@ -188,7 +188,7 @@ export const LINK_ROUTED_PLACE = {
 
       if (pageId === undefined) return undefined;
 
-      if (taskId !== undefined) return { kind: LINK_DESTINATION.PAGE, planId: taskId, pageId };
+      if (taskId !== undefined) return { kind: LINK_DESTINATION.PAGE, taskId: taskId, pageId };
 
       return agentId === undefined ? undefined : { kind: LINK_DESTINATION.PAGE, agentId, pageId };
     },
@@ -199,7 +199,7 @@ export const LINK_ROUTED_PLACE = {
     routes: ["/places/$workspace/task/$taskId/agent/$agentId/"],
     // Note that an agent's own address is its page's (`ROUTED_PLACE.AGENT`), which a load there stands as a link said, as it always has.
     ownPlaceRoutes: ["/places/$workspace/agent/$agentId/"],
-    lands: (place) => "planId" in place,
+    lands: (place) => "taskId" in place,
     read: ({ params }) => agentPlaceOf(params, { kind: LINK_DESTINATION.AGENT }),
   },
   MESSAGE: {
@@ -263,7 +263,7 @@ export const LINK_ROUTED_PLACE = {
     read: ({ params }) =>
       placeOf({
         kind: LINK_DESTINATION.VERSION,
-        planId: params.taskId,
+        taskId: params.taskId,
         revision: Number(params.revision),
       }),
   },
@@ -304,7 +304,7 @@ export const LINK_ROUTED_PLACE = {
     read: ({ params }) =>
       placeOf({
         kind: LINK_DESTINATION.INBOX,
-        ...(params.taskId !== undefined && { planId: params.taskId }),
+        ...(params.taskId !== undefined && { taskId: params.taskId }),
       }),
   },
   INBOX_ITEM: {
@@ -486,7 +486,7 @@ export function onTasksTab(
   place: LinkDestination,
   standingTask: string | undefined,
 ): OnStandingTask {
-  const standing = standingTask !== undefined && "planId" in place && place.planId === standingTask;
+  const standing = standingTask !== undefined && "taskId" in place && place.taskId === standingTask;
 
   const declared: LinkDestinationDeclaration | undefined = DECLARATIONS.find(
     (each) => each.kind === place.kind,

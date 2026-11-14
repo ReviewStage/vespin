@@ -8,6 +8,7 @@ export const LUCIDE_SYMBOL = {
   ALARM_CLOCK_CHECK: "AlarmClockCheck",
   ALARM_CLOCK_OFF: "AlarmClockOff",
   APP_WINDOW: "AppWindow",
+  APP_WINDOW_MAC: "AppWindowMac",
   ARCHIVE: "Archive",
   ARCHIVE_RESTORE: "ArchiveRestore",
   ARROW_DOWN: "ArrowDown",

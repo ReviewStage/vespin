@@ -42,9 +42,9 @@ import {
 } from "@tanstack/db";
 import { Effect, type Scope } from "effect";
 import { listedOf, type QueryCollection } from "./drawn-rows.js";
-import type { AgentRow, PastGrace, PlanRow } from "./task-list-collections.js";
 import type { Continued } from "./task-list-continuations.js";
 import type { PlanAgents, PlanPullRequests } from "./task-list-pull-requests.js";
+import type { AgentRow, PastGrace, PlanRow } from "./task-list-rows.js";
 
 /** What the list's plans and agents are derived from: the rows as it draws them, and what it derives beside them. */
 export interface TaskListSources {
@@ -125,8 +125,8 @@ export function taskListTasks(
         query: (q) =>
           q
             .from({ grace: pastGrace })
-            .groupBy(groupKeys(({ grace }) => grace.planId))
-            .select(({ grace }) => ({ taskId: grace.planId })),
+            .groupBy(groupKeys(({ grace }) => grace.taskId))
+            .select(({ grace }) => ({ taskId: grace.taskId })),
         gcTime: KEPT_BY_SCOPE,
         startSync: true,
       }),
@@ -140,7 +140,7 @@ export function taskListTasks(
             agentIds: toArray(
               q
                 .from({ grace: pastGrace })
-                .where(({ grace }) => eq(grace.planId, plan.taskId))
+                .where(({ grace }) => eq(grace.taskId, plan.taskId))
                 .select(({ grace }) => grace.agentId),
             ),
           })),

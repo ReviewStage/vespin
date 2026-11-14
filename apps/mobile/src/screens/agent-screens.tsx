@@ -14,7 +14,7 @@ import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/feature
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
-import { agentName, modelLabel } from "@repo/features/model-label";
+import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -172,7 +172,6 @@ const OPTIONS_WORDS = {
   EFFORT: "Effort",
   FAST: "Fast",
   DONE: "Done",
-  APPLIES: "Takes effect from the agent's next step.",
   READING_SERVERS: "Reading your MCP servers",
   NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
   MORE_SERVERS: "Connect another in Settings.",
@@ -201,7 +200,7 @@ function useAgentAddress(
   const place =
     taskId === undefined
       ? { kind: LINK_DESTINATION.AGENT, agentId }
-      : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId };
+      : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId };
 
   return step === undefined ? undefined : linkOf(place, step);
 }
@@ -499,7 +498,7 @@ export function AgentScreen() {
   const asked = merging === undefined ? undefined : offers.get(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const address = useAgentAddress(id, shown?.workspaceId, shown?.planId);
+  const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
   const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
@@ -591,7 +590,7 @@ export function AgentScreen() {
     suggested,
   );
 
-  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.planId);
+  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId);
   const older = useOlderPages(id, transcript?.before);
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
@@ -608,7 +607,7 @@ export function AgentScreen() {
             id,
             title,
             workspaceId: shown.workspaceId,
-            taskId: shown.planId,
+            taskId: shown.taskId,
           },
           workspaces,
         ),
@@ -655,7 +654,7 @@ export function AgentScreen() {
   };
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
-  const talk = useAgentTalk(id, shown?.planId);
+  const talk = useAgentTalk(id, shown?.taskId);
   const otherCall = useStandingCallCard(id);
 
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
@@ -707,7 +706,7 @@ export function AgentScreen() {
                 {COPY_TRANSCRIPT_WORDS.FULL}
               </Stack.Toolbar.MenuAction>
               <Stack.Toolbar.MenuAction
-                icon="square.and.arrow.up"
+                icon={glyphSymbol(GLYPH.SHARE)}
                 onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
               >
                 {COPY_TRANSCRIPT_WORDS.SHARE}
@@ -748,7 +747,7 @@ export function AgentScreen() {
                     <Stack.Toolbar.MenuAction
                       key={offered.action.id}
                       icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
-                      subtitle={offered.action.command}
+                      subtitle={offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command}
                       onPress={offered.onPress}
                     >
                       {runActionMenuLabel(offered.action, offered.runs)}
@@ -760,11 +759,7 @@ export function AgentScreen() {
           )}
           {agent === undefined || barActs ? null : (
             <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(GLYPH.ARCHIVE)}
-                destructive
-                onPress={askArchive}
-              >
+              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
                 {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
             </Stack.Toolbar.Menu>
@@ -817,6 +812,7 @@ export function AgentScreen() {
           head={
             <AgentHead
               model={agent === undefined ? undefined : modelLabel(agent.model)}
+              harness={agent === undefined ? undefined : providerOf(agent.model)}
               status={status}
               onModel={openOptions}
             />
@@ -872,7 +868,6 @@ export function AgentScreen() {
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}
         act={actions.archiveAsk.question.act}
-        destructive
         presented={archiving}
         onAct={() => {
           setArchiving(false);
@@ -918,7 +913,7 @@ export function AgentPageScreen() {
   return (
     <PageScreen
       workspaceId={agent?.workspaceId}
-      taskId={agent?.planId}
+      taskId={agent?.taskId}
       pageId={page}
       version={Number(version)}
       title={title}
@@ -974,7 +969,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection footer={pick.note ?? OPTIONS_WORDS.APPLIES}>
+          <ListSection footer={pick.note}>
             <MenuPickRow
               label={OPTIONS_WORDS.MODEL}
               options={pick.models}

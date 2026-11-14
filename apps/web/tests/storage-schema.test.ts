@@ -92,6 +92,7 @@ const DECLARED_TABLES = [
   "jwks",
   "live_activity",
   "machine_command",
+  "machine_command_ask",
   "machine_command_device_listener",
   "machine_command_listener",
   "memory",

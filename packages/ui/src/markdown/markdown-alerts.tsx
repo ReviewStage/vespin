@@ -34,7 +34,7 @@ export const ALERT_KIND = {
 export type AlertKind = (typeof ALERT_KIND)[keyof typeof ALERT_KIND];
 
 /** The property the step sets on a quote it marks, its alert's kind. */
-export const ALERT_PROPERTY = "dataAlert";
+const ALERT_PROPERTY = "dataAlert";
 
 /** The marker an alert opens on, alone on its line, in any case, as GitHub reads it. */
 const ALERT_MARKER = /^\s*\[!(note|tip|important|warning|caution)\][^\S\n]*(?:\n|$)/iu;

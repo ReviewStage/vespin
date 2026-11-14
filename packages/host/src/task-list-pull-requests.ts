@@ -28,7 +28,7 @@ import {
 } from "@tanstack/db";
 import { Effect, type Scope } from "effect";
 import { listedOf, type QueryCollection } from "./drawn-rows.js";
-import type { AgentRow } from "./task-list-collections.js";
+import type { AgentRow } from "./task-list-rows.js";
 
 /** The task list's pull requests, as its live queries hold them now. */
 export interface TaskListPullRequests {
@@ -77,8 +77,8 @@ export function taskListPullRequests(
         query: (q) =>
           q
             .from({ agent: agents })
-            .groupBy(groupKeys(({ agent }) => agent.planId))
-            .select(({ agent }) => ({ taskId: agent.planId })),
+            .groupBy(groupKeys(({ agent }) => agent.taskId))
+            .select(({ agent }) => ({ taskId: agent.taskId })),
         gcTime: KEPT_BY_SCOPE,
         startSync: true,
       }),
@@ -90,7 +90,7 @@ export function taskListPullRequests(
           q.from({ plan: plans }).select(({ plan }) => ({
             taskId: plan.taskId,
             agents: toArray(
-              q.from({ agent: agents }).where(({ agent }) => eq(agent.planId, plan.taskId)),
+              q.from({ agent: agents }).where(({ agent }) => eq(agent.taskId, plan.taskId)),
             ),
           })),
         gcTime: KEPT_BY_SCOPE,

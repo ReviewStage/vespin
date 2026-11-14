@@ -67,7 +67,7 @@ export class InboxAttachmentKey extends Data.TaggedClass(KEPT_KIND.INBOX_ATTACHM
 
 /** A picture of a description, or a file one of its comments carries: each upload is given an id of its own. */
 export class DescriptionPictureKey extends Data.TaggedClass(KEPT_KIND.DESCRIPTION_PICTURE)<{
-  readonly planId: string;
+  readonly taskId: string;
   readonly attachmentId: string;
 }> {}
 
@@ -182,7 +182,7 @@ export function keptOfAgent(agentId: string): (key: KeptKey) => boolean {
 export function keptOfTask(taskId: string): (key: KeptKey) => boolean {
   return (key) =>
     Match.value(key).pipe(
-      Match.tag(KEPT_KIND.DESCRIPTION_PICTURE, (kept) => kept.planId === taskId),
+      Match.tag(KEPT_KIND.DESCRIPTION_PICTURE, (kept) => kept.taskId === taskId),
       Match.tag(
         KEPT_KIND.PAGE_VERSION,
         (kept) => kept.ownerKind === PAGE_OWNER.TASK && kept.ownerId === taskId,
