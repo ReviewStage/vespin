@@ -1,18 +1,25 @@
 import type { AgentPullRequest } from "@repo/features/agent-wire";
+import { DEVICE_STANDING } from "@repo/features/agent-wire";
 import {
   automationOwner,
   automationRunStanding,
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import { AUTOMATION_SCOPE, type AutomationSummary } from "@repo/features/automation-wire";
+import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { NEEDS_YOU, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { machineName, type ThisMac } from "@repo/features/machine-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ASSIGNED_TO } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { type Noun, TERM } from "@repo/features/words";
-import { WORKSPACE_ROLE, workspaceOfSlug } from "@repo/features/workspace-wire";
+import {
+  WORKSPACE_ROLE,
+  type WorkspaceMachine,
+  workspaceOfSlug,
+} from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -49,6 +56,7 @@ import {
   useMinute,
   usePageScroll,
   VirtualTaskRows,
+  VisuallyHidden,
 } from "@repo/ui";
 import {
   ACTOR_KIND,
@@ -74,6 +82,7 @@ import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { changesTab } from "@repo/ui/tab-strip-model";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { queryOptions, skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Duration } from "effect";
 import { ListFilterIcon, MailIcon, UsersIcon } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { askAct } from "../act.js";
@@ -84,6 +93,7 @@ import { useCopyToast } from "../copy-feedback.js";
 import { LinkWorkspaceProvider, linkItems, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
+import { useThisMac } from "../machine-name.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { useAutomationsDoor, usePersonDoor } from "../places/routed-doors.js";
@@ -95,6 +105,7 @@ import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { HOME_ROW_CONTEXT, HOME_ROW_META, HOME_ROW_PICTURE } from "../tasks/home-row.js";
 import { InboxItemRows } from "../tasks/inbox-item-rows.js";
 import { InboxListSkeleton } from "../tasks/inbox-list.js";
+import { DeviceStandingGlyph, STANDING_WORDS } from "../tasks/runs-on.js";
 import { type AgentsControl, readAgentById } from "../tasks/use-agents.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -136,15 +147,21 @@ import { useAutomations } from "./use-automations.js";
  * items their agents wait on, the tasks assigned to them, the rest of the
  * tasks they created, and their other
  * agents, each from the listed workspace's task list and Inbox
- * (`@repo/ui/person-page-model`), and the workspace's automations they
- * made, a section with nothing in it left out.
+ * (`@repo/ui/person-page-model`), the workspace's automations they
+ * made, and their machines, each by its platform's glyph wearing the Runs
+ * on menu's dot for whether it is there now, its name, and its platform, a
+ * section with nothing in it left out.
  * Until the members, the task list, the Inbox, and the automations are read,
  * placeholders stand where what each names will, and a read that failed
  * says that and offers Retry, so a page names nobody as someone outside the
  * workspace, and is called empty, only once its reads have answered.
- * Nothing on it is read for it: it shows a teammate only what the sidebar,
- * the Inbox, and an agent's card already show any member, never their
- * personal workspace, their answers, or another workspace's. A press on a
+ * Nothing on it is read for it but their machines
+ * (`WORKSPACE_MACHINES_READ`), read as it opens and every half
+ * minute while it stands, which say only what each machine is and whether
+ * it is there, never its settings or whether agents may use it: it shows a
+ * teammate only what the sidebar, the Inbox, an agent's card, and a
+ * follower's card already show any member, never their personal workspace,
+ * their answers, or another workspace's. A press on a
  * row opens what it names, and its ⋯, a right-click, and the menu key open
  * its acts: a task's the sidebar's, an agent's Copy link and Archive, an
  * Item's and an automation's Copy link, each link written under the
@@ -632,6 +649,104 @@ function AutomationRows({
   );
 }
 
+/** What their machines are called, a section's title and the noun its count reads with. */
+const MACHINES_TITLE = "Machines";
+
+const MACHINE_NOUN = { one: "machine", many: "machines" } as const satisfies Noun;
+
+/** How often their machines are read again while the page stands, since where each stands moves by the minute. */
+const MACHINES_READ_EVERY = Duration.seconds(30);
+
+/** Their machines as the page draws them, none while they are first read or where they never could be, and whether the latest read failed, which the page says rather than pass a stale or missing answer for a fresh one. */
+interface PersonMachines {
+  readonly machines: readonly WorkspaceMachine[];
+  readonly reading: boolean;
+  readonly failed: boolean;
+  readonly onRetry: () => void;
+}
+
+/** Their machines in the workspace the page stands in, read as it opens and every half minute while it stands; none outside a workspace. */
+function usePersonMachines(workspaceId: string | undefined, userId: string): PersonMachines {
+  const read = useQuery({
+    queryKey: [QUERY_ROOT.MEMBER_MACHINES, workspaceId, userId],
+    queryFn: () =>
+      workspaceId === undefined
+        ? Promise.reject(new Error("No workspace is listed."))
+        : askAct(ACT_KIND.WORKSPACE_MACHINES_READ, { workspaceId, userId }),
+    enabled: workspaceId !== undefined,
+    refetchOnMount: "always",
+    refetchInterval: Duration.toMillis(MACHINES_READ_EVERY),
+    retry: false,
+  });
+
+  const none = { machines: [], reading: false, failed: false, onRetry: () => void read.refetch() };
+
+  if (workspaceId === undefined) return none;
+
+  // Note that a poll that failed keeps its last answer drawn and still says it failed, so a stale dot never passes for a fresh one.
+  if (read.data !== undefined) {
+    return { ...none, machines: read.data.machines, failed: read.isError };
+  }
+
+  return read.isError ? { ...none, failed: true } : { ...none, reading: true };
+}
+
+/**
+ * One of their machines as a row: its platform's glyph wearing whether it
+ * is there now, its name, and its platform in words. Note that its
+ * standing is the dot's alone to the eye, with words for a reader only,
+ * since the row's leading mark is decoration.
+ */
+function MachineRow({
+  machine,
+  name,
+}: {
+  machine: WorkspaceMachine;
+  /** What the list calls it (`machineName`): This Mac on the reader's own page. */
+  name: string;
+}): React.JSX.Element {
+  const standing = machine.online ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE;
+
+  return (
+    <ListRow
+      motionKey={machine.id}
+      leading={<DeviceStandingGlyph device={machine} standing={standing} hinted={false} />}
+      title={name}
+      titleReplayMasked
+      meta={
+        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          {DEVICE_PLATFORM_NAME[machine.platform]}
+          <VisuallyHidden>{`, ${STANDING_WORDS[standing]}`}</VisuallyHidden>
+        </Text>
+      }
+    />
+  );
+}
+
+/** Their machines' rows, each named as every list of machines names it, This Mac on the reader's own page. */
+function MachineRows({
+  machines,
+  thisMac,
+}: {
+  machines: readonly WorkspaceMachine[];
+  /** The reader's own Mac, which only their own page names so. */
+  thisMac: ThisMac;
+}): React.JSX.Element {
+  const listed = machines.map((machine) => ({ deviceId: machine.id, name: machine.name }));
+
+  return (
+    <>
+      {machines.map((machine) => (
+        <MachineRow
+          key={machine.id}
+          machine={machine}
+          name={machineName({ deviceId: machine.id, name: machine.name }, listed, thisMac)}
+        />
+      ))}
+    </>
+  );
+}
+
 /** The page's title: their face beside their name, which is the page's one `h1`. */
 function PersonHeading({ person }: { person: Actor }): React.JSX.Element {
   return (
@@ -849,6 +964,9 @@ function PersonColumn({
   const waitingTitle = you ? NEEDS_YOU.LABEL : "Waiting on their answer";
   const theirAutomations = usePersonAutomations(tasks.workspace?.id, userId);
   const { automations } = theirAutomations;
+  const theirMachines = usePersonMachines(tasks.workspace?.id, userId);
+  const { machines } = theirMachines;
+  const thisMac = useThisMac();
   const read = useWaitingItems(tasks);
 
   // An item is theirs where it waits on them (`inboxWaitsOn`), on a task its assignee or else its agent's starter, by the list followed live from a service that names neither.
@@ -927,7 +1045,13 @@ function PersonColumn({
         actions={away === undefined ? actions : undefined}
       >
         <PersonBody
-          reading={!tasks.listRead || read.reading || theirAutomations.reading || unnamed}
+          reading={
+            !tasks.listRead ||
+            read.reading ||
+            theirAutomations.reading ||
+            theirMachines.reading ||
+            unnamed
+          }
         >
           <PersonTop>{note}</PersonTop>
           {tasks.listFailed ? (
@@ -1028,15 +1152,35 @@ function PersonColumn({
           ) : theirAutomations.reading ? (
             <RowsSkeleton label={`Reading ${theirs} automations…`} />
           ) : null}
-          {/* Note that the page is said to be empty only once it names someone and the task list, the Inbox, and the automations have answered, since any may yet name something, or nobody may be found. */}
+          {machines.length === 0 ? null : (
+            <PersonSection title={MACHINES_TITLE} count={machines.length} noun={MACHINE_NOUN}>
+              <MachineRows machines={machines} thisMac={you ? thisMac : undefined} />
+            </PersonSection>
+          )}
+          {theirMachines.failed ? (
+            <div className="home-note my-tight-gap">
+              <ErrorState
+                failure={unreadShown(FAILURE_SURFACE.PERSON_MACHINES_READ)}
+                onRetry={theirMachines.onRetry}
+              >
+                {`${you ? "Your" : "Their"} machines could not be read.`}
+              </ErrorState>
+            </div>
+          ) : theirMachines.reading ? (
+            <RowsSkeleton label={`Reading ${theirs} machines…`} />
+          ) : null}
+          {/* Note that the page is said to be empty only once it names someone and the task list, the Inbox, the automations, and the machines have answered, since any may yet name something, or nobody may be found. */}
           {unnamed ||
           !tasks.listRead ||
           read.failed ||
           read.reading ||
           theirAutomations.failed ||
-          theirAutomations.reading ? null : personPageEmpty(page) &&
+          theirAutomations.reading ||
+          theirMachines.failed ||
+          theirMachines.reading ? null : personPageEmpty(page) &&
             waiting.length === 0 &&
-            automations.length === 0 ? (
+            automations.length === 0 &&
+            machines.length === 0 ? (
             <div className="home-note my-tight-gap">
               <NoteLine look={NOTE_LINE_LOOK.INSET}>
                 {you ? "Nothing of yours here yet." : "Nothing of theirs here yet."}
