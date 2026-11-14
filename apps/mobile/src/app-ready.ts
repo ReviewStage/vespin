@@ -13,6 +13,14 @@ interface StartupPerformance {
 /** Whether this launch has counted, or let go of, its first Inbox, which it does once. */
 let counted = false;
 
+/**
+ * Whether this launch began in the background, a push or a Live Activity's
+ * wake, as React Native read the app's state when the bundle first ran.
+ * Note that only `background` marks one, since a launch from a tap can still
+ * read `inactive` while iOS finishes launching it.
+ */
+const launchedInBackground = AppState.currentState === "background";
+
 /** The time since React Native's own start of this launch, in milliseconds, or none where the runtime keeps no start. */
 function sinceLaunch(): number | undefined {
   // Note that React Native's startup timing is read inside a guard, since a runtime that keeps none throws on the read.
@@ -34,8 +42,9 @@ function sinceLaunch(): number | undefined {
  * threads, or the time itself. Note that the rows the current scope lists
  * aren't asked for, since an account whose Open scope is empty would never
  * count, and that a launch in the background, a push or a Live Activity's
- * wake, counts nothing, since nobody waited on it; it lets go of its count
- * rather than count once the app is later brought forward.
+ * wake, counts nothing, since nobody waited on it, even where the app is
+ * brought forward before the Inbox answers, since its time would hold that
+ * wait.
  */
 export function useAppReadyCount(shown: boolean): void {
   const count = useHostCount();
@@ -44,7 +53,7 @@ export function useAppReadyCount(shown: boolean): void {
     counted = true;
     const elapsed = sinceLaunch();
 
-    if (elapsed === undefined || AppState.currentState !== "active") return;
+    if (elapsed === undefined || launchedInBackground || AppState.currentState !== "active") return;
     count(PRODUCT_SURFACE_EVENT.APP_READY, { launch_seconds: productLaunchSeconds(elapsed) });
   }, [count, shown]);
 }
