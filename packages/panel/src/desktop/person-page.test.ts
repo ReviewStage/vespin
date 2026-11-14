@@ -719,6 +719,41 @@ test("a person's tasks assigned to them stand above those they created, a task b
   assert.equal(foot(), true, "and comes back with them");
 });
 
+test("a person's tasks the list does not hold, as finished ones are, are counted as the service counts them past what it holds", async () => {
+  const handed = [5, 6, 7, 8, 9, 10].map((n) =>
+    task(n, `Handed over ${n}`, DEAN, n * MINUTE, [], CHARLES),
+  );
+
+  const asked: { readonly workspaceId: string; readonly personId: string }[] = [];
+  const listed = [...TASKS, ...handed];
+
+  // The service counts three more tasks assigned to Charles than the list holds, finished long ago.
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_PERSON_PAGE]: (payload: {
+      readonly workspaceId: string;
+      readonly personId: string;
+    }) => {
+      asked.push(payload);
+
+      return Promise.resolve({ counts: { assigned: 9, created: 2, agents: 0 } });
+    },
+  });
+
+  const { page } = mountWith({ tasks: listed, listed: { tasks: listed } }, CHARLES.userId);
+  await settle();
+
+  assert.deepEqual(asked[0], { workspaceId: ACME.id, personId: CHARLES.userId });
+  await vi.waitFor(() =>
+    assert.equal(
+      [...page.querySelectorAll("button")].some((each) =>
+        each.textContent?.startsWith("Show 4 more"),
+      ),
+      true,
+    ),
+  );
+});
+
 test("a person's task is the Tasks page's row: its status before its name, one from before statuses under Todo, and its card hung beside it while rested on", async () => {
   const started = { ...DASHBOARD, status: TASK_STATUS.IN_PROGRESS };
   const listed = [RETRIES, CACHE, started, SHIM];

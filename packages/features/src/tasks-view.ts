@@ -810,6 +810,24 @@ export const tasksSettledPageAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
 ]);
 
+/** A person's tasks and agents in a workspace, as their page asks the host for them. */
+export const tasksPersonPageParamsSchema = EffectSchema.Struct({
+  workspaceId: EffectSchema.NonEmptyString,
+  personId: EffectSchema.NonEmptyString,
+});
+
+/** How many of a person's tasks and agents the service counts (`PersonCounts`), as their page hears it once their newest are read into the task list, or that the service did not answer. */
+export const tasksPersonPageAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    counts: EffectSchema.Struct({
+      assigned: EffectSchema.Finite,
+      created: EffectSchema.Finite,
+      agents: EffectSchema.Finite,
+    }),
+  }),
+  EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
+]);
+
 /** A page of a description's history, as the version history asks the host for it: the task, and the revision the page is read before where it is an older page. */
 export const tasksRevisionsParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
