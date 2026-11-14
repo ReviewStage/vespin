@@ -8,7 +8,6 @@
  * serves. Synthetic people throughout.
  */
 
-import assert from "node:assert/strict";
 import {
   AGENT_CALL_FAILURE,
   type AgentChangesAnswerView,
@@ -48,7 +47,7 @@ import type { Editor, TiptapEditorHTMLElement } from "@tiptap/core";
 import { Effect, Predicate } from "effect";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, beforeEach, vi } from "vitest";
+import { afterEach, assert, beforeAll, beforeEach, vi } from "vitest";
 import type { SideBundles } from "../bundle-loader.js";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
 import { handedCommand, type TabActionGroups } from "../desktop/strip-tabs.js";
@@ -672,7 +671,8 @@ export async function choose(tab: HTMLElement, name: string): Promise<void> {
   await settle();
 
   // Note that Files changed reads its changes through a query, so it is chosen once it no longer reads them.
-  if (name === "Files changed") await vi.waitFor(() => assert.equal(readingChanges(tab), false));
+  if (name === "Files changed")
+    await vi.waitFor(() => assert.strictEqual(readingChanges(tab), false));
 }
 
 /** Whether Files changed still says it is reading the changes. */
