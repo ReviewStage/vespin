@@ -1487,7 +1487,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
 
 /** A call held for an answer, as its row draws it (`TranscriptTool`'s `held`). */
 export interface HeldCall {
-  readonly status: string;
+  /** Where the ask stands, in words, or words that move on their own, as a countdown to an ask's close. */
+  readonly status: ReactNode;
   /** Whether it still waits on an answer, which holds the call rather than working it. */
   readonly waiting: boolean;
   readonly about: string | undefined;

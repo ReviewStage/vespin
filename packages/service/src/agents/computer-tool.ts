@@ -54,8 +54,9 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  * (`machine-routing.ts`): the machine the call names, or else the agent's
  * default. One call is one action, queued as a computer command for that
  * machine (`machine-command.ts`'s `askMachine`): the Mac asks the developer
- * about the app the first time it is used, and the call waits for that
- * answer and the action within `COMPUTER_TOOL_TIMEOUT_SECONDS`.
+ * about the app the first time it is used, for as long as its ask stands
+ * (`machineAskSeconds`), and the action then runs within
+ * `COMPUTER_TOOL_TIMEOUT_SECONDS`.
  *
  * Reading an app answers its window twice, as the browser's screenshot
  * does: a copy at most `COMPUTER_SHOTS.MODEL.edge` pixels long, which the
@@ -76,7 +77,7 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  * where it has one, so the agent can post it. The model is never handed it.
  */
 
-/** How long one call waits for the developer to allow the app and for the action to run, together. */
+/** How long one action may run once its app is allowed; the ask before it stands apart (`machineAskSeconds`). */
 export const COMPUTER_TOOL_TIMEOUT_SECONDS = 120;
 
 /** The two screenshots a read asks for: the model's copy, and the one kept beside the transcript. */

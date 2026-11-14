@@ -92,7 +92,7 @@ it.effect(
       posted.length = 0;
       const scope = yield* Scope.make();
       const { focus, state, forwarded } = yield* linked(scope, () => Effect.void, []);
-      const ask = (id: string) => ({ id, command: "node --version", askedAt: 1 });
+      const ask = (id: string) => ({ id, command: "node --version", askedAt: 1, expiresAt: 2 });
 
       state.update({ machineCommands: { asks: [ask("first")] } });
       yield* Effect.yieldNow;
