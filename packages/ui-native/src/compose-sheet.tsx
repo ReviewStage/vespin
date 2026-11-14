@@ -182,7 +182,7 @@ export function MenuChip(props: MenuChipProps) {
         <Section key={at} {...(group.title === undefined ? {} : { title: group.title })}>
           {group.choices.map((choice) => (
             <Toggle
-              key={choice.label}
+              key={choice.id ?? choice.label}
               {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
               isOn={choice.on}
               onIsOnChange={() => choice.onPress()}
