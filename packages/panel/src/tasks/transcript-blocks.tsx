@@ -1484,6 +1484,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     answered?: ReactNode;
     /** For a terminal command or an action on an app that ran nothing on its machine, how, which the row says quietly at its line's end and its body in the answer's place; none for the rest. */
     notRun?: MachineNotRun | undefined;
+    /** Whether the service answered the call without doing it (`ToolCallView`'s `refused`), which its line marks as a failure. */
+    refused?: boolean | undefined;
   };
 
 /** A call held for an answer, as its row draws it (`TranscriptTool`'s `held`). */
@@ -1551,6 +1553,7 @@ export function TranscriptTool({
   held,
   answered,
   notRun,
+  refused,
   ...props
 }: TranscriptToolProps): ReactNode {
   const Icon = CALL_ICON[kind];
@@ -1616,6 +1619,7 @@ export function TranscriptTool({
         }
         status={held?.status ?? (notRun === undefined ? undefined : machineNotRunLabel(notRun))}
         paused={held?.waiting}
+        refused={refused}
       />
       <ToolContent bare>
         {held?.about === undefined ? null : (
