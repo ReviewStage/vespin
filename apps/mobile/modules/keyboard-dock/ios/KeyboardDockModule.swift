@@ -143,7 +143,8 @@ final class KeyboardDockView: ExpoView {
       lifted = bar
     }
 
-    if let was = told, abs(was - overlap) < overlapStep { return }
+    // Note that a step to or from no overlap is always told, however small, so the content never keeps room for a keyboard that has gone.
+    if let was = told, abs(was - overlap) < overlapStep, (was == 0) == (overlap == 0) { return }
     told = overlap
     onOverlap(["overlap": overlap])
   }
