@@ -33,6 +33,8 @@ export interface FollowerOffer {
   readonly people: readonly PersonPickOption[] | undefined;
   /** Whether the members could not be read. */
   readonly failed: boolean;
+  /** Reads the members again, after a read that failed. */
+  readonly retry: () => void;
   /** Adds `userId` as a follower of the task, their machines off, as the panel's Add does; answers whether it went. */
   readonly add: (userId: string) => Promise<boolean>;
 }
@@ -111,6 +113,13 @@ export function useFollowerOffer(
         offeredPerson(member, following, member.pictureUrl ?? pictureOf(member.userId)),
       ),
     failed: members === undefined && read?.failed === true,
+    retry: () => {
+      if (task === undefined) return;
+
+      void acts[ACT_KIND.WORKSPACE_MEMBERS_RETRY]({ workspaceId: task.workspaceId }).catch(
+        (cause: unknown) => console.error("Reading the members again did not go.", cause),
+      );
+    },
     add: (userId) =>
       task === undefined
         ? Promise.resolve(false)

@@ -1,9 +1,10 @@
 // follower-screens.tsx -- Add a follower as a sheet over a task: the members of its workspace, one who already follows dimmed, a press adding the one picked and closing the sheet, as the panel's offer adds a person mentioned.
 
 import { FOLLOWING_WORDS } from "@repo/features/task-followers-model";
-import { readFailedWords, readingWords } from "@repo/features/words";
+import { readFailedWords, readingWords, VERB } from "@repo/features/words";
 import {
   BAR_TITLE,
+  BUTTON_LOOK,
   EmptyState,
   GLYPH,
   glyphSymbol,
@@ -47,7 +48,8 @@ export function useAddFollowerDoor(): (taskId: string) => void {
  * face and address, one who already follows dimmed and saying so. A press
  * adds the member, their machines off, as the panel's offer adds a person
  * mentioned, and closes the sheet; where the service refused, the sheet
- * stays and the app's failure notice says why.
+ * stays and the app's failure notice says why. Where the members could not
+ * be read, Try again reads them again.
  */
 export function AddFollowerScreen({ taskId }: { readonly taskId: string }) {
   const router = useRouter();
@@ -113,7 +115,11 @@ export function AddFollowerScreen({ taskId }: { readonly taskId: string }) {
     task === undefined ? (
       <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : failed ? (
-      <EmptyState title={WORDS.READ_FAILED} symbol={GLYPH.PEOPLE} />
+      <EmptyState
+        title={WORDS.READ_FAILED}
+        symbol={GLYPH.PEOPLE}
+        action={{ label: VERB.TRY_AGAIN, look: BUTTON_LOOK.BORDERED, onPress: offer.retry }}
+      />
     ) : people === undefined ? (
       <EmptyState title={WORDS.READING} symbol={GLYPH.PEOPLE} loading />
     ) : people.length === 0 ? (
