@@ -91,7 +91,7 @@ test("a link to the Admin place or one of its views opens nowhere for a reader w
 
 test("a task, an agent, or an Inbox item opens on the Plans tab, whatever workspace its slug names", () => {
   for (const place of [
-    { kind: LINK_DESTINATION.TASK, planId: "p1" },
+    { kind: LINK_DESTINATION.TASK, taskId: "p1" },
     { kind: LINK_DESTINATION.AGENT, agentId: "a1" },
     { kind: LINK_DESTINATION.INBOX_ITEM, agentId: "a1", itemId: "i1" },
   ] as const) {

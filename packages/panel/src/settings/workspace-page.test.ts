@@ -289,7 +289,7 @@ function automationOf(
 ): AutomationSummary {
   const summary: AutomationSummary = {
     id: `3f0e6f5c-7d1a-4f6e-9a55-${String(at + 1).padStart(12, "0")}`,
-    planId: null,
+    taskId: null,
     planName: null,
     workspaceId: ACME.id,
     name,

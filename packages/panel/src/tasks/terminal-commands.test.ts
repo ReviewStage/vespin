@@ -59,7 +59,7 @@ const SUMMARY: TaskSummary = {
 function agent(id: string, title: string, status: AgentSummary["status"]): AgentSummary {
   return {
     id,
-    planId: TASK.id,
+    taskId: TASK.id,
     model: "openai/gpt-5.6-sol",
     effort: "high",
     title,

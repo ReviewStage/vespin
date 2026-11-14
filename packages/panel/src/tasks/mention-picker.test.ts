@@ -503,7 +503,7 @@ test("on a plan, the workspace's automations are found by their name, a pick wri
 
   const automation = (id: string, name: string) => ({
     id,
-    planId: null,
+    taskId: null,
     planName: null,
     workspaceId: "workspace-stage",
     name,

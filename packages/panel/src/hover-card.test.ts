@@ -229,7 +229,7 @@ test("a plan's, a skill's, an agent tab's, and a pull request's cards each name 
             agents: [
               {
                 id: AGENT,
-                planId: TASK,
+                taskId: TASK,
                 model: "anthropic/claude-opus-5.5",
                 effort: "high",
                 title: "Invite flow",

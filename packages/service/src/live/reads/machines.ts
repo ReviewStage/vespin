@@ -3,8 +3,9 @@
  *
  * Every machine of the account's not removed, each with its id, name,
  * platform, machine and model, where its host reported them, whether it
- * runs agents as a host, whether its app listens for commands now, and its
- * own settings for agents' commands and apps (`MACHINES_READ`). A machine
+ * runs agents as a host, whether its app listens for commands now, whether
+ * it is the member's default machine (`isDefaultMachine`), and its own
+ * settings for agents' commands and apps (`MACHINES_READ`). A machine
  * runs agents as a host where it holds a version, as the hosts read lists
  * it (`hostsRead`). Its app listens where it joined, which keeps its
  * command mode, and is not marked away from its commands: its join marks it
@@ -20,6 +21,7 @@
  */
 
 import { queryBuilder } from "@repo/database/core/query";
+import { isDefaultMachine } from "@repo/database/models/device-store";
 import { device } from "@repo/database/schemas";
 import { TOPIC } from "@repo/database/sync/notification";
 import { deviceSync } from "@repo/database/sync/tables";
@@ -56,6 +58,7 @@ export const machinesRead = bindLiveRead(MACHINES_READ, {
           commandMode: device.commandMode,
           computerUse: device.computerUse,
           alwaysAllowedApps,
+          isDefault: isDefaultMachine,
         },
       },
       (selection) =>

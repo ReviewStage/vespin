@@ -75,6 +75,7 @@ import type { AppSettings } from "@repo/settings/wire";
 import { EXCESS_KEYS, keepIdentity, type UnparsedWireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Equal, Predicate, Result, Schema } from "effect";
+import { type ListMoves, movesBetween } from "./list-moves.js";
 import type { MachineCommandAsk } from "./machine-command-ask.js";
 
 export {
@@ -1292,6 +1293,34 @@ function idOf(rowId: string, row: Keyed): string {
 }
 
 /**
+ * How `key` crosses as what its list's live query says moved between the
+ * drawing sent and the drawing `next` holds (`list-moves.ts`), with no walk
+ * of the list: the rows that came or moved, and every id in order only
+ * where a row came, went, or moved past another.
+ */
+function keyDrawn(
+  entry: HostReadSliceEntry,
+  key: readonly string[],
+  rowId: string,
+  drawn: ListMoves<Keyed>,
+  next: HeldValue,
+): KeyMoved {
+  const rows = drawn.moves.flatMap((move) => (move.now === undefined ? [] : [move.now]));
+  const ids = drawn.reordered ? rowsOf(entry, next)?.map((row) => idOf(rowId, row)) : undefined;
+
+  // Note that a list whose ids repeat cannot be laid by them, so it crosses whole.
+  if (ids !== undefined && new Set(ids).size !== ids.length) return { key, value: next };
+  const beside = besideOf(entry, next);
+
+  return {
+    key,
+    rows,
+    ...(ids === undefined ? undefined : { ids }),
+    ...(beside === undefined ? undefined : { beside }),
+  };
+}
+
+/**
  * How `key` crosses from `sent` to `next`: as its rows that are not the very
  * ones sent where both hold rows of unique ids, with every id in order where
  * any came, went, or moved past another; and whole otherwise. Note that the
@@ -1311,6 +1340,9 @@ function keyMoved(
     return { key, value: next };
   }
 
+  const drawn = movesBetween(before, after);
+
+  if (drawn !== undefined) return keyDrawn(entry, key, rowId, drawn, next);
   const sentRows = new Map(before.map((row) => [idOf(rowId, row), row]));
   const sentIds = [...sentRows.keys()];
   const ids = after.map((row) => idOf(rowId, row));

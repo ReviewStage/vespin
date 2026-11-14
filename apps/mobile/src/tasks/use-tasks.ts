@@ -424,9 +424,9 @@ function agentsByTask(
 
   for (const agent of listed ?? []) {
     if (agent.archivedAt !== undefined) continue;
-    const onTask = byTask.get(agent.planId);
+    const onTask = byTask.get(agent.taskId);
 
-    if (onTask === undefined) byTask.set(agent.planId, [agent]);
+    if (onTask === undefined) byTask.set(agent.taskId, [agent]);
     else onTask.push(agent);
   }
 
@@ -708,7 +708,7 @@ const listedOnce = new Set<string>();
 function idNamed(named: string | undefined): string | undefined {
   if (named === undefined) return undefined;
 
-  return taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: named }) === undefined
+  return taskNumberOf({ kind: LINK_DESTINATION.TASK, taskId: named }) === undefined
     ? named
     : undefined;
 }

@@ -189,7 +189,7 @@ const TASK: TaskSummary = {
 /** An agent on the task, as the task list carries it beside the tasks. */
 const AGENT: ListedAgent = {
   id: "a1b2c3d4-0000-4000-8000-0000000000aa",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: null,

@@ -189,7 +189,7 @@ function openPalette(
   // The repository's files are read whole through the act port, by the plan they stand on.
   fakeActPort({
     ...fakeActPortCalls(),
-    [ACT_KIND.TASKS_TREE]: (payload) => readFiles("planId" in payload ? payload.planId : ""),
+    [ACT_KIND.TASKS_TREE]: (payload) => readFiles("taskId" in payload ? payload.taskId : ""),
   });
   act(() => root.render(withQueryClient(palette)));
   act(() => {
@@ -810,7 +810,7 @@ test("an agent's row hangs its tab's card beside it while the pointer rests on i
         agents: [
           {
             id: "agent-7",
-            planId: "plan-1",
+            taskId: "plan-1",
             model: "anthropic/claude-opus-5.5",
             effort: "high",
             title: "Invoice export",
@@ -849,7 +849,7 @@ test("an archived agent of the open task is still found, after the standing ones
 
   const agent = (id: string, title: string) => ({
     id,
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title,
@@ -896,7 +896,7 @@ test("an archived agent of the open task is still found, after the standing ones
 test("an agent's card in ⌘K names the automation that started it, the listed workspace's automations read once around the window", async () => {
   const automation = {
     id: "3f0e6f5c-7d1a-4f6e-9a55-000000000001",
-    planId: null,
+    taskId: null,
     planName: null,
     workspaceId: "workspace-acme",
     name: "Morning Sentry triage",
@@ -940,7 +940,7 @@ test("an agent's card in ⌘K names the automation that started it, the listed w
       agents: [
         {
           id: "agent-7",
-          planId: "plan-1",
+          taskId: "plan-1",
           model: "anthropic/claude-opus-5.5",
           effort: "high",
           title: "Invoice export",
@@ -1027,7 +1027,7 @@ test("an agent's card in ⌘K names the automation that started it, the listed w
 test("an agent's Pull request row is named as its tab is, by its pull request's number and title, with the agent beside it, and is found by that number, that title, and the agent's name", () => {
   const agent = {
     id: "agent-7",
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Invoice export",
@@ -1082,7 +1082,7 @@ test("an agent's Pull request row is named as its tab is, by its pull request's 
 test("while an agent's page holds the side panel, ⌘K offers none of the open plan's panel tabs, workers, Changes, or files, which would open beside the agent", () => {
   const agent = {
     id: "agent-7",
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Invoice export",
@@ -1153,7 +1153,7 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
 }> {
   const agent = {
     id: "agent-7",
-    planId: DOCUMENT_TASK.id,
+    taskId: DOCUMENT_TASK.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Invoice export",
@@ -1388,7 +1388,7 @@ test("an agent pressed on a task's card in ⌘K over Settings leaves the palette
           taskAgents: [
             listedAgent({
               id: "agent-7",
-              planId: "plan-1",
+              taskId: "plan-1",
               title: "Invoice export",
               model: "anthropic/claude-opus-5.5",
               effort: "high",
@@ -1929,7 +1929,7 @@ const ON_AGENT_TAB: TasksControl = tasksControl({
     agents: [
       {
         id: LINKED_AGENT,
-        planId: DOCUMENT_TASK.id,
+        taskId: DOCUMENT_TASK.id,
         model: "anthropic/claude-opus-5.5",
         effort: "high",
         title: "Expire old invites",
@@ -2497,7 +2497,7 @@ async function paletteUnderState(
 test('with a task open, ⌘K\'s "This task" lists its pages and a terminal for each agent, as the side panel\'s "+" offers them, and each opens as the "+" opens it', async () => {
   const agent = {
     id: "agent-7",
-    planId: DOCUMENT_TASK.id,
+    taskId: DOCUMENT_TASK.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Invoice export",
@@ -2792,7 +2792,7 @@ test("with no task open, ⌘K draws no This task filter, which would list nothin
 test("⌘K's Automations lists the workspace's automations by name and what fires them, found by their task's name too, and one chosen opens its page", async () => {
   const automation = {
     id: "3f0e6f5c-7d1a-4f6e-9a55-000000000002",
-    planId: "7e4f0a9b-0000-4000-8000-0000000000c3",
+    taskId: "7e4f0a9b-0000-4000-8000-0000000000c3",
     planName: "Billing usage alerts",
     workspaceId: ACME.id,
     name: "Deploy notes",

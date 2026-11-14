@@ -271,6 +271,11 @@ const SHARE_EXTENSION: AppExtension = {
 // run in it, and a local build, which never uploads, is build 1.
 const BUILD_NUMBER = process.env.VESPIN_IOS_BUILD_NUMBER ?? "1";
 
+// The camera's purpose string. The app never opens the camera, but WebRTC's
+// library, which a call's audio rides on, links the camera's APIs, and App
+// Store Connect refuses a build that links them without this key (ITMS-90683).
+const CAMERA_USAGE = "Vespin never uses the camera: a call with an agent is audio only.";
+
 // What the system's microphone prompt says, the first time Talk calls an
 // agent (`src/voice-call.tsx`): the one use the app has for the microphone.
 const MICROPHONE_USAGE = "Vespin uses the microphone while you talk with an agent on a call.";
@@ -854,21 +859,25 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
     plugins: [
       "expo-router",
       // A message's photo is picked in the system's photo picker, which reads
-      // only what the person picks, so no camera is asked for; the microphone
-      // is a call's alone, and the picker names it in a call's words, since
-      // its plugin otherwise writes or clears the key over WebRTC's.
+      // only what the person picks, so the camera is never asked for. Both
+      // purpose strings are still named here, since the picker's plugin
+      // otherwise writes or clears each key over WebRTC's: a cleared camera
+      // key is what App Store Connect refused build 32 for.
       [
         "expo-image-picker",
         {
           photosPermission: "Vespin attaches the photos you pick to a message to an agent.",
-          cameraPermission: false,
+          cameraPermission: CAMERA_USAGE,
           microphonePermission: MICROPHONE_USAGE,
         },
       ],
       // A voice call's audio rides on WebRTC (`src/voice-call.tsx`), its
       // native module linked from the app's dependencies; the plugin writes
-      // the microphone's prompt and turns bitcode off.
-      ["@config-plugins/react-native-webrtc", { microphonePermission: MICROPHONE_USAGE }],
+      // the microphone's and the camera's purpose strings and turns bitcode off.
+      [
+        "@config-plugins/react-native-webrtc",
+        { cameraPermission: CAMERA_USAGE, microphonePermission: MICROPHONE_USAGE },
+      ],
       [
         "expo-splash-screen",
         {

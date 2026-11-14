@@ -625,10 +625,10 @@ export function fakeService(tasks: Task[]): FakeService {
     commentGate: undefined,
     commentLives: {},
     // The service starts the thread as asked, the member its writer, and holds it on the description.
-    startComment: (planId, start) =>
+    startComment: (taskId, start) =>
       Effect.sync(() => {
         if ("page" in start) throw new Error("the fake holds no page's threads");
-        service.commentCalls.push(`start:${planId}:${start.quote}`);
+        service.commentCalls.push(`start:${taskId}:${start.quote}`);
 
         const thread: DescriptionCommentThread = {
           id: start.id ?? "0f9b5f6e-6a8e-4c51-9a0e-2c1f2f0b7a11",
@@ -654,17 +654,17 @@ export function fakeService(tasks: Task[]): FakeService {
           revision: 1,
         };
 
-        service.threads[planId] = [...(service.threads[planId] ?? []), thread];
+        service.threads[taskId] = [...(service.threads[taskId] ?? []), thread];
 
         return { thread };
       }),
-    actOnComment: (planId, threadId, action) =>
+    actOnComment: (taskId, threadId, action) =>
       Effect.andThen(
         Effect.suspend(() =>
           service.commentGate === undefined ? Effect.void : Deferred.await(service.commentGate),
         ),
         Effect.sync(() => {
-          service.commentCalls.push(`act:${planId}:${threadId}:${action.action}`);
+          service.commentCalls.push(`act:${taskId}:${threadId}:${action.action}`);
 
           return service.commentAnswer ?? { deleted: threadId };
         }),

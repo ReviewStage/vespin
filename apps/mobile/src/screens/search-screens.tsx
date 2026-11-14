@@ -73,7 +73,7 @@ const SCOPES: readonly SearchScope[] = Object.values(SEARCH_SCOPE);
 function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined> {
   return new Map([
     ...found.tasks.map(
-      (task) => [task.id, iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: task.id })] as const,
+      (task) => [task.id, iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: task.id })] as const,
     ),
     ...found.inbox.map(
       ({ holder, item }) =>
@@ -81,7 +81,7 @@ function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined
           item.id,
           iosAppRouteOf({
             kind: LINK_DESTINATION.INBOX_ITEM,
-            planId: holder.task.id,
+            taskId: holder.task.id,
             itemId: item.id,
           }),
         ] as const,

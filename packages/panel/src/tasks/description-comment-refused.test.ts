@@ -136,7 +136,7 @@ function drawn(
   account: Identity = DEAN,
 ): HTMLElement {
   const control: DescriptionCommentsControl = {
-    planId: "plan-1",
+    taskId: "plan-1",
     threads: [THREAD],
     read: true,
     failed: false,

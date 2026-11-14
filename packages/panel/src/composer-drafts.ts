@@ -104,12 +104,12 @@ const draftPlaceSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.AGENT),
     /** The agent's plan, which the sidebar marks; null for an agent with none. */
-    planId: Schema.NullOr(Schema.String),
+    taskId: Schema.NullOr(Schema.String),
     agentId: Schema.String,
   }),
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.NEW_AGENT),
-    planId: Schema.String,
+    taskId: Schema.String,
     /** The key the draft agent starts under, which a relaunch keeps, so a Start asked again is the same one. */
     draftId: Schema.String,
     /** The agent and message the draft forks, with the message's opening words, which a relaunch keeps beside its words; no message for a continue of the agent's whole transcript. */
@@ -126,7 +126,7 @@ const draftPlaceSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.INBOX),
     /** The item's plan, which the sidebar marks; null for an inbox of an agent with no plan. */
-    planId: Schema.NullOr(Schema.String),
+    taskId: Schema.NullOr(Schema.String),
     /** The agent that posted the item, whose own inbox, where it has no plan, is all that reads it. */
     agentId: Schema.String,
     itemId: Schema.String,
@@ -144,7 +144,7 @@ const draftPlaceSchema = Schema.Union([
   Schema.Struct({
     kind: descriptionCommentKind,
     /** The plan the comment is on, which the sidebar marks. */
-    planId: Schema.String,
+    taskId: Schema.String,
     /**
      * What the words go to: the comment of a thread they edit, the thread
      * they answer, or, for a thread not yet started, the words it is started
@@ -213,7 +213,7 @@ const issueDraftPlaceSchema = Schema.Struct({
  */
 const revisedPlaceSchema = Schema.Struct({
   kind: Schema.Literal(DRAFT_PLACE.INBOX),
-  planId: Schema.NullOr(Schema.String),
+  taskId: Schema.NullOr(Schema.String),
   agentId: Schema.String,
   itemId: Schema.String,
   revision: Schema.Number,
@@ -258,9 +258,9 @@ function placeOf(
   if (retired(stored) || "issueId" in stored) return undefined;
 
   if (!("revision" in stored)) return { place: stored };
-  const { kind, planId, agentId, itemId, revision } = stored;
+  const { kind, taskId, agentId, itemId, revision } = stored;
 
-  return { place: { kind, planId, agentId, itemId }, revision };
+  return { place: { kind, taskId, agentId, itemId }, revision };
 }
 
 /** The element of a page a thread being started there is on, as its draft keeps it. */
@@ -1085,7 +1085,7 @@ export function useDraftsOwner(
  * word typed.
  */
 function draftedPlans(drafts: readonly KeptDraft[]): readonly (string | null)[] {
-  return drafts.flatMap(({ place }) => ("planId" in place ? [place.planId] : []));
+  return drafts.flatMap(({ place }) => ("taskId" in place ? [place.taskId] : []));
 }
 
 /**
@@ -1150,7 +1150,7 @@ export function useNewAgentDraft(
   draftId: string | undefined,
 ): KeptDraft<NewAgentPlace> | undefined {
   return useSelector(draftsStore, (drafts) => {
-    const onTask = drafts.filter(isNewAgent).filter((kept) => kept.place.planId === taskId);
+    const onTask = drafts.filter(isNewAgent).filter((kept) => kept.place.taskId === taskId);
 
     return draftId === undefined
       ? onTask.at(-1)
@@ -1349,7 +1349,7 @@ export function useInboxDrafts(taskId: string | null): readonly KeptDraft<InboxP
   const last = useRef<readonly KeptDraft<InboxPlace>[]>([]);
 
   return useSelector(draftsStore, (drafts) => {
-    const found = drafts.filter(isInbox).filter((kept) => kept.place.planId === taskId);
+    const found = drafts.filter(isInbox).filter((kept) => kept.place.taskId === taskId);
 
     const same =
       found.length === last.current.length && found.every((kept, at) => kept === last.current[at]);

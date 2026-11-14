@@ -4,7 +4,7 @@
  * Each statement reads what `listPages` reads, under the same account and
  * rule of who may read it, the task's or the agent's, the instant in epoch
  * milliseconds, so a task or an agent the account does not reach is no
- * rows. It reads no clock, as Realtime requires.
+ * rows. It reads no clock, as a live read must (`live-statement.ts`).
  *
  * A task's pages are woken by a page shown on the task, an agent's by a page
  * it shows and by the agent's own row, all of which name the task or the
@@ -79,7 +79,7 @@ function agentPagesNewest(userId: string, agentId: string) {
     .as("newest");
 }
 
-/** The newest version of each page as Realtime is handed it, from the version subquery. */
+/** The newest version of each page, read from the version subquery. */
 function newestPages(newest: ReturnType<typeof taskPagesNewest>) {
   return liveRowsStatement(
     TASK_PAGES_READ.parts.pages,

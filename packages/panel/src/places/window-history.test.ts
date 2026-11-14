@@ -969,7 +969,7 @@ function listedTask(name: string): TaskSummary {
 function openAgent(title: string): AgentSummary {
   return {
     id: AGENT_A.agent,
-    planId: TASK_ID,
+    taskId: TASK_ID,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title,

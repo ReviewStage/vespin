@@ -71,7 +71,7 @@ export function PlanPages({
   );
 
   const placeOf = (pageId: string) =>
-    ({ kind: LINK_DESTINATION.PAGE, planId: place.taskId, pageId }) as const;
+    ({ kind: LINK_DESTINATION.PAGE, taskId: place.taskId, pageId }) as const;
 
   // Note that the links are copied and opened in the order the group lists the pages, whatever order they were chosen in.
   const chosenPages = () => listed.filter((page) => selected.has(page.id));

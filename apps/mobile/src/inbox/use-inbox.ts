@@ -275,7 +275,7 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
 
   const { home, again } = useItemHome(id, lookedFor);
   const found = home === undefined || Predicate.isString(home) ? undefined : home;
-  const homed = useHomeGroups(found?.planId);
+  const homed = useHomeGroups(found?.taskId);
   const outside = useSendsDrawn(homed.groups);
   const listed = inFeed ?? (lookedFor ? listedIn(outside, id) : undefined);
 

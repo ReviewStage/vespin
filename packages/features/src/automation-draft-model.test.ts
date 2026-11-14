@@ -48,7 +48,7 @@ const NOW = new Date("2026-01-14T12:00:00Z");
 
 const SAVED: AutomationSummary = {
   id: "3f0e6f5c-7d1a-4f6e-9a55-1b2c3d4e5f60",
-  planId: null,
+  taskId: null,
   planName: null,
   workspaceId: "workspace-acme",
   name: "Nightly flaky-test sweep",
@@ -266,7 +266,7 @@ test("a save changes only what moved, the task keeping its model, and a draft th
     ),
     { repositories: ["acme/web"], scope: AUTOMATION_SCOPE.PERSONAL },
   );
-  const onTask = { ...SAVED, planId: "9b1d2c3e-4f5a-4b6c-8d7e-0f1a2b3c4d5e" };
+  const onTask = { ...SAVED, taskId: "9b1d2c3e-4f5a-4b6c-8d7e-0f1a2b3c4d5e" };
   assert.equal(
     changeOf({ ...automationDraft(onTask, DEFAULTS), repository: "acme/web" }, onTask, DEFAULTS),
     undefined,
