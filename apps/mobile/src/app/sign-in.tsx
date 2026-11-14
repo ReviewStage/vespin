@@ -1,14 +1,9 @@
-// sign-in.tsx -- the sign-in screen: the Keel mark on the brand's ground with what the product is, and a way in through Google and through GitHub at its foot, each in the system's authentication session.
+// sign-in.tsx -- the sign-in screen: the Keel mark on the brand's ground and a way in through Google and through GitHub at its foot, each in the system's authentication session.
 
 import { ACCOUNT_PROVIDER, type AccountProvider } from "@repo/credentials/snapshot";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SOCIAL_PROVIDER_LABEL } from "@repo/features/sign-in-provider";
-import {
-  PRODUCT_TAGLINE,
-  SIGN_IN_FAILURE,
-  SIGN_IN_FAILURE_WORDS,
-  type SignInFailure,
-} from "@repo/features/words";
+import { SIGN_IN_FAILURE, SIGN_IN_FAILURE_WORDS, type SignInFailure } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { AuthPage, PROVIDER_MARK_ASSET, ProviderButton, Screen } from "@repo/ui-native";
 import { useState } from "react";
@@ -51,7 +46,6 @@ export default function SignInScreen() {
     <Screen>
       <AuthPage
         title={`Sign in to ${PRODUCT_NAME}`}
-        description={PRODUCT_TAGLINE}
         error={failure === undefined ? undefined : SIGN_IN_FAILURE_WORDS[failure]}
       >
         {WAYS_IN.map(({ provider, mark }) => (

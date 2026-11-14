@@ -12,7 +12,6 @@ appId: dev.vespin.ios
     arguments:
       authServer: stub
 - assertVisible: "Sign in to Vespin"
-- assertVisible: "An inbox for all your coding agents."
 - waitForAnimationToEnd
 - takeScreenshot: sign-in
 - tapOn: "Continue with GitHub"
