@@ -36,7 +36,7 @@ import { FIELD_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode } from "react";
 import { useAnnounced } from "./accessibility.js";
-import { CHIP_LOOK, Chip } from "./button.js";
+import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
@@ -96,7 +96,7 @@ export type AskAct = {
   readonly onPress: () => void;
 };
 
-/** The bordered card on the surface the rows stand in, a hairline between each from where their words start. */
+/** The bordered card on its own fill (`CARD`), set off from the page's ground, the rows standing in it, a hairline between each from where their words start. */
 function Card({
   inset,
   children,
@@ -113,7 +113,7 @@ function Card({
       modifiers={[
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
         background(
-          colors.SURFACE,
+          colors.CARD,
           SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
         ),
         strokeBorder({
@@ -155,16 +155,21 @@ export function AskNote({ words }: { readonly words: string }) {
   );
 }
 
-/** The card's acts in a row under it, each a small capsule with its glyph, as the panel's presses under an ask stand. */
+/**
+ * The card's acts in a row under it, at the system's regular size so each
+ * stands a 44 pt target: the main act, such as Mark done, filled in the
+ * accent as a screen's one act is, and a quiet one beside it, such as
+ * Couldn't do it, its words alone in the ink, as the panel's quiet button.
+ */
 export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
   return (
     <HStack spacing={SPACE.TIGHT * 2}>
       {acts.map((act) => (
-        <Chip
+        <Button
           key={act.label}
           label={act.label}
           symbol={act.symbol}
-          look={act.quiet === true ? CHIP_LOOK.QUIET : CHIP_LOOK.BORDERED}
+          look={act.quiet === true ? BUTTON_LOOK.PLAIN : BUTTON_LOOK.PROMINENT}
           onPress={act.onPress}
         />
       ))}

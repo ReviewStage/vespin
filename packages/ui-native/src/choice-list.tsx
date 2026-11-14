@@ -203,7 +203,7 @@ export function ChoiceList(props: ChoiceListProps) {
         modifiers={[
           frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
           background(
-            colors.SURFACE,
+            colors.CARD,
             SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
           ),
           strokeBorder({

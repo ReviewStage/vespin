@@ -261,16 +261,21 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
   checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
-  with Mark done and Couldn't do it under it; `AnswerFields`, a row per
+  with Mark done and Couldn't do it under it, at the system's regular size,
+  Mark done filled as the card's one act and Couldn't do it its words
+  alone; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
-  card and prompting with its label while empty, a select's menu picker at
+  card and prompting "Required" while a required one is empty, a select's menu picker at
   the end of its label's row, a
   boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because
   a `Form` scrolls on its own inside the thread's scroll; a card's hairlines
   start where its rows' words do, as iOS insets a list's separator) and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and
-  red, and its acts as pills; a press on it opens its own page), each on
-  `SURFACE` inside a hairline.
+  red, and its acts as pills; a press on it opens its own page). An ask's
+  card and a file's chip stand on `CARD`, the soft gray in light, so they
+  read off the page's white as iOS's own cards do rather than by a faint
+  hairline alone; the pull request card stands on `SURFACE`; each inside a
+  hairline.
 - **A pull request's page** reads as the panel's Pull request tab, from the
   same model (`@repo/features/pull-request-model`): its state as a chip in
   GitHub's color, the merge queue's in the attention ink with its place
