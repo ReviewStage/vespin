@@ -74,4 +74,32 @@ describe("inboxThreadMessages", () => {
       { kind: INBOX_MEDIA.FILE, attachmentId: PLAN_PDF },
     ]);
   });
+
+  it("says a marker naming one of a message's files as the file's name, which stands after the words as its chip", () => {
+    const item: InboxItem = {
+      id: ITEM,
+      agentId: "agent-1",
+      key: "plan",
+      revision: 1,
+      version: INBOX_WIRE_VERSION,
+      title: "The plan",
+      needsReply: false,
+      status: INBOX_STATUS.OPEN,
+      thread: [
+        {
+          id: "message-1",
+          author: INBOX_MESSAGE_AUTHOR.AGENT,
+          text: "The plan is in [File: plan.pdf].",
+          files: [{ attachmentId: PLAN_PDF, name: "plan.pdf", mediaType: "application/pdf" }],
+          createdAt: 1_000,
+        },
+      ],
+      postedAt: 1_000,
+      updatedAt: 1_000,
+    };
+
+    const [message] = inboxThreadMessages(item, "Agent", undefined);
+
+    expect(message?.words).toBe("The plan is in plan.pdf.");
+  });
 });
