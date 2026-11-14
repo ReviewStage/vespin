@@ -4,7 +4,7 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { VERB } from "@repo/features/words";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
-import { EmptyState, GLYPH, glyphSymbol, Screen, SealedPage } from "@repo/ui-native";
+import { BUTTON_LOOK, EmptyState, GLYPH, glyphSymbol, Screen, SealedPage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { usePageHtml } from "../agents/use-agent.js";
@@ -17,6 +17,7 @@ import { useTasksWorkspace } from "../tasks/use-tasks.js";
 const PAGE_WORDS = {
   READING: "Reading the page",
   FAILED: "The page could not be read.",
+  TRY_AGAIN: "Try again",
 } as const;
 
 /** The page's address on vespin.dev, under its workspace and its task; none until both are read. */
@@ -56,7 +57,7 @@ export function PageScreen({
   readonly title: string;
 }) {
   useSurfaceOpen(PRODUCT_SURFACE.PAGE, pageId);
-  const read = usePageHtml(taskId, pageId, version);
+  const { read, again } = usePageHtml(taskId, pageId, version);
   const address = usePageAddress(workspaceId, taskId, pageId);
   const named = "title" in read && read.title !== "" ? read.title : title;
 
@@ -84,6 +85,11 @@ export function PageScreen({
             title={"failed" in read ? PAGE_WORDS.FAILED : PAGE_WORDS.READING}
             symbol={"failed" in read ? GLYPH.FAILED : GLYPH.PAGE}
             loading={!("failed" in read)}
+            action={
+              "failed" in read
+                ? { label: PAGE_WORDS.TRY_AGAIN, onPress: again, look: BUTTON_LOOK.BORDERED }
+                : undefined
+            }
           />
         </Screen>
       )}

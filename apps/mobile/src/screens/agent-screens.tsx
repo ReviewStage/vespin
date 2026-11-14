@@ -706,7 +706,7 @@ export function AgentScreen() {
                 {COPY_TRANSCRIPT_WORDS.FULL}
               </Stack.Toolbar.MenuAction>
               <Stack.Toolbar.MenuAction
-                icon="square.and.arrow.up"
+                icon={glyphSymbol(GLYPH.SHARE)}
                 onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
               >
                 {COPY_TRANSCRIPT_WORDS.SHARE}

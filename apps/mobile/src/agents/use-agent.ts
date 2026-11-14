@@ -442,10 +442,19 @@ export type PageRead =
   | { readonly html: string; readonly title: string }
   | { readonly failed: true };
 
-/** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known. */
-export function usePageHtml(taskId: string | undefined, pageId: string, version: number): PageRead {
+/** A page's read as it stands, and the ask to read it again after it failed. */
+export interface PageHtml {
+  readonly read: PageRead;
+  readonly again: () => void;
+}
+
+/** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known, and read again on `again` after a read that failed. */
+export function usePageHtml(taskId: string | undefined, pageId: string, version: number): PageHtml {
   const acts = useHostActs();
   const [read, setRead] = useState<PageRead>({ reading: true });
+  // Note that each ask to read again counts up, which the read below depends on, so Try again reads the page anew rather than leaving the failure standing.
+  const [asked, setAsked] = useState(0);
+  const again = useCallback(() => setAsked((was) => was + 1), []);
   useEffect(() => {
     let current = true;
     setRead({ reading: true });
@@ -470,9 +479,9 @@ export function usePageHtml(taskId: string | undefined, pageId: string, version:
     return () => {
       current = false;
     };
-  }, [acts, taskId, pageId, version]);
+  }, [acts, taskId, pageId, version, asked]);
 
-  return read;
+  return { read, again };
 }
 
 /** The older read asked last: of which agent, below where, and whether it failed. */
