@@ -34,7 +34,7 @@ export const CLIENT_PLATFORM = {
   CLI: "cli",
 } as const;
 
-export type ClientPlatform = (typeof CLIENT_PLATFORM)[keyof typeof CLIENT_PLATFORM];
+type ClientPlatform = (typeof CLIENT_PLATFORM)[keyof typeof CLIENT_PLATFORM];
 
 /** What a build says of itself: which app, and its version as its package names it. */
 export interface ClientIdentity {

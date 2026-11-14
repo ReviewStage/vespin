@@ -28,6 +28,7 @@ import {
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactNode } from "react";
 import { AddPress, type ComposerMenu } from "./composer.js";
 import {
@@ -42,6 +43,7 @@ import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
+import { HarnessMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -67,16 +69,31 @@ type MenuChipProps = {
   /** What is picked, as the capsule says it: a repository, a model and its effort, where an agent runs. */
   readonly label: string;
   readonly symbol?: Glyph | undefined;
+  /** The harness the picked model runs in, whose mark leads the words in the glyph's place, as the panel's model chip leads with it. */
+  readonly harness?: ModelProvider | undefined;
   readonly menu: ChipMenu;
   /** The name a flow finds the capsule by. */
   readonly testId?: string | undefined;
 };
 
 /** The capsule's words, its glyph before them where it has one, in the capsule's small type. */
-function chipLabel(label: string, symbol: Glyph | undefined): ReactNode {
+function chipLabel(
+  label: string,
+  symbol: Glyph | undefined,
+  harness: ModelProvider | undefined,
+): ReactNode {
   const words = (
     <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), lineLimit(1)]}>{label}</Text>
   );
+
+  if (harness !== undefined) {
+    return (
+      <HStack spacing={SPACE.TIGHT + 2}>
+        <HarnessMark provider={harness} />
+        {words}
+      </HStack>
+    );
+  }
 
   if (symbol === undefined) return words;
 
@@ -96,13 +113,13 @@ function chipLabel(label: string, symbol: Glyph | undefined): ReactNode {
  * the menus within it. Drawn in the ink, never the accent, as a bordered
  * button is.
  */
-export function MenuChip({ label, symbol, menu, testId }: MenuChipProps) {
+export function MenuChip({ label, symbol, harness, menu, testId }: MenuChipProps) {
   const colors = useColors();
   const actions = menu.actions ?? [];
 
   return (
     <Menu
-      label={chipLabel(label, symbol)}
+      label={chipLabel(label, symbol, harness)}
       modifiers={[
         buttonStyle("bordered"),
         SwiftModifiers.buttonBorderShape("capsule"),
