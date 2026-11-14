@@ -21,14 +21,11 @@
  */
 
 import {
-  INTEGRATION_NAME,
   type INTEGRATION_NAMES_ACCOUNT,
   INTEGRATION_PROVIDER,
-  INTEGRATION_PROVIDER_LIST,
   type IntegrationProvider,
 } from "@repo/features/integration-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { orList } from "@repo/features/words";
 import type { WireRecord, WireValue } from "@repo/wire";
 import { Option, Schema } from "effect";
 import { toolResultJson, toolResultTexts } from "./mcp-tools.js";
@@ -480,8 +477,3 @@ export function integrationInstructions(
     ? INTEGRATION[provider].DESCRIPTION
     : `${INTEGRATION[provider].DESCRIPTION} ${accountNote}`;
 }
-
-/** Every integration's name as one phrase an instruction can say: "Linear or Notion". */
-export const INTEGRATION_NAMES_SAID = orList(
-  INTEGRATION_PROVIDER_LIST.map((provider) => INTEGRATION_NAME[provider]),
-);

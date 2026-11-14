@@ -118,7 +118,7 @@ export function keptHandedImages(
 }
 
 /** How the part naming a member who sent a message opens, which the service writes and no member can type as one. */
-export const SENDER_LABEL_LEAD = "[sender: ";
+const SENDER_LABEL_LEAD = "[sender: ";
 
 /** How the part naming a teammate closes, after their mention link. */
 const SENDER_LABEL_TAIL = ", a teammate]";
