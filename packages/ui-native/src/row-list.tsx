@@ -1,6 +1,16 @@
 // row-list.tsx -- a list of rows and its sections, as SwiftUI's own List draws them, each section under a small muted header that folds.
 
-import { Button, HStack, Image, List, Menu, Section, Spacer, Text } from "@expo/ui/swift-ui";
+import {
+  Button,
+  HStack,
+  Image,
+  List,
+  Menu,
+  Section,
+  Spacer,
+  Text,
+  ZStack,
+} from "@expo/ui/swift-ui";
 import type { ModifierConfig } from "@expo/ui/swift-ui/modifiers";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
@@ -105,24 +115,25 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
 
 /**
  * The one row a list with nothing to show holds: its empty state, on the
- * list's ground with no hairline, three quarters of the list's height tall so
- * it stands near the middle without making the list scroll. Note that it
+ * list's ground with no hairline, at least three quarters of the list's height
+ * tall so it stands near the middle without making the list scroll. Note that it
  * stands inside the list rather than over it, because SwiftUI's words and
  * glyphs take a touch, so a pull begun on the state's title stopped there
  * when it stood over the list; inside it, a pull anywhere scrolls the list.
  */
 function EmptyRow({ children }: { readonly children: ReactNode }) {
+  // Note that ¾ of the list's height is the row's least, not its height: a clear spacer stands that tall behind the state, and the stack takes the taller of the two, so at the accessibility sizes in a short window the state grows past it and the list scrolls to its foot rather than squeezing it.
   return (
-    <HStack
+    <ZStack
       modifiers={[
         listRowBackground("clear"),
         listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
         listRowSeparator("hidden"),
-        containerRelativeFrame({ axes: "vertical", count: 4, span: 3 }),
       ]}
     >
-      {children}
-    </HStack>
+      <Spacer modifiers={[containerRelativeFrame({ axes: "vertical", count: 4, span: 3 })]} />
+      <HStack>{children}</HStack>
+    </ZStack>
   );
 }
 
