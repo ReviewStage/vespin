@@ -7,6 +7,7 @@ import {
   moveChosen,
   moveGainParts,
   moveLossParts,
+  moveNoneTakesWords,
   movePartsText,
   moveTargetLine,
   moveTargets,
@@ -171,9 +172,12 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
     );
   }
 
+  // Note that where no workspace can take the task the footer says why, rather than leave a dimmed list and a dimmed Move to explain themselves.
   const effects =
     chosen === undefined
-      ? undefined
+      ? repository === null
+        ? undefined
+        : moveNoneTakesWords(repository)
       : [moveLossParts(from, chosen), moveGainParts(chosen), moveAgentsParts(chosen)]
           .map(movePartsText)
           .join("\n");
