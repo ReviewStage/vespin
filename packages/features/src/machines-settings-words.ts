@@ -48,7 +48,7 @@ export const MACHINE_SETTINGS_WORDS = {
   CHANGE_FAILED: "Could not change this machine. Try again.",
   /** The row that picks the member's default machine, atop the list. */
   DEFAULT: "Terminal and computer use",
-  DEFAULT_DETAIL: "Where agents run terminal commands and use apps.",
+  DEFAULT_DETAIL: "Agents use this machine unless you point them at another.",
   DEFAULT_FAILED: "Could not change your default machine. Try again.",
 } as const;
 
