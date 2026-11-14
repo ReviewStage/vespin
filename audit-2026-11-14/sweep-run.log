@@ -158,3 +158,8 @@ ipad26-landscape-ipad26-light wrap-inbox.yaml: fails 3 shots 5     Tap on "Open.
 ipad26-landscape-ipad26-dark wrap-inbox.yaml: fails 3 shots 5     Tap on "Open.*"... FAILED
   ax none on ipad26: contrast disabled transparency-key 
 ipad26-landscape-ipad26-light wrap-task-relations.yaml: fails 0 shots 5 
+ipad26-landscape-ipad26-dark wrap-task-relations.yaml: fails 0 shots 5 
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-answer.yaml: fails 2 shots 13   Assert that "Resolve" is visible... FAILED
+ipad26-landscape-ipad26-dark wrap-answer.yaml: fails 0 shots 3 
+  ax none on ipad26: contrast disabled transparency-key 
