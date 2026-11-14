@@ -312,8 +312,8 @@ export interface AgentsDependencies extends AccountGateDependencies {
 function inboxTaskIds(answer: AccountInboxAnswer): readonly string[] {
   return [
     ...new Set([
-      ...answer.items.map((item) => item.planId),
-      ...answer.plans.map((plan) => plan.planId),
+      ...answer.items.map((item) => item.taskId),
+      ...answer.plans.map((plan) => plan.taskId),
     ]),
   ];
 }

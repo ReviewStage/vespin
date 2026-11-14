@@ -43,7 +43,7 @@ const AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 
 const STARTED: AgentSummary = {
   id: AGENT,
-  planId: TASK,
+  taskId: TASK,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: null,
@@ -333,7 +333,7 @@ test("an ask of the models still out when its tab closes settles nothing, so its
 
 test("the task's agents are the followed list's alone, the archived among them, with no read of them asked", async () => {
   const OTHER_TASK = "3c2d1e0f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
-  const elsewhere = { ...STARTED, id: "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a", planId: OTHER_TASK };
+  const elsewhere = { ...STARTED, id: "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a", taskId: OTHER_TASK };
 
   const archived = {
     ...STARTED,
@@ -365,7 +365,7 @@ test("the task's agents are the followed list's alone, the archived among them, 
 
 test("a delivery that moves only another task's agent leaves the control the same object", async () => {
   const OTHER_TASK = "3c2d1e0f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
-  const elsewhere = { ...STARTED, id: "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a", planId: OTHER_TASK };
+  const elsewhere = { ...STARTED, id: "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a", taskId: OTHER_TASK };
   const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [STARTED, elsewhere] });
   await tab.mount();
   const before = tab.control();

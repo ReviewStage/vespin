@@ -83,7 +83,7 @@ export interface SpotlightChanges {
 function agentPlace(agentId: string, taskId: string | undefined): LinkDestination {
   return taskId === undefined
     ? { kind: LINK_DESTINATION.AGENT, agentId }
-    : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId };
+    : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId };
 }
 
 /** An Inbox thread's activity: its title and its page, under its task's workspace. */
@@ -107,7 +107,7 @@ export function taskActivity(task: TaskSummary, workspaces: readonly Workspace[]
 
   return {
     title: task.name,
-    webpageUrl: linkOf({ kind: LINK_DESTINATION.TASK, planId: task.id }, step),
+    webpageUrl: linkOf({ kind: LINK_DESTINATION.TASK, taskId: task.id }, step),
   };
 }
 
@@ -143,7 +143,7 @@ export function pullRequestActivity(
   const place: LinkDestination =
     taskId === undefined
       ? { kind: LINK_DESTINATION.CHANGES, agentId }
-      : { kind: LINK_DESTINATION.CHANGES, planId: taskId, agentId };
+      : { kind: LINK_DESTINATION.CHANGES, taskId: taskId, agentId };
 
   return {
     title: pullRequest.title,
@@ -199,13 +199,13 @@ export function desktopHandoffOf(link: ReadLink, reads: HandoffReads): HandoffAc
     case LINK_DESTINATION.TASK: {
       const task = reads.tasks.find(
         (each) =>
-          taskLinkStep(each) === place.planId &&
+          taskLinkStep(each) === place.taskId &&
           linkWorkspaceStep(each.workspaceId, reads.workspaces) === workspace,
       );
 
       if (task === undefined) return undefined;
 
-      return { webpageUrl: linkOf({ kind: LINK_DESTINATION.TASK, planId: task.id }, workspace) };
+      return { webpageUrl: linkOf({ kind: LINK_DESTINATION.TASK, taskId: task.id }, workspace) };
     }
 
     default:

@@ -87,7 +87,7 @@ function task(id: string, name: string, agentId: string) {
 
   const agent: AgentSummary = {
     id: agentId,
-    planId: id,
+    taskId: id,
     model: "openai/gpt-5.6-sol",
     effort: "high",
     title: `${name} agent`,
@@ -590,7 +590,7 @@ test("the drafts an account kept under its address are its own still once its id
 
 /** A draft as storage keeps it: an agent's words on a plan, by the account that wrote them. */
 function keptEntry(accountId: string, taskId: string, agentId: string, text: string) {
-  return { accountId, place: { kind: "agent", planId: taskId, agentId }, text };
+  return { accountId, place: { kind: "agent", taskId: taskId, agentId }, text };
 }
 
 test("past the most drafts kept, the oldest written goes, whosever it is, and the window lets go of it as storage does", async () => {
@@ -673,7 +673,7 @@ test("the files attached to a draft while only the account's address was known s
 test("an inbox answer's picture moves with it as the id lands before its words reach storage, its unset steps and press read as storage leaves them out", async () => {
   const place = {
     kind: DRAFT_PLACE.INBOX,
-    planId: INVITES.plan.id,
+    taskId: INVITES.plan.id,
     agentId: INVITES.agent.id,
     itemId: "item-1",
   } as const;
@@ -948,7 +948,7 @@ test("a draft agent's first message marks its tab while another is chosen, never
     JSON.stringify([
       {
         accountId: null,
-        place: { kind: "newAgent", planId: INVITES.plan.id, draftId: DRAFT_KEY },
+        place: { kind: "newAgent", taskId: INVITES.plan.id, draftId: DRAFT_KEY },
         text: "Write the expiry job",
       },
     ]),
@@ -1096,7 +1096,7 @@ test("a pick kept by a build that stored its revision in the place still stands 
         accountId: null,
         place: {
           kind: "inbox",
-          planId: INVITES.plan.id,
+          taskId: INVITES.plan.id,
           agentId: INVITES.agent.id,
           itemId: mine.id,
           revision: 1,
@@ -1206,7 +1206,7 @@ test("an account's drafts moved from its address reach a window that read its id
 test("words another window writes for a box this window let go a moment before stand, in its box and in storage", async () => {
   const place = {
     kind: DRAFT_PLACE.AGENT,
-    planId: INVITES.plan.id,
+    taskId: INVITES.plan.id,
     agentId: INVITES.agent.id,
   } as const;
 

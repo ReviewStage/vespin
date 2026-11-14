@@ -75,7 +75,7 @@ const MEMBERS: readonly WorkspaceMember[] = [
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Fix auth flow",

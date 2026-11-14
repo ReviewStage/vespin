@@ -499,7 +499,7 @@ function DescriptionDocument({
   // so nothing opens it again. Note that the description has taken it by then,
   // beside its words or, resolved, in its list, since a child's effects run
   // before ours.
-  const commentAsk = tasks.commentReveal?.planId === inboxTaskId ? tasks.commentReveal : undefined;
+  const commentAsk = tasks.commentReveal?.taskId === inboxTaskId ? tasks.commentReveal : undefined;
   const commentsRead = comments?.read === true;
   const { onCommentRevealed } = tasks;
   useEffect(() => {
@@ -709,8 +709,8 @@ function DescriptionDocument({
 
         return openPlace?.(
           itemId === undefined
-            ? { kind: LINK_DESTINATION.INBOX, planId: taskId }
-            : { kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId },
+            ? { kind: LINK_DESTINATION.INBOX, taskId: taskId }
+            : { kind: LINK_DESTINATION.INBOX_ITEM, taskId: taskId, itemId },
         );
       }
 
@@ -1514,8 +1514,8 @@ function DescriptionDocument({
     <LinkWorkspaceProvider value={workspace}>
       <DescriptionCommentsProvider value={comments}>
         <CommentFocusScope
-          planId={inboxTaskId}
-          reveal={tasks.commentReveal?.planId === inboxTaskId ? tasks.commentReveal : undefined}
+          taskId={inboxTaskId}
+          reveal={tasks.commentReveal?.taskId === inboxTaskId ? tasks.commentReveal : undefined}
         >
           <MemberDirectory workspace={home} readerId={tasks.me}>
             <AutomationDirectory

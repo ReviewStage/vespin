@@ -200,7 +200,7 @@ function useAgentAddress(
   const place =
     taskId === undefined
       ? { kind: LINK_DESTINATION.AGENT, agentId }
-      : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId };
+      : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId };
 
   return step === undefined ? undefined : linkOf(place, step);
 }
@@ -498,7 +498,7 @@ export function AgentScreen() {
   const asked = merging === undefined ? undefined : offers.get(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const address = useAgentAddress(id, shown?.workspaceId, shown?.planId);
+  const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
   const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
@@ -590,7 +590,7 @@ export function AgentScreen() {
     suggested,
   );
 
-  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.planId);
+  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId);
   const older = useOlderPages(id, transcript?.before);
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
@@ -607,7 +607,7 @@ export function AgentScreen() {
             id,
             title,
             workspaceId: shown.workspaceId,
-            taskId: shown.planId,
+            taskId: shown.taskId,
           },
           workspaces,
         ),
@@ -654,7 +654,7 @@ export function AgentScreen() {
   };
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
-  const talk = useAgentTalk(id, shown?.planId);
+  const talk = useAgentTalk(id, shown?.taskId);
   const otherCall = useStandingCallCard(id);
 
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
@@ -915,7 +915,7 @@ export function AgentPageScreen() {
   return (
     <PageScreen
       workspaceId={agent?.workspaceId}
-      taskId={agent?.planId}
+      taskId={agent?.taskId}
       pageId={page}
       version={Number(version)}
       title={title}

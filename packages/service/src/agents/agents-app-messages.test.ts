@@ -1289,7 +1289,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         const outside = yield* ask(request(AGENT, other, { id: agent.id }));
 
         assert.deepEqual(
-          [onTask.agent.id, onTask.agent.planId, onTask.agent.workspaceId, onTask.agent.repository],
+          [onTask.agent.id, onTask.agent.taskId, onTask.agent.workspaceId, onTask.agent.repository],
           [agent.id, task.id, task.workspaceId, RELAY_FULL_NAME],
         );
         assert.deepEqual(

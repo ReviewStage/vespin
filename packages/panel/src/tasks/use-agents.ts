@@ -249,7 +249,7 @@ function useTaskRows(
       ? undefined
       : q
           .from({ agent: collections.agents })
-          .where(({ agent }) => eq(agent.planId, taskId))
+          .where(({ agent }) => eq(agent.taskId, taskId))
           .orderBy(({ agent }) => agent.createdAt)
           .orderBy(({ agent }) => agent.id),
   );
@@ -273,7 +273,7 @@ function stagedRows(staged: TasksView, taskId: string | undefined): TaskRows {
   const carried = taskId !== undefined && staged.tasks.some((task) => task.id === taskId);
 
   return {
-    listedHere: carried ? staged.taskAgents?.filter((agent) => agent.planId === taskId) : undefined,
+    listedHere: carried ? staged.taskAgents?.filter((agent) => agent.taskId === taskId) : undefined,
     listedPullRequests: staged.agentPullRequests,
   };
 }
@@ -1337,7 +1337,7 @@ export function useAgents(input: {
   /**
    * Where a draft's words are kept: under its key, beside the fork it is.
    * Note that an agent page's draft is kept with its agent's id as the
-   * `planId`, so the drafted plans list that id too; no task has it, so no
+   * `taskId`, so the drafted plans list that id too; no task has it, so no
    * row reads it as drafted.
    */
   const wordsPlace = (
@@ -1347,7 +1347,7 @@ export function useAgents(input: {
     suggestion?: DraftSuggestion,
   ): NewAgentPlace => ({
     kind: DRAFT_PLACE.NEW_AGENT,
-    planId: on,
+    taskId: on,
     draftId: id,
     ...forkOf(fork),
     ...suggestionOf(suggestion),
@@ -2058,7 +2058,7 @@ export function useAgents(input: {
     if (!skillsOn || taskId === undefined) return undefined;
 
     return keptSkills(() =>
-      queryClient.fetchQuery(repositorySkillsQueryOptions({ planId: taskId })),
+      queryClient.fetchQuery(repositorySkillsQueryOptions({ taskId: taskId })),
     );
   }, [queryClient, skillsOn, taskId, repository]);
 

@@ -63,7 +63,7 @@ import { trimmedText } from "./text-schema.js";
  * bearer and the path that name them. Declared directly with Effect's
  * `Schema.Struct` and exported under its own name.
  *
- * Note that `planId`, `plan`, and `plans` keep the wire's legacy spelling of a task, because a
+ * Note that `plan` and `plans` keep the wire's legacy spelling of a task, because a
  * released desktop sends and reads them; they are renamed with the wire in a
  * follow-up, with no alias.
  */

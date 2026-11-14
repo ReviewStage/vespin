@@ -106,7 +106,7 @@ it.effect(
         );
         assert.deepEqual(
           newTasks.map((task) => [task.id, task.agents?.working]),
-          [[moved.planId, 1]],
+          [[moved.taskId, 1]],
         );
         assert.equal(after.taskAgentPins, before.taskAgentPins);
       }),

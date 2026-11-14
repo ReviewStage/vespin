@@ -1815,8 +1815,8 @@ export function placeOfTaskTarget(
   target: Extract<ToolTarget, { readonly kind: typeof TOOL_TARGET.TASK }>,
 ): LinkDestination {
   return target.agent === undefined
-    ? { kind: LINK_DESTINATION.TASK, planId: target.task }
-    : { kind: LINK_DESTINATION.AGENT, planId: target.task, agentId: target.agent };
+    ? { kind: LINK_DESTINATION.TASK, taskId: target.task }
+    : { kind: LINK_DESTINATION.AGENT, taskId: target.task, agentId: target.agent };
 }
 
 /** What the hover over a row says it opens, by its target's kind. */
@@ -2075,13 +2075,13 @@ export function targetLink(target: ToolTarget, place: TargetPlace): string | und
 
   switch (target.kind) {
     case TOOL_TARGET.TASK:
-      return linked({ kind: LINK_DESTINATION.TASK, planId: target.task });
+      return linked({ kind: LINK_DESTINATION.TASK, taskId: target.task });
     case TOOL_TARGET.DESCRIPTION: {
       const taskId = place.holder?.taskId;
 
       return taskId === undefined
         ? undefined
-        : linked({ kind: LINK_DESTINATION.TASK, planId: taskId });
+        : linked({ kind: LINK_DESTINATION.TASK, taskId: taskId });
     }
 
     case TOOL_TARGET.PAGE: {
@@ -2089,7 +2089,7 @@ export function targetLink(target: ToolTarget, place: TargetPlace): string | und
 
       return taskId === undefined
         ? undefined
-        : linked({ kind: LINK_DESTINATION.PAGE, planId: taskId, pageId: target.page });
+        : linked({ kind: LINK_DESTINATION.PAGE, taskId: taskId, pageId: target.page });
     }
 
     case TOOL_TARGET.INBOX:

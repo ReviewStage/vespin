@@ -71,7 +71,7 @@ export class HostedAutomationClient {
     params: AutomationListParams,
   ): Effect.Effect<AutomationListView, never, HttpClient.HttpClient> {
     const query = {
-      ...(params.taskId === undefined ? undefined : { planId: params.taskId }),
+      ...(params.taskId === undefined ? undefined : { taskId: params.taskId }),
       ...(params.workspaceId === undefined ? undefined : { workspaceId: params.workspaceId }),
     };
 
