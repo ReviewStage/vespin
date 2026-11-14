@@ -315,7 +315,11 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
  * draws a row's background across the whole column, and on iPadOS 26 a
  * split view's list column runs on under the floating sidebar, so the gray
  * stood under the sidebar's glass to the window's edge. A row's own view
- * stays inside the column's safe area, as Mail's rows do.
+ * stays inside the column's safe area, as Mail's rows do. The gray is
+ * rounded and set in from the column's edges by `ROW_INSET.FILL`, as Mail's
+ * selected message stands, the padding inside it giving back that inset so
+ * the row's words and marks stand where an unselected row's do, and its
+ * hairlines step aside while it is selected, as Mail's do.
  */
 export function rowPlacement(
   colors: BrandColors,
@@ -325,8 +329,22 @@ export function rowPlacement(
   return [
     listRowBackground("clear"),
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
-    padding({ leading: ROW_INSET.LEADING, trailing: SPACE.EDGE, top: vertical, bottom: vertical }),
-    ...(selected ? [background(colors.SELECTED)] : []),
+    padding({
+      leading: ROW_INSET.LEADING - ROW_INSET.FILL,
+      trailing: SPACE.EDGE - ROW_INSET.FILL,
+      top: vertical,
+      bottom: vertical,
+    }),
+    ...(selected
+      ? [
+          background(
+            colors.SELECTED,
+            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
+          ),
+          listRowSeparator("hidden"),
+        ]
+      : []),
+    padding({ horizontal: ROW_INSET.FILL }),
     listRowSeparatorTint(colors.CHIP_EDGE),
     alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT),
   ];
