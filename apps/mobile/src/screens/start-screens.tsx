@@ -191,6 +191,7 @@ function choicesOf(
 ): ChipMenuGroup["choices"] {
   return options.map((option) => ({
     label: option.label,
+    id: option.id,
     on: option.id === picked,
     onPress: () => onPick(option.id),
   }));
@@ -747,6 +748,12 @@ export function NewTaskScreen({
       : (repository.failed ??
         (repository.read && repository.options.length === 0 ? WORDS.NO_REPOSITORIES : undefined));
 
+  // Note that the relation picked, whose Swap task lists every open task, is drawn again only as the pick or the tasks change, never on a key typed; its acts set the pick, which never changes.
+  const head = useMemo(
+    () => <RelationChip pick={relation} />,
+    [relation.relation, relation.task, relation.tasks],
+  );
+
   // Note that the relation menu, a choice for each open task under each kind, is made again only as the tasks or the pick change, never on a key typed.
   const related = useMemo(
     () => relationMenu({ tasks: relation.tasks, relation: relation.relation, pick: relation.pick }),
@@ -782,7 +789,7 @@ export function NewTaskScreen({
         kept={kept}
       />
       <ComposeSheet
-        head={<RelationChip pick={relation} />}
+        head={head}
         words={{
           placeholder: WORDS.TASK_PLACEHOLDER,
           words: prompt,
