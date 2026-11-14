@@ -1,4 +1,7 @@
 import {
+  BUTTON_CORNERS,
+  BUTTON_VARIANT,
+  Button,
   cn,
   cssCustomProperties,
   Fill,
@@ -19,6 +22,7 @@ import {
   type UIEvent,
   useCallback,
   useContext,
+  useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
@@ -67,6 +71,9 @@ import {
 
 /** The theme's room at a log's end (tasks.css), registered as a length so it reads in pixels. */
 const LOG_END_PROPERTY = "--conversation-log-end";
+
+/** How near its end, in pixels, a log stands to be kept there as its box shrinks. */
+const SHRINK_END_PX = 8;
 
 /** How near its top, in screens of the box, a log asks for the lines older than its first (`onNearTop`): one, so they land before the reader reaches them. */
 const NEAR_TOP_SCREENS = 1;
@@ -160,6 +167,24 @@ export function Conversation({
   const scrollToBottom = useCallback(() => {
     rows.current?.current?.scrollToEnd();
   }, []);
+
+  // Note that a log standing at its end keeps to it as its box shrinks, as a phone's keyboard shrinks it, so the line being typed at the end stays in view rather than sliding under the keyboard.
+  useEffect(() => {
+    const box = list.current;
+
+    if (box === null) return;
+    let height = box.clientHeight;
+    const heard = new ResizeObserver(() => {
+      const was = height;
+      height = box.clientHeight;
+      const endWas = box.scrollHeight - box.scrollTop - was;
+
+      if (height < was && endWas <= SHRINK_END_PX) rows.current?.current?.scrollToEnd();
+    });
+    heard.observe(box);
+
+    return () => heard.disconnect();
+  }, [list]);
 
   const onScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
@@ -419,10 +444,49 @@ const SCROLL_LABEL = "Scroll to the newest line";
  * from it: the shared icon button, floating over the lines on a ground of
  * its own.
  */
+/** PROTOTYPE: which design the way back draws, read from `?scroll=` as the page opens (corner, pill, center). */
+const PROTOTYPE_DESIGN = new URLSearchParams(window.location.search).get("scroll") ?? "center";
+
+function prototypeDesign(): string {
+  return PROTOTYPE_DESIGN;
+}
+
 export function ConversationScrollButton(): ReactNode {
   const { isAtBottom, scrollToBottom } = useConversation();
 
   if (isAtBottom) return null;
+  const design = prototypeDesign();
+
+  if (design === "corner")
+    return (
+      <div className="conversation-scroll absolute right-content-inset bottom-ui-6 flex rounded-disc bg-button-ground shadow-floating-edge [--ui-button-ground:var(--ui-color-well)]">
+        <Tooltip label={SCROLL_LABEL}>
+          <IconButton
+            label={SCROLL_LABEL}
+            corners={BUTTON_CORNERS.ROUND}
+            variant={BUTTON_VARIANT.OUTLINE}
+            icon={<ArrowDownIcon aria-hidden="true" />}
+            onClick={scrollToBottom}
+          />
+        </Tooltip>
+      </div>
+    );
+
+  if (design === "pill")
+    return (
+      <div className="conversation-scroll absolute left-1/2 -translate-x-1/2 bottom-ui-6 flex rounded-ui-full bg-button-ground shadow-floating-edge [--ui-button-ground:var(--ui-color-well)]">
+        <Button
+          label={SCROLL_LABEL}
+          corners={BUTTON_CORNERS.ROUND}
+          variant={BUTTON_VARIANT.OUTLINE}
+          size="compact"
+          icon={<ArrowDownIcon aria-hidden="true" />}
+          onClick={scrollToBottom}
+        >
+          Latest
+        </Button>
+      </div>
+    );
 
   return (
     // Its ground is the button's own (`--ui-button-ground`), which the button's lit fill is laid over as a title bar's is.
