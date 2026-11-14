@@ -38,8 +38,8 @@ import { Fragment, type ReactNode } from "react";
 import { useAnnounced } from "./accessibility.js";
 import { Chip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { GlyphImage } from "./glyph-label.js";
-import { useColors } from "./tokens/colors.js";
+import { ToneGlyph } from "./marks.js";
+import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -152,7 +152,12 @@ export function AskNote({ words }: { readonly words: string }) {
       alignment="firstTextBaseline"
       modifiers={[accessibilityIdentifier("ask-note")]}
     >
-      <GlyphImage glyph={GLYPH.FAILED} textStyle={TYPE_ROLE.ROW_LINE} color={colors.ATTENTION} />
+      <ToneGlyph
+        glyph={GLYPH.FAILED}
+        tone={STATUS_TONE.ATTENTION}
+        textStyle={TYPE_ROLE.ROW_LINE}
+        hidden
+      />
       <Text
         modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
       >

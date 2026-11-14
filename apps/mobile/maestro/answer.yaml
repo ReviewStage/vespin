@@ -42,7 +42,7 @@ appId: dev.vespin.ios
 
 # A refused answer: the approval is drawn answered at once, then taken back
 # as the fixture refuses it, its pick back on the card and the refusal said
-# under it.
+# in the box's head.
 - launchApp:
     clearState: true
     arguments:
