@@ -231,6 +231,13 @@ type AgentRowProps = {
   readonly preview?: ReactElement | undefined;
 };
 
+/** How far past its words an agent row's pull request link takes a press, in points: down to the row's foot, out to either side, and up only to the gap under the title, so the row stays its height and the title keeps its own press. */
+const LINK_REACH = {
+  ACROSS: SPACE.TIGHT * 2,
+  UP: 2,
+  DOWN: ROW_INSET.VERTICAL,
+} as const;
+
 /** An agent's pull request in its line: its state's glyph and its number, pressed to open it. */
 function PullRequestLink({
   pullRequest,
@@ -249,12 +256,17 @@ function PullRequestLink({
         accessibilityHint(OPENS_PULL_REQUEST),
       ]}
     >
-      {/* Note that the link stands in Apple's least target, as a block's comment count does, the shape on that frame rather than on the button, since a borderless button takes a press only where its label is hit. */}
+      {/* Note that the link takes a press past its words, down to the row's foot and out to either side, through a shape padded out and then taken back so the line lays out no taller; it stops short of the title above, which opens the agent. The shape stands on the label, since a borderless button takes a press only where its label is hit. */}
       <HStack
         spacing={SPACE.TIGHT}
         modifiers={[
-          frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+          padding({ horizontal: LINK_REACH.ACROSS, top: LINK_REACH.UP, bottom: LINK_REACH.DOWN }),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          padding({
+            horizontal: -LINK_REACH.ACROSS,
+            top: -LINK_REACH.UP,
+            bottom: -LINK_REACH.DOWN,
+          }),
         ]}
       >
         <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_LINE} hidden />
