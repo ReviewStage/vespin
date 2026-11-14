@@ -117,7 +117,7 @@ export {
 
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 
-export { markdownGithubPages, markdownReplyButtons } from "./markdown-model.js";
+export { markdownGithubPages, markdownReplyButtons, markdownShows } from "./markdown-model.js";
 
 export { MarkdownPage } from "./markdown-page.js";
 

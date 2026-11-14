@@ -555,6 +555,8 @@ type WordsRowProps = {
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
   /** What GitHub holds of a pull request or issue a chip in the words names, by its page, which the chip says where it stands. */
   readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
+  /** Whether raw HTML in the words stays unseen, as GitHub's page hides a pull request body's comments and tags. */
+  readonly hidesHtml?: boolean | undefined;
 };
 
 /** The count of a block's open comment threads at its trailing edge, as a document's margin marks them, opening them on a press. */
@@ -611,6 +613,7 @@ export function WordsRow({
   pictureSource,
   videoAt,
   linkStanding,
+  hidesHtml,
 }: WordsRowProps) {
   const colors = useColors();
 
@@ -624,6 +627,7 @@ export function WordsRow({
           pictureSource={pictureSource}
           videoAt={videoAt}
           linkStanding={linkStanding}
+          hidesHtml={hidesHtml}
           headings
         />
       </View>
