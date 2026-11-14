@@ -1,6 +1,5 @@
 import type { AgentPullRequest } from "@repo/features/agent-wire";
 import { createContext, useContext } from "react";
-import type { AgentsControl } from "./use-agents.js";
 
 /**
  * pull-request-number.ts -- which pull request a Pull request tab shows, where it names one by its number rather than following its agent's branch.
@@ -71,7 +70,10 @@ export function withPullRequestTab<V>(
  * else its agent's own; none before it is read.
  */
 export function pullRequestOfTab(
-  control: Pick<AgentsControl, "pullRequests" | "numberedPullRequests">,
+  control: {
+    readonly pullRequests: ReadonlyMap<string, AgentPullRequest>;
+    readonly numberedPullRequests: ByPullRequestTab<AgentPullRequest>;
+  },
   tab: { readonly changes: string; readonly number?: number | undefined },
 ): AgentPullRequest | undefined {
   return tab.number === undefined

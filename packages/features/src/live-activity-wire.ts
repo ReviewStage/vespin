@@ -36,7 +36,7 @@ export const LIVE_ACTIVITY_BOUNDS = {
 } as const;
 
 /** One running agent as the activity lists it. */
-export const liveActivityAgentSchema = EffectSchema.Struct({
+const liveActivityAgentSchema = EffectSchema.Struct({
   /** The agent's id, which a tap on its row opens. */
   id: EffectSchema.NonEmptyString.check(
     EffectSchema.isMaxLength(LIVE_ACTIVITY_BOUNDS.MAX_ID_CHARS),
@@ -85,5 +85,3 @@ export const liveActivityEndedRequestSchema = EffectSchema.Struct({
   environment: pushEnvironmentSchema,
   activityToken: EffectSchema.optionalKey(pushDeviceTokenSchema),
 });
-
-export type LiveActivityEndedRequest = typeof liveActivityEndedRequestSchema.Type;

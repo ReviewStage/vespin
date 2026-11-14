@@ -36,7 +36,6 @@ import {
   WORKSPACE_CALL_FAILURE,
   WORKSPACE_RENAMES,
   type WorkspaceCallFailure,
-  type WorkspaceCallResult,
 } from "./workspace-call.js";
 import {
   type WorkspaceEnvironmentAnswer,
@@ -88,6 +87,9 @@ import {
  * is asked through `hostedCall`, so a refusal is read as its contract
  * declares it, in the words `workspace-call.ts` derives from them.
  */
+
+/** One workspace call's answer, or why there is none. */
+export type WorkspaceCallResult<Answer> = TaskCallResult<Answer, WorkspaceCallFailure>;
 
 export interface HostedWorkspaceClientOptions {
   /** What authorizes each call on the signed-in account, read fresh for every attempt. */

@@ -9,10 +9,10 @@ import {
   rewindConversation,
 } from "@repo/database/models/conversation-rewind";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
-import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import { listStandingVoiceCalls } from "@repo/database/models/voice-calls";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { LOCAL_AGENT_REFUSAL } from "@repo/features/agent-wire";
+import type { CheckoutRestoreSnapshot } from "@repo/features/checkout-restore";
 import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
 import { Effect, Option, Result } from "effect";
@@ -86,7 +86,7 @@ const stoppedForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
 const restorePointOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   target: ConversationTarget,
   messageId: string,
-): Effect.fn.Return<TurnCheckoutSnapshot, HostedRefusal, DatabaseServices> {
+): Effect.fn.Return<CheckoutRestoreSnapshot, HostedRefusal, DatabaseServices> {
   const snapshot = yield* hostedStoreOrUnavailable(readRewindSnapshot(target, messageId));
 
   if (Option.isNone(snapshot)) return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
@@ -108,7 +108,7 @@ export function refusedByMachine(cause: unknown): HostedRefusal {
 /** The checkout put back to the snapshot on the agent's machine: refused where the snapshot is no longer there, or the machine restores none, and unavailable where the restore failed. */
 const restoredForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
   target: ConversationTarget,
-  snapshot: TurnCheckoutSnapshot,
+  snapshot: CheckoutRestoreSnapshot,
 ): Effect.fn.Return<
   void,
   HostedRefusal,

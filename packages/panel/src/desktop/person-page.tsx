@@ -134,10 +134,10 @@ import {
   RowsSkeleton,
   SectionSkeleton,
 } from "./person-frame.js";
+import type { TaskHeadBack } from "./phone-head.js";
 import { PhoneBack, PhoneHead, phoneBar, phoneFindGroups } from "./phone-head.js";
 import { RecentTasks, RecentTasksSkeleton } from "./recent-tasks.js";
 import { useTaskListView } from "./task-list-view.js";
-import type { TaskHeadBack } from "./task-pane-switcher.js";
 import type { ChosenRows } from "./tasks-selection.js";
 import { useAutomations } from "./use-automations.js";
 
