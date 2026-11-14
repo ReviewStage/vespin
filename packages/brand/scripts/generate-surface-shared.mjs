@@ -200,6 +200,7 @@ const LUCIDE_SYMBOLS = {
   ALARM_CLOCK_CHECK: "alarm-clock-check",
   ALARM_CLOCK_OFF: "alarm-clock-off",
   APP_WINDOW: "app-window",
+  APP_WINDOW_MAC: "app-window-mac",
   ARCHIVE: "archive",
   ARCHIVE_RESTORE: "archive-restore",
   ARROW_DOWN: "arrow-down",
