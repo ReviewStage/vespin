@@ -32,7 +32,8 @@ import {
   useTaskCommentsHeld,
   useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
-import { type TaskOverview, useTaskOverview, useTasksRead } from "../tasks/use-tasks.js";
+import { type TaskOverview, useTaskOverview } from "../tasks/use-tasks.js";
+import { TaskMissing } from "./task-missing.js";
 
 /** The panel's words for a thread: what its field says before anything is typed, how a resolved one ended, and what stands for words since deleted. */
 const WORDS = {
@@ -84,16 +85,23 @@ function BlockState({ overview }: { readonly overview: TaskOverview | undefined 
 }
 
 /**
- * What a thread's page draws where it holds no thread: reading while the
- * task or its comments are on their way, the read's failure with Try again,
- * and Comment not found only once both are read and hold no such thread, so
- * a thread opened from a link never says it is gone before its read lands.
+ * What a thread's page draws where it holds no thread: the task's own
+ * missing state while the task is not held (`TaskMissing`); reading while
+ * its comments are on their way; their read's failure with Try again; and
+ * Comment not found only once they are read and hold no such thread, so a
+ * thread opened from a link never says it is gone before its read lands.
  */
-function ThreadMissing({ taskId }: { readonly taskId: string }) {
-  const tasksRead = useTasksRead();
-  const overview = useTaskOverview(taskId);
+function ThreadMissing({
+  taskId,
+  overview,
+}: {
+  readonly taskId: string;
+  readonly overview: TaskOverview | undefined;
+}) {
   const held = useTaskCommentsHeld(overview?.task.id);
   const retry = useTaskCommentsRetry(overview?.task.id);
+
+  if (overview === undefined) return <TaskMissing taskId={taskId} notFound={WORDS.NOT_FOUND} />;
 
   if (retry !== undefined) {
     return (
@@ -105,9 +113,7 @@ function ThreadMissing({ taskId }: { readonly taskId: string }) {
     );
   }
 
-  const reading = overview === undefined ? !tasksRead : !held;
-
-  if (reading) return <EmptyState title={READING_COMMENTS} symbol={GLYPH.COMMENT} loading />;
+  if (!held) return <EmptyState title={READING_COMMENTS} symbol={GLYPH.COMMENT} loading />;
 
   return <EmptyState title={WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />;
 }
@@ -165,7 +171,7 @@ export function CommentThreadScreen() {
       />
       {thread === undefined ? (
         <Screen>
-          <ThreadMissing taskId={taskId} />
+          <ThreadMissing taskId={taskId} overview={overview} />
         </Screen>
       ) : (
         <GlassDock

@@ -820,8 +820,9 @@ function GroupSection({
  * What an empty list says in place of "No tasks" while the list has not
  * been read: reading, or that the read failed with Try again, as the
  * panel's Tasks page says; none once it is read, so an empty list is one
- * that holds nothing. Note that a list holding rows draws them whatever its
- * read, so a refresh that fails leaves what was read standing.
+ * that holds nothing. Note that it is asked only while the whole list holds
+ * nothing, so a list holding rows draws them whatever its read, and a
+ * refresh that fails leaves what was read standing.
  */
 function notRead(
   read: TasksView["listStatus"],
@@ -903,7 +904,11 @@ function TasksTree({
 
   if (search.trim() !== "") {
     if (found.length === 0) {
-      return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
+      return (
+        (treeEmpty(tree) ? notRead(read, onRefresh) : undefined) ?? (
+          <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />
+        )
+      );
     }
 
     return (
@@ -918,7 +923,7 @@ function TasksTree({
   if (collection !== undefined) {
     if (collection.rows.length === 0) {
       return (
-        notRead(read, onRefresh) ?? (
+        (treeEmpty(tree) ? notRead(read, onRefresh) : undefined) ?? (
           <EmptyState title={WORDS.NO_TASKS} symbol={collectionGlyph(collection)} />
         )
       );
