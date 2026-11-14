@@ -1,4 +1,4 @@
-// pull-request-screens.tsx -- one agent's pull request on its own screen: where it stands, its checks and reviews held live, its merge or Remove from queue in the bar or, in a regular window, under its checks, and Open on GitHub in the bar.
+// pull-request-screens.tsx -- one agent's pull request on its own screen: where it stands, its checks and reviews held live, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and Open on GitHub in the bar's ⋯.
 
 import { githubAvatarUrl } from "@repo/features/account-picture";
 import {
@@ -43,7 +43,9 @@ import {
   buzz,
   CHECK_LOOK,
   CHECK_SUMMARY_LOOK,
+  type ColumnBar,
   ConfirmAsk,
+  DetailPage,
   EmptyState,
   FACE_KIND,
   GLYPH,
@@ -65,8 +67,9 @@ import {
 } from "@repo/ui-native";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent } from "../agents/use-agent.js";
+import { PUSHED_PAGE, useHandToDetail } from "../detail-stack.js";
 import { openInSafari } from "../open-link.js";
 import {
   type PullRequestKey,
@@ -77,8 +80,6 @@ import {
 } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 /** What the bar's ⋯ menu offers beside the merge, in the panel's words. */
 const MENU_WORDS = {
@@ -149,7 +150,7 @@ function copyLink(url: string): void {
     });
 }
 
-/** The press the bar offers as the pull request stands: its words, whether it is the screen's one prominent act, and the change it sends. */
+/** The merge's press as the pull request stands: its words, whether it is the screen's one prominent act, and the change it sends. */
 interface MergePress {
   readonly words: string;
   readonly prominent: boolean;
@@ -194,7 +195,7 @@ function mergePressOf(
       };
     case MERGE_ACTION.DEQUEUE:
       return { words: MERGE_WORDS.DEQUEUE, prominent: false, request: undefined };
-    // Note that the bar offers no bypass of the base's rules, which asks first; GitHub's own does.
+    // Note that the page offers no bypass of the base's rules, which asks first; GitHub's own does.
     case MERGE_ACTION.BYPASS:
     case undefined:
       return undefined;
@@ -245,44 +246,20 @@ function methodsOffered(pullRequest: AgentOverviewPullRequest | undefined): read
 }
 
 /**
- * The bar's acts: the merge's one press where the screen hands it one, and
- * the ⋯ menu, grouped as the panel's and Mail's are: Copy GitHub link and
- * Open on GitHub; the ways to merge, where the repository allows more than
- * one and the press stands in the bar; and Refresh. A regular window chooses
- * the way on the press under the checks instead.
+ * The bar's one act, the ⋯ menu, grouped as the panel's and Mail's are:
+ * Copy GitHub link and Open on GitHub, then Refresh. The merge stands in
+ * the page under the heading, where the panel's head stands it, so the
+ * bar's title keeps its place.
  */
 function PullRequestToolbar({
-  pullRequest,
   url,
-  press,
-  method,
-  onChoose,
   onRefresh,
 }: {
-  readonly pullRequest: AgentOverviewPullRequest | undefined;
   readonly url: string | undefined;
-  readonly press: ShownPress | undefined;
-  readonly method: MergeMethod | undefined;
-  readonly onChoose: (method: MergeMethod) => void;
   readonly onRefresh: () => void;
 }) {
-  const colors = useColors();
-  const methods = methodsOffered(pullRequest);
-  const chooses = press !== undefined && methods.length > 1;
-
-  // Note that these stand in the top bar in every window, never the bottom: expo-router shows a navigation controller's toolbar and never hides it again, so a bottom bar outlived the page. A regular window hands no press, since its top bar folds it into More, and draws it under the checks instead.
   return (
     <Stack.Toolbar placement="right">
-      {press === undefined ? null : (
-        <Stack.Toolbar.Button
-          variant={press.prominent ? "prominent" : "plain"}
-          tintColor={press.prominent ? colors.ACCENT : colors.TEXT}
-          disabled={press.disabled}
-          onPress={press.onPress}
-        >
-          {press.words}
-        </Stack.Toolbar.Button>
-      )}
       <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
         {url === undefined ? null : (
           <Stack.Toolbar.Menu inline>
@@ -297,19 +274,6 @@ function PullRequestToolbar({
             </Stack.Toolbar.MenuAction>
           </Stack.Toolbar.Menu>
         )}
-        {chooses ? (
-          <Stack.Toolbar.Menu inline>
-            {methods.map((each) => (
-              <Stack.Toolbar.MenuAction
-                key={each}
-                isOn={each === method}
-                onPress={() => onChoose(each)}
-              >
-                {MERGE_METHOD_WORDS[each]}
-              </Stack.Toolbar.MenuAction>
-            ))}
-          </Stack.Toolbar.Menu>
-        ) : null}
         <Stack.Toolbar.Menu inline>
           <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RETRY)} onPress={onRefresh}>
             {MENU_WORDS.REFRESH}
@@ -332,15 +296,46 @@ function PullRequestToolbar({
  * them again. The merge's one press acts at once as the panel's merge
  * control does, or arms auto-merge where the repository merges through a
  * queue, and Remove from queue asks first, as the panel's does; it stands
- * in the bar in a compact window, and in a regular one under the checks as
- * a large button, since a regular window's bar folds its acts into More.
+ * under the heading in every window, as wide as its words, as the panel's
+ * head stands Merge under the title, and as a split button where the
+ * repository merges more than one way.
  * The bar's ⋯ menu opens it on GitHub, where its diff and comments are
- * read.
+ * read. In a window wide enough for three columns it stands pushed over
+ * the split view's detail instead (`PullRequestPage`'s `inColumn`).
  */
 export function PullRequestScreen() {
   const { id = "", number = "" } = useLocalSearchParams<{ id: string; number: string }>();
-  const key: PullRequestKey = { agentId: id, number: Number(number) };
-  useSurfaceOpen(PRODUCT_SURFACE.PULL_REQUEST, number);
+
+  const handed = useHandToDetail({
+    kind: PUSHED_PAGE.PULL_REQUEST,
+    agentId: id,
+    number: Number(number),
+  });
+
+  if (handed) return null;
+
+  return <PullRequestPage agentId={id} number={Number(number)} />;
+}
+
+/**
+ * One agent's pull request as `PullRequestScreen` describes it, by the
+ * agent and its number: on a stack over the window, or, `inColumn`, pushed
+ * over a split view's detail under the column's own bar, its path, and its
+ * ⋯ opening it on GitHub and reading it again, the merge standing under the
+ * checks as a regular window's does.
+ */
+export function PullRequestPage({
+  agentId: id,
+  number: pulled,
+  inColumn = false,
+}: {
+  readonly agentId: string;
+  readonly number: number;
+  /** Whether it stands pushed over a split view's detail rather than on a stack over the window. */
+  readonly inColumn?: boolean | undefined;
+}) {
+  const key: PullRequestKey = { agentId: id, number: pulled };
+  useSurfaceOpen(PRODUCT_SURFACE.PULL_REQUEST, String(pulled));
   const colors = useColors();
   const agent = useFollowedAgent(id);
   const listed = useAgentPullRequests(id).find((each) => each.number === key.number);
@@ -372,8 +367,6 @@ export function PullRequestScreen() {
   useEffect(() => {
     if (!dequeues) setAsking(false);
   }, [dequeues]);
-  // Whether the press stands in the page, under the checks, rather than in the bar.
-  const inPage = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   useScreenActivity((workspaces) =>
     agent === undefined || title === undefined
       ? undefined
@@ -390,6 +383,41 @@ export function PullRequestScreen() {
   );
   const path = [...(agent?.repository == null ? [] : [agent.repository]), `#${key.number}`];
 
+  const columnBar: ColumnBar = {
+    path: { path },
+    menu: {
+      label: MENU_WORDS.MORE,
+      symbol: GLYPH.MORE,
+      choices: [],
+      actions: [
+        ...(url === undefined
+          ? []
+          : [
+              {
+                label: MENU_WORDS.OPEN_ON_GITHUB,
+                symbol: GLYPH.OPEN_EXTERNALLY,
+                onPress: () => openInSafari(url),
+              },
+            ]),
+        { label: MENU_WORDS.REFRESH, symbol: GLYPH.RETRY, onPress: () => void retry() },
+      ],
+    },
+  };
+
+  // Note that a page in a split view's column draws its bar in its column, and a stack's page in the stack's bar.
+  const page = (view: ReactNode, asks?: ReactNode) =>
+    inColumn ? (
+      <DetailPage bar={columnBar} asks={asks}>
+        {view}
+      </DetailPage>
+    ) : (
+      <>
+        {bar}
+        <Screen>{view}</Screen>
+        {asks}
+      </>
+    );
+
   const bar = (
     <>
       <Stack.Screen
@@ -398,34 +426,20 @@ export function PullRequestScreen() {
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      <PullRequestToolbar
-        pullRequest={pullRequest}
-        url={url}
-        press={inPage ? undefined : press}
-        method={method}
-        onChoose={setChosen}
-        onRefresh={() => void retry()}
-      />
+      <PullRequestToolbar url={url} onRefresh={() => void retry()} />
     </>
   );
 
   if (title === undefined || state === undefined) {
     const failed = failedOf(parts.pullRequest);
 
-    return (
-      <>
-        {bar}
-        <Screen>
-          <EmptyState
-            title={failed ? PULL_REQUEST_READ_WORDS.FAILED : PULL_REQUEST_READ_WORDS.READING}
-            symbol={failed ? GLYPH.FAILED : GLYPH.PULL_REQUEST}
-            loading={!failed}
-            action={
-              failed ? { label: MENU_WORDS.TRY_AGAIN, onPress: () => void retry() } : undefined
-            }
-          />
-        </Screen>
-      </>
+    return page(
+      <EmptyState
+        title={failed ? PULL_REQUEST_READ_WORDS.FAILED : PULL_REQUEST_READ_WORDS.READING}
+        symbol={failed ? GLYPH.FAILED : GLYPH.PULL_REQUEST}
+        loading={!failed}
+        action={failed ? { label: MENU_WORDS.TRY_AGAIN, onPress: () => void retry() } : undefined}
+      />,
     );
   }
 
@@ -450,147 +464,135 @@ export function PullRequestScreen() {
 
   if (url !== undefined) opens.set(COMMENTS_ROW, url);
 
-  return (
-    <>
-      {bar}
-      <Screen>
-        <RowList
-          look={LIST_LOOK.PLAIN}
-          onSelect={(row) => {
-            const address = opens.get(row);
+  return page(
+    <RowList
+      look={LIST_LOOK.PLAIN}
+      onSelect={(row) => {
+        const address = opens.get(row);
 
-            if (address !== undefined) openInSafari(address);
-          }}
-          onRefresh={retry}
-        >
-          <ListSection>
-            <PullRequestHead
-              title={title}
-              number={key.number}
-              state={state}
-              queued={queued !== null || (pullRequest === undefined && listed?.queued === true)}
-              stateLabel={
-                queued !== null ? queuedLabel(queued.position) : PULL_REQUEST_STATE_LABEL[state]
-              }
-              branches={
-                pullRequest === undefined
-                  ? undefined
-                  : { base: pullRequest.base, head: pullRequest.head }
-              }
-              sentence={
-                pullRequest !== undefined && isLivePullRequest(pullRequest)
-                  ? mergeSentence(pullRequest, action)
-                  : undefined
-              }
-              opened={
-                pullRequest === undefined
-                  ? undefined
-                  : {
-                      by:
-                        pullRequest.author === undefined
-                          ? undefined
-                          : githubFace(pullRequest.author),
-                      at: pullRequest.createdAt,
-                      mergedAt: pullRequest.mergedAt,
-                    }
-              }
-              labels={pullRequest?.labels}
-            />
-            {writes.note === undefined ? null : (
-              <WriteNoteRow words={writes.note.words} said={writes.note.said} />
-            )}
-          </ListSection>
-          <ListSection
-            title="Checks"
-            count={
-              checks === undefined || summary === undefined
-                ? undefined
-                : checksCountOf(checks, summary)
-            }
-            mark={summary === undefined ? undefined : CHECK_SUMMARY_LOOK[summary]}
-          >
-            {checks === undefined ? (
-              <MarkRow
-                id="checks-reading"
-                mark={CHECK_LOOK[CHECK_STATE.PENDING]}
-                title={
-                  failedOf(parts.checks)
-                    ? PULL_REQUEST_READ_WORDS.CHECKS_FAILED
-                    : PULL_REQUEST_READ_WORDS.READING_CHECKS
+        if (address !== undefined) openInSafari(address);
+      }}
+      onRefresh={retry}
+    >
+      <ListSection>
+        <PullRequestHead
+          title={title}
+          number={key.number}
+          state={state}
+          queued={queued !== null || (pullRequest === undefined && listed?.queued === true)}
+          stateLabel={
+            queued !== null ? queuedLabel(queued.position) : PULL_REQUEST_STATE_LABEL[state]
+          }
+          branches={
+            pullRequest === undefined
+              ? undefined
+              : { base: pullRequest.base, head: pullRequest.head }
+          }
+          sentence={
+            pullRequest !== undefined && isLivePullRequest(pullRequest)
+              ? mergeSentence(pullRequest, action)
+              : undefined
+          }
+          opened={
+            pullRequest === undefined
+              ? undefined
+              : {
+                  by: pullRequest.author === undefined ? undefined : githubFace(pullRequest.author),
+                  at: pullRequest.createdAt,
+                  mergedAt: pullRequest.mergedAt,
                 }
-              />
-            ) : checks.length === 0 ? (
-              <MarkRow
-                id="checks-none"
-                mark={CHECK_LOOK[CHECK_STATE.SKIPPED]}
-                title={PULL_REQUEST_READ_WORDS.NO_CHECKS}
-              />
-            ) : (
-              checks.map((check) => (
-                <MarkRow
-                  key={check.url ?? check.name}
-                  id={check.url ?? check.name}
-                  mark={CHECK_LOOK[check.state]}
-                  title={check.name}
-                  detail={checkDetail(check)}
-                  standing={CHECK_WORDS[check.state]}
-                  face={checkFace(check)}
-                />
-              ))
-            )}
-          </ListSection>
-          {inPage && press !== undefined ? (
-            <ListSection>
-              <MergeActRow
-                label={press.words}
-                prominent={press.prominent}
-                disabled={press.disabled}
-                methods={methodsOffered(pullRequest).map((each) => ({
-                  label: MERGE_METHOD_WORDS[each],
-                  on: each === method,
-                  onPress: () => setChosen(each),
-                }))}
-                onPress={press.onPress}
-              />
-            </ListSection>
-          ) : null}
-          <ListSection title="Reviews" count={reviewers.length}>
-            {reviewers.map((reviewer) => (
-              <MarkRow
-                key={reviewer.by.login}
-                id={reviewer.by.login}
-                mark={REVIEW_LOOK[reviewer.state]}
-                title={reviewer.by.login}
-                detail={REVIEW_WORDS[reviewer.state]}
-                face={{ of: githubFace(reviewer.by), stands: MARK_FACE.LEAD }}
-              />
-            ))}
+          }
+          labels={pullRequest?.labels}
+        />
+        {writes.note === undefined ? null : (
+          <WriteNoteRow words={writes.note.words} said={writes.note.said} />
+        )}
+        {press === undefined ? null : (
+          <MergeActRow
+            label={press.words}
+            prominent={press.prominent}
+            disabled={press.disabled}
+            methods={methodsOffered(pullRequest).map((each) => ({
+              label: MERGE_METHOD_WORDS[each],
+              on: each === method,
+              onPress: () => setChosen(each),
+            }))}
+            onPress={press.onPress}
+          />
+        )}
+      </ListSection>
+      <ListSection
+        title="Checks"
+        count={
+          checks === undefined || summary === undefined ? undefined : checksCountOf(checks, summary)
+        }
+        mark={summary === undefined ? undefined : CHECK_SUMMARY_LOOK[summary]}
+      >
+        {checks === undefined ? (
+          <MarkRow
+            id="checks-reading"
+            mark={CHECK_LOOK[CHECK_STATE.PENDING]}
+            title={
+              failedOf(parts.checks)
+                ? PULL_REQUEST_READ_WORDS.CHECKS_FAILED
+                : PULL_REQUEST_READ_WORDS.READING_CHECKS
+            }
+          />
+        ) : checks.length === 0 ? (
+          <MarkRow
+            id="checks-none"
+            mark={CHECK_LOOK[CHECK_STATE.SKIPPED]}
+            title={PULL_REQUEST_READ_WORDS.NO_CHECKS}
+          />
+        ) : (
+          checks.map((check) => (
             <MarkRow
-              id={COMMENTS_ROW}
-              mark={{ symbol: GLYPH.THREAD, tone: STATUS_TONE.NEUTRAL }}
-              title={
-                conversation === undefined
-                  ? failedOf(parts.conversation)
-                    ? PULL_REQUEST_READ_WORDS.CONVERSATION_FAILED
-                    : PULL_REQUEST_READ_WORDS.READING_CONVERSATION
-                  : PULL_REQUEST_READ_WORDS.commentCount(conversationCount(conversation))
-              }
-              detail={url === undefined ? undefined : MENU_WORDS.OPEN_ON_GITHUB}
+              key={check.url ?? check.name}
+              id={check.url ?? check.name}
+              mark={CHECK_LOOK[check.state]}
+              title={check.name}
+              detail={checkDetail(check)}
+              standing={CHECK_WORDS[check.state]}
+              face={checkFace(check)}
             />
-          </ListSection>
-        </RowList>
-      </Screen>
-      <ConfirmAsk
-        title={MERGE_WORDS.DEQUEUE_QUESTION}
-        message={QUEUE_WARNING}
-        act={MERGE_WORDS.DEQUEUE}
-        presented={asking && dequeues}
-        onAct={() => {
-          setAsking(false);
-          void writes.write({ action: PULL_REQUEST_ACTION.DEQUEUE });
-        }}
-        onDismiss={() => setAsking(false)}
-      />
-    </>
+          ))
+        )}
+      </ListSection>
+      <ListSection title="Reviews" count={reviewers.length}>
+        {reviewers.map((reviewer) => (
+          <MarkRow
+            key={reviewer.by.login}
+            id={reviewer.by.login}
+            mark={REVIEW_LOOK[reviewer.state]}
+            title={reviewer.by.login}
+            detail={REVIEW_WORDS[reviewer.state]}
+            face={{ of: githubFace(reviewer.by), stands: MARK_FACE.LEAD }}
+          />
+        ))}
+        <MarkRow
+          id={COMMENTS_ROW}
+          mark={{ symbol: GLYPH.THREAD, tone: STATUS_TONE.NEUTRAL }}
+          title={
+            conversation === undefined
+              ? failedOf(parts.conversation)
+                ? PULL_REQUEST_READ_WORDS.CONVERSATION_FAILED
+                : PULL_REQUEST_READ_WORDS.READING_CONVERSATION
+              : PULL_REQUEST_READ_WORDS.commentCount(conversationCount(conversation))
+          }
+          detail={url === undefined ? undefined : MENU_WORDS.OPEN_ON_GITHUB}
+        />
+      </ListSection>
+    </RowList>,
+    <ConfirmAsk
+      title={MERGE_WORDS.DEQUEUE_QUESTION}
+      message={QUEUE_WARNING}
+      act={MERGE_WORDS.DEQUEUE}
+      presented={asking && dequeues}
+      onAct={() => {
+        setAsking(false);
+        void writes.write({ action: PULL_REQUEST_ACTION.DEQUEUE });
+      }}
+      onDismiss={() => setAsking(false)}
+    />,
   );
 }

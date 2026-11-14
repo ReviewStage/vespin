@@ -47,6 +47,7 @@ import { useMemo, useRef, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
+import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useOnTab } from "../tab-route.js";
 import {
@@ -132,7 +133,7 @@ function SheetBar({
   readonly kept: KeptWords;
 }) {
   const colors = useColors();
-  const router = useRouter();
+  const close = useCloseSheet(kept);
 
   // Note that the options are made once for their title and colors, because the stack sets a screen's options again whenever a new object comes, which a key typed would make.
   const options = useMemo(
@@ -152,7 +153,7 @@ function SheetBar({
       {/* Note that the bar has no ground of its own, so the system draws its buttons in glass over the sheet's. */}
       <Stack.Screen options={options} />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button onPress={close}>{WORDS.CANCEL}</Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         {file === undefined ? null : (
