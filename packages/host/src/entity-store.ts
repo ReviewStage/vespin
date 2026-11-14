@@ -28,8 +28,10 @@
  * shapes it was kept at, so a file of another account, of another build's
  * shapes, or one that will not open, is deleted and read as none, and every
  * read reads whole. A store saves lists that moved at most every
- * `SAVE_EVERY`, the writes waiting for the service `QUEUE_SETTLE` after
- * they move, and both once more as it closes; a sign-out forgets it,
+ * `SAVE_EVERY`, or only at the moments the shell names where it names any
+ * (`KeptListsDue`, the phone's app going to the background), the writes
+ * waiting for the service `QUEUE_SETTLE` after they move, and both once
+ * more as it closes; a sign-out forgets it,
  * which deletes the file. Rows
  * kept where none of them moved but where they stand (`keepUnmoved`), as the
  * task list's sync id moving alone, are written only beside the next save of
@@ -239,6 +241,8 @@ export interface EntityStoreOptions {
   readonly refused?: () => readonly unknown[];
   /** Each moving of `refused`, which has the store write them `QUEUE_SETTLE` later. */
   readonly refusedMoves?: Stream.Stream<void>;
+  /** Each moment the shell asks the lists written (`KeptListsDue`); where given, lists that moved are written only then and as the store closes, never every `SAVE_EVERY`. */
+  readonly listsDue?: Stream.Stream<void>;
 }
 
 /** The SHA-256, in hex, of every kept row shape's JSON Schema, which a build that changes any of them changes. */
@@ -392,7 +396,7 @@ export function openEntityStore(
 
     /**
      * The saver: once the writes waiting moved, a save `QUEUE_SETTLE` later;
-     * once lists moved, one when `SAVE_EVERY` has passed since the last save,
+     * once lists moved, where the shell names no moments of its own, one when `SAVE_EVERY` has passed since the last save,
      * sooner where the writes waiting move meanwhile; otherwise asleep until
      * woken. Note that it ends once the store is forgotten, since nothing it
      * would save is kept.
@@ -401,7 +405,7 @@ export function openEntityStore(
       while (!forgotten) {
         if (waitingNow() !== savedQueue) {
           yield* Effect.sleep(QUEUE_SETTLE);
-        } else if (dirty) {
+        } else if (dirty && options.listsDue === undefined) {
           const left = savedAt + Duration.toMillis(SAVE_EVERY) - (yield* Clock.currentTimeMillis);
 
           if (left > 0) {
@@ -430,6 +434,14 @@ export function openEntityStore(
     if (options.refusedMoves !== undefined) {
       yield* Effect.forkScoped(
         Stream.runForEach(options.refusedMoves, () => woken),
+        { startImmediately: true },
+      );
+    }
+
+    // Note that a moment the shell names writes the lists whole, as the store closing does, since the app may not run again before it is ended.
+    if (options.listsDue !== undefined) {
+      yield* Effect.forkScoped(
+        Stream.runForEach(options.listsDue, () => save(true)),
         { startImmediately: true },
       );
     }
