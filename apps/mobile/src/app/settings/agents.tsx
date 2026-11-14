@@ -40,6 +40,7 @@ import {
   ListSection,
   MenuPickRow,
   rejectionWords,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   ToggleRow,
@@ -208,7 +209,7 @@ export default function AgentsScreen() {
     );
 
   return (
-    <Screen>
+    <Screen ground={SCREEN_GROUND.GROUPED}>
       <SettingsForm>
         {current === undefined && newAgentRows.length === 0 ? null : (
           <ListSection

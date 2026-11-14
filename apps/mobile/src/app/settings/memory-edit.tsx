@@ -7,7 +7,6 @@ import {
   memorySaveRefusal,
 } from "@repo/features/memory-settings-words";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
-import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaceMemories, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
@@ -17,6 +16,7 @@ import {
   GLYPH,
   ListSection,
   NOTICE_KIND,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   useColors,
@@ -192,15 +192,12 @@ function MemoryEditor({
         }}
         onDismiss={kept.stay}
       />
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         {failed ? (
           <EmptyState
             title={MEMORY_PAGE_WORDS.FAILED}
             symbol={GLYPH.FAILED}
-            action={{
-              label: VERB.RETRY,
-              onPress: () => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost),
-            }}
+            retry={() => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost)}
           />
         ) : reading ? (
           <EmptyState title={MEMORY_PAGE_WORDS.READING} symbol={MEMORY_SYMBOL} loading />

@@ -12,7 +12,7 @@ import {
   skillGroups,
   workspaceGroupTitle,
 } from "@repo/features/skills-settings-words";
-import { readingWords, VERB } from "@repo/features/words";
+import { readingWords } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -24,6 +24,7 @@ import {
   glyphSymbol,
   ListSection,
   NoteRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   useColors,
@@ -114,13 +115,8 @@ function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
   );
 
   const group = (title: string, rows: readonly SkillRow[]) => (
-    <ListSection
-      key={title}
-      title={title}
-      count={rows.length}
-      footer={rows.length === 0 ? SKILLS_LINE.NONE : undefined}
-    >
-      {rows.length === 0 ? null : rows.map(rowOf)}
+    <ListSection key={title} title={title} count={rows.length}>
+      {rows.map(rowOf)}
     </ListSection>
   );
 
@@ -132,17 +128,25 @@ function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
         <EmptyState
           title={SKILLS_LINE.READ_FAILED}
           symbol={GLYPH.FAILED}
-          action={{
-            label: VERB.RETRY,
-            onPress: () =>
-              void acts[ACT_KIND.INSTALLED_SKILLS_RETRY]({ workspaceId }).catch((cause: unknown) =>
-                console.error("Reading the skills again did not go.", cause),
-              ),
-          }}
+          retry={() =>
+            void acts[ACT_KIND.INSTALLED_SKILLS_RETRY]({ workspaceId }).catch((cause: unknown) =>
+              console.error("Reading the skills again did not go.", cause),
+            )
+          }
         />
       ) : (
         <EmptyState title={READING} symbol={SKILLS_SYMBOL} loading />
       )
+    ) : groups.workspace.length === 0 && groups.personal.length === 0 ? (
+      // Note that a workspace with no skill at all says so once, with Add skill, rather than the same line under two empty groups.
+      <EmptyState
+        title={SKILLS_LINE.NONE}
+        symbol={SKILLS_SYMBOL}
+        action={{
+          label: SKILLS_LINE.ADD_SKILL,
+          onPress: () => router.push(SETTINGS_ROUTE.SKILL_ADD),
+        }}
+      />
     ) : (
       <SettingsForm>
         {workspace.personal === true
@@ -162,7 +166,7 @@ function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
           onPress={() => router.push(SETTINGS_ROUTE.SKILL_ADD)}
         />
       </Stack.Toolbar>
-      <Screen>{body}</Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>{body}</Screen>
       <ConfirmAsk
         title={question.title}
         message={question.body}

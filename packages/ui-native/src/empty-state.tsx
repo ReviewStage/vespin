@@ -16,6 +16,9 @@ import { type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
+/** What a press to read or send again says, as the app says it everywhere: the panel's Retry in the phone's words. */
+export const TRY_AGAIN_WORDS = "Try again";
+
 /** The room between the glyph, the title, the line, and the act, as the system's view stands them. */
 const EMPTY_SPACING = 12;
 
@@ -27,6 +30,12 @@ export type EmptyStateProps = {
   readonly action?:
     | { readonly label: string; readonly onPress: () => void; readonly look?: ButtonLook }
     | undefined;
+  /**
+   * Reads what failed again: the bordered Try again in the act's place,
+   * quiet rather than filled, since a failure is no screen's main act, as
+   * every read that failed offers it.
+   */
+  readonly retry?: (() => void) | undefined;
   /** Whether what the screen shows is still read, which stands the system's spinner over the title in the symbol's place, so a read under way never looks like nothing to show. */
   readonly loading?: boolean | undefined;
 };
@@ -65,12 +74,19 @@ export function EmptyState({
   title,
   symbol,
   description,
-  action,
+  action: given,
+  retry,
   loading = false,
 }: EmptyStateProps) {
   const colors = useColors();
 
   if (loading) return <LoadingState title={title} />;
+
+  const action =
+    retry === undefined
+      ? given
+      : { label: TRY_AGAIN_WORDS, onPress: retry, look: BUTTON_LOOK.BORDERED };
+
   const centered = multilineTextAlignment("center");
 
   return (

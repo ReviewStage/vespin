@@ -3,7 +3,7 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
-import { ACT_UNREACHED_WORDS } from "@repo/features/words";
+import { ACT_UNREACHED_WORDS, readingWords } from "@repo/features/words";
 import {
   INVITATION_ROLE,
   type WorkspaceInvitation,
@@ -33,9 +33,11 @@ import {
   ConfirmAsk,
   GLYPH,
   ListSection,
+  LoadingRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   useAsyncAction,
@@ -228,7 +230,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
 
   return (
     <>
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <SettingsForm>
           <ListSection
             footer={
@@ -285,6 +287,9 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                 : (people.refusal ?? (ownerAlone ? LEAVE_WORDS.OWNER_NO_ADMIN : undefined))
             }
           >
+            {members === undefined && held?.members?.failed !== true ? (
+              <LoadingRow words={readingWords("the members")} />
+            ) : null}
             {(members ?? []).map((member) => (
               <MemberRow
                 key={member.userId}
