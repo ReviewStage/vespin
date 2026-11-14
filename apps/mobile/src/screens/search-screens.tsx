@@ -40,7 +40,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useDetailStack } from "../detail-stack.js";
+import { useDetailStack, useStackRoot } from "../detail-stack.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useHandColumns } from "../place-columns.js";
@@ -373,7 +373,12 @@ function useSearchDetail(
   remindMenu: (item: InboxItem) => BarMenu,
   choose: Dispatch<SetStateAction<SearchPick | undefined>>,
 ) {
-  const task = useTaskDetail(picked?.kind === SEARCH_PICK.TASK ? picked.id : undefined, listing);
+  const task = useTaskDetail(
+    picked?.kind === SEARCH_PICK.TASK ? picked.id : undefined,
+    listing,
+    undefined,
+    SIDEBAR_PLACE.SEARCH,
+  );
 
   if (picked === undefined)
     return { detail: <NoSelection title={CHOOSE_AN_ITEM_WORDS} />, asks: null };
@@ -463,7 +468,7 @@ function SearchSplitColumns({
   readonly root?: string | undefined;
 }) {
   const { query, setQuery, scope } = words;
-
+  useStackRoot(SIDEBAR_PLACE.SEARCH, root);
   useHandColumns(SIDEBAR_PLACE.SEARCH, {
     content,
     contentBar: {

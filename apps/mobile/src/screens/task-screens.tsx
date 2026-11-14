@@ -122,7 +122,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
-import { PUSHED_PAGE, useDetailLeave, useDetailPush } from "../detail-stack.js";
+import { PUSHED_PAGE, useDetailLeave, useDetailPush, useStackRoot } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
@@ -165,7 +165,13 @@ import {
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, type SidebarTasks, useListColumn } from "./app-sidebar.js";
+import {
+  SIDEBAR_PLACE,
+  type SidebarPlace,
+  type SidebarTasks,
+  useListColumn,
+} from "./app-sidebar.js";
+import { useDetailStackColumn } from "./detail-stack-column.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -1067,9 +1073,10 @@ function useNewAgent(): (task: TaskSummary) => void {
 /** Opens a task's version history where its workspace's descriptions stand on, as the panel's Version history opens it; none where they stand off. */
 function useHistoryDoor(
   workspaceId: string | undefined,
+  place?: SidebarPlace | undefined,
 ): ((task: TaskSummary) => void) | undefined {
   const router = useRouter();
-  const toDetail = useDetailPush();
+  const toDetail = useDetailPush(place);
   const onOwnTab = useOnOwnTab();
 
   const { data: descriptions = false } = useQuery({
@@ -1719,6 +1726,7 @@ function ReadFailedRow({
  */
 function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
+  const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
   const { task } = overview;
   const open = useTaskComments(task.id).filter(threadOpen);
@@ -1742,12 +1750,16 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
           symbol={GLYPH.COMMENT}
           label={threadComments(thread)[0]?.words ?? thread.quote}
           detail={provenanceText(thread.updatedAt, Date.now())}
-          onPress={() =>
+          onPress={() => {
+            if (toDetail({ kind: PUSHED_PAGE.COMMENTS, threadId: thread.id, taskId: task.id })) {
+              return;
+            }
+
             router.push({
               pathname: onOwnTab("/tasks/comments/[id]"),
               params: { id: thread.id, task: task.id },
-            })
-          }
+            });
+          }}
         />
       ))}
     </ListSection>
@@ -1890,12 +1902,15 @@ const NO_STATUS_DOORS = { setStatus: () => undefined, workingAgents: () => 0 } a
  * none picked, and the reading state or Task not found for one not read.
  * Its status set and its delete ask through `doors` where a list beside it
  * asks for them, else through asks of its own, which `asks` draws with its
- * agents' Archive question, a delete going on to `onDeleted`.
+ * agents' Archive question, a delete going on to `onDeleted`. `place` names
+ * the detail its bar opens History over where the caller draws the bar from
+ * outside that detail, as a split view's root does.
  */
 export function useTaskDetail(
   selected: string | undefined,
   doors?: TaskDetailDoors | undefined,
   onDeleted?: (() => void) | undefined,
+  place?: SidebarPlace | undefined,
 ): TaskDetail {
   const newSubTask = useNewSubTask();
   const newAgent = useNewAgent();
@@ -1909,7 +1924,7 @@ export function useTaskDetail(
   const setStatus = doors?.setStatus ?? own.setStatus;
   const askDelete = doors?.askDelete ?? deletion.askDelete;
   const overview = held === undefined ? undefined : { ...held, setStatus };
-  const history = useHistoryDoor(overview?.task.workspaceId);
+  const history = useHistoryDoor(overview?.task.workspaceId, place);
   const read = useTasksRead();
   const archiveAsk = useAgentArchiveAsk();
   const { refreshTasks } = useInboxActs();
@@ -1995,7 +2010,13 @@ function TasksSplitScreen({
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const threeColumns = useThreeColumns();
   const picked = useTasksCollection();
-  const { detail, detailBar, asks } = useTaskDetail(selected, listing);
+
+  const { detail, detailBar, asks } = useTaskDetail(
+    selected,
+    listing,
+    undefined,
+    SIDEBAR_PLACE.TASKS,
+  );
 
   // Note that a collection the sidebar picked fills the list only where the sidebar stands, and a portrait window's list keeps every group.
   const collection =
@@ -2020,6 +2041,9 @@ function TasksSplitScreen({
   };
 
   const first = useListColumn(list);
+  useStackRoot(SIDEBAR_PLACE.TASKS, selected);
+  // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
+  const stack = useDetailStackColumn(SIDEBAR_PLACE.TASKS, { id: selected }, true);
   useHandColumns(
     SIDEBAR_PLACE.TASKS,
     threeColumns
@@ -2032,7 +2056,12 @@ function TasksSplitScreen({
       <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
       {threeColumns ? null : (
         <Screen>
-          <SplitView {...first} detail={detail} detailBar={detailBar} />
+          <SplitView
+            {...first}
+            detail={stack.wrap(detail)}
+            detailBar={detailBar}
+            detailStack={stack.detailStack}
+          />
         </Screen>
       )}
       <StatusQuestionAsk question={status} />
