@@ -16,7 +16,8 @@
  * not found rather than refused, or may leave out (`LIVE_PARAM.OPTIONAL_TEXT`),
  * bound as empty then, the id of a row it names (`LIVE_PARAM.ID`) or may
  * leave out (`LIVE_PARAM.OPTIONAL_ID`), read as text and bound as the id it
- * spells, or not found where it spells none, or a value the service binds itself and no query
+ * spells, or not found where it spells none, which its procedure declares
+ * whatever else it refuses (`IdRefusals`), or a value the service binds itself and no query
  * names (`LIVE_PARAM.SERVED`), such as an instant read from its clock. The mode adds the fields a reader polls
  * with (`LIVE_POLL`): every read takes `poll` and `after`, a cursor read
  * `cursor` too, and a delta read `sync`, each of which a reader asks with
@@ -42,6 +43,7 @@ import { ANY_PROCEDURE_REFUSALS, declaredProcedure, refuses } from "./contract/b
 import type { HOSTED_ERRORS } from "./contract/errors.js";
 import { LIVE_POLL, sealedLiveQuerySchema } from "./live-wire.js";
 import type { HOSTED_SERVICE_PATH } from "./service-paths.js";
+import { HOSTED_API_ERROR } from "./service-wire.js";
 
 /** How a live read answers a wake: run again and answered whole where its rows moved, its cursor parts answered past the reader's cursor, or what moved past the reader's sync id answered alone. */
 export const LIVE_MODE = { SNAPSHOT: "snapshot", CURSOR: "cursor", DELTA: "delta" } as const;
@@ -175,6 +177,16 @@ type RowsFields<Parts extends LiveParts> = {
 /** The refusals any procedure may answer, as the one map declares them. */
 type AnyRefusals = Pick<typeof HOSTED_ERRORS, (typeof ANY_PROCEDURE_REFUSALS)[number]>;
 
+/** A param that names a row's id, which the service answers not found where it spells none. */
+type IdParam = typeof LIVE_PARAM.ID | typeof LIVE_PARAM.OPTIONAL_ID;
+
+/** The refusals a read's params answer: not found where one names a row's id, and none else. */
+type IdRefusals<Params extends LiveParams> = [Extract<Params[keyof Params], IdParam>] extends [
+  never,
+]
+  ? Readonly<Record<never, never>>
+  : Pick<typeof HOSTED_ERRORS, typeof HOSTED_API_ERROR.NOT_FOUND>;
+
 /** A read as its declaration names it. */
 interface LiveReadSpec<
   Name extends string,
@@ -223,8 +235,8 @@ export interface LiveReadDeclaration<
   readonly heldOn: readonly (keyof Parts & string)[] | undefined;
   /** The parts a reader that keeps fewer than every part keeps, where any such reader stands. */
   readonly olderParts: readonly (keyof Parts & string)[] | undefined;
-  /** Every refusal the read's procedure declares: any procedure's and its own. */
-  readonly errors: AnyRefusals & Refuses;
+  /** Every refusal the read's procedure declares: any procedure's, its params', and its own. */
+  readonly errors: AnyRefusals & IdRefusals<Params> & Refuses;
   /** The query the read is asked with. */
   readonly input: Schema.Struct<InputFields<Params, Mode, Query>>;
   /** The answer the service seals. */
@@ -359,6 +371,14 @@ export function liveRead<
   const own = (spec.refuses ?? {}) as Refuses;
   const query: Readonly<Record<string, Schema.Top | undefined>> = spec.query ?? {};
 
+  // Note that an id a param names is refused as not found where it spells none (`pathUuid`), so the read declares it whatever its own refusals say.
+  const namesId = Object.values<LiveParam>(spec.params).some(
+    (param) => param === LIVE_PARAM.ID || param === LIVE_PARAM.OPTIONAL_ID,
+  );
+
+  // SAFETY: not found is declared exactly where a param names an id, as `IdRefusals` reads the params.
+  const idRefusals = (namesId ? refuses(HOSTED_API_ERROR.NOT_FOUND) : {}) as IdRefusals<Params>;
+
   const params = Object.fromEntries(
     Object.entries<LiveParam>(spec.params).flatMap(([key, param]) =>
       param === LIVE_PARAM.SERVED ? [] : [[key, query[key] ?? PARAM_FIELD[param]]],
@@ -379,7 +399,7 @@ export function liveRead<
     beside,
     heldOn: spec.heldOn,
     olderParts: spec.olderParts,
-    errors: { ...refuses(...ANY_PROCEDURE_REFUSALS), ...own },
+    errors: { ...refuses(...ANY_PROCEDURE_REFUSALS), ...idRefusals, ...own },
     // SAFETY: the fields are those `InputFields`, `AnswerFields`, and `RowsFields` name, built from the same records.
     input: Schema.Struct({ ...params, ...MODE_FIELDS[spec.mode] }) as Schema.Struct<
       InputFields<Params, Mode, Query>
