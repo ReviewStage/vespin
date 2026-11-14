@@ -14,7 +14,6 @@ import {
   latestDeviceAgentLaunch,
 } from "@repo/database/models/device-agent-store";
 import { beatDevice } from "@repo/database/models/device-store";
-import { recordHostVersion } from "@repo/database/models/host-store";
 import { turns } from "@repo/database/schemas/storage";
 import { getTestDB } from "@repo/database/testing";
 import {
@@ -181,13 +180,12 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
     );
 
     it.effect(
-      "a relaunch on a Mac whose host keeps transcripts at the service resumes a session begun before, which the store holds none of, from its disk with the store left out",
+      "a relaunch on a Mac resumes a session begun before, which the store holds none of, from its disk with the store left out",
       () =>
         Effect.gen(function* () {
           const warm = yield* warmLocalAgent;
           const { userId, deviceId, agent } = warm;
-          // The Mac updated to a host whose runner keeps transcripts while the session it began stood on its disk alone.
-          yield* recordHostVersion(deviceId, "0.11.0");
+          // The session stood on the Mac's disk alone, begun before its runner kept transcripts.
           assert.equal(yield* recordAgentNativeSession(userId, agent.id, BEGUN_BEFORE), true);
           const launch = yield* latestDeviceAgentLaunch(userId, agent.id);
           assert.ok(Option.isSome(launch));

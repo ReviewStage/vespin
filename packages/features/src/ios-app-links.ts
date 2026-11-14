@@ -95,7 +95,7 @@ function addressPath(address: string): string {
 }
 
 /** The query a task's route carries the workspace its link names it under by, where it names the task by number. */
-export const IOS_TASK_WORKSPACE_PARAM = "workspace";
+const IOS_TASK_WORKSPACE_PARAM = "workspace";
 
 /** A task's route as its link names it: by id, or by number with the workspace the number counts in, for the task's screen to find. */
 function taskRoute(taskId: string, workspace: string | undefined): string {

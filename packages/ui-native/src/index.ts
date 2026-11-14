@@ -114,6 +114,15 @@ export {
 } from "./keep-model.js";
 
 export {
+  NO_WRITES,
+  newestValue,
+  type WriteSent,
+  type WritesBook,
+  writeSent,
+  writeSettled,
+} from "./latest-writes-model.js";
+
+export {
   ListRow,
   ROW_ACTION_TONE,
   type RowAction,
@@ -133,7 +142,9 @@ export { MarkdownPage } from "./markdown-page.js";
 export {
   AgentTile,
   Avatar,
+  FACE_KIND,
   type Face,
+  type FaceKind,
   FailedMark,
   NeedsYouDot,
   TaskStatusMark,
@@ -166,6 +177,9 @@ export {
 
 export {
   ConfirmAsk,
+  githubFace,
+  MARK_FACE,
+  type MarkFace,
   MarkRow,
   MergeActRow,
   type MergeMethodChoice,
