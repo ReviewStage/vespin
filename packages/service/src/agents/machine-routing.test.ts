@@ -306,6 +306,22 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
   );
 
   it.effect(
+    "a local agent's terminal command for its own machine is refused, even where an old Mac listens as the account",
+    () =>
+      Effect.gen(function* () {
+        const { owner, agentId, target } = yield* openPeople;
+        const laptop = yield* openMachine(owner, "Laptop", false);
+        yield* setAgent(agentId, { deviceId: laptop });
+        const routed = yield* route(target, { account: true });
+
+        assert.equal(
+          routed.kind === MACHINE_ROUTE.REFUSED && routed.why,
+          MACHINE_UNREACHED.OWN_SHELL,
+        );
+      }),
+  );
+
+  it.effect(
     "an agent's default may be set to a machine of anyone who lets the task's agents use theirs, online or not, and to no machine of a follower whose switch is off",
     () =>
       Effect.gen(function* () {

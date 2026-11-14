@@ -320,7 +320,13 @@ export function routeOf(
       (machine) => machine.userId === routing.userId && machine.isDefault,
     );
 
-    if (ownersDefault !== undefined && whyNotHere(ownersDefault) === undefined) {
+    const defaultWhy = ownersDefault === undefined ? undefined : whyNotHere(ownersDefault);
+
+    // Note that a local agent's own machine never takes its terminal command, so no older Mac listening as the account takes it in its place.
+    if (
+      ownersDefault !== undefined &&
+      (defaultWhy === undefined || defaultWhy.code === MACHINE_UNREACHED.OWN_SHELL)
+    ) {
       return to(ownersDefault);
     }
 
