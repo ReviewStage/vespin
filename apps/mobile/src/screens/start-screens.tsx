@@ -9,7 +9,11 @@ import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
 import { REMOVE_RELATION, TASK_RELATION_MENU } from "@repo/features/task-relation-model";
-import { TASK_CREATE_RELATION_WORDS, TASK_STATUS_TONE } from "@repo/features/task-standing-words";
+import {
+  TASK_CREATE_RELATION_WORDS,
+  TASK_STATUS_TONE,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
 import {
   isTaskSettled,
   TASK_CREATE_RELATION_KIND,
@@ -68,6 +72,8 @@ import { useWrite } from "../use-write.js";
 /** The panel's words for the sheets, their capsules, their menus, and their acts. */
 const WORDS = {
   NEW_AGENT: "New agent",
+  /** What VoiceOver hears for the task New agent starts on, which the capsule says with its ring and name alone. */
+  STARTS_ON: (task: string, status: string) => `Starts on ${task}, ${status}`,
   NEW_TASK: "New task",
   AGENT_PLACEHOLDER: "Ask to make changes",
   TASK_PLACEHOLDER: "Describe the task",
@@ -383,8 +389,9 @@ function offered(skills: SkillsOffered | undefined) {
 }
 
 /**
- * New agent on a task, as the panel's draft tab starts one: what to ask of
- * it and the pictures that go with it, the model and effort it runs on, the
+ * New agent on a task, as the panel's draft tab starts one: the task it
+ * starts on, named over the words, what to ask of it and the pictures that
+ * go with it, the model and effort it runs on, the
  * account's default until another is picked, and where it runs. Opened on a
  * suggestion (`opened`), it starts filled in with the suggestion's brief and
  * model under a line naming who suggested it, offers no Runs on, and its
@@ -408,6 +415,8 @@ export function NewAgentScreen({
   // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
   const suggestedTask = suggester?.taskId;
   const placed = opened === undefined || suggestedTask !== undefined;
+  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const startsOn = view?.tasks.find((task) => task.id === (suggestedTask ?? taskId));
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
@@ -462,6 +471,7 @@ export function NewAgentScreen({
                 opened.suggestion.label,
               )
         }
+        head={startsOn === undefined ? undefined : <StartsOnChip task={startsOn} />}
         words={{
           placeholder: WORDS.AGENT_PLACEHOLDER,
           words: prompt,
@@ -485,6 +495,25 @@ export function NewAgentScreen({
         }
       />
     </>
+  );
+}
+
+/**
+ * The task New agent starts on, over its words as a capsule with the task's
+ * ring and name. Note that the panel starts an agent from a draft tab on the
+ * task's own page, which names the task, while this sheet covers that page,
+ * so it says which task the agent works on; it takes no press, since an agent
+ * starts only on the task it was opened from.
+ */
+function StartsOnChip({ task }: { readonly task: TaskSummary }) {
+  const status = task.status ?? TASK_STATUS.TODO;
+
+  return (
+    <FieldChip
+      label={task.name}
+      status={status}
+      heard={WORDS.STARTS_ON(task.name, TASK_STATUS_WORDS[status])}
+    />
   );
 }
 

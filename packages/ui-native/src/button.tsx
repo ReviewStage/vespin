@@ -303,6 +303,8 @@ type FieldChipProps = {
   readonly mark?: { readonly glyph: Glyph; readonly tone: StatusTone } | undefined;
   /** What a press offers, the field's other values, where the reader may change it; a chip with none takes no press. */
   readonly menu?: FieldMenu | undefined;
+  /** What VoiceOver hears for a chip that takes no press, where its words alone don't say what it is, such as the task an agent starts on and its status; its words otherwise. */
+  readonly heard?: string | undefined;
 };
 
 /** A field's values as its chip's menu offers them: the field's name, which VoiceOver hears before its value, and each value, the one it holds checked. */
@@ -353,7 +355,7 @@ export function FieldChip(props: FieldChipProps) {
       modifiers={[
         ...capsuleModifiers(colors, false),
         ...(menu === undefined
-          ? [accessibilityElement("ignore"), accessibilityLabel(props.label)]
+          ? [accessibilityElement("ignore"), accessibilityLabel(props.heard ?? props.label)]
           : []),
       ]}
     >
