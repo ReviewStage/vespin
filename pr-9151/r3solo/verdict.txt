@@ -1,0 +1,4 @@
+#9151 solo (main + #9151 at 81bc04c8d, built a87c7c643), agent.yaml on the iPhone 18 Pro, light, on Nov 12's native app.
+STEP 47 PASSES SOLO: Try again under "Earlier messages could not be read." brings the older page in (agent-older.jpg), then Jump to latest, Allow and "Allowed" pass. So bundle A's stop at step 47 came from bundle A's mix, not from #9151.
+Stops later at step 74, assert "Takes effect from the next turn." after "Approve for me…" in Options, exactly as main + #9007 alone does, so it's main's agent.yaml against main's code, not #9151. Archive (what #9151 touches) isn't reached by this flow before step 74.
+Whole screen (agent page): needs work. The fold's spinner turns while the approval is held, the recording runs full width, and the dock covers the lower third.

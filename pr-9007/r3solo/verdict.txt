@@ -1,0 +1,3 @@
+#9007 solo (main + #9007 at 6f116e040, built 4d2b89efe), agent.yaml on the iPhone 18 Pro, light, on Nov 12's native app.
+STEP 47 PASSES SOLO, so #9007's transcript runs and stamps don't stop the older page from coming in. Same later stop at step 74 ("Takes effect from the next turn." after "Approve for me…"), as main + #9151 alone does, so it's main's flow.
+Whole screen (agent page): needs work, the same as #9151's solo run (the fold's spinner while held, a full-width recording, the dock over the lower third).
