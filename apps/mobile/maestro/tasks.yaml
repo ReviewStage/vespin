@@ -1,4 +1,4 @@
-# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link share sheet, Rename alert, and Permanently delete question, an agent's preview and swipe, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with a reply typed, the list in landscape, and its search.
+# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link share sheet, Rename alert, and Permanently delete question, an agent's preview and swipe, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with their files and a reply typed, the list in landscape, and its search.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -299,6 +299,9 @@ onFlowComplete:
 - takeScreenshot: task-comments
 - tapOn: "Should an owner be able to resend.*"
 - assertVisible: "Yes: Resend stands beside each expired invite.*"
+# The question's files stand after its words: its screenshot, and its PDF as
+# a chip that names its size once read.
+- assertVisible: "resend-flow.pdf.*"
 - waitForAnimationToEnd
 - takeScreenshot: task-comment-thread
 - tapOn: "Reply"
