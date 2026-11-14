@@ -24,7 +24,7 @@ appId: dev.vespin.ios
       visible:
         id: "BackButton"
     commands:
-      # The ⋯ menu leads with the thread's path: Open task, then Open agent.
+      # The ⋯ menu leads with the thread's path, Open task then Open agent, under the path's names.
       - tapOn:
           text: "More"
           index: -1

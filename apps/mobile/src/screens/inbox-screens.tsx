@@ -636,7 +636,7 @@ function ThreadDetail({
   // Note that a split view's detail bar stands the thread's main acts as glyphs, as Mail's stands Reply and Trash, and ⋯ keeps the rest; a compact window's stack keeps them all in ⋯.
   const acts = threadActs(item, answer, doors);
 
-  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them; a compact window's stack names the path as its plain title, which can hold no menu, so there they lead the ⋯ menu instead.
+  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them; a compact window's stack title can hold no menu, so there they lead the ⋯ menu instead, headed by the path.
   const pathActions = [
     {
       label: PATH_OPENS.TASK,
@@ -766,7 +766,6 @@ function ThreadDetail({
       {...(inStack
         ? {}
         : {
-            pathInHead: true,
             acts,
             menu: menuWithout(menu, acts),
             foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
@@ -778,15 +777,16 @@ function ThreadDetail({
 
   return (
     <>
+      {/* Note that the stack's bar names the thread in the ink, as Messages names a conversation and the agent page names its agent, since the thread opens at its newest message with its heading out of sight; its path leads the ⋯ menu. */}
       <Stack.Screen
         options={{
-          title: path.join(PATH_PART),
-          headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
+          title: cardTitle(item.title),
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         }}
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-          <Stack.Toolbar.Menu inline>
+          <Stack.Toolbar.Menu inline title={path.join(PATH_PART)}>
             {pathActions.map((action) => (
               <Stack.Toolbar.MenuAction
                 key={action.label}
