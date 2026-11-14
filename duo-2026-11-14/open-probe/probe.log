@@ -1,0 +1,323 @@
+created ABCD8146-A703-4310-871E-F282EEEFB9F8
+== enumerate
+Port:
+    UUID: ADA64160-A76A-45E1-B640-B8D87970DA1D
+    Class: Unknown
+    Port Identifier: com.apple.display.captureservice
+    Power state: On
+
+Port:
+    UUID: 718D888E-24A5-4215-8CCA-A29EAC3A1BC0
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 1
+    Default width: 7680
+    Default height: 4320
+    Default pixel format: 'BGRA'
+
+Port:
+    UUID: FEB2490D-2C45-4475-B951-22C75BAE4426
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 1
+    Default width: 720
+    Default height: 480
+    Default pixel format: 'BGRA'
+
+Port:
+    UUID: 7D38DA12-ED98-4AE6-85A3-CCC8348CB231
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 0
+    Default width: 2007
+    Default height: 2853
+    Default pixel format: 'BGRA'
+    IOSurface port:
+        width              = 2007
+        height             = 2853
+        bytes per row      = 8064
+        size               = 23019520
+        pixel format       = 'BGRA'
+        bytes per element  = 4
+        CPU cache mode     = Default cache
+        Pixel size casting = Yes
+
+Port:
+    UUID: E5BB2E99-9F08-4880-AD51-83E7F810D256
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 1
+    Default width: 720
+    Default height: 480
+    Default pixel format: 'BGRA'
+
+Port:
+    UUID: 01BE4C70-58DB-4940-B8E8-F71DC56B27FD
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 0
+    Default width: 1398
+    Default height: 2034
+    Default pixel format: 'BGRA'
+    IOSurface port:
+        width              = 1398
+        height             = 2034
+        bytes per row      = 5632
+        size               = 11468800
+        pixel format       = 'BGRA'
+        bytes per element  = 4
+        CPU cache mode     = Default cache
+        Pixel size casting = Yes
+
+Port:
+    UUID: 62F1825D-CA6A-49B2-87B2-BBB46B33D54B
+    Class: DisplayAdapter
+    Port Identifier: com.apple.framebuffer.server
+    Power state: On
+    Creatable Screen Properties:
+    Connected Screens:
+    (1) LCD:
+        Screen ID: 1
+        Name: LCD
+        Unique ID: 607A0B13-EACB-474A-986A-F1DFF8204E50
+        Device Name: primary
+        Seed: 4
+        Screen Type: Integrated
+        Pixel Size: {1398, 2034}
+        Dot Pitch: 460
+        Mask URL: file:///Library/Developer/DeviceKit/FramebufferMasks/1C896A2B-F0D7-405C-8D0F-66E4B80AD044.pdf
+        Mask ID: 1C896A2B-F0D7-405C-8D0F-66E4B80AD044
+        Chrome ID: com.apple.dt.devicekit.chrome.phone15
+        Preferred UI Scale: 3
+        Pixel Format: 'BGRA'
+        Colorspace: DCI-P3
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Portrait
+    (2) TVOut:
+        Screen ID: 2
+        Name: TVOut
+        Unique ID: F0ECB128-E840-4AAA-B419-D1695E8237D2
+        Device Name: external-0
+        Seed: 5
+        Screen Type: TVOut
+        Pixel Size: {720, 480}
+        Dot Pitch: 72
+        Mask URL: (none)
+        Mask ID: (none)
+        Chrome ID: (none)
+        Preferred UI Scale: 1
+        Pixel Format: 'BGRA'
+        Colorspace: sRGB
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+    (3) LCD-1:
+        Screen ID: 3
+        Name: LCD-1
+        Unique ID: A4100528-206A-430C-ACC2-A8EF1A5A59AD
+        Device Name: primary-1
+        Seed: 6
+        Screen Type: Integrated
+        Pixel Size: {2007, 2853}
+        Dot Pitch: 460
+        Mask URL: file:///Library/Developer/DeviceKit/FramebufferMasks/BF0DC480-5EE2-4EC1-B02B-C75E94759832.pdf
+        Mask ID: BF0DC480-5EE2-4EC1-B02B-C75E94759832
+        Chrome ID: com.apple.dt.devicekit.chrome.phone14
+        Preferred UI Scale: 3
+        Pixel Format: 'BGRA'
+        Colorspace: sRGB
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Portrait
+    (4) Wireless:
+        Screen ID: 4
+        Name: Wireless
+        Unique ID: AC5D9565-1D68-4BE9-87E8-98D85688E648
+        Device Name: wireless0
+        Seed: 7
+        Screen Type: CarPlay
+        Pixel Size: {720, 480}
+        Dot Pitch: 72
+        Mask URL: (none)
+        Mask ID: (none)
+        Chrome ID: (none)
+        Preferred UI Scale: 1
+        Pixel Format: 'BGRA'
+        Colorspace: sRGB
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+    (5) Resizable:
+        Screen ID: 5
+        Name: Resizable
+        Unique ID: FEA403F4-F975-4962-ACBB-4A51AF3AAD87
+        Device Name: resizable
+        Seed: 8
+        Screen Type: Scene
+        Pixel Size: {7680, 4320}
+        Dot Pitch: 120
+        Mask URL: (none)
+        Mask ID: (none)
+        Chrome ID: (none)
+        Preferred UI Scale: 3
+        Pixel Format: 'BGRA'
+        Colorspace: sRGB
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+
+Port:
+    UUID: D684807F-76BC-4E96-AC11-C43E42CD16FB
+    Class: Accelerator
+    Port Identifier: com.apple.accelerator.metal
+    Power state: On
+
+Port:
+    UUID: 8701A713-E3A9-40F5-8AFC-862165DE23F4
+    Class: Accelerator
+    Port Identifier: com.apple.accelerator.iosurface
+    Power state: On
+
+Port:
+    UUID: A70CA7AE-C665-4E9C-A264-6ECD7F6CA2EB
+    Class: LegacyHID
+    Port Identifier: com.apple.CoreSimulator.HID.LegacyHID
+    Power state: On
+
+Port:
+    UUID: B6E2650B-47D7-4DB0-9812-19B5865F5CBC
+    Class: StreamProcessor
+    Port Identifier: com.apple.SimStreamProcessor.default
+    Power state: On
+    Stream processor device
+    Specification:
+        SimStreamProcessorSpecificationPerformanceHint = SimStreamProcessorSpecificationPerformanceHint_MaximizePerformance
+        SimStreamProcessorSpecificationRendererHint = SimStreamProcessorSpecificationRendererHint_Metal
+        SimStreamProcessorSpecificationEmulationHint = SimStreamProcessorSpecificationEmulationHint_NoEmulation
+    Renderer private name: Apple M3 Pro
+    Renderer version: 1.3
+    Denylisted: No
+    Memory regions:
+
+Port:
+    UUID: 3DB9A0C4-5B97-4E21-916B-FEAEF8EB11A8
+    Class: StreamProcessor
+    Port Identifier: com.apple.SimStreamProcessor.default
+    Power state: On
+    Stream processor device
+    Specification:
+        SimStreamProcessorSpecificationPerformanceHint = SimStreamProcessorSpecificationPerformanceHint_MaximizePerformance
+        SimStreamProcessorSpecificationRendererHint = SimStreamProcessorSpecificationRendererHint_OpenGL
+        SimStreamProcessorSpecificationEmulationHint = SimStreamProcessorSpecificationEmulationHint_NoEmulation
+    Renderer private name: Apple M3 Pro
+    Renderer version: 4.1 Metal - 91.7
+    Denylisted: No
+    Memory regions:
+
+Port:
+    UUID: D1793DDA-655A-42CC-BFA4-A8C5393E4B8A
+    Class: StreamProcessor
+    Port Identifier: com.apple.SimStreamProcessor.default
+    Power state: On
+    Stream processor device
+    Specification:
+        SimStreamProcessorSpecificationPerformanceHint = SimStreamProcessorSpecificationPerformanceHint_Default
+        SimStreamProcessorSpecificationRendererHint = SimStreamProcessorSpecificationRendererHint_OpenGL
+        SimStreamProcessorSpecificationEmulationHint = SimStreamProcessorSpecificationEmulationHint_SerialProcessing
+    Renderer private name: Apple Software Renderer
+    Renderer version: 4.1 APPLE-24.0.2
+    Denylisted: No
+    Memory regions:
+
+Port:
+    UUID: 68B48529-FBA4-40A9-91DB-652AECC4D24F
+    Class: Audio
+    Port Identifier: com.apple.CoreSimulator.Audio.HostRoute
+    Power state: On
+    Guest Audio Input -> Default Host Audio Device
+    Guest Audio Output -> Default Host Audio Device
+    Host Audio Devices:
+        BuiltInMicrophoneDevice: MacBook Pro Microphone (1 In / 0 Out)
+        BuiltInSpeakerDevice: MacBook Pro Speakers (0 In / 2 Out)
+        E0EE4FAD-077C-4E2A-BF98-2BB400000003: Dean’s iPhone 15 Pro Max Microphone (1 In / 0 Out)
+
+Port:
+    UUID: 43DF5F05-F850-4BE2-BACA-B7106263543D
+    Class: Unknown
+    Port Identifier: com.apple.gputools.service.simulator
+    Power state: On
+
+Port:
+    UUID: 340DE3A4-BD7E-42B3-8D06-A53473FC09E1
+    Class: Unknown
+    Port Identifier: com.apple.gputools.GPUToolsAgentService.simulator
+    Power state: On
+
+Detected file type from extension: PNG
+Wrote screenshot to: /Users/deanstratakos/vespin-ipad-agent/out/jduoopen/1-folded-cover.png
+folded cover px: 1398 2034 
+== cover off
+Screen 1 power state set to off
+== inner on
+Screen 3 power state set to on
+Detected file type from extension: PNG
+Wrote screenshot to: /Users/deanstratakos/vespin-ipad-agent/out/jduoopen/2-open-inner.png
+open inner px: 2007 2853 
+Detected file type from extension: PNG
+An error was encountered processing the command (domain=NSPOSIXErrorDomain, code=60):
+The operation couldn’t be completed. Timeout waiting for screen surfaces
+Timeout waiting for screen surfaces
+cover while open px: 
+== geometry help
+Set up a device IO operation.
+Usage: simctl io <device> <operation> <arguments>
+
+Common arguments:
+	    --display    Specifies which display to record. Accepts:
+	                 - Screen ID (eg: "1") 
+	                 - Screen name (eg: "Internal-1")
+	                 - Screen device name (eg: "primary")
+	                 - Screen UUID (eg: "D5293DAA-4D8C-453E-B049-969FE81936A0")
+	                 - Port UUID (eg: "D5293DAA-4D8C-453E-B049-969FE81936A0"
+	                 - Alias (for compatibility): "internal" or "external"
+	                 If a value matches more than one screen, simctl prefers the powered one.
+	                 Use 'simctl io <device> enumerate' to list available screens and their IDs.
+
+	                 If a single default display cannot be determined, screenshot, recordVideo and
+	                 screenConfig will require --display to be passed in.
+
+Supported operations:
+	enumerate [--poll]
+	    Lists all available IO ports and descriptor states.
+== fold back
+Screen 3 power state set to off
+Screen 1 power state set to on
+Detected file type from extension: PNG
+Wrote screenshot to: /Users/deanstratakos/vespin-ipad-agent/out/jduoopen/3-folded-again.png
+folded again px: 1398 2034 
+2026-11-14 07:17:52.006 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.006 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.006 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.006 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.006 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.006 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.007 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.007 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.007 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.007 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.007 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.008 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.008 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.008 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.008 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.008 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.017 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x1087a4500> (D5D495F7-E99D-47C0-9C1F-A9FD695CBDD1)
+2026-11-14 07:17:52.018 Df Vespin[68093:aa63a9] [com.apple.UIKit:InterfaceStyle] Push traits update to screen for new style 1, <_UIKeyboardInputScene: 0x1087a5900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:17:52.019 Df Vespin[68093:aa63a9] [com.apple.UIKit:KeyboardSceneDelegate] Tracking provider: updateProviderFromRemoteUpdate skipping update [no keyboardScene] <<<_UIKeyboardChangedInformation: 0x10b995680>; appId (null) bundleId (null) animation fence (null); position {{0, 0}, {0, 0}}; animated YES; on screen NO; tracking NO; resizing NO; local NO, dock state: Unknown, hasValidNotif: NO>; source canvas (null); source display (null); source bundle (null); host bundle (null); animation fence (null); position {{0, 0}, {0, 0}} (with IAV same); floating 0; on screen NO;  intersectable YES; snapshot NO>
+2026-11-14 07:17:52.075 Df Vespin[68093:aa63a9] [com.apple.UIKit:KeyboardArbiterClientLog] -[_UIRemoteKeyboards signalToProxyKeyboardChanged:onCompletion:]  Signaling keyboard changed <<<_UIKeyboardChangedInformation: 0x10b995680>; appId (null) bundleId (null) animation fence <BKSAnimationFenceHandle:0x10869de00 -> <CAFenceHandle:0x108676610 name=2 fence=1068700000004 usable=YES>>; position {{0, 0}, {0, 0}}; animated YES; on screen NO; tracking NO; resizing NO; local NO, dock state: Unknown, hasValidNotif: NO>; source canvas com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default; source display Main; source bundle dev.vespin.ios; host bundle (null); animation fence <BKSAnimationFenceHandle:0x10869de00 -> <CAFenceHandle:0x108676610 name=2 fence=1068700000004 usable=YES>>; position {{0, 0}, {0, 0}} (with IAV same); floating 0; on screen NO;  intersectable YES; snapshot YES>
