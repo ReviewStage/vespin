@@ -96,19 +96,12 @@ export function SelectRow<Value extends string | number>({
 }): React.JSX.Element {
   const run = write === undefined ? onChange : write.run;
   const ahead = write?.ahead;
-  const offered = ahead !== undefined && options.some((option) => option.value === ahead.value);
-
-  const agreed =
-    write !== undefined &&
-    !write.busy &&
-    ahead !== undefined &&
-    (ahead.value === value || !offered);
-
-  // Note that a pick drawn ahead of its answer is let go of once the stored value agrees, or once it is no longer offered, so the row then follows the store again, other windows' changes included.
+  const agreed = write !== undefined && !write.busy && ahead !== undefined && ahead.value === value;
+  // Note that a pick drawn ahead of its answer is let go of once the stored value agrees, so the row then follows the store again, other windows' changes included.
   useEffect(() => {
     if (agreed) write.settle();
   }, [agreed, write]);
-  const shown = ahead === undefined || !offered ? value : ahead.value;
+  const shown = ahead === undefined ? value : ahead.value;
   const chosen = options.find((option) => option.value === shown);
 
   return (
