@@ -61,7 +61,8 @@ export function useAppReadyCount(shown: boolean): void {
       return;
     }
 
-    if (!active) return;
+    // Note that the state is read again here, since the app can go inactive after the render this effect belongs to, before its change lands.
+    if (!active || AppState.currentState !== "active") return;
     counted = true;
     const elapsed = sinceLaunch();
 
