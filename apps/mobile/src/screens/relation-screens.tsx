@@ -39,7 +39,7 @@ import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskRelationWrites } from "../tasks/use-relations.js";
-import { useTaskOverview } from "../tasks/use-tasks.js";
+import { useTaskOverview, useTasksRead } from "../tasks/use-tasks.js";
 
 /** The sheet's own words. */
 const WORDS = {
@@ -160,6 +160,7 @@ export function TaskRelationScreen({
   const router = useRouter();
   const colors = useColors();
   const overview = useTaskOverview(taskId);
+  const tasksRead = useTasksRead();
   const writes = useTaskRelationWrites();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const [chosen, setChosen] = useState<TaskRelationKind | undefined>(opened);
@@ -195,12 +196,17 @@ export function TaskRelationScreen({
     </>
   );
 
+  // Note that a task the list has not yet read is on its way, so the sheet reads rather than say it is gone.
   if (overview === undefined) {
     return (
       <>
         {bar}
         <Screen>
-          <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
+          {tasksRead ? (
+            <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
+          ) : (
+            <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
+          )}
         </Screen>
       </>
     );

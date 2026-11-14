@@ -747,14 +747,19 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   ]);
 }
 
-/** Whether the host has read the task list once, so a task it does not hold is one that is not there rather than one still on its way. */
-export function useTasksRead(): boolean {
-  const { data: status } = useQuery({
+/** Where the host's read of the task list stands: not yet asked, reading, read, or failed. */
+export function useTasksReadStatus(): TasksView["listStatus"] {
+  const { data: status = TASKS_READ.IDLE } = useQuery({
     ...appStateQuery,
     select: (state) => state.tasks.listStatus,
   });
 
-  return status === TASKS_READ.READY;
+  return status;
+}
+
+/** Whether the host has read the task list once, so a task it does not hold is one that is not there rather than one still on its way. */
+export function useTasksRead(): boolean {
+  return useTasksReadStatus() === TASKS_READ.READY;
 }
 
 /**

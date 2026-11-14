@@ -29,8 +29,10 @@ import {
   useCommentReply,
   useCommentStart,
   useTaskComments,
+  useTaskCommentsHeld,
+  useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
-import { type TaskOverview, useTaskOverview } from "../tasks/use-tasks.js";
+import { type TaskOverview, useTaskOverview, useTasksRead } from "../tasks/use-tasks.js";
 
 /** The panel's words for a thread: what its field says before anything is typed, how a resolved one ended, and what stands for words since deleted. */
 const WORDS = {
@@ -40,6 +42,12 @@ const WORDS = {
   GONE: "Original content deleted",
   NOT_FOUND: "Comment not found",
 } as const;
+
+/** What a thread's page says while the task's comments are first read. */
+const READING_COMMENTS = readingWords("the comments");
+
+/** What a thread's page says where the task's comments could not be read, beside Try again. */
+const COMMENTS_UNREAD = readFailedWords("the comments");
 
 /** What the description is called while it is first read. */
 const READING_DESCRIPTION = readingWords("the description");
@@ -73,6 +81,35 @@ function BlockState({ overview }: { readonly overview: TaskOverview | undefined 
       action={{ label: TRY_AGAIN, onPress: retry, look: BUTTON_LOOK.BORDERED }}
     />
   );
+}
+
+/**
+ * What a thread's page draws where it holds no thread: reading while the
+ * task or its comments are on their way, the read's failure with Try again,
+ * and Comment not found only once both are read and hold no such thread, so
+ * a thread opened from a link never says it is gone before its read lands.
+ */
+function ThreadMissing({ taskId }: { readonly taskId: string }) {
+  const tasksRead = useTasksRead();
+  const overview = useTaskOverview(taskId);
+  const held = useTaskCommentsHeld(overview?.task.id);
+  const retry = useTaskCommentsRetry(overview?.task.id);
+
+  if (retry !== undefined) {
+    return (
+      <EmptyState
+        title={COMMENTS_UNREAD}
+        symbol={GLYPH.COMMENT}
+        action={{ label: TRY_AGAIN, onPress: retry, look: BUTTON_LOOK.BORDERED }}
+      />
+    );
+  }
+
+  const reading = overview === undefined ? !tasksRead : !held;
+
+  if (reading) return <EmptyState title={READING_COMMENTS} symbol={GLYPH.COMMENT} loading />;
+
+  return <EmptyState title={WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />;
 }
 
 /** A comment screen's path, as the bar names it: the task's name and its key. */
@@ -128,7 +165,7 @@ export function CommentThreadScreen() {
       />
       {thread === undefined ? (
         <Screen>
-          <EmptyState title={WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
+          <ThreadMissing taskId={taskId} />
         </Screen>
       ) : (
         <GlassDock
