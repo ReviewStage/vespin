@@ -257,9 +257,11 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
       Effect.gen(function* () {
         yield* account("user-no-mac");
 
+        // An agent's call names its agent, which the command's wire leaves out.
         const answer = yield* askMac("user-no-mac", {
           kind: MACHINE_COMMAND_KIND.SHELL,
           command: COMMAND.command,
+          agentId: "55555555-5555-4555-8555-555555555555",
         });
 
         const read = yield* emptyRead(request({ userId: "user-no-mac" }));

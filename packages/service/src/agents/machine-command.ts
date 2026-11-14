@@ -348,8 +348,11 @@ export function askMacHeard(
     answer: machineCommandNotRun(reason),
   });
 
+  // Note that a shell command's wire names no agent, so its agent rides beside it to the queue alone.
+  const { agentId, ...wire } = ask;
+
   const asked = readMachineCommand({
-    ...ask,
+    ...(ask.kind === MACHINE_COMMAND_KIND.COMPUTER ? ask : wire),
     id: randomUUID(),
     timeoutSeconds: ask.timeoutSeconds ?? MACHINE_COMMAND_BOUNDS.DEFAULT_TIMEOUT_SECONDS,
   });
@@ -363,7 +366,7 @@ export function askMacHeard(
 
     const heard = yield* Effect.gen(function* () {
       // A device no longer the account's queues nothing, and nothing would ever claim it.
-      if (!(yield* queueMachineCommand(userId, queued, deviceId, ask.agentId))) return undefined;
+      if (!(yield* queueMachineCommand(userId, queued, deviceId, agentId))) return undefined;
       const result = yield* awaitedResult(userId, queued);
 
       if (Option.isSome(result) && isRecorded(result.value)) {
