@@ -6,6 +6,7 @@ import {
   Menu,
   RNHostView,
   ScrollView,
+  Section,
   Spacer,
   Button as SwiftUIButton,
   Text,
@@ -126,7 +127,7 @@ type ThreadPageProps = {
   readonly path: readonly string[];
   /** The status of the task it stands in, its ring leading the path; none for an agent's own thread. */
   readonly status?: TaskStatus | undefined;
-  /** What the path opens, such as its task and its agent, as the panel's crumbs open them, which a press on the path offers as a menu; none leaves it words alone. */
+  /** What the path opens, such as its task and its agent, as the panel's crumbs open them, which a press on the bar's title offers as a menu headed by the path; none leaves it words alone. */
   readonly pathActions?: BarMenu["actions"] | undefined;
   /** The thread's title, which heads the page. */
   readonly title: string;
@@ -241,15 +242,18 @@ export function PathTitle({
 
   return (
     // Note that the menu takes a bar item's plain look, so the bar's glass is the one layer around the path, as the ⋯ stands.
+    // Note that where the bar names the page, the menu heads its acts with the path, so the task and agent the thread stands in are still named somewhere, as Messages' title menu heads with the conversation's people.
     <Menu label={title} modifiers={[...BAR_ITEM_MENU, accessibilityLabel(words)]}>
-      {actions.map((action) => (
-        <SwiftUIButton
-          key={action.label}
-          {...actContent(action.label, action.symbol)}
-          onPress={action.onPress}
-          modifiers={[disabled(action.disabled === true)]}
-        />
-      ))}
+      <Section {...(name === undefined ? {} : { title: path.join(PATH_PART) })}>
+        {actions.map((action) => (
+          <SwiftUIButton
+            key={action.label}
+            {...actContent(action.label, action.symbol)}
+            onPress={action.onPress}
+            modifiers={[disabled(action.disabled === true)]}
+          />
+        ))}
+      </Section>
     </Menu>
   );
 }

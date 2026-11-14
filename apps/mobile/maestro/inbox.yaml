@@ -64,10 +64,10 @@ appId: dev.vespin.ios
       - scrollUntilVisible:
           element: "Who can withdraw an invite\\?"
           direction: UP
-# A thread opens on its path small in the bar and its title as the page's
-# heading, then each message: the agent's tile, name and time over its words,
-# its picture drawn where the words name it, and its recording after the
-# message that sent it, played in place from its MP4 copy.
+# A thread opens named in the bar, its title the page's heading too, then
+# each message: the agent's tile, name and time over its words, its picture
+# drawn where the words name it, and its recording after the message that
+# sent it, played in place from its MP4 copy.
 - tapOn: "Recorded the invite flow"
 - assertVisible: ".*walked the invite flow.*"
 - waitForAnimationToEnd

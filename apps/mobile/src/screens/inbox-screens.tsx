@@ -57,6 +57,7 @@ import {
   type MarkdownVideo,
   menuWithout,
   NoSelection,
+  PATH_PART,
   previewMessages,
   ROW_ACTION_TONE,
   type RowChoosing,
@@ -635,7 +636,7 @@ function ThreadDetail({
   // Note that a split view's detail bar stands the thread's main acts as glyphs, as Mail's stands Reply and Trash, and ⋯ keeps the rest; a compact window's stack keeps them all in ⋯.
   const acts = threadActs(item, answer, doors);
 
-  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them; a compact window's stack names the path as its plain title, which can hold no menu, so there they lead the ⋯ menu instead.
+  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them; a compact window's stack title can hold no menu, so there they lead the ⋯ menu instead, headed by the path.
   const pathActions = [
     {
       label: PATH_OPENS.TASK,
@@ -785,7 +786,7 @@ function ThreadDetail({
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-          <Stack.Toolbar.Menu inline>
+          <Stack.Toolbar.Menu inline title={path.join(PATH_PART)}>
             {pathActions.map((action) => (
               <Stack.Toolbar.MenuAction
                 key={action.label}
