@@ -1520,7 +1520,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
                   : sealed,
             ),
       // Note that an answer's read standing rides the list it draws, so a window is told both at once.
-      take: (rows, standing, taskWorkspaces) =>
+      take: (rows, standing, { taskWorkspaces, liveSince } = {}) =>
         Effect.gen(function* () {
           view = {
             ...view,
@@ -1530,7 +1530,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           };
           const entities = dependencies.entities();
           const { collections } = taskList;
-          const moved = yield* collections.answer(rows, standing);
+          const moved = yield* collections.answer(rows, standing, liveSince);
           const waiting = [...coldWaiting];
           coldWaiting.clear();
           yield* Effect.forEach(waiting, openedOutside, { discard: true });

@@ -56,6 +56,7 @@
 import type { ListedAgent } from "@repo/features/agent-wire";
 import {
   agentGraceEnd,
+  standsLive,
   type TaskListLiveRows,
   taskListDrawer,
 } from "@repo/features/task-list-live";
@@ -127,10 +128,16 @@ export interface TaskListCollections {
   /**
    * Takes one answer of the list's follow, both its parts, whole or past a
    * sync id, and draws it, answering whether a row the list holds moved, or
-   * it took one up or let one go. One past a sync id that carries no row and
+   * it took one up or let one go. Where it names the `liveSince` the service
+   * bound it at, each task that no longer stands live by it (`standsLive`)
+   * is let go with its agents. One past a sync id that carries no row and
    * lets none go is neither taken nor drawn.
    */
-  readonly answer: (rows: TaskListLiveRows, standing?: SyncStanding) => Effect.Effect<boolean>;
+  readonly answer: (
+    rows: TaskListLiveRows,
+    standing?: SyncStanding,
+    liveSince?: number,
+  ) => Effect.Effect<boolean>;
   /** The plans and agents the list holds as the service answered them, with no write drawn over them, as the entity store keeps them. */
   readonly synced: () => TaskListLiveRows;
   /** Whether the list draws the task or the agent `id` names, from its follow or as a cold one. */
@@ -169,6 +176,37 @@ function joined(
   const gone = new Set(standing.gone);
 
   return [...new Set([...held, ...answered])].filter((id) => !gone.has(id));
+}
+
+/**
+ * The tasks of `planIds` that no longer stand live as of `liveSince`
+ * (`standsLive`), each read as `planOf` shows it, a task pinned through
+ * one of `agentIds`'s agents standing by that pin.
+ */
+function agedOut(
+  planIds: readonly string[],
+  agentIds: readonly string[],
+  planOf: (id: string) => PlanRow | undefined,
+  agentOf: (id: string) => AgentRow | undefined,
+  liveSince: number,
+): ReadonlySet<string> {
+  const pinnedThroughAgent = new Set(
+    agentIds.flatMap((id) => {
+      const agent = agentOf(id);
+
+      return agent === undefined || agent.pinnedAt === null || agent.planId === null
+        ? []
+        : [agent.planId];
+    }),
+  );
+
+  return new Set(
+    planIds.filter((id) => {
+      const plan = planOf(id);
+
+      return plan !== undefined && !standsLive(plan, pinnedThroughAgent.has(id), liveSince);
+    }),
+  );
 }
 
 /** The account's task list, empty until its follow first answers. */
@@ -408,10 +446,40 @@ export function taskListCollections(
       });
 
     return {
-      answer: (rows, standing) =>
+      answer: (answeredRows, standing, liveSince) =>
         Effect.suspend(() => {
-          const nextPlans = joined(planKeys, rows.plans, standing);
-          const nextAgents = joined(agentKeys, rows.agents, standing);
+          const joinedPlans = joined(planKeys, answeredRows.plans, standing);
+          const joinedAgents = joined(agentKeys, answeredRows.agents, standing);
+          const answeredPlans = new Map(answeredRows.plans.map((row) => [row.id, row]));
+          const answeredAgents = new Map(answeredRows.agents.map((row) => [row.id, row]));
+          const agentOf = (id: string) => answeredAgents.get(id) ?? agents.row(id);
+
+          // Note that a task only ages out of the set, which logs nothing, so the list lets it go itself, at the instant the service bound, and its agents with it.
+          const left =
+            liveSince === undefined
+              ? new Set<string>()
+              : agedOut(
+                  joinedPlans,
+                  joinedAgents,
+                  (id) => answeredPlans.get(id) ?? plans.row(id),
+                  agentOf,
+                  liveSince,
+                );
+
+          const standsHere = (row: { readonly id: string }) => !left.has(row.id);
+          const ofStanding = (row: AgentRow) => row.planId === null || !left.has(row.planId);
+          const nextPlans = joinedPlans.filter((id) => !left.has(id));
+
+          const nextAgents = joinedAgents.filter((id) => {
+            const agent = agentOf(id);
+
+            return agent === undefined || ofStanding(agent);
+          });
+
+          const rows = {
+            plans: answeredRows.plans.filter(standsHere),
+            agents: answeredRows.agents.filter(ofStanding),
+          };
 
           // Note that an answer past a sync id carrying no row and letting none go moves nothing, as most of a busy service's do, so neither the pool nor the list is walked: the edge armed stands, and a write settles on the follow's wait.
           const still =
