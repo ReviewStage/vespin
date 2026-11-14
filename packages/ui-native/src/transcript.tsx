@@ -460,7 +460,7 @@ function OriginBody({ body }: { readonly body: string }) {
         style={styles.callLine}
       >
         <SymbolView
-          name={open ? "chevron.down" : "chevron.right"}
+          name={glyphSymbol(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
           size={MARK_SIZE.GLYPH - 3}
           tintColor={colors.TEXT_MUTED}
           style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
