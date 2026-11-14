@@ -87,7 +87,10 @@ function typedValue(
 
 /** What an open ask's option media is opened and drawn by: each file's bytes as read, a page in the app or Safari, an address in Safari, and a recording the player cannot read on the web. */
 export interface OptionMediaDoors {
-  readonly source: (attachmentId: string) => string | undefined;
+  /** A file's bytes as read: none while on their way, and `null` where they could not be read. */
+  readonly source: (attachmentId: string) => string | null | undefined;
+  /** Reads a file whose bytes could not be read again. */
+  readonly retry: (attachmentId: string) => void;
   readonly openPage: (page: InboxOptionPage) => void;
   readonly openLink: (address: string) => void;
   readonly openVideoElsewhere: () => void;
@@ -107,6 +110,7 @@ function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedi
         kind: recording ? CHOICE_MEDIA.VIDEO : CHOICE_MEDIA.PICTURE,
         title: piece.caption ?? (recording ? RECORDING_WORD : PICTURE_WORD),
         source: doors.source(piece.attachmentId),
+        onRetry: () => doors.retry(piece.attachmentId),
         onOpen: recording ? doors.openVideoElsewhere : undefined,
       };
     }

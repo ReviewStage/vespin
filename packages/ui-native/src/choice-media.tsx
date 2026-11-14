@@ -26,8 +26,10 @@ export type ChoiceMedia = {
   readonly kind: ChoiceMediaKind;
   /** Its caption, a page's title, or an address's words, under its tile. */
   readonly title: string;
-  /** The file a picture or a recording is drawn from; none while its bytes are on their way. */
-  readonly source?: string | undefined;
+  /** The file a picture or a recording is drawn from; none while its bytes are on their way, and `null` where they could not be read. */
+  readonly source?: string | null | undefined;
+  /** Reads a picture or a recording whose bytes could not be read again. */
+  readonly onRetry?: (() => void) | undefined;
   /** Opens a page or an address, or a recording the system's player cannot read. */
   readonly onOpen?: (() => void) | undefined;
 };
@@ -98,13 +100,19 @@ function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
   return (
     <View style={large ? styles.wholeTile : styles.tile}>
       {piece.kind === CHOICE_MEDIA.PICTURE ? (
-        <Picture source={piece.source} alt={piece.title} tileAspect={TILE_ASPECT} />
+        <Picture
+          source={piece.source}
+          alt={piece.title}
+          tileAspect={TILE_ASPECT}
+          onRetry={piece.onRetry}
+        />
       ) : piece.kind === CHOICE_MEDIA.VIDEO ? (
         <Video
           source={piece.source}
           label={piece.title}
           onOpenElsewhere={piece.onOpen}
           tileAspect={TILE_ASPECT}
+          onRetry={piece.onRetry}
         />
       ) : (
         <SymbolTile piece={piece} />

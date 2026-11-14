@@ -10,6 +10,7 @@ import {
   type InboxMessage,
   optionFileIds,
 } from "@repo/features/inbox-wire";
+import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type CommentAuthor, ErrorState } from "@repo/ui";
@@ -41,9 +42,6 @@ import type { InboxImageReads } from "./use-task-inbox.js";
  * card with its title and lines (`lone-link-card.tsx`), and draw the item's
  * own pictures through the reads it is handed (`inbox-pictures.tsx`).
  */
-
-/** What a comment says under its files where some could not be read. */
-const FILES_FAILED_LINE = "Some files could not be read.";
 
 /** No files, one array so a comment that has none hands down the same one. */
 const NO_FILES: NonNullable<InboxMessage["files"]> = [];
@@ -175,7 +173,7 @@ function CommentFiles({
               for (const read of failed) void read.refetch();
             }}
           >
-            {FILES_FAILED_LINE}
+            {MEDIA_READ_WORDS.FILES_FAILED}
           </ErrorState>
         </div>
       )}

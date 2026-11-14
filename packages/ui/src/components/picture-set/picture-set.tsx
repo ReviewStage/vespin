@@ -1,3 +1,4 @@
+import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { countWords } from "@repo/features/words";
 import {
   Children,
@@ -61,12 +62,6 @@ const WAITING_RATIO = 16 / 10;
 /** What the spinner says to a reader while a picture's bytes are read. */
 const READING_LABEL = "Reading the picture";
 
-/** What a picture that is not there says, after its words, where its place says no more. */
-const NOT_AVAILABLE = "not available";
-
-/** What a picture whose read did not land says, after its words. */
-const COULD_NOT_READ = "could not be read.";
-
 /** What a failed picture's Retry is named. */
 const RETRY = "Retry";
 
@@ -76,9 +71,6 @@ const PICTURE = { one: "picture", many: "pictures" } as const;
 /** A gone picture's glyph and words, in the caption's type, the words wrapping and clipped by the frame where a thumbnail is small. */
 const STAND_IN =
   "ui-picture-stand-in flex min-w-0 items-center gap-control-gap text-caption text-muted-foreground wrap-anywhere [&>svg]:size-icon-16 [&>svg]:flex-none";
-
-/** What a failed picture says on screen, short enough for a thumbnail's box; its whole sentence is spoken. */
-const FAILED_LINE = "Couldn't load image";
 
 /**
  * A failed picture's stand-in, filling the box the spinner stood in and the
@@ -135,7 +127,7 @@ function goneWords(words: string, why: string): string {
 
 /** The sentence a picture whose read did not land says: its own words first, or this picture where it has none. */
 function failedWords(words: string): string {
-  return `${words === "" ? "This picture" : words} ${COULD_NOT_READ}`;
+  return `${words === "" ? "This picture" : words} ${MEDIA_READ_WORDS.COULD_NOT_READ}`;
 }
 
 /**
@@ -167,7 +159,7 @@ function FailedStandIn({
         <ImageOffIcon />
       </span>
       <span className={FAILED_WORDS} aria-hidden="true">
-        {FAILED_LINE}
+        {MEDIA_READ_WORDS.PICTURE_FAILED}
       </span>
       {onRetry === undefined ? null : (
         <span className={FAILED_RETRY}>
@@ -224,7 +216,7 @@ export function PictureStandIn(
   return (
     <span className={STAND_IN}>
       <ImageOffIcon aria-hidden="true" />
-      <span>{goneWords(words, props.why ?? NOT_AVAILABLE)}</span>
+      <span>{goneWords(words, props.why ?? MEDIA_READ_WORDS.NOT_AVAILABLE)}</span>
     </span>
   );
 }
@@ -304,7 +296,7 @@ export function PictureSetTile({
       padding={CARD_PADDING.FLUSH}
       dashed={gone}
       role={gone ? "img" : undefined}
-      aria-label={gone ? goneWords(words, why ?? NOT_AVAILABLE) : undefined}
+      aria-label={gone ? goneWords(words, why ?? MEDIA_READ_WORDS.NOT_AVAILABLE) : undefined}
       className={FRAME}
     >
       <TileFace state={state} words={words} why={why} />

@@ -75,18 +75,20 @@ export const THREAD_MEDIA = {
   FILE: "file",
 } as const;
 
-/** One file a message carried, drawn after its words; its source none while its bytes are on their way. */
+/** One file a message carried, drawn after its words; its source none while its bytes are on their way and `null` where they could not be read, which `onRetry` reads again. */
 export type ThreadMedia =
   | {
       readonly kind: typeof THREAD_MEDIA.PICTURE;
       readonly key: string;
-      readonly source: string | undefined;
+      readonly source: string | null | undefined;
+      readonly onRetry?: (() => void) | undefined;
       readonly alt: string;
     }
   | {
       readonly kind: typeof THREAD_MEDIA.VIDEO;
       readonly key: string;
-      readonly source: string | undefined;
+      readonly source: string | null | undefined;
+      readonly onRetry?: (() => void) | undefined;
       readonly label: string;
       /** Opens the video where it plays, such as its thread in Safari, for one the system's player cannot read. */
       readonly onOpenElsewhere?: (() => void) | undefined;
@@ -95,7 +97,8 @@ export type ThreadMedia =
       readonly kind: typeof THREAD_MEDIA.FILE;
       readonly key: string;
       /** The file's address under the app's caches, which its viewer opens. */
-      readonly source: string | undefined;
+      readonly source: string | null | undefined;
+      readonly onRetry?: (() => void) | undefined;
       readonly name: string;
       readonly mediaType: string;
       /** Its size in words once its bytes are read. */
@@ -135,8 +138,10 @@ type ThreadPageProps = {
   readonly repository?: string | null | undefined;
   /** Opens a link or a chip pressed, by the address it was written as, where the app draws it or in Safari. */
   readonly onOpenLink: (address: string) => void;
-  /** The address a picture its words draw is drawn from, by the address they name it by; none while it is on its way. */
-  readonly pictureSource?: ((written: string) => string | undefined) | undefined;
+  /** The address a picture its words draw is drawn from, by the address they name it by; none while it is on its way, and `null` where it could not be read. */
+  readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
+  /** Reads a picture its words draw again, by the address they name it by, where it could not be read. */
+  readonly onRetryPicture?: ((written: string) => void) | undefined;
   /** The video a picture its words draw names, played in its place; every address names a picture where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
   /** What GitHub holds of a pull request or issue a chip in its words names, by its page, which the chip says where it stands. */
@@ -249,10 +254,15 @@ export function PathTitle({
 function MediaView({ media }: { readonly media: ThreadMedia }) {
   switch (media.kind) {
     case THREAD_MEDIA.PICTURE:
-      return <Picture source={media.source} alt={media.alt} />;
+      return <Picture source={media.source} alt={media.alt} onRetry={media.onRetry} />;
     case THREAD_MEDIA.VIDEO:
       return (
-        <Video source={media.source} label={media.label} onOpenElsewhere={media.onOpenElsewhere} />
+        <Video
+          source={media.source}
+          label={media.label}
+          onOpenElsewhere={media.onOpenElsewhere}
+          onRetry={media.onRetry}
+        />
       );
     case THREAD_MEDIA.FILE:
       return (
@@ -261,6 +271,7 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
           mediaType={media.mediaType}
           source={media.source}
           size={media.size}
+          onRetry={media.onRetry}
         />
       );
   }
@@ -303,6 +314,7 @@ function MessageView({
   repository,
   onOpenLink,
   pictureSource,
+  onRetryPicture,
   videoAt,
   linkStanding,
   now,
@@ -365,6 +377,7 @@ function MessageView({
                 onOpenLink={onOpenLink}
                 typed={message.typed}
                 pictureSource={pictureSource}
+                onRetryPicture={onRetryPicture}
                 videoAt={videoAt}
                 linkStanding={linkStanding}
               />

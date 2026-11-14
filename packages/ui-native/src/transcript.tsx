@@ -34,6 +34,7 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
+import { MEDIA_BOUNDS } from "./media-frame.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
@@ -59,13 +60,6 @@ const LATEST_REACH = 240;
 
 /** How near its newest row the list stands to keep it in view as rows land, in points. */
 const ANCHOR_REACH = 48;
-
-/**
- * The widest a picture or a recording stands in the transcript, in points,
- * near the width Messages draws a photo at, so one shown never fills the
- * screen and the words around it stay in view.
- */
-const MEDIA_WIDTH = 280;
 
 /** How wide the round control that brings the newest row into view stands, in points: the system's least target. */
 const JUMP_SIZE = 44;
@@ -147,7 +141,8 @@ const styles = StyleSheet.create({
   blockTitle: { paddingHorizontal: SPACE.ROW, paddingTop: 6 },
   blockText: { padding: SPACE.ROW, paddingTop: SPACE.TIGHT },
   media: { gap: SPACE.ROW },
-  shown: { width: "100%", maxWidth: MEDIA_WIDTH, gap: SPACE.TIGHT },
+  // Note that each picture or recording sizes itself by the media's one rule (`mediaFrame`), and its caption wraps at the widest one stands.
+  shown: { maxWidth: MEDIA_BOUNDS.WIDTH, alignItems: "flex-start", gap: SPACE.TIGHT },
   page: {
     flexDirection: "row",
     alignItems: "center",
@@ -536,8 +531,10 @@ interface RowDrawing {
   readonly onOpenPage: (
     item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>,
   ) => void;
-  /** The address a picture or a recording is drawn from, by its id; none while its bytes are on their way. */
-  readonly mediaSource: (id: string) => string | undefined;
+  /** The address a picture or a recording is drawn from, by its id; none while its bytes are on their way, and `null` where they could not be read. */
+  readonly mediaSource: (id: string) => string | null | undefined;
+  /** Reads a picture or a recording whose bytes could not be read again, by its id. */
+  readonly onRetryMedia?: ((id: string) => void) | undefined;
   /** Opens a recording the system's player cannot play where it plays. */
   readonly onOpenElsewhere?: (() => void) | undefined;
   /** Opens a web address in Safari, such as a pull request's page on GitHub. */
@@ -557,7 +554,15 @@ interface RowDrawing {
 /** A pull request an agent opened, as the transcript lists it. */
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
 
+/** What reads a picture or a recording again, by its id, where the transcript offers it. */
+function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
+  const retry = drawing.onRetryMedia;
+
+  return retry === undefined ? undefined : () => retry(id);
+}
+
 /** One of the transcript's rows, as its kind draws it. */
+
 function TranscriptRow({
   item,
   drawing,
@@ -656,9 +661,14 @@ function TranscriptRow({
                   source={drawing.mediaSource(shown.id)}
                   label={shown.label}
                   onOpenElsewhere={drawing.onOpenElsewhere}
+                  onRetry={retryOf(drawing, shown.id)}
                 />
               ) : (
-                <Picture source={drawing.mediaSource(shown.id)} alt={shown.label} />
+                <Picture
+                  source={drawing.mediaSource(shown.id)}
+                  alt={shown.label}
+                  onRetry={retryOf(drawing, shown.id)}
+                />
               )}
               {shown.caption === "" ? null : (
                 <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>

@@ -815,7 +815,8 @@ export function AgentScreen() {
           onOpenLink={openLink}
           onToggle={(item) => setToggles((held) => toggledAt(held, item))}
           onOpenPage={openPage}
-          mediaSource={(pictureId) => media.get(pictureId)}
+          mediaSource={(pictureId) => media.sources.get(pictureId)}
+          onRetryMedia={media.retry}
           onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
           onOpenAddress={openInSafari}
           onOpenPullRequest={(item) =>

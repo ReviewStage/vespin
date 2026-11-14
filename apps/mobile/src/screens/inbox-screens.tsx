@@ -579,7 +579,7 @@ function ThreadDetail({
     openInSafari(linkOf(place, workspaceStep));
   };
 
-  const { sources, sizes } = useThreadMedia(item.id, media);
+  const { sources, sizes, retry } = useThreadMedia(item.id, media);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
   const router = useRouter();
@@ -667,6 +667,7 @@ function ThreadDetail({
     media: message.media.map((each): ThreadMedia => {
       const source = sources.get(each.attachmentId);
       const key = each.attachmentId;
+      const onRetry = () => retry(key);
 
       if (each.kind === INBOX_MEDIA.VIDEO) {
         return {
@@ -675,6 +676,7 @@ function ThreadDetail({
           source,
           label: each.name,
           onOpenElsewhere: openOnWeb,
+          onRetry,
         };
       }
 
@@ -688,20 +690,28 @@ function ThreadDetail({
           name: each.name,
           mediaType: each.mediaType,
           size,
+          onRetry,
         };
       }
 
-      return { kind: THREAD_MEDIA.PICTURE, key, source, alt: each.name };
+      return { kind: THREAD_MEDIA.PICTURE, key, source, alt: each.name, onRetry };
     }),
   }));
 
   // Note that a picture the words name by one of the thread's own files is drawn from its bytes as read, and any other from the address it names.
-  const pictureSource = (written: string): string | undefined => {
+  const pictureSource = (written: string): string | null | undefined => {
     const named = inboxAttachmentOf(inboxPictureDestination(written));
 
     return named === undefined || named.itemId !== item.id
       ? written
       : sources.get(named.attachmentId);
+  };
+
+  // A picture the words name by one of the thread's own files is read again by its file; any other is drawn from its address and never fails a read of ours.
+  const retryPicture = (written: string) => {
+    const named = inboxAttachmentOf(inboxPictureDestination(written));
+
+    if (named !== undefined && named.itemId === item.id) retry(named.attachmentId);
   };
 
   // A video the words name as a picture is played where they name it, from its bytes as read.
@@ -716,6 +726,7 @@ function ThreadDetail({
       source: sources.get(named.attachmentId),
       label: VIDEO_LABEL,
       onOpenElsewhere: openOnWeb,
+      onRetry: () => retry(named.attachmentId),
     };
   };
 
@@ -738,6 +749,7 @@ function ThreadDetail({
       repository={holder.task.repository}
       onOpenLink={openLink}
       pictureSource={pictureSource}
+      onRetryPicture={retryPicture}
       videoAt={videoAt}
       linkStanding={linkStanding}
       standing={item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(item)}
@@ -747,6 +759,7 @@ function ThreadDetail({
           answer={answer}
           doors={{
             source: (attachmentId) => sources.get(attachmentId),
+            retry,
             openPage: (page) =>
               openLink(
                 linkOf(

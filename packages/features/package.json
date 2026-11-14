@@ -99,6 +99,7 @@
     "./voice-delegation": "./src/voice-delegation.js",
     "./markdown-nesting": "./src/markdown-nesting.js",
     "./markdown-tree": "./src/markdown-tree.js",
+    "./media-read-words": "./src/media-read-words.js",
     "./media-signature": "./src/media-signature.js",
     "./agent-origin-live": "./src/agent-origin-live.js",
     "./agent-pictures-model": "./src/agent-pictures-model.js",
