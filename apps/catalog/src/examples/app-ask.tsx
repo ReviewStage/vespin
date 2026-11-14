@@ -1,5 +1,6 @@
 import {
   AGENT_POINTER_KIND,
+  AgentPointer,
   APP_ICON_SIZE,
   AppAsk,
   AppIcon,
@@ -23,7 +24,8 @@ import { CatalogSection } from "../section";
  * by a screen's glyph where there is none to draw; and the ask that lets an
  * agent use an app, opened from its button and put away by any of its
  * answers, Escape, or a press on the dimmed window, for an app with its icon
- * and bundle id and for one with neither; and the windows of the apps an
+ * and bundle id and for one with neither; the agent's pointer over a
+ * picture, moved there, pressing, and typing; and the windows of the apps an
  * agent is using, as the stack that floats over its box, for one app whose
  * window is a phone's, the agent's pointer where it pressed, three apps, the
  * pointer mirrored at the front window's corner, more apps than the stack draws behind
@@ -137,6 +139,15 @@ function AppAsks(): React.JSX.Element {
           <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
             Line, lead, card, and an app with no icon
           </Text>
+        </Inline>
+      </CatalogSection>
+      <CatalogSection id="agent-pointer" title="The agent's pointer: moved, pressed, typing">
+        <Inline>
+          {Object.values(AGENT_POINTER_KIND).map((kind) => (
+            <div key={kind} className="catalog-pointer-ground">
+              <AgentPointer x={0.4} y={0.4} kind={kind} move={kind} shown />
+            </div>
+          ))}
         </Inline>
       </CatalogSection>
       <CatalogSection id="app-window-stack" title="The apps an agent is using">
