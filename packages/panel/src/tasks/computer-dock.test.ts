@@ -137,3 +137,52 @@ test("a line sent while the turn runs steers it and keeps the apps used before i
   );
   assert.equal(appsInUse(closed, true), undefined);
 });
+
+test("the agent's pointer stands where the turn's newest call left its cursor, over that call's app, an earlier turn's left out", () => {
+  const clickAt = (callId: string, app: string, xFraction: number, yFraction: number) =>
+    call(
+      callId,
+      "computer",
+      { action: "click", app, element_index: 4 },
+      {
+        status: "ran",
+        done: "clicked",
+        app: { name: app, refused: false },
+        cursor: { xFraction, yFraction },
+      },
+    );
+
+  const typed = call(
+    "t1",
+    "computer",
+    { action: "type_text", app: "Simulator", text: "hello" },
+    { status: "ran", done: "typed", app: { name: "Simulator", refused: false } },
+  );
+
+  const messages = [
+    asked("ask-1"),
+    turn("turn-1", [read("r0", "Notes", OTHER_WINDOW), clickAt("c0", "Notes", 0.9, 0.9)]),
+    asked("ask-2"),
+    turn("turn-2", [
+      read("r1", "Simulator", WINDOW),
+      clickAt("c1", "Simulator", 0.25, 0.5),
+      clickAt("c2", "Simulator", 0.5, 0.75),
+      typed,
+    ]),
+  ];
+
+  assert.deepEqual(appsInUse(messages, true)?.cursor, {
+    app: "com.example.simulator",
+    x: 0.5,
+    y: 0.75,
+    pressed: true,
+    callId: "c2",
+  });
+
+  // Note that a read of another app that says no point leaves the pointer where it stood, over the app before it.
+  const movedOn = [...messages, turn("turn-3", [read("r2", "Xcode", OTHER_WINDOW)])];
+  assert.equal(appsInUse(movedOn, true)?.cursor?.app, "com.example.simulator");
+
+  assert.equal(appsInUse(messages.slice(0, 2), true)?.cursor?.callId, "c0");
+  assert.equal(appsInUse([asked("ask-3"), turn("turn-4", [typed])], true)?.cursor, undefined);
+});

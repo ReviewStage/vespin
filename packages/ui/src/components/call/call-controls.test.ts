@@ -3,7 +3,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test } from "vitest";
-import { CALL_DEVICE, CallBar, CallMute, TalkButton } from "./call-controls.js";
+import { CALL_DEVICE, CallMute, TalkButton } from "./call-controls.js";
 
 /**
  * call-controls.test.ts -- Talk with no OpenAI API key reads as unavailable
@@ -60,31 +60,4 @@ test("a muted microphone is named for unmuting and announced as on", () => {
 
   expect(mute.getAttribute("aria-label")).toBe("Unmute microphone");
   expect(mute.getAttribute("aria-pressed")).toBe("true");
-});
-
-test("the call bar offers Stop only while the agent works, and hands its press to the owner", () => {
-  let stopped = 0;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  roots.push(root);
-  const mute = { muted: false, onPress: () => {} };
-
-  const bar = (agent: { action: string | undefined } | undefined) =>
-    createElement(CallBar, {
-      status: { stageWord: undefined, agent },
-      microphone: mute,
-      speaker: mute,
-      onStop: () => (stopped += 1),
-      onEnd: () => {},
-    });
-
-  const stop = () => container.querySelector<HTMLButtonElement>('button[aria-label="Stop"]');
-
-  act(() => root.render(bar(undefined)));
-  expect(stop()).toBeNull();
-
-  act(() => root.render(bar({ action: "pnpm test" })));
-  act(() => stop()?.click());
-
-  expect(stopped).toBe(1);
 });

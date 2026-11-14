@@ -1,5 +1,6 @@
 import { MinimizeIcon } from "../../icons/lucide-glyphs.js";
 import { PICTURE_STATE, type PictureState } from "../../picture-read.js";
+import { AgentPointer, type AgentPointerKind } from "../agent-pointer/agent-pointer.js";
 import { APP_ICON_SIZE, AppIcon } from "../app-icon/app-icon.js";
 import { BUTTON_SIZE, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_LOOK, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
@@ -28,6 +29,10 @@ import { WorkingMark } from "../working-mark/working-mark.js";
  * walk the other apps' windows too. A window not read yet holds the frame
  * with a spinner, one whose read did not land holds it with Retry and is no
  * press, and an app whose window the agent never read stands as its icon.
+ * Where the agent's cursor stands over the window in front, its pointer
+ * (`AgentPointer`) is drawn over the picture at that spot, gliding as the
+ * agent moves it, as its cursor does on the Mac; the picture may lag a press
+ * or two behind it, until the agent reads the window again.
  *
  * The other apps stand behind it as cards peeking out above it, stepping in
  * from the edge as a deck does, at most two: the one used last nearest as
@@ -69,13 +74,27 @@ const PILE_PLACE = [
 /** Each card behind the front window, by its depth from it: stepping in from the edge, the deeper the further. */
 const BEHIND_INSET = ["mx-app-window-peek", "mx-app-window-peek-twice"] as const;
 
-/** An app in the stack: what tells it apart from every other, such as its bundle id, its name, its icon's address, and its newest window, where the agent read one. Note that two apps may share a name, so the stack knows each by its id and only shows its name. */
+/** The agent's pointer over an app's window: where it stands as a share of the window from its top left, what it does there, the move it stands at, and whether it shows, as it does while the agent works. */
+export interface StackedPointer {
+  readonly x: number;
+  readonly y: number;
+  readonly kind: AgentPointerKind;
+  readonly move: string;
+  readonly shown: boolean;
+}
+
+/** An app in the stack: what tells it apart from every other, such as its bundle id, its name, its icon's address, and its newest window, where the agent read one, with the agent's pointer where it stands over that window. Note that two apps may share a name, so the stack knows each by its id and only shows its name. */
 export interface StackedApp {
   readonly id: string;
   readonly name: string;
   readonly iconSrc?: string | undefined;
   readonly window?:
-    | { readonly state: PictureState; readonly width: number; readonly height: number }
+    | {
+        readonly state: PictureState;
+        readonly width: number;
+        readonly height: number;
+        readonly pointer?: StackedPointer | undefined;
+      }
     | undefined;
 }
 
@@ -97,14 +116,28 @@ function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
   const window = app.window;
 
   if (window?.state.kind === PICTURE_STATE.READY) {
+    const pointer = window.pointer;
+
+    // Note that the pointer stands over the picture alone, which the tile's face hugs and positions.
     return (
-      <img
-        className="ui-app-window block h-auto max-h-app-window-tall w-auto max-w-full"
-        src={window.state.url}
-        width={window.width}
-        height={window.height}
-        alt=""
-      />
+      <>
+        <img
+          className="ui-app-window block h-auto max-h-app-window-tall w-auto max-w-full"
+          src={window.state.url}
+          width={window.width}
+          height={window.height}
+          alt=""
+        />
+        {pointer === undefined ? null : (
+          <AgentPointer
+            x={pointer.x}
+            y={pointer.y}
+            kind={pointer.kind}
+            move={pointer.move}
+            shown={pointer.shown}
+          />
+        )}
+      </>
     );
   }
 

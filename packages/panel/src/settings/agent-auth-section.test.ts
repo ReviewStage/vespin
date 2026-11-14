@@ -405,7 +405,7 @@ async function choose(row: Element, thing: string, item: string): Promise<void> 
 
 /** Chooses `item` from a harness's Add, on its header. */
 async function add(page: Element, harness: string, item: string): Promise<void> {
-  await press(credential(page, harness), `Add to ${harness}`);
+  await press(credential(page, harness), `Add plan or key to ${harness}`);
   await pick(item);
 }
 
@@ -462,7 +462,7 @@ test("each card opens on its harness and its Add; each credential says how it st
     ["Claude", "Codex"],
     "nothing connected is the headers alone",
   );
-  await press(credential(empty, "Claude"), "Add to Claude");
+  await press(credential(empty, "Claude"), "Add plan or key to Claude");
   assert.deepEqual(menuItems(), ["Claude plan", "API key"]);
   leave();
 
@@ -698,7 +698,9 @@ test("an API key added from Add opens a masked field under the header, sent once
   const row = () => credential(page, name);
   await vi.waitFor(() => assert.equal(lineOf(row()), undefined));
   assert.equal(header().querySelector("form") === null, true, "the field goes");
-  await vi.waitFor(() => assert.ok(document.activeElement === button(header(), "Add to Claude")));
+  await vi.waitFor(() =>
+    assert.ok(document.activeElement === button(header(), "Add plan or key to Claude")),
+  );
   assert.ok(!document.body.innerHTML.includes(KEY), "the key stands nowhere once kept");
 
   for (const spy of logged) {
@@ -870,7 +872,7 @@ test("Cancel withdraws a Codex login still waiting, handing the focus back to Ad
   await add(page, "Codex", "Codex plan");
   await press(credential(page, "Codex"), "Cancel");
   assert.deepEqual(sentOf(ACT_KIND.CHATGPT_DEVICE_CANCEL), [{ loginId: DEVICE_LOGIN.loginId }]);
-  assert.ok(document.activeElement === button(page, "Add to Codex"));
+  assert.ok(document.activeElement === button(page, "Add plan or key to Codex"));
 });
 
 test("a login that expires says so with Retry, which asks for a new code", async () => {

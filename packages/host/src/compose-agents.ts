@@ -108,6 +108,7 @@ import {
   type CHAPTERS_ACTS,
   CHAPTERS_FOLLOWS,
 } from "./contract/index.js";
+import type { EntityStore } from "./entity-store.js";
 import type { HostMethodTable } from "./gateway-door.js";
 import { type AccountHeld, accountHeld, type HeldFetch, heldFetch } from "./held-fetch.js";
 import { type HostActTable, liveTold } from "./host-acts.js";
@@ -151,7 +152,8 @@ import {
   type ScopeInboxes,
   scopeInboxes,
 } from "./scope-inbox-follow.js";
-import { AGENT, type AgentRow } from "./task-list-collections.js";
+import { AGENT } from "./task-list-collections.js";
+import type { AgentRow } from "./task-list-rows.js";
 import {
   followTranscript,
   HELD_BYTES,
@@ -289,7 +291,7 @@ export interface AgentsDependencies extends AccountGateDependencies {
    * Start is answered once the list carries it; none waits for nothing.
    */
   listed?: (txid: string | undefined) => Effect.Effect<void>;
-  /** The task list as each drawing of it stands, from the caller's listening on (`TasksComposer.pullRequestListings`), on which the Pull request tabs' parts are asked again; none moves nothing. */
+  /** What each drawing of the task list moved, from the caller's listening on (`TasksComposer.pullRequestListings`), on which the Pull request tabs' parts are asked again; none moves nothing. */
   pullRequestListings?: Effect.Effect<Stream.Stream<PullRequestListing>, never, Scope.Scope>;
   /**
    * The sync engine's pool, which an agent's row of the task list stands in
@@ -303,14 +305,16 @@ export interface AgentsDependencies extends AccountGateDependencies {
   openedOutside?: (agentId: string) => Effect.Effect<void>;
   /** Reads the tasks the account's Inbox holds items of into the task list where it holds them not (`TasksComposer.inboxNamed`); none reads nothing. */
   inboxNamed?: (taskIds: readonly string[]) => Effect.Effect<void>;
+  /** The signed-in account's lists kept on disk (`entity-store.ts`), which the Inbox is kept among and drawn from at a launch; none keeps nothing. */
+  entities?: () => EntityStore | undefined;
 }
 
 /** The tasks an account inbox answer holds items of, once each: those with an item waiting on the reader first, as they are counted, then every other holding one. */
 function inboxTaskIds(answer: AccountInboxAnswer): readonly string[] {
   return [
     ...new Set([
-      ...answer.items.map((item) => item.planId),
-      ...answer.plans.map((plan) => plan.planId),
+      ...answer.items.map((item) => item.taskId),
+      ...answer.tasks.map((task) => task.taskId),
     ]),
   ];
 }
@@ -534,6 +538,9 @@ export function composeAgents(
             ),
           pool: dependencies.pool,
           accountWide,
+          ...(dependencies.entities === undefined
+            ? undefined
+            : { entities: dependencies.entities }),
         },
         userId,
         tellItems,

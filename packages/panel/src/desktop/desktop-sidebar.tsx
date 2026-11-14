@@ -24,6 +24,7 @@ import {
   type RepositoryGroup,
   repositoryHeadingsDrawn,
   repositoryLabel,
+  servedCounts,
   TASK_GROUPING,
   TASK_ORDER,
   type TaskSections,
@@ -178,6 +179,7 @@ import {
   type SidebarPin,
   samePin,
 } from "../tasks/use-side-panel.js";
+import { useSubTaskReads } from "../tasks/use-sub-task-reads.js";
 import { useReadMark, useUnreadTasks } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -507,11 +509,13 @@ function useListedPart(workspaceId: string | undefined, pinned: boolean): readon
 /**
  * How many of each parent's child tasks are finished, of all of them, by
  * the parent's id (`childTaskCounts`), as one live query grouping the
- * window's task collection keeps them. Note that every task counts, the
- * finished ones the view hides among them, since the count is how many of
- * them there are.
+ * window's task collection keeps them, read beside the count the service
+ * carries on each parent's row (`servedCounts`), which stands for children
+ * the collection does not hold. Note that every task counts, the finished
+ * ones the view hides among them, since the count is how many of them there
+ * are.
  */
-function useChildCounts(): ReadonlyMap<string, ChildTaskCount> {
+function useChildCounts(): ChildCounts {
   const collections = useTaskListCollections();
 
   const { data } = useLiveQuery({
@@ -529,15 +533,44 @@ function useChildCounts(): ReadonlyMap<string, ChildTaskCount> {
         })),
   });
 
-  return useMemo(
-    () =>
-      new Map(
-        data.flatMap(({ parentTaskId, finished, total }) =>
-          parentTaskId === undefined ? [] : [[parentTaskId, { finished, total }] as const],
-        ),
+  // The parents the service counted sub-tasks of, whose count stands where the collection holds fewer of their children.
+  const { data: counted } = useLiveQuery({
+    query: (q) =>
+      q
+        .from({ task: collections.tasks })
+        .where(({ task }) => not(isUndefined(task.subTasks)))
+        .select(({ task }) => ({
+          id: task.id,
+          status: task.status,
+          parentTaskId: task.parentTaskId,
+          subTasks: task.subTasks,
+        })),
+  });
+
+  return useMemo(() => {
+    const held = new Map(
+      data.flatMap(({ parentTaskId, finished, total }) =>
+        parentTaskId === undefined ? [] : [[parentTaskId, { finished, total }] as const],
       ),
-    [data],
-  );
+    );
+
+    // Note that a finished parent at the top is left out, since the view draws none to stand its sub-tasks under, while a finished sub-task stands under its own parent and its children under it.
+    const unheld = counted.flatMap(({ id, status, parentTaskId, subTasks }) =>
+      subTasks !== undefined &&
+      (held.get(id)?.total ?? 0) < subTasks.total &&
+      (status === undefined || !SETTLED_STATUSES.includes(status) || parentTaskId !== undefined)
+        ? [id]
+        : [],
+    );
+
+    return { counts: servedCounts(counted, held), unheld };
+  }, [counted, data]);
+}
+
+/** Each parent's sub-task count (`useChildCounts`), and the parents whose count names children the collection does not hold. */
+interface ChildCounts {
+  readonly counts: ReadonlyMap<string, ChildTaskCount>;
+  readonly unheld: readonly string[];
 }
 
 /** The listed tasks as the sidebar reads them, every list off the window's task collection, so Pinned, the sections, and Tasks never disagree on a task for a frame. */
@@ -552,6 +585,8 @@ interface ListedTasks {
   readonly task: (taskId: string) => TaskSummary | undefined;
   /** How many of a task's child tasks are finished, of all of them, by its id. */
   readonly childCounts: ReadonlyMap<string, ChildTaskCount>;
+  /** The open tasks whose sub-tasks the service counted more of than the collection holds, by id. */
+  readonly unheldSubTasks: readonly string[];
 }
 
 /**
@@ -565,7 +600,7 @@ function useListedTasks(tasks: TasksControl): ListedTasks {
   const workspaceId = tasks.workspace?.id;
   const pinnedRows = useListedPart(workspaceId, true);
   const unpinnedRows = useListedPart(workspaceId, false);
-  const childCounts = useChildCounts();
+  const { counts: childCounts, unheld: unheldSubTasks } = useChildCounts();
   const { typedNames } = tasks;
   const pinned = useMemo(() => renamedTasks(pinnedRows, typedNames), [pinnedRows, typedNames]);
 
@@ -584,7 +619,7 @@ function useListedTasks(tasks: TasksControl): ListedTasks {
     return renamedTasks([held], typedNames)[0];
   };
 
-  return { pinned, unpinned, every: collections.tasks, task, childCounts };
+  return { pinned, unpinned, every: collections.tasks, task, childCounts, unheldSubTasks };
 }
 
 /**
@@ -1273,8 +1308,8 @@ function PinnedSection({
 /**
  * The Following group, under Pinned and above the Tasks head: the tasks the
  * reader follows that no other list holds (`followingTasks`), a teammate's
- * they keep up with, newest active first, each naming its repository as a
- * row in one run does, since the group gathers repositories. It stands only
+ * they keep up with, newest active first, its rows naming no repository, as
+ * Pinned's and a section's do not. It stands only
  * while it holds a task, so a task followed lands in it at once and one
  * unfollowed leaves it, as the live list moves. Its head folds it as
  * Pinned's does, kept across launches, the open task still standing under
@@ -1285,12 +1320,10 @@ function PinnedSection({
 function FollowingSection({
   tasks,
   folds,
-  repositoryOf,
   context,
 }: {
   tasks: readonly TaskSummary[];
   folds: FoldedGroups;
-  repositoryOf: (task: TaskSummary) => React.ReactNode;
   context: RowContext;
 }): React.JSX.Element {
   const folded = folds.followingFolded;
@@ -1323,12 +1356,10 @@ function FollowingSection({
           )
         }
         standing={
-          standing.length === 0 ? undefined : (
-            <TaskRows tasks={standing} context={context} repository={repositoryOf} />
-          )
+          standing.length === 0 ? undefined : <TaskRows tasks={standing} context={context} />
         }
       >
-        <TaskRows tasks={tasks} context={context} repository={repositoryOf} />
+        <TaskRows tasks={tasks} context={context} />
       </GroupHeader>
       {menu.drawn === undefined ? null : (
         <ActionMenu
@@ -2172,6 +2203,8 @@ function SidebarColumn({
   const listedInbox = useListedInbox(tasks);
   // The list is the chosen workspace's; the unread marks above read every task.
   const listedTasks = useListedTasks(tasks);
+  // Note that while the view shows finished sub-tasks, those a parent's count names that the list holds not are read into it.
+  useSubTaskReads(listedTasks.unheldSubTasks, taskView.view.finishedSubTasks && tasks.listRead);
   const pinnedSection = pinnedRows(listedTasks.pinned, listedTasks.task, tasks);
   // The pin the open task was opened from is marked in its task's place,
   // whichever of the task's tabs is shown, while its row still stands.
@@ -2668,7 +2701,6 @@ function SidebarColumn({
                           key={key}
                           tasks={homedFollowing}
                           folds={folds}
-                          repositoryOf={repositoryOf}
                           context={context}
                         />
                       )}

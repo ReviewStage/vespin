@@ -28,6 +28,7 @@ export {
   type ProductEventPropertiesFor,
   type ProductExperiment,
   type ProductExperimentScope,
+  type ProductLaunchSeconds,
   type ProductLayout,
   type ProductPermissionResult,
   type ProductPlatform,
@@ -43,6 +44,7 @@ export {
   productEventBuildFromWire,
   productEventFromWire,
   productEventsAnswerSchema,
+  productLaunchSeconds,
   productSessionCountBucket,
   type RecordProductEvent,
 } from "./product-events.js";

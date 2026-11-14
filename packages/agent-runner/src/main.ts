@@ -12,11 +12,11 @@ import { createInterface } from "node:readline";
 import {
   NodeChildProcessSpawner,
   NodeFileSystem,
+  NodeHttpClient,
   NodePath,
   NodeRuntime,
 } from "@effect/platform-node";
 import { Effect, Exit, Layer, Stream } from "effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { checkoutSnapshotsLive } from "./checkout-snapshot.js";
 import { claudeCodeLive } from "./claude-code.js";
 import { RunnerUnconfigured } from "./launch.js";
@@ -55,7 +55,10 @@ const main = runAgent({ lines: stdinLines, env: process.env }).pipe(
     Layer.mergeAll(
       claudeCodeLive,
       providerProbeLive,
-      FetchHttpClient.layer,
+      // Note that the runner's requests go through undici itself rather than fetch, because fetch gives up
+      // on any answer whose headers take five minutes, and a tool call held for the developer's Allow may
+      // take longer (`mcp-relay.ts`); each read that must end sooner bounds itself.
+      NodeHttpClient.layerUndici,
       // Codex's app-server, spawned as the runner's own child (codex.ts), and git for the
       // checkout's snapshot before each turn (checkout-snapshot.ts).
       spawner,
