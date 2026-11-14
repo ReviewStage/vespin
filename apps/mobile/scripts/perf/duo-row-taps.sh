@@ -30,21 +30,23 @@ for e in items:
 print("; ".join(out) or "no bars")
 '
 }
-# Whether the Inbox list stands in front: a thread's page holds Send, which the list never does, and the list names its rows.
-on_list() {
-  local tree=$(idb ui describe-all --udid $U 2>/dev/null)
-  ! print -r -- "$tree" | grep -q '"AXLabel":"Send"' && print -r -- "$tree" | grep -q 'What the expired invite page says'
+# Whether a thread's page stands in front: only it holds Send. Each read is kept under trees/ with the step that read it.
+N=0
+in_thread() {
+  N=$((N + 1)); mkdir -p $OUT/trees
+  idb ui describe-all --udid $U > $OUT/trees/$N-$1.json 2>&1
+  grep -q '"AXLabel":"Send"' $OUT/trees/$N-$1.json
 }
 
 for r in $(seq 1 $ROUNDS); do
   for y in $YS; do
     fresh
-    on_list || { echo "r$r y=$y SKIP list not in front" >> $LOG; continue; }
+    in_thread "r$r-y$y-before" && { echo "r$r y=$y SKIP a thread stands in front at launch" >> $LOG; continue; }
     hit=$(idb ui describe-point --udid $U $X $y 2>/dev/null | tr -d '\n' | sed -E 's/.*"AXLabel": ?"([^"]*)".*"type": ?"([^"]*)".*/\2: \1/' | cut -c1-90)
     bars=$(frames)
     idb ui tap --udid $U $X $y
     sleep 2
-    if on_list; then res=SWALLOWED; else res=pushed; fi
+    if in_thread "r$r-y$y-after"; then res=pushed; else res=SWALLOWED; fi
     echo "r$r tap=($X,$y) $res | hit $hit | bars $bars" >> $LOG
   done
 done
@@ -58,7 +60,7 @@ for wait in 2 0.3; do
     idb ui swipe --udid $U 184 500 184 150 --duration 0.15; sleep $wait
     hit=$(idb ui describe-point --udid $U $X 605 2>/dev/null | tr -d '\n' | cut -c1-160)
     idb ui tap --udid $U $X 605; sleep 2
-    if on_list; then res=SWALLOWED; else res=pushed; fi
+    if in_thread "pop$wait-r$r-after"; then res=pushed; else res=SWALLOWED; fi
     echo "pop wait=${wait}s r$r tap=($X,605) $res | hit $hit" >> $LOG
   done
 done
