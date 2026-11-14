@@ -197,11 +197,12 @@ function letGoCarriedCloses(items: readonly InboxItem[]): void {
 }
 
 /** The store with the thread's closes and its Got it let go, as its Undo asks, so the thread is drawn as the host draws the take-back rather than closed by a send taken back, Got it offered again. */
-function letGoCloses(itemId: string): void {
+function letGoCloses(itemId: string, revision: number): void {
   if (held.get(itemId)?.sending.size === undefined) return;
   hold(itemId, (was) => ({
     ...was,
-    nodded: undefined,
+    // Note that only a Got it at the revision the Undo settled is let go, so a later one still out keeps its hold.
+    nodded: was.nodded === revision ? undefined : was.nodded,
     sending: new Map(
       [...was.sending].filter(([, sending]) => sending.kind !== INBOX_SENDING.CLOSE),
     ),
@@ -296,7 +297,7 @@ export function useSettleUndo(): (
     (threads, settle, words) => {
       // Note that every take-back goes as one write, so several answer with one buzz and one notice rather than one each, and that Try again sends again only those no answer reached.
       const takeBack = () => {
-        for (const { item } of threads) letGoCloses(item.id);
+        for (const { item } of threads) letGoCloses(item.id, item.revision);
         let unreached = threads;
         // Note that what the service answered stays among the outcomes a Try again is read with, so a refusal it said is said again rather than hidden by a later take-back that went.
         let answered: readonly TookBack[] = [];
