@@ -1,4 +1,4 @@
-# scroll-to.yaml -- scrolls the page until `ELEMENT` stands in its middle, down unless `DIRECTION` is UP; with `ABOVE`, down until it stands above the control of that id; with `BELOW`, up in short steps until it stands clear under the bar whose words `BELOW` names; and lets it settle.
+# scroll-to.yaml -- scrolls the page until `ELEMENT` stands in its middle, down unless `DIRECTION` is UP; with `ABOVE`, down until it stands above the control of that id; with `BELOW`, up in short steps until it stands clear under the navigation bar `BELOW` names by its title; and lets it settle.
 #
 # Note that the element is centered, because a scroll that stops once it
 # shows leaves it at the window's edge: under a thread's reply box and the
@@ -18,7 +18,10 @@
 # clear of the bar, Jump to latest, and the banner. Each scroll may take a minute, because a page that never
 # holds still, an agent's turn still running or a video playing, holds each
 # swipe ten seconds waiting for it to, which ran a scroll out of Maestro's
-# twenty seconds after two swipes.
+# twenty seconds after two swipes. Note too that the bar is found by its
+# identifier, which iOS sets to its title, because a regular window, the
+# iPad's, draws its floating tab bar in the title's place, so no words of
+# the title stand there to be found.
 appId: dev.vespin.ios
 env:
   DIRECTION: ${DIRECTION || 'DOWN'}
@@ -34,7 +37,8 @@ env:
           while:
             notVisible:
               text: "${ELEMENT}"
-              below: "${BELOW}"
+              below:
+                id: "${BELOW}"
           commands:
             - swipe:
                 start: "50%, 40%"

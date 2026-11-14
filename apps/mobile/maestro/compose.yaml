@@ -16,7 +16,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
-- assertVisible: "Then add a Resend button beside each pending invite."
+- extendedWaitUntil:
+    visible: "Then add a Resend button beside each pending invite."
+    timeout: 30000
 - assertVisible: "Steer"
 - assertVisible: "Stop"
 - assertVisible: "Add"

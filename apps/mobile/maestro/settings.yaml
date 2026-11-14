@@ -13,7 +13,9 @@ appId: dev.vespin.ios
       notifications: allow
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 # The workspace switcher leads the Inbox's bar, and its menu's account,
 # heard as its name and Settings, opens it.
 - tapOn:
@@ -87,7 +89,9 @@ appId: dev.vespin.ios
     stopApp: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - tapOn:
     id: "workspace-switcher"
 - tapOn: ".*, Settings"
@@ -115,7 +119,9 @@ appId: dev.vespin.ios
     stopApp: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - tapOn:
     id: "workspace-switcher"
 - tapOn: ".*, Settings"

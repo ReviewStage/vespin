@@ -21,7 +21,7 @@ appId: dev.vespin.ios
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
-    timeout: 15000
+    timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-inbox
@@ -85,7 +85,7 @@ appId: dev.vespin.ios
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
     visible: "Waiting on you.*"
-    timeout: 15000
+    timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-agent
@@ -96,7 +96,7 @@ appId: dev.vespin.ios
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
-    timeout: 15000
+    timeout: 30000
 - tapOn: "New task"
 - assertVisible: "Describe the task"
 - waitForAnimationToEnd:
@@ -109,7 +109,7 @@ appId: dev.vespin.ios
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
-    timeout: 15000
+    timeout: 30000
 - tapOn:
     id: "workspace-switcher"
 # Note that the switcher's list is scrolled to the account's row, which at

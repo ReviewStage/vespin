@@ -3,6 +3,8 @@
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device.
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # The app is launched on the host's Inbox fixture (`src/host/launch-arguments.ts`),
 # so the Inbox lists the synthetic threads the panel's own fixture run lists
@@ -13,7 +15,9 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Inbox"
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 30000
 - takeScreenshot: inbox
 # A row's detail: pushed over the list in a compact window, and beside it in
 # a regular one. A thread with a decide ask opens on its question.
@@ -72,7 +76,17 @@ appId: dev.vespin.ios
 - takeScreenshot: search
 # Note that the keyboard is put away, since it stands over the tab bar.
 - hideKeyboard
-# The tab bar's round + opens New task as a sheet over the tabs.
+# The tab bar's round + opens New task as a sheet over the tabs. Note that an
+# iPad's Search page, under its floating tabs, has no +, so there the Inbox's
+# New task, at its bar's end, opens it.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - runFlow:
+          file: subflows/tab.yaml
+          env:
+            TAB: Inbox
 - tapOn: "New task"
 - assertVisible: "Describe the task"
 - assertVisible: "ada/relay"

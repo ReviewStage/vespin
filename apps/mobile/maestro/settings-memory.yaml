@@ -4,12 +4,16 @@
 # (`@repo/host/fixture-inbox`), so no server is reached. The fixture is
 # signed in as Ada Lovelace, the workspace's owner, who may delete each.
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - tapOn:
     id: "workspace-switcher"
 - tapOn: ".*, Settings"
@@ -24,12 +28,26 @@ appId: dev.vespin.ios
 - takeScreenshot: settings-memory
 # The search narrows the list by a memory's words or whose they are. Note
 # that a wide window, the iPhone Duo's, folds the search field into a Search
-# button at the toolbar's end, which stands the field once pressed.
+# button at the toolbar's end, which stands the field once pressed, and that
+# the iPad's form sheet draws neither until its list is pulled down, as a
+# search field that hides on scroll stands.
 - runFlow:
     when:
       notVisible: "Search memories"
     commands:
-      - tapOn: "Search"
+      - runFlow:
+          when:
+            visible: "Search"
+          commands:
+            - tapOn: "Search"
+      - runFlow:
+          when:
+            true: ${FLOATING_TABS == 'true'}
+          commands:
+            - swipe:
+                start: "50%, 40%"
+                end: "50%, 55%"
+                duration: 800
       - waitForAnimationToEnd
 - tapOn: "Search memories"
 - inputText: "Grace"

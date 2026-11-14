@@ -25,11 +25,12 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: got-it
 - tapOn: "Got it"
+# Note that the notice is checked at once and pressed after only its shot,
+# since it stands six seconds and a loaded runner has reached it after it
+# went.
 - extendedWaitUntil:
-    visible:
-      id: "failure-notice-undo"
+    visible: "Got it: “acceptInvite can add a member twice”"
     timeout: 5000
-- assertVisible: "Got it: “acceptInvite can add a member twice”"
 - takeScreenshot: got-it-undo
 - tapOn:
     id: "failure-notice-undo"
@@ -42,8 +43,8 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: got-it-undone
 
-# Resolve, from the thread's ⋯ menu: the thread settles, says so with Undo,
-# and Undo opens it again, the menu offering Resolve anew.
+# Resolve, from the thread's ⋯ menu or a wide window's bar: the thread
+# settles, says so with Undo, and Undo opens it again, Resolve offered anew.
 - launchApp:
     clearState: true
     arguments:
@@ -53,33 +54,14 @@ appId: dev.vespin.ios
     env:
       ROW: "What the expired invite page says"
 - waitForAnimationToEnd
-# Note that on an iPhone the thread's ⋯ is the one "More"; a split view's list has its own first, so where Resolve did not open the thread's is tapped by its place, a second time where that tap only closed the list's menu. Maestro 2.12 finds no "More" by a negative index.
-- extendedWaitUntil:
-    visible: "More"
-    timeout: 5000
-- tapOn: "More"
 - runFlow:
-    when:
-      notVisible: "Resolve"
-    commands:
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "More"
-          index: 1
-- runFlow:
-    when:
-      notVisible: "Resolve"
-    commands:
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "More"
-          index: 1
+    file: subflows/thread-act.yaml
+    env:
+      ACT: Resolve
 - tapOn: "Resolve"
 - extendedWaitUntil:
-    visible:
-      id: "failure-notice-undo"
+    visible: "Resolved “What the expired invite page says”"
     timeout: 5000
-- assertVisible: "Resolved “What the expired invite page says”"
 - takeScreenshot: resolve-undo
 - tapOn:
     id: "failure-notice-undo"
@@ -87,22 +69,13 @@ appId: dev.vespin.ios
     notVisible:
       id: "failure-notice-undo"
     timeout: 5000
-- tapOn: "More"
+# Note that Resolve is checked as pressable, since a regular window's bar
+# keeps it standing, dimmed, once the thread is settled.
 - runFlow:
-    when:
-      notVisible: "Resolve"
-    commands:
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "More"
-          index: 1
-- runFlow:
-    when:
-      notVisible: "Resolve"
-    commands:
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "More"
-          index: 1
-- assertVisible: "Resolve"
+    file: subflows/thread-act.yaml
+    env:
+      ACT: Resolve
+- assertVisible:
+    text: "Resolve"
+    enabled: true
 - takeScreenshot: resolve-undone

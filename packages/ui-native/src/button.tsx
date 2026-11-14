@@ -15,6 +15,7 @@ import {
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHint,
+  accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
   background,
@@ -433,6 +434,7 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
         accessibilityLabel(label),
         accessibilityValue(heard),
         accessibilityHint(hint),
+        accessibilityIdentifier("following-chip"),
       ]}
     >
       <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, false)}>

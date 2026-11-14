@@ -14,7 +14,9 @@ onFlowComplete:
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - waitForAnimationToEnd
 # A regular window, which stands "Choose an item" beside the Inbox's list, is
 # turned to landscape, wide enough for three columns: the system's tab bar

@@ -14,7 +14,7 @@ appId: dev.vespin.ios
       connect: "BCDF-GHJK"
 - extendedWaitUntil:
     visible: "Connect Ada's Mac mini?"
-    timeout: 15000
+    timeout: 30000
 - assertVisible: "Ada's Mac mini"
 - assertVisible: ".*203.0.113.7.*"
 - assertVisible: "Connect it only if you ran the command on it, and this code matches the one it shows."

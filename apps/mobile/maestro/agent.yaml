@@ -255,7 +255,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 00000000-0000-4000-8000-000000000000
-- assertVisible: "Reading the transcript|The transcript could not be read\\."
+- extendedWaitUntil:
+    visible: "Reading the transcript|The transcript could not be read\\."
+    timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-empty

@@ -11,7 +11,9 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Inbox"
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 30000
 - tapOn: "New task"
 - assertVisible: "Describe the task"
 - assertVisible: "ada/relay"
@@ -42,7 +44,9 @@ appId: dev.vespin.ios
 - launchApp:
     arguments:
       fixture: inbox
-- assertVisible: "Inbox"
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 30000
 - tapOn: "New task"
 - assertVisible: "Describe the task"
 - inputText: "Audit the invite emails for broken links."
@@ -70,7 +74,9 @@ appId: dev.vespin.ios
 - launchApp:
     arguments:
       fixture: inbox
-- assertVisible: "Inbox"
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 30000
 - tapOn: "New task"
 - assertVisible: "Describe the task"
 - inputText: "Show who sent each pending invite."

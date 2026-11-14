@@ -11,13 +11,15 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Inbox"
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 30000
 - runFlow:
     file: subflows/tab.yaml
     env:
       TAB: Tasks
 - tapOn: "Teammate invitations"
-- waitForAnimationToEnd
+- assertVisible: "Created by .*"
 - scrollUntilVisible:
     element: "Goal"
     direction: DOWN

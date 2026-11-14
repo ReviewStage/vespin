@@ -302,8 +302,11 @@ A flow is written one way throughout:
   end, which no scroll can center, or with `BELOW` scrolls up in short slow
   steps until it stands clear under the bar, for a page whose floating
   controls a centering swipe can leave it under, `tab.yaml` opens a tab,
-  going back from a pushed page first, and `dismiss.yaml` closes a menu by a
-  tap off it. Maestro reads a swipe's points as the flow is parsed, so a
+  going back from a pushed page first, `thread-act.yaml` reaches a thread's
+  read mark, Remind me, or Resolve, in a regular window's bar or a compact
+  window's ⋯, and `dismiss.yaml` closes a menu by a tap off it. Each launch
+  waits up to half a minute for its first words, since a loaded runner's
+  cold launch has drawn them after Maestro's own wait. Maestro reads a swipe's points as the flow is parsed, so a
   swipe's points are never a subflow's `env`.
 - **A swipe is closed before the next press**, by pressing its action or a
   tap on the row across from it, since a row left open takes the next press

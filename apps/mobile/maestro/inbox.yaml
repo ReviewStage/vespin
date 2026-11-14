@@ -11,7 +11,9 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 # The workspace's one button leads the bar, its menu holding the account and
 # Settings (`workspace.yaml`).
 - assertVisible:
@@ -116,15 +118,15 @@ appId: dev.vespin.ios
 - tapOn:
     id: "file-viewer-done"
 - waitForAnimationToEnd
-# The thread's ⋯ menu opens Remind me too: a compact window's bar holds the
-# menu, and a regular window's detail column its own, the last "More" on
-# screen beside the sidebar's. The sheet stands over the whole thread, and a
-# split view's thread fills its column's height beneath it. A tap off the
-# sheet closes it unchanged, so the row's Remind me below still finds the
-# thread under Open.
-- tapOn:
-    text: "More"
-    index: -1
+# The thread's own Remind me opens the sheet too, in its ⋯ on a compact
+# window and in a regular window's detail bar (`thread-act.yaml`). The sheet
+# stands over the whole thread, and a split view's thread fills its column's
+# height beneath it. A tap off the sheet closes it unchanged, so the row's
+# Remind me below still finds the thread under Open.
+- runFlow:
+    file: subflows/thread-act.yaml
+    env:
+      ACT: Remind me
 - tapOn: "Remind me"
 - assertVisible: "Pick a date and time…"
 - waitForAnimationToEnd

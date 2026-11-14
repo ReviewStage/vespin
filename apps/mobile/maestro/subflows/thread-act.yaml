@@ -1,0 +1,18 @@
+# thread-act.yaml -- brings the open thread's act `ACT` into reach: a regular window's detail bar stands it already, and a compact window opens the thread's ⋯ on it.
+#
+# Note that a regular window's bar stands the thread's read mark, Remind me,
+# and Resolve as buttons of their own and keeps only the rest in ⋯
+# (`threadActs`), while a compact window keeps every act in ⋯, so a flow
+# that always opened ⋯ found no Resolve there on the iPad. The way is chosen
+# by the device, `FLOATING_TABS` naming a regular window, as `tab.yaml`'s is.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn:
+          text: "More"
+          index: -1

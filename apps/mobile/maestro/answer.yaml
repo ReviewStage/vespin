@@ -19,7 +19,9 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Who can withdraw an invite?"
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 30000
 - waitForAnimationToEnd
 # A decide: the options as a card of rows, the recommended tagged; a
 # pick lights Send, which sends it with the note typed, and the thread reads
@@ -71,7 +73,7 @@ appId: dev.vespin.ios
       fixture: inbox
 - extendedWaitUntil:
     visible: "Who can withdraw an invite?"
-    timeout: 15000
+    timeout: 30000
 - runFlow:
     file: subflows/open-row.yaml
     env:
@@ -118,7 +120,7 @@ appId: dev.vespin.ios
       fixture: inbox
 - extendedWaitUntil:
     visible: "Who can withdraw an invite?"
-    timeout: 15000
+    timeout: 30000
 - runFlow:
     file: subflows/open-row.yaml
     env:
@@ -143,7 +145,7 @@ appId: dev.vespin.ios
       fixture: inbox
 - extendedWaitUntil:
     visible: "Who can withdraw an invite?"
-    timeout: 15000
+    timeout: 30000
 - runFlow:
     file: subflows/open-row.yaml
     env:
@@ -175,7 +177,7 @@ appId: dev.vespin.ios
       fixture: inbox
 - extendedWaitUntil:
     visible: "Who can withdraw an invite?"
-    timeout: 15000
+    timeout: 30000
 - runFlow:
     file: subflows/open-row.yaml
     env:
@@ -205,15 +207,16 @@ appId: dev.vespin.ios
       fixture: inbox
 - extendedWaitUntil:
     visible: "Who can withdraw an invite?"
-    timeout: 15000
+    timeout: 30000
 - runFlow:
     file: subflows/open-row.yaml
     env:
       ROW: "What the expired invite page says"
 - waitForAnimationToEnd
-- tapOn:
-    text: "More"
-    index: -1
+- runFlow:
+    file: subflows/thread-act.yaml
+    env:
+      ACT: Resolve
 - assertVisible: "Resolve"
 - takeScreenshot: resolve-menu
 - tapOn: "Resolve"
@@ -231,7 +234,7 @@ appId: dev.vespin.ios
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXL
 - extendedWaitUntil:
     visible: "Who can withdraw an invite?"
-    timeout: 15000
+    timeout: 30000
 - tapOn: "Who can withdraw an invite?"
 # Note that at this size the card may stand below the thread's first screen, so the flow scrolls to the recommended option rather than asserting it at once.
 - scrollUntilVisible:

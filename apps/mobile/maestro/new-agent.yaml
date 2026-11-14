@@ -19,6 +19,9 @@ appId: dev.vespin.ios
     element: "Teammate invitations"
     direction: DOWN
 - tapOn: "Teammate invitations"
+# Note that the page is waited for before the scroll, since a scroll that
+# finds nothing yet swipes, and that swipe flung the page past its Agents.
+- assertVisible: "Created by .*"
 - scrollUntilVisible:
     element: "New agent"
     direction: DOWN
