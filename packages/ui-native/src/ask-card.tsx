@@ -38,11 +38,15 @@ import { Fragment, type ReactNode } from "react";
 import { useAnnounced } from "./accessibility.js";
 import { Chip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { ProblemLine } from "./problem-line.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How thick the card's edge is drawn: a hairline, as the decide card's is. */
+/** What a flow finds an ask's note by. */
+const ASK_NOTE_ID = "ask-note";
+
 const HAIRLINE = 0.5;
 
 /** A row's inner margins, as a decide option's. */
@@ -131,23 +135,12 @@ function Card({
   );
 }
 
-/** What the box's last send said where it did not go, under the ask: what the answer lacks, or the refusal, in the danger's ink. */
+/** What the box's last send said where it did not go, under the ask: what the answer lacks, or the refusal, as every refusal stands (`ProblemLine`), never red words. */
 export function AskNote({ words }: { readonly words: string }) {
-  const colors = useColors();
   // Note that a note stands because a send did not go, so VoiceOver is told it at once, rather than the reader finding it only by walking the screen.
   useAnnounced(words, true);
 
-  return (
-    <Text
-      modifiers={[
-        font({ textStyle: TYPE_ROLE.ROW_LINE }),
-        foregroundStyle(colors.DANGER_TEXT),
-        accessibilityIdentifier("ask-note"),
-      ]}
-    >
-      {words}
-    </Text>
-  );
+  return <ProblemLine text={words} id={ASK_NOTE_ID} />;
 }
 
 /** The card's acts in a row under it, each a small capsule with its glyph, as the panel's presses under an ask stand. */
