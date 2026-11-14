@@ -27,7 +27,8 @@ import {
   VOICE_CALLER_ENVIRONMENT,
 } from "../testing/voice-callers.js";
 import { voiceCallDelegations } from "./voice-call-delegations.js";
-import { holdVoiceCall, VOICE_CALL_HELD, type VoiceCallObserver } from "./voice-call-lease.js";
+import type { VoiceCallObserver } from "./voice-call-holder.js";
+import { holdVoiceCall, VOICE_CALL_HELD } from "./voice-call-lease.js";
 
 /**
  * A voice call's delegations run by the lease holding it, over a fake
