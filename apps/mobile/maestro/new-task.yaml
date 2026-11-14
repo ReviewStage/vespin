@@ -3,6 +3,8 @@
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, whose models and repositories are
 # staged and whose task start is answered with the task made and its agent
@@ -109,38 +111,75 @@ appId: dev.vespin.ios
 - tapOn:
     id: "new-task-attach"
 - tapOn: "Photos"
-# Note that the waits on the photo picker and on the picked photo are long,
-# because the picker's process and the Photos file provider start cold on a
-# fresh simulator, which has taken a loaded runner thirteen seconds.
-- extendedWaitUntil:
-    visible: "Select up to .*"
-    timeout: 30000
-- waitForAnimationToEnd
-- takeScreenshot: new-task-picker
-- tapOn:
-    id: "PXGGridLayout-Info"
-    index: 0
-    optional: true
-# Note that the photo's other name is tapped only while nothing is picked,
-# because on iOS 27.2 both names find the same photo, and a second tap
-# takes it back.
+# On an iPad, whose floating tabs `FLOATING_TABS` names, Maestro reads none
+# of the photo picker, since XCTest's snapshot stops at its remote view, run
+# out of the app's process, and none of the sheet under it either. So there
+# the picker is known by the sheet's words going and coming back: it is shot,
+# drawn down to close it unpicked, its close pressed where that drag left it,
+# and the sheet, holding nothing, is canceled without a question.
 - runFlow:
     when:
-      visible: "Select Photos"
+      true: ${FLOATING_TABS == 'true'}
     commands:
+      - extendedWaitUntil:
+          notVisible: "Describe the task"
+          timeout: 30000
+      - waitForAnimationToEnd
+      - takeScreenshot: new-task-picker
+      - swipe:
+          start: "50%, 6%"
+          end: "50%, 85%"
+          duration: 600
+      - waitForAnimationToEnd
+      - runFlow:
+          when:
+            notVisible: "Describe the task"
+          commands:
+            - tapOn:
+                point: "4%, 10%"
+      - extendedWaitUntil:
+          visible: "Describe the task"
+          timeout: 10000
+      - tapOn: "Cancel"
+      - extendedWaitUntil:
+          notVisible: "Describe the task"
+          timeout: 5000
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      # Note that the waits on the photo picker and on the picked photo are long,
+      # because the picker's process and the Photos file provider start cold on a
+      # fresh simulator, which has taken a loaded runner thirteen seconds.
+      - extendedWaitUntil:
+          visible: "Select up to .*"
+          timeout: 30000
+      - waitForAnimationToEnd
+      - takeScreenshot: new-task-picker
       - tapOn:
-          text: "Photo, .*"
+          id: "PXGGridLayout-Info"
           index: 0
           optional: true
-- tapOn: "Add|Done"
-- extendedWaitUntil:
-    visible: "Picture 1"
-    timeout: 30000
-- waitForAnimationToEnd
-- takeScreenshot: new-task-picture
-- tapOn: "Cancel"
-- assertVisible: "Discard draft?"
-- tapOn: "Discard draft"
-- extendedWaitUntil:
-    notVisible: "Describe the task"
-    timeout: 5000
+      # Note that the photo's other name is tapped only while nothing is picked,
+      # because on iOS 27.2 both names find the same photo, and a second tap
+      # takes it back.
+      - runFlow:
+          when:
+            visible: "Select Photos"
+          commands:
+            - tapOn:
+                text: "Photo, .*"
+                index: 0
+                optional: true
+      - tapOn: "Add|Done"
+      - extendedWaitUntil:
+          visible: "Picture 1"
+          timeout: 30000
+      - waitForAnimationToEnd
+      - takeScreenshot: new-task-picture
+      - tapOn: "Cancel"
+      - assertVisible: "Discard draft?"
+      - tapOn: "Discard draft"
+      - extendedWaitUntil:
+          notVisible: "Describe the task"
+          timeout: 5000
