@@ -1,0 +1,567 @@
+created A4021549-0D8F-40A5-80C0-7C51E7F36966
+== swap 07:22:34
+Screen 1 power state set to off
+Screen 3 power state set to on
+Detected file type from extension: PNG
+Wrote screenshot to: /Users/deanstratakos/vespin-ipad-agent/out/jduoopen2/t2-a-after-swap.png
+t2-a-after-swap px: 2007 2853 
+An error was encountered processing the command (domain=FBSOpenApplicationServiceErrorDomain, code=5):
+Simulator device failed to launch dev.vespin.ios.
+The system shell probably crashed.
+Underlying error (domain=FBSOpenApplicationServiceErrorDomain, code=5):
+	The request to open "dev.vespin.ios" failed. The system shell probably crashed.
+	The system shell probably crashed.
+Detected file type from extension: PNG
+An error was encountered processing the command (domain=NSPOSIXErrorDomain, code=60):
+The operation couldn’t be completed. Timeout waiting for screen surfaces
+Timeout waiting for screen surfaces
+t2-b-relaunched px: 
+== after shutdown, enumerate
+Port:
+    UUID: B778A266-270D-4236-A4A3-9EF78D62DA39
+    Class: Unknown
+    Port Identifier: com.apple.display.captureservice
+    Power state: On
+
+Port:
+    UUID: E18668B5-4139-45F4-8044-BCA620F77AF2
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 1
+    Default width: 7680
+    Default height: 4320
+    Default pixel format: 'BGRA'
+
+Port:
+    UUID: CA923BD6-BC0B-49C8-9A25-0F5BFD157FEF
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 1
+    Default width: 720
+    Default height: 480
+    Default pixel format: 'BGRA'
+
+Port:
+    UUID: BDB22AAA-9F61-4B3E-A827-1E634B522993
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 0
+    Default width: 2007
+    Default height: 2853
+    Default pixel format: 'BGRA'
+
+Port:
+    UUID: 3B033D0B-4F49-460C-AA47-06FDA4B1882E
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 1
+    Default width: 720
+    Default height: 480
+    Default pixel format: 'BGRA'
+
+Port:
+    UUID: A0FA42B0-39D2-4670-B6C4-981533F3A2CD
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 0
+    Default width: 1398
+    Default height: 2034
+    Default pixel format: 'BGRA'
+
+Port:
+    UUID: C6770969-5942-4869-A69C-9A317863D50A
+    Class: DisplayAdapter
+    Port Identifier: com.apple.framebuffer.server
+    Power state: On
+    Creatable Screen Properties:
+    Connected Screens:
+    (1) LCD:
+        Screen ID: 1
+        Name: LCD
+        Unique ID: F29654A7-0F90-46EF-B711-C715B573524B
+        Device Name: primary
+        Seed: 7
+        Screen Type: Integrated
+        Pixel Size: {1398, 2034}
+        Dot Pitch: 460
+        Mask URL: file:///Library/Developer/DeviceKit/FramebufferMasks/1C896A2B-F0D7-405C-8D0F-66E4B80AD044.pdf
+        Mask ID: 1C896A2B-F0D7-405C-8D0F-66E4B80AD044
+        Chrome ID: com.apple.dt.devicekit.chrome.phone15
+        Preferred UI Scale: 3
+        Pixel Format: 'BGRA'
+        Colorspace: DCI-P3
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+    (2) TVOut:
+        Screen ID: 2
+        Name: TVOut
+        Unique ID: 74998F55-6A16-4FBA-A5E1-1D40CD4BC78D
+        Device Name: external-0
+        Seed: 8
+        Screen Type: TVOut
+        Pixel Size: {720, 480}
+        Dot Pitch: 72
+        Mask URL: (none)
+        Mask ID: (none)
+        Chrome ID: (none)
+        Preferred UI Scale: 1
+        Pixel Format: 'BGRA'
+        Colorspace: sRGB
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+    (3) LCD-1:
+        Screen ID: 3
+        Name: LCD-1
+        Unique ID: 05F7B326-9B91-451C-9652-936C472D3411
+        Device Name: primary-1
+        Seed: 9
+        Screen Type: Integrated
+        Pixel Size: {2007, 2853}
+        Dot Pitch: 460
+        Mask URL: file:///Library/Developer/DeviceKit/FramebufferMasks/BF0DC480-5EE2-4EC1-B02B-C75E94759832.pdf
+        Mask ID: BF0DC480-5EE2-4EC1-B02B-C75E94759832
+        Chrome ID: com.apple.dt.devicekit.chrome.phone14
+        Preferred UI Scale: 3
+        Pixel Format: 'BGRA'
+        Colorspace: sRGB
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+    (4) Wireless:
+        Screen ID: 4
+        Name: Wireless
+        Unique ID: A86BACF0-40A9-40D2-943D-8B520984454B
+        Device Name: wireless0
+        Seed: 10
+        Screen Type: CarPlay
+        Pixel Size: {720, 480}
+        Dot Pitch: 72
+        Mask URL: (none)
+        Mask ID: (none)
+        Chrome ID: (none)
+        Preferred UI Scale: 1
+        Pixel Format: 'BGRA'
+        Colorspace: sRGB
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+    (5) Resizable:
+        Screen ID: 5
+        Name: Resizable
+        Unique ID: 85F0EBF6-373F-44BE-91F1-77F9C9EA780C
+        Device Name: resizable
+        Seed: 11
+        Screen Type: Scene
+        Pixel Size: {7680, 4320}
+        Dot Pitch: 120
+        Mask URL: (none)
+        Mask ID: (none)
+        Chrome ID: (none)
+        Preferred UI Scale: 3
+        Pixel Format: 'BGRA'
+        Colorspace: sRGB
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+
+Port:
+    UUID: 26C8C773-1204-4961-B5BD-D7EEAF2D8360
+    Class: Accelerator
+    Port Identifier: com.apple.accelerator.metal
+    Power state: On
+
+Port:
+    UUID: CA524595-62FA-4422-9FF3-B2399E0A8F0B
+    Class: Accelerator
+    Port Identifier: com.apple.accelerator.iosurface
+    Power state: On
+
+Port:
+    UUID: C5101C60-6A81-4584-ADC1-08A3C82AE6C3
+    Class: LegacyHID
+    Port Identifier: com.apple.CoreSimulator.HID.LegacyHID
+    Power state: On
+
+Port:
+    UUID: BA628F79-FF3A-481F-A2FF-E8A47B5796FC
+    Class: StreamProcessor
+    Port Identifier: com.apple.SimStreamProcessor.default
+    Power state: On
+    Stream processor device
+    Specification:
+        SimStreamProcessorSpecificationPerformanceHint = SimStreamProcessorSpecificationPerformanceHint_MaximizePerformance
+        SimStreamProcessorSpecificationRendererHint = SimStreamProcessorSpecificationRendererHint_Metal
+        SimStreamProcessorSpecificationEmulationHint = SimStreamProcessorSpecificationEmulationHint_NoEmulation
+    Renderer private name: Apple M3 Pro
+    Renderer version: 1.3
+    Denylisted: No
+    Memory regions:
+
+Port:
+    UUID: E699410E-6604-49B5-B37D-951BEDEF9CA5
+    Class: StreamProcessor
+    Port Identifier: com.apple.SimStreamProcessor.default
+    Power state: On
+    Stream processor device
+    Specification:
+        SimStreamProcessorSpecificationPerformanceHint = SimStreamProcessorSpecificationPerformanceHint_MaximizePerformance
+        SimStreamProcessorSpecificationRendererHint = SimStreamProcessorSpecificationRendererHint_OpenGL
+        SimStreamProcessorSpecificationEmulationHint = SimStreamProcessorSpecificationEmulationHint_NoEmulation
+    Renderer private name: Apple M3 Pro
+    Renderer version: 4.1 Metal - 91.7
+    Denylisted: No
+    Memory regions:
+
+Port:
+    UUID: 484DCB3A-9DA5-44B3-9FFF-37DC8470B0ED
+    Class: StreamProcessor
+    Port Identifier: com.apple.SimStreamProcessor.default
+    Power state: On
+    Stream processor device
+    Specification:
+        SimStreamProcessorSpecificationPerformanceHint = SimStreamProcessorSpecificationPerformanceHint_Default
+        SimStreamProcessorSpecificationRendererHint = SimStreamProcessorSpecificationRendererHint_OpenGL
+        SimStreamProcessorSpecificationEmulationHint = SimStreamProcessorSpecificationEmulationHint_SerialProcessing
+    Renderer private name: Apple Software Renderer
+    Renderer version: 4.1 APPLE-24.0.2
+    Denylisted: No
+    Memory regions:
+
+Port:
+    UUID: C17F4309-C12D-4C67-8D53-413CDE8613CA
+    Class: Audio
+    Port Identifier: com.apple.CoreSimulator.Audio.HostRoute
+    Power state: On
+    Guest Audio Input -> Default Host Audio Device
+    Guest Audio Output -> Default Host Audio Device
+    Host Audio Devices:
+        BuiltInMicrophoneDevice: MacBook Pro Microphone (1 In / 0 Out)
+        BuiltInSpeakerDevice: MacBook Pro Speakers (0 In / 2 Out)
+        E0EE4FAD-077C-4E2A-BF98-2BB400000003: Dean’s iPhone 15 Pro Max Microphone (1 In / 0 Out)
+
+Port:
+    UUID: 8C66589B-AC79-4CAB-8B05-37795019F483
+    Class: Unknown
+    Port Identifier: com.apple.gputools.service.simulator
+    Power state: On
+
+Port:
+    UUID: AE9EBC7A-DC29-4977-A85E-E1B86C190786
+    Class: Unknown
+    Port Identifier: com.apple.gputools.GPUToolsAgentService.simulator
+    Power state: On
+
+== after boot, enumerate
+Port:
+    UUID: B778A266-270D-4236-A4A3-9EF78D62DA39
+    Class: Unknown
+    Port Identifier: com.apple.display.captureservice
+    Power state: On
+
+Port:
+    UUID: E18668B5-4139-45F4-8044-BCA620F77AF2
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 1
+    Default width: 7680
+    Default height: 4320
+    Default pixel format: 'BGRA'
+
+Port:
+    UUID: CA923BD6-BC0B-49C8-9A25-0F5BFD157FEF
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 1
+    Default width: 720
+    Default height: 480
+    Default pixel format: 'BGRA'
+
+Port:
+    UUID: BDB22AAA-9F61-4B3E-A827-1E634B522993
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 0
+    Default width: 2007
+    Default height: 2853
+    Default pixel format: 'BGRA'
+    IOSurface port:
+        width              = 2007
+        height             = 2853
+        bytes per row      = 8064
+        size               = 23019520
+        pixel format       = 'BGRA'
+        bytes per element  = 4
+        CPU cache mode     = Default cache
+        Pixel size casting = Yes
+
+Port:
+    UUID: 3B033D0B-4F49-460C-AA47-06FDA4B1882E
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 1
+    Default width: 720
+    Default height: 480
+    Default pixel format: 'BGRA'
+
+Port:
+    UUID: A0FA42B0-39D2-4670-B6C4-981533F3A2CD
+    Class: Display
+    Port Identifier: com.apple.framebuffer.display
+    Power state: On
+    Display class: 0
+    Default width: 1398
+    Default height: 2034
+    Default pixel format: 'BGRA'
+    IOSurface port:
+        width              = 1398
+        height             = 2034
+        bytes per row      = 5632
+        size               = 11468800
+        pixel format       = 'BGRA'
+        bytes per element  = 4
+        CPU cache mode     = Default cache
+        Pixel size casting = Yes
+
+Port:
+    UUID: C6770969-5942-4869-A69C-9A317863D50A
+    Class: DisplayAdapter
+    Port Identifier: com.apple.framebuffer.server
+    Power state: On
+    Creatable Screen Properties:
+    Connected Screens:
+    (1) LCD:
+        Screen ID: 1
+        Name: LCD
+        Unique ID: F29654A7-0F90-46EF-B711-C715B573524B
+        Device Name: primary
+        Seed: 12
+        Screen Type: Integrated
+        Pixel Size: {1398, 2034}
+        Dot Pitch: 460
+        Mask URL: file:///Library/Developer/DeviceKit/FramebufferMasks/1C896A2B-F0D7-405C-8D0F-66E4B80AD044.pdf
+        Mask ID: 1C896A2B-F0D7-405C-8D0F-66E4B80AD044
+        Chrome ID: com.apple.dt.devicekit.chrome.phone15
+        Preferred UI Scale: 3
+        Pixel Format: 'BGRA'
+        Colorspace: DCI-P3
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+    (2) TVOut:
+        Screen ID: 2
+        Name: TVOut
+        Unique ID: 74998F55-6A16-4FBA-A5E1-1D40CD4BC78D
+        Device Name: external-0
+        Seed: 13
+        Screen Type: TVOut
+        Pixel Size: {720, 480}
+        Dot Pitch: 72
+        Mask URL: (none)
+        Mask ID: (none)
+        Chrome ID: (none)
+        Preferred UI Scale: 1
+        Pixel Format: 'BGRA'
+        Colorspace: sRGB
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+    (3) LCD-1:
+        Screen ID: 3
+        Name: LCD-1
+        Unique ID: 05F7B326-9B91-451C-9652-936C472D3411
+        Device Name: primary-1
+        Seed: 14
+        Screen Type: Integrated
+        Pixel Size: {2007, 2853}
+        Dot Pitch: 460
+        Mask URL: file:///Library/Developer/DeviceKit/FramebufferMasks/BF0DC480-5EE2-4EC1-B02B-C75E94759832.pdf
+        Mask ID: BF0DC480-5EE2-4EC1-B02B-C75E94759832
+        Chrome ID: com.apple.dt.devicekit.chrome.phone14
+        Preferred UI Scale: 3
+        Pixel Format: 'BGRA'
+        Colorspace: sRGB
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+    (4) Wireless:
+        Screen ID: 4
+        Name: Wireless
+        Unique ID: A86BACF0-40A9-40D2-943D-8B520984454B
+        Device Name: wireless0
+        Seed: 15
+        Screen Type: CarPlay
+        Pixel Size: {720, 480}
+        Dot Pitch: 72
+        Mask URL: (none)
+        Mask ID: (none)
+        Chrome ID: (none)
+        Preferred UI Scale: 1
+        Pixel Format: 'BGRA'
+        Colorspace: sRGB
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+    (5) Resizable:
+        Screen ID: 5
+        Name: Resizable
+        Unique ID: 85F0EBF6-373F-44BE-91F1-77F9C9EA780C
+        Device Name: resizable
+        Seed: 16
+        Screen Type: Scene
+        Pixel Size: {7680, 4320}
+        Dot Pitch: 120
+        Mask URL: (none)
+        Mask ID: (none)
+        Chrome ID: (none)
+        Preferred UI Scale: 3
+        Pixel Format: 'BGRA'
+        Colorspace: sRGB
+        HDR Mode: SDR
+        Refresh Rate: 6000
+        UI Orientation: Ambiguous
+
+Port:
+    UUID: 26C8C773-1204-4961-B5BD-D7EEAF2D8360
+    Class: Accelerator
+    Port Identifier: com.apple.accelerator.metal
+    Power state: On
+
+Port:
+    UUID: CA524595-62FA-4422-9FF3-B2399E0A8F0B
+    Class: Accelerator
+    Port Identifier: com.apple.accelerator.iosurface
+    Power state: On
+
+Port:
+    UUID: C5101C60-6A81-4584-ADC1-08A3C82AE6C3
+    Class: LegacyHID
+    Port Identifier: com.apple.CoreSimulator.HID.LegacyHID
+    Power state: On
+
+Port:
+    UUID: BA628F79-FF3A-481F-A2FF-E8A47B5796FC
+    Class: StreamProcessor
+    Port Identifier: com.apple.SimStreamProcessor.default
+    Power state: On
+    Stream processor device
+    Specification:
+        SimStreamProcessorSpecificationPerformanceHint = SimStreamProcessorSpecificationPerformanceHint_MaximizePerformance
+        SimStreamProcessorSpecificationRendererHint = SimStreamProcessorSpecificationRendererHint_Metal
+        SimStreamProcessorSpecificationEmulationHint = SimStreamProcessorSpecificationEmulationHint_NoEmulation
+    Renderer private name: Apple M3 Pro
+    Renderer version: 1.3
+    Denylisted: No
+    Memory regions:
+
+Port:
+    UUID: E699410E-6604-49B5-B37D-951BEDEF9CA5
+    Class: StreamProcessor
+    Port Identifier: com.apple.SimStreamProcessor.default
+    Power state: On
+    Stream processor device
+    Specification:
+        SimStreamProcessorSpecificationPerformanceHint = SimStreamProcessorSpecificationPerformanceHint_MaximizePerformance
+        SimStreamProcessorSpecificationRendererHint = SimStreamProcessorSpecificationRendererHint_OpenGL
+        SimStreamProcessorSpecificationEmulationHint = SimStreamProcessorSpecificationEmulationHint_NoEmulation
+    Renderer private name: Apple M3 Pro
+    Renderer version: 4.1 Metal - 91.7
+    Denylisted: No
+    Memory regions:
+
+Port:
+    UUID: 484DCB3A-9DA5-44B3-9FFF-37DC8470B0ED
+    Class: StreamProcessor
+    Port Identifier: com.apple.SimStreamProcessor.default
+    Power state: On
+    Stream processor device
+    Specification:
+        SimStreamProcessorSpecificationPerformanceHint = SimStreamProcessorSpecificationPerformanceHint_Default
+        SimStreamProcessorSpecificationRendererHint = SimStreamProcessorSpecificationRendererHint_OpenGL
+        SimStreamProcessorSpecificationEmulationHint = SimStreamProcessorSpecificationEmulationHint_SerialProcessing
+    Renderer private name: Apple Software Renderer
+    Renderer version: 4.1 APPLE-24.0.2
+    Denylisted: No
+    Memory regions:
+
+Port:
+    UUID: C17F4309-C12D-4C67-8D53-413CDE8613CA
+    Class: Audio
+    Port Identifier: com.apple.CoreSimulator.Audio.HostRoute
+    Power state: On
+    Guest Audio Input -> Default Host Audio Device
+    Guest Audio Output -> Default Host Audio Device
+    Host Audio Devices:
+        BuiltInMicrophoneDevice: MacBook Pro Microphone (1 In / 0 Out)
+        BuiltInSpeakerDevice: MacBook Pro Speakers (0 In / 2 Out)
+        E0EE4FAD-077C-4E2A-BF98-2BB400000003: Dean’s iPhone 15 Pro Max Microphone (1 In / 0 Out)
+
+Port:
+    UUID: 8C66589B-AC79-4CAB-8B05-37795019F483
+    Class: Unknown
+    Port Identifier: com.apple.gputools.service.simulator
+    Power state: On
+
+Port:
+    UUID: AE9EBC7A-DC29-4977-A85E-E1B86C190786
+    Class: Unknown
+    Port Identifier: com.apple.gputools.GPUToolsAgentService.simulator
+    Power state: On
+
+Detected file type from extension: PNG
+Wrote screenshot to: /Users/deanstratakos/vespin-ipad-agent/out/jduoopen2/t1-a-booted.png
+t1-a-booted px: 2007 2853 
+dev.vespin.ios: 79364
+Detected file type from extension: PNG
+Wrote screenshot to: /Users/deanstratakos/vespin-ipad-agent/out/jduoopen2/t1-b-launched.png
+t1-b-launched px: 2007 2853 
+== swap 07:26:00
+Screen 1 power state set to off
+Screen 3 power state set to on
+Detected file type from extension: PNG
+Wrote screenshot to: /Users/deanstratakos/vespin-ipad-agent/out/jduoopen2/t1-c-swapped-again.png
+t1-c-swapped-again px: 2007 2853 
+An error was encountered processing the command (domain=FBSOpenApplicationServiceErrorDomain, code=5):
+Simulator device failed to launch dev.vespin.ios.
+The system shell probably crashed.
+Underlying error (domain=FBSOpenApplicationServiceErrorDomain, code=5):
+	The request to open "dev.vespin.ios" failed. The system shell probably crashed.
+	The system shell probably crashed.
+Detected file type from extension: PNG
+Wrote screenshot to: /Users/deanstratakos/vespin-ipad-agent/out/jduoopen2/t1-d-relaunched.png
+t1-d-relaunched px: 2007 2853 
+2026-11-14 07:26:02.609 Df Vespin[79364:ab3ce7] [com.apple.BackBoard:EventDelivery] policyStatus:<0x1099c5500; _UIKeyWindowSceneObserver-0x1099439c0; fb/FBSceneManager:sceneID%3Adev.vespin.ios-default; <none; generation: 0>> was:<ancestor; generation: 77; finalStringToken>
+2026-11-14 07:26:02.609 Df Vespin[79364:ab3ce7] [com.apple.BackBoard:EventDelivery] [BKSHIDEventObserver] policyDidChange: 0x1099c5500 -> <_UIKeyWindowSceneObserver: 0x1099439c0> now:<none; generation: 0>
+2026-11-14 07:26:02.611 Df Vespin[79364:ab3b8e] [com.apple.UIKit:KeyWindow] Scene target of keyboard event deferring environment did change: target=0; ancestor=0; scene: UIWindowScene: 0x10679c780; scene identity: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default
+2026-11-14 07:26:02.611 Df Vespin[79364:ab3ce7] [com.apple.BackBoard:EventDelivery] policyStatus:<0x1099c5b90; _UIKeyboardFocusAssistant-0x1064d4b40; fb/FBSceneManager:sceneID%3Adev.vespin.ios-default; <none; generation: 0>> was:<ancestor; generation: 77; finalStringToken>
+2026-11-14 07:26:02.612 Df Vespin[79364:ab3ce7] [com.apple.BackBoard:EventDelivery] [BKSHIDEventObserver] policy-per (
+    <0x1099c5500; _UIKeyWindowSce…ver-0x1099439c0; fb/FBSceneManag…pin.ios-default; <none; generation: 0>>,
+    <0x10666ed10; _UIKeyWindowSce…ver-0x109a9cf90; com.apple.UIKit…pin.ios-default; <none; generation: 0>>,
+    <0x1099c5b90; _UIKeyboardFocu…ant-0x1064d4b40; fb/FBSceneManag…pin.ios-default; <none; generation: 0>>
+)
+2026-11-14 07:26:02.612 Df Vespin[79364:ab3b8e] [com.apple.UIKit:KeyboardFocusAssistant] Event deferring policy changed: finalScene:Y->N (token: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-14 07:26:09.161 Df Vespin[79364:ab3ce7] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> was interrupted
+2026-11-14 07:26:09.162 Df Vespin[79364:ab3ce7] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> attempting immediate handshake from interruption handler
+2026-11-14 07:26:09.162 Df Vespin[79364:ab3ce7] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> sent handshake
+2026-11-14 07:26:15.733 Df Vespin[79364:ab45c8] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> was interrupted
+2026-11-14 07:26:15.734 Df Vespin[79364:ab45c8] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> attempting immediate handshake from interruption handler
+2026-11-14 07:26:15.734 Df Vespin[79364:ab45c8] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> sent handshake
+2026-11-14 07:26:21.612 Df Vespin[79364:ab45cb] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> was interrupted
+2026-11-14 07:26:21.612 Df Vespin[79364:ab45cb] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> attempting immediate handshake from interruption handler
+2026-11-14 07:26:21.614 Df Vespin[79364:ab45cb] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> sent handshake
+2026-11-14 07:26:28.177 Df Vespin[79364:ab5048] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> was interrupted
+2026-11-14 07:26:28.178 Df Vespin[79364:ab5048] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> attempting immediate handshake from interruption handler
+2026-11-14 07:26:28.178 Df Vespin[79364:ab5048] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> sent handshake
+2026-11-14 07:26:35.512 Df Vespin[79364:ab4e45] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> was interrupted
+2026-11-14 07:26:35.513 Df Vespin[79364:ab4e45] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> attempting immediate handshake from interruption handler
+2026-11-14 07:26:35.514 Df Vespin[79364:ab4e45] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x106565860 com.apple.frontboard.systemappservices> sent handshake
