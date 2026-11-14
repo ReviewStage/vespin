@@ -17,7 +17,6 @@ export const CALL_CONTROL_LABEL = {
   UNMUTE_MICROPHONE: "Unmute microphone",
   MUTE_SPEAKER: "Mute speaker",
   UNMUTE_SPEAKER: "Unmute speaker",
-  STOP_AGENT: "Stop",
   END_CALL: "End call",
 } as const;
 

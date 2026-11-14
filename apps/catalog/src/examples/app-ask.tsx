@@ -72,9 +72,16 @@ function ready(url: string, width: number, height: number) {
 
 /** Apps past the two the stack draws behind its front, to pile. */
 const MORE_APPS = ["Notes", "Calculator", "Maps", "Music", "Preview"].map((name) => ({
+  id: name,
   name,
   iconSrc: ICON,
 }));
+
+/** How long an ask the catalog opens has left: about four minutes, as one shown a minute ago. */
+const ASK_LEFT_MS = 252_000;
+
+/** The most characters of a Deny's words, as the Mac takes them. */
+const NOTE_MAX_LENGTH = 2000;
 
 /** A button that puts the ask about `app` to the developer, whose answers put it away. */
 function Asking({
@@ -85,14 +92,28 @@ function Asking({
   app: { name: string; bundleId?: string; iconSrc?: string };
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  const [expiresAt, setExpiresAt] = useState(0);
   const close = () => setOpen(false);
+
+  const ask = () => {
+    setExpiresAt(Date.now() + ASK_LEFT_MS);
+    setOpen(true);
+  };
 
   return (
     <>
-      <Button variant={BUTTON_VARIANT.OUTLINE} aria-haspopup="dialog" onClick={() => setOpen(true)}>
+      <Button variant={BUTTON_VARIANT.OUTLINE} aria-haspopup="dialog" onClick={ask}>
         {label}
       </Button>
-      <AppAsk open={open} app={app} onAllowOnce={close} onAllowAlways={close} onDeny={close} />
+      <AppAsk
+        open={open}
+        app={app}
+        onAllowOnce={close}
+        onAllowAlways={close}
+        onDeny={close}
+        expiresAt={expiresAt}
+        noteMaxLength={NOTE_MAX_LENGTH}
+      />
     </>
   );
 }
@@ -114,21 +135,23 @@ function AppAsks(): React.JSX.Element {
       <CatalogSection id="app-window-stack" title="The apps an agent is using">
         <Inline>
           <Stack
-            apps={[{ name: "Simulator", iconSrc: ICON, window: ready(PHONE, 236, 512) }]}
-            using="Simulator"
-          />
-          <Stack
             apps={[
-              { name: "Xcode", window: ready(EDITOR, 640, 400) },
-              { name: "Simulator", iconSrc: ICON },
-              { name: "Safari" },
+              { id: "Simulator", name: "Simulator", iconSrc: ICON, window: ready(PHONE, 236, 512) },
             ]}
             using="Simulator"
           />
           <Stack
             apps={[
-              { name: "Xcode", window: ready(EDITOR, 640, 400) },
-              { name: "Simulator", iconSrc: ICON },
+              { id: "Xcode", name: "Xcode", window: ready(EDITOR, 640, 400) },
+              { id: "Simulator", name: "Simulator", iconSrc: ICON },
+              { id: "Safari", name: "Safari" },
+            ]}
+            using="Simulator"
+          />
+          <Stack
+            apps={[
+              { id: "Xcode", name: "Xcode", window: ready(EDITOR, 640, 400) },
+              { id: "Simulator", name: "Simulator", iconSrc: ICON },
               ...MORE_APPS,
             ]}
             using="Xcode"
@@ -136,6 +159,7 @@ function AppAsks(): React.JSX.Element {
           <Stack
             apps={[
               {
+                id: "Simulator",
                 name: "Simulator",
                 iconSrc: ICON,
                 window: { state: { kind: PICTURE_STATE.READING }, width: 236, height: 512 },
@@ -145,6 +169,7 @@ function AppAsks(): React.JSX.Element {
           <Stack
             apps={[
               {
+                id: "Simulator",
                 name: "Simulator",
                 iconSrc: ICON,
                 window: {
@@ -164,12 +189,20 @@ function AppAsks(): React.JSX.Element {
       <CatalogSection id="app-stack-pill" title="The apps minimized, at work and done">
         <Inline>
           <AppStackPill
-            apps={[{ name: "Simulator", iconSrc: ICON }, { name: "Xcode" }, { name: "Safari" }]}
+            apps={[
+              { id: "Simulator", name: "Simulator", iconSrc: ICON },
+              { id: "Xcode", name: "Xcode" },
+              { id: "Safari", name: "Safari" },
+            ]}
             using="Simulator"
             onRestore={() => undefined}
           />
           <AppStackPill
-            apps={[{ name: "Simulator", iconSrc: ICON }, { name: "Xcode" }, { name: "Safari" }]}
+            apps={[
+              { id: "Simulator", name: "Simulator", iconSrc: ICON },
+              { id: "Xcode", name: "Xcode" },
+              { id: "Safari", name: "Safari" },
+            ]}
             onRestore={() => undefined}
           />
         </Inline>

@@ -1221,7 +1221,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const { task, document, tasks, relations } = overview;
   const byId = new Map(tasks.map((each) => [each.id, each]));
   const subTasks = subTasksOf(tasks, task.id);
-  const finished = subTaskCount(subTasks);
+  const finished = subTaskCount(task, subTasks);
 
   // Note that each side is listed apart, since one task may both wait on this one and hold it up.
   const sides = [
@@ -1357,9 +1357,10 @@ type UseAgentArchiveAskResult = {
  * an agent, and `ask` is the system's alert that asks it, which the screen
  * stands beside its `<Screen>`, as every list's questions stand. Note that
  * the question reads where the agent stands now, as the agent page's menu
- * asks (`useArchiveAsk`), read afresh as it's raised and checked again as
- * its act is pressed, because one that starts working while the alert is up
- * would otherwise be stopped and archived without a word of it.
+ * asks (`useArchiveAsk`), raised at once on where the list holds it and
+ * checked afresh as its act is pressed, because one that starts working
+ * while the alert is up would otherwise be stopped and archived without a
+ * word of it.
  */
 export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
   const acts = useAgentRowActs();

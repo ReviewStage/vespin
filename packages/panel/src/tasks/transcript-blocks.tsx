@@ -21,7 +21,13 @@ import {
   type ToolBlock,
   type ToolState,
 } from "@repo/features/tool-call-block";
-import { type CallMachine, type SentWords, todosCount } from "@repo/features/tool-call-model";
+import {
+  type CallMachine,
+  type MachineNotRun,
+  machineNotRunLabel,
+  type SentWords,
+  todosCount,
+} from "@repo/features/tool-call-model";
 import {
   agentCallLine,
   CALL_KIND,
@@ -195,6 +201,7 @@ import {
   inlineCodeTarget,
 } from "./inline-code-target.js";
 import { LoneLinkCard } from "./lone-link-card.js";
+import { MachineNotRunNote } from "./machine-not-run.js";
 import { fileChip, linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
 import { ReplyButtonLink } from "./reply-button-link.js";
@@ -204,8 +211,8 @@ import {
   TRANSCRIPT_CODE_AND_TABLE_COMPONENTS,
   TranscriptMarkdownSource,
 } from "./transcript-markdown.js";
-import { useWordTargets } from "./use-known-names.js";
 import { opensAsLink, useOpenLink } from "./use-open-link.js";
+import { useKeyTarget } from "./use-task-outside.js";
 import type { CutBody } from "./whole-parts.js";
 import { WorkingTime } from "./working-time.js";
 
@@ -710,8 +717,9 @@ function MentionElement({
 
 /**
  * A task's key written in a transcript's words: its task's chip where the
- * window lists a task by it (`useWordTargets`), as a link to the task is
- * drawn (`MentionElement`), and the key as written where it lists none. It
+ * window lists a task by it, or once the service found one it lists not
+ * (`useKeyTarget`), as a link to the task is drawn (`MentionElement`), and
+ * the key as written where it lists none. It
  * is read as it is drawn, so the chip follows the tasks as they are listed
  * while the words around it stand.
  */
@@ -721,7 +729,7 @@ function TaskKeyElement({
 }: MarkdownNodeProps & { children?: ReactNode }): ReactNode {
   const doors = useMentionDoors();
   const key = String(node?.properties[TASK_KEY_ELEMENT.KEY] ?? "");
-  const target = useWordTargets().get(key);
+  const target = useKeyTarget(key);
 
   return (target === undefined ? undefined : linkChip(target, key, doors)) ?? children;
 }
@@ -1473,11 +1481,14 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     held?: HeldCall | undefined;
     /** What the body holds under the call's answer, seen once the row is opened, such as the window a computer call read. */
     answered?: ReactNode;
+    /** For a terminal command or an action on an app that ran nothing on its machine, how, which the row says quietly at its line's end and its body in the answer's place; none for the rest. */
+    notRun?: MachineNotRun | undefined;
   };
 
 /** A call held for an answer, as its row draws it (`TranscriptTool`'s `held`). */
 export interface HeldCall {
-  readonly status: string;
+  /** Where the ask stands, in words, or words that move on their own, as a countdown to an ask's close. */
+  readonly status: ReactNode;
   /** Whether it still waits on an answer, which holds the call rather than working it. */
   readonly waiting: boolean;
   readonly about: string | undefined;
@@ -1538,6 +1549,7 @@ export function TranscriptTool({
   cut,
   held,
   answered,
+  notRun,
   ...props
 }: TranscriptToolProps): ReactNode {
   const Icon = CALL_ICON[kind];
@@ -1596,14 +1608,23 @@ export function TranscriptTool({
             callPlace(kind, server)
           )
         }
-        status={held?.status}
+        status={held?.status ?? (notRun === undefined ? undefined : machineNotRunLabel(notRun))}
         paused={held?.waiting}
       />
       <ToolContent bare>
         {held?.about === undefined ? null : (
           <NoteLine look={NOTE_LINE_LOOK.INSET}>{held.about}</NoteLine>
         )}
-        {input.kind === TOOL_BLOCK.COMMAND ? (
+        {notRun !== undefined ? (
+          <>
+            {input.kind === TOOL_BLOCK.COMMAND ? (
+              <ToolTerminal input={input} block={undefined} errorText={undefined} />
+            ) : (
+              <ToolInput block={input} markdown={toolMarkdown} />
+            )}
+            <MachineNotRunNote notRun={notRun} machine={machine} />
+          </>
+        ) : input.kind === TOOL_BLOCK.COMMAND ? (
           cut === undefined ? (
             <ToolTerminal input={input} block={output} errorText={errorText} />
           ) : (

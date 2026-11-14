@@ -403,6 +403,27 @@ export function memoizedSelect<Inputs extends unknown[], A>(
 /** How deep `shareAppState` compares before it takes the new value whole, as Query's own `replaceEqualDeep` stops. */
 const SHARE_DEPTH = 500;
 
+/** The id an array's item goes by, where it is a plain object carrying one as a string. */
+function itemId<T>(item: T): string | undefined {
+  if (!isPlainObject(item)) return undefined;
+  const id = item["id"];
+
+  return Predicate.isString(id) ? id : undefined;
+}
+
+/** The items of `held` that go by an id, by it, so an item is laid over its own and not over whichever stood in its place. */
+function heldById<T>(held: readonly T[]): ReadonlyMap<string, T> {
+  const byId = new Map<string, T>();
+
+  for (const item of held) {
+    const id = itemId(item);
+
+    if (id !== undefined && !byId.has(id)) byId.set(id, item);
+  }
+
+  return byId;
+}
+
 /** Whether `value` is an array with no holes and no keys of its own beside its items. */
 function isPlainArray<T>(value: T): value is T & readonly unknown[] {
   return Array.isArray(value) && value.length === Object.keys(value).length;
@@ -437,6 +458,10 @@ function isPlainObject<T>(value: T): value is T & ReadonlyRecord<string, unknown
  * there). Answering `next`'s node keeps the next comparison
  * stopping at the first identical object. A node with any part kept from
  * `held` is still a copy, so a write's unchanged parts keep their identity.
+ * An array's items that carry an `id` are laid over the held item of the
+ * same id, so a thread landing at the Inbox's head, or a workspace's list
+ * standing in for another's, shares by identity rather than walking each
+ * row into its neighbor.
  */
 export function shareAppState<T>(held: T, next: T, depth = 0): T {
   if (held === next) return next;
@@ -454,14 +479,26 @@ export function shareAppState<T>(held: T, next: T, depth = 0): T {
   const nextKeys = array ? undefined : Object.keys(after);
   // SAFETY: `nextKeys` is absent only where `array` holds, so `next` is a plain array.
   const nextSize = nextKeys?.length ?? (next as readonly unknown[]).length;
+  let partners: ReadonlyMap<string, unknown> | undefined;
   const parts: unknown[] = [];
   let keptHeld = 0;
   let keptNext = 0;
 
   for (let at = 0; at < nextSize; at++) {
     const key = nextKeys?.[at] ?? at;
-    const heldItem = before[key];
     const nextItem = after[key];
+    const placed = before[key];
+    const id = !array || placed === nextItem ? undefined : itemId(nextItem);
+    // Note that the item at the same place is its partner wherever it goes by the same id, so a row edited in place builds no map, and a held row whose id repeats an earlier one's keeps its own partner.
+    const moved = id !== undefined && itemId(placed) !== id;
+
+    // Note that an item with an id is laid over the held item of that id, never the one that stood at its place, because a list a row joined or left at its head would otherwise lay every row over its neighbor and hold copies of all of them.
+    if (moved) {
+      // SAFETY: `id` is found only where `array` holds, so `held` is a plain array.
+      partners ??= heldById(held as readonly unknown[]);
+    }
+
+    const heldItem = moved ? partners?.get(id) : placed;
 
     // Note that a part that is the same, or no object on either side, needs no walk of its own.
     const shared =
@@ -471,7 +508,7 @@ export function shareAppState<T>(held: T, next: T, depth = 0): T {
 
     parts.push(shared);
 
-    if (shared === heldItem && (array ? at < heldSize : Object.hasOwn(before, key))) keptHeld++;
+    if (shared === placed && (array ? at < heldSize : Object.hasOwn(before, key))) keptHeld++;
 
     if (shared === nextItem) keptNext++;
   }

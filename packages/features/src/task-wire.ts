@@ -766,6 +766,15 @@ const taskSummaryFields = {
   runsOn: EffectSchema.optionalKey(taskRunsOnSchema),
   /** The task this one is a child of; absent for a task at the top, and from a service before child tasks. */
   parentTaskId: EffectSchema.optionalKey(wireUuidSchema),
+  /**
+   * How many of the task's direct children the reader reaches, and how many
+   * of them are finished (done or canceled), as the service counts them over
+   * every task, the ones a list does not hold among them; absent for a task
+   * with none, and from a service before it counted them.
+   */
+  subTasks: EffectSchema.optionalKey(
+    EffectSchema.Struct({ finished: countedNumber, total: countedNumber }),
+  ),
   /** How the task is worked; absent from a service before modes, where every task is worked by its agents. */
   mode: EffectSchema.optionalKey(taskModeSchema),
   /**
@@ -792,8 +801,8 @@ const taskSummaryFields = {
   /**
    * The members following the task, the earliest to follow first, each
    * with whether they are its assignee and whether its agents may use their
-   * machines (`@repo/wire`'s `taskFollowerSchema`); absent while its
-   * workspace has Following off, and from a service before it.
+   * machines (`@repo/wire`'s `taskFollowerSchema`); absent from a service
+   * before it.
    */
   followers: EffectSchema.optionalKey(EffectSchema.Array(taskFollowerSchema)),
 };

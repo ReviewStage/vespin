@@ -157,6 +157,7 @@
     "./host-release": "./src/host-release.js",
     "./cli-release": "./src/cli-release.js",
     "./machine-command-live": "./src/machine-command-live.js",
+    "./machine-live": "./src/machine-live.js",
     "./machine-command-wire": "./src/machine-command-wire.js",
     "./recording-wire": "./src/recording-wire.js",
     "./sentry-install-wire": "./src/sentry-install-wire.js",

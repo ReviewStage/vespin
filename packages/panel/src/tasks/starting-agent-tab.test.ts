@@ -94,20 +94,17 @@ async function agentTabWords(
   return container.textContent ?? "";
 }
 
-test("an agent's tab while its first launch boots reads its empty transcript as read, saying its sandbox is starting and no placeholder", async () => {
+test("an agent's tab while its first launch boots reads its empty transcript as read, saying Preparing… and no placeholder", async () => {
   const words = await bootingTabWords({ phase: BOOT_PHASE.STARTING, since: Date.now() });
 
-  assert.ok(
-    words.includes("Starting a cloud sandbox…"),
-    "the empty transcript says where it starts",
-  );
+  assert.ok(words.includes("Preparing…"), "the empty transcript says where it starts");
   assert.ok(
     !words.includes(readingWords("the transcript")),
     "no placeholder stands for a transcript already read",
   );
 });
 
-test("an agent's tab while its start waits on its workspace's drive says Building… in place of its sandbox starting", async () => {
+test("an agent's tab while its start waits on its workspace's drive says Building… in place of Preparing…", async () => {
   const words = await bootingTabWords({
     phase: BOOT_PHASE.STARTING,
     since: Date.now(),
@@ -115,19 +112,13 @@ test("an agent's tab while its start waits on its workspace's drive says Buildin
   });
 
   assert.ok(words.includes(BOOT_WORDS.BUILDING), "the empty transcript says it is building");
-  assert.ok(
-    !words.includes("Starting a cloud sandbox…"),
-    "Building… stands in place of the sandbox starting",
-  );
+  assert.ok(!words.includes("Preparing…"), "Building… stands in place of Preparing…");
 });
 
 test("an agent's tab just made, before its first transcript page lands, says Starting… as the start's own tab did rather than a placeholder", async () => {
   const words = await agentTabWords(AGENT_STATUS.STARTING, []);
 
-  assert.ok(
-    words.includes("Starting a cloud sandbox…"),
-    "the empty transcript says it is starting",
-  );
+  assert.ok(words.includes("Preparing…"), "the empty transcript says it is starting");
   assert.ok(
     !words.includes(readingWords("the transcript")),
     "no placeholder stands between the start's tab and the agent's",

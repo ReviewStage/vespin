@@ -169,6 +169,7 @@ import { useInboxTaskAgents } from "./use-inbox-task-agents.js";
 import { isOverviewTab, type MainTab, type MainTabsControl, useMainTabs } from "./use-main-tabs.js";
 import { type NewTask, useNewTask } from "./use-new-task.js";
 import { usePinWrites } from "./use-pin-writes.js";
+import { usePinnedTabTasks } from "./use-pinned-tab-tasks.js";
 import {
   DRAWN_KINDS,
   type SidebarPin,
@@ -344,6 +345,8 @@ export interface TasksControl {
   };
   /** The tasks a rename, a pin, or where they stand, asked here and not yet carried by the list, is drawn over (main's view's own), which a list held still moves at once; none where nothing waits. */
   pendingTasks?: ReadonlySet<string>;
+  /** The workspaces in which the account reaches any task, as the service last said, whatever the list holds of them (`TasksView.taskWorkspaces`); absent before it says. */
+  taskWorkspaces?: readonly string[];
   /** The workspaces the account is a member of, its first one first; none before the first read lands. */
   workspaces: readonly Workspace[];
   /** The workspace the sidebar lists and New task starts in; absent while none is listed, when every task is listed. */
@@ -1298,6 +1301,9 @@ export function useTasksTab(input: {
     inboxView !== undefined ? inboxTaskAgents.heldIds : agents.heldIds,
     cloudBrowserAgents,
   );
+
+  // A tab pinned on a task the list holds not reads its task into the list, so the sidebar draws its pin.
+  usePinnedTabTasks(sidePanel.pins, listCollections.tasks);
 
   const { keys: tabKeys, onKeys, onKeysTaken } = useColumnKeys();
 
@@ -3467,6 +3473,7 @@ export function useTasksTab(input: {
       tasks: listedSidebar,
     },
     pendingTasks,
+    ...(tasks.taskWorkspaces === undefined ? undefined : { taskWorkspaces: tasks.taskWorkspaces }),
     workspaces: viewed.workspaces,
     workspace: listedWorkspace,
     onChooseWorkspace: chooseWorkspace,

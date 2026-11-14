@@ -33,7 +33,16 @@ import {
 import { markedAs, readMarkOf } from "@repo/features/read-mark";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import { revisionsOfLiveRows, TASK_HISTORY_READ } from "@repo/features/task-history-live";
-import { TASK_LIST_READ, TASK_ROWS_READ } from "@repo/features/task-list-live";
+import {
+  PERSON_PAGE_READ,
+  settledPageCursorOf,
+  TASK_LIST_READ,
+  TASK_PAGE_READ,
+  TASK_RELATIONS_READ,
+  TASK_ROWS_READ,
+  TASK_SEARCH_READ,
+  type TaskListLiveRows,
+} from "@repo/features/task-list-live";
 import { pagesOfLiveRows, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
 import {
@@ -459,6 +468,14 @@ export interface TasksComposer extends Composer {
   pullRequestListings: Effect.Effect<Stream.Stream<PullRequestListing>, never, Scope.Scope>;
   /** Reads the task or the agent `id` names into the list as a cold task where the list holds neither, behind the open that asked, which it answers at once; a second open reads nothing. */
   openedOutside: (id: string) => Effect.Effect<void>;
+  /**
+   * The tasks the account's Inbox holds items of, as its read last named
+   * them, the ones waiting on the reader first: each the list holds not is
+   * read into it as a cold task (`openedOutside`), a few at a time, so the
+   * Inbox lists and counts its items as any; answered at once. A later call
+   * stands in place of the one before.
+   */
+  inboxNamed: (taskIds: readonly string[]) => Effect.Effect<void>;
   /** Every workspace's repositories the windows hold asked again, as the member's own token saved or removed moves them, answering once each has landed. */
   repositoriesMoved: Effect.Effect<void>;
 }
@@ -631,7 +648,7 @@ interface ReaderStamp {
   readonly readerId: string | undefined;
 }
 
-/** A row's followers, the earliest first; none while its workspace has Following off. */
+/** A row's followers, the earliest first; none where the service answered none. */
 function rowFollowersOf(row: PlanRow): readonly RowFollower[] | undefined {
   const ids = row.followerIds;
 
@@ -654,6 +671,9 @@ function rowFollowerFields(followers: readonly RowFollower[]): Partial<PlanRow> 
  * several events at once (resume, then unlock) seals the list again once.
  */
 const RESYNC_SETTLE = Duration.seconds(10);
+
+/** How many of the tasks the Inbox names are read outside the list at once (`inboxNamed`). */
+const INBOX_READS_AT_ONCE = 4;
 
 type TakeAnsweredResult = {
   readonly taskId: string;
@@ -1195,6 +1215,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           });
         },
         txWait: () => listWait,
+        readAgain: (id) => readTaskRows(id),
       }),
     );
 
@@ -1205,6 +1226,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   yield* Effect.addFinalizer(() => Scope.close(taskList.scope, Exit.void));
 
   const decodeTaskRows = Schema.decodeUnknownOption(TASK_ROWS_READ.rows);
+  const decodeTaskPage = Schema.decodeUnknownOption(TASK_PAGE_READ.rows);
+  const decodePersonPage = Schema.decodeUnknownOption(PERSON_PAGE_READ.rows);
   /** Each read out now of a task the list does not hold, by the id a window opened, which every ask meanwhile joins. */
   const coldReads = yield* FiberMap.make<string>();
   /** The ids the service answered no task for, as one the account does not reach, so a second open reads nothing; a read it did not answer is asked again at the next open. */
@@ -1213,7 +1236,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   const coldRead = new Set<string>();
   /** The ids read outside the list now, which a sign-out meanwhile reads again for the session signing in. */
   const coldPending = new Set<string>();
-  /** The ids opened while the list could not be read outside of: signed out, or not answered yet, since until then every task is outside it. Each is read once the list answers, where it holds it not. */
+  /** The ids opened while the list could not be read outside of: signed out, or not answered yet, since until then every task is outside it, and those whose read the service did not answer. Each is read once the list answers, where it holds it not. */
   const coldWaiting = new Set<string>();
 
   /**
@@ -1225,14 +1248,38 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    * is read again. A list replaced by a sign-out meanwhile draws nothing of
    * it.
    */
-  const openedOutside = (id: string): Effect.Effect<void> =>
+  /** Whether a task outside the list can be read into it now: signed in, and the list answered, since until then every task is outside it. */
+  const readableOutside = (): boolean =>
+    gate() && dependencies.accountId() !== undefined && view.listStatus === TASKS_READ.READY;
+
+  /** The task or the agent `id` names read again for the list, as a task it let go while a read of it was out is (`task-list-collections.ts`); none where the service did not answer, which is read again at the list's next answer, as an open's read is. */
+  const readTaskRows = (id: string): Effect.Effect<TaskListLiveRows | undefined> =>
+    Effect.gen(function* () {
+      const userId = dependencies.accountId();
+      const { collections } = taskList;
+
+      if (userId === undefined) return undefined;
+      const sealed = yield* served(client.liveRead(TASK_ROWS_READ, { id, userId }, {}));
+
+      if ("failure" in sealed) {
+        if (taskList.collections === collections && !inboxAsked.has(id)) coldWaiting.add(id);
+
+        return undefined;
+      }
+
+      const { plans, agents } = sealed.queries;
+
+      return Option.getOrUndefined(decodeTaskRows({ plans: plans.rows, agents: agents.rows }));
+    });
+
+  const readOutside = (id: string): Effect.Effect<void> =>
     Effect.suspend(() => {
       const userId = dependencies.accountId();
       const { collections } = taskList;
 
       if (coldNone.has(id) || collections.holds(id)) return Effect.void;
 
-      if (!gate() || userId === undefined || view.listStatus !== TASKS_READ.READY) {
+      if (!readableOutside() || userId === undefined) {
         coldWaiting.add(id);
 
         return Effect.void;
@@ -1244,7 +1291,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       const read = Effect.gen(function* () {
         const sealed = yield* served(client.liveRead(TASK_ROWS_READ, { id, userId }, {}));
 
-        if ("failure" in sealed) return;
+        // Note that a read the service did not answer waits for the list's next answer, which says the service answers again, as an open made before the list answered does.
+        if ("failure" in sealed) {
+          if (taskList.collections === collections && !inboxAsked.has(id)) coldWaiting.add(id);
+
+          return;
+        }
+
         const { plans, agents } = sealed.queries;
         const rows = decodeTaskRows({ plans: plans.rows, agents: agents.rows });
 
@@ -1268,6 +1321,157 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       );
 
       return Effect.asVoid(FiberMap.run(coldReads, id, pending, { onlyIfMissing: true }));
+    });
+
+  const decodeRelationRows = Schema.decodeUnknownOption(TASK_RELATIONS_READ.rows);
+  /** Each read out now of a task's relations, by the task's id, which every ask meanwhile joins. */
+  const relationReads = yield* FiberMap.make<string>();
+  /** The tasks whose relations were read into this list, which a card hung again reads not, and a session signing in reads again. */
+  const relationsRead = new Set<string>();
+  /** The tasks whose relations are being read now, which a sign-out meanwhile reads again for the session signing in. */
+  const relationsPending = new Set<string>();
+  /** The tasks whose relations were asked while the list could not be read outside of, each read once the list answers. */
+  const relationsWaiting = new Set<string>();
+
+  /**
+   * The tasks related to the task `taskId` names, its sub-tasks, its parent,
+   * and the tasks it waits on and holds up, read from the service with their
+   * agents and drawn in the list as cold tasks (`task-list-collections.ts`)
+   * where it holds them not, so the task's relations and its count of
+   * sub-tasks finished stand whole however few tasks the list follows.
+   * Answered at once, the read running on. An open reads them each time,
+   * since a relation may have been added since; a card hung (`again` false)
+   * reads them once a list. Note that a task the list holds already is the
+   * list's alone, so nothing moves while it holds every one related.
+   */
+  const relationsOpened = (taskId: string, again: boolean): Effect.Effect<void> =>
+    Effect.suspend(() => {
+      const userId = dependencies.accountId();
+      const { collections } = taskList;
+
+      if (!again && relationsRead.has(taskId)) return Effect.void;
+
+      if (!gate() || userId === undefined || view.listStatus !== TASKS_READ.READY) {
+        relationsWaiting.add(taskId);
+
+        return Effect.void;
+      }
+
+      // Note that the read is marked before it is asked, so a task the follow lets go while it is out is not drawn back by its answer.
+      const mark = collections.mark();
+
+      const read = Effect.gen(function* () {
+        const sealed = yield* served(
+          client.liveRead(TASK_RELATIONS_READ, { id: taskId, userId }, {}),
+        );
+
+        // Note that a read the service did not answer is read again at the list's next answer, since the window that asked asks no more.
+        if ("failure" in sealed) {
+          relationsWaiting.add(taskId);
+
+          return;
+        }
+
+        const { plans, agents } = sealed.queries;
+        const rows = decodeRelationRows({ plans: plans.rows, agents: agents.rows });
+
+        if (Option.isNone(rows) || taskList.collections !== collections) return;
+        // Note that only an answer drawn counts as read, so a card hung after a read that failed asks again.
+        relationsRead.add(taskId);
+        yield* collections.cold(rows.value, mark);
+      });
+
+      relationsPending.add(taskId);
+
+      const pending = Effect.ensuring(
+        read,
+        Effect.sync(() => relationsPending.delete(taskId)),
+      );
+
+      return Effect.asVoid(FiberMap.run(relationReads, taskId, pending, { onlyIfMissing: true }));
+    });
+
+  const openedOutside = (id: string): Effect.Effect<void> =>
+    Effect.suspend(() => {
+      // Note that a task a window opens is the window's, read again for a session signing in, though the Inbox asked it first.
+      inboxAsked.delete(id);
+
+      return readOutside(id);
+    });
+
+  /** The tasks the account's Inbox last named (`inboxNamed`). */
+  let inboxTaskIds: readonly string[] = [];
+  /** Whether the Inbox named tasks while the list could not be read outside of, which are read once it answers. */
+  let inboxWaiting = false;
+  /** The ids read outside the list for the Inbox alone, which a session signing in does not read again, since its own Inbox names its own. */
+  const inboxAsked = new Set<string>();
+  /** The Inbox's reads outside the list now, which the next naming stands in place of. */
+  const inboxReads = yield* FiberHandle.make<void>();
+
+  /** One task the Inbox names, read outside the list as a window's open reads it, and waited for. */
+  const readForInbox = (id: string): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      if (!coldPending.has(id) && !taskList.collections.holds(id) && !coldNone.has(id)) {
+        inboxAsked.add(id);
+      }
+
+      yield* readOutside(id);
+      const pending = yield* FiberMap.get(coldReads, id);
+
+      if (Option.isSome(pending)) yield* Fiber.await(pending.value);
+    });
+
+  /**
+   * Each task the Inbox last named that the list holds not, read into it a
+   * few at a time (`INBOX_READS_AT_ONCE`), so an account whose Inbox names
+   * many finished tasks never asks every one at once over the socket the
+   * list is followed on; nothing while the list cannot be read outside of,
+   * whose first answer reads them.
+   */
+  const readInboxTasks = Effect.suspend(() => {
+    inboxWaiting = !readableOutside();
+
+    return inboxWaiting
+      ? Effect.void
+      : Effect.forEach(inboxTaskIds, readForInbox, {
+          concurrency: INBOX_READS_AT_ONCE,
+          discard: true,
+        });
+  });
+
+  const inboxNamed = (taskIds: readonly string[]): Effect.Effect<void> =>
+    Effect.suspend(() => {
+      inboxTaskIds = taskIds;
+
+      return Effect.asVoid(FiberHandle.run(inboxReads, readInboxTasks));
+    });
+
+  const decodeSearchRows = Schema.decodeUnknownOption(TASK_SEARCH_READ.rows);
+
+  /**
+   * The tasks a window's search finds on the service, read with their agents
+   * and drawn in the list as cold tasks (`task-list-collections.ts`) where it
+   * holds them not, so the window's own search over the list finds them
+   * beside the live ones, one row each, and opens them as any. Answered once
+   * they are drawn, or at once while the list cannot be read outside of.
+   * Note that a task the list holds already is the list's alone, so nothing
+   * moves while it holds every one the search finds.
+   */
+  const searched = (query: string): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      const userId = dependencies.accountId();
+      const { collections } = taskList;
+
+      if (!gate() || userId === undefined || view.listStatus !== TASKS_READ.READY) return;
+      const mark = collections.mark();
+      const sealed = yield* served(client.liveRead(TASK_SEARCH_READ, { query, userId }, {}));
+
+      if ("failure" in sealed) return;
+      const { plans, agents } = sealed.queries;
+      const rows = decodeSearchRows({ plans: plans.rows, agents: agents.rows });
+
+      if (Option.isNone(rows) || taskList.collections !== collections) return;
+      yield* collections.cold(rows.value, mark);
     });
 
   /** The sync id the list drawn from disk was kept at, which the next follow reads past once; none once it has. */
@@ -1316,21 +1520,40 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
                   : sealed,
             ),
       // Note that an answer's read standing rides the list it draws, so a window is told both at once.
-      take: (rows, standing) =>
+      take: (rows, standing, taskWorkspaces) =>
         Effect.gen(function* () {
-          view = { ...view, listStatus: TASKS_READ.READY, live: HOST_LIVE.LIVE };
+          view = {
+            ...view,
+            listStatus: TASKS_READ.READY,
+            live: HOST_LIVE.LIVE,
+            ...(taskWorkspaces === undefined ? undefined : { taskWorkspaces }),
+          };
           const entities = dependencies.entities();
           const { collections } = taskList;
           const moved = yield* collections.answer(rows, standing);
           const waiting = [...coldWaiting];
           coldWaiting.clear();
           yield* Effect.forEach(waiting, openedOutside, { discard: true });
+          const relationsAsked = [...relationsWaiting];
+          relationsWaiting.clear();
+          yield* Effect.forEach(relationsAsked, (taskId) => relationsOpened(taskId, true), {
+            discard: true,
+          });
+
+          if (inboxWaiting) yield* FiberHandle.run(inboxReads, readInboxTasks);
           // Note that an answer the list did not draw tells its standing here, as after a poll that failed, and one it drew told it already.
           publish();
 
           // Note that only an answer read at a sync id is kept, since the follow reads past it at the next launch, and one that moved no row is written only beside the next that did, or as the store closes.
           if (entities !== undefined && standing !== undefined) {
-            const kept = { rows: collections.synced(), at: standing.next };
+            const kept = {
+              rows: collections.synced(),
+              at: standing.next,
+              ...(view.taskWorkspaces === undefined
+                ? undefined
+                : { taskWorkspaces: view.taskWorkspaces }),
+            };
+
             yield* moved
               ? entities.keep(KEPT_READ.TASK_LIST, kept)
               : entities.keepUnmoved(KEPT_READ.TASK_LIST, kept);
@@ -1473,7 +1696,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     if (list !== undefined && view.listStatus !== TASKS_READ.READY) {
       listKeptAt = list.at;
       // Note that a list drawn from disk is not said to be behind: the follow's first answer, or its failure, says where it stands.
-      view = { ...view, listStatus: TASKS_READ.READY };
+      view = {
+        ...view,
+        listStatus: TASKS_READ.READY,
+        ...(list.taskWorkspaces === undefined
+          ? undefined
+          : { taskWorkspaces: list.taskWorkspaces }),
+      };
       yield* taskList.collections.answer(list.rows, { past: undefined, next: list.at, gone: [] });
     }
 
@@ -2256,8 +2485,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    * A follower write, the reader's own follow, unfollow, or switch, or
    * another member added, drawn on the task's row at once over the
    * followers the row holds, and the followers the service answered taken in
-   * its place. A row whose workspace has Following off holds no followers,
-   * so nothing is drawn on it.
+   * its place. A row the service answered no followers for holds none, so
+   * nothing is drawn on it.
    */
   const followersChanged = <Input extends { readonly taskId: string }>(declared: {
     readonly drawn: (input: Input) => (followers: readonly RowFollower[]) => readonly RowFollower[];
@@ -2527,6 +2756,95 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
         return { taskId };
       }),
+    // A search past the list is read into it, answered to the window once drawn.
+    TASKS_SEARCH: ({ query }) => searched(query),
+    // A task's card hung reads the tasks related to it into the list, once a list.
+    TASKS_RELATIONS_READ: ({ taskId }) => relationsOpened(taskId, false),
+    // A tab pinned in a window on a task the list holds not reads its task into it, as an open does, without opening it.
+    TASKS_LOAD: ({ taskId }) => openedOutside(taskId),
+    // A page of a workspace's settled tasks is read into the list as cold
+    // tasks, as a task opened outside it is, so a list that shows finished
+    // work draws them where the list holds them not; the cursor the next page
+    // reads past is answered to the list that asked, and held nowhere.
+    TASKS_SETTLED_PAGE: ({ workspaceId, before }) =>
+      Effect.gen(function* () {
+        const userId = dependencies.accountId();
+        const { collections } = taskList;
+
+        if (!gate() || userId === undefined || view.listStatus !== TASKS_READ.READY) {
+          return { failure: TASK_CALL_FAILURE.UNANSWERED };
+        }
+
+        // Note that the read is marked before it is asked, as an open's is, so a task the follow lets go meanwhile is not drawn back by its answer.
+        const mark = collections.mark();
+
+        const params = {
+          workspaceId,
+          userId,
+          ...(before === undefined
+            ? undefined
+            : { beforeAt: String(before.finishedAt), beforeId: before.taskId }),
+        };
+
+        const sealed = yield* served(client.liveRead(TASK_PAGE_READ, params, {}));
+
+        if ("failure" in sealed) return { failure: TASK_CALL_FAILURE.UNANSWERED };
+        const { plans, agents } = sealed.queries;
+        const rows = decodeTaskPage({ plans: plans.rows, agents: agents.rows });
+
+        if (Option.isNone(rows)) return { failure: TASK_CALL_FAILURE.UNANSWERED };
+
+        // Note that a list a sign-out replaced meanwhile draws nothing of the page.
+        if (taskList.collections === collections) yield* collections.cold(rows.value, mark);
+
+        const next = settledPageCursorOf(rows.value.plans);
+
+        return next === undefined ? {} : { next };
+      }),
+    // A person's newest tasks and agents are read into the list as cold
+    // tasks, as a page of settled ones is, so their page draws them where the
+    // list holds them not; how many of each the service counts is answered to
+    // the page that asked, and held nowhere.
+    TASKS_PERSON_PAGE: ({ workspaceId, personId }) =>
+      Effect.gen(function* () {
+        const userId = dependencies.accountId();
+        const { collections } = taskList;
+
+        if (!gate() || userId === undefined || view.listStatus !== TASKS_READ.READY) {
+          return { failure: TASK_CALL_FAILURE.UNANSWERED };
+        }
+
+        // Note that the read is marked before it is asked, as an open's is, so a task the follow lets go meanwhile is not drawn back by its answer.
+        const mark = collections.mark();
+
+        const sealed = yield* served(
+          client.liveRead(PERSON_PAGE_READ, { workspaceId, personId, userId }, {}),
+        );
+
+        if ("failure" in sealed) return { failure: TASK_CALL_FAILURE.UNANSWERED };
+        const { counts, plans, agents } = sealed.queries;
+
+        const rows = decodePersonPage({
+          counts: counts.rows,
+          plans: plans.rows,
+          agents: agents.rows,
+        });
+
+        const counted = Option.isNone(rows) ? undefined : rows.value.counts[0];
+
+        if (Option.isNone(rows) || counted === undefined) {
+          return { failure: TASK_CALL_FAILURE.UNANSWERED };
+        }
+
+        // Note that a list a sign-out replaced meanwhile draws nothing of the page.
+        if (taskList.collections === collections) {
+          yield* collections.cold({ plans: rows.value.plans, agents: rows.value.agents }, mark);
+        }
+
+        const { assigned, created, agents: started } = counted;
+
+        return { counts: { assigned, created, agents: started } };
+      }),
     // A page of the history is answered to the caller that asked, and an
     // older page is laid on the task's held history too, past the revisions
     // held from where it was read before, so a version history scrolled back
@@ -2775,8 +3093,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     TASKS_BROWSER_TABS_FOLLOW: { hold: (place) => heldBrowserTabs.hold(browserTabsOwnerOf(place)) },
     TASKS_PAGES_FOLLOW: { hold: (place) => heldPageReads.hold(pageOwnerOf(place)) },
     TASKS_DOCUMENT_FOLLOW: {
-      // A task a window opens that the list does not hold is read into it beside its description.
-      hold: ({ taskId }) => Effect.andThen(openedOutside(taskId), documents.hold(taskId)),
+      // A task a window opens that the list does not hold is read into it beside its description, and so are the tasks related to it.
+      hold: ({ taskId }) =>
+        Effect.andThen(
+          Effect.andThen(openedOutside(taskId), relationsOpened(taskId, true)),
+          documents.hold(taskId),
+        ),
       retry: ({ taskId }) => (gate() ? documents.retry(taskId) : Effect.void),
     },
     TASKS_HISTORY_FOLLOW: {
@@ -2826,6 +3148,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     ],
     pullRequestListings: Effect.map(PubSub.subscribe(listings), Stream.fromSubscription),
     openedOutside,
+    inboxNamed,
     repositoriesMoved: repositoryLists.reread(() => true),
     reset: Effect.gen(function* () {
       yield* Cache.invalidateAll(pullRequestReads);
@@ -2844,9 +3167,20 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       yield* FiberHandle.clear(listFollow);
 
       // Note that the cold tasks read, and those still being read, are read again for the session signing in, as the windows' holds on them stand through a sign-out.
-      for (const id of [...coldRead, ...coldPending]) coldWaiting.add(id);
+      for (const id of [...coldRead, ...coldPending]) if (!inboxAsked.has(id)) coldWaiting.add(id);
 
+      // Note that the Inbox's reads end with its session, whose next names its own tasks.
+      yield* FiberHandle.clear(inboxReads);
+      inboxTaskIds = [];
+      inboxWaiting = false;
+      inboxAsked.clear();
       yield* FiberMap.clear(coldReads);
+
+      // Note that the relations read are read again for the session signing in, as the cold tasks are.
+      for (const id of [...relationsRead, ...relationsPending]) relationsWaiting.add(id);
+
+      yield* FiberMap.clear(relationReads);
+      relationsRead.clear();
 
       coldRead.clear();
       coldNone.clear();

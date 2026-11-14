@@ -23,6 +23,7 @@ import { LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import { PAGE_OWNER, PAGE_SHOWER } from "@repo/features/page-wire";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
+import { subTaskCount, subTasksOf } from "@repo/features/task-list-model";
 import { TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_SECTION_WRITE, type TaskSection } from "@repo/features/task-section-wire";
 import {
@@ -868,6 +869,285 @@ it.effect("a task the list does not hold is read into it as it opens, and only o
       service.reads.filter((read) => read.startsWith("task-rows")),
       [`task-rows:${INVITES}`],
       "the task outside the list is read once, and the one in it never",
+    );
+  }),
+);
+
+it.effect(
+  "a task opened draws its finished sub-task and its blocker from outside the list, the sub-task counted finished",
+  () =>
+    Effect.gen(function* () {
+      const shipped = "2d6f3b1a-8e4c-4f2a-9b7d-1c5e8a3f6b90";
+
+      const invites = {
+        ...task(INVITES, "Teammate invitations", "# Teammate invitations", 30),
+        blockedBy: [BILLING],
+      };
+
+      const billing = {
+        ...task(BILLING, "Billing export", "# Billing export", 10),
+        status: TASK_STATUS.DONE,
+        blocks: [INVITES],
+      };
+
+      const emails = {
+        ...task(shipped, "Invitation emails", "# Invitation emails", 20),
+        status: TASK_STATUS.DONE,
+        parentTaskId: INVITES,
+      };
+
+      const service = fakeService([invites, billing, emails]);
+      const { call, last, openTask } = yield* subject(service);
+      // The list the host follows holds the open task alone, as one that keeps only active tasks live.
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(invites)], agents: [], issues: [] });
+
+      yield* openTask(INVITES);
+      const listed = last()?.tasks ?? [];
+
+      assert.deepEqual(
+        listed.map((each) => each.id).toSorted(),
+        [INVITES, BILLING, shipped].toSorted(),
+        "the sub-task and the blocker outside the list are drawn",
+      );
+      assert.deepEqual(subTaskCount({}, subTasksOf(listed, INVITES)), { finished: 1, total: 1 });
+    }),
+);
+
+it.effect(
+  "the tasks the Inbox names outside the list are read into it once the list answers, each once",
+  () =>
+    Effect.gen(function* () {
+      const invites = {
+        ...task(INVITES, "Teammate invitations", "# Invites", 10),
+        status: TASK_STATUS.DONE,
+      };
+
+      const billing = task(BILLING, "Billing export", "# Billing export", 20);
+      const gone = "0d6f2c4a-9b1e-4f3a-8c5d-7e2a1b9c4f60";
+      const service = fakeService([billing, invites]);
+      const { tasks, call, last, settled } = yield* subject(service);
+      const taskRowReads = () => service.reads.filter((read) => read.startsWith("task-rows"));
+      yield* call("TASKS_REFRESH", undefined);
+      // The Inbox names its tasks before the list first answers, when every task is outside it.
+      yield* tasks.inboxNamed([INVITES, BILLING, gone]);
+      yield* settled;
+      assert.deepEqual(taskRowReads(), [], "nothing is read before the list answers");
+
+      // The list the host follows holds the billing task alone, as one that keeps only recent tasks live.
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+      yield* settled;
+
+      assert.deepEqual(
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted(),
+        [BILLING, INVITES].toSorted(),
+        "the finished task the Inbox names is drawn beside the list's",
+      );
+
+      yield* tasks.inboxNamed([INVITES, BILLING, gone]);
+      yield* settled;
+
+      assert.deepEqual(
+        taskRowReads().toSorted(),
+        [`task-rows:${INVITES}`, `task-rows:${gone}`].toSorted(),
+        "each task outside the list is read once, one the service answers gone never again, and the one in it never",
+      );
+    }),
+);
+
+it.effect(
+  "a search draws the tasks it finds outside the list beside it, and each it holds once",
+  () =>
+    Effect.gen(function* () {
+      const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+      const billing = task(BILLING, "Billing invitations", "# Billing invitations", 20);
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      // The list holds the billing task alone, as one that keeps only recent tasks live.
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+
+      yield* call("TASKS_SEARCH", { query: "invitations" });
+
+      assert.deepEqual(
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted(),
+        [BILLING, INVITES].toSorted(),
+        "the task found outside the list is drawn, and the one in it is drawn once",
+      );
+    }),
+);
+
+it.effect(
+  "a page of settled tasks is read into the list beside the follow's, each it holds staying its own",
+  () =>
+    Effect.gen(function* () {
+      const invites = {
+        ...task(INVITES, "Teammate invitations", "# Invites", 10),
+        status: TASK_STATUS.DONE,
+      };
+
+      const billing = {
+        ...task(BILLING, "Billing export", "# Billing export", 20),
+        status: TASK_STATUS.DONE,
+      };
+
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      // The list the host follows holds the billing task alone, renamed since the page was kept, as one that keeps only recent tasks live.
+      yield* call("TASKS_REFRESH", undefined);
+      const renamed = { ...billing, name: "Billing export, renamed" };
+      yield* listAnswers(service, { plans: [rowOfTask(renamed)], agents: [], issues: [] });
+
+      assert.deepEqual(
+        yield* call("TASKS_SETTLED_PAGE", { workspaceId: billing.workspaceId }),
+        {},
+        "a page shorter than a page's tasks is the last",
+      );
+
+      assert.deepEqual(
+        last()
+          ?.tasks.map((each) => [each.id, each.name])
+          .toSorted(),
+        [
+          [BILLING, "Billing export, renamed"],
+          [INVITES, "Teammate invitations"],
+        ].toSorted(),
+        "the settled task outside the list is drawn, and the one in it as the follow answers it",
+      );
+    }),
+);
+
+it.effect("a pinned tab's task outside the list is drawn in it once read, and left unopened", () =>
+  Effect.gen(function* () {
+    const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+    const billing = task(BILLING, "Billing export", "# Billing export", 20);
+    const service = fakeService([billing, invites]);
+    const { call, last } = yield* subject(service);
+    // The list holds the billing task alone, as one that keeps only recent tasks live.
+    yield* call("TASKS_REFRESH", undefined);
+    yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+
+    yield* call("TASKS_LOAD", { taskId: INVITES });
+
+    assert.deepEqual(
+      last()
+        ?.tasks.map((each) => each.id)
+        .toSorted(),
+      [BILLING, INVITES].toSorted(),
+      "the pinned tab's task is drawn beside the list's",
+    );
+    assert.equal(last()?.activeTaskId, undefined, "nothing is opened");
+  }),
+);
+
+it.effect(
+  "a task read outside the list the service did not answer is read again at the list's next answer",
+  () =>
+    Effect.gen(function* () {
+      const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+      const billing = task(BILLING, "Billing export", "# Billing export", 20);
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+
+      const listed = () =>
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted();
+
+      service.taskRowsFail = true;
+      yield* call("TASKS_LOAD", { taskId: INVITES });
+      assert.deepEqual(
+        listed(),
+        [BILLING],
+        "nothing is drawn of a read the service did not answer",
+      );
+
+      service.taskRowsFail = false;
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+      assert.deepEqual(
+        listed(),
+        [BILLING, INVITES].toSorted(),
+        "the task is drawn once read again",
+      );
+    }),
+);
+
+it.effect(
+  "a task's relations the service did not answer are read again at the list's next answer",
+  () =>
+    Effect.gen(function* () {
+      const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+
+      const billing = {
+        ...task(BILLING, "Billing export", "# Billing export", 20),
+        parentTaskId: INVITES,
+        status: TASK_STATUS.DONE,
+      };
+
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(invites)], agents: [], issues: [] });
+
+      const listed = () =>
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted();
+
+      service.taskRowsFail = true;
+      yield* call("TASKS_RELATIONS_READ", { taskId: INVITES });
+      assert.deepEqual(
+        listed(),
+        [INVITES],
+        "nothing is drawn of a read the service did not answer",
+      );
+
+      service.taskRowsFail = false;
+      yield* listAnswers(service, { plans: [rowOfTask(invites)], agents: [], issues: [] });
+      assert.deepEqual(
+        listed(),
+        [BILLING, INVITES].toSorted(),
+        "the finished sub-task is drawn once read again",
+      );
+    }),
+);
+
+it.effect("a person's finished task outside the list is counted and read into it", () =>
+  Effect.gen(function* () {
+    const ada = { userId: "user-ada", name: "Ada Lovelace" };
+
+    const invites = {
+      ...task(INVITES, "Teammate invitations", "# Invites", 10),
+      status: TASK_STATUS.DONE,
+      assignee: ada,
+    };
+
+    const billing = { ...task(BILLING, "Billing export", "# Billing export", 20), assignee: ada };
+    const service = fakeService([billing, invites]);
+    const { call, last } = yield* subject(service);
+    // The list the host follows holds the billing task alone, as one that keeps only recent tasks live.
+    yield* call("TASKS_REFRESH", undefined);
+    const held = { ...rowOfTask(billing), assigneeId: ada.userId, assigneeName: ada.name };
+    yield* listAnswers(service, { plans: [held], agents: [], issues: [] });
+
+    assert.deepEqual(
+      yield* call("TASKS_PERSON_PAGE", { workspaceId: billing.workspaceId, personId: ada.userId }),
+      { counts: { assigned: 2, created: 0, agents: 0 } },
+    );
+
+    assert.deepEqual(
+      last()
+        ?.tasks.filter((each) => each.assignee?.userId === ada.userId)
+        .map((each) => each.id)
+        .toSorted(),
+      [BILLING, INVITES].toSorted(),
+      "the finished task outside the list is drawn as theirs beside the one in it",
     );
   }),
 );

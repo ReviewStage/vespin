@@ -13,11 +13,14 @@ import { DEVICE_LAYOUT, getTestDB, joinWorkspace, openWorkspace } from "../../te
 import {
   allowedAppsOf,
   beatDevice,
+  changeMachine,
   devicesNamed,
   devicesSeenSince,
   joinCommandDevice,
   markAwayDevices,
+  markCommandsAwayDevices,
   registerDevice,
+  removeMachine,
   saveCommandDeviceSettings,
   saveDeviceAppLooks,
   workspaceMachinesOf,
@@ -30,10 +33,13 @@ import { markMachineListening } from "../machine-command-store.js";
  * read by its own account alone, an id another account holds is never taken
  * over, a Mac that stopped beating is no longer read as there, a host's
  * update stands until its own beat names none, a Mac quiet past fresh is marked away once and its next beat clears it, and the Macs a read's local agents name are read by their ids alone.
- * A Mac joining for its commands carries its own settings up once, and the
- * apps each machine always allows are read by its own account alone. A
- * workspace's machines are read by its members alone, and name only those of
- * its members, each online while it beats as a host or its app listened lately.
+ * A Mac joining for its commands carries its own settings up once, a
+ * machine's settings are changed and the machine removed by its own account
+ * alone, a machine reads away from its commands until it listens and once it
+ * goes quiet, and the apps each machine always allows are read by its own
+ * account alone. A workspace's machines are read by its members alone, and
+ * name only those of its members, each online while it beats as a host or
+ * its app listened lately.
  * Synthetic accounts and Macs throughout.
  */
 
@@ -86,7 +92,7 @@ it.layer(getTestDB())("the device store", (it) => {
   );
 
   it.effect(
-    "a machine that runs no agents reads online only while its app listened since the instant asked",
+    "a machine that runs no agents carries its commands mode and apps switch, and reads online only while its app listened since the instant asked",
     () =>
       Effect.gen(function* () {
         const { owner } = yield* openAccounts;
@@ -98,8 +104,19 @@ it.layer(getTestDB())("the device store", (it) => {
           name: "Laptop",
           platform: DEVICE_PLATFORM.DARWIN,
           arch: DEVICE_ARCH.ARM64,
-          settings: { commandMode: MACHINE_COMMAND_MODE.ASK, alwaysAllowedApps: [] },
+          settings: {
+            commandMode: MACHINE_COMMAND_MODE.ASK,
+            alwaysAllowedApps: ["com.apple.Notes"],
+            computerUse: false,
+          },
         });
+        const [read] = yield* workspaceMachinesOf(owner, shared, new Date(0));
+
+        assert.deepEqual(
+          [read?.commandMode, read?.computerUse, read !== undefined && "alwaysAllowedApps" in read],
+          [MACHINE_COMMAND_MODE.ASK, false, false],
+          "its commands mode and apps switch, never its always-allowed apps",
+        );
 
         const online = (since: number) =>
           Effect.map(workspaceMachinesOf(owner, shared, new Date(since)), (machines) =>
@@ -163,6 +180,7 @@ it.layer(getTestDB())("the device store", (it) => {
         const carried = {
           commandMode: MACHINE_COMMAND_MODE.NEVER,
           alwaysAllowedApps: ["com.apple.Notes"],
+          computerUse: false,
         };
 
         const changed = { commandMode: MACHINE_COMMAND_MODE.ALWAYS, alwaysAllowedApps: [] };
@@ -179,7 +197,107 @@ it.layer(getTestDB())("the device store", (it) => {
         assert.deepEqual(byOther, Option.none(), "another account's join takes nothing over");
         assert.equal(savedByOther, false);
         assert.equal(saved, true);
-        assert.deepEqual(afterSave, Option.some(changed));
+        // Note that a desktop older than the apps switch writes none, which leaves the one carried up.
+        assert.deepEqual(afterSave, Option.some({ ...changed, computerUse: false }));
+      }),
+  );
+
+  it.effect(
+    "a machine's settings are changed, and the machine removed, from anywhere by its own account alone",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+
+        const machine = {
+          deviceId: randomUUID(),
+          name: "Studio",
+          platform: DEVICE_PLATFORM.DARWIN,
+          arch: DEVICE_ARCH.ARM64,
+        };
+
+        const carried = {
+          commandMode: MACHINE_COMMAND_MODE.ASK,
+          alwaysAllowedApps: ["com.apple.Notes", "com.tinyspeck.slackmacgap"],
+          computerUse: true,
+        };
+
+        yield* joinCommandDevice(owner, { ...machine, settings: carried });
+
+        const changedByOther = yield* changeMachine(other, machine.deviceId, {
+          computerUse: false,
+        });
+
+        const removedByOther = yield* removeMachine(other, machine.deviceId);
+
+        const changed = yield* changeMachine(owner, machine.deviceId, {
+          commandMode: MACHINE_COMMAND_MODE.NEVER,
+          computerUse: false,
+          removeApp: "com.apple.Notes",
+        });
+
+        const afterChange = yield* joinCommandDevice(owner, { ...machine, settings: carried });
+        const removed = yield* removeMachine(owner, machine.deviceId);
+
+        const changedOnceRemoved = yield* changeMachine(owner, machine.deviceId, {
+          computerUse: true,
+        });
+
+        assert.equal(changedByOther, undefined, "another account changes nothing of the owner's");
+        assert.equal(removedByOther, undefined, "another account removes nothing of the owner's");
+        assert.ok(changed !== undefined);
+        assert.deepEqual(
+          afterChange,
+          Option.some({
+            commandMode: MACHINE_COMMAND_MODE.NEVER,
+            alwaysAllowedApps: ["com.tinyspeck.slackmacgap"],
+            computerUse: false,
+          }),
+        );
+        assert.ok(removed !== undefined);
+        assert.equal(changedOnceRemoved, undefined, "a removed machine is no longer changed");
+      }),
+  );
+
+  it.effect(
+    "a machine reads away from its commands from its join until it listens, and again once the sweep finds it quiet",
+    () =>
+      Effect.gen(function* () {
+        const { owner } = yield* openAccounts;
+        const id = randomUUID();
+
+        yield* joinCommandDevice(owner, {
+          deviceId: id,
+          name: "Studio",
+          platform: DEVICE_PLATFORM.DARWIN,
+          arch: DEVICE_ARCH.ARM64,
+          settings: { commandMode: MACHINE_COMMAND_MODE.ASK, alwaysAllowedApps: [] },
+        });
+
+        const awayAt = Effect.map(
+          Database.use((db) =>
+            db.select({ at: device.commandsAwayAt }).from(device).where(eq(device.id, id)),
+          ),
+          ([row]) => row?.at ?? null,
+        );
+
+        const joined = yield* awayAt;
+        yield* markMachineListening(owner, id);
+        const listening = yield* awayAt;
+        const freshMs = 45_000;
+        yield* markCommandsAwayDevices(yield* Clock.currentTimeMillis, freshMs);
+        const whileFresh = yield* awayAt;
+        yield* TestClock.adjust(freshMs + 1_000);
+        const sweptAt = yield* Clock.currentTimeMillis;
+        yield* markCommandsAwayDevices(sweptAt, freshMs);
+        const quiet = yield* awayAt;
+        yield* markMachineListening(owner, id);
+        const back = yield* awayAt;
+
+        assert.ok(joined !== null, "a machine that joined has not listened yet");
+        assert.equal(listening, null);
+        assert.equal(whileFresh, null);
+        assert.equal(quiet?.getTime(), sweptAt);
+        assert.equal(back, null);
       }),
   );
 
