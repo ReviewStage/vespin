@@ -125,6 +125,7 @@ export function AppSplit({
     columns === undefined ? undefined : { id: columns.root },
     front,
   );
+
   // Note that Collapse stays while the page stands alone even once nothing is picked, so the columns always have a way back.
   const lead = detailOnly ? [expand] : columns?.root === undefined ? [compose] : [expand, compose];
 
