@@ -30,6 +30,8 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   ActionRow,
+  BUZZ,
+  buzz,
   ConfirmAsk,
   GLYPH,
   ListSection,
@@ -46,6 +48,7 @@ import {
   WorkspaceRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { setStringAsync } from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
@@ -57,6 +60,9 @@ import { pickWorkspacePhoto } from "../../workspace-photo.js";
 import { selectPhotos, switcherWorkspace } from "../../workspace-switcher.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
+
+/** What an invitation's menu calls copying its accept link, as the panel's row's button says it. */
+const INVITE_LINK_WORDS = { COPY: "Copy link" } as const;
 
 /** The rename's alert: its title, its field's placeholder, and its act, the panel's words. */
 const RENAME_WORDS = {
@@ -325,7 +331,19 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                   key={invitation.id}
                   name={invitation.email}
                   email={invitationLine(invitation)}
+                  invited
                   acts={[
+                    // Note that the service mails the accept link where the deployment names a sender, so Copy link sends it by hand, as the panel's row offers it.
+                    {
+                      label: INVITE_LINK_WORDS.COPY,
+                      symbol: GLYPH.LINK,
+                      onPress: () =>
+                        void setStringAsync(invitation.acceptUrl)
+                          .then(() => buzz(BUZZ.SUCCESS))
+                          .catch((cause: unknown) =>
+                            console.error("The invite link was not copied.", cause),
+                          ),
+                    },
                     {
                       label: INVITATION_WORDS.CANCEL,
                       destructive: true,

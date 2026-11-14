@@ -1,6 +1,7 @@
 // settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
 
 import {
+  Circle,
   ContextMenu,
   Form,
   HStack,
@@ -14,6 +15,7 @@ import {
   Text,
   Toggle,
   VStack,
+  ZStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
@@ -840,6 +842,8 @@ type MemberRowProps = {
   readonly picture?: string | undefined;
   /** Their role, in the words the panel says it: Owner, Admin, Member; none for an address invited, whose line says it. */
   readonly role?: string | undefined;
+  /** Whether they are an address invited rather than a member, which a person mark leads in place of a face, since an address has no photo and its letters would read as someone's. */
+  readonly invited?: boolean | undefined;
   /** The badge beside the reader's own name, such as "You"; none on anyone else's row. */
   readonly badge?: string | undefined;
   /** What the reader may do to them; a row with none takes no press. */
@@ -852,13 +856,20 @@ type MemberRowProps = {
  * ink. Where the reader may act on them, a press opens the system's menu of
  * those acts, as a contact's row opens one.
  */
-export function MemberRow({ name, email, picture, role, badge, acts }: MemberRowProps) {
+export function MemberRow({ name, email, picture, role, invited, badge, acts }: MemberRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(ROW_FACE_SIZE);
 
   const face = (
     <HStack spacing={SPACE.ROW}>
-      <Avatar name={name} picture={picture} size={faceSize} />
+      {invited === true ? (
+        <ZStack modifiers={[frame({ width: faceSize, height: faceSize }), accessibilityHidden()]}>
+          <Circle modifiers={[foregroundStyle(colors.GROUPED)]} />
+          <Image {...glyphImage(GLYPH.PERSON)} color={colors.TEXT_MUTED} />
+        </ZStack>
+      ) : (
+        <Avatar name={name} picture={picture} size={faceSize} />
+      )}
       <VStack alignment="leading" spacing={1}>
         <Text
           modifiers={[foregroundStyle(colors.TEXT), alignmentGuide("listRowSeparatorLeading", 0)]}
