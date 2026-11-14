@@ -19,7 +19,7 @@ import WidgetKit
 struct CallLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: CallActivityAttributes.self) { context in
-      CallContentView(state: context.state)
+      CallContentView(agentId: context.attributes.agentId, state: context.state)
         .padding(14)
         .widgetURL(context.attributes.opens)
     } dynamicIsland: { context in
@@ -32,7 +32,7 @@ struct CallLiveActivity: Widget {
           CallElapsed(state: state).padding(.trailing, 4)
         }
         DynamicIslandExpandedRegion(.bottom) {
-          CallPresses(state: state)
+          CallPresses(agentId: context.attributes.agentId, state: state)
         }
       } compactLeading: {
         Image("AudioLines").foregroundStyle(Color("Working"))
@@ -49,13 +49,14 @@ struct CallLiveActivity: Widget {
 
 /// The Lock Screen's call: the agent and its line beside the presses.
 struct CallContentView: View {
+  let agentId: String
   let state: CallActivityAttributes.ContentState
 
   var body: some View {
     HStack(spacing: 12) {
       CallTitle(state: state)
       Spacer(minLength: 8)
-      CallPresses(state: state)
+      CallPresses(agentId: context.attributes.agentId, state: state)
     }
   }
 }
@@ -98,21 +99,24 @@ struct CallElapsed: View {
 
 /// The call's presses in the panel's order: the speaker's mute, the microphone's, and End call.
 struct CallPresses: View {
+  /// The agent the activity shows, which every press names.
+  let agentId: String
   let state: CallActivityAttributes.ContentState
 
   var body: some View {
     HStack(spacing: 10) {
       CallPressButton(
-        press: state.speakerMuted ? .unmuteSpeaker : .muteSpeaker,
+        intent: CallPressIntent(state.speakerMuted ? .unmuteSpeaker : .muteSpeaker, agentId: agentId),
         symbol: state.speakerMuted ? "VolumeOff" : "Volume2",
         label: state.speakerMuted ? "Unmute speaker" : "Mute speaker",
         lit: state.speakerMuted)
       CallPressButton(
-        press: state.microphoneMuted ? .unmuteMicrophone : .muteMicrophone,
+        intent: CallPressIntent(
+          state.microphoneMuted ? .unmuteMicrophone : .muteMicrophone, agentId: agentId),
         symbol: state.microphoneMuted ? "MicOff" : "Mic",
         label: state.microphoneMuted ? "Unmute microphone" : "Mute microphone",
         lit: state.microphoneMuted)
-      Button(intent: CallPressIntent(.end)) {
+      Button(intent: CallPressIntent(.end, agentId: agentId)) {
         Image("PhoneOff")
           .foregroundStyle(.white)
           .frame(width: 36, height: 36)
@@ -126,13 +130,13 @@ struct CallPresses: View {
 
 /// One mute: quiet while off, lit in gray while on, its glyph struck through, as the panel's mute stands.
 struct CallPressButton: View {
-  let press: CallPressIntent.Press
+  let intent: CallPressIntent
   let symbol: String
   let label: String
   let lit: Bool
 
   var body: some View {
-    Button(intent: CallPressIntent(press)) {
+    Button(intent: intent) {
       Image(symbol)
         .frame(width: 36, height: 36)
         .background(

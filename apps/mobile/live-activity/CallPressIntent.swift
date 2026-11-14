@@ -7,7 +7,9 @@
 // the press needs no queue and no waiting: it pings the app's `LiveActivity`
 // module, which hands it to the call's JavaScript at once. Each button
 // names the state it sets rather than a toggle, so a press that lands on a
-// state already changed sets it again and nothing flips back.
+// state already changed sets it again and nothing flips back, and the agent
+// its activity shows, so a press on an activity left from an earlier call
+// never reaches the call that replaced it.
 
 import AppIntents
 import Foundation
@@ -29,17 +31,19 @@ struct CallPressIntent: LiveActivityIntent {
   }
 
   @Parameter(title: "Press") var press: String
+  @Parameter(title: "Agent") var agentId: String
 
   init() {}
 
-  init(_ press: Press) {
+  init(_ press: Press, agentId: String) {
     self.press = press.rawValue
+    self.agentId = agentId
   }
 
   func perform() async throws -> some IntentResult {
-    let press = press
+    let userInfo = ["press": press, "agentId": agentId]
     await MainActor.run {
-      NotificationCenter.default.post(name: Self.pressed, object: nil, userInfo: ["press": press])
+      NotificationCenter.default.post(name: Self.pressed, object: nil, userInfo: userInfo)
     }
     return .result()
   }

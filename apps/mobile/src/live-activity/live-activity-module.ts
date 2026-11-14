@@ -27,8 +27,8 @@ type LiveActivityEvents = {
   readonly onActivityEnded: (event: { readonly token?: string | null }) => void;
   /** Stop was pressed on an agent's row; `answerStop` with its request once the stop is answered. */
   readonly onStop: (event: { readonly request: string; readonly agentId: string }) => void;
-  /** A press on the voice call's activity, named as `CALL_PRESS` names it. */
-  readonly onCallPress: (event: { readonly press: string }) => void;
+  /** A press on the voice call's activity, named as `CALL_PRESS` names it, with the agent the activity shows. */
+  readonly onCallPress: (event: { readonly press: string; readonly agentId: string }) => void;
 };
 
 declare class LiveActivityModule extends NativeModule<LiveActivityEvents> {

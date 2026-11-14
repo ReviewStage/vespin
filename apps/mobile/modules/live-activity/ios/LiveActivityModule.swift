@@ -90,10 +90,12 @@ public final class LiveActivityModule: Module {
       self.callPressObserver = NotificationCenter.default.addObserver(
         forName: Self.callPressed, object: nil, queue: .main
       ) { [weak self] note in
-        guard let press = note.userInfo?["press"] as? String else { return }
+        guard let press = note.userInfo?["press"] as? String,
+          let agentId = note.userInfo?["agentId"] as? String
+        else { return }
         Task { @MainActor in
           guard let self, self.listening.contains("onCallPress") else { return }
-          self.sendEvent("onCallPress", ["press": press])
+          self.sendEvent("onCallPress", ["press": press, "agentId": agentId])
         }
       }
     }

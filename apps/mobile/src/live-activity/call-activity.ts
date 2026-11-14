@@ -7,7 +7,10 @@
  * card's (`callLineWords`), or that the call is on while the agent is idle.
  * Each call to the module waits on the last, since a state set before its
  * activity stood would set nothing. A call into another agent starts its
- * activity again, since its attributes name the agent and cannot change.
+ * activity again, since its attributes name the agent and cannot change,
+ * and a press names the agent its activity shows, so one pressed on the
+ * last call's activity while the next one's starts is dropped rather than
+ * acting on the new call.
  * One left standing from a launch that ended mid-call is ended as the app
  * starts, since no call outlives its launch. Where Live Activities are
  * turned off, or the build has no module, the call goes on without one.
@@ -82,6 +85,12 @@ export function useCallLiveActivity(
   // Note that the module's calls queue on one another, and the agent the activity stands for is kept beside them, both outside any render.
   const queue = useRef<Promise<void> | undefined>(undefined);
   const shownFor = useRef<string | undefined>(undefined);
+  // Note that the press listener reads the call's agent through a ref, so it stays subscribed while the call changes.
+  const callingAgent = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    callingAgent.current = agentId;
+  }, [agentId]);
 
   useEffect(() => {
     const module = liveActivityModule;
@@ -114,8 +123,8 @@ export function useCallLiveActivity(
     // The activity left from a launch that ended mid-call goes as the app starts.
     queue.current ??= liveActivityModule.endCall().catch(() => undefined);
 
-    const subscription = liveActivityModule.addListener("onCallPress", ({ press }) => {
-      if (isCallPress(press)) PRESSED[press](presses);
+    const subscription = liveActivityModule.addListener("onCallPress", ({ press, agentId: of }) => {
+      if (of === callingAgent.current && isCallPress(press)) PRESSED[press](presses);
     });
 
     return () => subscription.remove();
