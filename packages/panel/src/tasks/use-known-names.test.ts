@@ -2,6 +2,7 @@
 
 import { AGENT_STATUS } from "@repo/features/agent-wire";
 import type { KnownNames } from "@repo/features/entity-kind";
+import { MENTION_KIND } from "@repo/features/mention-link";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
@@ -13,7 +14,7 @@ import { fakeAppBridge } from "../testing/app-bridge.js";
 import { deliveryOf, stateWith } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { MentionedAgents } from "./mentioned-place.js";
-import { useKnownNames, useWordTargets } from "./use-known-names.js";
+import { useKnownNames, useNamesOf, useWordTargets } from "./use-known-names.js";
 
 /**
  * use-known-names.test.ts -- every chip of a window reads the one set of
@@ -21,8 +22,9 @@ import { useKnownNames, useWordTargets } from "./use-known-names.js";
  * the same names, a delivery that moves neither the tasks nor the Inbox
  * hands them those names again, and one that adds a task hands them new
  * names naming it; the tasks' keys, likewise, are handed again until a key
- * changes, whatever else about a task moves; and an untitled agent is named
- * by the catalog around the reader. Synthetic tasks.
+ * changes, whatever else about a task moves; a chip's names of its one task
+ * are handed again until that task moves, whatever other task does; and an
+ * untitled agent is named by the catalog around the reader. Synthetic tasks.
  */
 
 const AT = 1_792_000_000_000;
@@ -197,7 +199,7 @@ test("an untitled agent is named by the catalog around the reader, as its tab an
   // The task's agent, as the list followed live holds it.
   const followed = {
     id: agentId,
-    planId: task.id,
+    taskId: task.id,
     title: null,
     model,
     effort: "high",
@@ -237,4 +239,45 @@ test("an untitled agent is named by the catalog around the reader, as its tab an
     ),
   );
   await vi.waitFor(() => expect(seen?.agents.get(agentId)).toBe("GPT-6.1 Sol"));
+});
+
+test("a chip's names of its task are handed again for a delivery that renames another task, and anew once its own is renamed", async () => {
+  const listeners = new Set<(snapshot: AppStateSnapshot) => void>();
+  fakeAppBridge({
+    onAppState: (heard: (delivery: AppStateDelivery) => void) => {
+      const listener = (snapshot: AppStateSnapshot) => heard(deliveryOf(snapshot));
+      listeners.add(listener);
+
+      return () => listeners.delete(listener);
+    },
+    requestAppState: () => Promise.resolve(holding([INVITES, BILLING], 1)),
+  });
+  const seen: KnownNames[] = [];
+  const mention = { kind: MENTION_KIND.TASK, taskId: INVITES.id } as const;
+
+  function Reader(): null {
+    seen.push(useNamesOf(mention));
+
+    return null;
+  }
+
+  root = createRoot(document.body.appendChild(document.createElement("div")));
+  act(() => root?.render(withQueryClient(createElement(Reader))));
+  await settle();
+
+  const deliver = async (next: AppStateSnapshot) => {
+    act(() => {
+      for (const listener of listeners) listener(next);
+    });
+    await settle();
+  };
+
+  await vi.waitFor(() => expect(seen.at(-1)?.tasks.get(INVITES.id)).toBe("Teammate invitations"));
+  const held = seen.at(-1);
+
+  await deliver(holding([INVITES, { ...BILLING, name: "Billing export" }], 2));
+  expect(seen.at(-1)).toBe(held);
+
+  await deliver(holding([{ ...INVITES, name: "Invitations" }, BILLING], 3));
+  await vi.waitFor(() => expect(seen.at(-1)?.tasks.get(INVITES.id)).toBe("Invitations"));
 });

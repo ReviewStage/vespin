@@ -56,6 +56,7 @@ import {
   ListRow,
   type MarkdownVideo,
   menuWithout,
+  NoSelection,
   PATH_PART,
   previewMessages,
   ROW_ACTION_TONE,
@@ -104,7 +105,7 @@ import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, useListColumn, useListLook } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, useListColumn } from "./app-sidebar.js";
 import {
   NO_THREAD_ACTS,
   OpenAskCard,
@@ -326,7 +327,7 @@ function InboxRow({
         },
       ]}
       link={linkOf(
-        { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+        { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
         workspaceStep,
       )}
       preview={
@@ -571,7 +572,7 @@ function ThreadDetail({
   const openOnWeb = () => {
     const place = {
       kind: LINK_DESTINATION.INBOX_ITEM,
-      planId: holder.task.id,
+      taskId: holder.task.id,
       itemId: item.id,
     } as const;
 
@@ -627,7 +628,7 @@ function ThreadDetail({
     onCopyLink: () =>
       keeping.copyWords(
         linkOf(
-          { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+          { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
           workspaceStep,
         ),
       ),
@@ -643,7 +644,7 @@ function ThreadDetail({
       label: PATH_OPENS.TASK,
       symbol: GLYPH.TASK,
       onPress: () =>
-        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: holder.task.id }))),
+        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: holder.task.id }))),
     },
     {
       label: PATH_OPENS.AGENT,
@@ -753,7 +754,7 @@ function ThreadDetail({
                 linkOf(
                   {
                     kind: LINK_DESTINATION.PAGE,
-                    planId: page.place.taskId,
+                    taskId: page.place.taskId,
                     pageId: page.pageId,
                   },
                   workspaceStep,
@@ -1042,7 +1043,6 @@ function InboxSplitScreen({
   );
 
   const threeColumns = useThreeColumns();
-  const look = useListLook();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
   const rows =
@@ -1055,7 +1055,7 @@ function InboxSplitScreen({
       />
     ) : (
       <InboxRows
-        look={look}
+        look={LIST_LOOK.PLAIN}
         listed={listing.listed}
         readerId={listing.readerId}
         selected={selected}
@@ -1093,7 +1093,7 @@ function InboxSplitScreen({
 
   const detail =
     selected === undefined ? (
-      <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.INBOX} />
+      <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
     ) : (
       <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
     );

@@ -1,6 +1,10 @@
 import { ACT_KIND } from "@repo/host/acts";
 import { isMachineShellAsk, type MachineCommandAsk } from "@repo/host/app-state";
-import { MACHINE_COMMAND_DECISION, type MachineCommandDecision } from "@repo/host/contract";
+import {
+  MACHINE_COMMAND_DECISION,
+  MACHINE_COMMAND_NOTE_MAX_CHARS,
+  type MachineCommandDecision,
+} from "@repo/host/contract";
 import { AppAsk, CommandAsk } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { pressMutation } from "./act-mutations.js";
@@ -13,9 +17,10 @@ import { useHeldThroughExit } from "./use-held-through-exit.js";
  *
  * Main holds each command it claimed under This Mac's Ask every
  * time, and each action on an app not yet allowed, drawn as the app's own
- * card (`AppAsk`), until the developer answers or the command's own timeout passes
+ * card (`AppAsk`), until the developer answers or the ask's window closes
  * (`@repo/host`'s `compose-machine-commands.ts`), and the document carries the
- * asks waiting. The earliest is drawn, and the next takes its place as it
+ * asks waiting, each with the instant it closes, which the card counts down
+ * to. A Deny carries the words the developer gave the agent, where they gave any. The earliest is drawn, and the next takes its place as it
  * goes; the answer goes back by the ask's id, and the card goes as main
  * drops the ask, so one answered elsewhere or timed out leaves no card
  * standing once it has faded out. An answer main refuses says why in a toast, as every press does.
@@ -43,6 +48,13 @@ export function MachineCommandAskDialog(): React.JSX.Element | null {
   if (ask === undefined) return null;
   const answer = (decision: MachineCommandDecision) => answerAsk({ id: ask.id, decision });
 
+  const deny = (note: string | undefined) =>
+    answerAsk({
+      id: ask.id,
+      decision: MACHINE_COMMAND_DECISION.DENY,
+      ...(note === undefined ? undefined : { note }),
+    });
+
   if (!isMachineShellAsk(ask)) {
     return (
       <AppAsk
@@ -52,7 +64,9 @@ export function MachineCommandAskDialog(): React.JSX.Element | null {
         app={{ ...ask.app, iconSrc: iconAddress(ask.app.iconPng) }}
         onAllowOnce={() => answer(MACHINE_COMMAND_DECISION.ALLOW_ONCE)}
         onAllowAlways={() => answer(MACHINE_COMMAND_DECISION.ALLOW_ALWAYS)}
-        onDeny={() => answer(MACHINE_COMMAND_DECISION.DENY)}
+        onDeny={deny}
+        expiresAt={ask.expiresAt}
+        noteMaxLength={MACHINE_COMMAND_NOTE_MAX_CHARS}
       />
     );
   }
@@ -65,7 +79,9 @@ export function MachineCommandAskDialog(): React.JSX.Element | null {
       command={ask.command}
       onAllowOnce={() => answer(MACHINE_COMMAND_DECISION.ALLOW_ONCE)}
       onAllowAlways={() => answer(MACHINE_COMMAND_DECISION.ALLOW_ALWAYS)}
-      onDeny={() => answer(MACHINE_COMMAND_DECISION.DENY)}
+      onDeny={deny}
+      expiresAt={ask.expiresAt}
+      noteMaxLength={MACHINE_COMMAND_NOTE_MAX_CHARS}
       copy={copyThroughShell}
     />
   );

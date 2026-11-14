@@ -37,7 +37,7 @@ test("one save is out at a time; words typed meanwhile save after it lands, from
 
   assert.equal(pendingSave(typedMore), undefined);
   assert.deepEqual(saved(editorAnswered(typedMore, { saved: true })), {
-    document: { base: `${TEXT}Mine.\n`, value: `${TEXT}Mine, by email.\n` },
+    description: { base: `${TEXT}Mine.\n`, value: `${TEXT}Mine, by email.\n` },
   });
 });
 
@@ -73,9 +73,9 @@ test("a failed save keeps the words, says why, and waits to be tried again or ty
   });
   assert.equal(pendingSave(unanswered), undefined);
   assert.equal(editorCloses(editorCloseAsked(unanswered)), false);
-  assert.equal(saved(editorRetried(unanswered)).document.value, `${TEXT}Mine.\n`);
+  assert.equal(saved(editorRetried(unanswered)).description.value, `${TEXT}Mine.\n`);
   assert.equal(
-    saved(editorTyped(unanswered, `${TEXT}Mine, again.\n`)).document.value,
+    saved(editorTyped(unanswered, `${TEXT}Mine, again.\n`)).description.value,
     `${TEXT}Mine, again.\n`,
   );
 });
@@ -84,7 +84,9 @@ test("a text rebased on a save's merged answer saves only what the developer typ
   const merged = `${TEXT}Vespin's.\nMine.\n`;
   const rebased = editorRebased(editorOpened(TEXT), merged, `${merged}More.\n`);
 
-  assert.deepEqual(pendingSave(rebased), { document: { base: merged, value: `${merged}More.\n` } });
+  assert.deepEqual(pendingSave(rebased), {
+    description: { base: merged, value: `${merged}More.\n` },
+  });
 });
 
 test("an editor carrying comment anchors sends where they stand with its save, and keeps the last it reported", () => {
@@ -108,7 +110,7 @@ test("an editor left tries a failed save once more, sends nothing over a conflic
   const failed = editorAnswered(out, { failure: TASK_CALL_FAILURE.UNANSWERED });
   const conflicted = editorAnswered(out, { conflict: { current: `${TEXT}Vespin's.\n` } });
 
-  assert.deepEqual(leavingSave(failed), { document: { base: TEXT, value: `${TEXT}Mine.\n` } });
+  assert.deepEqual(leavingSave(failed), { description: { base: TEXT, value: `${TEXT}Mine.\n` } });
   assert.equal(leavingSave(conflicted), undefined);
   assert.equal(editorLeft(conflicted)?.draft, `${TEXT}Mine.\n`);
   assert.equal(editorLeft(failed)?.draft, `${TEXT}Mine.\n`);

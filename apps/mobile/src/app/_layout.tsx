@@ -27,6 +27,7 @@ import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
+import { VoiceCallProvider } from "../voice-call.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
@@ -174,7 +175,7 @@ function KeptScreens() {
   );
 }
 
-/** The root: the host, the one notice of a write that did not go, and the screens under both. */
+/** The root: the host, the one notice of a write that did not go, the voice call, which outlives every screen, and the screens under them. */
 export default function RootLayout() {
   // Note that a compact window's tab bar floats at its foot, which the notice stands over; a regular window's tabs stand at its top or its side.
   const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
@@ -182,7 +183,9 @@ export default function RootLayout() {
   return (
     <HostProvider>
       <FailureNoticeProvider footRoom={compact ? TAB_BAR_ROOM : 0}>
-        <KeptScreens />
+        <VoiceCallProvider>
+          <KeptScreens />
+        </VoiceCallProvider>
       </FailureNoticeProvider>
     </HostProvider>
   );

@@ -1465,7 +1465,7 @@ it.effect(
             organizationId: acme,
             name: "Relay retries",
             number: 1,
-            document: "",
+            description: "",
           }),
         );
         yield* leaving(plugin, grace, acme);

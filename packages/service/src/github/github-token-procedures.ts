@@ -31,8 +31,8 @@ import {
   saveGitHubToken,
 } from "@repo/database/models/github-token-store";
 import {
+  githubTokenOpens,
   type KeyRing,
-  openGitHubToken,
   sealGitHubToken,
 } from "@repo/database/models/provider-key-seal";
 import {
@@ -98,7 +98,7 @@ const checkGitHubToken = (token: Redacted.Redacted<string>) => {
 
 /** The token as the member is shown it, answered unreadable where the ring cannot open it. */
 function summaryOf(userId: string, ring: KeyRing, row: GitHubTokenRow): GitHubTokenSummary {
-  const readable = Result.isSuccess(openGitHubToken(ring, userId, row));
+  const readable = githubTokenOpens(ring, userId, row);
 
   return {
     login: row.githubLogin,

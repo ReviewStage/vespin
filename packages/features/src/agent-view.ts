@@ -13,6 +13,7 @@ import {
   agentArchiveRequestSchema,
   agentBeforeSchema,
   agentCallIdSchema,
+  agentChatHoldSchema,
   agentMessageRequestSchema,
   agentMessagesAnswerSchema,
   agentPinRequestSchema,
@@ -42,7 +43,7 @@ import { failureFactsSchema } from "./failure-facts.js";
 import { GITHUB_IMAGE_BOUNDS, GITHUB_IMAGE_TYPE } from "./github-image.js";
 import { githubPullRequestNumberSchema } from "./github-repositories-wire.js";
 import { githubTokenSaveRequestSchema } from "./github-token-wire.js";
-import { hostIdRequestSchema } from "./host-wire.js";
+import { hostIdRequestSchema, machineChangeRequestSchema } from "./host-wire.js";
 import { answerView, failureSetOf, HOSTED_CALL_FAILURE } from "./hosted-failure.js";
 import {
   inboxAcknowledgeRequestSchema,
@@ -423,6 +424,11 @@ export type HostDoneAnswerView = typeof hostDoneAnswerViewSchema.Type;
 
 /** What removing a host names: its id. */
 export const hostIdParamsSchema = hostIdRequestSchema;
+
+/** What changing one of the account's machines names: its id, and each setting changed, or an app taken back from those it always allows. */
+export const machineChangeParamsSchema = machineChangeRequestSchema;
+
+export type MachineChangeParams = typeof machineChangeParamsSchema.Type;
 
 /**
  * What turning Run agents on this Mac on or off answers: done, with what of
@@ -1008,6 +1014,13 @@ export const agentStopParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
 });
 
+/** An agent's chat said shown or hidden by the window or device showing it (`agentChatHoldSchema`), or a bare warm as a build older than the hold asks. */
+export const agentWarmParamsSchema = EffectSchema.Struct({
+  ...agentStopParamsSchema.fields,
+  chat: EffectSchema.optionalKey(agentChatHoldSchema.fields.chat),
+  holder: EffectSchema.optionalKey(agentChatHoldSchema.fields.holder),
+});
+
 /** One agent taken back to just before one of the developer's lines, as the window names the line by its message id. */
 export const agentRewindParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
@@ -1243,13 +1256,13 @@ export type LiveActivityEndedAnswerView = typeof liveActivityEndedAnswerViewSche
 
 /** Whose inbox is followed: a plan's, or one agent's. */
 export const INBOX_SCOPE_KIND = {
-  PLAN: "plan",
+  TASK: "task",
 } as const;
 
-/** The kind of holder an inbox item is on: a plan. */
+/** The kind of holder an inbox item is on: a task. */
 export type InboxScopeKind = (typeof INBOX_SCOPE_KIND)[keyof typeof INBOX_SCOPE_KIND];
 
-/** One plan's inbox, as the window follows it: which kind, and the plan's id. */
+/** One task's inbox, as the window follows it: which kind, and the task's id. */
 export const agentInboxScopeSchema = EffectSchema.Struct({
   kind: EffectSchema.Literals(Object.values(INBOX_SCOPE_KIND)),
   id: EffectSchema.NonEmptyString,

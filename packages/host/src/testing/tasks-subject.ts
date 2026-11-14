@@ -38,7 +38,14 @@ import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
-import { TASK_LIST_READ } from "@repo/features/task-list-live";
+import {
+  PERSON_PAGE_READ,
+  TASK_LIST_READ,
+  TASK_PAGE_READ,
+  TASK_RELATIONS_READ,
+  TASK_ROWS_READ,
+  TASK_SEARCH_READ,
+} from "@repo/features/task-list-live";
 import { AGENT_PAGES_READ, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
 import type {
@@ -65,7 +72,7 @@ import {
   type BlockCallFailure,
   BROWSER_TAB_OPEN_FAILURE,
   type FollowerCallFailure,
-  type HeldDescriptionDocument,
+  type HeldTask,
   type ParentCallFailure,
   PICTURE_KEEP_FAILURE,
   type RelationCallFailure,
@@ -101,7 +108,7 @@ import { readEither } from "@repo/wire/effect";
 import { noNetwork } from "@repo/wire/testing";
 import { Data, Deferred, Duration, Effect, FiberMap, Predicate, Result, type Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { type AppDescriptionDocuments, type AppHostRead, NO_KEYS_HELD } from "../app-state.js";
+import { type AppHeldTasks, type AppHostRead, NO_KEYS_HELD } from "../app-state.js";
 import { composeTasks, type TasksClient } from "../compose-tasks.js";
 import { composeWorkspaces, type WorkspacesClient } from "../compose-workspaces.js";
 import {
@@ -136,7 +143,7 @@ export function task(id: string, name: string, body: string, updatedAt: number):
     createdAt: 1_000,
     updatedAt,
     repository: null,
-    document: {
+    description: {
       body,
       assumptions: [{ text: "An invite expires after 7 days." }],
     },
@@ -163,8 +170,12 @@ export interface FakeService extends TasksClient, WorkspacesClient {
   agents: Record<string, TaskAgentsSummary>;
   /** How many times the list's live read was first asked, its polls apart. */
   liveListReads: number;
+  /** The instant the list's live set is bound at, which each answer carries beside its rows; none, as a service before the set was narrowed. */
+  liveSince: number | undefined;
   /** Whether a delete is refused, as a service that did not answer refuses it. */
   deleteFails: boolean;
+  /** Whether a read of one task outside the list, or of its relations, goes unanswered, as a service that did not answer leaves it. */
+  taskRowsFail: boolean;
   /** What a delete's answer waits on, so a test can see what is drawn while it is out. */
   deleteAnswered: Effect.Effect<void>;
   /** Whether a relation's change is refused, as a service that did not answer refuses it. */
@@ -302,7 +313,7 @@ export interface FakeService extends TasksClient, WorkspacesClient {
       "sentryInstallations" | "slackInstallation" | "slackChannelRepositories"
     >;
     readonly list: PolledLive<
-      "plans" | "agents" | "issues",
+      "tasks" | "agents" | "issues",
       { readonly failure: typeof TASK_CALL_FAILURE.UNANSWERED | typeof LIVE_SIGNED_OUT.failure }
     >;
   };
@@ -456,12 +467,12 @@ export const EDITED_AT = 7_000;
 
 /** The task list's read as the service answers it, before it is read by sync id. */
 type ListAnswer = Exclude<
-  ReturnType<PolledLive<"plans" | "agents" | "issues">["first"]>,
+  ReturnType<PolledLive<"tasks" | "agents" | "issues">["first"]>,
   { readonly failure: string }
 >;
 
 /** Each part of the task list's rows by id as they stood at each sync id answered, so a read past one is answered what moved since. */
-type ListAt = Map<string, ReadonlyMap<"plans" | "agents", ReadonlyMap<string, string>>>;
+type ListAt = Map<string, ReadonlyMap<"tasks" | "agents", ReadonlyMap<string, string>>>;
 
 /** A row's id; none where it is no object carrying one as words. */
 function rowIdOf<Row>(row: Row): string | undefined {
@@ -488,17 +499,17 @@ function rowsById(rows: readonly unknown[] | undefined): ReadonlyMap<string, str
  * of its own rows that stand no longer.
  */
 function listBySyncId(answer: ListAnswer, past: string | undefined, listAt: ListAt): ListAnswer {
-  const next = answer.queries.plans.digest ?? "0";
+  const next = answer.queries.tasks.digest ?? "0";
   const before = past === undefined ? undefined : listAt.get(past);
 
   const now = new Map([
-    ["plans", rowsById(answer.queries.plans.rows)],
+    ["tasks", rowsById(answer.queries.tasks.rows)],
     ["agents", rowsById(answer.queries.agents.rows)],
   ] as const);
 
   listAt.set(next, now);
 
-  const part = (name: "plans" | "agents"): SealedLiveQueryWire => {
+  const part = (name: "tasks" | "agents"): SealedLiveQueryWire => {
     const query = answer.queries[name];
     const sync = past === undefined ? { next } : { past, next };
     const was = before?.get(name);
@@ -519,7 +530,7 @@ function listBySyncId(answer: ListAnswer, past: string | undefined, listAt: List
 
   return {
     ...answer,
-    queries: { ...answer.queries, plans: part("plans"), agents: part("agents") },
+    queries: { ...answer.queries, tasks: part("tasks"), agents: part("agents") },
   };
 }
 
@@ -567,9 +578,9 @@ export function fakeService(tasks: Task[]): FakeService {
       "sentryInstallations" | "slackInstallation" | "slackChannelRepositories"
     >(["sentryInstallations", "slackInstallation", "slackChannelRepositories"]),
     list: polledLive<
-      "plans" | "agents" | "issues",
+      "tasks" | "agents" | "issues",
       { readonly failure: typeof TASK_CALL_FAILURE.UNANSWERED | typeof LIVE_SIGNED_OUT.failure }
-    >(["plans", "agents", "issues"]),
+    >(["tasks", "agents", "issues"]),
   };
 
   /** A live read first asked, or polled past `after`. */
@@ -614,10 +625,10 @@ export function fakeService(tasks: Task[]): FakeService {
     commentGate: undefined,
     commentLives: {},
     // The service starts the thread as asked, the member its writer, and holds it on the description.
-    startComment: (planId, start) =>
+    startComment: (taskId, start) =>
       Effect.sync(() => {
         if ("page" in start) throw new Error("the fake holds no page's threads");
-        service.commentCalls.push(`start:${planId}:${start.quote}`);
+        service.commentCalls.push(`start:${taskId}:${start.quote}`);
 
         const thread: DescriptionCommentThread = {
           id: start.id ?? "0f9b5f6e-6a8e-4c51-9a0e-2c1f2f0b7a11",
@@ -643,24 +654,26 @@ export function fakeService(tasks: Task[]): FakeService {
           revision: 1,
         };
 
-        service.threads[planId] = [...(service.threads[planId] ?? []), thread];
+        service.threads[taskId] = [...(service.threads[taskId] ?? []), thread];
 
         return { thread };
       }),
-    actOnComment: (planId, threadId, action) =>
+    actOnComment: (taskId, threadId, action) =>
       Effect.andThen(
         Effect.suspend(() =>
           service.commentGate === undefined ? Effect.void : Deferred.await(service.commentGate),
         ),
         Effect.sync(() => {
-          service.commentCalls.push(`act:${planId}:${threadId}:${action.action}`);
+          service.commentCalls.push(`act:${taskId}:${threadId}:${action.action}`);
 
           return service.commentAnswer ?? { deleted: threadId };
         }),
       ),
     agents: {},
     liveListReads: 0,
+    liveSince: undefined,
     deleteFails: false,
+    taskRowsFail: false,
     deleteAnswered: Effect.void,
     relationFails: false,
     relationAnswered: Effect.void,
@@ -727,7 +740,7 @@ export function fakeService(tasks: Task[]): FakeService {
 
         const restored: Task = {
           ...found,
-          document: revision.document,
+          description: revision.description,
           updatedAt: found.updatedAt + 1,
           lastEdit: {
             actor: DESCRIPTION_ACTOR.DEVELOPER,
@@ -1193,9 +1206,9 @@ export function fakeService(tasks: Task[]): FakeService {
         const edited = {
           ...found,
           updatedAt: EDITED_AT,
-          document: {
-            ...found.document,
-            body: edit.document.value,
+          description: {
+            ...found.description,
+            body: edit.description.value,
           },
           lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, at: EDITED_AT, duringCall: false },
         };
@@ -1207,7 +1220,7 @@ export function fakeService(tasks: Task[]): FakeService {
 
         return {
           ok: true,
-          answer: { plan: edited, ...(txid === undefined ? undefined : { txid }) },
+          answer: { task: edited, ...(txid === undefined ? undefined : { txid }) },
         };
       }),
     readFile: (_taskId, window) => Effect.sync(() => service.files[window.path]),
@@ -1251,7 +1264,10 @@ export function fakeService(tasks: Task[]): FakeService {
       read: { readonly name: string },
       params: {
         readonly id: string;
+        readonly workspaceId?: string;
+        readonly personId?: string;
         readonly page?: string;
+        readonly query?: string;
         readonly userId?: string;
         readonly sync?: string;
       },
@@ -1259,6 +1275,99 @@ export function fakeService(tasks: Task[]): FakeService {
     ) =>
       Effect.suspend((): Effect.Effect<unknown> => {
         if (read.name === TASK_LIST_READ.name) return service.listLive(params.userId, params.sync);
+
+        // One task outside the list, read with its agents, none of which the fake's tasks hold.
+        if (read.name === TASK_ROWS_READ.name) {
+          service.reads.push(`task-rows:${params.id}`);
+
+          if (service.taskRowsFail) return Effect.succeed(UNANSWERED_LIVE);
+          const rows = polledLive<"tasks" | "agents">(["tasks", "agents"]);
+          rows.set({
+            tasks: service.tasks.filter((each) => each.id === params.id).map(rowOfTask),
+            agents: [],
+          });
+
+          return Effect.succeed(rows.first());
+        }
+
+        // A task's relations, its sub-tasks, its parent, and its blocks among the fake's tasks, none with agents.
+        if (read.name === TASK_RELATIONS_READ.name) {
+          service.reads.push(`task-relations:${params.id}`);
+
+          if (service.taskRowsFail) return Effect.succeed(UNANSWERED_LIVE);
+          const of = service.tasks.find((each) => each.id === params.id);
+          const rows = polledLive<"tasks" | "agents">(["tasks", "agents"]);
+
+          const related = new Set([
+            ...(of?.parentTaskId === undefined ? [] : [of.parentTaskId]),
+            ...(of?.blockedBy ?? []),
+            ...(of?.blocks ?? []),
+          ]);
+
+          rows.set({
+            tasks: service.tasks
+              .filter((each) => related.has(each.id) || each.parentTaskId === params.id)
+              .map(rowOfTask),
+            agents: [],
+          });
+
+          return Effect.succeed(rows.first());
+        }
+
+        // A search, finding each of the fake's tasks whose name holds the query, none with agents.
+        if (read.name === TASK_SEARCH_READ.name) {
+          const query = params.query?.toLowerCase() ?? "";
+          const rows = polledLive<"tasks" | "agents">(["tasks", "agents"]);
+          rows.set({
+            tasks: service.tasks
+              .filter((each) => each.name.toLowerCase().includes(query))
+              .map(rowOfTask),
+            agents: [],
+          });
+
+          return Effect.succeed(rows.first());
+        }
+
+        // A page of the workspace's settled tasks, every one the fake holds in a page of its own, with no agents.
+        if (read.name === TASK_PAGE_READ.name) {
+          service.reads.push(`task-page:${params.workspaceId}`);
+          const rows = polledLive<"tasks" | "agents">(["tasks", "agents"]);
+
+          const settled = service.tasks.filter(
+            (each) =>
+              each.workspaceId === params.workspaceId &&
+              (each.status === TASK_STATUS.DONE || each.status === TASK_STATUS.CANCELED),
+          );
+
+          rows.set({ tasks: settled.map(rowOfTask), agents: [] });
+
+          return Effect.succeed(rows.first());
+        }
+
+        // A person's page: every task of the workspace the fake assigns them, counted and read with no agents, as none of theirs were created by them.
+        if (read.name === PERSON_PAGE_READ.name) {
+          service.reads.push(`person-page:${params.personId}`);
+          const rows = polledLive<"counts" | "tasks" | "agents">(["counts", "tasks", "agents"]);
+
+          const assigned = service.tasks.filter(
+            (each) =>
+              each.workspaceId === params.workspaceId && each.assignee?.userId === params.personId,
+          );
+
+          rows.set({
+            counts: [
+              { personId: params.personId, assigned: assigned.length, created: 0, agents: 0 },
+            ],
+            tasks: assigned.map((each) => ({
+              ...rowOfTask(each),
+              assigneeId: each.assignee?.userId ?? null,
+              assigneeName: each.assignee?.name ?? null,
+            })),
+            agents: [],
+          });
+
+          return Effect.succeed(rows.first());
+        }
 
         if (read.name === SIDEBAR_READ.name) {
           if (poll === undefined) service.reads.push("sidebar-live");
@@ -1279,17 +1388,20 @@ export function fakeService(tasks: Task[]): FakeService {
       Effect.suspend((): Effect.Effect<unknown> => {
         if (sync === undefined) return Effect.succeed(live.list.first());
 
+        const beside = () =>
+          service.liveSince === undefined ? undefined : { liveSince: service.liveSince };
+
         if (sync === "") {
           service.liveListReads += 1;
           const whole = live.list.first();
 
           return Effect.succeed(
-            "failure" in whole ? whole : listBySyncId(whole, undefined, listAt),
+            "failure" in whole ? whole : { ...listBySyncId(whole, undefined, listAt), ...beside() },
           );
         }
 
         return Effect.map(live.list.poll(sync), (answer) =>
-          "failure" in answer ? answer : listBySyncId(answer, sync, listAt),
+          "failure" in answer ? answer : { ...listBySyncId(answer, sync, listAt), ...beside() },
         );
       }),
     open: (taskId) =>
@@ -1437,7 +1549,13 @@ export function fakeService(tasks: Task[]): FakeService {
         const found = service.tasks.find((candidate) => candidate.id === taskId);
 
         if (found === undefined) return { ok: false, failure: WRITE_UNTAKEN.REFUSED };
-        const renamed = { ...found, name, document: { ...found.document, body: `# ${name}` } };
+
+        const renamed = {
+          ...found,
+          name,
+          description: { ...found.description, body: `# ${name}` },
+        };
+
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? renamed : candidate,
         );
@@ -1518,7 +1636,7 @@ const settledTurns = Effect.repeat(Effect.yieldNow, { times: 200 });
 export const listAnswers = (
   service: FakeService,
   parts: {
-    readonly plans?: readonly unknown[];
+    readonly tasks?: readonly unknown[];
     readonly agents?: readonly unknown[];
     readonly issues?: readonly unknown[];
   },
@@ -1749,12 +1867,12 @@ export function subject(
      */
     const listed = (agents: readonly unknown[] = []) =>
       Effect.gen(function* () {
-        service.live.list.set({ plans: service.tasks.map(rowOfTask), agents, issues: [] });
+        service.live.list.set({ tasks: service.tasks.map(rowOfTask), agents, issues: [] });
         yield* nextPoll(settled);
       });
 
     /** Holds a task's description as the window does while it has the task open. */
-    const holdDescription = (taskId: string) => follow("TASKS_DOCUMENT_FOLLOW", { taskId });
+    const holdDescription = (taskId: string) => follow("TASKS_HELD_FOLLOW", { taskId });
 
     /** Opens a task as the window's press does, the window then holding its description, and lets the description's read land. */
     const openTask = (taskId: string) =>
@@ -1762,17 +1880,16 @@ export function subject(
         Effect.andThen(holdDescription(taskId), settled),
       );
 
-    /** The descriptions the host holds for the windows as it last told them (`LIVE_READ.DESCRIPTION_DOCUMENT`). */
-    const descriptions = (): AppDescriptionDocuments => {
-      const told = pushed.findLast(([kind]) => kind === LIVE_READ.DESCRIPTION_DOCUMENT);
+    /** The descriptions the host holds for the windows as it last told them (`LIVE_READ.HELD_TASK`). */
+    const descriptions = (): AppHeldTasks => {
+      const told = pushed.findLast(([kind]) => kind === LIVE_READ.HELD_TASK);
 
       // SAFETY: the host tells its held descriptions whole as this event's payload.
-      return (told?.[1] ?? NO_KEYS_HELD) as AppDescriptionDocuments;
+      return (told?.[1] ?? NO_KEYS_HELD) as AppHeldTasks;
     };
 
     /** `taskId`'s description as the host last told it held; none where it holds none. */
-    const held = (taskId: string): AppHostRead<HeldDescriptionDocument> | undefined =>
-      descriptions()[taskId];
+    const held = (taskId: string): AppHostRead<HeldTask> | undefined => descriptions()[taskId];
 
     /** The task `taskId`'s held description holds; none where none is held, or it is gone. */
     const description = (taskId: string): Task | undefined => {
@@ -1842,7 +1959,7 @@ export const answered = (set: () => void) =>
     ),
   );
 
-/** One plan as the plans statement delivers its row. */
+/** One plan as the tasks statement delivers its row. */
 export function planRow(id: string, name: string) {
   return {
     id,
@@ -1865,7 +1982,7 @@ export function planRow(id: string, name: string) {
   };
 }
 
-/** One plan as the plans statement delivers the service's task. */
+/** One plan as the tasks statement delivers the service's task. */
 export function rowOfTask(each: Task) {
   return {
     ...planRow(each.id, each.name),
@@ -1876,5 +1993,7 @@ export function rowOfTask(each: Task) {
     status: each.status ?? TASK_STATUS.TODO,
     priority: each.priority ?? TASK_PRIORITY.NONE,
     parentTaskId: each.parentTaskId ?? null,
+    blockedBy: each.blockedBy ?? [],
+    blocks: each.blocks ?? [],
   };
 }

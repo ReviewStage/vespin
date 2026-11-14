@@ -7,11 +7,15 @@ import { MAC_PRESENCE } from "@repo/features/agent-wire";
 import { DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
 import type { HostLine } from "@repo/features/host-live";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
+import type { MachineLine } from "@repo/features/machine-live";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateDelivery, AppStateSnapshot, AppThisMacHost } from "@repo/host/app-state";
-import { act, createElement } from "react";
+import { EXPERIMENT } from "@repo/settings";
+import { act, createElement, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
+import { RoutedExitsProvider, useSettingsMachineStore } from "../places/routed-exits.js";
 import {
   type FakeActPort,
   fakeActPort,
@@ -27,8 +31,9 @@ import { HostsSection } from "./hosts-section.js";
 /**
  * hosts-section.test.ts -- Settings › Hosts, drawn from the hosts the host
  * holds: Add a host shows the public install command and names each host
- * that joins while the page stands, a host updating says so, and This Mac
- * stands first. Synthetic ids, codes, and addresses.
+ * that joins while the page stands, a host updating says so, This Mac
+ * stands first, and each machine's settings for agents stand under its own
+ * row. Synthetic ids, codes, and addresses.
  */
 
 declare global {
@@ -65,13 +70,39 @@ async function settle(): Promise<void> {
  * left it, the host answering the window's acts as `procedures` say and
  * holding its holds quietly, as it does while their reads are laid.
  */
-function drawHosts(procedures: Partial<FakeActPort> = {}): void {
+function drawHosts(procedures: Partial<FakeActPort> = {}, landingAt?: string): void {
   fakeActPort(procedures);
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(HostsSection, { signedIn: true }))));
+  const page = createElement(HostsSection, { signedIn: true });
+
+  act(() =>
+    root.render(
+      withQueryClient(
+        landingAt === undefined
+          ? page
+          : createElement(
+              RoutedExitsProvider,
+              null,
+              createElement(OpenedAt, { machineId: landingAt }),
+              page,
+            ),
+      ),
+    ),
+  );
+}
+
+/** Opens Machines at the machine of `machineId`, as a press on its chip does. */
+function OpenedAt({ machineId }: { machineId: string }): null {
+  const landings = useSettingsMachineStore();
+  useEffect(
+    () => landings.setState(() => ({ asks: 1, at: { machineId, ask: 1 } })),
+    [landings, machineId],
+  );
+
+  return null;
 }
 
 /**
@@ -180,7 +211,7 @@ test("a host that joins while the page stands is said to be connected in the wai
     !pageText().includes("Waiting for a machine to connect"),
     "the wait gives way to the host",
   );
-  assert.ok(pageText().includes("hel-02Setting up… · Linux server"), pageText());
+  assert.ok(pageText().includes("hel-02Setting up…Linux server"), pageText());
 });
 
 test("a sign-in to another account names none of its hosts as just connected", async () => {
@@ -295,12 +326,13 @@ test("This Mac stands first on the row of the machine it is, its switch on, with
   const text = document.body.textContent ?? "";
 
   assert.ok(text.indexOf("This Mac") < text.indexOf("fra-03"), "This Mac stands first");
-  assert.ok(text.includes("Online · Mac"), text);
   assert.equal(thisMacSwitch().getAttribute("aria-checked"), "true");
 
   const thisMacRow = [...document.querySelectorAll(".ui-settings-row")].find(
     (row) => row.textContent?.includes("This Mac") ?? false,
   );
+
+  assert.notEqual(thisMacRow?.querySelector('[aria-label="Online"]') ?? null, null, "online");
 
   assert.equal(
     (thisMacRow?.querySelector('button[aria-haspopup="menu"]') ?? null) === null,
@@ -321,8 +353,14 @@ test("a host's row says Setting up… while its update runs, though the restart 
   ]);
   const text = document.body.textContent ?? "";
 
-  assert.ok(text.includes("ams-01Online · Linux server"), text);
-  assert.ok(text.includes("ord-01Setting up… · Linux server"), text);
+  assert.ok(text.includes("ams-01Linux server"), text);
+  assert.ok(text.includes("ord-01Setting up…Linux server"), text);
+
+  const ams = [...document.querySelectorAll(".ui-settings-row")].find(
+    (row) => row.textContent?.includes("ams-01") ?? false,
+  );
+
+  assert.notEqual(ams?.querySelector('[aria-label="Online"]') ?? null, null, "ams-01 is online");
 });
 
 test("each host draws its Remove on its own row, which asks about that host first", async () => {
@@ -462,4 +500,187 @@ test("turning This Mac off offers to keep its agents' folders, and keeps them wh
   await press("Turn off");
 
   assert.deepEqual(sent, [{ on: false, deleteFolders: false }]);
+});
+
+/** A Mac that runs the account's agents, asking before each command and always allowing Notes. */
+const STUDIO: MachineLine = {
+  id: "5a7c9e1b-3d5f-4a6b-8c0d-2e4f6a8b0c11",
+  name: "Studio",
+  platform: DEVICE_PLATFORM.DARWIN,
+  host: true,
+  listening: true,
+  isDefault: true,
+  settings: {
+    commandMode: MACHINE_COMMAND_MODE.ASK,
+    computerUse: true,
+    alwaysAllowedApps: ["com.apple.Notes"],
+  },
+};
+
+/** A laptop that only runs the app, gone quiet. */
+const LAPTOP: MachineLine = {
+  id: "6b8d0f2c-4e6a-4b7c-9d1e-3f5a7b9c1d22",
+  name: "Laptop",
+  platform: DEVICE_PLATFORM.DARWIN,
+  host: false,
+  listening: false,
+  isDefault: false,
+  settings: { commandMode: MACHINE_COMMAND_MODE.NEVER, computerUse: false, alwaysAllowedApps: [] },
+};
+
+/**
+ * The Studio as a host and the laptop as a Mac that only runs the app, laid
+ * with their settings as the host holds them, Computer use on; answers with
+ * every change and Remove the page sent, as the host was asked them.
+ */
+async function machinesWithSettings(landingAt?: string): Promise<unknown[]> {
+  const sent: unknown[] = [];
+
+  handBeats({});
+  holdHosts(() => [{ id: STUDIO.id, name: "Studio", platform: DEVICE_PLATFORM.DARWIN }]);
+  const handed = fakeAppBridgeCalls().requestAppState;
+
+  fakeAppBridge({
+    ...fakeAppBridgeCalls(),
+    requestAppState: async () => {
+      const snapshot = await (handed ?? assert.fail("the beats hand a document"))();
+      const { account } = snapshot;
+      const settings = snapshot.settings ?? assert.fail("the document holds settings");
+
+      if (account.status !== ACCOUNT_STATUS.SIGNED_IN || account.id === undefined) {
+        assert.fail("the window is signed in");
+      }
+
+      return {
+        ...snapshot,
+        settings: {
+          ...settings,
+          experiments: { ...settings.experiments, [EXPERIMENT.COMPUTER_USE]: true },
+        },
+        [LIVE_READ.MACHINES]: { [account.id]: { rows: [STUDIO, LAPTOP] } },
+      };
+    },
+  });
+
+  drawHosts(
+    {
+      [ACT_KIND.MACHINES_CHANGE]: async (change) => {
+        sent.push(change);
+
+        return { done: true } as const;
+      },
+      [ACT_KIND.MACHINES_REMOVE]: async (removed) => {
+        sent.push(removed);
+
+        return { done: true } as const;
+      },
+      [ACT_KIND.HOSTS_ALLOWED_APPS]: async () => ({
+        machines: [
+          {
+            deviceId: STUDIO.id,
+            name: STUDIO.name,
+            apps: ["com.apple.Notes"],
+            looks: [{ app: "com.apple.Notes", name: "Notes" }],
+          },
+        ],
+      }),
+    },
+    landingAt,
+  );
+  await settle();
+  await vi.waitFor(() => assert.ok(pageText().includes("Laptop"), pageText()));
+
+  return sent;
+}
+
+test("a machine's apps switch and an app's Remove are sent for that machine alone", async () => {
+  const sent = await machinesWithSettings();
+
+  await vi.waitFor(() => assert.ok(pageText().includes("Notes")));
+  removeOf("Notes");
+
+  const switches = [...document.querySelectorAll<HTMLElement>('[aria-label="Computer use"]')];
+
+  // The laptop's switch, its machine's second, is off; pressing it turns that machine's on.
+  await act(async () => switches[1]?.click());
+
+  await vi.waitFor(() => assert.equal(sent.length, 2));
+  assert.deepEqual(sent, [
+    { id: STUDIO.id, removeApp: "com.apple.Notes" },
+    { id: LAPTOP.id, computerUse: true },
+  ]);
+});
+
+test("the default machine stands atop the list, and picking another sends it as the member's default", async () => {
+  const sent = await machinesWithSettings();
+
+  const row =
+    [...document.querySelectorAll<HTMLElement>(".ui-settings-row")].find(
+      (each) => each.textContent?.includes("Terminal and computer use") ?? false,
+    ) ?? assert.fail("the default machine's row is drawn");
+
+  const chip =
+    [...row.querySelectorAll<HTMLButtonElement>("button")].find(
+      (each) => each.textContent?.includes("Studio") ?? false,
+    ) ?? assert.fail("the row names the Studio, the default");
+
+  await act(async () => chip.click());
+  await settle();
+
+  const laptop =
+    [...document.querySelectorAll<HTMLElement>('[role="option"], [role^="menuitem"]')].find(
+      (each) => each.textContent?.includes("Laptop") ?? false,
+    ) ?? assert.fail("the laptop is offered");
+
+  await act(async () => laptop.click());
+  await settle();
+
+  assert.deepEqual(sent, [{ id: LAPTOP.id, makeDefault: true }]);
+});
+
+test("a Mac that only runs the app stands after the hosts, and its Remove removes that machine", async () => {
+  const sent = await machinesWithSettings();
+
+  removeOf("Laptop");
+  await press("Remove machine");
+
+  assert.deepEqual(sent, [{ id: LAPTOP.id }]);
+});
+
+test("an account with no host whose machines' settings could not be read says so, rather than that it has no machines", async () => {
+  handBeats({});
+  holdHosts(() => []);
+  const handed = fakeAppBridgeCalls().requestAppState;
+
+  fakeAppBridge({
+    ...fakeAppBridgeCalls(),
+    requestAppState: async () => {
+      const snapshot = await (handed ?? assert.fail("the beats hand a document"))();
+      const { account } = snapshot;
+
+      if (account.status !== ACCOUNT_STATUS.SIGNED_IN || account.id === undefined) {
+        assert.fail("the window is signed in");
+      }
+
+      return { ...snapshot, [LIVE_READ.MACHINES]: { [account.id]: { failed: true } } };
+    },
+  });
+
+  drawHosts();
+  await settle();
+
+  await vi.waitFor(() =>
+    assert.ok(pageText().includes("Each machine's settings could not be read."), pageText()),
+  );
+  assert.equal(pageText().includes("No machines yet."), false);
+});
+
+test("Machines opened at a machine, as a press on its chip opens it, unfolds that machine's settings alone", async () => {
+  await machinesWithSettings(LAPTOP.id);
+
+  const unfolded = (name: string) =>
+    document.querySelector(`[aria-label="${name}'s settings"]`)?.getAttribute("aria-expanded");
+
+  await vi.waitFor(() => assert.equal(unfolded("Laptop"), "true"));
+  assert.equal(unfolded("Studio"), "false");
 });

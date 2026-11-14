@@ -39,7 +39,7 @@ const TASK: Task = {
   createdAt: 1_000,
   updatedAt: 1_000,
   repository: "acme/relay",
-  document: {
+  description: {
     body: [
       "## Goal",
       "",
@@ -101,7 +101,7 @@ test("a section mentioned in the form written before the link was settled is han
 test("a heading the description bears twice is handed by which of them the anchor names", () => {
   const task: Task = {
     ...TASK,
-    document: { body: "## Notes\n\nfirst\n\n## Notes\n\nsecond", assumptions: [] },
+    description: { body: "## Notes\n\nfirst\n\n## Notes\n\nsecond", assumptions: [] },
   };
 
   const second = mentionMarkdown(
@@ -150,7 +150,7 @@ test("a long section is cut on a line, saying how much was left out, and a full 
 
   const task: Task = {
     ...TASK,
-    document: {
+    description: {
       body: headings.map((heading) => `## ${heading}\n\n${long}`).join("\n\n"),
       assumptions: [],
     },
@@ -230,7 +230,7 @@ test("however long the headings of what is left out, the part stays inside its b
 
   const task: Task = {
     ...TASK,
-    document: {
+    description: {
       body: headings.map((heading) => `## ${heading}\n\n${long}`).join("\n\n"),
       assumptions: [],
     },
@@ -246,7 +246,7 @@ test("a description cut short names every section past the cut, one whose headin
 
   const task: Task = {
     ...TASK,
-    document: {
+    description: {
       body: `## Context\n\nSee Rollout below.\n\n${filler}\n\n## Rollout\n\nStore first.`,
       assumptions: [],
     },
@@ -273,7 +273,7 @@ test("a message whose words happen to open as the mentioned part does still read
 test("a section too long for the room left is passed over, and a shorter one after it still goes", () => {
   const task: Task = {
     ...TASK,
-    document: {
+    description: {
       body: [
         "## Big",
         "",
@@ -295,7 +295,7 @@ test("a section too long for the room left is passed over, and a shorter one aft
 
   const crowded: Task = {
     ...task,
-    document: { body: `${many}\n\n${task.document.body}`, assumptions: [] },
+    description: { body: `${many}\n\n${task.description.body}`, assumptions: [] },
   };
 
   const words = [
@@ -317,7 +317,7 @@ test("a cut description with many long headings past the cut is still handed, it
     (_, at) => `## ${"Long heading ".repeat(70)}${at}\n\n${"w".repeat(400)}`,
   );
 
-  const task: Task = { ...TASK, document: { body: sections.join("\n\n"), assumptions: [] } };
+  const task: Task = { ...TASK, description: { body: sections.join("\n\n"), assumptions: [] } };
 
   const part =
     mentionedContext(

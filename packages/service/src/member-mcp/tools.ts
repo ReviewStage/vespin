@@ -1565,7 +1565,7 @@ const READ_DESCRIPTION_REVISION_TOOL = memberMcpTool({
           return agentToolRejected(DESCRIPTION_HISTORY_REFUSAL.NO_REVISION);
         }
 
-        const text = cutOnLine(revision.value.document.body, DESCRIPTION_TEXT_READ_CHARS);
+        const text = cutOnLine(revision.value.description.body, DESCRIPTION_TEXT_READ_CHARS);
 
         return {
           status: ACTION_RESULT_STATUS.ACCEPTED,

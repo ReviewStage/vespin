@@ -9,6 +9,7 @@ import { createPanelRouter } from "../panel-router.js";
 import type { RouteAccess } from "../route-gates.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
+import { listedRows } from "../testing/history-rows.js";
 import { tasksControl, VIEWS_AWAY } from "../testing/tasks-control.js";
 import type { RoutedViews } from "../workspace-routes.js";
 import {
@@ -159,7 +160,13 @@ test("each place over the plan names its step for itself, and Admin's as the pla
     overrides: Parameters<typeof tasksControl>[0],
     place: keyof typeof ROUTED_PLACE,
     views: RoutedViews = VIEWS_AWAY,
-  ) => stepTitle(ROUTED_PLACE[place], tasksControl({ tasks: [task], ...overrides }), views);
+  ) =>
+    stepTitle(
+      ROUTED_PLACE[place],
+      tasksControl({ tasks: [task], ...overrides }),
+      listedRows([task]),
+      views,
+    );
 
   assert.deepEqual(titled({}, "BOARD", { ...VIEWS_AWAY, board: true }), {
     label: "Tasks",

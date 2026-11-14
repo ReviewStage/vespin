@@ -22,7 +22,7 @@ import { countedNumber, wireUuidSchema } from "./service-wire.js";
  * items is carried, so neither the Dock nor a toast counts one. A reader
  * that asks with `archived=include` (the `inbox.account` procedure's
  * query, `contract/inbox.ts`) is listed the
- * archived tasks holding items beside the rest in `plans`, which its
+ * archived tasks holding items beside the rest in `tasks`, which its
  * Inbox's Archived tab reads, so an item is put away with its task and
  * comes back as it stood when the task is brought back; a build from
  * before it never asks, and lists none. The read is
@@ -30,8 +30,8 @@ import { countedNumber, wireUuidSchema } from "./service-wire.js";
  * is, and starts from the task read's own start (`INBOX_CURSOR_START`).
  *
  * An item of an agent with no task was carried under keys of its own
- * beside the tasks' (`planless`, `automations`, `agents`) rather than in
- * `items` and `plans`, which name a task. Every agent works on a task now,
+ * beside the tasks' (`taskless`, `automations`, `agents`) rather than in
+ * `items` and `tasks`, which name a task. Every agent works on a task now,
  * so those keys hold nothing; they stay declared because the service still
  * answers them, empty, to a released desktop that reads them. This build
  * reads none of them: an answer ignores a key its reader does not name.
@@ -64,7 +64,7 @@ export const ACCOUNT_INBOX_REPOSITORYLESS = {
 /** One open item as the account's read carries it: where it waits, who posted it, and what it is called. */
 export const accountInboxEntrySchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  planId: wireUuidSchema,
+  taskId: wireUuidSchema,
   agentId: wireUuidSchema,
   /** The agent's title as its row holds it now; null until it has one. */
   agentTitle: EffectSchema.NullOr(EffectSchema.String),
@@ -103,7 +103,7 @@ export type AccountInboxEntry = typeof accountInboxEntrySchema.Type;
 
 /** One task the account's read lists as holding inbox items: the task, how many it holds, open and settled alike, how many of them are the reader's to do, and when the latest of them changed. */
 export const accountInboxTaskSchema = EffectSchema.Struct({
-  planId: wireUuidSchema,
+  taskId: wireUuidSchema,
   items: countedNumber,
   /**
    * How many of the task's items wait on the reader: open, an ask not
@@ -212,17 +212,17 @@ export type AccountFailedRun = typeof accountFailedRunSchema.Type;
  * every task holding any item, waiting or settled, the task whose item
  * changed latest first, which the desktop's Inbox lists: a task whose
  * items were all answered holds no open one, so only this names it. The
- * items of agents with no task wait in `planless`, listed by automation in
+ * items of agents with no task wait in `taskless`, listed by automation in
  * `automations`, on the same terms; a service that predates them sends
  * neither. Each agent with no task holding any item, settled ones
- * included, is listed in `agents` as a task is in `plans`; a service before
+ * included, is listed in `agents` as a task is in `tasks`; a service before
  * it sends none. The newest failed run of each of the account's own automations
  * rides beside them in `failedRuns`; a service before it sends none.
  */
 export const accountInboxAnswerSchema = EffectSchema.Struct({
   items: EffectSchema.Array(accountInboxEntrySchema),
-  plans: EffectSchema.Array(accountInboxTaskSchema),
-  planless: EffectSchema.optionalKey(EffectSchema.Array(accountTasklessEntrySchema)),
+  tasks: EffectSchema.Array(accountInboxTaskSchema),
+  taskless: EffectSchema.optionalKey(EffectSchema.Array(accountTasklessEntrySchema)),
   automations: EffectSchema.optionalKey(EffectSchema.Array(accountInboxAutomationSchema)),
   agents: EffectSchema.optionalKey(EffectSchema.Array(accountInboxAgentSchema)),
   failedRuns: EffectSchema.optionalKey(EffectSchema.Array(accountFailedRunSchema)),

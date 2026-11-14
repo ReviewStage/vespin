@@ -30,6 +30,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useScaledSize } from "./accessibility.js";
+import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
@@ -131,6 +132,8 @@ type ComposerProps = {
   readonly addMenu?: ComposerMenu | undefined;
   /** Starts dictation, drawn as a mic in Send's place while the field is empty. */
   readonly onDictate?: (() => void) | undefined;
+  /** What the composer offers of a voice call into its agent: Talk before Send while the field is empty, or the call's presses there while the call stands; none where it calls no one. */
+  readonly call?: ComposerCall | undefined;
   /** Stops the turn under way, drawn as Stop in Send's place while the field is empty, as the panel's box offers it while its agent works. */
   readonly onStop?: (() => void) | undefined;
   /** Whether a Stop is out, which stands as the system's spinner in Stop's place until the agent stops. */
@@ -304,6 +307,7 @@ function ComposerPieces(props: ComposerProps) {
     onAdd,
     addMenu,
     onDictate,
+    call,
     onStop,
     stopping = false,
   } = props;
@@ -360,6 +364,9 @@ function ComposerPieces(props: ComposerProps) {
           accessibilityIdentifier("composer-field"),
         ]}
       />
+      {call === undefined || (call.kind === COMPOSER_CALL.TALK && !empty) ? null : (
+        <ComposerCallPresses call={call} />
+      )}
       <SendButton
         empty={empty}
         onSend={send}

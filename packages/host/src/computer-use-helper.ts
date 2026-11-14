@@ -1,5 +1,6 @@
 import type {
   ComputerApp,
+  ComputerCursor,
   ComputerOutcome,
   MacComputerAction,
 } from "@repo/features/machine-command-wire";
@@ -147,6 +148,9 @@ const helperAppSchema = Schema.Struct({
   refused: Schema.Boolean,
 });
 
+/** Where the agent's cursor stands, as a share of the window the app's last read captured, in the helper's spelling. */
+const helperCursorSchema = Schema.Struct({ x_fraction: Schema.Number, y_fraction: Schema.Number });
+
 /**
  * One line of the helper's, by its request's id. Note that a read's answer
  * comes before a description's, since a read names its app too, and the
@@ -180,6 +184,7 @@ const helperLineSchema = Schema.fromJsonString(
       shots: Schema.Array(
         Schema.Struct({ width: Schema.Number, height: Schema.Number, jpeg: Schema.String }),
       ),
+      cursor: Schema.optionalKey(helperCursorSchema),
     }),
     Schema.Struct({ id: Schema.Number, ok: Schema.Literal(true), app: helperAppSchema }),
     Schema.Struct({
@@ -188,7 +193,12 @@ const helperLineSchema = Schema.fromJsonString(
       screen_recording: Schema.Boolean,
       accessibility: Schema.Boolean,
     }),
-    Schema.Struct({ id: Schema.Number, ok: Schema.Literal(true), done: Schema.String }),
+    Schema.Struct({
+      id: Schema.Number,
+      ok: Schema.Literal(true),
+      done: Schema.String,
+      cursor: Schema.optionalKey(helperCursorSchema),
+    }),
     Schema.Struct({
       id: Schema.Number,
       ok: Schema.Literal(true),
@@ -216,6 +226,20 @@ function wireApp(app: typeof helperAppSchema.Type): ComputerApp {
   };
 }
 
+/** The cursor as the wire names it; none where the helper answered none, as an action that moves no cursor does, or a helper from before it answered one. */
+function wireCursor(
+  cursor: typeof helperCursorSchema.Type | undefined,
+): { readonly cursor: ComputerCursor } | undefined {
+  if (cursor === undefined) return undefined;
+  const { x_fraction: x, y_fraction: y } = cursor;
+
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return undefined;
+  // Note that a share is held to the window, so a point a rounding past its edge never fails the whole result on the wire's bound.
+  const held = (share: number) => Math.max(0, Math.min(1, share));
+
+  return { cursor: { xFraction: held(x), yFraction: held(y) } };
+}
+
 /** What a request came to, read off the helper's line for it. */
 function answerOf(line: HelperLine): ComputerHelperAnswer {
   if (!line.ok) {
@@ -231,9 +255,11 @@ function answerOf(line: HelperLine): ComputerHelperAnswer {
   if ("apps" in line) return { outcome: { apps: line.apps.map(wireApp) } };
 
   if ("window" in line) {
-    const { app, window, elements, truncated, shots } = line;
+    const { app, window, elements, truncated, shots, cursor } = line;
 
-    return { outcome: { app: wireApp(app), window, elements, truncated, shots } };
+    return {
+      outcome: { app: wireApp(app), window, elements, truncated, shots, ...wireCursor(cursor) },
+    };
   }
 
   if ("app" in line) {
@@ -248,7 +274,7 @@ function answerOf(line: HelperLine): ComputerHelperAnswer {
     };
   }
 
-  return { outcome: { done: line.done } };
+  return { outcome: { done: line.done, ...wireCursor(line.cursor) } };
 }
 
 /** What a request answers where the helper was still on an earlier one when its own time ran out. */

@@ -86,7 +86,7 @@ import type { RunMode } from "./run-mode.js";
  * There is one recovery path, which is to connect and match again: no
  * cursor, no change log, nothing stored between connections. A mirror makes
  * one attempt each time it is asked and never tries again on its own: a
- * socket that drops, is refused, closes as idle, finds the sandbox not
+ * socket that drops, is refused, finds the sandbox not
  * running, or fails a step ends the attempt, and an ensure waiting on a
  * worktree not made yet is refused, for its Local tab to offer Retry. The
  * window asks again each minute an agent is on screen, beside the warm call

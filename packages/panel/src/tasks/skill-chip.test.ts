@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import type { AgentAttachment, AgentTranscriptMessage } from "@repo/features/agent-wire";
+import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import type { SkillOption } from "@repo/features/skill-mention";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
 import { MESSAGE_ROLE } from "@repo/wire";
@@ -17,6 +17,7 @@ import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { AgentComposer } from "./agent-composer.js";
 import { AGENT_LEAD, AgentMessage } from "./agent-tab.js";
+import type { BoxHeld } from "./refused-send.js";
 import { SentWords, SkillFiles } from "./skill-chip.js";
 import type { SkillSource } from "./skill-picker.js";
 import { SkillRef } from "./skill-ref.js";
@@ -96,16 +97,13 @@ async function mounted(view: ReactNode, source: SkillSource = reading) {
 
 /** The composer holding the words given, as the developer left them. */
 function Composer({ words, commands = false }: { words: string; commands?: boolean }): ReactNode {
-  const [draft, setDraft] = useState(words);
-  const [attachments, setAttachments] = useState<readonly AgentAttachment[]>([]);
+  const [held, setHeld] = useState<BoxHeld>({ text: words, attachments: [] });
 
   return createElement(AgentComposer, {
     ...QUIET_COMPOSER,
     composer: {
-      draft,
-      setDraft,
-      attachments,
-      setAttachments: (next) => setAttachments(next),
+      held,
+      updateHeld: (next) => setHeld((now) => next(now) ?? now),
       sending: false,
       note: undefined,
       closed: undefined,
