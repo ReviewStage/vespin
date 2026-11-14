@@ -173,3 +173,20 @@ ipad26-landscape-ipad26-light wrap-description-comment.yaml: fails 2 shots 2   S
 ipad26-landscape-ipad26-dark wrap-description-comment.yaml: fails 2 shots 2   Scrolling DOWN until "Goal" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
   ax none on ipad26: contrast disabled transparency-key 
 ipad26-landscape-ipad26-light wrap-undo.yaml: fails 2 shots 5   Scrolling DOWN until "What the expired invite page says" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... FAILED
+ipad26-landscape-ipad26-dark wrap-undo.yaml: fails 3 shots 6     Tap on "More", Index: 1... FAILED
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-sign-in.yaml: fails 2 shots 3   Assert that "Inbox" is visible... FAILED
+ipad26-landscape-ipad26-dark wrap-sign-in.yaml: fails 2 shots 2   Assert that "Sign in to Vespin" is visible... FAILED
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-update-needed.yaml: fails 2 shots 2   Assert that "This Vespin is older than the one now live" is visible... FAILED
+ipad26-landscape-ipad26-dark wrap-update-needed.yaml: fails 2 shots 2   Assert that "This Vespin is older than the one now live" is visible... FAILED
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-task-history.yaml: fails 2 shots 2   Tap on "Tasks"... FAILED
+ipad26-landscape-ipad26-dark wrap-task-history.yaml: fails 2 shots 2   Tap on "Tasks"... FAILED
+remote: 
+remote: GitHub found 5 vulnerabilities on ReviewStage/vespin's default branch (2 moderate, 3 low). To find out more, visit:        
+remote:      https://github.com/ReviewStage/vespin/security/dependabot        
+remote: 
+pushed ipad26-landscape      167 files 12:05:13
+== ipad27 12:06:05
+  ax none on ipad27: contrast disabled transparency-key 
