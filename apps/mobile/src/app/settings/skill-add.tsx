@@ -43,9 +43,10 @@ import {
   WordsField,
 } from "@repo/ui-native";
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
+import { useCloseSheet } from "../../close-sheet.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { DISCARD_WORDS, useKeptWords } from "../../use-kept-words.js";
@@ -111,7 +112,7 @@ export default function SkillAddScreen() {
  */
 function AddSkill({ workspace }: { readonly workspace: Workspace }) {
   const colors = useColors();
-  const router = useRouter();
+  const close = useCloseSheet();
   const acts = useHostActs();
   const write = useWrite();
   const [text, setText] = useState("");
@@ -216,7 +217,7 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
 
       if (!went || !standing.current || edited) return;
       kept.release();
-      router.back();
+      close();
     });
   };
 
