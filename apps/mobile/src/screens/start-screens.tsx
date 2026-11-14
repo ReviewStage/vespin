@@ -1,6 +1,7 @@
 // start-screens.tsx -- the two sheets that start work, each a compose sheet as Mail's stands: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus above the keyboard; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules, or File for later, which files it with no agent.
 
-import { hasWordsOrFiles } from "@repo/features/agent-wire";
+import { AGENT_STATUS, hasWordsOrFiles } from "@repo/features/agent-wire";
+import { AGENT_STATUS_WORDS } from "@repo/features/automation-list-model";
 import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { devicePlatformOf } from "@repo/features/device-platform";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
@@ -337,8 +338,17 @@ function RepositoryChip({
 
 type UseSheetStartResult = {
   readonly starting: boolean;
-  readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
+  /** What the sheet says beside its spinner while a start is out, such as "Starting…"; none for a task filed for later, which says nothing. */
+  readonly pending: string | undefined;
+  readonly go: (
+    start: () => Promise<StartAnswer>,
+    refusal?: string | undefined,
+    says?: string | undefined,
+  ) => void;
 };
+
+/** What the sheet says while an agent's start is out, as the panel names an agent starting. */
+const STARTING_WORDS = AGENT_STATUS_WORDS[AGENT_STATUS.STARTING];
 
 type Started = { answer?: StartAnswer };
 
@@ -357,9 +367,15 @@ function useSheetStart(
   const router = useRouter();
   const onTab = useOnTab();
   const write = useWrite();
-  const [starting, setStarting] = useState(false);
+  // Note that what a start says is held with it, so a task filed for later shows the spinner without the words an agent's start says.
+  const [out, setOut] = useState<{ readonly says: string | undefined } | undefined>(undefined);
+  const starting = out !== undefined;
 
-  const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
+  const go = (
+    start: () => Promise<StartAnswer>,
+    refusal?: string | undefined,
+    says?: string | undefined,
+  ) => {
     if (starting) return;
 
     if (refusal !== undefined) {
@@ -369,7 +385,7 @@ function useSheetStart(
       return;
     }
 
-    setStarting(true);
+    setOut({ says });
     setNote(undefined);
     const started: Started = {};
     // Note that a start refused says why in the sheet, under its words, rather than in the notice.
@@ -398,10 +414,10 @@ function useSheetStart(
 
         if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
       })
-      .finally(() => setStarting(false));
+      .finally(() => setOut(undefined));
   };
 
-  return { starting, go };
+  return { starting, pending: out?.says, go };
 }
 
 /** The skills a `/` offers, as the compose sheet takes them. */
@@ -441,7 +457,7 @@ export function NewAgentScreen({
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
-  const { starting, go } = useSheetStart(kept, setNote);
+  const { starting, pending, go } = useSheetStart(kept, setNote);
   const skills = useSkillOffer(prompt, setPrompt, { planId: taskId });
 
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
@@ -472,6 +488,7 @@ export function NewAgentScreen({
             })
           : startSuggested(opened.suggestion),
       pictures.refusal,
+      STARTING_WORDS,
     );
 
   return (
@@ -483,6 +500,7 @@ export function NewAgentScreen({
         kept={kept}
       />
       <ComposeSheet
+        busy={starting ? { says: pending } : undefined}
         title={
           opened === undefined
             ? undefined
@@ -726,7 +744,7 @@ export function NewTaskScreen({
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
   const filed = pictures.files === undefined && !pictures.opening ? filedTaskOf(prompt) : undefined;
   const kept = useKeptWords(drafted);
-  const { starting, go } = useSheetStart(kept, setNote);
+  const { starting, pending, go } = useSheetStart(kept, setNote);
   const place = { repository: repository.picked, relation: relation.relation };
   const tree = inTree(relation.relation) ? relation.task : undefined;
   // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
@@ -772,6 +790,7 @@ export function NewTaskScreen({
           ...place,
         }),
       pictures.refusal,
+      STARTING_WORDS,
     );
   };
 
@@ -789,6 +808,7 @@ export function NewTaskScreen({
         kept={kept}
       />
       <ComposeSheet
+        busy={starting ? { says: pending } : undefined}
         head={head}
         words={{
           placeholder: WORDS.TASK_PLACEHOLDER,

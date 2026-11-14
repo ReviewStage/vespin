@@ -6,6 +6,7 @@ import {
   HStack,
   Image,
   Menu,
+  ProgressView,
   ScrollView,
   Section,
   Button as SwiftUIButton,
@@ -235,6 +236,8 @@ type ComposeSheetProps = {
   /** What stands over the words, such as the task the new one is related to, as capsules. */
   readonly head?: ReactNode;
   readonly words: ComposeWords;
+  /** A start that is out, which the page says with the system's spinner and, where it says them, its words, such as "Starting…"; none while nothing is out. */
+  readonly busy?: { readonly says: string | undefined } | undefined;
   /** The skills a `/` being typed offers; none while no `/` word ends the words. */
   readonly skills?:
     | {
@@ -258,7 +261,7 @@ type ComposeSheetProps = {
 function ComposePage(props: ComposeSheetProps) {
   const colors = useColors();
   const room = useDockRoom();
-  const { title, head, words, skills, pictures, onDetach, notes, onDropPictures } = props;
+  const { title, head, words, skills, pictures, onDetach, notes, onDropPictures, busy } = props;
   const muted = [font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)];
 
   return (
@@ -293,6 +296,12 @@ function ComposePage(props: ComposeSheetProps) {
               {note}
             </Text>
           ))}
+          {busy === undefined ? null : (
+            <HStack spacing={SPACE.TIGHT}>
+              <ProgressView modifiers={[tint(colors.TEXT_MUTED)]} />
+              {busy.says === undefined ? null : <Text modifiers={muted}>{busy.says}</Text>}
+            </HStack>
+          )}
         </VStack>
       </ScrollView>
     </Host>
