@@ -87,15 +87,10 @@ import { recordServerEventIn, SERVER_EVENT, voiceCallDurationOf } from "../event
 import type { GitHubApp } from "../github/github-app.js";
 import { logStoreFailure } from "../http/store-failure.js";
 import { QUEUE_ACKNOWLEDGED, queueConsumer } from "../queues/queue-consumer.js";
-import {
-  closedSeconds,
-  LIVE_SIDEBAND_EVENT,
-  type LiveEvent,
-  LiveSidebands,
-  sessionGone,
-} from "./live-sideband.js";
+import { closedSeconds, LIVE_SIDEBAND_EVENT, LiveSidebands, sessionGone } from "./live-sideband.js";
 import { VOICE_CALL_LEASE } from "./voice-call-bounds.js";
 import { voiceCallDelegations } from "./voice-call-delegations.js";
+import type { VoiceCallHolder, VoiceCallObserver } from "./voice-call-holder.js";
 
 const MS_PER_SECOND = 1_000;
 
@@ -136,34 +131,6 @@ export type VoiceCallLeaseMessage = typeof VoiceCallLeaseMessageSchema.Type;
 export interface VoiceCallLease extends VoiceCallLeaseMessage {
   readonly redelivered: boolean;
 }
-
-/** The call as one lease holds it, and what that lease may say to the session. */
-export interface VoiceCallHolder {
-  /** The call's row as this lease claimed it, under the epoch it holds. */
-  readonly call: VoiceCallRow;
-  /** Whether this lease still holds the call, read now, which fences an act that says nothing to the session. A holder told no lets go. */
-  readonly holds: Effect.Effect<boolean, StoreFailure, DatabaseServices>;
-  /** The event sent where this lease still holds the call, read just before; whether it was. A holder told no lets go. */
-  readonly send: (event: {
-    readonly type: string;
-  }) => Effect.Effect<boolean, StoreFailure, DatabaseServices>;
-}
-
-/**
- * What a holder does once it holds the call: with each event the session
- * says before it closes, at least once, under a key of the event's own; and
- * beside them, for as long as the lease holds, what it follows of its own,
- * which ends only once it finds the lease lost.
- */
-export interface VoiceCallObserving<R> {
-  readonly observe: (event: LiveEvent) => Effect.Effect<void, StoreFailure, R>;
-  readonly beside: Effect.Effect<void, StoreFailure, R>;
-}
-
-/** How a holder sets out to observe the call, once, as it claims it. */
-export type VoiceCallObserver<R> = (
-  holder: VoiceCallHolder,
-) => Effect.Effect<VoiceCallObserving<R>, StoreFailure, R>;
 
 /** A lease's message the queue did not take. */
 export class VoiceCallLeaseNotPublished extends Data.TaggedError("VoiceCallLeaseNotPublished")<{
