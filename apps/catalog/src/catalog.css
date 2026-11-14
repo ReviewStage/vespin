@@ -368,6 +368,16 @@ body {
   background: var(--ui-color-accent);
 }
 
+/* A picture's place the agent's pointer stands over (app-ask.tsx): positioned, so the pointer places its tip by share of it. */
+.catalog-pointer-ground {
+  position: relative;
+  width: 160px;
+  height: 100px;
+  border: 1px solid var(--ui-color-border-strong);
+  border-radius: var(--ui-dialog-radius);
+  background: var(--ui-color-surface);
+}
+
 /* A column narrower than a phone, where long words have to wrap. */
 .catalog-narrow {
   display: flex;

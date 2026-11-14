@@ -26,7 +26,7 @@ import {
   type Task,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { IDLE_TASKS_VIEW, type TasksTreeAnswer } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -189,7 +189,7 @@ function openPalette(
   // The repository's files are read whole through the act port, by the plan they stand on.
   fakeActPort({
     ...fakeActPortCalls(),
-    [ACT_KIND.TASKS_TREE]: (payload) => readFiles("planId" in payload ? payload.planId : ""),
+    [ACT_KIND.TASKS_TREE]: (payload) => readFiles("taskId" in payload ? payload.taskId : ""),
   });
   act(() => root.render(withQueryClient(palette)));
   act(() => {
@@ -216,7 +216,7 @@ function paletteOverTask(): (
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
 
   const tasks = tasksControl({
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     activeTaskId: DOCUMENT_TASK.id,
   });
 
@@ -810,7 +810,7 @@ test("an agent's row hangs its tab's card beside it while the pointer rests on i
         agents: [
           {
             id: "agent-7",
-            planId: "plan-1",
+            taskId: "plan-1",
             model: "anthropic/claude-opus-5.5",
             effort: "high",
             title: "Invoice export",
@@ -849,7 +849,7 @@ test("an archived agent of the open task is still found, after the standing ones
 
   const agent = (id: string, title: string) => ({
     id,
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title,
@@ -896,8 +896,8 @@ test("an archived agent of the open task is still found, after the standing ones
 test("an agent's card in ⌘K names the automation that started it, the listed workspace's automations read once around the window", async () => {
   const automation = {
     id: "3f0e6f5c-7d1a-4f6e-9a55-000000000001",
-    planId: null,
-    planName: null,
+    taskId: null,
+    taskName: null,
     workspaceId: "workspace-acme",
     name: "Morning Sentry triage",
     enabled: true,
@@ -940,7 +940,7 @@ test("an agent's card in ⌘K names the automation that started it, the listed w
       agents: [
         {
           id: "agent-7",
-          planId: "plan-1",
+          taskId: "plan-1",
           model: "anthropic/claude-opus-5.5",
           effort: "high",
           title: "Invoice export",
@@ -1027,7 +1027,7 @@ test("an agent's card in ⌘K names the automation that started it, the listed w
 test("an agent's Pull request row is named as its tab is, by its pull request's number and title, with the agent beside it, and is found by that number, that title, and the agent's name", () => {
   const agent = {
     id: "agent-7",
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Invoice export",
@@ -1082,7 +1082,7 @@ test("an agent's Pull request row is named as its tab is, by its pull request's 
 test("while an agent's page holds the side panel, ⌘K offers none of the open plan's panel tabs, workers, Changes, or files, which would open beside the agent", () => {
   const agent = {
     id: "agent-7",
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Invoice export",
@@ -1106,7 +1106,7 @@ test("while an agent's page holds the side panel, ⌘K offers none of the open p
           repository: "acme/relay",
         },
       ],
-      region: { kind: DOCUMENT_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
+      region: { kind: TASK_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
       agentView: { ...control.agentView, agentId: "agent-page-1" },
       agents: agentsControl({
         agents: [agent],
@@ -1153,7 +1153,7 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
 }> {
   const agent = {
     id: "agent-7",
-    planId: DOCUMENT_TASK.id,
+    taskId: DOCUMENT_TASK.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Invoice export",
@@ -1177,7 +1177,7 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
         repository: "acme/relay",
       },
     ],
-    region: { kind: DOCUMENT_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
+    region: { kind: TASK_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
     sidePanel: { ...base.sidePanel, onOpenFile: (ref) => opened.push(ref.path) },
     agents: agentsControl({
       agents: [agent],
@@ -1388,7 +1388,7 @@ test("an agent pressed on a task's card in ⌘K over Settings leaves the palette
           taskAgents: [
             listedAgent({
               id: "agent-7",
-              planId: "plan-1",
+              taskId: "plan-1",
               title: "Invoice export",
               model: "anthropic/claude-opus-5.5",
               effort: "high",
@@ -1442,7 +1442,7 @@ test("an agent pressed on a task's card in ⌘K over Settings leaves the palette
   assert.equal(paletteShown(), false, "the palette is put away");
 });
 
-test("Search lists the listed workspace's plans first, then every other workspace's, each naming its workspace by its tile and name and found by it", () => {
+test("Search lists the listed workspace's tasks first, then every other workspace's, each naming its workspace by its tile and name and found by it", () => {
   const personal = {
     id: "workspace-personal",
     name: "Personal",
@@ -1806,9 +1806,9 @@ test("a task's command wears the same chord in ⌘K as in the open task's Plan t
   const tasks = tasksControl({
     workspaces: [listed],
     workspace: listed,
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: DOCUMENT_TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     sidePanel: { ...tasksControl().sidePanel, open: true, tab: SIDE_PANEL_TAB.DESCRIPTION },
   });
 
@@ -1915,10 +1915,10 @@ const LINKED_AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 
 /** A task drawn in Acme, its agent's tab chosen in the work column and the agent named. */
 const ON_AGENT_TAB: TasksControl = tasksControl({
-  page: TASKS_PAGE.DOCUMENT,
+  page: TASKS_PAGE.TASK,
   activeTaskId: DOCUMENT_TASK.id,
   region: {
-    kind: DOCUMENT_REGION.READY,
+    kind: TASK_REGION.READY,
     task: { ...DOCUMENT_TASK, workspaceId: "workspace-acme" },
   },
   workspaces: [
@@ -1929,7 +1929,7 @@ const ON_AGENT_TAB: TasksControl = tasksControl({
     agents: [
       {
         id: LINKED_AGENT,
-        planId: DOCUMENT_TASK.id,
+        taskId: DOCUMENT_TASK.id,
         model: "anthropic/claude-opus-5.5",
         effort: "high",
         title: "Expire old invites",
@@ -2359,7 +2359,7 @@ function PinnableTask(): React.JSX.Element {
 
   const tasks = tasksControl({
     tasks: [listed],
-    region: { kind: DOCUMENT_REGION.READY, task: listed },
+    region: { kind: TASK_REGION.READY, task: listed },
     activeTaskId: listed.id,
   });
 
@@ -2497,7 +2497,7 @@ async function paletteUnderState(
 test('with a task open, ⌘K\'s "This task" lists its pages and a terminal for each agent, as the side panel\'s "+" offers them, and each opens as the "+" opens it', async () => {
   const agent = {
     id: "agent-7",
-    planId: DOCUMENT_TASK.id,
+    taskId: DOCUMENT_TASK.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Invoice export",
@@ -2521,7 +2521,7 @@ test('with a task open, ⌘K\'s "This task" lists its pages and a terminal for e
         repository: null,
       },
     ],
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     pages: [{ id: "page-1", title: "Invite funnel", version: 1, at: 1 }],
     sidePanel: { ...base.sidePanel, onChoose: (tab) => chosen.push(tab) },
     agents: agentsControl({ agents: [agent], agentIds: [agent.id] }),
@@ -2564,7 +2564,7 @@ test('over an Inbox item of the open task, ⌘K\'s "This task" lists the pages t
         repository: null,
       },
     ],
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     pages: [],
     inboxView: {
       ...base.inboxView,
@@ -2596,7 +2596,7 @@ test("with a task on screen, ⌘K offers its Version history, Cancel task, and C
 
   const tasks = tasksControl({
     tasks: [task],
-    region: { kind: DOCUMENT_REGION.READY, task },
+    region: { kind: TASK_REGION.READY, task },
     activeTaskId: task.id,
     onOpenHistory: (taskId) => ran.push(`history:${taskId}`),
     onChangeRepository: (taskId) => ran.push(`repository:${taskId}`),
@@ -2656,9 +2656,9 @@ function paletteBesideTask(room: ShellRoom): HTMLElement {
   const base = tasksControl();
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: DOCUMENT_TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     sidePanel: {
       ...base.sidePanel,
       open: true,
@@ -2762,7 +2762,7 @@ test("⌘K's \"This task\" offers the task's Inbox while an item waits on it and
         repository: null,
       },
     ],
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
   });
 
   await paletteUnderState(tasks);
@@ -2792,8 +2792,8 @@ test("with no task open, ⌘K draws no This task filter, which would list nothin
 test("⌘K's Automations lists the workspace's automations by name and what fires them, found by their task's name too, and one chosen opens its page", async () => {
   const automation = {
     id: "3f0e6f5c-7d1a-4f6e-9a55-000000000002",
-    planId: "7e4f0a9b-0000-4000-8000-0000000000c3",
-    planName: "Billing usage alerts",
+    taskId: "7e4f0a9b-0000-4000-8000-0000000000c3",
+    taskName: "Billing usage alerts",
     workspaceId: ACME.id,
     name: "Deploy notes",
     enabled: true,
@@ -2901,7 +2901,7 @@ function fedOf(inbox: FedInbox): AppHostRead<AppInboxItems> {
   if ("failure" in inbox) return { failed: true };
 
   return {
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [ROTATION.id]: inbox.items } },
+    rows: { [INBOX_SCOPE_KIND.TASK]: { [ROTATION.id]: inbox.items } },
   };
 }
 

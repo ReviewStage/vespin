@@ -21,6 +21,7 @@ import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
+import { VoiceCallProvider } from "../voice-call.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
@@ -149,12 +150,14 @@ function KeptScreens() {
   );
 }
 
-/** The root: the host, the one notice of a write that did not go, and the screens under both. */
+/** The root: the host, the one notice of a write that did not go, the voice call, which outlives every screen, and the screens under them. */
 export default function RootLayout() {
   return (
     <HostProvider>
       <FailureNoticeProvider>
-        <KeptScreens />
+        <VoiceCallProvider>
+          <KeptScreens />
+        </VoiceCallProvider>
       </FailureNoticeProvider>
     </HostProvider>
   );

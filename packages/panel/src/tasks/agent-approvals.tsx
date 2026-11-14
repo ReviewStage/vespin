@@ -21,6 +21,7 @@ import type { AgentApprovalAnswerView } from "@repo/features/agent-view";
 import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { allowedCommandWords } from "@repo/features/allowed-command-model";
 import { providerOf } from "@repo/features/model-label";
+import { drawnCall } from "@repo/features/native-tool-calls";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -588,16 +589,22 @@ export function looseApprovals(
   );
 }
 
-/** The call an ask no drawn row holds stands for, as its row is drawn from it: the tool, its input, under way while the ask waits. */
+/** The call an ask no drawn row holds stands for, as its row is drawn from it: the tool, its input, under way while the ask waits. Note that the harness's own tool is read as the call of its kind (`drawnCall`), as a stored part is, so a held `Bash` reads as a command rather than as a tool by that name. */
 export function heldCallPart(
   approval: AgentPendingApproval,
 ): Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }> {
+  const { tool, input } = drawnCall({
+    tool: approval.toolName,
+    input: approval.input,
+    output: undefined,
+  });
+
   return {
     kind: AGENT_PART.TOOL,
-    tool: approval.toolName,
+    tool,
     callId: approval.toolUseId,
     state: TOOL_STATE.INPUT_AVAILABLE,
-    input: approval.input,
+    input,
     output: undefined,
     errorText: undefined,
   };

@@ -92,7 +92,7 @@ it.effect(
       posted.length = 0;
       const scope = yield* Scope.make();
       const { focus, state, forwarded } = yield* linked(scope, () => Effect.void, []);
-      const ask = (id: string) => ({ id, command: "node --version", askedAt: 1 });
+      const ask = (id: string) => ({ id, command: "node --version", askedAt: 1, expiresAt: 2 });
 
       state.update({ machineCommands: { asks: [ask("first")] } });
       yield* Effect.yieldNow;
@@ -189,7 +189,7 @@ const TASK: TaskSummary = {
 /** An agent on the task, as the task list carries it beside the tasks. */
 const AGENT: ListedAgent = {
   id: "a1b2c3d4-0000-4000-8000-0000000000aa",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: null,
