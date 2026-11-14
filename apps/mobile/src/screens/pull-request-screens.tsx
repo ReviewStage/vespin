@@ -132,12 +132,23 @@ function copyLink(url: string): void {
     });
 }
 
-/** The merge's press as the pull request stands: its words, whether it is the screen's one prominent act, and the change it sends. */
+/** What a press asks before it sends: its question, and what the question says under it; the pull request by its number and title where it says nothing of its own. */
+interface MergeAsk {
+  readonly title: string;
+  readonly message?: string | undefined;
+}
+
+/** A merge's question, the one a pull request's card asks too, so a merge asks the same wherever it is pressed. */
+const MERGE_ASK: MergeAsk = { title: MERGE_WORDS.MERGE_QUESTION };
+
+/** The merge's press as the pull request stands: its words, whether it is the screen's one prominent act, the change it sends, and what it asks first. */
 interface MergePress {
   readonly words: string;
   readonly prominent: boolean;
-  /** The change to send; none where it asks first, as Remove from queue does. */
-  readonly request: PullRequestActionRequest | undefined;
+  /** The change it sends. */
+  readonly request: PullRequestActionRequest;
+  /** What it asks before it sends; none where it only takes back what was asked for, as Disable auto-merge does. */
+  readonly ask: MergeAsk | undefined;
 }
 
 /** The press for `action`, by the method chosen where it names one; none where it offers nothing, or names a method none is allowed. */
@@ -154,6 +165,7 @@ function mergePressOf(
         words: MERGE_PRESS_WORDS[method],
         prominent: true,
         request: { action: PULL_REQUEST_ACTION.MERGE, method, headSha },
+        ask: MERGE_ASK,
       };
     case MERGE_ACTION.ENABLE_AUTO_MERGE:
       if (method === undefined) return undefined;
@@ -162,21 +174,29 @@ function mergePressOf(
         words: MERGE_WORDS.ENABLE_AUTO_MERGE,
         prominent: false,
         request: { action: PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE, method, headSha },
+        ask: MERGE_ASK,
       };
     case MERGE_ACTION.MERGE_WHEN_READY:
       return {
         words: MERGE_WORDS.MERGE_WHEN_READY,
         prominent: true,
         request: { action: PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE, headSha },
+        ask: MERGE_ASK,
       };
     case MERGE_ACTION.DISABLE_AUTO_MERGE:
       return {
         words: MERGE_WORDS.DISABLE_AUTO_MERGE,
         prominent: false,
         request: { action: PULL_REQUEST_ACTION.DISABLE_AUTO_MERGE },
+        ask: undefined,
       };
     case MERGE_ACTION.DEQUEUE:
-      return { words: MERGE_WORDS.DEQUEUE, prominent: false, request: undefined };
+      return {
+        words: MERGE_WORDS.DEQUEUE,
+        prominent: false,
+        request: { action: PULL_REQUEST_ACTION.DEQUEUE },
+        ask: { title: MERGE_WORDS.DEQUEUE_QUESTION, message: QUEUE_WARNING },
+      };
     // Note that the page offers no bypass of the base's rules, which asks first; GitHub's own does.
     case MERGE_ACTION.BYPASS:
     case undefined:
@@ -184,37 +204,53 @@ function mergePressOf(
   }
 }
 
-/** The merge's press as a screen draws it: its words, busy in its own while a change is out, and what a tap does. */
+/** The merge's press as a screen draws it: its words, busy in its own while a change is out, what it asks first, and the change it sends. */
 interface ShownPress {
   readonly words: string;
   readonly prominent: boolean;
   readonly disabled: boolean;
-  readonly onPress: () => void;
+  readonly ask: MergeAsk | undefined;
+  readonly request: PullRequestActionRequest;
+}
+
+/** A press whose question stands, as it was when pressed: what the pull request offered, the change it sends, and its question's words, so a live read landing under the question changes neither what it says nor what it sends. */
+interface AskedPress {
+  readonly action: MergeAction;
+  readonly request: PullRequestActionRequest;
+  readonly words: string;
+  readonly ask: MergeAsk;
+}
+
+/** The merge the pull request offers as it stands, by GitHub's live state; none where it isn't live. */
+function offeredActionOf(
+  pullRequest: AgentOverviewPullRequest | undefined,
+): MergeAction | undefined {
+  return pullRequest !== undefined && isLivePullRequest(pullRequest)
+    ? mergeActionFor(pullRequest)
+    : undefined;
 }
 
 /** The press the pull request offers as it stands, wherever the screen draws it; none where it offers nothing. */
 function shownPressOf(
   pullRequest: AgentOverviewPullRequest | undefined,
   method: MergeMethod | undefined,
-  writes: PullRequestWrites,
-  onDequeue: () => void,
+  pending: PullRequestWrites["pending"],
 ): ShownPress | undefined {
-  const live = pullRequest !== undefined && isLivePullRequest(pullRequest);
-  const action = live ? mergeActionFor(pullRequest) : undefined;
-  const press = mergePressOf(action, method, pullRequest?.merging?.headSha ?? "");
+  const press = mergePressOf(
+    offeredActionOf(pullRequest),
+    method,
+    pullRequest?.merging?.headSha ?? "",
+  );
 
   if (press === undefined) return undefined;
-  const pending = isMergeWrite(writes.pending) ? writes.pending : undefined;
-  const { request } = press;
+  const busy = isMergeWrite(pending) ? pending : undefined;
 
   return {
-    words: pending === undefined ? press.words : MERGE_BUSY_WORDS[pending],
+    words: busy === undefined ? press.words : MERGE_BUSY_WORDS[busy],
     prominent: press.prominent,
-    disabled: writes.pending !== undefined,
-    onPress: () => {
-      if (request === undefined) onDequeue();
-      else void writes.write(request);
-    },
+    disabled: pending !== undefined,
+    ask: press.ask,
+    request: press.request,
   };
 }
 
@@ -275,9 +311,11 @@ function PullRequestToolbar({
  * opening its run on GitHub; and its reviewers, where each stands, with
  * how many comments its conversation holds, which opens it on GitHub. Its
  * parts are held live while the screen is in focus, and a pull down reads
- * them again. The merge's one press acts at once as the panel's merge
- * control does, or arms auto-merge where the repository merges through a
- * queue, and Remove from queue asks first, as the panel's does; it stands
+ * them again. The merge's one press merges, or arms auto-merge where the
+ * repository merges through a queue, once its question is answered, as a
+ * pull request's card on the agent page asks it, so a merge asks the same
+ * wherever it is pressed; Remove from queue asks first too, as the
+ * panel's does, and Disable auto-merge, which only takes back, doesn't. It stands
  * under the heading in every window, as wide as its words, as the panel's
  * head stands Merge under the title, and as a split button where the
  * repository merges more than one way.
@@ -295,8 +333,8 @@ export function PullRequestScreen() {
   const retry = usePullRequestRetry(key);
   const writes = usePullRequestWrites(key);
   const [chosen, setChosen] = useState<MergeMethod | undefined>(undefined);
-  // Whether Remove from queue is being asked about.
-  const [asking, setAsking] = useState(false);
+  // The merge whose question stands, by what the pull request offered when it was pressed.
+  const [asked, setAsked] = useState<AskedPress | undefined>(undefined);
   const pullRequest = landedOf(parts.pullRequest)?.pullRequest ?? undefined;
   const checks = landedOf(parts.checks)?.pullRequest?.checks;
   const conversation = landedOf(parts.conversation)?.pullRequest ?? undefined;
@@ -307,18 +345,13 @@ export function PullRequestScreen() {
   const title = pullRequest?.title ?? listed?.title;
   const state = pullRequest?.state ?? listed?.state;
   const url = pullRequest?.url ?? listed?.url;
-  const press = shownPressOf(pullRequest, method, writes, () => setAsking(true));
+  const press = shownPressOf(pullRequest, method, writes.pending);
+  const offered = offeredActionOf(pullRequest);
 
-  // Whether the pull request offers Remove from queue as it stands, which its question asks about.
-  const dequeues =
-    pullRequest !== undefined &&
-    isLivePullRequest(pullRequest) &&
-    mergeActionFor(pullRequest) === MERGE_ACTION.DEQUEUE;
-
-  // Note that the question is dropped as soon as the queue no longer offers it, rather than only when its alert says it went, so it never stands again by itself the next time the pull request is queued.
+  // Note that a question is dropped as soon as the pull request no longer offers what it asks about, rather than only when its alert says it went, so it never stands again by itself the next time it offers that.
   useEffect(() => {
-    if (!dequeues) setAsking(false);
-  }, [dequeues]);
+    if (asked !== undefined && asked.action !== offered) setAsked(undefined);
+  }, [asked, offered]);
   useScreenActivity((workspaces) =>
     agent === undefined || title === undefined
       ? undefined
@@ -431,7 +464,18 @@ export function PullRequestScreen() {
                   on: each === method,
                   onPress: () => setChosen(each),
                 }))}
-                onPress={press.onPress}
+                onPress={() => {
+                  if (press.ask === undefined || offered === undefined) {
+                    void writes.write(press.request);
+                  } else {
+                    setAsked({
+                      action: offered,
+                      request: press.request,
+                      words: press.words,
+                      ask: press.ask,
+                    });
+                  }
+                }}
               />
             )}
             {writes.note === undefined ? null : (
@@ -503,15 +547,16 @@ export function PullRequestScreen() {
         </RowList>
       </Screen>
       <ConfirmAsk
-        title={MERGE_WORDS.DEQUEUE_QUESTION}
-        message={QUEUE_WARNING}
-        act={MERGE_WORDS.DEQUEUE}
-        presented={asking && dequeues}
+        title={asked?.ask.title ?? MERGE_WORDS.MERGE_QUESTION}
+        message={asked?.ask.message ?? `#${key.number} ${title}`}
+        act={asked?.words ?? ""}
+        presented={asked !== undefined && asked.action === offered}
         onAct={() => {
-          setAsking(false);
-          void writes.write({ action: PULL_REQUEST_ACTION.DEQUEUE });
+          setAsked(undefined);
+
+          if (asked !== undefined) void writes.write(asked.request);
         }}
-        onDismiss={() => setAsking(false)}
+        onDismiss={() => setAsked(undefined)}
       />
     </>
   );
