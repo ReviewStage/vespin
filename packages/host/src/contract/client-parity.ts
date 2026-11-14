@@ -146,7 +146,7 @@ const IOS = {
   SOUNDS: byDesign("The phone plays only its push sound, never the account's chosen sounds"),
   TASKS: notYet("iOS v1's Tasks tab and task page don't offer this yet"),
   ACTIVE_TASK: byDesign(
-    "iOS follows each open task's description by its id (TASKS_DOCUMENT_FOLLOW), so it has no one active task to select or leave",
+    "iOS follows each open task's description by its id (TASKS_HELD_FOLLOW), so it has no one active task to select or leave",
   ),
   CODE_COLOR: byDesign(
     "iOS's host colors no code (compose-mobile.ts answers plainCodeLines), so a fenced block draws plain in mono",
@@ -443,8 +443,8 @@ export const CLIENT_PARITY = {
     ios: YES,
   },
   [PORT_ACT_KIND.TASKS_PAGES_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_DOCUMENT_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_DOCUMENT_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_HELD_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_HELD_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PICTURE_READ]: EVERYWHERE,

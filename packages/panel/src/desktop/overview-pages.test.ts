@@ -8,10 +8,10 @@ import { afterEach, beforeEach, test } from "vitest";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { PlanPages } from "./plan-pages.js";
+import { OverviewPages } from "./overview-pages.js";
 
 /**
- * plan-pages.test.ts -- a task's pages stand as rows of their own list in
+ * overview-pages.test.ts -- a task's pages stand as rows of their own list in
  * its Overview: a row's ⋯ offers the page's Copy link, and the pages are
  * chosen together by their boxes, a row chosen among several opening every
  * chosen page in a tab of its own where the window opens tabs, and copying
@@ -68,7 +68,7 @@ function mount(pages: readonly PageLine[]): MountResult {
         createElement(
           LinkWorkspaceProvider,
           { value: "acme" },
-          createElement(PlanPages, {
+          createElement(OverviewPages, {
             pages,
             place: { taskId: TASK },
             shown: true,

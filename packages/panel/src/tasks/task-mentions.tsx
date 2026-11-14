@@ -26,7 +26,7 @@ import {
 import { askAct } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import type { MentionNode } from "../description-editor/contract.js";
-import { descriptionDocumentQuery } from "../live-reads.js";
+import { heldTaskQuery } from "../live-reads.js";
 import type { LinkDrawer } from "../markdown-message.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { agentActor, agentName } from "./agent-model.js";
@@ -289,7 +289,7 @@ async function newestRevisionText(taskId: string): Promise<string | null> {
 export function useSavedDescriptionText(
   task: Pick<TaskSummary, "id" | "updatedAt"> | undefined,
 ): string | undefined {
-  const held = useQuery({ ...descriptionDocumentQuery(task?.id), enabled: false }).data;
+  const held = useQuery({ ...heldTaskQuery(task?.id), enabled: false }).data;
   const openText = held !== undefined && "task" in held ? held.task.description.body : undefined;
   const reading = openText === undefined ? task?.id : undefined;
   const savedAt = task?.updatedAt;

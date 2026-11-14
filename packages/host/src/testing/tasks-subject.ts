@@ -72,7 +72,7 @@ import {
   type BlockCallFailure,
   BROWSER_TAB_OPEN_FAILURE,
   type FollowerCallFailure,
-  type HeldDescriptionDocument,
+  type HeldTask,
   type ParentCallFailure,
   PICTURE_KEEP_FAILURE,
   type RelationCallFailure,
@@ -108,7 +108,7 @@ import { readEither } from "@repo/wire/effect";
 import { noNetwork } from "@repo/wire/testing";
 import { Data, Deferred, Duration, Effect, FiberMap, Predicate, Result, type Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { type AppDescriptionDocuments, type AppHostRead, NO_KEYS_HELD } from "../app-state.js";
+import { type AppHeldTasks, type AppHostRead, NO_KEYS_HELD } from "../app-state.js";
 import { composeTasks, type TasksClient } from "../compose-tasks.js";
 import { composeWorkspaces, type WorkspacesClient } from "../compose-workspaces.js";
 import {
@@ -313,7 +313,7 @@ export interface FakeService extends TasksClient, WorkspacesClient {
       "sentryInstallations" | "slackInstallation" | "slackChannelRepositories"
     >;
     readonly list: PolledLive<
-      "plans" | "agents" | "issues",
+      "tasks" | "agents" | "issues",
       { readonly failure: typeof TASK_CALL_FAILURE.UNANSWERED | typeof LIVE_SIGNED_OUT.failure }
     >;
   };
@@ -467,12 +467,12 @@ export const EDITED_AT = 7_000;
 
 /** The task list's read as the service answers it, before it is read by sync id. */
 type ListAnswer = Exclude<
-  ReturnType<PolledLive<"plans" | "agents" | "issues">["first"]>,
+  ReturnType<PolledLive<"tasks" | "agents" | "issues">["first"]>,
   { readonly failure: string }
 >;
 
 /** Each part of the task list's rows by id as they stood at each sync id answered, so a read past one is answered what moved since. */
-type ListAt = Map<string, ReadonlyMap<"plans" | "agents", ReadonlyMap<string, string>>>;
+type ListAt = Map<string, ReadonlyMap<"tasks" | "agents", ReadonlyMap<string, string>>>;
 
 /** A row's id; none where it is no object carrying one as words. */
 function rowIdOf<Row>(row: Row): string | undefined {
@@ -499,17 +499,17 @@ function rowsById(rows: readonly unknown[] | undefined): ReadonlyMap<string, str
  * of its own rows that stand no longer.
  */
 function listBySyncId(answer: ListAnswer, past: string | undefined, listAt: ListAt): ListAnswer {
-  const next = answer.queries.plans.digest ?? "0";
+  const next = answer.queries.tasks.digest ?? "0";
   const before = past === undefined ? undefined : listAt.get(past);
 
   const now = new Map([
-    ["plans", rowsById(answer.queries.plans.rows)],
+    ["tasks", rowsById(answer.queries.tasks.rows)],
     ["agents", rowsById(answer.queries.agents.rows)],
   ] as const);
 
   listAt.set(next, now);
 
-  const part = (name: "plans" | "agents"): SealedLiveQueryWire => {
+  const part = (name: "tasks" | "agents"): SealedLiveQueryWire => {
     const query = answer.queries[name];
     const sync = past === undefined ? { next } : { past, next };
     const was = before?.get(name);
@@ -530,7 +530,7 @@ function listBySyncId(answer: ListAnswer, past: string | undefined, listAt: List
 
   return {
     ...answer,
-    queries: { ...answer.queries, plans: part("plans"), agents: part("agents") },
+    queries: { ...answer.queries, tasks: part("tasks"), agents: part("agents") },
   };
 }
 
@@ -578,9 +578,9 @@ export function fakeService(tasks: Task[]): FakeService {
       "sentryInstallations" | "slackInstallation" | "slackChannelRepositories"
     >(["sentryInstallations", "slackInstallation", "slackChannelRepositories"]),
     list: polledLive<
-      "plans" | "agents" | "issues",
+      "tasks" | "agents" | "issues",
       { readonly failure: typeof TASK_CALL_FAILURE.UNANSWERED | typeof LIVE_SIGNED_OUT.failure }
-    >(["plans", "agents", "issues"]),
+    >(["tasks", "agents", "issues"]),
   };
 
   /** A live read first asked, or polled past `after`. */
@@ -1220,7 +1220,7 @@ export function fakeService(tasks: Task[]): FakeService {
 
         return {
           ok: true,
-          answer: { plan: edited, ...(txid === undefined ? undefined : { txid }) },
+          answer: { task: edited, ...(txid === undefined ? undefined : { txid }) },
         };
       }),
     readFile: (_taskId, window) => Effect.sync(() => service.files[window.path]),
@@ -1281,9 +1281,9 @@ export function fakeService(tasks: Task[]): FakeService {
           service.reads.push(`task-rows:${params.id}`);
 
           if (service.taskRowsFail) return Effect.succeed(UNANSWERED_LIVE);
-          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+          const rows = polledLive<"tasks" | "agents">(["tasks", "agents"]);
           rows.set({
-            plans: service.tasks.filter((each) => each.id === params.id).map(rowOfTask),
+            tasks: service.tasks.filter((each) => each.id === params.id).map(rowOfTask),
             agents: [],
           });
 
@@ -1296,7 +1296,7 @@ export function fakeService(tasks: Task[]): FakeService {
 
           if (service.taskRowsFail) return Effect.succeed(UNANSWERED_LIVE);
           const of = service.tasks.find((each) => each.id === params.id);
-          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+          const rows = polledLive<"tasks" | "agents">(["tasks", "agents"]);
 
           const related = new Set([
             ...(of?.parentTaskId === undefined ? [] : [of.parentTaskId]),
@@ -1305,7 +1305,7 @@ export function fakeService(tasks: Task[]): FakeService {
           ]);
 
           rows.set({
-            plans: service.tasks
+            tasks: service.tasks
               .filter((each) => related.has(each.id) || each.parentTaskId === params.id)
               .map(rowOfTask),
             agents: [],
@@ -1317,9 +1317,9 @@ export function fakeService(tasks: Task[]): FakeService {
         // A search, finding each of the fake's tasks whose name holds the query, none with agents.
         if (read.name === TASK_SEARCH_READ.name) {
           const query = params.query?.toLowerCase() ?? "";
-          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+          const rows = polledLive<"tasks" | "agents">(["tasks", "agents"]);
           rows.set({
-            plans: service.tasks
+            tasks: service.tasks
               .filter((each) => each.name.toLowerCase().includes(query))
               .map(rowOfTask),
             agents: [],
@@ -1331,7 +1331,7 @@ export function fakeService(tasks: Task[]): FakeService {
         // A page of the workspace's settled tasks, every one the fake holds in a page of its own, with no agents.
         if (read.name === TASK_PAGE_READ.name) {
           service.reads.push(`task-page:${params.workspaceId}`);
-          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+          const rows = polledLive<"tasks" | "agents">(["tasks", "agents"]);
 
           const settled = service.tasks.filter(
             (each) =>
@@ -1339,7 +1339,7 @@ export function fakeService(tasks: Task[]): FakeService {
               (each.status === TASK_STATUS.DONE || each.status === TASK_STATUS.CANCELED),
           );
 
-          rows.set({ plans: settled.map(rowOfTask), agents: [] });
+          rows.set({ tasks: settled.map(rowOfTask), agents: [] });
 
           return Effect.succeed(rows.first());
         }
@@ -1347,7 +1347,7 @@ export function fakeService(tasks: Task[]): FakeService {
         // A person's page: every task of the workspace the fake assigns them, counted and read with no agents, as none of theirs were created by them.
         if (read.name === PERSON_PAGE_READ.name) {
           service.reads.push(`person-page:${params.personId}`);
-          const rows = polledLive<"counts" | "plans" | "agents">(["counts", "plans", "agents"]);
+          const rows = polledLive<"counts" | "tasks" | "agents">(["counts", "tasks", "agents"]);
 
           const assigned = service.tasks.filter(
             (each) =>
@@ -1358,7 +1358,7 @@ export function fakeService(tasks: Task[]): FakeService {
             counts: [
               { personId: params.personId, assigned: assigned.length, created: 0, agents: 0 },
             ],
-            plans: assigned.map((each) => ({
+            tasks: assigned.map((each) => ({
               ...rowOfTask(each),
               assigneeId: each.assignee?.userId ?? null,
               assigneeName: each.assignee?.name ?? null,
@@ -1636,7 +1636,7 @@ const settledTurns = Effect.repeat(Effect.yieldNow, { times: 200 });
 export const listAnswers = (
   service: FakeService,
   parts: {
-    readonly plans?: readonly unknown[];
+    readonly tasks?: readonly unknown[];
     readonly agents?: readonly unknown[];
     readonly issues?: readonly unknown[];
   },
@@ -1867,12 +1867,12 @@ export function subject(
      */
     const listed = (agents: readonly unknown[] = []) =>
       Effect.gen(function* () {
-        service.live.list.set({ plans: service.tasks.map(rowOfTask), agents, issues: [] });
+        service.live.list.set({ tasks: service.tasks.map(rowOfTask), agents, issues: [] });
         yield* nextPoll(settled);
       });
 
     /** Holds a task's description as the window does while it has the task open. */
-    const holdDescription = (taskId: string) => follow("TASKS_DOCUMENT_FOLLOW", { taskId });
+    const holdDescription = (taskId: string) => follow("TASKS_HELD_FOLLOW", { taskId });
 
     /** Opens a task as the window's press does, the window then holding its description, and lets the description's read land. */
     const openTask = (taskId: string) =>
@@ -1880,17 +1880,16 @@ export function subject(
         Effect.andThen(holdDescription(taskId), settled),
       );
 
-    /** The descriptions the host holds for the windows as it last told them (`LIVE_READ.DESCRIPTION_DOCUMENT`). */
-    const descriptions = (): AppDescriptionDocuments => {
-      const told = pushed.findLast(([kind]) => kind === LIVE_READ.DESCRIPTION_DOCUMENT);
+    /** The descriptions the host holds for the windows as it last told them (`LIVE_READ.HELD_TASK`). */
+    const descriptions = (): AppHeldTasks => {
+      const told = pushed.findLast(([kind]) => kind === LIVE_READ.HELD_TASK);
 
       // SAFETY: the host tells its held descriptions whole as this event's payload.
-      return (told?.[1] ?? NO_KEYS_HELD) as AppDescriptionDocuments;
+      return (told?.[1] ?? NO_KEYS_HELD) as AppHeldTasks;
     };
 
     /** `taskId`'s description as the host last told it held; none where it holds none. */
-    const held = (taskId: string): AppHostRead<HeldDescriptionDocument> | undefined =>
-      descriptions()[taskId];
+    const held = (taskId: string): AppHostRead<HeldTask> | undefined => descriptions()[taskId];
 
     /** The task `taskId`'s held description holds; none where none is held, or it is gone. */
     const description = (taskId: string): Task | undefined => {
@@ -1960,7 +1959,7 @@ export const answered = (set: () => void) =>
     ),
   );
 
-/** One plan as the plans statement delivers its row. */
+/** One plan as the tasks statement delivers its row. */
 export function planRow(id: string, name: string) {
   return {
     id,
@@ -1983,7 +1982,7 @@ export function planRow(id: string, name: string) {
   };
 }
 
-/** One plan as the plans statement delivers the service's task. */
+/** One plan as the tasks statement delivers the service's task. */
 export function rowOfTask(each: Task) {
   return {
     ...planRow(each.id, each.name),

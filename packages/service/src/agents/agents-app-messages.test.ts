@@ -1205,7 +1205,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         );
 
         assert.deepEqual(
-          listed.plans
+          listed.tasks
             .find((each) => each.id === task.id)
             ?.agents?.agents.map((each) => [each.id, each.startedBy]),
           [[agent.id, { userId: owner, name: "Charles Pan" }]],
@@ -1235,7 +1235,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
               yield* ask(request(TASKS, owner)),
             );
 
-            const line = tasks.plans.find((each) => each.id === task.id)?.agents?.agents[0];
+            const line = tasks.tasks.find((each) => each.id === task.id)?.agents?.agents[0];
 
             return [agents.agents[0]?.automationId, line?.automationId];
           });

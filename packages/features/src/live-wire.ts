@@ -333,7 +333,7 @@ export const LIVE_READ = {
    * host follows the task's record (`taskRecordLive`), whose description mark moves
    * with each save, and reads the description again where it moved past the copy held.
    */
-  DESCRIPTION_DOCUMENT: "descriptionDocument",
+  HELD_TASK: "heldTask",
 } as const;
 
 export type LiveRead = (typeof LIVE_READ)[keyof typeof LIVE_READ];

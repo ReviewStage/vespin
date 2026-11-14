@@ -56,11 +56,7 @@ import type { ProviderKeysAnswer } from "@repo/features/provider-key-wire";
 import type { PullRequestChaptersAnswer } from "@repo/features/pull-request-chapters-wire";
 import type { SlackListedChannel } from "@repo/features/slack-bot-wire";
 import type { DescriptionRevisionsAnswer } from "@repo/features/task-wire";
-import {
-  COMMENT_SUBJECT,
-  type HeldDescriptionDocument,
-  type TasksView,
-} from "@repo/features/tasks-view";
+import { COMMENT_SUBJECT, type HeldTask, type TasksView } from "@repo/features/tasks-view";
 import type { StandingCall } from "@repo/features/voice-wire";
 import type { WorkspaceIntegrations } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
@@ -373,7 +369,7 @@ type ByInboxHolder<Value> = {
  * answers them. A plan it holds nothing of holds nothing now.
  */
 export type AppInboxItems = {
-  readonly [INBOX_SCOPE_KIND.PLAN]: Readonly<Record<string, readonly InboxItem[]>>;
+  readonly [INBOX_SCOPE_KIND.TASK]: Readonly<Record<string, readonly InboxItem[]>>;
 };
 
 /** One plan's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */
@@ -389,7 +385,7 @@ export type AppHolderInboxes = ByInboxHolder<AppHolderInbox>;
 
 /** No holder's inbox held, as the host stands before any window chooses one and after the session ends. */
 export const NO_HOLDER_INBOXES: AppHolderInboxes = {
-  [INBOX_SCOPE_KIND.PLAN]: {},
+  [INBOX_SCOPE_KIND.TASK]: {},
 };
 
 /** What pages stand on: a task. */
@@ -667,7 +663,7 @@ export type AppInstalledSkills = AppHeldById<readonly InstalledSkillSummary[]>;
  * tasks a window opened, and the few it opened lately, by the task's id,
  * each as its read and the writes since stand.
  */
-export type AppDescriptionDocuments = AppHeldById<HeldDescriptionDocument>;
+export type AppHeldTasks = AppHeldById<HeldTask>;
 
 /**
  * Each task's description history the host holds for the windows
@@ -757,7 +753,7 @@ export interface AppHostReads {
   [LIVE_READ.AUTOMATION_RUNS]: readonly AutomationRunSummary[];
   [LIVE_READ.DESCRIPTION_COMMENTS]: readonly DescriptionCommentThread[];
   [LIVE_READ.HISTORY]: DescriptionRevisionsAnswer;
-  [LIVE_READ.DESCRIPTION_DOCUMENT]: HeldDescriptionDocument;
+  [LIVE_READ.HELD_TASK]: HeldTask;
 }
 
 /**
@@ -860,7 +856,7 @@ export interface AppState {
   /**
    * The Tasks tab's named tasks as the host's reads of the service
    * hold them: the list and the one active task, whose description is held apart
-   * (`LIVE_READ.DESCRIPTION_DOCUMENT`). Only the panel's Tasks tab draws it.
+   * (`LIVE_READ.HELD_TASK`). Only the panel's Tasks tab draws it.
    */
   tasks: TasksView;
   agents: AppAgentsSlice;
@@ -948,7 +944,7 @@ export interface AppState {
   /** Each task's description history the windows showed, held while a version history shows it and a while after: what the version history lists. */
   [LIVE_READ.HISTORY]: AppHistories;
   /** Each task's description the windows opened, held while a window has it open and a while after: what the task's page, a section's chip, and a mention's saved text draw. */
-  [LIVE_READ.DESCRIPTION_DOCUMENT]: AppDescriptionDocuments;
+  [LIVE_READ.HELD_TASK]: AppHeldTasks;
   machineCommands: AppMachineCommandsSlice;
   notifications: AppNotificationsSlice;
   network: AppNetworkSlice;
@@ -1159,7 +1155,7 @@ export const HOST_READ_SLICE = {
     rowId: "id" satisfies keyof AutomationRunSummary,
   },
   // Note that a description crosses whole, since each save replaces it.
-  [LIVE_READ.DESCRIPTION_DOCUMENT]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
+  [LIVE_READ.HELD_TASK]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
 } as const satisfies { readonly [Slice in keyof AppState]?: HostReadSliceEntry };
 
 /** A slice `HOST_READ_SLICE` declares. */

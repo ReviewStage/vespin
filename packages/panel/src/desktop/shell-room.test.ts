@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { EXPERIMENT } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { NOTIFICATIONS_STATUS } from "@repo/settings/settings-controls";
@@ -158,10 +158,10 @@ function Window({ onTask }: { onTask: boolean }): React.JSX.Element {
     tab,
     onTabChange: setTab,
     tasks: tasksControl({
-      page: onTask ? TASKS_PAGE.DOCUMENT : TASKS_PAGE.HOME,
+      page: onTask ? TASKS_PAGE.TASK : TASKS_PAGE.HOME,
       // An account with a task, so Home rests on its own page rather than a new account's welcome.
       tasks: [DOCUMENT_TASK],
-      region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+      region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
       // Note that the panel stands beside a draft agent's tab, since the task's details take its room.
       mainTabs: {
         ...tasksControl().mainTabs,

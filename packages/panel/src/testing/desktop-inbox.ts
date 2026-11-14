@@ -468,7 +468,7 @@ function answerTask(taskId: string): Pushed | undefined {
 
   if (held === undefined) return { items: world.inboxes.get(taskId) ?? [] };
   void held.then((outcome) =>
-    world.main.push({ kind: INBOX_SCOPE_KIND.PLAN, id: taskId }, pushedOf(outcome.value)),
+    world.main.push({ kind: INBOX_SCOPE_KIND.TASK, id: taskId }, pushedOf(outcome.value)),
   );
 
   return undefined;
@@ -485,7 +485,7 @@ function drawnByHost(drawn: (item: InboxItem) => InboxItem | undefined): void {
     if (!items.some((item) => drawn(item) !== undefined)) continue;
     const next = items.map((item) => drawn(item) ?? item);
     world.inboxes.set(id, next);
-    const scope = { kind: INBOX_SCOPE_KIND.PLAN, id };
+    const scope = { kind: INBOX_SCOPE_KIND.TASK, id };
 
     if (world.main.isHeld(scope)) world.main.push(scope, { items: next });
   }
@@ -519,7 +519,7 @@ function feedNow(): AppHostRead<AppInboxItems> {
     [...world.inboxes].filter(([id, items]) => items.length > 0 && !world.feedLeavesOut.has(id)),
   );
 
-  return { rows: { [INBOX_SCOPE_KIND.PLAN]: holding } };
+  return { rows: { [INBOX_SCOPE_KIND.TASK]: holding } };
 }
 
 /** The account's feed delivered to the window as it now stands, as main delivers a move of it. */
