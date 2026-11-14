@@ -337,7 +337,7 @@ export function rowPlacement(
   colors: BrandColors,
   selected = false,
   vertical: number = ROW_INSET.VERTICAL,
-  text: number = ROW_INSET.TEXT,
+  indent = 0,
 ) {
   return [
     listRowBackground("clear"),
@@ -345,7 +345,7 @@ export function rowPlacement(
     padding({ leading: ROW_INSET.LEADING, trailing: SPACE.EDGE, top: vertical, bottom: vertical }),
     ...(selected ? [background(colors.SELECTED)] : []),
     listRowSeparatorTint(colors.CHIP_EDGE),
-    alignmentGuide("listRowSeparatorLeading", text),
+    alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT + indent),
   ];
 }
 
@@ -420,15 +420,15 @@ export function RowFrame({
   preview,
   link,
   vertical,
-  text,
+  indent,
   place = ROW_PLACE.LIST,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
   /** The row's top and bottom inset, where it stands roomier than the list's own, as an Inbox thread does. */
   readonly vertical?: number | undefined;
-  /** Where its words, and so its hairline, start, where a second mark before them sets them further in than the list's own. */
-  readonly text?: number | undefined;
+  /** How much further in than the list's own its words, and so its hairline, start, in points, as a second mark before them sets them. */
+  readonly indent?: number | undefined;
   /** Whether it stands as a list's row or a sidebar's. */
   readonly place?: RowPlace | undefined;
 }) {
@@ -442,7 +442,7 @@ export function RowFrame({
     tag(id),
     ...(place === ROW_PLACE.SIDEBAR
       ? sidebarRowPlacement(colors, selected)
-      : rowPlacement(colors, selected, vertical, text)),
+      : rowPlacement(colors, selected, vertical, indent)),
     ...(heard === undefined
       ? []
       : [
@@ -808,9 +808,6 @@ function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou"
 /** How far each level of sub-tasks stands in, in points: past a parent's mark, so a sub-task's mark stands under its parent's name. */
 const SUB_TASK_INDENT = MARK_SIZE.LEAD + SPACE.ROW;
 
-/** Where a task row's words start where its priority's mark stands before its status: a lead's column further in. */
-const PRIORITY_TEXT_INSET = ROW_INSET.TEXT + MARK_SIZE.LEAD + SPACE.ROW;
-
 /** What a parent's chevron is heard as, folded and open. */
 const SHOW_SUB_TASKS = "Show sub-tasks";
 const HIDE_SUB_TASKS = "Hide sub-tasks";
@@ -859,6 +856,8 @@ export function TaskRow(props: TaskRowProps) {
   } = props;
 
   const colors = useColors();
+  // Note that the priority's column is the lead's, grown with Dynamic Type as the lead grows, so the hairline still starts under the name at an accessibility size; it is an offset past the list's own words, which a sub-task's depth adds to.
+  const priorityColumn = useScaledSize(MARK_SIZE.LEAD) + SPACE.ROW;
 
   const row: ReactElement = (
     <HStack modifiers={[padding({ leading: depth * SUB_TASK_INDENT })]}>
@@ -914,7 +913,7 @@ export function TaskRow(props: TaskRowProps) {
       {...props}
       id={id}
       row={row}
-      text={priority === undefined ? undefined : PRIORITY_TEXT_INSET}
+      indent={priority === undefined ? undefined : priorityColumn}
       menuActions={[...folding, ...(props.menuActions ?? [])]}
       heard={props.heard ?? taskHeard(props)}
     />
