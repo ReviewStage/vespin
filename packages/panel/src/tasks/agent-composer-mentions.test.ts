@@ -849,7 +849,7 @@ test("an @ in the box browses the account's connected MCP servers as one kind, a
   ]);
 });
 
-test("with Computer use on, on the Mac the agent's calls go to, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
+test("with Computer use on, on the Mac the agent's calls go to, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id on this Mac", async () => {
   const sent: string[] = [];
 
   const sender: MessageSender = (_agentId, { text }) => {
@@ -895,7 +895,7 @@ test("with Computer use on, on the Mac the agent's calls go to, an @ in the box 
 
   assert.deepEqual(apps, ["Apps", ["Simulator"]]);
   assert.deepEqual(sent, [
-    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.iphonesimulator" }, "Simulator", PLACE)}`,
+    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.iphonesimulator", machine: STUDIO_ID }, "Simulator", PLACE)}`,
   ]);
 });
 
@@ -908,7 +908,7 @@ const OFF_THAT_MAC = {
 } as const;
 
 test.each(Object.values(OFF_THAT_MAC))(
-  "off the Mac the agent's calls go to, in %s, an @ in the box offers the apps the reader's machines always allow, each by the name its machine posted and saying the machines it is allowed on, a pick sent as the app's mention by its bundle id",
+  "off the Mac the agent's calls go to, in %s, an @ in the box offers the apps the reader's machines always allow, each by the name its machine posted and saying the machines it is allowed on, a pick sent as the app's mention by its bundle id on the one machine that allows it",
   async (window) => {
     const sent: string[] = [];
 
@@ -981,7 +981,7 @@ test.each(Object.values(OFF_THAT_MAC))(
       ["Slack", "Always allowed on Studio"],
     ]);
     assert.deepEqual(sent, [
-      `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.tinyspeck.slackmacgap" }, "Slack", PLACE)}`,
+      `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.tinyspeck.slackmacgap", machine: STUDIO_ID }, "Slack", PLACE)}`,
     ]);
   },
 );

@@ -220,6 +220,8 @@ export * from "./components/list-row/list-row.js";
 
 export * from "./components/list-row/list-row-hint.js";
 
+export * from "./components/mac-app-card/mac-app-card.js";
+
 export * from "./components/mark-strip/mark-strip.js";
 
 export * from "./components/menu/context-menu.js";

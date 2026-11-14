@@ -121,7 +121,7 @@ import { useWorkspaceDirectory } from "../member-directory.js";
 import { memberRows, YOU_WORD } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { Highlighted } from "../search-field.js";
-import { appStateQuery } from "../use-app-state.js";
+import { appStateQuery, selectMachineCommandDevice } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { type AgentRowPlace, agentMenuRow, useAgentRowPlace } from "./agent-menu-row.js";
 import { useComputerApps } from "./agent-pictures.js";
@@ -905,18 +905,18 @@ const COMPUTER_ROW: MentionRow = {
  * The Mac's own row, then each app on this Mac's row, as the host lists
  * them, those running first; none where it lists none, as while agents use
  * no apps here. A pick names an app by its bundle id, or by its name where
- * it has none, and it is found by either. Note that routing's R3 adds the
- * Mac each row stands on once a command can name one; until then a row
- * names the app alone.
+ * it has none, and it is found by either, with this Mac as the machine it
+ * is on where the window knows its device (`machine`).
  */
-function appRows(apps: readonly MacApp[]): MentionRow[] {
+function appRows(apps: readonly MacApp[], machine: string | undefined): MentionRow[] {
   if (apps.length === 0) return [];
+  const on = machine === undefined ? undefined : { machine };
 
   const rows = apps.map(({ name, bundleId, running, allowed }): MentionRow => {
     const detail = allowed ? APP_DETAIL.ALLOWED : running ? APP_DETAIL.RUNNING : undefined;
 
     return {
-      mention: { kind: MENTION_KIND.MAC_APP, app: bundleId ?? name },
+      mention: { kind: MENTION_KIND.MAC_APP, app: bundleId ?? name, ...on },
       name,
       detail,
       terms: bundleId === undefined ? name : `${name} ${bundleId}`,
@@ -944,15 +944,16 @@ function allowedAppName(app: string): string {
  * Mac the agent uses; none where no machine allows one. An app is named as
  * a machine that allows it posted it, else as a `computer` call in the
  * conversation named it, else by its bundle id, and is found by either. Where the reader has more than one
- * machine that allows an app, each row names the machines it is allowed on.
+ * machine that allows an app, each row names the machines it is allowed on;
+ * a pick of an app one machine alone allows names that machine.
  */
 function allowedAppRows(machines: readonly MachineAllowedApps[], kept: ComputerApps): MentionRow[] {
-  const allowedOn = new Map<string, string[]>();
+  const allowedOn = new Map<string, MachineAllowedApps[]>();
   const posted = new Map<string, string>();
 
   for (const machine of machines) {
     for (const app of machine.apps) {
-      allowedOn.set(app, [...(allowedOn.get(app) ?? []), machine.name]);
+      allowedOn.set(app, [...(allowedOn.get(app) ?? []), machine]);
     }
 
     for (const look of machine.looks ?? []) {
@@ -965,11 +966,19 @@ function allowedAppRows(machines: readonly MachineAllowedApps[], kept: ComputerA
 
   const rows = [...allowedOn].map(([app, on]): MentionRow => {
     const name = posted.get(app) ?? computerAppNamed(kept, app)?.name ?? allowedAppName(app);
+    const [alone, ...others] = on;
+    const machine = alone !== undefined && others.length === 0 ? alone.deviceId : undefined;
 
     return {
-      mention: { kind: MENTION_KIND.MAC_APP, app },
+      mention: {
+        kind: MENTION_KIND.MAC_APP,
+        app,
+        ...(machine === undefined ? undefined : { machine }),
+      },
       name,
-      detail: named ? `${APP_DETAIL.ALLOWED} on ${on.join(", ")}` : APP_DETAIL.ALLOWED,
+      detail: named
+        ? `${APP_DETAIL.ALLOWED} on ${on.map((each) => each.name).join(", ")}`
+        : APP_DETAIL.ALLOWED,
       terms: `${name} ${app}`,
     };
   });
@@ -2164,12 +2173,13 @@ export function useMentionPicker({
   const apps = useMacApps(open && macApps && onThatMac === true);
   const allowedApps = useAllowedApps(open && macApps && onThatMac === false);
   const keptApps = useComputerApps();
+  const thisDevice = useQuery({ ...appStateQuery, select: selectMachineCommandDevice }).data;
 
   const appRowsOffered =
     !open || onThatMac === undefined
       ? []
       : onThatMac
-        ? appRows(apps.apps)
+        ? appRows(apps.apps, thisDevice)
         : allowedAppRows(allowedApps.machines, keptApps);
 
   // The machines offered are the workspace's members', read while the list stands open, the task's followers' after the reader's own.

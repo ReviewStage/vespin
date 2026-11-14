@@ -16,6 +16,7 @@ import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "reac
 import { pressMutation } from "../act-mutations.js";
 import { useKeptPicture, useKeptPictures, useKeptPictureViewer } from "./agent-pictures.js";
 import { useOnThatMac } from "./computer-permission-note.js";
+import { MacAppChipCard } from "./mac-app-card.js";
 
 /**
  * computer-dock.tsx -- the apps an agent is using on the developer's Mac, as a stack of their windows floating over its message box, or minimized to a pill.
@@ -25,8 +26,10 @@ import { useOnThatMac } from "./computer-permission-note.js";
  * it used last in front, by its newest window, the others behind it, each a
  * press that brings it forward, and the working mark on the app its newest
  * call is on. The front's name brings that app's own window forward on the
- * Mac the agent uses (`useOnThatMac`), and a press on its window opens the
- * viewer, which walks every app's newest window. As the agent moves on to
+ * Mac the agent uses (`useOnThatMac`), and hangs the app's card
+ * (`MacAppChipCard`): the machine it is on, whether that machine always
+ * allows it, and that the agent is in it now; a press on its window opens
+ * the viewer, which walks every app's newest window. As the agent moves on to
  * another app, that app comes forward. Where the agent's cursor last stood
  * over the window in front, as its calls this turn said, the agent's
  * pointer stands over the picture at that spot, gliding to each new one and
@@ -284,11 +287,22 @@ function AppsFloat({
     const icon = icons[at];
     const iconSrc = icon?.kind === PICTURE_STATE.READY ? icon.url : undefined;
 
+    const card = (
+      <MacAppChipCard
+        name={each.name}
+        bundleId={each.bundleId}
+        iconSrc={iconSrc}
+        machine={each.machine}
+        inUse={each.id === using}
+      />
+    );
+
     return each === front && front.window !== undefined
       ? {
           id: each.id,
           name: each.name,
           iconSrc,
+          card,
           window: {
             state: window,
             width: front.window.width,
@@ -296,7 +310,7 @@ function AppsFloat({
             pointer: cursor?.app === each.id ? pointer : undefined,
           },
         }
-      : { id: each.id, name: each.name, iconSrc };
+      : { id: each.id, name: each.name, iconSrc, card };
   });
 
   const putAway = () => {

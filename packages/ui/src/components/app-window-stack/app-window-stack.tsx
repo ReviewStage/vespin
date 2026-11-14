@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { MinimizeIcon } from "../../icons/lucide-glyphs.js";
 import { PICTURE_STATE, type PictureState } from "../../picture-read.js";
 import { AgentPointer, type AgentPointerKind } from "../agent-pointer/agent-pointer.js";
@@ -11,6 +12,7 @@ import { PictureStandIn } from "../picture-set/picture-set.js";
 import { PICTURE_TILE_FACE, PictureTile } from "../picture-tile/picture-tile.js";
 import { SPINNER_SIZE, SpinnerRing } from "../spinner/spinner.js";
 import { TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { Tooltip } from "../tooltip/hint.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
 
 /**
@@ -20,7 +22,8 @@ import { WorkingMark } from "../working-mark/working-mark.js";
  * the agent read of it. Every title in the stack, the front's and each one
  * behind it, says the same two things: the app, by its icon and name, and
  * the working mark where the agent is in it now. The front's name is a chip
- * that looks the same on every device; on the Mac the agent uses, where the
+ * that looks the same on every device and hangs the app's card where the
+ * caller hands one (`MacAppCard`); on the Mac the agent uses, where the
  * caller hands `onShowApp`, a press on it brings that app's own window
  * forward. The window stands in a frame of one size whatever its shape,
  * centered on a quiet ground, so the stack keeps still as the apps change,
@@ -96,6 +99,8 @@ export interface StackedApp {
         readonly pointer?: StackedPointer | undefined;
       }
     | undefined;
+  /** The card its name's chip hangs (`MacAppCard`); none where the caller has none. */
+  readonly card?: ReactNode;
 }
 
 /** Apps as a pile of their icons, at most four, each overlapping the one before it, the first on top. */
@@ -159,7 +164,7 @@ function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
   );
 }
 
-/** The app's icon and name, the same chip on every device; a press brings its own window forward where the caller can. */
+/** The app's icon and name, the same chip on every device, hanging the app's card; a press brings its own window forward where the caller can. */
 function AppName({
   app,
   onShowApp,
@@ -176,21 +181,25 @@ function AppName({
 
   if (onShowApp === undefined) {
     return (
-      <StaticChip look={CHIP_LOOK.TOOLBAR} size={CHIP_SIZE.COMPACT}>
-        {face}
-      </StaticChip>
+      <Tooltip label={app.name} card={app.card}>
+        <StaticChip look={CHIP_LOOK.TOOLBAR} size={CHIP_SIZE.COMPACT}>
+          {face}
+        </StaticChip>
+      </Tooltip>
     );
   }
 
   return (
-    <Chip
-      look={CHIP_LOOK.TOOLBAR}
-      size={CHIP_SIZE.COMPACT}
-      aria-label={WORDS.SHOW_ON_MAC(app.name)}
-      onClick={() => onShowApp(app.id)}
-    >
-      {face}
-    </Chip>
+    <Tooltip label={app.name} card={app.card}>
+      <Chip
+        look={CHIP_LOOK.TOOLBAR}
+        size={CHIP_SIZE.COMPACT}
+        aria-label={WORDS.SHOW_ON_MAC(app.name)}
+        onClick={() => onShowApp(app.id)}
+      >
+        {face}
+      </Chip>
+    </Tooltip>
   );
 }
 

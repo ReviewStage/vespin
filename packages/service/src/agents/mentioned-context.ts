@@ -544,7 +544,12 @@ function sameMention(first: Handed, second: Handed): boolean {
     case MENTION_KIND.PERSON:
       return second.kind === MENTION_KIND.PERSON && first.userId === second.userId;
     case MENTION_KIND.MAC_APP:
-      return second.kind === MENTION_KIND.MAC_APP && first.app === second.app;
+      // Note that the same app on two machines is two apps, so two mentions of it name one only on the same machine, or both on none.
+      return (
+        second.kind === MENTION_KIND.MAC_APP &&
+        first.app === second.app &&
+        first.machine === second.machine
+      );
     case MENTION_KIND.COMPUTER:
       return second.kind === MENTION_KIND.COMPUTER;
     case MENTION_KIND.MACHINE:

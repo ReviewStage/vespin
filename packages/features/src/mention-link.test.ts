@@ -1172,3 +1172,17 @@ test("a member's link is written as its name alone, its address written bare too
   );
   assert.equal(withoutMemberLinks(`ask ${address} about ${plan}`), `ask @Person about ${plan}`);
 });
+
+test("an app on a Mac reads back with the machine it is on, and a link written before machines were named still reads as the app alone", () => {
+  const onStudio: Mention = {
+    kind: MENTION_KIND.MAC_APP,
+    app: "com.apple.iphonesimulator",
+    machine: "6f1c0d2e-studio",
+  };
+
+  assert.deepEqual(decodeMention(encodeMention(onStudio, PLACE), REPOSITORY), onStudio);
+  assert.deepEqual(decodeMention("mention://mac-app/com.apple.iphonesimulator", REPOSITORY), {
+    kind: MENTION_KIND.MAC_APP,
+    app: "com.apple.iphonesimulator",
+  });
+});
