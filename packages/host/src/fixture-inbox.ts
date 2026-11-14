@@ -1674,6 +1674,9 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
   },
 ];
 
+/** The threads a fixture run started on the invites task's description, by id, so a reply or a resolve on one finds it as it does a staged thread. */
+const STARTED_THREADS = new Map<string, DescriptionCommentThread>();
+
 /** Each held comments slice with the reference journey's description threads laid over it, one object for each. */
 const STAGED_COMMENTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS],
@@ -2530,11 +2533,14 @@ const ANSWERS: StagedAnswers = {
       revision: 1,
     };
 
+    STARTED_THREADS.set(thread.id, thread);
+
     return { thread };
   },
-  // Note that a reply is taken as the service takes one, answered with its thread as it then stands, though nothing here moves.
+  // Note that a reply is taken as the service takes one, on a staged thread or one the run started, answered with its thread as it then stands, though nothing here moves.
   [ACT_KIND.TASKS_COMMENT_ACT]: ({ planId, threadId, action }) => {
-    const thread = INVITES_THREADS.find((each) => each.id === threadId);
+    const thread =
+      INVITES_THREADS.find((each) => each.id === threadId) ?? STARTED_THREADS.get(threadId);
 
     if (planId !== TASK.INVITES || thread === undefined) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
