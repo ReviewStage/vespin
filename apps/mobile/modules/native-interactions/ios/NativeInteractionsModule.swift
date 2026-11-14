@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -16,10 +16,12 @@ import UniformTypeIdentifiers
 /// The names the modifiers are registered under, which `interactions.ts` names too.
 private enum ModifierName {
   static let cellFocusRingOff = "vespinCellFocusRingOff"
+  static let columnSubtitle = "vespinColumnSubtitle"
+  static let stackSubtitle = "vespinStackSubtitle"
   static let dragLink = "vespinDragLink"
   static let dropPictures = "vespinDropPictures"
   static let dropLink = "vespinDropLink"
-  static let all = [cellFocusRingOff, dragLink, dropPictures, dropLink]
+  static let all = [cellFocusRingOff, columnSubtitle, stackSubtitle, dragLink, dropPictures, dropLink]
 }
 
 /// How a dropped picture is kept for JavaScript to read: a JPEG at the quality the photo picker reads one at (`use-attached-pictures.ts`).
@@ -33,6 +35,12 @@ public final class NativeInteractionsModule: Module {
     OnCreate {
       ViewModifierRegistry.register(ModifierName.cellFocusRingOff) { params, appContext, _ in
         return try CellFocusRingOffModifier(from: params, appContext: appContext)
+      }
+      ViewModifierRegistry.register(ModifierName.columnSubtitle) { params, appContext, _ in
+        return try ColumnSubtitleModifier(from: params, appContext: appContext)
+      }
+      ViewModifierRegistry.register(ModifierName.stackSubtitle) { params, appContext, _ in
+        return try StackSubtitleModifier(from: params, appContext: appContext)
       }
       ViewModifierRegistry.register(ModifierName.dragLink) { params, appContext, _ in
         return try DragLinkModifier(from: params, appContext: appContext)
@@ -107,6 +115,115 @@ private final class CellFocusEffectProbe: UIView {
       view = current.superview
     }
     (view as? UICollectionViewCell)?.focusEffect = nil
+  }
+}
+
+// MARK: - Subtitle
+
+/// A split view column's subtitle under its title, as Mail names its filter under Inbox: SwiftUI's own bar reads `navigationSubtitle`.
+///
+/// Note that the modifier stands on the column whether or not it has a
+/// subtitle, an empty one drawing none, because adding or removing a
+/// modifier changes the column's view type and so redraws everything under
+/// it, the lists a tab keeps behind the one shown among them.
+internal struct ColumnSubtitleModifier: ViewModifier, Record {
+  @Field var subtitle: String = ""
+
+  func body(content: Content) -> some View {
+    content.navigationSubtitle(subtitle)
+  }
+}
+
+/// A compact screen's subtitle under the title of the native stack's bar it's pushed under.
+///
+/// Note that react-native-screens draws that bar from its screen's
+/// `UINavigationItem`, which no SwiftUI modifier reaches. So the screen
+/// carries a probe that finds the view controller its navigation controller
+/// holds and sets that item's `subtitle` (iOS 26), clearing it as it leaves
+/// only while it still reads what the probe wrote. A probe with an empty
+/// subtitle that has written nothing touches nothing.
+internal struct StackSubtitleModifier: ViewModifier, Record {
+  @Field var subtitle: String = ""
+
+  func body(content: Content) -> some View {
+    content.background(StackSubtitleProbe(subtitle: subtitle))
+  }
+}
+
+/// The probe a screen carries: an empty view that writes its subtitle to the stack's item each time it's placed or redrawn.
+private struct StackSubtitleProbe: UIViewRepresentable {
+  let subtitle: String
+
+  func makeUIView(context: Context) -> StackSubtitleView {
+    StackSubtitleView()
+  }
+
+  func updateUIView(_ view: StackSubtitleView, context: Context) {
+    view.subtitle = subtitle
+  }
+
+  static func dismantleUIView(_ view: StackSubtitleView, coordinator: ()) {
+    view.clear()
+  }
+}
+
+private final class StackSubtitleView: UIView {
+  /// The item this probe wrote to, and what it wrote there, so it clears only its own.
+  private weak var item: UINavigationItem?
+  private var written: String?
+
+  var subtitle = "" {
+    didSet { write() }
+  }
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    isUserInteractionEnabled = false
+    isAccessibilityElement = false
+  }
+
+  required init?(coder: NSCoder) {
+    nil
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    write()
+  }
+
+  /// Clears the subtitle this probe wrote, unless something else has written over it since.
+  func clear() {
+    if let item, item.subtitle == written {
+      item.subtitle = nil
+    }
+    item = nil
+    written = nil
+  }
+
+  /// Sets the subtitle on the item of the nearest view controller a navigation controller holds, moving off an item it wrote to before.
+  private func write() {
+    guard window != nil, let held = heldController() else {
+      clear()
+      return
+    }
+    if item !== held.navigationItem { clear() }
+    if subtitle.isEmpty && written == nil { return }
+    let shown = subtitle.isEmpty ? nil : subtitle
+    held.navigationItem.subtitle = shown
+    item = held.navigationItem
+    written = shown
+  }
+
+  /// The view controller above the probe whose parent is a navigation controller: the stack's screen, past the hosting controller standing inside it.
+  private func heldController() -> UIViewController? {
+    var responder: UIResponder? = next
+    while let current = responder {
+      if let controller = current as? UIViewController, controller.parent is UINavigationController {
+        return controller
+      }
+      responder = current.next
+    }
+    return nil
   }
 }
 

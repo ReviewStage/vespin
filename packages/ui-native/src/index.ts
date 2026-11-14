@@ -238,6 +238,7 @@ export {
   SplitOverTabs,
   SplitView,
   scopeMenu,
+  scopeSubtitle,
   UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 
