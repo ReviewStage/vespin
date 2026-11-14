@@ -361,6 +361,7 @@ export function reportShownFailure(failure: ShownFailure, at: number): string | 
         online: state?.network.online ?? true,
         account: state?.account.status ?? ACCOUNT_UNREAD,
         live: failure.live,
+        updateNeeded: state?.network.updateNeeded === true,
       },
     };
 
