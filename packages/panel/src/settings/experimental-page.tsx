@@ -32,7 +32,7 @@ import {
   useConfirmDialog,
   useMinute,
 } from "@repo/ui";
-import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
+import { ACTION_RESULT_STATUS, type ActionResult, actionRefused } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { FlaskConicalIcon } from "lucide-react";
 import { useState } from "react";
@@ -42,7 +42,7 @@ import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { MemberDirectory, usePerson } from "../member-directory.js";
 import { useOpenFeedback } from "../open-feedback.js";
-import { actionRefused, refusalToast, rowWrite } from "./row-write.js";
+import { refusalToast, rowWrite } from "./row-write.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import { SwitchRow } from "./switch-row.js";
 
