@@ -313,7 +313,7 @@ function inboxTaskIds(answer: AccountInboxAnswer): readonly string[] {
   return [
     ...new Set([
       ...answer.items.map((item) => item.taskId),
-      ...answer.plans.map((plan) => plan.taskId),
+      ...answer.tasks.map((task) => task.taskId),
     ]),
   ];
 }

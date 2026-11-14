@@ -17,10 +17,10 @@ import { type AgentsControl, agentsArchiveMutation } from "../tasks/use-agents.j
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { item } from "../testing/desktop-inbox.js";
 import { agentsControl } from "../testing/tasks-control.js";
-import { PlanAgents } from "./plan-agents.js";
+import { OverviewAgents } from "./overview-agents.js";
 
 /**
- * plan-agents.test.ts -- the plan's agents list those waiting on the
+ * overview-agents.test.ts -- the plan's agents list those waiting on the
  * developer first, each counting what needs them, then those at work,
  * then the newest started, each saying where it runs itself; a row opens its agent, its ⋯ offers the
  * agent's menu, its pull request's chip opens
@@ -144,7 +144,7 @@ function mount(
     act(() =>
       root?.render(
         withQueryClient(
-          createElement(PlanAgents, {
+          createElement(OverviewAgents, {
             agents: controlOf(listed),
             held: { agents: new Map(), workers: new Map() },
             tab: undefined,

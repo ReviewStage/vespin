@@ -47,7 +47,7 @@ interface FedItem {
 /** The item a link names as the feed holds it, and the plan the feed holds it under; none where the feed holds no such item. Note that a link under its agent, or by the item alone, leaves the plan to be found among every plan's. */
 function fedItemOf(fed: AppInboxItems | undefined, place: InboxItemPlace): FedItem | undefined {
   if (fed === undefined) return undefined;
-  const plans = fed[INBOX_SCOPE_KIND.PLAN];
+  const plans = fed[INBOX_SCOPE_KIND.TASK];
 
   const named = (item: InboxItem) =>
     item.id === place.itemId && (!("agentId" in place) || item.agentId === place.agentId);

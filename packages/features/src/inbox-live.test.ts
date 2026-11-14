@@ -33,8 +33,8 @@ const RUN = {
 
 const ROWS: AccountInboxLiveRows = {
   items: [ITEM],
-  planless: [],
-  plans: [{ taskId: ITEM.taskId, items: 1, updatedAt: ITEM.updatedAt }],
+  taskless: [],
+  tasks: [{ taskId: ITEM.taskId, items: 1, updatedAt: ITEM.updatedAt }],
   automations: [],
   failedRuns: [RUN],
 };
@@ -47,7 +47,7 @@ describe("a live answer's cursor", () => {
     assert.equal(cursorOf(ROWS), cursorOf({ ...ROWS }, NOW + 60_000));
     assert.equal(
       cursorOf(ROWS),
-      cursorOf({ ...ROWS, plans: [{ taskId: ITEM.taskId, items: 2, updatedAt: NOW }] }),
+      cursorOf({ ...ROWS, tasks: [{ taskId: ITEM.taskId, items: 2, updatedAt: NOW }] }),
       "the tasks holding items are compared apart",
     );
   });

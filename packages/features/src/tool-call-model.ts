@@ -109,6 +109,8 @@ export interface ToolCallView {
   readonly machine?: CallMachine;
   /** For a call of an MCP server's tool, or a search of its tools, the server's name as its card gives it, which the row says it ran on. */
   readonly server?: string;
+  /** For a call of an integration's own tool, the name of the account it ran on as its owner called it, where they held more than one at the provider, which every reader is shown; absent for the rest. */
+  readonly account?: string;
   /** For the same calls, the connection they ran on, which the window names by the account's own name where it holds more than one (`connection-names.tsx`); `server` stands where it does not know it. */
   readonly connection?: string;
   /** For a terminal command or an action on an app that ran nothing on its machine, how it came to run nothing, which its row says quietly in place of a failure; absent for the rest. */
@@ -1202,8 +1204,12 @@ function remoteToolView(
   return {
     kind: CALL_KIND.MCP_TOOL,
     subject: remote.call.remoteTool,
-    server: connectionName(remote.call.connection ?? remote.provider),
+    server:
+      remote.call.account === undefined
+        ? connectionName(remote.call.connection ?? remote.provider)
+        : `${INTEGRATION_NAME[remote.provider]} · ${remote.call.account}`,
     connection: remote.call.connection ?? remote.provider,
+    ...(remote.call.account === undefined ? undefined : { account: remote.call.account }),
     provider: remote.provider,
     input: jsonBlock(remote.call.input),
     output: output === undefined ? undefined : jsonBlock(output),

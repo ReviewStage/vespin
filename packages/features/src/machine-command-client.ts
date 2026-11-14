@@ -4,6 +4,7 @@ import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { failureSetOf } from "./hosted-failure.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
+import type { MachineAskAnswerRequest, MachineAskRequest } from "./machine-ask-wire.js";
 import {
   type AllowedAppLook,
   type MachineCommandKind,
@@ -22,7 +23,9 @@ import {
  * asks for the unclaimed commands of its kinds sealed (or, polling, inline
  * and held until they move) for the account it started for, claims each it
  * hears of by its id, and says it listens; a stopped recording's video goes
- * up on a path of its own before its result. No call fails: a read refused as
+ * up on a path of its own before its result. An ask the Mac shows is
+ * posted, answered through the service so the first answer stands, and
+ * taken down or said closed (`machine-ask-wire.ts`). No call fails: a read refused as
  * signed out is `LIVE_SIGNED_OUT` and any other unanswered a failure the
  * caller asks again, and a claim, a presence, and a result answer what the
  * service said or how the call failed (`hostedCall`): a claim or a result
@@ -108,5 +111,25 @@ export class HostedMachineCommandClient {
   /** How the device names and draws the apps it always allows, as this Mac holds them now. */
   saveDeviceAppLooks(deviceId: string, looks: readonly AllowedAppLook[]) {
     return hostedCall(this.#hosted.machineCommands.saveDeviceAppLooks, { deviceId, looks });
+  }
+
+  /** An ask this Mac shows for a command it claimed, posted so any of the account's devices may answer it. */
+  postAsk(request: MachineAskRequest) {
+    return hostedCall(this.#hosted.machineCommands.ask, request);
+  }
+
+  /** An ask this Mac holds taken down, once it took an answer. */
+  closeAsk(id: string) {
+    return hostedCall(this.#hosted.machineCommands.closeAsk, { id });
+  }
+
+  /** An ask this Mac holds said closed as its window ran out: the answer that beat it, where one did. */
+  lapseAsk(id: string) {
+    return hostedCall(this.#hosted.machineCommands.lapseAsk, { id });
+  }
+
+  /** An ask answered from this Mac: the answer that stands, this one where it was the first. */
+  answerAsk(answer: MachineAskAnswerRequest) {
+    return hostedCall(this.#hosted.hosts.answerMachineAsk, answer);
   }
 }

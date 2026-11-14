@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { pageFrameUrl } from "@repo/features/page-frame";
 import type { Task } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { agentTab, draftTab, pageTab } from "@repo/ui/tab-strip-model";
@@ -164,9 +164,9 @@ function mount(
                 room,
                 away: { label: "Inbox", onPress: () => told.push("away") },
                 tasks: tasksControl({
-                  page: TASKS_PAGE.DOCUMENT,
+                  page: TASKS_PAGE.TASK,
                   activeTaskId: TASK.id,
-                  region: { kind: DOCUMENT_REGION.READY, task: TASK },
+                  region: { kind: TASK_REGION.READY, task: TASK },
                   pages: paged ? [PAGE] : undefined,
                   repositoryMenu:
                     repositoryAsk === undefined
@@ -403,10 +403,7 @@ test("a wide window keeps the panel's strip and the column's toolbar beside an a
 });
 
 test("on a phone a task still read, or one that cannot be, is headed by its way back alone, as the task's own head will lead", () => {
-  for (const region of [
-    { kind: DOCUMENT_REGION.READING },
-    { kind: DOCUMENT_REGION.FAILED },
-  ] as const) {
+  for (const region of [{ kind: TASK_REGION.READING }, { kind: TASK_REGION.FAILED }] as const) {
     const told: string[] = [];
     const container = document.body.appendChild(document.createElement("div"));
     const root = createRoot(container);
@@ -418,7 +415,7 @@ test("on a phone a task still read, or one that cannot be, is headed by its way 
               looks: NO_LOOKS,
               room: SHELL_ROOM.NARROW,
               away: { label: "Inbox", onPress: () => told.push("away") },
-              tasks: tasksControl({ page: TASKS_PAGE.DOCUMENT, region }),
+              tasks: tasksControl({ page: TASKS_PAGE.TASK, region }),
             }),
           ),
         ),
@@ -511,9 +508,9 @@ function RefusingTask(): React.JSX.Element {
     looks: NO_LOOKS,
     room: SHELL_ROOM.WIDE,
     tasks: tasksControl({
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       activeTaskId: TASK.id,
-      region: { kind: DOCUMENT_REGION.READY, task },
+      region: { kind: TASK_REGION.READY, task },
       onDraftName: (_taskId, name) => setDraft(name),
     }),
   });

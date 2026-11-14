@@ -804,7 +804,7 @@ function unlistedThreadTasks(
   if (feed === undefined) return [];
   const listed = new Set(tasks.map((task) => task.id));
 
-  return Object.keys(feed[INBOX_SCOPE_KIND.PLAN]).filter((taskId) => !listed.has(taskId));
+  return Object.keys(feed[INBOX_SCOPE_KIND.TASK]).filter((taskId) => !listed.has(taskId));
 }
 
 /**
@@ -822,7 +822,7 @@ function threadRows(
   if (feed === undefined || workspace === undefined) return [];
   const held: { readonly row: MentionRow; readonly own: boolean; readonly at: number }[] = [];
 
-  for (const [itemTaskId, items] of Object.entries(feed[INBOX_SCOPE_KIND.PLAN])) {
+  for (const [itemTaskId, items] of Object.entries(feed[INBOX_SCOPE_KIND.TASK])) {
     const task = tasks.find((each) => each.id === itemTaskId && each.workspaceId === workspace.id);
 
     if (task === undefined) continue;

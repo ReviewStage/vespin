@@ -64,7 +64,7 @@ function standFixtureRun(profile: string): Effect.Effect<void> {
 
 /** The items the account's feed holds of a task on the staged document, which must hold the task. */
 function fedItems(state: AppStateSnapshot, taskId: string): readonly InboxItem[] {
-  const items = state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.PLAN][taskId];
+  const items = state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.TASK][taskId];
   assert.ok(items !== undefined, `the feed holds ${taskId}`);
 
   return items;

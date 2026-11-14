@@ -21,7 +21,7 @@
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, type LinkDestination, taskLinkStep } from "@repo/features/link-grammar";
-import { DOCUMENT_REGION } from "@repo/features/tasks-model";
+import { TASK_REGION } from "@repo/features/tasks-model";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { StripTab } from "@repo/ui/tab-strip-model";
 import { type HistoryLocation, useRouter } from "@tanstack/react-router";
@@ -223,7 +223,7 @@ function withinLink(place: LinkDestination, thing: LinkThing, workspace: string)
 function versionLinks({ tasks, at }: PlaceLinks): readonly LinkAtHand[] {
   const { region } = tasks;
 
-  if (region.kind !== DOCUMENT_REGION.READY) return [];
+  if (region.kind !== TASK_REGION.READY) return [];
   const { task: drawn } = region;
   const workspace = slugOf(tasks.workspaces, drawn.workspaceId);
   // Note that the task's links name it by its number, where it has one, as every link to it is written.

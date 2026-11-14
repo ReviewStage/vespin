@@ -11,7 +11,7 @@ import type {
   TaskStanding,
   TaskSummary,
 } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, RENAME_FAILED_NOTE, TASKS_PAGE } from "@repo/features/tasks-model";
+import { RENAME_FAILED_NOTE, TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
 import { EXPERIMENT, INTRO } from "@repo/settings";
@@ -131,10 +131,10 @@ import {
   newAgentStarts,
   TaskTopbar,
 } from "./main-tabs.js";
+import { OverviewAgents } from "./overview-agents.js";
+import { OverviewHead } from "./overview-head.js";
+import { OverviewPages } from "./overview-pages.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
-import { PlanAgents } from "./plan-agents.js";
-import { PlanHead } from "./plan-head.js";
-import { PlanPages } from "./plan-pages.js";
 import {
   changesTabOf,
   SIDE_PANEL_HOLDER,
@@ -455,7 +455,7 @@ function DescriptionDocument({
   const phone = room === SHELL_ROOM.NARROW;
   const drawing = useSidePanelDrawing(tasks.sidePanel);
   const views = useTabViews();
-  const inboxTaskId = region.kind === DOCUMENT_REGION.READY ? region.task.id : undefined;
+  const inboxTaskId = region.kind === TASK_REGION.READY ? region.task.id : undefined;
 
   // The task's agents' cloud browser tabs, which a phone's Show browser goes back to, read only on a phone.
   const agentBrowsers = useCloudBrowserTabs(
@@ -476,7 +476,7 @@ function DescriptionDocument({
 
   // The task's comments are held from its open while it is shown, for its description's margin and list, so its first ready frame marks them; none are read while its workspace, the listed one while it is read, has Descriptions off.
   const shownWorkspaceId =
-    region.kind === DOCUMENT_REGION.READY
+    region.kind === TASK_REGION.READY
       ? region.task.workspaceId
       : (tasks.tasks.find((each) => each.id === tasks.activeTaskId)?.workspaceId ??
         tasks.workspace?.id);
@@ -511,7 +511,7 @@ function DescriptionDocument({
   // The description in the column, whose heading a phone's row picks up once it scrolls away under the row (`useHeadingAway`).
   // Note that each box is handed afresh as it mounts, and the document's for each task, because the document stands only once the task is read, and the heading watched is that task's.
   const [documentBox, setDocumentBox] = useState<HTMLElement | null>(null);
-  const headingTask = region.kind === DOCUMENT_REGION.READY ? region.task.id : undefined;
+  const headingTask = region.kind === TASK_REGION.READY ? region.task.id : undefined;
   const columnHeld = useMemo(() => ({ current: column }), [column]);
 
   const documentHeld = useMemo(
@@ -555,13 +555,13 @@ function DescriptionDocument({
   // among it, which its card and its banner read. Held above the states
   // with no document for the same reason.
   // The task as its description was read, which only the description and what it names draw from.
-  const read = region.kind === DOCUMENT_REGION.READY ? region.task : undefined;
+  const read = region.kind === TASK_REGION.READY ? region.task : undefined;
 
   // The task the page stands on: as read, or, while its description is read, as the list holds it, so its bars, its
   // tabs, and its agents draw at once rather than wait on the description.
   const opened: TaskSummary | undefined =
     read ??
-    (region.kind === DOCUMENT_REGION.READING
+    (region.kind === TASK_REGION.READING
       ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
       : undefined);
 
@@ -1116,7 +1116,7 @@ function DescriptionDocument({
   // The task's agents head its description, a row opening its agent in this column as its tab does.
   const planAgents = useMemo(
     () => (
-      <PlanAgents
+      <OverviewAgents
         agents={agents}
         held={views.held}
         tab={tab}
@@ -1169,7 +1169,7 @@ function DescriptionDocument({
   const planPages = useMemo(
     () =>
       openedId === undefined ? null : (
-        <PlanPages
+        <OverviewPages
           pages={pages}
           place={{ taskId: openedId }}
           shown={tasks.shown}
@@ -1190,7 +1190,7 @@ function DescriptionDocument({
           {planPages}
         </Fragment>
       ) : (
-        <PlanHead
+        <OverviewHead
           key={openedId}
           task={read}
           tasks={tasks}
@@ -1281,7 +1281,7 @@ function DescriptionDocument({
   ]);
 
   // Note that a task the list does not hold, as a link may open, waits on its description, which alone names it.
-  if (region.kind === DOCUMENT_REGION.READING && opened === undefined) {
+  if (region.kind === TASK_REGION.READING && opened === undefined) {
     return (
       <TaskPageSkeleton
         drawing={drawing}
@@ -1298,7 +1298,7 @@ function DescriptionDocument({
     sectionLinks === undefined
   ) {
     const line =
-      region.kind === DOCUMENT_REGION.FAILED
+      region.kind === TASK_REGION.FAILED
         ? "The task could not be read."
         : "Choose a task, or start a new one.";
 
@@ -1306,7 +1306,7 @@ function DescriptionDocument({
     const close = { label: "Close task", onClick: tasks.onLeaveTask };
 
     // A plan the service would not hand the reader is not there for them, whether it was deleted or never theirs.
-    if (region.kind === DOCUMENT_REGION.MISSING) {
+    if (region.kind === TASK_REGION.MISSING) {
       return (
         <NotFound
           thing={NOT_FOUND_THING.TASK}
@@ -1322,7 +1322,7 @@ function DescriptionDocument({
       <>
         {phone ? <TaskWaitHead away={away} reading={false} /> : <Toolbar />}
         <Fill as={FILL_ELEMENT.SECTION} className="desktop-empty-region">
-          {region.kind === DOCUMENT_REGION.FAILED ? (
+          {region.kind === TASK_REGION.FAILED ? (
             <ErrorState
               failure={unreadShown(FAILURE_SURFACE.TASK_DOCUMENT_READ)}
               onRetry={retryDescription}
