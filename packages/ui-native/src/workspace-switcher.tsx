@@ -36,7 +36,7 @@ import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar } from "./marks.js";
 import { ActionRow, SettingsForm } from "./settings-form.js";
-import { useColors } from "./tokens/colors.js";
+import { ElevatedGround, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
@@ -375,6 +375,8 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
   } = props;
 
   const colors = useColors();
+  // Note that the popover stands over a regular window, so it draws on the lifted ground, its list with it.
+  const lifted = useColors(true);
   // Note that at an accessibility size the sheet opens at its full height, since at its half height the account's row, the way into Settings, stood below the fold.
   const detents = useAccessibilitySize() ? SHEET_DETENTS.WHOLE : SHEET_DETENTS.HALF_THEN_WHOLE;
 
@@ -442,12 +444,14 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
               height: Math.min(Math.max(measured ?? 0, popoverHeight(props)), POPOVER_TALLEST),
             }),
             // Note that the popover stands on the list's own ground, its arrow and rim too, rather than the system's glass around a solid list.
-            presentationBackground(colors.GROUPED),
+            presentationBackground(lifted.GROUPED),
             onDisappear(gone),
           ]}
         >
           {opened || presented ? (
-            <SwitcherList props={props} closed={closed} onContentHeight={setMeasured} />
+            <ElevatedGround lifted>
+              <SwitcherList props={props} closed={closed} onContentHeight={setMeasured} />
+            </ElevatedGround>
           ) : null}
         </Group>
       </Popover.Content>

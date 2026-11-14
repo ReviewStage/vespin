@@ -38,6 +38,8 @@ type RemindPickSheetProps = {
   readonly onPick: (at: number) => void;
   /** Called as the sheet goes, by Done, Cancel, or a drag down. */
   readonly onDismiss: () => void;
+  /** Whether the sheet stands as a form sheet over a regular window, which draws it on the lifted ground in dark. */
+  readonly elevated?: boolean | undefined;
 };
 
 /**
@@ -50,8 +52,14 @@ type RemindPickSheetProps = {
  * the surface, as Settings' form does, and in a host of its own, the size
  * of nothing, beside its screen rather than inside it, as every ask does.
  */
-export function RemindPickSheet({ presented, pick, onPick, onDismiss }: RemindPickSheetProps) {
-  const colors = useColors();
+export function RemindPickSheet({
+  presented,
+  pick,
+  onPick,
+  onDismiss,
+  elevated = false,
+}: RemindPickSheetProps) {
+  const colors = useColors(elevated);
   const [picked, setPicked] = useState(() => new Date(pick.opensAt));
 
   // Note that each opening starts again from its own opening moment, so an earlier pick that was canceled doesn't stand.
