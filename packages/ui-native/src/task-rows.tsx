@@ -39,6 +39,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dropLink } from "./interactions.js";
@@ -438,6 +439,45 @@ export function LinkRow({
         end={detail === undefined ? null : <EndWords words={detail} />}
       />
     </SwiftUIButton>
+  );
+}
+
+type FailedReadRowProps = {
+  /** What could not be read, such as the description. */
+  readonly label: string;
+  /** The act's words, such as Try again. */
+  readonly act: string;
+  readonly onPress: () => void;
+};
+
+/**
+ * A row saying a part of a page could not be read, in the muted ink with its
+ * glyph, and its one act at the line's end as the system's small bordered
+ * capsule, as Mail says a message could not be loaded. Note that a failed
+ * read is no copper matter: it asks nothing of the reader but the press, so
+ * only the capsule takes one.
+ */
+export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
+  const colors = useColors();
+
+  return (
+    <HStack modifiers={rowPlacement(colors)}>
+      <RowHead
+        unread={false}
+        faded={false}
+        lead={<LeadGlyph symbol={GLYPH.FAILED} ink={colors.TEXT_MUTED} />}
+        title={label}
+        ink={colors.TEXT_MUTED}
+        end={
+          <Button
+            label={act}
+            look={BUTTON_LOOK.BORDERED}
+            size={BUTTON_SIZE.SMALL}
+            onPress={onPress}
+          />
+        }
+      />
+    </HStack>
   );
 }
 
