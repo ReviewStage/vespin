@@ -28,7 +28,8 @@
  * skills the account sees there, named the same way, each with whether it
  * may manage it; and the account's hosts, with the install script's address
  * on the service's own origin; and the account's machines, with their own
- * settings for agents' commands and apps; and one workspace's Sentry installations and
+ * settings for agents' commands and apps; and the asks its machines hold
+ * for its answer; and one workspace's Sentry installations and
  * Slack bot, named by `?workspaceId=`, with whether this deployment holds
  * each integration; and the account's preferences row, its default agent,
  * chapters model, and Slack notifications as stored. Each
@@ -64,6 +65,7 @@ import {
 import { INSTALLED_SKILLS_READ } from "../installed-skill-live.js";
 import { INTEGRATION_STATUSES_READ } from "../integration-live.js";
 import { liveProcedure } from "../live-read.js";
+import { MACHINE_ASKS_READ } from "../machine-ask-live.js";
 import { MACHINE_COMMANDS_READ } from "../machine-command-live.js";
 import { MACHINES_READ } from "../machine-live.js";
 import { WORKSPACE_MEMORIES_READ } from "../memory-live.js";
@@ -117,6 +119,7 @@ export const liveContract = {
   [WORKSPACE_INVITATIONS_READ.name]: liveProcedure(WORKSPACE_INVITATIONS_READ),
   [HOSTS_READ.name]: liveProcedure(HOSTS_READ),
   [MACHINES_READ.name]: liveProcedure(MACHINES_READ),
+  [MACHINE_ASKS_READ.name]: liveProcedure(MACHINE_ASKS_READ),
   [WORKSPACE_MEMORIES_READ.name]: liveProcedure(WORKSPACE_MEMORIES_READ),
   [INSTALLED_SKILLS_READ.name]: liveProcedure(INSTALLED_SKILLS_READ),
   [WORKSPACE_INTEGRATIONS_READ.name]: liveProcedure(WORKSPACE_INTEGRATIONS_READ),

@@ -1636,7 +1636,7 @@ const INVITES_PAGES: readonly PageLine[] = [
 /** A descriptions slice with the reference journey's laid over it, and the listed task it was laid from. */
 interface StagedDocuments {
   readonly from: TaskSummary;
-  readonly laid: AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT];
+  readonly laid: AppStateSnapshot[typeof LIVE_READ.HELD_TASK];
 }
 
 /**
@@ -1645,7 +1645,7 @@ interface StagedDocuments {
  * laid from stands as it was.
  */
 const STAGED_DOCUMENTS = new WeakMap<
-  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT],
+  AppStateSnapshot[typeof LIVE_READ.HELD_TASK],
   StagedDocuments
 >();
 
@@ -1655,10 +1655,8 @@ const STAGED_DOCUMENTS = new WeakMap<
  * row say the same; the stand-in where the document lists none of it, as the
  * panel's fixture run, which lists its own on the window's side, does.
  */
-function stagedDocuments(
-  state: AppStateSnapshot,
-): AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT] {
-  const held = state[LIVE_READ.DESCRIPTION_DOCUMENT];
+function stagedDocuments(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.HELD_TASK] {
+  const held = state[LIVE_READ.HELD_TASK];
   const from = state.tasks.tasks.find((task) => task.id === TASK.INVITES) ?? INVITES_TASK;
   const staged = STAGED_DOCUMENTS.get(held);
 
@@ -2055,9 +2053,9 @@ export function inboxAppState(
     ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
     inbox: stagedInbox(state.inbox),
     [LIVE_READ.INBOX_ITEMS]: {
-      rows: { [INBOX_SCOPE_KIND.PLAN]: fed },
+      rows: { [INBOX_SCOPE_KIND.TASK]: fed },
     },
-    [LIVE_READ.DESCRIPTION_DOCUMENT]: stagedDocuments(state),
+    [LIVE_READ.HELD_TASK]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),
     [LIVE_READ.DESCRIPTION_COMMENTS]: stagedComments(state),
     [LIVE_READ.AUTOMATIONS]: noneHeldIn(workspaceIds),
@@ -2119,7 +2117,7 @@ export function inboxRemindersAppState(
   state: AppStateSnapshot,
   reminders: InboxReminders,
 ): AppStateSnapshot {
-  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.PLAN];
+  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.TASK];
 
   if (reminders.size === 0 || fed === undefined) return state;
 
@@ -2132,7 +2130,7 @@ export function inboxRemindersAppState(
 
   return {
     ...state,
-    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: reminded } },
+    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: reminded } },
   };
 }
 

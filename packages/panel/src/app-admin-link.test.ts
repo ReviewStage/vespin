@@ -552,7 +552,7 @@ test("a move from one open task to another keeps the task's page drawn, never it
         access: { admin: false, pending: true },
       },
     ),
-    [LIVE_READ.DESCRIPTION_DOCUMENT]: {
+    [LIVE_READ.HELD_TASK]: {
       [one.id]: { rows: { task: { ...DOCUMENT_TASK, workspaceId: ACME.id } } },
       [other.id]: { rows: { task: { ...DOCUMENT_TASK, ...other } } },
     },

@@ -1,6 +1,6 @@
 import { ACCOUNT_STATUS, type AccountProvider } from "@repo/credentials/snapshot";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { readingWords, type SignInFailure } from "@repo/features/words";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -916,7 +916,7 @@ export function DesktopShell({
     place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
 
   const shownTask =
-    tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READY
+    tab === PANEL_TAB.TASKS && !standingIn && region.kind === TASK_REGION.READY
       ? region.task
       : undefined;
 
@@ -939,7 +939,7 @@ export function DesktopShell({
   // Note that while the plan's description is read, the window is named by the task as the list holds it.
   const namedTask =
     shownTask ??
-    (tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READING
+    (tab === PANEL_TAB.TASKS && !standingIn && region.kind === TASK_REGION.READING
       ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
       : undefined);
 
@@ -1001,7 +1001,7 @@ export function DesktopShell({
   // so while they stand there is no panel to toggle either; but a panel left
   // filling the window over them hides them too, and its toggle is the way out.
   const detailsShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
-  const descriptionToggle = tasks.page === TASKS_PAGE.DOCUMENT && !standingIn && !detailsShown;
+  const descriptionToggle = tasks.page === TASKS_PAGE.TASK && !standingIn && !detailsShown;
   // A phone's task leads its own row with the way back to the page it was opened from, named for it (`task-pane-switcher.tsx`).
   const awayLabel = awayBack(history.away, history.onLeave).label;
   const { onLeave } = history;
@@ -1255,13 +1255,13 @@ export function ShellPlaces(): React.JSX.Element {
       {panelToggle && room === SHELL_ROOM.NARROW ? (
         <SidePanelChord
           panel={tasks.sidePanel}
-          disabled={descriptionToggle && tasks.region.kind !== DOCUMENT_REGION.READY}
+          disabled={descriptionToggle && tasks.region.kind !== TASK_REGION.READY}
         />
       ) : panelToggle ? (
         <div ref={setToggleRoom} className="title-bar-controls" data-edge="end" inert={drawerOver}>
           <SidePanelToggle
             panel={tasks.sidePanel}
-            disabled={descriptionToggle && tasks.region.kind !== DOCUMENT_REGION.READY}
+            disabled={descriptionToggle && tasks.region.kind !== TASK_REGION.READY}
           />
         </div>
       ) : null}

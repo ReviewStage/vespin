@@ -119,9 +119,9 @@ const listCommand = Command.make(
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
       const me = mine ? yield* signedInMemberId : undefined;
-      const { plans } = yield* askService(hosted.tasks.list, {});
+      const { tasks } = yield* askService(hosted.tasks.list, {});
 
-      const listed = plans.filter(
+      const listed = tasks.filter(
         (task) =>
           task.workspaceId === workspace.id &&
           (Option.isNone(status) || task.status === status.value) &&
@@ -175,7 +175,7 @@ const viewCommand = Command.make(
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
 
-      const [{ plan }, { agents }, { plans }, { items }, { workspaces }] = yield* Effect.all(
+      const [{ task: plan }, { agents }, { tasks }, { items }, { workspaces }] = yield* Effect.all(
         [
           askService(hosted.tasks.open, { id }),
           askService(hosted.agents.listOfTask, { id }),
@@ -186,7 +186,7 @@ const viewCommand = Command.make(
         { concurrency: "unbounded" },
       );
 
-      const row = plans.find((listed) => listed.id === id);
+      const row = tasks.find((listed) => listed.id === id);
       const found = taskJson(plan, workspaceNamed(workspaces, plan.workspaceId));
       const pullRequests = row?.agents?.pullRequests ?? [];
 
@@ -309,10 +309,10 @@ const createCommand = Command.make(
         together ? HOSTED_DEADLINE.START : HOSTED_DEADLINE.USUAL,
       );
 
-      const task = taskJson(created.body.plan, workspace.name);
+      const task = taskJson(created.body.task, workspace.name);
 
       if (descriptionText !== undefined) {
-        yield* writeDescription(task.id, created.body.plan.description.body, descriptionText);
+        yield* writeDescription(task.id, created.body.task.description.body, descriptionText);
       }
 
       const agent =
@@ -462,19 +462,19 @@ const updateCommand = Command.make(
       let plan: Task | undefined;
 
       if (Object.keys(fields).length > 0) {
-        plan = (yield* askService(hosted.tasks.update, { params: { id }, body: fields })).plan;
+        plan = (yield* askService(hosted.tasks.update, { params: { id }, body: fields })).task;
       }
 
       if (parentTaskId !== undefined) {
         plan = (yield* askService(hosted.tasks.parent, { params: { id }, body: { parentTaskId } }))
-          .plan;
+          .task;
       }
 
       for (const block of blockChanges) {
-        plan = (yield* askService(hosted.tasks.block, { params: { id }, body: block })).plan;
+        plan = (yield* askService(hosted.tasks.block, { params: { id }, body: block })).task;
       }
 
-      plan ??= (yield* askService(hosted.tasks.open, { id })).plan;
+      plan ??= (yield* askService(hosted.tasks.open, { id })).task;
 
       const sectionId = Option.isNone(section)
         ? undefined
@@ -554,7 +554,7 @@ const deleteCommand = Command.make(
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
 
-      const [{ plan }, { workspaces }] = yield* Effect.all(
+      const [{ task: plan }, { workspaces }] = yield* Effect.all(
         [askService(hosted.tasks.open, { id }), askService(hosted.workspaces.list, undefined)],
         { concurrency: "unbounded" },
       );
@@ -649,7 +649,7 @@ const relateCommand = Command.make(
       const otherId = yield* resolveTaskId(asked.other);
       const { hosted } = yield* session;
 
-      const { plan } = yield* askService(hosted.tasks.relation, {
+      const { task: plan } = yield* askService(hosted.tasks.relation, {
         params: { id },
         body: { taskId: otherId, from: fromKind, to: asked.to },
       });
@@ -684,7 +684,7 @@ const relateCommand = Command.make(
 function taskMembersOf(taskId: string) {
   return Effect.gen(function* () {
     const { hosted } = yield* session;
-    const { plan } = yield* askService(hosted.tasks.open, { id: taskId });
+    const { task: plan } = yield* askService(hosted.tasks.open, { id: taskId });
 
     const { members } = yield* askService(hosted.workspaces.members, {
       workspaceId: plan.workspaceId,

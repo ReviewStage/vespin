@@ -1410,7 +1410,7 @@ const findTasksWithItems = SqlSchema.findAll({
  * in epoch milliseconds, so a row decodes as the held read's entry does. The order is the reader's to keep, since Realtime keeps none.
  * The account's failed runs are its binding's own (`../live/reads/account-inbox.ts`).
  * The items of agents with no task, and the automations and agents holding
- * them (`planless`, `automations`, `agents`), answer no rows, since every
+ * them (`taskless`, `automations`, `agents`), answer no rows, since every
  * agent stands on a task, and stand because a released desktop follows
  * them: each still joins its items' agents and their automations, so its
  * columns read as they did, and takes no row.
@@ -1450,8 +1450,8 @@ export function accountInboxLiveStatements(userId: string) {
         .where(accountWaiting(userId)),
   );
 
-  const planless = liveRowsStatement(
-    parts.planless,
+  const taskless = liveRowsStatement(
+    parts.taskless,
     {
       ordered: false,
       columns: {
@@ -1485,8 +1485,8 @@ export function accountInboxLiveStatements(userId: string) {
         .where(sql`false`),
   );
 
-  const plans = liveRowsStatement(
-    parts.plans,
+  const tasks = liveRowsStatement(
+    parts.tasks,
     {
       ordered: false,
       columns: {
@@ -1549,7 +1549,7 @@ export function accountInboxLiveStatements(userId: string) {
         .groupBy(agentTable.id, automation.id),
   );
 
-  return { items, planless, plans, automations, agents };
+  return { items, taskless, tasks, automations, agents };
 }
 
 /** A message of an item's thread as its live row declares it, which each of its columns, an expression of the thread's union, is typed to. */

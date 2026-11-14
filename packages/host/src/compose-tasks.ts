@@ -151,12 +151,12 @@ import type { Composer } from "./composer.js";
 import { type TASKS_ACTS, TASKS_FOLLOWS } from "./contract/index.js";
 import { commentSubjectOf, descriptionCommentReads } from "./description-comment-reads.js";
 import { descriptionCommentWrites } from "./description-comment-writes.js";
-import { descriptionDocumentReads } from "./description-document-reads.js";
 import { lateService } from "./effect/kernel.js";
 import { type EntityStore, KEPT_READ } from "./entity-store.js";
 import { fixturePage } from "./fixture-stage.js";
 import type { HostMethodTable } from "./gateway-door.js";
 import { heldFetch } from "./held-fetch.js";
+import { heldTaskReads } from "./held-task-reads.js";
 import { type HostActTable, liveTold } from "./host-acts.js";
 import type { HostKernel } from "./host-kernel.js";
 import {
@@ -188,7 +188,7 @@ import { followSidebarRows } from "./workspaces-follow.js";
  *
  * Nothing here writes a description but a restore or an edit the developer asks
  * for: the task's coding agents are its writers, on the service. Each description
- * a window opened is held for it per task (`description-document-reads.ts`), read
+ * a window opened is held for it per task (`held-task-reads.ts`), read
  * as it is first held and again as its record's description mark moves, and never
  * on a clock. The list itself is followed over Neon Realtime from the
  * account gate opening until a sign-out (`task-list-follow.ts`), and is read
@@ -355,7 +355,7 @@ function startMayWait(start: Start): boolean {
 const startKeptSchema = Schema.Struct({
   request: Schema.Struct({ ...taskCreateRequestSchema.fields, id: Schema.String }),
   quiet: Schema.Boolean,
-  row: Schema.UndefinedOr(TASK_LIST_READ.parts.plans.row),
+  row: Schema.UndefinedOr(TASK_LIST_READ.parts.tasks.row),
 }).check(Schema.makeFilter(startMayWait));
 
 /** Where a start sent from the waiting writes opened its task: as it was asked, before any ask of the screen standing now, its description laid as held. */
@@ -431,7 +431,7 @@ export interface TasksDependencies {
   kept: KeptContent;
   /** The windows coming forward, raised here as the panel's focus reaches the host and heard by every read asked again on it. */
   focus: WindowFocus;
-  /** The sync engine's pool, which the task list's plans and agents, and the comments' threads, stand in. */
+  /** The sync engine's pool, which the task list's tasks and agents, and the comments' threads, stand in. */
   pool: EntityPool;
   /** The signed-in account's lists kept on disk, which the gate opening draws before the service answers and each answer keeps; none where nothing keeps them. */
   entities: () => EntityStore | undefined;
@@ -879,7 +879,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    * answers are applied in the order the reads were made, because a list
    * that left before a task started would otherwise land last and roll the
    * view back. A held description is read outside it, ordered by its task's own
-   * numbers instead (`description-document-reads.ts`).
+   * numbers instead (`held-task-reads.ts`).
    */
   const serial = (yield* Semaphore.make(1)).withPermits(1);
   const late = yield* lateService<TasksLinks>();
@@ -1146,10 +1146,10 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   /**
    * The description of each task a window opened, and of the few opened latest,
    * told whole on the app state every window draws
-   * (`LIVE_READ.DESCRIPTION_DOCUMENT`), so a task opened again draws its description in
-   * its first frame (`description-document-reads.ts`).
+   * (`LIVE_READ.HELD_TASK`), so a task opened again draws its description in
+   * its first frame (`held-task-reads.ts`).
    */
-  const documents = yield* descriptionDocumentReads({
+  const documents = yield* heldTaskReads({
     gate,
     accountId: dependencies.accountId,
     open: (taskId) => served(client.open(taskId)),
@@ -1158,7 +1158,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         client.liveRead(TASK_RECORD_READ, { id: taskId, userId }, poll ? { after } : undefined),
       ),
     listed: asListed,
-    tell: liveTold(kernel.emit, TASKS_FOLLOWS.TASKS_DOCUMENT_FOLLOW),
+    tell: liveTold(kernel.emit, TASKS_FOLLOWS.TASKS_HELD_FOLLOW),
   });
 
   /** Each edit's waits for its transaction, on its task's record and on the list, by the task, a newer edit's replacing an older one's. */
@@ -1222,7 +1222,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           const { pendingTasks: _held, ...rest } = view;
           view = pendingTasks.length === 0 ? rest : { ...rest, pendingTasks };
           write({
-            tasks: list.plans,
+            tasks: list.tasks,
             taskAgents,
             taskPullRequests,
             agentPullRequests,
@@ -1286,9 +1286,9 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         return undefined;
       }
 
-      const { plans, agents } = sealed.queries;
+      const { tasks, agents } = sealed.queries;
 
-      return Option.getOrUndefined(decodeTaskRows({ plans: plans.rows, agents: agents.rows }));
+      return Option.getOrUndefined(decodeTaskRows({ tasks: tasks.rows, agents: agents.rows }));
     });
 
   const readOutside = (id: string): Effect.Effect<void> =>
@@ -1317,12 +1317,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           return;
         }
 
-        const { plans, agents } = sealed.queries;
-        const rows = decodeTaskRows({ plans: plans.rows, agents: agents.rows });
+        const { tasks, agents } = sealed.queries;
+        const rows = decodeTaskRows({ tasks: tasks.rows, agents: agents.rows });
 
         if (Option.isNone(rows) || taskList.collections !== collections) return;
 
-        if (rows.value.plans.length + rows.value.agents.length === 0) {
+        if (rows.value.tasks.length + rows.value.agents.length === 0) {
           coldNone.add(id);
 
           return;
@@ -1391,8 +1391,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           return;
         }
 
-        const { plans, agents } = sealed.queries;
-        const rows = decodeRelationRows({ plans: plans.rows, agents: agents.rows });
+        const { tasks, agents } = sealed.queries;
+        const rows = decodeRelationRows({ tasks: tasks.rows, agents: agents.rows });
 
         if (Option.isNone(rows) || taskList.collections !== collections) return;
         // Note that only an answer drawn counts as read, so a card hung after a read that failed asks again.
@@ -1486,8 +1486,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       const sealed = yield* served(client.liveRead(TASK_SEARCH_READ, { query, userId }, {}));
 
       if ("failure" in sealed) return;
-      const { plans, agents } = sealed.queries;
-      const rows = decodeSearchRows({ plans: plans.rows, agents: agents.rows });
+      const { tasks, agents } = sealed.queries;
+      const rows = decodeSearchRows({ tasks: tasks.rows, agents: agents.rows });
 
       if (Option.isNone(rows) || taskList.collections !== collections) return;
       yield* collections.cold(rows.value, mark);
@@ -2003,7 +2003,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    * Lays `answered`, a write's answer about `taskId`, on its description wherever
    * that is held, over the copy held by `lay`, so no read that left before
    * the answer lands over it; a description whose first read is still out takes the
-   * answer whole (`description-document-reads.ts`).
+   * answer whole (`held-task-reads.ts`).
    */
   function documentTook(taskId: string, answered: Task, lay: (held: Task) => Task): void {
     documents.written(taskId, (held) => (held === undefined ? answered : lay(held)));
@@ -2642,7 +2642,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     // starts only a follow that is not running, the workspaces' among them,
     // and reads GitHub's connection again where the last read is stale
     // (`compose-workspaces.ts`). A held description has a Try again of its
-    // own (`TASKS_DOCUMENT_RETRY`).
+    // own (`TASKS_HELD_RETRY`).
     TASKS_REFRESH: () =>
       Effect.gen(function* () {
         if (!gate()) return;
@@ -2655,7 +2655,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       Effect.gen(function* () {
         if (!gate()) return false;
         screenAsks += 1;
-        // Note that the open reads nothing of a task the list holds: the window holds the task's description (`TASKS_DOCUMENT_FOLLOW`), which draws at once where it was held lately.
+        // Note that the open reads nothing of a task the list holds: the window holds the task's description (`TASKS_HELD_FOLLOW`), which draws at once where it was held lately.
         write({ activeTaskId: taskId });
         yield* openedOutside(taskId);
 
@@ -2808,15 +2808,15 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         const sealed = yield* served(client.liveRead(TASK_PAGE_READ, params, {}));
 
         if ("failure" in sealed) return { failure: TASK_CALL_FAILURE.UNANSWERED };
-        const { plans, agents } = sealed.queries;
-        const rows = decodeTaskPage({ plans: plans.rows, agents: agents.rows });
+        const { tasks, agents } = sealed.queries;
+        const rows = decodeTaskPage({ tasks: tasks.rows, agents: agents.rows });
 
         if (Option.isNone(rows)) return { failure: TASK_CALL_FAILURE.UNANSWERED };
 
         // Note that a list a sign-out replaced meanwhile draws nothing of the page.
         if (taskList.collections === collections) yield* collections.cold(rows.value, mark);
 
-        const next = settledPageCursorOf(rows.value.plans);
+        const next = settledPageCursorOf(rows.value.tasks);
 
         return next === undefined ? {} : { next };
       }),
@@ -2841,11 +2841,11 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         );
 
         if ("failure" in sealed) return { failure: TASK_CALL_FAILURE.UNANSWERED };
-        const { counts, plans, agents } = sealed.queries;
+        const { counts, tasks, agents } = sealed.queries;
 
         const rows = decodePersonPage({
           counts: counts.rows,
-          plans: plans.rows,
+          tasks: tasks.rows,
           agents: agents.rows,
         });
 
@@ -2857,7 +2857,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
         // Note that a list a sign-out replaced meanwhile draws nothing of the page.
         if (taskList.collections === collections) {
-          yield* collections.cold({ plans: rows.value.plans, agents: rows.value.agents }, mark);
+          yield* collections.cold({ tasks: rows.value.tasks, agents: rows.value.agents }, mark);
         }
 
         const { assigned, created, agents: started } = counted;
@@ -3038,7 +3038,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
             return {
               answer: { saved: true } as const,
-              held: takeAnswered(answer.plan),
+              held: takeAnswered(answer.task),
               txid: answer.txid,
             };
           }),
@@ -3111,7 +3111,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     TASKS_LINK_STANDING_FOLLOW: { hold: (link) => linkStandings.hold(new LinkStandingKey(link)) },
     TASKS_BROWSER_TABS_FOLLOW: { hold: (place) => heldBrowserTabs.hold(browserTabsOwnerOf(place)) },
     TASKS_PAGES_FOLLOW: { hold: (place) => heldPageReads.hold(pageOwnerOf(place)) },
-    TASKS_DOCUMENT_FOLLOW: {
+    TASKS_HELD_FOLLOW: {
       // A task a window opens that the list does not hold is read into it beside its description, and so are the tasks related to it.
       hold: ({ taskId }) =>
         Effect.andThen(

@@ -45,7 +45,7 @@ function automation(id: string, extra: Partial<AutomationSummary> = {}): Automat
   return {
     id,
     taskId: null,
-    planName: null,
+    taskName: null,
     workspaceId: "workspace-1",
     name: `Automation ${id}`,
     enabled: true,

@@ -338,7 +338,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
 
         const { automation } = made;
         assert.deepEqual(
-          [automation.taskId, automation.planName, automation.workspaceId, automation.repositories],
+          [automation.taskId, automation.taskName, automation.workspaceId, automation.repositories],
           [null, null, task.workspaceId, [relay]],
           "no plan, the workspace, and the repository as GitHub spells it",
         );
@@ -489,7 +489,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
         const { automation } = made;
         assert.equal(made.webhookSecret, undefined, "a schedule has no secret");
         assert.equal(automation.enabled, true);
-        assert.equal(automation.planName, null);
+        assert.equal(automation.taskName, null);
         assert.deepEqual(automation.guards, AUTOMATION_DEFAULT_GUARDS);
         assert.equal(automation.lastRun, null);
         assert.ok(automation.nextRunAt !== null && automation.nextRunAt > now);
