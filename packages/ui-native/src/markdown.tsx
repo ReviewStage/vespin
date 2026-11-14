@@ -3,6 +3,7 @@
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind, entityWordHeard } from "@repo/features/entity-kind";
 import type { LinkStanding } from "@repo/features/link-standing-model";
+import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
@@ -40,6 +41,9 @@ import {
   type MarkdownSuggestion,
   markdownBlocks,
 } from "./markdown-model.js";
+import { MediaBox } from "./media-box.js";
+import { MediaFailed } from "./media-failed.js";
+import { type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
 import {
   SUGGESTION_LOOK,
@@ -192,6 +196,8 @@ interface Drawing {
   readonly openLink: (address: string) => void;
   /** The address a picture is drawn from, by the address its words name it by; none while it is on its way. */
   readonly pictureSource: (written: string) => string | null | undefined;
+  /** Reads a picture that could not be read again, by the address its words name it by; none offers nothing. */
+  readonly onRetryPicture: ((written: string) => void) | undefined;
   /** The video a picture's address names, played in its place; none where the address names a picture. */
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
   /** Whether a heading is heard as one, on a page of words alone, where VoiceOver's Headings rotor walks its sections. */
@@ -927,9 +933,9 @@ function CodeView({ text, drawing }: { readonly text: string; readonly drawing: 
 /** The most a full-screen picture zooms in to, as a pinch takes it. */
 const VIEWER_MAX_ZOOM = 4;
 
-/** What a picture that could not be read says in its well, its own words first, as the panel's stand-in says it. */
+/** What a picture that could not be read is heard as, its own words first, as the panel's stand-in says it. */
 function unreadWords(alt: string): string {
-  return alt.trim() === "" ? "This picture could not be read." : `${alt} · could not be read.`;
+  return `${alt.trim() === "" ? "This picture" : alt} ${MEDIA_READ_WORDS.COULD_NOT_READ}`;
 }
 
 type PictureProps = {
@@ -937,8 +943,10 @@ type PictureProps = {
   readonly source: string | null | undefined;
   /** What the picture shows, heard in its place. */
   readonly alt: string;
-  /** A tile's fixed shape, width over height, the picture standing whole inside it; the picture's own shape where none is given. */
+  /** A tile's fixed shape, width over height, the picture standing whole inside it, as wide as its tile; the picture's own shape and size, held to `MEDIA_BOUNDS`, where none is given. */
   readonly tileAspect?: number | undefined;
+  /** Reads the picture again where it could not be read; none offers nothing. */
+  readonly onRetry?: (() => void) | undefined;
 };
 
 /**
@@ -951,11 +959,11 @@ type PictureProps = {
  * is, the system's spinner in it as Photos stands one, so the words under
  * it do not jump twice and it never reads as an empty box.
  */
-export function Picture({ source, alt, tileAspect }: PictureProps) {
+export function Picture({ source, alt, tileAspect, onRetry }: PictureProps) {
   const colors = useColors();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const [aspect, setAspect] = useState<number | undefined>(undefined);
+  const [natural, setNatural] = useState<MediaSize | undefined>(undefined);
   const [full, setFull] = useState(false);
   const heard = alt === "" ? "Picture" : alt;
 
@@ -963,53 +971,63 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
     source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard },
   );
 
+  // Note that a tile fills its tile at the tile's shape, and any other picture stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
+  const frame = tileAspect === undefined ? mediaFrame(natural) : undefined;
+
   const well = [
     styles.picture,
-    { aspectRatio: tileAspect ?? aspect ?? 16 / 9, backgroundColor: colors.WELL },
+    { aspectRatio: tileAspect ?? frame?.aspectRatio, backgroundColor: colors.WELL },
   ];
 
   if (source === undefined) {
     return (
-      <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
-        <ActivityIndicator color={colors.TEXT_MUTED} />
-      </View>
+      <MediaBox frame={frame}>
+        <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
+          <ActivityIndicator color={colors.TEXT_MUTED} />
+        </View>
+      </MediaBox>
     );
   }
 
   // Note that a picture that could not be read says so in its well, as the panel's stand-in does, rather than spin as one still on its way.
   if (source === null) {
-    const words = unreadWords(alt);
-
     return (
-      <View style={[well, styles.pending]} accessible accessibilityLabel={words}>
-        <Text style={{ fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "center" }}>
-          {words}
-        </Text>
-      </View>
+      <MediaBox frame={frame}>
+        <MediaFailed
+          line={MEDIA_READ_WORDS.PICTURE_FAILED}
+          heard={unreadWords(alt)}
+          onRetry={onRetry}
+          style={well}
+        />
+      </MediaBox>
     );
   }
 
   return (
     <>
-      <HeldMenu acts={acts}>
-        <Press
-          onPress={() => setFull(true)}
-          accessibilityRole="imagebutton"
-          accessibilityLabel={heard}
-          accessibilityHint="Opens full screen"
-        >
-          <Image
-            source={{ uri: source }}
-            resizeMode="contain"
-            onLoad={(event) => {
-              const loaded = event.nativeEvent.source;
+      <MediaBox frame={frame}>
+        <HeldMenu acts={acts}>
+          <Press
+            onPress={() => setFull(true)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={heard}
+            accessibilityHint="Opens full screen"
+          >
+            <Image
+              source={{ uri: source }}
+              resizeMode="contain"
+              onLoad={(event) => {
+                const loaded = event.nativeEvent.source;
 
-              if (loaded.width > 0 && loaded.height > 0) setAspect(loaded.width / loaded.height);
-            }}
-            style={well}
-          />
-        </Press>
-      </HeldMenu>
+                if (loaded.width > 0 && loaded.height > 0) {
+                  setNatural({ width: loaded.width, height: loaded.height });
+                }
+              }}
+              style={well}
+            />
+          </Press>
+        </HeldMenu>
+      </MediaBox>
       <Modal
         visible={full}
         animationType="fade"
@@ -1070,13 +1088,24 @@ function PictureBlock({
 }) {
   const video = drawing.videoAt(source);
 
-  if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
+  if (video === undefined) {
+    const retry = drawing.onRetryPicture;
+
+    return (
+      <Picture
+        source={drawing.pictureSource(source)}
+        alt={alt}
+        onRetry={retry === undefined ? undefined : () => retry(source)}
+      />
+    );
+  }
 
   return (
     <Video
       source={video.source}
       label={alt.trim() === "" ? video.label : alt}
       onOpenElsewhere={video.onOpenElsewhere}
+      onRetry={video.onRetry}
     />
   );
 }
@@ -1175,6 +1204,8 @@ type MarkdownProps = {
   readonly typed?: boolean | undefined;
   /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way, and `null` where it could not be read. Each is drawn from the address it names where none is given. */
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
+  /** Reads a picture that could not be read again, by the address its words name it by; a picture that could not be read offers nothing where none is given. */
+  readonly onRetryPicture?: ((written: string) => void) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
   /** Whether its headings are heard as headings, on a page of words alone; a message's are styled alone. */
@@ -1187,11 +1218,12 @@ type MarkdownProps = {
     | undefined;
 };
 
-/** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, and where it opens where the player cannot read it. */
+/** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way and `null` where it could not be read, its name, where it opens where the player cannot read it, and what reads it again. */
 export interface MarkdownVideo {
-  readonly source: string | undefined;
+  readonly source: string | null | undefined;
   readonly label: string;
   readonly onOpenElsewhere?: (() => void) | undefined;
+  readonly onRetry?: (() => void) | undefined;
 }
 
 /** Each picture drawn from the address its words name it by. */
@@ -1227,6 +1259,7 @@ export function Markdown({
   onOpenLink,
   typed,
   pictureSource = namedSource,
+  onRetryPicture,
   videoAt = noVideo,
   headings = false,
   linkStanding = noStanding,
@@ -1246,6 +1279,7 @@ export function Markdown({
     lineWidth: width - SPACE.PAGE * 2,
     openLink: onOpenLink,
     pictureSource,
+    onRetryPicture,
     videoAt,
     headings,
     linkStanding,

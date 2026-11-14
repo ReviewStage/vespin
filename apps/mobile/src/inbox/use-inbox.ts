@@ -684,8 +684,15 @@ export function useReadOnOpen(listed: InboxListed | undefined): void {
 
 /** A thread's files as read: what each is drawn from, and how big each is, in words, by its attachment. */
 interface ThreadMediaRead {
-  readonly sources: ReadonlyMap<string, string>;
+  /** What each file is drawn from, by its attachment: an address once read, `null` once its read failed, and absent while it is on its way. */
+  readonly sources: ReadonlyMap<string, string | null>;
   readonly sizes: ReadonlyMap<string, string>;
+}
+
+/** A thread's files as read, and what reads one that failed again. */
+export interface ThreadFiles extends ThreadMediaRead {
+  /** Reads a file whose read failed again, by its attachment, standing it on its way meanwhile. */
+  readonly retry: (attachmentId: string) => void;
 }
 
 /** What a file of the thread is read into, by its kind: a picture's `data:` address, or a video's or another file's address under the app's caches. */
@@ -717,19 +724,22 @@ function sourceOf(
  * older recording with no copy answers as a WebM the player cannot play, and
  * any other file, such as a PDF, as a file of the app's caches under its own
  * name, which its viewer and the share sheet read; with each one's size in
- * words, which a file's chip says. One still on its way, or that could not
- * be read, is absent. Note that each file is asked for once while
+ * words, which a file's chip says. One still on its way is absent, and one
+ * that could not be read is `null` until `retry` reads it again. Note that each file is asked for once while
  * the thread stands, whatever `media` list names it, because the thread's
  * item is made anew on every change to it, its read mark as it opens among
  * them, and each read carries the whole file; one whose read failed is asked
- * for again on the thread's next change.
+ * for again only by its Try again, since the thread's next change, such as
+ * its read mark, would otherwise read the whole file again unseen.
  */
 export function useThreadMedia(
   itemId: string | undefined,
   media: readonly InboxMessageMedia[],
-): ThreadMediaRead {
+): ThreadFiles {
   const acts = useHostActs();
   const [read, setRead] = useState<ThreadMediaRead>(NOTHING_READ);
+  // How many times a file was read again, which asks the effect to read what was let go.
+  const [retries, setRetries] = useState(0);
 
   // The thread the files were asked for, and the attachments asked for on it.
   const asked = useRef<{ readonly itemId: string | undefined; readonly ids: Set<string> }>({
@@ -751,10 +761,15 @@ export function useThreadMedia(
       if (ids.has(each.attachmentId)) continue;
       ids.add(each.attachmentId);
 
-      // A read that fails is forgotten, so the thread's next change asks for it again.
-      const forget = (cause: unknown) => {
-        if (asked.current.itemId === itemId) ids.delete(each.attachmentId);
+      // Note that a read that fails is marked failed, so its file says so with Try again rather than spinning on, and stays asked until Try again lets it go.
+      const failed = (cause: unknown) => {
         refused("Reading a thread's file")(cause);
+
+        if (asked.current.itemId !== itemId) return;
+        setRead((held) => ({
+          sources: new Map(held.sources).set(each.attachmentId, null),
+          sizes: held.sizes,
+        }));
       };
 
       // A video is asked for as the MP4 copy iOS's player plays, which an older recording kept without one answers as its WebM.
@@ -778,9 +793,20 @@ export function useThreadMedia(
             sizes: new Map(held.sizes).set(each.attachmentId, size),
           }));
         })
-        .catch(forget);
+        .catch(failed);
     }
-  }, [acts, itemId, media]);
+  }, [acts, itemId, media, retries]);
 
-  return read;
+  const retry = useCallback((attachmentId: string) => {
+    asked.current.ids.delete(attachmentId);
+    setRead((held) => {
+      const sources = new Map(held.sources);
+      sources.delete(attachmentId);
+
+      return { sources, sizes: held.sizes };
+    });
+    setRetries((count) => count + 1);
+  }, []);
+
+  return { ...read, retry };
 }

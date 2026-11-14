@@ -53,7 +53,7 @@ import { useWrite } from "../use-write.js";
 const AGENT_MEDIA_PREFIX = "agent";
 
 /** No media read yet, held as one value so a page that holds none reads the same each time. */
-const NO_SOURCES: ReadonlyMap<string, string> = new Map();
+const NO_SOURCES: ReadonlyMap<string, string | null> = new Map();
 
 /** Says on the console a read the host refused, which the page draws without. */
 function refused(what: string): (cause: unknown) => void {
@@ -284,13 +284,20 @@ async function agentMediaSource(
     : `data:${read.contentType};base64,${read.base64}`;
 }
 
+/** What an agent's pictures and recordings are drawn from, by id, and what reads one that failed again. */
+export interface AgentMedia {
+  readonly sources: ReadonlyMap<string, string | null>;
+  readonly retry: (pictureId: string) => void;
+}
+
 /**
  * What each picture and recording the agent showed is drawn from, by its
  * id, read once through the host as the panel reads one
  * (`ACT_KIND.AGENTS_PICTURE`): a picture as a `data:` address, and a
  * recording, its MP4 copy where the service kept one, as a file of the
  * app's caches, written whole before it is drawn, since the system's player
- * reads a file; one on its way, or that could not be read, is absent. Note
+ * reads a file; one on its way is absent, and one whose every try failed is
+ * `null`, which its Try again (`retry`) reads again. Note
  * that each is asked for once while the agent's page stands, however often
  * the transcript moves; that one whose read failed is tried again on its
  * own a few times after a pause (`mediaReads`), since a transcript that
@@ -298,16 +305,24 @@ async function agentMediaSource(
  * transcript's next change; and that each failure is written to the
  * device's log.
  */
-export function useAgentMedia(
-  agentId: string,
-  ids: readonly string[],
-): ReadonlyMap<string, string> {
+export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMedia {
   const acts = useHostActs();
 
   const [shown, setShown] = useState<{
     readonly agentId: string;
-    readonly sources: ReadonlyMap<string, string>;
+    readonly sources: ReadonlyMap<string, string | null>;
   }>({ agentId, sources: new Map() });
+
+  // Each source standing for the agent, `source` for an id, or none to stand it on its way again.
+  const stand = (pictureId: string, source: string | null | undefined) =>
+    setShown((held) => {
+      const sources = new Map(held.agentId === agentId ? held.sources : undefined);
+
+      if (source === undefined) sources.delete(pictureId);
+      else sources.set(pictureId, source);
+
+      return { agentId, sources };
+    });
 
   const [reads, setReads] = useState<MediaReads | undefined>(undefined);
 
@@ -315,15 +330,13 @@ export function useAgentMedia(
   useEffect(() => {
     const standing = mediaReads({
       read: (pictureId) => agentMediaSource(acts, agentId, pictureId),
-      landed: (pictureId, source) =>
-        setShown((held) => ({
-          agentId,
-          sources: new Map(held.agentId === agentId ? held.sources : undefined).set(
-            pictureId,
-            source,
-          ),
-        })),
-      failed: (pictureId, cause, again) => mediaReadFailed(agentId, pictureId, cause, again),
+      landed: (pictureId, source) => stand(pictureId, source),
+      // Note that a read whose every try failed stands failed, so it says so with Try again rather than spinning on.
+      failed: (pictureId, cause, again) => {
+        mediaReadFailed(agentId, pictureId, cause, again);
+
+        if (!again) stand(pictureId, null);
+      },
       pause: paused,
     });
 
@@ -334,7 +347,13 @@ export function useAgentMedia(
 
   useEffect(() => reads?.ask(ids), [reads, ids]);
 
-  return shown.agentId === agentId ? shown.sources : NO_SOURCES;
+  const retry = (pictureId: string) => {
+    stand(pictureId, undefined);
+    // Note that a read whose every try failed is let go (`mediaReads`), so asking for it again reads it afresh.
+    reads?.ask([pictureId]);
+  };
+
+  return { sources: shown.agentId === agentId ? shown.sources : NO_SOURCES, retry };
 }
 
 /** A cut part's whole read as held: the size it was asked at, and how it stands. */
