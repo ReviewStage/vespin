@@ -1,14 +1,16 @@
 // empty-state.tsx -- what a screen or a column says when it has nothing to show, in the system's own ContentUnavailableView, or the system's spinner over its words while what it shows is still read.
 
-import { ContentUnavailableView, ProgressView, Text, VStack } from "@expo/ui/swift-ui";
+import { ContentUnavailableView, ProgressView, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import {
   font,
   foregroundStyle,
   frame,
   multilineTextAlignment,
   padding,
+  scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { useAccessibilitySize } from "./accessibility.js";
 import { BUTTON_LOOK, Button, type ButtonLook } from "./button.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
@@ -84,6 +86,7 @@ export function EmptyState({
   loading = false,
 }: EmptyStateProps) {
   const colors = useColors();
+  const large = useAccessibilitySize();
 
   if (loading) return <LoadingState title={title} />;
 
@@ -94,7 +97,7 @@ export function EmptyState({
       ? given
       : { label: TRY_AGAIN_WORDS, onPress: retry, look: BUTTON_LOOK.BORDERED };
 
-  return (
+  const view = (
     <ContentUnavailableView
       title={title}
       {...("assetName" in image ? { image: image.assetName } : { systemImage: image.systemName })}
@@ -114,6 +117,13 @@ export function EmptyState({
         )
       }
     />
+  );
+
+  // Note that at an accessibility size the words outgrow a short screen, such as Search's over its keyboard, so they scroll there rather than stand cut short with "…".
+  return large ? (
+    <ScrollView modifiers={[scrollDismissesKeyboard("immediately")]}>{view}</ScrollView>
+  ) : (
+    view
   );
 }
 

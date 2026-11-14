@@ -90,7 +90,8 @@ export interface FollowedAppState {
 /**
  * Follows the document over `bridge` into `write`, from the moment it is
  * called until it is stopped: the first whole read, then each delivery laid
- * over what is held.
+ * over what is held, handed beside the document it made so a reader of what
+ * moved (`task-list-following.ts`) reads the delivery rather than the whole.
  *
  * A delivery is what moved since the last one sent, not the whole document,
  * and names no version it was built on, so it is laid only over a whole
@@ -104,7 +105,7 @@ export interface FollowedAppState {
  */
 export function followAppStateOver(
   bridge: AppStateBridgeReads,
-  write: (state: AppStateSnapshot) => Promise<void> | undefined,
+  write: (state: AppStateSnapshot, delivery?: AppStateDelivery) => Promise<void> | undefined,
   report: (message: string, cause: unknown) => void,
 ): FollowedAppState {
   let following = true;
@@ -149,7 +150,7 @@ export function followAppStateOver(
 
     if (next === held) return;
     held = next;
-    write(next);
+    write(next, delivered);
   });
 
   const written = readWhole();
