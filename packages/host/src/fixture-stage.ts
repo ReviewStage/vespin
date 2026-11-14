@@ -39,8 +39,8 @@ function funnelPage(version: number, at: string, steps: readonly (readonly [stri
     shownBy: { kind: PAGE_SHOWER.AGENT, agentId: FIXTURE_IDS.AGENT },
     html: [
       "<!doctype html><html><head><meta charset='utf-8'><title>Invite funnel</title><style>",
-      "body{font:14px/1.5 system-ui,sans-serif;margin:24px;color:#1f2328}",
-      "table{border-collapse:collapse;margin-top:12px}td,th{padding:6px 12px;border-bottom:1px solid #d0d7de;text-align:left}",
+      "body{font:var(--app-text-size) / var(--app-text-leading) var(--app-font-sans);color:var(--app-foreground)}",
+      "table{border-collapse:collapse;margin-top:12px}td,th{padding:6px 12px;border-bottom:1px solid var(--app-border);text-align:left}",
       "td:last-child{text-align:right;font-variant-numeric:tabular-nums}",
       "</style></head><body>",
       "<h1>Invite funnel</h1>",
