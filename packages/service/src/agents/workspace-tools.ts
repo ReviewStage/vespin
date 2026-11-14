@@ -7,8 +7,8 @@
  * (`machineOwnerOf`). `run_on_mac` is answered off where a call would be
  * refused now. The machines its default may be set to are those of the
  * people who let the task's agents use them (`defaultMachinesOf`), online
- * or not. A local agent with no default names no machine, since a call
- * would go to the one it runs on, which refuses it. An agent the catalog
+ * or not. A local agent whose command would land on the machine it runs on
+ * names no machine, since that machine refuses it. An agent the catalog
  * offers no `run_on_mac` (`tool-catalog/catalog.ts`) is answered nothing.
  */
 
