@@ -3,7 +3,7 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
+import { FailureNoticeProvider, KeepingProvider, NO_GROUND } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { hide as hideSplash } from "expo-splash-screen";
@@ -19,15 +19,13 @@ import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
+import { SHORT_SHEET_DETENTS } from "../sheet-stack.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
-
-/** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
-const SHORT_SHEET_DETENTS = [0.5, 1];
 
 /**
  * The screens, each behind the account's standing: the tabs, Settings, and
@@ -88,6 +86,8 @@ function GuardedScreens() {
         presentation: "formSheet" as const,
         sheetAllowedDetents: SHORT_SHEET_DETENTS,
         sheetGrabberVisible: true,
+        // Note that the route under the sheet's own stack paints no ground, so at half height the sheet's glass shows through to its screen, which paints none there either (`useSheetAtHalf`).
+        contentStyle: { backgroundColor: NO_GROUND },
       };
 
   return (

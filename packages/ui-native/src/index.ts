@@ -1,6 +1,6 @@
 // index.ts -- @repo/ui-native: the iOS app's components over @expo/ui's SwiftUI, its Markdown in React Native views, and the brand's tokens they draw with.
 
-export { useAnnounced } from "./accessibility.js";
+export { useAnnounced, useReduceTransparency } from "./accessibility.js";
 
 export { AccountBarItem, AccountButton, type BarAccount } from "./account-button.js";
 
@@ -183,7 +183,7 @@ export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./r
 
 export { latestStep, type PreviewMessage, previewMessages } from "./row-preview-model.js";
 
-export { Screen, Spacer } from "./screen.js";
+export { NO_GROUND, Screen, Spacer } from "./screen.js";
 
 export { ScreenFailure } from "./screen-failure.js";
 

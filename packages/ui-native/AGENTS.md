@@ -110,7 +110,10 @@ builds a control of its own.
   screen and a list stand on the brand's `GROUND` and `SIDEBAR`, never the
   system's grays, and so do a split view's list and detail columns
   themselves (`containerBackground`) and a sheet or popover to its edge
-  (`presentationBackground`); a split view's sidebar paints nothing, so it
+  (`presentationBackground`), but for a short route sheet at half height in
+  a compact window, which iOS floats as Liquid Glass and which stands on
+  that glass alone (see Grouped forms) unless the reader reduces
+  transparency; a split view's sidebar paints nothing, so it
   stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
   inset cards; and the tint is the brand's copper, never the system's blue.
   Only a control's states and a label's hierarchy are the system's.
@@ -233,7 +236,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   or remind) read as iOS Settings' cards: their rows stand in the panel's
   raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
   (`GROUPED`: the chip's hover gray in light, black in dark), and the sheet
-  around them stands on `GROUPED` too.
+  around them stands on `GROUPED` too, but for a short sheet at half height,
+  which iOS floats as Liquid Glass: there the glass is its one ground
+  (`Screen` and `SettingsForm` `clear`), as Apple's half sheets stand.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
   rows, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it; `AnswerFields`, a row per
