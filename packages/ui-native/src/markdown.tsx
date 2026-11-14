@@ -159,9 +159,15 @@ type FirstLine = {
 /** Reports a list item's first line once it is laid out; none where nothing asks. */
 type OnFirstLine = ((line: FirstLine) => void) | undefined;
 
+/** A quote's rule, the line down its left. */
+const QUOTE_RULE = 3;
+
+/** How far a quote's words stand in from the column: its rule and its padding. */
+const QUOTE_INSET = QUOTE_RULE + SPACE.ROW;
+
 const styles = StyleSheet.create({
   marker: { position: "absolute", left: 0, top: 0 },
-  quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW },
+  quote: { borderLeftWidth: QUOTE_RULE, paddingLeft: SPACE.ROW },
   well: { borderRadius: 8, padding: SPACE.ROW },
   tableBox: { alignSelf: "stretch", overflow: "hidden" },
   table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
@@ -828,7 +834,13 @@ function ListItem({
       <View style={item.blocks.length === 0 ? { marginLeft: -indent } : styles.marker}>
         <Marker checked={item.checked} number={number} firstLine={firstLine} drawing={drawing} />
       </View>
-      <Blocks blocks={item.blocks} drawing={drawing} gap={NESTED_GAP} onFirstLine={onFirstLine} />
+      {/* Note that the item's chips are held to the width left beside its marker, so one in a list never runs past the column. */}
+      <Blocks
+        blocks={item.blocks}
+        drawing={{ ...drawing, lineWidth: drawing.lineWidth - indent }}
+        gap={NESTED_GAP}
+        onFirstLine={onFirstLine}
+      />
     </View>
   );
 }
@@ -1112,7 +1124,12 @@ function BlockView({
     case MARKDOWN_BLOCK.QUOTE:
       return (
         <View style={[styles.quote, { borderColor: colors.CHIP_EDGE }]}>
-          <Blocks blocks={block.blocks} drawing={drawing} gap={NESTED_GAP} />
+          {/* Note that a quote's chips are held to the width inside its rule and padding. */}
+          <Blocks
+            blocks={block.blocks}
+            drawing={{ ...drawing, lineWidth: drawing.lineWidth - QUOTE_INSET }}
+            gap={NESTED_GAP}
+          />
         </View>
       );
     case MARKDOWN_BLOCK.TABLE:
@@ -1238,6 +1255,13 @@ export function Markdown({
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
   const [measured, setMeasured] = useState<number | undefined>(undefined);
+  const [measuredAt, setMeasuredAt] = useState(width);
+
+  // Note that a change of the window's width, a fold, an unfold, or a turn, forgets the width measured, since words in a bubble that wraps its words are measured no wider than they stood and would hold their chips there for good.
+  if (measuredAt !== width) {
+    setMeasuredAt(width);
+    setMeasured(undefined);
+  }
 
   const blocks = useMemo(
     () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
