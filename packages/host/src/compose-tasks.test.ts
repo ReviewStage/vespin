@@ -1002,6 +1002,40 @@ it.effect("a pinned tab's task outside the list is drawn in it once read, and le
   }),
 );
 
+it.effect(
+  "a task read outside the list the service did not answer is read again at the list's next answer",
+  () =>
+    Effect.gen(function* () {
+      const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+      const billing = task(BILLING, "Billing export", "# Billing export", 20);
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+
+      const listed = () =>
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted();
+
+      service.taskRowsFail = true;
+      yield* call("TASKS_LOAD", { taskId: INVITES });
+      assert.deepEqual(
+        listed(),
+        [BILLING],
+        "nothing is drawn of a read the service did not answer",
+      );
+
+      service.taskRowsFail = false;
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+      assert.deepEqual(
+        listed(),
+        [BILLING, INVITES].toSorted(),
+        "the task is drawn once read again",
+      );
+    }),
+);
+
 it.effect("a task the list takes up and then lets go is read again as it opens", () =>
   Effect.gen(function* () {
     const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
