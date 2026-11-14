@@ -3,7 +3,13 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeLayer, FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
+import {
+  BAR_TITLE,
+  FailureNoticeLayer,
+  FailureNoticeProvider,
+  KeepingProvider,
+  useColors,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
@@ -138,6 +144,7 @@ function GuardedScreens() {
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  const colors = useColors();
   const sheetPresentation = regular ? "formSheet" : "modal";
 
   // Note that a short sheet, a list to pick from or a few rows, opens at half height with its grabber in a compact window, and pulls up to full, as Maps' and Mail's short sheets do; a regular window's form sheet keeps its own size.
@@ -152,7 +159,16 @@ function GuardedScreens() {
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
-      <Stack screenOptions={{ headerShown: false }} screenLayout={screenLayout}>
+      {/* Note that every sheet's bar takes the ink here as its default, so a sheet that sets no ink of its own never stands its title in the system's black on the dark ground; a sheet's own options still win, key by key. */}
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          headerTintColor: colors.TEXT,
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+          headerShadowVisible: false,
+        }}
+        screenLayout={screenLayout}
+      >
         <Stack.Protected guard={signedIn && !updateNeeded}>
           <Stack.Screen name="index" />
           <Stack.Screen name="(tabs)" />

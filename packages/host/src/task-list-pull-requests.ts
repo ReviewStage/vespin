@@ -28,7 +28,7 @@ import {
 } from "@tanstack/db";
 import { Effect, type Scope } from "effect";
 import { listedOf, type QueryCollection } from "./drawn-rows.js";
-import type { AgentRow } from "./task-list-collections.js";
+import type { AgentRow } from "./task-list-rows.js";
 
 /** The task list's pull requests, as its live queries hold them now. */
 export interface TaskListPullRequests {

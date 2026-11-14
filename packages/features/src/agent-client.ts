@@ -6,8 +6,8 @@ import {
   type AccountCallEffects,
   accountCall,
   type CallAnswer,
-  type CallCredential,
   callAnswered,
+  type HostedServiceOptions,
   jsonOf,
 } from "./account-call.js";
 import type { AccountPreferencesAnswerWire } from "./account-wire.js";
@@ -81,6 +81,7 @@ import {
   type LiveActivityTokenAnswerView,
   type LiveActivityTokenParams,
   type MachineAllowedAppsAnswerView,
+  type MachineAskAnsweredView,
   type MachineChangeParams,
   type MemoriesAnswerView,
   type MemoryForgetParams,
@@ -196,6 +197,7 @@ import {
 } from "./live-activity-wire.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { TRANSCRIPT_NOW_QUERY, type TranscriptNowAnswer } from "./live-wire.js";
+import type { MachineAskAnswerRequest } from "./machine-ask-wire.js";
 import { MEMORY_QUERY } from "./memory-wire.js";
 import {
   agentDefaultWriteSchema,
@@ -258,14 +260,6 @@ import { voiceSessionRequestSchema } from "./voice-wire.js";
  * still, since one from another agent copies its work first; every other
  * call keeps the account call's usual one.
  */
-
-export interface HostedAgentClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-  requestTimeoutMs?: number;
-}
 
 const UNANSWERED = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 
@@ -507,7 +501,7 @@ export class HostedAgentClient {
 
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedAgentClientOptions) {
+  constructor(options: HostedServiceOptions) {
     const { credential } = options;
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
@@ -561,6 +555,13 @@ export class HostedAgentClient {
   }
 
   /** One of the account's machines removed, as a host where it runs agents, answering the transaction it was removed in. */
+  /** An ask one of the account's machines holds, answered from this device: the answer that stands, this one where it was the first. */
+  answerMachineAsk(
+    answer: MachineAskAnswerRequest,
+  ): Effect.Effect<MachineAskAnsweredView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.hosts.answerMachineAsk, answer);
+  }
+
   removeMachine(id: string): Effect.Effect<HostDoneAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.hosts.removeMachine, { id });
   }
