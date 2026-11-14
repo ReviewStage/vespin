@@ -1,0 +1,85 @@
+== start 01:32:19 free 18 GB
+-- readings start 01:32:19
+/dev/disk3s1s1       460   12        18    42%  484014 189457120    0%   /
+vm.swapusage: total = 5120.00M  used = 4178.44M  free = 941.56M  (encrypted)
+Snapshots for disk /:
+  merged fix/ios-settings-skill-invites cb3394c0e3
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/markdown.tsx
+  merged feat/ios-quick-look 306b9c3f06
+Auto-merging apps/mobile/app.config.ts
+  merged fix/ios-share-sheet-brand-look d61df0fdb3
+Auto-merging apps/mobile/package.json
+Auto-merging packages/host/src/entity-store.ts
+Auto-merging pnpm-lock.yaml
+  merged perf/ios-native-seal 946f5cfa25
+skipped:
+built b2e0ee1757 = main 480f87d0b4 + #9258 (carries #9256 #9251 #9242 #9233) + #8954 + #9241 + #9270 (Sealer, first compile)
+install 0
+BUILD EXIT 0 01:38:25 free 12 GB
+actool warnings: 7
+IntegrationMarks warnings: 0
+/Users/deanstratakos/vespin-ipad-agent/Vn2.app: replacing existing signature
+== audit26
+clean binaries: 14
+Frameworks/WebRTC.framework/WebRTC: weak missing 0; strong SwiftUI missing 0, UIKit missing 1
+(from
+cold-ipad26 pid 18204 alive yes crashes 0
+cold-ipad27 pid 18743 alive yes crashes 0
+cold-iphone pid code=405):
+Down alive no crashes 0
+== upgrade #9270
+main build kept file: none 
+upgraded launch: dev.vespin.ios: 22891 alive yes crashes 0
+after upgrade kept file: none 
+sealCheck CE9E34B9-693F-475C-8AC7-308952029222: 6 PASS lines, 0 FAIL lines; DONE 6 passed, 0 failed; check key deleted
+[seal-check] 1.00 MB open: noble and Base64 504 ms, native 7 ms
+[seal-check] 1.00 MB seal: noble and Base64 610 ms, native 5 ms
+[seal-check] DONE 6 passed, 0 failed; check key deleted
+[seal-check] PASS 1 MB sealed and opened both ways for the timings
+[seal-check] PASS AEAD_XChaCha20_Poly1305 seal and open (draft-irtf-cfrg-xchacha-03 A.3.1)
+[seal-check] PASS HChaCha20 (draft-irtf-cfrg-xchacha-03 2.2.1)
+[seal-check] PASS a changed native sealing is refused
+[seal-check] PASS a native sealing opens in noble, as a build without the module opens it
+[seal-check] PASS a sealing noble made, as every earlier build wrote the kept file, opens natively
+[seal-check]"'
+sealCheck ABD9B3FE-4859-40A8-85F9-63B98B47142F: 0 PASS lines, 0 FAIL lines; 
+sealCheck BAD5C9D5-2CB3-466D-8272-09ADD64A74E8: 6 PASS lines, 0 FAIL lines; DONE 6 passed, 0 failed; check key deleted
+[seal-check] 1.00 MB open: noble and Base64 514 ms, native 7 ms
+[seal-check] 1.00 MB seal: noble and Base64 1240 ms, native 5 ms
+[seal-check] DONE 6 passed, 0 failed; check key deleted
+[seal-check] PASS 1 MB sealed and opened both ways for the timings
+[seal-check] PASS AEAD_XChaCha20_Poly1305 seal and open (draft-irtf-cfrg-xchacha-03 A.3.1)
+[seal-check] PASS HChaCha20 (draft-irtf-cfrg-xchacha-03 2.2.1)
+[seal-check] PASS a changed native sealing is refused
+[seal-check] PASS a native sealing opens in noble, as a build without the module opens it
+[seal-check] PASS a sealing noble made, as every earlier build wrote the kept file, opens natively
+[seal-check]"'
+9233-native-iphone-light r9233.yaml: fails 0 
+9233-native-iphone-dark r9233.yaml: fails 0 
+9233-native-ipad26-light r9233.yaml: fails 0 
+9233-native-ipad26-dark r9233.yaml: fails 0 
+8954-native-iphone-light inbox.yaml:  
+8954-native-iphone-dark inbox.yaml: fails 0 (rig 1)
+  RIG ERROR: Device CE9E34B9-693F-475C-8AC7-308952029222 was requested, but it is not connected. 
+8954-native-iphone-light keep.yaml: fails 1 Assert that "Copy message" is visible... FAILED
+8954-native-iphone-dark keep.yaml: fails 1 Assert that "Copy message" is visible... FAILED
+8954-native-iphone-light markdown.yaml: fails 0 
+8954-native-iphone-dark markdown.yaml: fails 0 
+8954-native-ipad26-light inbox.yaml: fails 0 
+9242-native-iphone-light r9242.yaml: fails 0 
+9242-native-iphone-dark r9242.yaml: fails 0 
+9242-native-ipad26-light r9242.yaml: fails 0 
+9233-native-iphone-light settings-integrations-tools.yaml: fails 0 
+9233-native-iphone-dark settings-integrations-tools.yaml: fails 0 
+9251-native-iphone-light r9251.yaml: fails 0 
+9251-native-iphone-dark r9251.yaml: fails 0 
+9256-native-iphone-light r9256.yaml: fails 0 
+9256-native-iphone-dark r9256.yaml: fails 0 
+9256-native-ipad26-light r9256.yaml: fails 0 
+9258-native-iphone-light r9258.yaml: fails 0 
+9258-native-iphone-dark r9258.yaml: fails 0 
+9241-native-iphone-light share9241.yaml: fails 0 
+9241-native-iphone-dark share9241.yaml: fails 0 
+9241-native-ipad26-light share9241.yaml: fails 0 
+9241-native-ipad26-dark share9241.yaml: fails 0 

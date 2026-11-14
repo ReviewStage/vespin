@@ -1,0 +1,7 @@
+An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):
+Unable to lookup in current state: Shutting Down
+--- unified log
+An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):
+Process spawn via launchd failed because device is not booted.
+Underlying error (domain=com.apple.SimLaunchHostService.RequestError, code=3):
+	Bad or unknown session: com.apple.CoreSimulator.SimDevice.ABD9B3FE-4859-40A8-85F9-63B98B47142F
