@@ -36,9 +36,15 @@ appId: dev.vespin.ios
 - assertVisible: "grace"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-ready
-# Merging acts on the press under the heading, in every window, as the
-# panel's merge control does.
+# Merging is the press under the heading, in every window, and it asks
+# first, as the card's Merge does.
 - tapOn: "Squash and merge"
+- assertVisible: "Merge this pull request?"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-merge-ask
+- tapOn:
+    text: "Squash and merge"
+    below: "Merge this pull request?"
 - extendedWaitUntil:
     visible: "Merged"
     timeout: 30000
