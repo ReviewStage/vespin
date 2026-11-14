@@ -1001,21 +1001,36 @@ export function AgentTranscript({
   // The calls' rows as they stand, and the call a reader was sent to whose row has not yet taken VoiceOver's focus.
   const calls = useRef(new Map<string, HostInstance>());
   const sentTo = useRef<string | undefined>(undefined);
+  // Whether the scroll that brings the call sent to into view has settled, so its row, mounted after, takes the focus as it stands.
+  const settled = useRef(false);
 
-  // Note that the focus waits for the scroll that brings the call into view to settle, since a focus sent as it starts lands on a row still off screen, and is sent again from each settle until the row stands.
+  // Note that the focus waits for the scroll that brings the call into view to settle, since a focus sent as it starts lands on a row still off screen, and a row the list had not yet drawn as it settled takes it once it stands (`placeCall`).
   const focusSentTo = useCallback(() => {
+    settled.current = true;
     const callId = sentTo.current;
     const row = callId === undefined ? undefined : calls.current.get(callId);
 
     if (row === undefined) return;
     sentTo.current = undefined;
+    settled.current = false;
     AccessibilityInfo.sendAccessibilityEvent(row, "focus");
   }, []);
 
-  const placeCall = useCallback((callId: string, row: HostInstance | null) => {
-    if (row === null) calls.current.delete(callId);
-    else calls.current.set(callId, row);
-  }, []);
+  const placeCall = useCallback(
+    (callId: string, row: HostInstance | null) => {
+      if (row === null) {
+        calls.current.delete(callId);
+
+        return;
+      }
+
+      calls.current.set(callId, row);
+
+      // Note that the row takes the focus a frame later, once it is laid out, where the scroll settled before it was drawn.
+      if (settled.current && sentTo.current === callId) requestAnimationFrame(focusSentTo);
+    },
+    [focusSentTo],
+  );
 
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now(), placeCall };
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
@@ -1063,12 +1078,13 @@ export function AgentTranscript({
     if (index < 0) return;
     anchored.current = false;
     sentTo.current = reveal.callId;
+    settled.current = false;
     list.current?.scrollToIndex({ index, viewPosition: REVEAL_POSITION, animated: !reduceMotion });
 
     // Note that a scroll that moves the list ends in its momentum's end, which sends the focus, while one that has nowhere to go, the row already in view, ends at once, so the focus is also sent once the scroll would have settled.
-    const settled = setTimeout(focusSentTo, reduceMotion ? 0 : REVEAL_SETTLE_MS);
+    const settling = setTimeout(focusSentTo, reduceMotion ? 0 : REVEAL_SETTLE_MS);
 
-    return () => clearTimeout(settled);
+    return () => clearTimeout(settling);
   }, [reveal, reduceMotion, focusSentTo]);
 
   // Note that a row not yet measured cannot be scrolled to by its index, so the list goes to where the rows' average height puts it, then to the row once it is drawn.
