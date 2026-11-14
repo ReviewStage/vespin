@@ -1,10 +1,18 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { UPDATE_STATUS } from "@repo/settings/update";
-import { type ComponentProps, createElement, type ReactElement } from "react";
+import {
+  type ComponentProps,
+  createElement,
+  type ReactElement,
+  type ReactNode,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { DesktopSidebar } from "../desktop/desktop-sidebar.js";
 import { SIDEBAR_OVERLAY } from "../desktop/sidebar-collapse.js";
 import { PANEL_TAB } from "../panel-tabs.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { standingTaskList } from "./history-rows.js";
 import { type TestWindowRouter, windowRouter } from "./window-router.js";
 
 /**
@@ -60,10 +68,36 @@ export function sidebarProps(tasks: TasksControl): ComponentProps<typeof Desktop
   };
 }
 
-/** The sidebar with `props`, under `router`, a window's router standing at `/app` unless one is handed, as the shell draws it under the window's, whose place its rows read and its doors move. */
+/**
+ * `children` over the window's task collections standing on what `tasks`
+ * lists, as the window's follow keeps them beside the tab it hands the
+ * sidebar: written again as each draw hands another list, before the frame
+ * is painted.
+ */
+function StandingListed({
+  tasks,
+  children,
+}: {
+  tasks: TasksControl;
+  children: ReactNode;
+}): ReactElement {
+  const listed = tasks.listed.tasks;
+  const [taskList] = useState(() => standingTaskList({ tasks: listed }));
+
+  useLayoutEffect(() => taskList.stand({ tasks: listed }), [taskList, listed]);
+
+  return taskList.provide(children);
+}
+
+/** `element`, a sidebar or the shell holding one, over task collections holding what `tasks` lists, as the window's root feeds them. */
+export function overListedTasks(tasks: TasksControl, element: ReactNode): ReactElement {
+  return createElement(StandingListed, { tasks, children: element });
+}
+
+/** The sidebar with `props`, under `router`, a window's router standing at `/app` unless one is handed, as the shell draws it under the window's, whose place its rows read and its doors move, over task collections holding what `props`' tab lists. */
 export function drawnSidebar(
   props: ComponentProps<typeof DesktopSidebar>,
   router: TestWindowRouter = windowRouter(),
 ): ReactElement {
-  return router.provide(createElement(DesktopSidebar, props));
+  return router.provide(overListedTasks(props.tasks, createElement(DesktopSidebar, props)));
 }

@@ -65,7 +65,7 @@ const TASK_AGENTS: readonly ListedAgent[] = [
   { id: UNTITLED_AGENT, title: null, status: AGENT_STATUS.RUNNING },
 ].map((agent) => ({
   ...agent,
-  planId: TASK_ID,
+  taskId: TASK_ID,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   createdAt: AT,
@@ -89,7 +89,7 @@ const STATE: AppStateSnapshot = stateWith(
         ...TASK_AGENTS,
         {
           id: OTHER_AGENT,
-          planId: UNTITLED_TASK,
+          taskId: UNTITLED_TASK,
           turnId: null,
           title: "Answer workspace questions",
           model: "openai/gpt-5.5",

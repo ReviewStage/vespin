@@ -24,7 +24,12 @@
  * member changes them on it with `POST /api/mac-commands/device/settings`,
  * posts how it names and draws the apps it always allows with `POST
  * /api/mac-commands/device/app-looks`, for the account's `@` lists off the
- * machine, and names that device in its claims and presence. Every request resolves the
+ * machine, and names that device in its claims and presence. A Mac that
+ * shows an ask for a command it claimed posts it to `POST
+ * /api/mac-commands/asks`, for that command alone, and takes it down with
+ * `POST /api/mac-commands/asks/close` once it took an answer, or says it
+ * closed with `POST /api/mac-commands/asks/lapse` as its window runs out;
+ * any device of the account answers it (`hosts-procedures.ts`). Every request resolves the
  * bearer before it touches a row, and every row it touches is the
  * bearer's account's own.
  */
@@ -34,6 +39,11 @@ import {
   saveCommandDeviceSettings,
   saveDeviceAppLooks,
 } from "@repo/database/models/device-store";
+import {
+  closeMachineAsk,
+  lapseMachineAsk,
+  postMachineAsk,
+} from "@repo/database/models/machine-command-ask-store";
 import {
   keepMachineCommandRecording,
   markMachineListening,
@@ -143,6 +153,25 @@ export function machineCommandsProcedures(seams: MachineCommandsProcedureSeams) 
       if (!saved) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
       return { saved: true } as const;
+    }),
+    ask: machineCommands.ask.effect(function* ({ context, input }) {
+      const { stands, answer } = yield* hostedStoreOrUnavailable(
+        postMachineAsk(context.userId, input),
+      );
+
+      if (!stands) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+      return answer === undefined ? {} : { answer };
+    }),
+    lapseAsk: machineCommands.lapseAsk.effect(function* ({ context, input }) {
+      const answer = yield* hostedStoreOrUnavailable(lapseMachineAsk(context.userId, input.id));
+
+      return answer === undefined ? {} : { answer };
+    }),
+    closeAsk: machineCommands.closeAsk.effect(function* ({ context, input }) {
+      yield* hostedStoreOrUnavailable(closeMachineAsk(context.userId, input.id));
+
+      return { closed: true } as const;
     }),
   };
 }

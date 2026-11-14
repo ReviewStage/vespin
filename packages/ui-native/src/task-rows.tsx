@@ -156,7 +156,7 @@ type TaskHeadProps = {
   readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */
   readonly createdBy?: string | undefined;
-  /** Who follows it, as a chip under its fields; none while its workspace has Following off. */
+  /** Who follows it, as a chip under its fields; none where it carries no followers. */
   readonly following?: PageFollowing | undefined;
   /** What a press on each of its chips offers, where the reader may change that field. */
   readonly menus?: StandingMenus | undefined;
@@ -446,7 +446,7 @@ type GroupRowProps = {
   readonly id: string;
   readonly title: string;
   readonly symbol: Glyph;
-  /** How many it holds, such as the Inbox's threads waiting on you; no count where none is given. */
+  /** How many it holds, such as the Inbox's threads waiting on you; no count where none is given or it holds none, as Mail shows none on an empty mailbox. */
   readonly count?: number | undefined;
   /** What a flow finds the row by, such as the Search tab's id where the sidebar stands for the tab bar. */
   readonly testId?: string | undefined;
@@ -461,8 +461,9 @@ type GroupRowProps = {
  * body's size, and how many it holds at the trailing edge in the muted ink,
  * the whole row in a rounded fill while it is picked.
  */
-export function GroupRow({ id, title, symbol, count, testId, onDropLink }: GroupRowProps) {
+export function GroupRow({ id, title, symbol, count: held, testId, onDropLink }: GroupRowProps) {
   const colors = useColors();
+  const count = held === 0 ? undefined : held;
   const stacked = useAccessibilitySize();
   const leadWidth = useScaledSize(MARK_SIZE.SIDEBAR_LEAD);
 

@@ -1,15 +1,22 @@
 /**
- * mcp-relay.ts -- our MCP server as Claude Code reaches it: an in-process SDK server whose every JSON-RPC message the runner posts to the service under its own bearer, so the CLI is handed no URL, no port, and no secret.
+ * mcp-relay.ts -- our MCP servers as Claude Code reaches them on a host: in-process SDK servers whose every JSON-RPC message the runner posts to the service under its own bearer, so the CLI is handed no URL, no port, and no secret.
  *
- * The Agent SDK hands the CLI an HTTP MCP server as `--mcp-config <json>` in
- * argv, headers and all (0.3.304's `ProcessTransport`), and every process in
- * the sandbox can read another's `/proc/<pid>/cmdline`. A loopback proxy
- * would keep the bearer out of argv but answer anything that reaches
- * 127.0.0.1, any command the agent runs and a teammate's Terminal included.
- * So the server is an SDK one (`type: "sdk"`): the CLI speaks MCP to
- * the runner over the control channel on its own stdin and stdout, which no
- * other process holds, and the runner relays each message to the service's MCP URL
- * with the bearer from its own environment. Nothing listens on a port.
+ * In the cloud's sandbox the CLI reaches each server over HTTP itself, its
+ * header holding the launch's bearer placeholder (`runner.ts`'s
+ * `claudeCodeServers`). On a host the bearer is the real one, with no
+ * firewall in front of it, and the Agent SDK hands the CLI an HTTP MCP
+ * server as `--mcp-config <json>` in argv, headers and all (0.3.322's
+ * `ProcessTransport`), which `ps` lists to every user of the machine; a
+ * `${VAR}` header the CLI expands would need the bearer in the CLI's
+ * environment, which every command the agent runs inherits; and a loopback
+ * proxy would answer anything that reaches 127.0.0.1, any command the agent
+ * runs included. So there each server is an SDK one (`type: "sdk"`): the CLI
+ * speaks MCP to the runner over the control channel on its own stdin and
+ * stdout, which no other process holds, and the runner relays each message
+ * to the server's URL with the bearer from its own environment. Nothing
+ * listens on a port. Note that the CLI waits on an SDK server before its
+ * first turn whatever `CLAUDE_CODE_MCP_STARTUP_WAIT_MS` says, which a host's
+ * launch, kept warm between turns, rarely pays.
  *
  * The relay is JSON-RPC verbatim, since our MCP server is stateless and
  * answers each POST with one JSON body (`workspace-mcp/app.ts`): a request's

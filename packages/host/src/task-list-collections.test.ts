@@ -7,10 +7,15 @@ import {
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { entityPool } from "@repo/sync";
-import { Duration, Effect } from "effect";
+import { TASK_STATUS } from "@repo/features/task-wire";
+import { type EntityPool, entityPool } from "@repo/sync";
+import { TURN_STATUS } from "@repo/wire";
+import { Deferred, Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
+import { type AppStateSnapshot, appStateDelivery } from "./app-state.js";
+import { initialAppState } from "./client/app-state-store.js";
 import { DRAW_TICK, rowWriteOn } from "./live-collection.js";
+import { runModeFor } from "./run-mode.js";
 import { AGENT, type LiveTaskList, PLAN, taskListCollections } from "./task-list-collections.js";
 import { agentListRow, planListRow } from "./testing/task-list-rows.js";
 
@@ -31,53 +36,201 @@ function openPullRequest(number: number): AgentPullRequest {
   };
 }
 
+/** The document a window is told, its task list drawn as `drawn`, at `version`. */
+function documentOf(drawn: LiveTaskList, version: number): AppStateSnapshot {
+  const idle = initialAppState(
+    {
+      launch: { profile: "idle", captureMode: false, fixtureMode: false },
+      runMode: runModeFor({ capture: false, fixture: false }),
+      appVersion: "1.2.3",
+      packaged: true,
+      platform: "darwin",
+    },
+    true,
+    [],
+  );
+
+  return {
+    ...idle,
+    tasks: {
+      ...idle.tasks,
+      tasks: drawn.list.tasks,
+      taskAgents: drawn.taskAgents,
+      taskPullRequests: drawn.taskPullRequests,
+      agentPullRequests: drawn.agentPullRequests,
+      taskAgentPins: drawn.taskAgentPins,
+    },
+    window: { fullScreen: false },
+    version,
+  };
+}
+
+/** `pool`, counting each row a read standing on it reads of it, and each key an answer hands it as all the read holds. */
+function countedPool(pool: EntityPool) {
+  const work = { rowsRead: 0, keysHeld: 0 };
+
+  const counted: EntityPool = {
+    ...pool,
+    stand: (kind, read) =>
+      Effect.map(pool.stand(kind, read), (held) => ({
+        ...held,
+        row: (key) => {
+          work.rowsRead += 1;
+
+          return held.row(key);
+        },
+        answer: (rows, answered) => {
+          work.keysHeld += answered?.held?.length ?? 0;
+
+          return held.answer(rows, answered);
+        },
+      })),
+  };
+
+  return { pool: counted, work };
+}
+
 /** Lets the list's timer fiber run: arm its wait, or draw once that wait ends. */
 const settled = Effect.repeat(Effect.yieldNow, { times: 100 });
 
 it.effect(
-  "an agent's row that moves draws its own task again, and every other task and agent is the object drawn before",
+  "an agent's row that moves on an account of thousands draws its own agent and task again, reading no other row, every other task and agent the object drawn before, and the Done tasks the live set's instant passes leave with no row moving",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
         const drawings: LiveTaskList[] = [];
+        const { pool, work } = countedPool(yield* entityPool());
 
         const collections = yield* taskListCollections({
-          pool: yield* entityPool(),
+          pool,
           draw: (read) => {
             drawings.push(read);
           },
           txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
         });
 
-        const plans = [
-          planListRow(INVITES, "Teammate invitations"),
-          planListRow(BILLING, "Billing"),
-        ];
+        // Note that this test takes about two seconds, since its point is an account's size.
+        // An account of thousands: 1,000 tasks, a third of them Done and each touched at its own instant past the live set's, and 2,000 agents that each ran a turn, some pinned, some started from another.
+        const liveSince = 1_000_000;
+        const done = (at: number) => at % 3 === 0;
 
-        const invites = { ...agentListRow(INVITES, 1_000), id: "agent-invites" };
-        const billing = { ...agentListRow(BILLING, 1_000), id: "agent-billing" };
-        yield* collections.answer({ plans, agents: [invites, billing] });
+        const plans = Array.from({ length: 1_000 }, (_, at) => ({
+          ...planListRow(`task-${at}`, `Task ${at}`),
+          createdAt: at,
+          updatedAt: liveSince + ((at * 7_919) % 1_000),
+          ...(done(at) ? { status: TASK_STATUS.DONE } : undefined),
+        }));
+
+        const agents = Array.from({ length: 2_000 }, (_, at) => ({
+          ...agentListRow(`task-${at % plans.length}`, at),
+          id: `agent-${at}`,
+          title: `Agent ${at}`,
+          turnId: `turn-${at}`,
+          turnStatus: TURN_STATUS.SETTLED,
+          queuedAt: at,
+          startedAt: at,
+          settledAt: at + 1,
+          ...(at % 7 === 0 ? { pinnedAt: at, pinPosition: `a${at}` } : undefined),
+          ...(at >= 1_500
+            ? { startedFrom: { agentId: `agent-${at - 1_500}`, steps: 1, totalSteps: 1 } }
+            : undefined),
+        }));
+
+        yield* collections.answer({ tasks: plans, agents }, undefined, liveSince);
         const before = drawings.at(-1);
 
-        // Only the billing agent moved: a teammate renamed it.
-        yield* collections.answer({
-          plans,
-          agents: [invites, { ...billing, title: "CSV export" }],
-        });
+        // Only one agent moved, one nothing was started from and started from none, as the follow answers past a sync id: a teammate sent it a line, so it runs again.
+        const moved = agents[1_234];
+        assert.ok(moved !== undefined);
+
+        const running = {
+          ...moved,
+          turnId: "turn-next",
+          turnStatus: TURN_STATUS.RUNNING,
+          settledAt: null,
+        };
+
+        work.rowsRead = 0;
+        work.keysHeld = 0;
+
+        yield* collections.answer(
+          { tasks: [], agents: [running] },
+          { past: "1", next: "2", gone: [] },
+          liveSince,
+        );
+        yield* TestClock.adjust(DRAW_TICK);
         const after = drawings.at(-1);
 
-        const taskOf = (drawing: LiveTaskList | undefined, id: string) =>
-          drawing?.list.plans.find((each) => each.id === id);
+        // Taking the one row reads the pool for that agent and its task alone, and hands it no list of all the list holds.
+        assert.ok(work.rowsRead <= 4, `read ${work.rowsRead} rows`);
+        assert.equal(work.keysHeld, 0);
+        assert.ok(before !== undefined && after !== undefined && after !== before);
+        assert.equal(after.taskAgents.length, agents.length);
+        assert.equal(after.list.tasks.length, plans.length);
 
-        const agentOf = (drawing: LiveTaskList | undefined, id: string) =>
-          drawing?.taskAgents.find((each) => each.id === id);
+        const newAgents = after.taskAgents.filter((agent, at) => agent !== before.taskAgents[at]);
+        const newTasks = after.list.tasks.filter((task, at) => task !== before.list.tasks[at]);
 
-        assert.ok(
-          taskOf(before, INVITES) !== undefined && agentOf(before, invites.id) !== undefined,
+        assert.deepEqual(
+          newAgents.map((agent) => [agent.id, agent.status]),
+          [[moved.id, AGENT_STATUS.RUNNING]],
         );
-        assert.equal(taskOf(after, INVITES), taskOf(before, INVITES));
-        assert.equal(agentOf(after, invites.id), agentOf(before, invites.id));
-        assert.equal(agentOf(after, billing.id)?.title, "CSV export");
+        assert.deepEqual(
+          newTasks.map((task) => [task.id, task.agents?.working]),
+          [[moved.taskId, 1]],
+        );
+        assert.equal(after.taskAgentPins, before.taskAgentPins);
+
+        // The delivery that brings a window holding the list before to the list after names the moved agent and its task alone, and reads no other row of either list.
+        let reads = 0;
+        const drawnAgain = new Set<object>([...newAgents, ...newTasks]);
+
+        for (const row of [...after.taskAgents, ...after.list.tasks]) {
+          if (drawnAgain.has(row)) continue;
+          const { id } = row;
+
+          Object.defineProperty(row, "id", {
+            enumerable: true,
+            get: () => {
+              reads += 1;
+
+              return id;
+            },
+          });
+        }
+
+        const delivered = appStateDelivery(documentOf(before, 1), documentOf(after, 2));
+
+        assert.deepEqual(delivered?.moved, {
+          tasks: [
+            { key: ["tasks"], rows: newTasks },
+            { key: ["taskAgents"], rows: newAgents },
+          ],
+        });
+        assert.equal(reads, 0);
+
+        // The service binds the live set half its stretch later and answers no row: each Done task touched before then leaves, but one pinned through an agent.
+        const pinnedThroughAgent = (at: number) => at % 7 === 0 || (at + 1_000) % 7 === 0;
+
+        const stays = plans.filter(
+          (plan, at) => !done(at) || plan.updatedAt >= liveSince + 500 || pinnedThroughAgent(at),
+        );
+
+        yield* collections.answer(
+          { tasks: [], agents: [] },
+          { past: "2", next: "3", gone: [] },
+          liveSince + 500,
+        );
+        yield* TestClock.adjust(DRAW_TICK);
+
+        assert.deepEqual(
+          drawings
+            .at(-1)
+            ?.list.tasks.map((plan) => plan.id)
+            .toSorted(),
+          stays.map((plan) => plan.id).toSorted(),
+        );
       }),
     ),
 );
@@ -96,27 +249,28 @@ it.effect(
             drawings.push(read);
           },
           txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
         });
 
         const invites = planListRow(INVITES, "Teammate invitations");
         const billing = planListRow(BILLING, "Billing");
-        yield* collections.answer({ plans: [invites, billing], agents: [] });
+        yield* collections.answer({ tasks: [invites, billing], agents: [] });
         assert.equal(drawings.length, 1);
 
         // Three answers land 30 ms apart, as a busy account's agents answer.
         const past = (at: number) => ({ past: `${at}`, next: `${at + 1}`, gone: [] });
         yield* collections.answer(
-          { plans: [{ ...invites, name: "Invites" }], agents: [] },
+          { tasks: [{ ...invites, name: "Invites" }], agents: [] },
           past(1),
         );
         yield* TestClock.adjust("30 millis");
         yield* collections.answer(
-          { plans: [{ ...billing, name: "CSV export" }], agents: [] },
+          { tasks: [{ ...billing, name: "CSV export" }], agents: [] },
           past(2),
         );
         yield* TestClock.adjust("30 millis");
         yield* collections.answer(
-          { plans: [{ ...billing, name: "Invoices" }], agents: [] },
+          { tasks: [{ ...billing, name: "Invoices" }], agents: [] },
           past(3),
         );
         assert.equal(drawings.length, 1);
@@ -127,7 +281,7 @@ it.effect(
         assert.deepEqual(
           drawings
             .at(-1)
-            ?.list.plans.map((plan) => plan.name)
+            ?.list.tasks.map((plan) => plan.name)
             .toSorted(),
           ["Invites", "Invoices"],
         );
@@ -138,7 +292,7 @@ it.effect(
         );
         yield* Effect.yieldNow;
         assert.equal(drawings.length, 3);
-        assert.ok(drawings.at(-1)?.list.plans.some((plan) => plan.name === "Seat invites"));
+        assert.ok(drawings.at(-1)?.list.tasks.some((plan) => plan.name === "Seat invites"));
       }),
     ),
 );
@@ -156,6 +310,7 @@ it.effect(
             drawings.push(read);
           },
           txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
         });
 
         // The invites agent started at 0 and has no turn yet; the billing task has no agent.
@@ -164,10 +319,10 @@ it.effect(
           planListRow(BILLING, "Billing"),
         ];
 
-        yield* collections.answer({ plans, agents: [agentListRow(INVITES, 0)] });
+        yield* collections.answer({ tasks: plans, agents: [agentListRow(INVITES, 0)] });
         yield* settled;
         const statusOf = () => drawings.at(-1)?.taskAgents.map((agent) => agent.status);
-        const billingOf = () => drawings.at(-1)?.list.plans.find((plan) => plan.id === BILLING);
+        const billingOf = () => drawings.at(-1)?.list.tasks.find((plan) => plan.id === BILLING);
         const billing = billingOf();
         assert.deepEqual(statusOf(), [AGENT_STATUS.STARTING]);
 
@@ -179,7 +334,7 @@ it.effect(
         yield* settled;
         assert.deepEqual(statusOf(), [AGENT_STATUS.FAILED]);
         assert.equal(
-          drawings.at(-1)?.list.plans.find((plan) => plan.id === INVITES)?.agents?.working,
+          drawings.at(-1)?.list.tasks.find((plan) => plan.id === INVITES)?.agents?.working,
           0,
         );
         assert.equal(billingOf(), billing);
@@ -201,6 +356,7 @@ it.effect(
             drawings.push(read);
           },
           txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
         });
 
         const plans = [
@@ -220,12 +376,15 @@ it.effect(
           published: openPullRequest(8),
         };
 
-        yield* collections.answer({ plans, agents: [invites, billing] });
+        yield* collections.answer({ tasks: plans, agents: [invites, billing] });
         const before = drawings.at(-1);
 
         // Only billing's pull request moved: it merged.
         const merged = { ...openPullRequest(8), state: PULL_REQUEST_STATE.MERGED };
-        yield* collections.answer({ plans, agents: [invites, { ...billing, published: merged }] });
+        yield* collections.answer({
+          tasks: plans,
+          agents: [invites, { ...billing, published: merged }],
+        });
         const after = drawings.at(-1);
 
         const ofAgent = (drawing: LiveTaskList | undefined, agentId: string) =>
@@ -252,6 +411,187 @@ it.effect(
         assert.equal(ofTask(archived, BILLING), undefined);
         assert.equal(ofTask(archived, INVITES), ofTask(before, INVITES));
         assert.equal(ofAgent(archived, billing.id)?.pullRequest.number, 8);
+      }),
+    ),
+);
+
+it.effect(
+  "an earlier read of a task outside the list, answered last, draws back no agent a later read of it left out",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const drawings: LiveTaskList[] = [];
+
+        const collections = yield* taskListCollections({
+          pool: yield* entityPool(),
+          draw: (read) => {
+            drawings.push(read);
+          },
+          txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
+        });
+
+        // The list holds the billing task alone, so the invites task is read outside it.
+        yield* collections.answer({ tasks: [planListRow(BILLING, "Billing")], agents: [] });
+        const invites = planListRow(INVITES, "Teammate invitations");
+        const kept = { ...agentListRow(INVITES, 1_000), id: "agent-kept" };
+        const deleted = { ...agentListRow(INVITES, 2_000), id: "agent-deleted" };
+
+        // Two reads of the task are out at once: the earlier one asked while both agents stood, the later one after one was deleted.
+        const earlier = yield* Deferred.make<void>();
+        const later = yield* Deferred.make<void>();
+        const earlierMark = collections.mark();
+        const laterMark = collections.mark();
+
+        const earlierRead = yield* Effect.forkChild(
+          Effect.andThen(
+            Deferred.await(earlier),
+            collections.cold({ tasks: [invites], agents: [kept, deleted] }, earlierMark),
+          ),
+        );
+
+        const laterRead = yield* Effect.forkChild(
+          Effect.andThen(
+            Deferred.await(later),
+            collections.cold({ tasks: [invites], agents: [kept] }, laterMark),
+          ),
+        );
+
+        // The later read answers first, then the earlier one.
+        yield* Deferred.succeed(later, undefined);
+        yield* Fiber.join(laterRead);
+        yield* Deferred.succeed(earlier, undefined);
+        yield* Fiber.join(earlierRead);
+
+        const agentsDrawn = drawings.at(-1)?.taskAgents.map((agent) => agent.id);
+
+        assert.deepEqual(agentsDrawn, [kept.id]);
+      }),
+    ),
+);
+
+it.effect.each([
+  { case: "only left the list's set", service: "answers it still", drawn: true },
+  { case: "was deleted", service: "answers it no more", drawn: false },
+])(
+  "a task the list lets go while a read of it is out, which $case, is drawn from that read only where the service $service",
+  ({ drawn }) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const drawings: LiveTaskList[] = [];
+        const invites = planListRow(INVITES, "Teammate invitations");
+        const agent = { ...agentListRow(INVITES, 1_000), id: "agent-invites" };
+        const billing = planListRow(BILLING, "Billing");
+        const standing = { tasks: [invites], agents: [agent] };
+
+        const collections = yield* taskListCollections({
+          pool: yield* entityPool(),
+          draw: (read) => {
+            drawings.push(read);
+          },
+          txWait: () => undefined,
+          readAgain: () => Effect.succeed(drawn ? standing : { tasks: [], agents: [] }),
+        });
+
+        yield* collections.answer({ tasks: [invites, billing], agents: [agent] });
+
+        // A search is out when the list lets the invites task go, and answers it as it stood before.
+        const answered = yield* Deferred.make<void>();
+        const mark = collections.mark();
+
+        const read = yield* Effect.forkChild(
+          Effect.andThen(Deferred.await(answered), collections.cold(standing, mark)),
+        );
+
+        yield* collections.answer({ tasks: [billing], agents: [] });
+        yield* Deferred.succeed(answered, undefined);
+        yield* Fiber.join(read);
+        yield* settled;
+
+        const last = drawings.at(-1);
+
+        assert.deepEqual(
+          last?.list.tasks.map((plan) => plan.id).toSorted(),
+          drawn ? [INVITES, BILLING].toSorted() : [BILLING],
+        );
+        assert.deepEqual(
+          last?.taskAgents.map((each) => each.id),
+          drawn ? [agent.id] : [],
+        );
+      }),
+    ),
+);
+
+it.effect(
+  "an agent started from another lists it under its source, first started first, and every other agent's continuations are the object drawn before",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const drawings: LiveTaskList[] = [];
+
+        const collections = yield* taskListCollections({
+          pool: yield* entityPool(),
+          draw: (read) => {
+            drawings.push(read);
+          },
+          txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
+        });
+
+        const plans = [
+          planListRow(INVITES, "Teammate invitations"),
+          planListRow(BILLING, "Billing"),
+        ];
+
+        const invites = { ...agentListRow(INVITES, 1_000), id: "agent-invites" };
+        const billing = { ...agentListRow(BILLING, 1_000), id: "agent-billing" };
+
+        const invitesAgain = {
+          ...agentListRow(INVITES, 2_000),
+          id: "agent-invites-again",
+          title: "Invite flow, continued",
+          startedFrom: { agentId: invites.id, steps: 4, totalSteps: 4 },
+        };
+
+        const billingAgain = {
+          ...agentListRow(BILLING, 2_000),
+          id: "agent-billing-again",
+          title: "Billing, continued",
+          startedFrom: { agentId: billing.id, steps: 4, totalSteps: 4 },
+        };
+
+        const agents = [invites, billing, invitesAgain, billingAgain];
+        yield* collections.answer({ tasks: plans, agents });
+        const before = drawings.at(-1);
+
+        // A teammate forks billing's agent at a message.
+        const billingFork = {
+          ...agentListRow(BILLING, 3_000),
+          id: "agent-billing-fork",
+          title: "Billing, forked",
+          startedFrom: { agentId: billing.id, messageId: "message-7", steps: 2, totalSteps: 4 },
+        };
+
+        yield* collections.answer({ tasks: plans, agents: [...agents, billingFork] });
+        const after = drawings.at(-1);
+
+        const agentOf = (drawing: LiveTaskList | undefined, id: string) =>
+          drawing?.taskAgents.find((each) => each.id === id);
+
+        assert.deepEqual(agentOf(before, invites.id)?.continuedBy, [
+          { agentId: invitesAgain.id, title: "Invite flow, continued", forked: false },
+        ]);
+        assert.equal(agentOf(after, invites.id), agentOf(before, invites.id));
+
+        assert.deepEqual(agentOf(after, billing.id)?.continuedBy, [
+          { agentId: billingAgain.id, title: "Billing, continued", forked: false },
+          {
+            agentId: billingFork.id,
+            title: "Billing, forked",
+            forked: true,
+            messageId: "message-7",
+          },
+        ]);
       }),
     ),
 );

@@ -3,6 +3,12 @@ import { it } from "@effect/vitest";
 import { MACHINE_COMMAND_CALL_FAILURE, MACHINE_COMMAND_NOT_CLAIMED } from "@repo/features";
 import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { LIVE_POLL_URL, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
+import { MACHINE_ASKS_READ, type MachineAsksLiveAnswer } from "@repo/features/machine-ask-live";
+import {
+  MACHINE_ASK_DECISION,
+  type MachineAskDecision,
+  type MachineAskRequest,
+} from "@repo/features/machine-ask-wire";
 import type { MachineCommandsLiveAnswer } from "@repo/features/machine-command-live";
 import {
   type AllowedAppLook,
@@ -11,6 +17,7 @@ import {
   type ComputerApp,
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
+  MACHINE_REFUSAL,
   type MacComputerAction,
   type MachineCommand,
   type MachineCommandKind,
@@ -21,6 +28,7 @@ import {
   machineCommandKindsRead,
   storedMachineCommandText,
 } from "@repo/features/machine-command-wire";
+import { MACHINES_READ, type MachinesLiveAnswer } from "@repo/features/machine-live";
 import { GATEWAY_EVENT, type GatewayEventKind } from "@repo/gateway";
 import { isRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
@@ -96,6 +104,9 @@ const LATER: MachineCommand = {
 };
 
 const AGENT = "5b1e0c2d-3f4a-4b5c-9d6e-7f8a9b0c1d2e";
+
+/** The device a joined Mac claims as. */
+const STUDIO = "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13";
 const OTHER_AGENT = "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b";
 
 const SIMULATOR: ComputerApp = {
@@ -167,6 +178,12 @@ function scriptedHelper(apps: readonly ComputerApp[], permissions = GRANTED) {
   return { helper, asked };
 }
 
+/** A call lost on its way, as a network fault loses one. */
+const LOST_CALL = { failure: MACHINE_COMMAND_CALL_FAILURE.UNANSWERED } as const;
+
+/** An ask that stands with no answer on it yet. */
+const STANDS = {} satisfies { readonly answer?: never };
+
 /** How often the scripted service looks again while it holds a poll, as the service does. */
 const HOLD_LOOK = Duration.seconds(1);
 
@@ -189,6 +206,10 @@ function scriptedService(
     readonly deviceSettings?: MachineDeviceSettings;
     /** Whether a recording's video never reaches the service, as a network fault loses one. */
     readonly recordingUnsent?: boolean;
+    /** Whether an ask's post never reaches the service, as a network fault loses one. */
+    readonly askPostUnanswered?: boolean;
+    /** How long an ask's post takes to land, as a slow network holds one. */
+    readonly askPostTakes?: Duration.Input;
   } = {},
 ) {
   let unanswered = options.unansweredClaims ?? 0;
@@ -205,6 +226,106 @@ function scriptedService(
   const settledResults = new Map<string, MachineCommandResult>();
   /** Each recording's video posted up, by its command's id, as base64. */
   const postedRecordings = new Map<string, string>();
+
+  /** The asks a Mac posted, by their id, each with the answer that stands and whether it was said closed, as the service keeps them until taken down. */
+  const asks = new Map<
+    string,
+    MachineAskRequest & { decision?: MachineAskDecision; note?: string; lapsed?: boolean }
+  >();
+
+  let asksVersion = 0;
+
+  /** The answer standing on an ask, as the wire carries it; none while it waits. */
+  const standingOf = (ask: { decision?: MachineAskDecision; note?: string }) => {
+    if (ask.decision === undefined) return undefined;
+
+    return ask.note === undefined
+      ? { decision: ask.decision }
+      : { decision: ask.decision, note: ask.note };
+  };
+
+  /** The first answer stands, and a later one is answered with it, as the service's store keeps it. */
+  const answerAsk = (id: string, decision: MachineAskDecision, note?: string) => {
+    const ask = asks.get(id);
+
+    if (ask === undefined) return undefined;
+
+    if (ask.decision === undefined) {
+      ask.decision = decision;
+
+      if (note !== undefined) ask.note = note;
+      asksVersion += 1;
+    }
+
+    return standingOf(ask);
+  };
+
+  /** The account's asks as the service answers them. */
+  const asksRead = (rows: boolean): MachineAsksLiveAnswer => ({
+    url: LIVE_POLL_URL,
+    queries: {
+      asks: {
+        capability: "",
+        queryFingerprint: "",
+        expiresAt: NOW,
+        digest: String(asksVersion),
+        ...(rows
+          ? {
+              rows: [...asks].map(([id, ask]) => ({
+                id,
+                deviceId: ask.deviceId,
+                agentId: null,
+                subject: ask.subject,
+                askedAt: NOW,
+                expiresAt: NOW,
+                lapsed: ask.lapsed === true,
+                decision: ask.decision ?? null,
+                note: ask.note ?? null,
+              })),
+            }
+          : undefined),
+      },
+    },
+  });
+
+  /** The settings the service keeps for each device that joined, by its id, as joins, writes, and changes made elsewhere leave them. */
+  const kept = new Map<string, MachineDeviceSettings>();
+  let machinesVersion = 0;
+
+  const keep = (deviceId: string, settings: MachineDeviceSettings) => {
+    kept.set(deviceId, settings);
+    machinesVersion += 1;
+  };
+
+  /** The account's machines as the service answers them, each device that joined with the settings kept for it. */
+  const machines = (rows: boolean): MachinesLiveAnswer => ({
+    url: LIVE_POLL_URL,
+    queries: {
+      machines: {
+        capability: "",
+        queryFingerprint: "",
+        expiresAt: NOW,
+        digest: String(machinesVersion),
+        ...(rows
+          ? {
+              rows: [...kept].map(([id, settings]) => ({
+                id,
+                name: "Studio",
+                platform: DEVICE_PLATFORM.DARWIN,
+                machineId: null,
+                model: null,
+                host: false,
+                listening: true,
+                commandMode: settings.commandMode,
+                computerUse: settings.computerUse ?? null,
+                alwaysAllowedApps: settings.alwaysAllowedApps,
+                isDefault: false,
+              })),
+            }
+          : undefined),
+      },
+    },
+  });
 
   const answer = (rows: boolean): MachineCommandsLiveAnswer => ({
     url: LIVE_POLL_URL,
@@ -232,7 +353,7 @@ function scriptedService(
   });
 
   const client: MachineCommandClient = {
-    // SAFETY: the Mac's commands are the one live read the client is asked for, answering the script's rows.
+    // SAFETY: the Mac's commands and the account's machines are the live reads the client is asked for, each answering the script's rows.
     liveRead: (<Read>(
       _read: Read,
       {
@@ -244,6 +365,25 @@ function scriptedService(
     ) =>
       Effect.gen(function* () {
         const after = poll?.after;
+
+        // The account's asks are followed while the Mac holds one up, held as the service holds them.
+        if (_read === MACHINE_ASKS_READ) {
+          for (let held = 0; after === String(asksVersion) && held < 25; held += 1) {
+            yield* Effect.sleep(HOLD_LOOK);
+          }
+
+          return asksRead(after !== String(asksVersion));
+        }
+
+        // The account's machines are followed beside the commands, held as the service holds them.
+        if (_read === MACHINES_READ) {
+          for (let held = 0; after === String(machinesVersion) && held < 25; held += 1) {
+            yield* Effect.sleep(HOLD_LOOK);
+          }
+
+          return machines(after !== String(machinesVersion));
+        }
+
         reads.push({ userId, kinds: machineCommandKindsRead(kinds) });
         named.push({ by: "read", device });
 
@@ -291,12 +431,15 @@ function scriptedService(
     join: (request) =>
       Effect.sync(() => {
         joins.push(request);
+        const settings = options.deviceSettings ?? request.settings;
+        keep(request.deviceId, settings);
 
-        return { settings: options.deviceSettings ?? request.settings };
+        return { settings };
       }),
-    saveDeviceSettings: (_deviceId, settings) =>
+    saveDeviceSettings: (deviceId, settings) =>
       Effect.sync(() => {
         savedSettings.push(settings);
+        keep(deviceId, settings);
 
         return { saved: true } as const;
       }),
@@ -312,6 +455,40 @@ function scriptedService(
 
         return { settled: true } as const;
       }),
+    postAsk: (request) =>
+      Effect.andThen(
+        Effect.sleep(options.askPostTakes ?? 0),
+        Effect.sync(() => {
+          if (options.askPostUnanswered === true) return LOST_CALL;
+          asks.set(request.id, { ...request });
+          asksVersion += 1;
+
+          return STANDS;
+        }),
+      ),
+    lapseAsk: (id) =>
+      Effect.sync(() => {
+        const ask = asks.get(id);
+        const answer = ask === undefined ? undefined : standingOf(ask);
+
+        if (ask !== undefined && answer === undefined) {
+          ask.lapsed = true;
+          asksVersion += 1;
+        }
+
+        return answer === undefined ? {} : { answer };
+      }),
+    closeAsk: (id) =>
+      Effect.sync(() => {
+        asks.delete(id);
+        asksVersion += 1;
+
+        return { closed: true } as const;
+      }),
+    answerAsk: ({ id, decision, note }) =>
+      Effect.sync(
+        () => answerAsk(id, decision, note) ?? { failure: MACHINE_COMMAND_CALL_FAILURE.NOT_FOUND },
+      ),
     postRecording: (id, mp4) =>
       Effect.sync(() => {
         if (options.recordingUnsent === true)
@@ -335,6 +512,14 @@ function scriptedService(
     postedLooks,
     settledResults,
     postedRecordings,
+    /** The asks the service holds, by their id. */
+    asks,
+    /** An ask answered on another of the account's devices, as the service takes it: the first answer stands. */
+    answerElsewhere: (id: string, decision: MachineAskDecision, note?: string) =>
+      Effect.sync(() => answerAsk(id, decision, note)),
+    /** The device's settings changed on another device or the web, as Settings › Machines changes them. */
+    changeElsewhere: (deviceId: string, settings: MachineDeviceSettings) =>
+      Effect.sync(() => keep(deviceId, settings)),
     /** A command queued for the account, as an agent's call queues it. */
     queue: (command: MachineCommand, queuedAt: number) => {
       waiting.push({ ...command, queuedAt });
@@ -498,8 +683,10 @@ const subject = (
       moved: Effect.asVoid(PubSub.publish(moves, undefined)),
       /** The asks waiting as last told. */
       asks: () => told.at(-1) ?? [],
-      answer: (id: string, decision: MachineCommandDecision) =>
-        composer.acts.MACHINE_COMMAND_ANSWER({ id, decision }),
+      answer: (id: string, decision: MachineCommandDecision, note?: string) =>
+        composer.acts.MACHINE_COMMAND_ANSWER(
+          note === undefined ? { id, decision } : { id, decision, note },
+        ),
     };
   });
 };
@@ -633,6 +820,132 @@ it.effect(
         [studio],
         "the windows are told the device once it joined",
       );
+    }),
+);
+
+it.effect(
+  "a change made to a joined Mac's settings elsewhere is written over its own as it lands, and not written back",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+      const studio = "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13";
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        device: { id: studio, apps: ["com.apple.Notes"] },
+      };
+
+      const { composer } = yield* subject(service, spawner, gate);
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+
+          yield* service.changeElsewhere(studio, {
+            commandMode: MACHINE_COMMAND_MODE.NEVER,
+            alwaysAllowedApps: [],
+          });
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+        }),
+      );
+
+      assert.equal(service.joins.length, 1, "the change reaches the Mac without joining again");
+      assert.equal(gate.mode, MACHINE_COMMAND_MODE.NEVER);
+      assert.deepEqual(gate.device?.apps, []);
+      assert.deepEqual(service.savedSettings, [], "a change heard is not written back");
+    }),
+);
+
+it.effect(
+  "a change heard elsewhere that Settings refuses is written again after a rest, and never reversed by the Mac's own",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+      const studio = "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13";
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        device: { id: studio, apps: ["com.apple.Notes"] },
+      };
+
+      const { composer } = yield* subject(service, spawner, gate);
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+
+          if (gate.device !== undefined) gate.device.applyFails = 1;
+
+          yield* service.changeElsewhere(studio, {
+            commandMode: MACHINE_COMMAND_MODE.NEVER,
+            alwaysAllowedApps: [],
+          });
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+          yield* TestClock.adjust("30 seconds");
+          yield* settled;
+        }),
+      );
+
+      assert.equal(
+        gate.mode,
+        MACHINE_COMMAND_MODE.NEVER,
+        "the service's change is kept here at last",
+      );
+      assert.deepEqual(gate.device?.apps, []);
+      assert.deepEqual(service.savedSettings, [], "the Mac's old settings never go up over it");
+    }),
+);
+
+it.effect(
+  "a change heard for an account no longer signed in is not written over this Mac's settings",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+      const studio = "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13";
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        device: { id: studio, apps: ["com.apple.Notes"] },
+      };
+
+      const { composer } = yield* subject(service, spawner, gate);
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+
+          // Another account signs in, not yet able to join, as a switch stands before its capabilities are read.
+          gate.account = "user-other";
+          gate.signedIn = false;
+
+          yield* service.changeElsewhere(studio, {
+            commandMode: MACHINE_COMMAND_MODE.NEVER,
+            alwaysAllowedApps: [],
+          });
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+        }),
+      );
+
+      assert.equal(gate.mode, MACHINE_COMMAND_MODE.ASK);
+      assert.deepEqual(gate.device?.apps, ["com.apple.Notes"]);
     }),
 );
 
@@ -1083,30 +1396,37 @@ it.effect("Always allow writes the setting, runs the command, and the next runs 
   }),
 );
 
-it.effect("Deny answers the call as not run, declined, and runs nothing", () =>
-  Effect.gen(function* () {
-    const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
-    const service = scriptedService();
-    yield* Effect.scoped(
-      Effect.gen(function* () {
-        const built = yield* askedFor(service, spawner, [COMMAND]);
-        yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.DENY);
-        yield* settled;
-        assert.deepEqual(built.asks(), []);
-        // An answer after the ask went runs nothing (below).
-        yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
-        yield* settled;
-      }),
-    );
-    const answered = service.settledResults.get(COMMAND.id);
-    assert.ok(answered !== undefined && "refused" in answered, "the call hears it was not run");
-    assert.match(answered.refused, /declined/u);
-    assert.deepEqual(spawner.spawned, []);
-  }),
+it.effect(
+  "Deny answers the call as not run, declined, with the words given, and runs nothing",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const built = yield* askedFor(service, spawner, [COMMAND]);
+          yield* built.answer(
+            COMMAND.id,
+            MACHINE_COMMAND_DECISION.DENY,
+            "Use the staging database",
+          );
+          yield* settled;
+          assert.deepEqual(built.asks(), []);
+          // An answer after the ask went runs nothing (below).
+          yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
+          yield* settled;
+        }),
+      );
+      const answered = service.settledResults.get(COMMAND.id);
+      assert.ok(answered !== undefined && "refused" in answered, "the call hears it was not run");
+      assert.match(answered.refused, /declined.*Use the staging database/u);
+      assert.equal(answered.outcome, MACHINE_REFUSAL.DECLINED);
+      assert.deepEqual(spawner.spawned, []);
+    }),
 );
 
 it.effect(
-  "no answer by the command's own timeout answers the call as not run, and the ask goes",
+  "an ask stands five minutes from when it is shown, however short the command's own timeout, and no answer by then answers the call as not answered",
   () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
@@ -1114,7 +1434,7 @@ it.effect(
       yield* Effect.scoped(
         Effect.gen(function* () {
           const built = yield* askedFor(service, spawner, [SECOND]);
-          yield* TestClock.adjust(Duration.seconds(SECOND.timeoutSeconds - 1));
+          yield* TestClock.adjust("299 seconds");
           yield* settled;
           assert.deepEqual(built.asks(), [{ id: SECOND.id, command: SECOND.command }]);
           yield* TestClock.adjust("1 second");
@@ -1124,7 +1444,7 @@ it.effect(
       );
       const answered = service.settledResults.get(SECOND.id);
       assert.ok(answered !== undefined && "refused" in answered, "the call hears it was not run");
-      assert.match(answered.refused, /did not answer/u);
+      assert.equal(answered.outcome, MACHINE_REFUSAL.UNANSWERED);
       assert.deepEqual(spawner.spawned, []);
     }),
 );
@@ -1166,28 +1486,28 @@ it.effect(
 );
 
 it.effect(
-  "a command allowed late runs in what is left of its timeout, so its result still reaches the call",
+  "a command allowed late still runs for the whole of its own timeout, so its result reaches the call",
   () =>
     Effect.gen(function* () {
-      // A command that would run for twenty seconds, allowed with ten left of its sixty.
-      const spawner = scriptedSpawner(() => ({ exitCode: 0, after: "20 seconds" }));
+      // A command of sixty seconds that runs for fifty, allowed with ten seconds of its ask left.
+      const spawner = scriptedSpawner(() => ({ exitCode: 0, after: "50 seconds" }));
       const service = scriptedService();
       yield* Effect.scoped(
         Effect.gen(function* () {
           const built = yield* askedFor(service, spawner, [COMMAND]);
-          yield* TestClock.adjust("50 seconds");
+          yield* TestClock.adjust("290 seconds");
           yield* settled;
           yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
           yield* settled;
           assert.equal(spawner.spawned.length, 1, "it runs");
-          yield* TestClock.adjust("15 seconds");
+          yield* TestClock.adjust("55 seconds");
           yield* settled;
         }),
       );
       const answered = service.settledResults.get(COMMAND.id);
       assert.ok(answered !== undefined && "timedOut" in answered, "the call hears what it did");
-      assert.equal(answered.timedOut, true, "killed as the command's own timeout ran out");
-      assert.notEqual(spawner.spawned[0]?.ended, "running");
+      assert.equal(answered.timedOut, false, "it ran to its end");
+      assert.equal(answered.exitCode, 0);
     }),
 );
 
@@ -1216,7 +1536,7 @@ it.effect(
 );
 
 it.effect(
-  "an ask of an account that signed out is withdrawn, and an answer after the switch runs nothing",
+  "an ask of an account that signed out is withdrawn, its call told at once that no one answered, and an answer after the switch runs nothing",
   () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
@@ -1236,7 +1556,9 @@ it.effect(
         }),
       );
       assert.deepEqual(spawner.spawned, []);
-      assert.equal(service.settledResults.has(COMMAND.id), false);
+      const answered = service.settledResults.get(COMMAND.id);
+      assert.ok(answered !== undefined && "refused" in answered, "the call hears at once");
+      assert.equal(answered.outcome, MACHINE_REFUSAL.UNANSWERED);
     }),
 );
 
@@ -1825,4 +2147,183 @@ it.effect(
         }),
       );
     }),
+);
+
+/** A Mac joined as its device under Ask every time, its join heard before the command given is queued, so its ask goes up. */
+const joinedAndAsked = (
+  service: ReturnType<typeof scriptedService>,
+  spawner: ReturnType<typeof scriptedSpawner>,
+  command: MachineCommand,
+  gate: Gate = { mode: MACHINE_COMMAND_MODE.ASK, signedIn: true, device: { id: STUDIO, apps: [] } },
+) =>
+  Effect.gen(function* () {
+    const built = yield* subject(service, spawner, gate);
+
+    yield* built.composer.lifetime;
+    yield* settled;
+    service.queue(command, NOW);
+    yield* TestClock.adjust("2 seconds");
+    yield* settled;
+
+    return built;
+  });
+
+it.effect(
+  "a joined Mac's ask goes up, is decided by an answer given on another device, and comes down",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const built = yield* joinedAndAsked(service, spawner, COMMAND);
+          const posted = service.asks.get(COMMAND.id);
+          assert.equal(posted?.deviceId, STUDIO);
+          assert.deepEqual(posted?.subject, { command: COMMAND.command });
+          assert.deepEqual(spawner.spawned, [], "nothing runs before an answer");
+
+          yield* service.answerElsewhere(COMMAND.id, MACHINE_ASK_DECISION.ALLOW_ONCE);
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+
+          assert.equal(spawner.spawned.length, 1, "the command ran");
+          assert.deepEqual(built.asks(), [], "the prompt here comes down");
+          assert.equal(service.asks.has(COMMAND.id), false, "and the ask everywhere");
+        }),
+      );
+    }),
+);
+
+it.effect(
+  "an answer given on this Mac yields to one another device gave first, words and all",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const built = yield* joinedAndAsked(service, spawner, COMMAND);
+          yield* service.answerElsewhere(COMMAND.id, MACHINE_ASK_DECISION.DENY, "Not on main");
+          yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
+          yield* settled;
+
+          assert.deepEqual(spawner.spawned, [], "nothing ran");
+          const result = service.settledResults.get(COMMAND.id);
+          assert.ok(result !== undefined && "refused" in result);
+          assert.match(result.refused, /They said: "Not on main"/);
+        }),
+      );
+    }),
+);
+
+it.effect(
+  "an ask the service never took is this Mac's alone to answer, and one whose window ran out stays up said closed",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const offline = scriptedService({ askPostUnanswered: true });
+      const online = scriptedService();
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const built = yield* joinedAndAsked(offline, spawner, COMMAND);
+          // Note that the post is asked again a few times, a second apart, before the answer here stands alone.
+          yield* Effect.forkChild(built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE));
+          yield* TestClock.adjust("5 seconds");
+          yield* settled;
+          assert.equal(spawner.spawned.length, 1, "the answer here stood");
+        }),
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* joinedAndAsked(online, spawner, COMMAND);
+          yield* TestClock.adjust("6 minutes");
+          yield* settled;
+
+          const unanswered = online.settledResults.get(COMMAND.id);
+          assert.ok(unanswered !== undefined && "refused" in unanswered, "not answered");
+          assert.equal(online.asks.get(COMMAND.id)?.lapsed, true, "said closed, still up");
+        }),
+      );
+    }),
+);
+
+it.effect(
+  "an answer the Mac had not yet heard when its window closed is taken from the close, and the ask comes down",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* joinedAndAsked(service, spawner, COMMAND);
+          // Note that the answer is written where the follow does not wake, as one given a moment before the window closes is.
+          const posted = service.asks.get(COMMAND.id);
+          assert.ok(posted !== undefined);
+          posted.decision = MACHINE_ASK_DECISION.ALLOW_ONCE;
+          yield* TestClock.adjust("6 minutes");
+          yield* settled;
+
+          assert.equal(spawner.spawned.length, 1, "the command ran on the answer");
+          assert.equal(service.asks.has(COMMAND.id), false, "and the ask came down");
+        }),
+      );
+    }),
+);
+
+it.effect(
+  "an ask whose command is cut short while its post is still out is said closed once the post lands",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const slow = scriptedService({ askPostTakes: "303 seconds" });
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        device: { id: STUDIO, apps: [] },
+      };
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const built = yield* joinedAndAsked(slow, spawner, COMMAND, gate);
+          // Note that the window closes at five minutes, and the Mac then waits a few seconds on the post, which lands within them.
+          yield* TestClock.adjust("301 seconds");
+          gate.mode = MACHINE_COMMAND_MODE.NEVER;
+          yield* built.moved;
+          yield* TestClock.adjust("10 seconds");
+          yield* settled;
+
+          assert.equal(
+            slow.asks.get(COMMAND.id)?.lapsed,
+            true,
+            "the ask that landed is said closed",
+          );
+        }),
+      );
+    }),
+);
+
+it.effect("an ask whose post lands only after its wait ended is said closed once it lands", () =>
+  Effect.gen(function* () {
+    const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+    const slow = scriptedService({ askPostTakes: "306 seconds" });
+
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        yield* joinedAndAsked(slow, spawner, COMMAND);
+        yield* TestClock.adjust("6 minutes");
+        yield* settled;
+
+        assert.ok(slow.settledResults.has(COMMAND.id), "the call was answered at its window's end");
+        assert.equal(
+          slow.asks.get(COMMAND.id)?.lapsed,
+          true,
+          "and the ask that landed after is said closed",
+        );
+      }),
+    );
+  }),
 );

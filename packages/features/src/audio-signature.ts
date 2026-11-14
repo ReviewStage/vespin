@@ -20,9 +20,6 @@ export const AUDIO_TYPE = {
 
 export type AudioType = (typeof AUDIO_TYPE)[keyof typeof AUDIO_TYPE];
 
-/** The bytes a signature is read from: WAV's reaches the twelfth. */
-export const AUDIO_SIGNATURE_BYTES = 12;
-
 const RIFF = [0x52, 0x49, 0x46, 0x46] as const;
 const WAVE = [0x57, 0x41, 0x56, 0x45] as const;
 const ID3 = [0x49, 0x44, 0x33] as const;

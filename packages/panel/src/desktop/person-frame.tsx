@@ -133,7 +133,7 @@ export function PersonReadingSkeleton(): React.JSX.Element {
 /**
  * A section: its name and count over what it holds, a region named `label`
  * where it names one. A section that folds (`fold`) is pressed on its head,
- * as a task's Overview folds its groups (`plan-agents.tsx`).
+ * as a task's Overview folds its groups (`overview-agents.tsx`).
  */
 export function PersonSectionFrame({
   label,

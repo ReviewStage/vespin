@@ -303,7 +303,7 @@ export function useKnownNames(automationId?: string): KnownNames {
   );
 }
 
-/** The ids a subject names the window's rows by: its task (`taskId`, or a link's `planId`), its agent, and its automation. */
+/** The ids a subject names the window's rows by: its task (`taskId`, or a link's `taskId`), its agent, and its automation. */
 interface NamedIds {
   readonly taskId: string | undefined;
   readonly agentId: string | undefined;
@@ -313,7 +313,7 @@ interface NamedIds {
 /** The ids a mention, an entity, or a link's place names rows of the task list by. */
 function namedIdsOf(named: Entity | LinkDestination): NamedIds {
   return {
-    taskId: "taskId" in named ? named.taskId : "planId" in named ? named.planId : undefined,
+    taskId: "taskId" in named ? named.taskId : "taskId" in named ? named.taskId : undefined,
     agentId: "agentId" in named ? named.agentId : undefined,
     automationId: "automationId" in named ? named.automationId : undefined,
   };

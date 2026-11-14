@@ -158,6 +158,7 @@ pnpm --dir "$APP_REPO_ROOT/apps/web" exec tsx scripts/function-rewrites.ts --che
 # table, as the Mac app's own Keyboard shortcuts page lists it; --check fails
 # if a shortcut changed without the page.
 pnpm --dir "$APP_REPO_ROOT/packages/settings" exec tsx scripts/shortcuts-docs.ts --check
+node "$APP_REPO_ROOT/apps/docs/scripts/style-check.mjs"
 
 # Each workspace's TypeScript project references are written from the
 # workspaces its package.json names; --check fails where one no longer
@@ -168,6 +169,10 @@ node "$APP_REPO_ROOT/scripts/tsconfig-references.mjs" --check
 # @repo/ui's roles, the plain values, and @repo/ui-native's tokens, and the
 # motion tokens beside them; --check fails if a copy no longer matches.
 node "$APP_REPO_ROOT/packages/brand/scripts/generate-surface-shared.mjs" --check
+
+# The iOS app's integration marks are the desktop's, rendered from @repo/ui's
+# ProviderMark into @repo/ui-native's assets; --check fails if one drifted.
+pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/native-provider-marks.ts --check
 
 # The constants clients build /api/ URLs from are the other half of that
 # table: a path constant can outlive its route and nothing fails until

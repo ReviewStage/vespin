@@ -252,8 +252,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   system's default button, so it flashes the row's gray while held, as
   Settings' rows do; a choice among a few is `PickRows`, each a row with
   what it does under its name where it says and the picked one checked in
-  copper, the one pick look every form uses; a connection's one act is a
-  small bordered capsule at its end; what a section means is said in its
+  copper, the one pick look every form uses; a connection leads with its
+  provider's own mark, the desktop's vector (`INTEGRATION_MARK_ASSET`), and
+  its one act is a small bordered capsule at its end; what went wrong is a
+  `ProblemLine`, muted words led by the alert glyph in the attention ink,
+  never red words, wherever a refusal stands under a row or a field; what a section means is said in its
   footer, never in a line under a switch; a row that leaves the app ends in
   the arrow out; and the Account page heads with the
   account's photo, name and address centered on the ground, closing with
@@ -318,7 +321,10 @@ here once, so a screen gets them by composing these pieces.
   (unread, needs you, its status, its time by `sinceHeard`). A row holding a
   button of its own, such as `AgentRow`'s pull request, stays apart instead.
   A group header, a page's heading, and a message's writer line are headings;
-  a glyph its words already say is hidden. What happens out of the reader's
+  a glyph its words already say is hidden. A message's `Video` that can play
+  is one element, its name, which opens the system's player full screen, as
+  Messages does, since the inline player's own views stood a thread's
+  video in an iPad's split view past the depth XCTest can read. What happens out of the reader's
   sight is told with `useAnnounced`: an agent's change of state,
   a held call, and a send refused (`AskNote`). A line of Markdown offers
   each chip and link it holds as one of its VoiceOver actions ("Open …"),

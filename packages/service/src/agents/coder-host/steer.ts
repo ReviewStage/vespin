@@ -568,7 +568,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
               workspace.value,
               agent.repository,
               agentMember(agent),
-              task?.ownerId === userId ? userId : undefined,
+              task.ownerId === userId ? userId : undefined,
             ),
       ),
       reads: Effect.result(
@@ -663,7 +663,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   const servers =
     line.sender.kind === MESSAGE_SENDER.AGENT || reviewers
       ? []
-      : mentionedServers(line.serverWords ?? line.text, task?.repository ?? null);
+      : mentionedServers(line.serverWords ?? line.text, task.repository ?? null);
 
   // Note that a native agent's are written before its harness hears the words too, so the turn its runner
   // opens on them takes them: the hand-over runs in no transaction, so the agent's row a launch writes

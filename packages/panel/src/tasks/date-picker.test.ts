@@ -40,7 +40,7 @@ const MONDAY_NOON = Date.parse("2026-10-19T12:00:00Z");
 const TASK: Task = {
   ...DOCUMENT_TASK,
   repository: "acme/relay",
-  document: {
+  description: {
     body: "## Goal\n\nInvite by email.\n\n## Rollout\n\nShip by [@Oct 23, 2026](mention://date/2026-10-23).",
     assumptions: [],
   },
@@ -678,9 +678,9 @@ test("a day picked from the description at rest saves the description with the d
   assert.equal(picker(container), null);
   assert.deepEqual(saves, [
     {
-      document: {
-        base: TASK.document.body,
-        value: TASK.document.body.replace(
+      description: {
+        base: TASK.description.body,
+        value: TASK.description.body.replace(
           "[@Oct 23, 2026](mention://date/2026-10-23)",
           "[@Oct 24, 2026](mention://date/2026-10-24)",
         ),
@@ -717,7 +717,7 @@ test("a tick, a date and a tick from the description at rest, before it is drawn
     "## Rollout\n\n- [ ] One\n- [ ] Two\n\nShip by [@Oct 23, 2026](mention://date/2026-10-23).";
 
   const { container, saves } = drawnAtRest(
-    { ...TASK, document: { body, assumptions: [] } },
+    { ...TASK, description: { body, assumptions: [] } },
     true,
     true,
   );
@@ -754,7 +754,7 @@ test("a tick, a date and a tick from the description at rest, before it is drawn
   );
 
   assert.deepEqual(
-    saves.map((save) => save.document),
+    saves.map((save) => save.description),
     [
       { base: body, value: ticked },
       { base: ticked, value: dated },
@@ -778,8 +778,8 @@ test("Clear from the description at rest saves the description with the date tak
   await act(async () => undefined);
 
   assert.deepEqual(
-    saves.map((save) => save.document?.value),
-    [TASK.document.body.replace("[@Oct 23, 2026](mention://date/2026-10-23)", "")],
+    saves.map((save) => save.description?.value),
+    [TASK.description.body.replace("[@Oct 23, 2026](mention://date/2026-10-23)", "")],
   );
 });
 
@@ -801,9 +801,9 @@ test("words written above a date while its picker is open leave the date changed
 
   const grown: Task = {
     ...TASK,
-    document: {
-      ...TASK.document,
-      body: TASK.document.body.replace("Invite by email.", "Invite by email, or by a link."),
+    description: {
+      ...TASK.description,
+      body: TASK.description.body.replace("Invite by email.", "Invite by email, or by a link."),
     },
   };
 
@@ -816,11 +816,11 @@ test("words written above a date while its picker is open leave the date changed
   await pressKey(dialog, "Escape");
 
   assert.deepEqual(
-    saves.map((save) => save.document),
+    saves.map((save) => save.description),
     [
       {
-        base: grown.document.body,
-        value: grown.document.body.replace(
+        base: grown.description.body,
+        value: grown.description.body.replace(
           "[@Oct 23, 2026](mention://date/2026-10-23)",
           "[@Oct 24, 2026](mention://date/2026-10-24)",
         ),
