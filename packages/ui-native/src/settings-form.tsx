@@ -53,7 +53,7 @@ const ROW_FACE_SIZE = ACCOUNT_FACE_SIZE - 8;
 /** An account's face heading its own page, as large as Apple Account's photo stands over its name. */
 const ACCOUNT_HEAD_FACE_SIZE = 72;
 
-/** Where a `PushRow` goes, and the mark at its end that says so, where iOS's own Settings marks them. */
+/** Where a row goes on a press, such as a `PushRow` or a pull request's check, and the mark at its end that says so, where iOS's own Settings marks them. */
 export const PUSH_ROW_GOES = {
   /** A page of Settings, pushed over this one: iOS's own chevron, as every row that goes on draws it. */
   PAGE: GLYPH.DISCLOSURE,

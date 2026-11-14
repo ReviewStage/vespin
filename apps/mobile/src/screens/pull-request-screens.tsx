@@ -417,7 +417,7 @@ export function PullRequestScreen() {
               }
               sentence={
                 pullRequest !== undefined && isLivePullRequest(pullRequest)
-                  ? mergeSentence(pullRequest, action, true)
+                  ? mergeSentence(pullRequest, action, { queueShown: true })
                   : undefined
               }
             />
@@ -469,6 +469,7 @@ export function PullRequestScreen() {
                   key={check.url ?? check.name}
                   id={check.url ?? check.name}
                   mark={CHECK_LOOK[check.state]}
+                  said={CHECK_WORDS[check.state]}
                   title={check.name}
                   detail={checkDetail(check)}
                   goes={check.url === null ? undefined : PUSH_ROW_GOES.OUT}
