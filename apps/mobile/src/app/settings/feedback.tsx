@@ -195,15 +195,19 @@ export default function FeedbackScreen() {
       const added = now[kind].some((picture) => !sent.has(picture.id));
       const otherHeld = now.words[other].trim() !== "" || now[other].length > 0;
 
+      // Note that a picture dropped while the send was out and still being read keeps the page too, so it lands where it can be seen.
+      const leaves = standing.current && !edited && !added && !otherHeld && !now.reading;
+
       for (const id of sent) detach(id);
 
       if (!edited) {
         setWords((current) => ({ ...current, [kind]: "" }));
-        setSends((count) => count + 1);
+
+        // Note that the field is drawn afresh only on a page that stays, because a new field takes the keyboard as it appears, and a List torn down around a field taking focus aborts the app.
+        if (standing.current && !leaves) setSends((count) => count + 1);
       }
 
-      // Note that a picture dropped while the send was out and still being read keeps the page too, so it lands where it can be seen.
-      if (!standing.current || edited || added || otherHeld || now.reading) return;
+      if (!leaves) return;
       kept.release();
       router.back();
     });
