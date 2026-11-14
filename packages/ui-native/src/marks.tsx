@@ -133,11 +133,12 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
  */
 export function TaskPriorityMark({ priority }: { readonly priority: TaskPriority }) {
   const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
 
   return (
     <Image
       {...glyphImage(PRIORITY_MARK_SYMBOL[priority])}
-      size={MARK_SIZE.GLYPH}
+      size={size}
       originalColor={toneColor(colors, PRIORITY_MARK_TONE[priority])}
       modifiers={[accessibilityLabel(TASK_PRIORITY_WORDS[priority])]}
     />
