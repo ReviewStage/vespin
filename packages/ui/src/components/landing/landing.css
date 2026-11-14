@@ -1,6 +1,6 @@
-/* landing.css -- the landing (`landing-page.tsx`): its margin grid, the bar
-   that floats once the page scrolls, the hero beside the ball, each
-   feature's stage, the devices, the screens the scenes lay out at the app's
+/* landing.css -- the landing (`landing-page.tsx`): its insets, the bar
+   that stays at the top as the page scrolls, the hero over the live app,
+   the pillars, each feature's stage, the devices, the screens the scenes lay out at the app's
    own sizes, the close, and the foot over the wordmark. The page queries its
    own width rather than the viewport's, so it is drawn the same in a frame
    as in a window; a container query cannot read a custom property, so the
@@ -38,71 +38,10 @@
     margin: 0;
   }
 
-  /* The margin grid: a hairline rail at each of the content's edges, the
-     page's length. */
-  .ui-landing-rails {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-
-  .ui-landing-rails::before,
-  .ui-landing-rails::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    background: var(--ui-color-border);
-  }
-
-  .ui-landing-rails::before {
-    left: var(--ui-landing-inset);
-  }
-
-  .ui-landing-rails::after {
-    right: var(--ui-landing-inset);
-  }
-
-  /* A rule across the page, a cross where it meets each rail. */
+  /* A hairline across the page's whole width, between its parts. */
   .ui-landing-rule {
-    position: relative;
     height: 1px;
     background: var(--ui-color-border);
-  }
-
-  .ui-landing-rule > i {
-    position: absolute;
-    top: -5px;
-    width: 11px;
-    height: 11px;
-  }
-
-  .ui-landing-rule > i:first-child {
-    left: calc(var(--ui-landing-inset) - 5px);
-  }
-
-  .ui-landing-rule > i:last-child {
-    right: calc(var(--ui-landing-inset) - 5px);
-  }
-
-  .ui-landing-rule > i::before,
-  .ui-landing-rule > i::after {
-    content: "";
-    position: absolute;
-    background: var(--ui-color-border-strong);
-  }
-
-  .ui-landing-rule > i::before {
-    left: 5px;
-    width: 1px;
-    height: 11px;
-  }
-
-  .ui-landing-rule > i::after {
-    top: 5px;
-    width: 11px;
-    height: 1px;
   }
 
   /* The bar: across the page at its top, then, once the page scrolls, a
@@ -155,15 +94,10 @@
     flex: 1;
   }
 
+  /* Once the page moves under it, the bar stays across the top on a
+     blurred glass of the ground, its hairline under it. */
   .ui-landing-bar[data-floating="true"] .ui-landing-bar-in {
-    max-width: 720px;
-    height: 56px;
-    padding: 0 6px 0 20px;
-    border-color: var(--ui-color-border-strong);
-    border-radius: var(--ui-display-bar-radius);
-    background: var(--ui-color-float-solid);
-    box-shadow: var(--ui-display-landing-edge);
-    transform: translateY(12px);
+    background: color-mix(in srgb, var(--ui-color-ground) 72%, transparent);
   }
 
   /* The bar's links to the site's pages, a hairline after them setting them
@@ -192,9 +126,31 @@
   .ui-landing-hero-words {
     position: relative;
     z-index: 1;
-    /* off-scale: the line's measure, wide enough to keep it to two lines */
-    max-width: calc(820px + var(--ui-landing-gutter));
-    padding: 120px var(--ui-landing-inset) 0 var(--ui-landing-gutter);
+    padding: 160px var(--ui-landing-gutter) 0;
+  }
+
+  /* off-scale: the line's measure, wide enough to keep it to two lines */
+  .ui-landing-hero-words .ui-landing-title {
+    max-width: 900px;
+  }
+
+  /* The sentence at the left and the calls at the right, on one row under
+     the line, their feet level. */
+  .ui-landing-hero-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px 48px;
+    margin-top: 32px;
+  }
+
+  .ui-landing-hero-row .ui-landing-hero-lead {
+    margin-top: 0;
+  }
+
+  .ui-landing-hero-row .ui-landing-actions {
+    margin-top: 0;
   }
 
   /* The chip over the hero's line: a hairline pill, quiet words around
@@ -265,14 +221,26 @@
     margin-top: 40px;
   }
 
-  /* The live app's stage: between the rails, the field of copper dots
-     drifting behind a window standing at most the app's own width, its
-     glow the stages' own. */
+  /* The live app's stage: the window as wide as the page's inset allows,
+     a faint light over its top edge, its foot fading into the ground so
+     the page runs on under it. */
   .ui-landing-hero-stage {
     position: relative;
-    margin: 80px var(--ui-landing-inset) 0;
-    padding: 72px 5% 96px;
-    border-top: 1px solid var(--ui-color-border);
+    margin: 72px var(--ui-landing-inset) 0;
+    padding-bottom: 24px;
+  }
+
+  .ui-landing-hero-stage::before {
+    content: "";
+    position: absolute;
+    inset: -120px 10% auto;
+    height: 320px;
+    background: radial-gradient(
+      closest-side,
+      color-mix(in srgb, var(--ui-color-text) 7%, transparent),
+      transparent
+    );
+    pointer-events: none;
   }
 
   .ui-landing-hero-app {
@@ -280,6 +248,7 @@
     z-index: 1;
     max-width: 1280px;
     margin: 0 auto;
+    mask-image: linear-gradient(to bottom, black 62%, transparent 98%);
   }
 
   /* The hero's app (`landing-hero.tsx`): the Mac app at its own size,
@@ -320,8 +289,7 @@
        nothing the window clips can paint over the edge's curve. */
     box-shadow:
       0 0 0 1px var(--ui-color-border-strong),
-      0 48px 140px -24px var(--ui-color-shadow-deep),
-      0 0 200px -40px color-mix(in srgb, var(--ui-color-accent) 28%, transparent);
+      0 48px 140px -24px var(--ui-color-shadow-deep);
   }
 
   .ui-hero-app-room[data-scaled="true"] .ui-hero-app {
@@ -804,7 +772,60 @@
     animation: ui-landing-enter var(--ui-duration-shape) var(--ui-motion-pane) both;
   }
 
-  /* A feature: its heading and sentence over its stage. */
+  /* The pillars: three steps side by side under a hairline, each a line
+     drawing over its name and a sentence, parted by hairlines. */
+  .ui-landing-pillars {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+    padding: 0 var(--ui-landing-inset);
+    list-style: none;
+  }
+
+  .ui-landing-pillar {
+    display: flex;
+    flex-direction: column;
+    padding: 24px 32px 80px;
+  }
+
+  .ui-landing-pillar + .ui-landing-pillar {
+    border-left: 1px solid var(--ui-color-border);
+  }
+
+  .ui-landing-pillar-number {
+    color: var(--ui-color-text-muted);
+    font-family: var(--ui-font-mono);
+    font-size: var(--ui-type-caption-size);
+    line-height: var(--ui-type-caption-leading);
+    opacity: 0.7;
+  }
+
+  .ui-landing-figure {
+    display: block;
+    width: 100%;
+    max-width: 280px;
+    margin: 24px auto 40px;
+    fill: none;
+    stroke: var(--ui-color-text-muted);
+    stroke-width: 1;
+    opacity: 0.6;
+  }
+
+  .ui-landing-pillar-title {
+    font-size: var(--ui-type-label-size);
+    font-weight: var(--ui-type-section-weight);
+    line-height: var(--ui-type-label-leading);
+  }
+
+  .ui-landing-pillar-detail {
+    max-width: 320px;
+    margin-top: 8px;
+    color: var(--ui-color-text-muted);
+    line-height: var(--ui-display-lead-leading);
+  }
+
+  /* A feature: under a hairline, its heading at the left and its sentence,
+     larger, at the right with its link under it, over its stage. */
   .ui-landing-section {
     position: relative;
   }
@@ -813,8 +834,15 @@
     padding: 128px var(--ui-landing-gutter) 112px;
   }
 
+  .ui-landing-section-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 32px 64px;
+  }
+
   .ui-landing-section-title {
-    max-width: 680px;
+    max-width: 520px;
     font-family: var(--ui-display-landing-face);
     font-size: var(--ui-display-landing-feature-size);
     font-weight: var(--ui-display-landing-title-weight);
@@ -823,41 +851,25 @@
     text-wrap: balance;
   }
 
-  /* A stage: the feature's whole screen standing on a field of drifting
-     copper dots, with no panel round it, lifted off the field by a deep
-     shadow. The field fades out toward every edge, so it reads as light
-     round the screen rather than a box. */
-  .ui-landing-stage {
-    position: relative;
-    margin-top: 56px;
-    padding: 56px 6%;
+  .ui-landing-section-words {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
   }
 
-  /* off-scale: the field's fade at each edge */
-  .ui-landing-field {
-    --ui-landing-field-fade: 40px;
+  .ui-landing-section-words .ui-landing-lead {
+    max-width: 520px;
+    margin-top: 0;
+    color: color-mix(in srgb, var(--ui-color-text) 82%, transparent);
+  }
 
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    color: var(--ui-color-accent);
-    mask-image:
-      linear-gradient(
-        to right,
-        transparent,
-        black var(--ui-landing-field-fade),
-        black calc(100% - var(--ui-landing-field-fade)),
-        transparent
-      ),
-      linear-gradient(
-        to bottom,
-        transparent,
-        black var(--ui-landing-field-fade),
-        black calc(100% - var(--ui-landing-field-fade)),
-        transparent
-      );
-    mask-composite: intersect;
+  /* A stage: the feature's whole screen on the page's ground with no panel
+     round it, its foot fading into the ground. */
+  .ui-landing-stage {
+    position: relative;
+    margin-top: 72px;
+    mask-image: linear-gradient(to bottom, black 70%, transparent);
   }
 
   .ui-landing-stage .ui-landing-window {
@@ -913,14 +925,26 @@
   /* The page's close and its foot over the wordmark. */
   .ui-landing-close {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
-    gap: 32px;
-    padding: 112px var(--ui-landing-gutter) 80px;
+    padding: 160px var(--ui-landing-gutter) 140px;
+    text-align: center;
+  }
+
+  .ui-landing-close-title {
+    font-family: var(--ui-display-landing-face);
+    font-size: var(--ui-display-landing-feature-size);
+    font-weight: var(--ui-display-landing-title-weight);
+    line-height: var(--ui-display-feature-leading);
+    letter-spacing: var(--ui-display-landing-feature-tracking);
+  }
+
+  .ui-landing-close .ui-landing-lead {
+    margin-inline: auto;
   }
 
   .ui-landing-close .ui-landing-actions {
-    margin-top: 0;
+    justify-content: center;
   }
 
   /* Under a page's closing rule, as on every page but the landing, whose
@@ -1662,7 +1686,7 @@
     background: transparent;
   }
 
-  /* Under 640px of room the page keeps to one column: the ball under the
+  /* Under 640px of room the page keeps to one column: the live app under the
      words, and each stage under its heading. A
      window scaled to the column draws its words too small to read, so a
      stage that holds one alone shows the one moment that sells it instead:
@@ -1725,12 +1749,29 @@
 
     .ui-landing-stage {
       margin-top: 28px;
-      padding: 28px 5%;
     }
 
-    /* A cropped window fills its stage edge to edge, so no field shows. */
-    .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) .ui-landing-field {
-      display: none;
+    /* The pillars stand one under another, parted by hairlines across. */
+    .ui-landing-pillars {
+      grid-template-columns: minmax(0, 1fr);
+      padding: 0;
+    }
+
+    .ui-landing-pillar {
+      padding: 24px var(--ui-landing-gutter) 48px;
+    }
+
+    .ui-landing-pillar + .ui-landing-pillar {
+      border-top: 1px solid var(--ui-color-border);
+      border-left: 0;
+    }
+
+    .ui-landing-section-head {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ui-landing-close {
+      padding: 96px var(--ui-landing-gutter) 80px;
     }
 
     .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) {
@@ -1779,12 +1820,6 @@
 
     .ui-landing-stage[data-scene="devices"] {
       padding-bottom: 12px;
-    }
-
-    .ui-landing-close {
-      flex-direction: column;
-      align-items: stretch;
-      padding: 72px var(--ui-landing-gutter) 48px;
     }
 
     /* The foot's facts keep their line, and its links stand in two columns
