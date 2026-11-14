@@ -2,6 +2,12 @@ import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { revisionSummary, VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { descriptionSections } from "@repo/features/description-sections";
+import {
+  type ChangedSection,
+  changedSections,
+  VERSION_CHANGE,
+  versionDiff,
+} from "@repo/features/description-version-diff";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { sectionAnchors } from "@repo/features/mention-link";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -72,8 +78,6 @@ import { centerWithin } from "../scroll-within.js";
 import { hiddenColumns, SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useShortcutTargetsOf } from "../shortcut-target.js";
 import {
-  type ChangedSection,
-  changedSections,
   type HistoryReader,
   opensSections,
   type RevisionSource,
@@ -81,8 +85,6 @@ import {
   revisionSource,
   sectionName,
   sourceLabel,
-  VERSION_CHANGE,
-  versionDiff,
 } from "../tasks/description-history-model.js";
 import type { MentionedTask } from "../tasks/task-mentions.js";
 import {
