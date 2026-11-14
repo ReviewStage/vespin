@@ -299,9 +299,22 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
   );
 }
 
-/** The values an answer filled, one a line under its stamp, where the message's words start: each field's name muted, then what was put in it, as the panel's answered thread lists them. */
+/** The values an answer filled, one a line under its stamp, where the message's words start: each field's name muted, then what was put in it, as the panel's answered thread lists them; past an accessibility size the value stands under its name rather than beside it, so neither wraps to a narrow column, and each is heard as one element. */
 function AnswerValues({ values }: { readonly values: NonNullable<ThreadMessage["values"]> }) {
   const colors = useColors();
+  const stacked = useAccessibilitySize();
+
+  const label = (words: string) => (
+    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}>
+      {words}
+    </Text>
+  );
+
+  const value = (words: string) => (
+    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}>
+      {words}
+    </Text>
+  );
 
   return (
     <VStack
@@ -309,24 +322,30 @@ function AnswerValues({ values }: { readonly values: NonNullable<ThreadMessage["
       spacing={SPACE.TIGHT}
       modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
     >
-      {values.map(({ label, words }) => (
-        <HStack key={label} alignment="firstTextBaseline" spacing={SPACE.TIGHT * 2}>
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE }),
-              foregroundStyle(colors.TEXT_MUTED),
-            ]}
+      {values.map(({ label: name, words }) =>
+        stacked ? (
+          <VStack
+            key={name}
+            alignment="leading"
+            spacing={2}
+            modifiers={[accessibilityElement("combine")]}
           >
-            {label}
-          </Text>
-          <Text
-            modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}
+            {label(name)}
+            {value(words)}
+          </VStack>
+        ) : (
+          <HStack
+            key={name}
+            alignment="firstTextBaseline"
+            spacing={SPACE.TIGHT * 2}
+            modifiers={[accessibilityElement("combine")]}
           >
-            {words}
-          </Text>
-          <Spacer />
-        </HStack>
-      ))}
+            {label(name)}
+            {value(words)}
+            <Spacer />
+          </HStack>
+        ),
+      )}
     </VStack>
   );
 }

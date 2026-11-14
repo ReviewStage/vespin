@@ -76,7 +76,7 @@ describe("inboxThreadMessages", () => {
     ]);
   });
 
-  it("keeps the values an answer filled, in the form's order, a yes or no as its word, so a settled thread still says what was answered", () => {
+  it("keeps the values an answer filled, in the order it sent them, a yes or no as its word, so a settled thread still says what was answered", () => {
     const item: InboxItem = {
       id: ITEM,
       agentId: "agent-1",
