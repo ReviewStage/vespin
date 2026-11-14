@@ -7,6 +7,7 @@ import {
   moveChosen,
   moveGainParts,
   moveLossParts,
+  moveNoneTakesWords,
   moveTargetLine,
   moveTargets,
   moveTitle,
@@ -27,6 +28,9 @@ import {
   ErrorState,
   SCROLL_SIZE,
   ScrollArea,
+  TEXT_TONE,
+  TEXT_VARIANT,
+  Text,
   useConfirmDialog,
 } from "@repo/ui";
 import { CONFIRM_STAGE, confirmAsked } from "@repo/ui/confirm-state";
@@ -192,7 +196,14 @@ function MoveTaskCard({
             first={first}
             onChoose={onChoose}
           />
-          {chosen === undefined ? null : (
+          {/* Note that where no workspace can take the task the dialog says why, rather than leave its disabled rows and its disabled Move to explain themselves; the repository's name is masked, as each row's is. */}
+          {chosen === undefined ? (
+            task.repository === null ? null : (
+              <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+                <ReplayMask>{moveNoneTakesWords(task.repository)}</ReplayMask>
+              </Text>
+            )
+          ) : (
             <ul className="move-effects m-0 grid gap-tight-gap rounded-control bg-muted p-card-inset-snug pl-ui-24 text-body-foreground text-caption">
               <li>
                 <MoveLine parts={moveLossParts(from, chosen)} />
