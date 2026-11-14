@@ -52,7 +52,7 @@ const FORKED_AT = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
 
 function summary(overrides: Partial<AgentSummary> & { id: string }): AgentSummary {
   return {
-    planId: TASK_ID,
+    taskId: TASK_ID,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,
@@ -435,7 +435,7 @@ test("on an agent's own page, which lists no source, the card names the source a
   assert.equal(headOf(container), "Continued from Wire the start from field · 3 steps");
   press(container.querySelector("[data-replay-card] ~ .ui-disclosure-actions [data-actor-ref]"));
   assert.deepEqual(opened, []);
-  assert.deepEqual(places, [{ kind: LINK_DESTINATION.AGENT, planId: TASK_ID, agentId: SOURCE.id }]);
+  assert.deepEqual(places, [{ kind: LINK_DESTINATION.AGENT, taskId: TASK_ID, agentId: SOURCE.id }]);
 });
 
 test("a replay holding Vespin's summary of the oldest steps opens on one folded row naming it as its, which opens onto the summary", async () => {

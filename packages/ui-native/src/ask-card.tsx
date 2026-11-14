@@ -35,7 +35,7 @@ import {
   tint,
   toggleStyle,
 } from "@expo/ui/swift-ui/modifiers";
-import { FIELD_WORDS } from "@repo/features/words";
+import { CHOOSE_AN_ITEM_WORDS, FIELD_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode, useRef } from "react";
 import { useAnnounced } from "./accessibility.js";
@@ -67,9 +67,6 @@ const TICKED = "ticked";
 
 /** What lowers a number pad, which has no return key of its own. */
 const KEYBOARD_DONE = "Done";
-
-/** What a select's picker reads before an option is picked. */
-const CHOOSE = "Choose";
 
 /** The kinds of field an answer ask types its values in. */
 export const ANSWER_FIELD = {
@@ -369,7 +366,7 @@ function SelectRow({
         onSelectionChange={onChange}
         modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.TEXT)]}
       >
-        <Text modifiers={[tag("")]}>{CHOOSE}</Text>
+        <Text modifiers={[tag("")]}>{CHOOSE_AN_ITEM_WORDS}</Text>
         {(field.options ?? []).map((option) => (
           <Text key={option} modifiers={[tag(option)]}>
             {option === field.recommended ? `${option} (${recommendedWord})` : option}

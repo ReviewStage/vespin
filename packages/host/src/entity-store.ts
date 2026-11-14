@@ -23,13 +23,17 @@
  * The file is `entities.sealed` beside `settings.json`, written whole
  * through a temporary file of its own (`writeSettingsFileAtomic`), sealed by
  * the account source's cipher, which on a Mac is the Keychain's
- * (`safeStorage`); a host whose source hands no cipher, as a browser tab's,
+ * (`safeStorage`) and on an iPhone the app's native sealer under a key the
+ * Keychain keeps (`xchacha-cipher.ts`), which seals straight to the file's
+ * text; a host whose source hands no cipher, as a browser tab's,
  * keeps none. It names the account it was kept for and a hash of the row
  * shapes it was kept at, so a file of another account, of another build's
  * shapes, or one that will not open, is deleted and read as none, and every
  * read reads whole. A store saves lists that moved at most every
- * `SAVE_EVERY`, the writes waiting for the service `QUEUE_SETTLE` after
- * they move, and both once more as it closes; a sign-out forgets it,
+ * `SAVE_EVERY`, or only at the moments the shell names where it names any
+ * (`KeptListsDue`, the phone's app going to the background), the writes
+ * waiting for the service `QUEUE_SETTLE` after they move, and both once
+ * more as it closes; a sign-out forgets it,
  * which deletes the file. Rows
  * kept where none of them moved but where they stand (`keepUnmoved`), as the
  * task list's sync id moving alone, are written only beside the next save of
@@ -143,7 +147,7 @@ const keptRowsSchema = Schema.Struct({
   [KEPT_READ.AUTOMATIONS]: Schema.Record(Schema.String, AUTOMATIONS_READ.rows),
   [KEPT_READ.INBOX]: Schema.Struct({
     /** The first items the follow held, as it took them from the service, each with the plan it is on. */
-    items: Schema.Array(Schema.Struct({ item: inboxItemSchema, planId: Schema.String })),
+    items: Schema.Array(Schema.Struct({ item: inboxItemSchema, taskId: Schema.String })),
     /** The sync id the items were read at, kept only where they are every item the follow held, so the next launch reads past it; absent where the follow kept only its first ones, and reads whole. */
     at: Schema.optionalKey(Schema.String),
   }),
@@ -239,6 +243,8 @@ export interface EntityStoreOptions {
   readonly refused?: () => readonly unknown[];
   /** Each moving of `refused`, which has the store write them `QUEUE_SETTLE` later. */
   readonly refusedMoves?: Stream.Stream<void>;
+  /** Each moment the shell asks the lists written (`KeptListsDue`); where given, lists that moved are written only then and as the store closes, never every `SAVE_EVERY`. */
+  readonly listsDue?: Stream.Stream<void>;
 }
 
 /** The SHA-256, in hex, of every kept row shape's JSON Schema, which a build that changes any of them changes. */
@@ -286,11 +292,20 @@ function withinWorkspaces(reads: Partial<KeptRows>): Partial<KeptRows> {
   };
 }
 
+/** `plain` sealed as the file's text: in one step where the cipher seals to text itself, and as the base64 of its sealed bytes otherwise. */
+function sealedText(cipher: SecretCipher, plain: string): string {
+  return cipher.sealText?.(plain) ?? Base64.encode(cipher.encrypt(plain));
+}
+
 /** The file's text opened and read as far as its account and its waiting writes, or none where it will not open or is not a store's. */
 function opened(cipher: SecretCipher, text: string): Envelope | undefined {
-  const plain = Result.flatMap(Base64.decode(text.trim()), (bytes) =>
-    Result.try(() => cipher.decrypt(bytes)),
-  );
+  const sealed = text.trim();
+  const { openText } = cipher;
+
+  const plain =
+    openText === undefined
+      ? Result.flatMap(Base64.decode(sealed), (bytes) => Result.try(() => cipher.decrypt(bytes)))
+      : Result.try(() => openText.call(cipher, sealed));
 
   if (Result.isFailure(plain)) return undefined;
 
@@ -373,7 +388,7 @@ export function openEntityStore(
           savedAt = now;
 
           return encodeKept({ hash, accountId, reads, queue: waiting, refused }).pipe(
-            Effect.map((plain) => Base64.encode(cipher.encrypt(plain))),
+            Effect.map((plain) => sealedText(cipher, plain)),
             Effect.flatMap((sealed) =>
               writeSettingsFileAtomic(directory, sealed, undefined, ENTITY_STORE_FILE_NAME),
             ),
@@ -392,7 +407,7 @@ export function openEntityStore(
 
     /**
      * The saver: once the writes waiting moved, a save `QUEUE_SETTLE` later;
-     * once lists moved, one when `SAVE_EVERY` has passed since the last save,
+     * once lists moved, where the shell names no moments of its own, one when `SAVE_EVERY` has passed since the last save,
      * sooner where the writes waiting move meanwhile; otherwise asleep until
      * woken. Note that it ends once the store is forgotten, since nothing it
      * would save is kept.
@@ -401,7 +416,7 @@ export function openEntityStore(
       while (!forgotten) {
         if (waitingNow() !== savedQueue) {
           yield* Effect.sleep(QUEUE_SETTLE);
-        } else if (dirty) {
+        } else if (dirty && options.listsDue === undefined) {
           const left = savedAt + Duration.toMillis(SAVE_EVERY) - (yield* Clock.currentTimeMillis);
 
           if (left > 0) {
@@ -430,6 +445,14 @@ export function openEntityStore(
     if (options.refusedMoves !== undefined) {
       yield* Effect.forkScoped(
         Stream.runForEach(options.refusedMoves, () => woken),
+        { startImmediately: true },
+      );
+    }
+
+    // Note that a moment the shell names writes the lists whole, as the store closing does, since the app may not run again before it is ended.
+    if (options.listsDue !== undefined) {
+      yield* Effect.forkScoped(
+        Stream.runForEach(options.listsDue, () => save(true)),
         { startImmediately: true },
       );
     }

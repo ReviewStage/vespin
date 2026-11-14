@@ -13,7 +13,7 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -138,10 +138,10 @@ function openTab(
   const open = onRepository(TASK);
 
   const tasks: TasksControl = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     tasks: [onRepository(TASK), onRepository(OTHER)],
     activeTaskId: TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: { ...TASK, ...open } },
+    region: { kind: TASK_REGION.READY, task: { ...TASK, ...open } },
     onChangeRepository: (taskId) => asked.changed.push(taskId),
     sidePanel: { ...tasksControl().sidePanel, open: true, tab: SIDE_PANEL_TAB.DESCRIPTION },
   });
@@ -345,7 +345,7 @@ test("a question asked of one task does not outlive it: the delete the Plan tab'
   draw({
     ...tasks,
     activeTaskId: OTHER.id,
-    region: { kind: DOCUMENT_REGION.READY, task: other },
+    region: { kind: TASK_REGION.READY, task: other },
   });
   assert.equal(asking(), false, "the question went with the task it was asked of");
 });
@@ -392,7 +392,7 @@ test("⌘K's Change repository shows Overview where an agent's tab hides the des
   assert.ok(menu(), "the ask opens the repository's menu under the plan's path");
 
   // The head drawn afresh, as another tab and back would, opens nothing for the ask already answered.
-  draw({ ...asked(true), region: { kind: DOCUMENT_REGION.READING } });
+  draw({ ...asked(true), region: { kind: TASK_REGION.READING } });
   draw(asked(true));
   assert.equal(menu(), null, "no second opening");
 });
@@ -414,11 +414,11 @@ test("the plan's name reaches the recording only as masked text, never in an att
 /** The open task's tab, `SHARED_PLAN` open as `me` reads it and `OTHER` beside it in the list, its column on no tab and its panel shut. */
 function sharedTab(me: string): TasksControl {
   return tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     me,
     tasks: [SHARED_TASK, OTHER],
     activeTaskId: SHARED_TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: SHARED_TASK },
+    region: { kind: TASK_REGION.READY, task: SHARED_TASK },
   });
 }
 
@@ -1206,7 +1206,7 @@ test("a task is found in the list the control hands down now, a renamed one by i
   assert.equal(taskOf(next, added.id)?.name, "Added");
   assert.equal(taskOf(first, OTHER.id)?.name, "Before", "the older list still answers as it stood");
 
-  const opened = tasksControl({ region: { kind: DOCUMENT_REGION.READY, task: TASK } });
+  const opened = tasksControl({ region: { kind: TASK_REGION.READY, task: TASK } });
   assert.equal(taskOf(opened, TASK.id)?.id, TASK.id, "the open document's task");
 });
 

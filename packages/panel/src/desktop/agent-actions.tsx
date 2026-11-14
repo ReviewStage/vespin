@@ -360,7 +360,7 @@ export function useAgentActions(
   agent: Pick<
     AgentSummary,
     | "id"
-    | "planId"
+    | "taskId"
     | "status"
     | "title"
     | "automationName"

@@ -184,6 +184,8 @@ export interface SettingsLink {
   readonly page: SettingsView;
   readonly section?: SettingsSection;
   readonly workspaceId?: string;
+  /** The machine Machines lands on, by its device id: its row unfolded, scrolled to, and lit. */
+  readonly machineId?: string;
   /** Lands on the page list rather than the page, as a link naming no page this window knows does; a narrow room draws the two apart. */
   readonly listed?: true;
 }

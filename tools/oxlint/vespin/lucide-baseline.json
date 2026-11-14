@@ -1,6 +1,6 @@
 {
-  "apps/web/src/admin/chrome/sidebar.tsx": 1,
   "packages/panel/src/actor-ref.tsx": 1,
+  "packages/panel/src/admin/chrome/admin-shell.tsx": 1,
   "packages/panel/src/admin/chrome/controls.tsx": 1,
   "packages/panel/src/ai-elements/conversation.tsx": 1,
   "packages/panel/src/ai-elements/reasoning.tsx": 1,

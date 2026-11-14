@@ -1,5 +1,6 @@
-// pull-request-screens.tsx -- one agent's pull request on its own screen: where it stands, its checks and reviews held live, its merge or Remove from queue in the bar or, in a regular window, under its checks, and Open on GitHub in the bar.
+// pull-request-screens.tsx -- one agent's pull request on its own screen: where it stands, its checks and reviews held live, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and Open on GitHub in the bar's ⋯.
 
+import { githubAvatarUrl } from "@repo/features/account-picture";
 import {
   type AgentOverviewPullRequest,
   CHECK_STATE,
@@ -44,10 +45,13 @@ import {
   CHECK_SUMMARY_LOOK,
   ConfirmAsk,
   EmptyState,
+  FACE_KIND,
   GLYPH,
+  githubFace,
   glyphSymbol,
   LIST_LOOK,
   ListSection,
+  MARK_FACE,
   MarkRow,
   MergeActRow,
   PATH_PART,
@@ -73,8 +77,6 @@ import {
 } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 /** What the bar's ⋯ menu offers beside the merge, in the panel's words. */
 const MENU_WORDS = {
@@ -123,6 +125,18 @@ function checkDetail(check: PullRequestCheck): string {
   return CHECK_WORDS[check.state];
 }
 
+/** The App that runs a check, by the logo GitHub's avatar host serves for it, beside the check's mark, as the panel's check rows draw it; none where it has no such avatar. */
+function checkFace(check: PullRequestCheck) {
+  const picture = githubAvatarUrl(check.avatarUrl);
+
+  if (picture === undefined) return undefined;
+
+  return {
+    of: { name: check.app ?? check.name, picture, kind: FACE_KIND.APP },
+    stands: MARK_FACE.BESIDE,
+  };
+}
+
 /** Copies the pull request's GitHub address, with the system's tap of success, or says on the console why it could not. */
 function copyLink(url: string): void {
   setStringAsync(url)
@@ -133,7 +147,7 @@ function copyLink(url: string): void {
     });
 }
 
-/** The press the bar offers as the pull request stands: its words, whether it is the screen's one prominent act, and the change it sends. */
+/** The merge's press as the pull request stands: its words, whether it is the screen's one prominent act, and the change it sends. */
 interface MergePress {
   readonly words: string;
   readonly prominent: boolean;
@@ -178,7 +192,7 @@ function mergePressOf(
       };
     case MERGE_ACTION.DEQUEUE:
       return { words: MERGE_WORDS.DEQUEUE, prominent: false, request: undefined };
-    // Note that the bar offers no bypass of the base's rules, which asks first; GitHub's own does.
+    // Note that the page offers no bypass of the base's rules, which asks first; GitHub's own does.
     case MERGE_ACTION.BYPASS:
     case undefined:
       return undefined;
@@ -229,44 +243,20 @@ function methodsOffered(pullRequest: AgentOverviewPullRequest | undefined): read
 }
 
 /**
- * The bar's acts: the merge's one press where the screen hands it one, and
- * the ⋯ menu, grouped as the panel's and Mail's are: Copy GitHub link and
- * Open on GitHub; the ways to merge, where the repository allows more than
- * one and the press stands in the bar; and Refresh. A regular window chooses
- * the way on the press under the checks instead.
+ * The bar's one act, the ⋯ menu, grouped as the panel's and Mail's are:
+ * Copy GitHub link and Open on GitHub, then Refresh. The merge stands in
+ * the page under the heading, where the panel's head stands it, so the
+ * bar's title keeps its place.
  */
 function PullRequestToolbar({
-  pullRequest,
   url,
-  press,
-  method,
-  onChoose,
   onRefresh,
 }: {
-  readonly pullRequest: AgentOverviewPullRequest | undefined;
   readonly url: string | undefined;
-  readonly press: ShownPress | undefined;
-  readonly method: MergeMethod | undefined;
-  readonly onChoose: (method: MergeMethod) => void;
   readonly onRefresh: () => void;
 }) {
-  const colors = useColors();
-  const methods = methodsOffered(pullRequest);
-  const chooses = press !== undefined && methods.length > 1;
-
-  // Note that these stand in the top bar in every window, never the bottom: expo-router shows a navigation controller's toolbar and never hides it again, so a bottom bar outlived the page. A regular window hands no press, since its top bar folds it into More, and draws it under the checks instead.
   return (
     <Stack.Toolbar placement="right">
-      {press === undefined ? null : (
-        <Stack.Toolbar.Button
-          variant={press.prominent ? "prominent" : "plain"}
-          tintColor={press.prominent ? colors.ACCENT : colors.TEXT}
-          disabled={press.disabled}
-          onPress={press.onPress}
-        >
-          {press.words}
-        </Stack.Toolbar.Button>
-      )}
       <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
         {url === undefined ? null : (
           <Stack.Toolbar.Menu inline>
@@ -281,19 +271,6 @@ function PullRequestToolbar({
             </Stack.Toolbar.MenuAction>
           </Stack.Toolbar.Menu>
         )}
-        {chooses ? (
-          <Stack.Toolbar.Menu inline>
-            {methods.map((each) => (
-              <Stack.Toolbar.MenuAction
-                key={each}
-                isOn={each === method}
-                onPress={() => onChoose(each)}
-              >
-                {MERGE_METHOD_WORDS[each]}
-              </Stack.Toolbar.MenuAction>
-            ))}
-          </Stack.Toolbar.Menu>
-        ) : null}
         <Stack.Toolbar.Menu inline>
           <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RETRY)} onPress={onRefresh}>
             {MENU_WORDS.REFRESH}
@@ -316,8 +293,9 @@ function PullRequestToolbar({
  * them again. The merge's one press acts at once as the panel's merge
  * control does, or arms auto-merge where the repository merges through a
  * queue, and Remove from queue asks first, as the panel's does; it stands
- * in the bar in a compact window, and in a regular one under the checks as
- * a large button, since a regular window's bar folds its acts into More.
+ * under the heading in every window, as wide as its words, as the panel's
+ * head stands Merge under the title, and as a split button where the
+ * repository merges more than one way.
  * The bar's ⋯ menu opens it on GitHub, where its diff and comments are
  * read.
  */
@@ -356,8 +334,6 @@ export function PullRequestScreen() {
   useEffect(() => {
     if (!dequeues) setAsking(false);
   }, [dequeues]);
-  // Whether the press stands in the page, under the checks, rather than in the bar.
-  const inPage = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   useScreenActivity((workspaces) =>
     agent === undefined || title === undefined
       ? undefined
@@ -365,7 +341,7 @@ export function PullRequestScreen() {
           {
             agentId: id,
             workspaceId: agent.workspaceId,
-            taskId: agent.planId,
+            taskId: agent.taskId,
             number: key.number,
             title,
           },
@@ -382,14 +358,7 @@ export function PullRequestScreen() {
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      <PullRequestToolbar
-        pullRequest={pullRequest}
-        url={url}
-        press={inPage ? undefined : press}
-        method={method}
-        onChoose={setChosen}
-        onRefresh={() => void retry()}
-      />
+      <PullRequestToolbar url={url} onRefresh={() => void retry()} />
     </>
   );
 
@@ -466,7 +435,33 @@ export function PullRequestScreen() {
                   ? mergeSentence(pullRequest, action)
                   : undefined
               }
+              opened={
+                pullRequest === undefined
+                  ? undefined
+                  : {
+                      by:
+                        pullRequest.author === undefined
+                          ? undefined
+                          : githubFace(pullRequest.author),
+                      at: pullRequest.createdAt,
+                      mergedAt: pullRequest.mergedAt,
+                    }
+              }
+              labels={pullRequest?.labels}
             />
+            {press === undefined ? null : (
+              <MergeActRow
+                label={press.words}
+                prominent={press.prominent}
+                disabled={press.disabled}
+                methods={methodsOffered(pullRequest).map((each) => ({
+                  label: MERGE_METHOD_WORDS[each],
+                  on: each === method,
+                  onPress: () => setChosen(each),
+                }))}
+                onPress={press.onPress}
+              />
+            )}
             {writes.note === undefined ? null : (
               <WriteNoteRow words={writes.note.words} said={writes.note.said} />
             )}
@@ -504,25 +499,12 @@ export function PullRequestScreen() {
                   mark={CHECK_LOOK[check.state]}
                   title={check.name}
                   detail={checkDetail(check)}
+                  standing={CHECK_WORDS[check.state]}
+                  face={checkFace(check)}
                 />
               ))
             )}
           </ListSection>
-          {inPage && press !== undefined ? (
-            <ListSection>
-              <MergeActRow
-                label={press.words}
-                prominent={press.prominent}
-                disabled={press.disabled}
-                methods={methodsOffered(pullRequest).map((each) => ({
-                  label: MERGE_METHOD_WORDS[each],
-                  on: each === method,
-                  onPress: () => setChosen(each),
-                }))}
-                onPress={press.onPress}
-              />
-            </ListSection>
-          ) : null}
           <ListSection title="Reviews" count={reviewers.length}>
             {reviewers.map((reviewer) => (
               <MarkRow
@@ -531,6 +513,7 @@ export function PullRequestScreen() {
                 mark={REVIEW_LOOK[reviewer.state]}
                 title={reviewer.by.login}
                 detail={REVIEW_WORDS[reviewer.state]}
+                face={{ of: githubFace(reviewer.by), stands: MARK_FACE.LEAD }}
               />
             ))}
             <MarkRow

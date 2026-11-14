@@ -33,7 +33,7 @@ import {
   type Task,
   type TaskStanding,
 } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { COMMENT_SUBJECT, type TasksCommentsFollow } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -123,9 +123,9 @@ test("a task the service will not hand the reader, as a link to another workspac
           createElement(DesktopTasks, {
             looks: NO_LOOKS,
             tasks: tasksControl({
-              page: TASKS_PAGE.DOCUMENT,
+              page: TASKS_PAGE.TASK,
               activeTaskId: TASK.id,
-              region: { kind: DOCUMENT_REGION.MISSING },
+              region: { kind: TASK_REGION.MISSING },
               onLeaveTask: () => left.push(TASK.id),
             }),
           }),
@@ -211,7 +211,7 @@ test("a task's comments are held from its open, so its first ready frame marks t
       createElement(DesktopTasks, {
         looks: NO_LOOKS,
         tasks: tasksControl({
-          page: TASKS_PAGE.DOCUMENT,
+          page: TASKS_PAGE.TASK,
           activeTaskId: TASK.id,
           region,
           // The task's own workspace is listed, whose Descriptions holds its comments while it is read.
@@ -225,7 +225,7 @@ test("a task's comments are held from its open, so its first ready frame marks t
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
 
-  act(() => root.render(windowRouter().provide(opened({ kind: DOCUMENT_REGION.READING }))));
+  act(() => root.render(windowRouter().provide(opened({ kind: TASK_REGION.READING }))));
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
   });
@@ -235,7 +235,7 @@ test("a task's comments are held from its open, so its first ready frame marks t
     root.render(
       windowRouter().provide(
         opened({
-          kind: DOCUMENT_REGION.READY,
+          kind: TASK_REGION.READY,
           task: { ...TASK, description: { body, assumptions: [] } },
         }),
       ),
@@ -288,10 +288,10 @@ test("a listed task draws its name, its status, and the column's tab from its ro
               createElement(DesktopTasks, {
                 looks: NO_LOOKS,
                 tasks: tasksControl({
-                  page: TASKS_PAGE.DOCUMENT,
+                  page: TASKS_PAGE.TASK,
                   tasks: [listed],
                   activeTaskId: TASK.id,
-                  region: { kind: DOCUMENT_REGION.READING },
+                  region: { kind: TASK_REGION.READING },
                   workspaces: [
                     {
                       id: TASK.workspaceId,
@@ -354,9 +354,9 @@ test("a task with no agent tab draws a new agent's draft", () => {
           createElement(DesktopTasks, {
             looks: NO_LOOKS,
             tasks: tasksControl({
-              page: TASKS_PAGE.DOCUMENT,
+              page: TASKS_PAGE.TASK,
               activeTaskId: TASK.id,
-              region: { kind: DOCUMENT_REGION.READY, task: TASK },
+              region: { kind: TASK_REGION.READY, task: TASK },
               mainTabs: {
                 ...tasksControl().mainTabs,
                 tabs: [draftTab(DRAFT_ID)],
@@ -397,7 +397,7 @@ test("a run's task leads its bar with the path to the automation whose run made 
 
   const agent: AgentSummary = {
     id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-    planId: TASK.id,
+    taskId: TASK.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Draft standup entry",
@@ -415,9 +415,9 @@ test("a run's task leads its bar with the path to the automation whose run made 
         createElement(DesktopTasks, {
           looks: NO_LOOKS,
           tasks: tasksControl({
-            page: TASKS_PAGE.DOCUMENT,
+            page: TASKS_PAGE.TASK,
             activeTaskId: TASK.id,
-            region: { kind: DOCUMENT_REGION.READY, task: TASK },
+            region: { kind: TASK_REGION.READY, task: TASK },
             agents: agentsControl({ agents: [agent], agentIds: [agent.id] }),
           }),
         }),
@@ -449,9 +449,9 @@ test("a wide task's details with no agent offer New agent on its Agents group's 
           createElement(DesktopTasks, {
             looks: NO_LOOKS,
             tasks: tasksControl({
-              page: TASKS_PAGE.DOCUMENT,
+              page: TASKS_PAGE.TASK,
               activeTaskId: TASK.id,
-              region: { kind: DOCUMENT_REGION.READY, task: TASK },
+              region: { kind: TASK_REGION.READY, task: TASK },
               mainTabs: {
                 ...tasksControl().mainTabs,
                 onChoose: (tab) => chosen.push(tab),
@@ -465,7 +465,7 @@ test("a wide task's details with no agent offer New agent on its Agents group's 
   );
 
   const newAgent =
-    container.querySelector<HTMLElement>(".plan-agents button[aria-label='New agent']") ??
+    container.querySelector<HTMLElement>(".overview-agents button[aria-label='New agent']") ??
     assert.fail("New agent is offered");
 
   act(() => newAgent.click());
@@ -493,9 +493,9 @@ function panelTab(): HTMLElement {
         createElement(DesktopTasks, {
           looks: NO_LOOKS,
           tasks: tasksControl({
-            page: TASKS_PAGE.DOCUMENT,
+            page: TASKS_PAGE.TASK,
             activeTaskId: TASK.id,
-            region: { kind: DOCUMENT_REGION.READY, task: TASK },
+            region: { kind: TASK_REGION.READY, task: TASK },
             // Note that the panel stands beside an agent's tab, since the task's details take its room.
             mainTabs: {
               ...tasksControl().mainTabs,
@@ -595,7 +595,7 @@ async function _narrowTaskInbox(
   // The plan's held read holds `items` from the start, or what `first` says once it settles, and
   // again what `later` says once it settles; one that fails after it answered keeps its rows, as the host keeps them.
   const heldOf = (read: AppHolderInbox): AppHolderInboxes => ({
-    [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: read },
+    [INBOX_SCOPE_KIND.TASK]: { [TASK.id]: read },
   });
 
   let standing: AppHolderInbox = first === undefined ? { rows: items } : UNREAD;
@@ -625,9 +625,9 @@ async function _narrowTaskInbox(
           createElement(DesktopTasks, {
             looks: NO_LOOKS,
             tasks: tasksControl({
-              page: TASKS_PAGE.DOCUMENT,
+              page: TASKS_PAGE.TASK,
               activeTaskId: TASK.id,
-              region: { kind: DOCUMENT_REGION.READY, task: TASK },
+              region: { kind: TASK_REGION.READY, task: TASK },
               sidePanel: {
                 ...tasksControl().sidePanel,
                 open: true,
@@ -771,9 +771,9 @@ test("a plan's document, its way back to the agents pinned in its card, opens on
           createElement(DesktopTasks, {
             looks: NO_LOOKS,
             tasks: tasksControl({
-              page: TASKS_PAGE.DOCUMENT,
+              page: TASKS_PAGE.TASK,
               activeTaskId: task.id,
-              region: { kind: DOCUMENT_REGION.READY, task },
+              region: { kind: TASK_REGION.READY, task },
               workspaces: [home],
               workspace: home,
               sidePanel: DOCUMENT_PANEL,
@@ -848,11 +848,11 @@ test("a sub-task's row opens the task as a sidebar row does, never a link to its
             createElement(DesktopTasks, {
               looks: NO_LOOKS,
               tasks: tasksControl({
-                page: TASKS_PAGE.DOCUMENT,
+                page: TASKS_PAGE.TASK,
                 tasks: [{ ...TASK, number: 1 }, child],
                 listRead: true,
                 activeTaskId: TASK.id,
-                region: { kind: DOCUMENT_REGION.READY, task: TASK },
+                region: { kind: TASK_REGION.READY, task: TASK },
                 workspaces: [home],
                 workspace: home,
                 sidePanel: DOCUMENT_PANEL,
@@ -909,9 +909,9 @@ test("opening another task draws only its own title and sub-tasks, none of the t
             createElement(DesktopTasks, {
               looks: NO_LOOKS,
               tasks: tasksControl({
-                page: TASKS_PAGE.DOCUMENT,
+                page: TASKS_PAGE.TASK,
                 activeTaskId: task.id,
-                region: { kind: DOCUMENT_REGION.READY, task },
+                region: { kind: TASK_REGION.READY, task },
                 tasks: listed,
                 workspaces: [home],
                 workspace: home,
@@ -943,7 +943,7 @@ test("opening another task draws only its own title and sub-tasks, none of the t
 test("a chip in the plan naming a pull request one of the task's agents opened opens that agent's Pull request tab on its conversation, another of the task's repository, an archived agent's among them, opens by its number, and another repository's opens on GitHub", async () => {
   const agent: AgentSummary = {
     id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-    planId: TASK.id,
+    taskId: TASK.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Batch the invitations",
@@ -996,9 +996,9 @@ test("a chip in the plan naming a pull request one of the task's agents opened o
           createElement(DesktopTasks, {
             looks: NO_LOOKS,
             tasks: tasksControl({
-              page: TASKS_PAGE.DOCUMENT,
+              page: TASKS_PAGE.TASK,
               activeTaskId: task.id,
-              region: { kind: DOCUMENT_REGION.READY, task },
+              region: { kind: TASK_REGION.READY, task },
               sidePanel: {
                 ...DOCUMENT_PANEL,
                 onPullRequestView: (tab, view) => opened.push({ agentId: tab.changes, view }),
@@ -1097,9 +1097,9 @@ function panelPage(tab: SidePanelTab, overrides: Partial<TasksControl> = {}) {
             createElement(DesktopTasks, {
               looks: NO_LOOKS,
               tasks: tasksControl({
-                page: TASKS_PAGE.DOCUMENT,
+                page: TASKS_PAGE.TASK,
                 activeTaskId: TASK.id,
-                region: { kind: DOCUMENT_REGION.READY, task: TASK },
+                region: { kind: TASK_REGION.READY, task: TASK },
                 ...overrides,
                 ...more,
                 sidePanel: { ...DOCUMENT_PANEL, ...overrides.sidePanel, tab: shown },
@@ -1229,9 +1229,9 @@ function standingPageMounted(keeps: boolean) {
             createElement(DesktopTasks, {
               looks: NO_LOOKS,
               tasks: tasksControl({
-                page: TASKS_PAGE.DOCUMENT,
+                page: TASKS_PAGE.TASK,
                 activeTaskId: task.id,
-                region: { kind: DOCUMENT_REGION.READY, task },
+                region: { kind: TASK_REGION.READY, task },
                 sidePanel: DOCUMENT_PANEL,
               }),
             }),
