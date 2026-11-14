@@ -34,11 +34,10 @@ import {
   integrationAccountLabel,
   integrationConnectionOf,
 } from "@repo/features/integration-wire";
-import { readingWords, VERB } from "@repo/features/words";
+import { readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   askForName,
-  BUTTON_LOOK,
   ConfirmAsk,
   type ConnectionLine,
   ConnectionRow,
@@ -47,8 +46,10 @@ import {
   INTEGRATION_MARK_ASSET,
   ListSection,
   type MemberRowAct,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
+  TRY_AGAIN_WORDS,
 } from "@repo/ui-native";
 import { Stack } from "expo-router";
 import { useState } from "react";
@@ -79,7 +80,7 @@ const NONE_OFF: readonly string[] = [];
 
 /** A grant's words as the app says them: the panel's Retry after a sign-in that failed is the app's Try again. */
 function grantWords(label: string): string {
-  return label === SIGN_IN_ACTION.TRY_AGAIN ? VERB.TRY_AGAIN : label;
+  return label === SIGN_IN_ACTION.TRY_AGAIN ? TRY_AGAIN_WORDS : label;
 }
 
 /** What the rename alert asks, by the provider whose account it renames: "Rename Notion account". */
@@ -175,7 +176,7 @@ export default function IntegrationsScreen() {
         <EmptyState
           title={INTEGRATIONS_PAGE_WORDS.READ_FAILED}
           symbol={GLYPH.FAILED}
-          action={{ label: VERB.TRY_AGAIN, onPress: page.retry, look: BUTTON_LOOK.BORDERED }}
+          retry={page.retry}
         />
       ) : (
         <EmptyState title={READING} symbol={INTEGRATIONS_SYMBOL} loading />
@@ -220,7 +221,7 @@ export default function IntegrationsScreen() {
           onCancelButtonPress={() => setQuery("")}
         />
       </Stack.Screen>
-      <Screen>{body}</Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>{body}</Screen>
       <ConfirmAsk
         title={question?.title ?? ""}
         message={question?.body}
@@ -387,7 +388,11 @@ function useIntegrationActs(
       row.kind === SERVER_ROW.SWITCH &&
       healthOf(row.connection).kind === CONNECTION_HEALTH.FAILED
     ) {
-      return { label: VERB.TRY_AGAIN, disabled: false, onPress: () => tools.retry(row.connection) };
+      return {
+        label: TRY_AGAIN_WORDS,
+        disabled: false,
+        onPress: () => tools.retry(row.connection),
+      };
     }
 
     if (bySignIn(row.provider)) return undefined;

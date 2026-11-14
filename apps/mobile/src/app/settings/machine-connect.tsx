@@ -18,11 +18,9 @@ import {
   hostUserCodeOf,
   shownHostUserCode,
 } from "@repo/features/host-wire";
-import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   ActionRow,
-  BUTTON_LOOK,
   BUZZ,
   buzz,
   CodeRow,
@@ -30,6 +28,7 @@ import {
   GLYPH,
   ListSection,
   NoteRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
 } from "@repo/ui-native";
@@ -146,7 +145,7 @@ function Refused({ refusal }: { readonly refusal: HostPairingFailed }) {
   return (
     <>
       <Stack.Screen options={SETTLED_OPTIONS} />
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <EmptyState title={words.title} description={words.body} symbol={GLYPH.FAILED} />
       </Screen>
     </>
@@ -240,7 +239,7 @@ function Pairing({ code }: { readonly code: string }) {
       return (
         <>
           <Stack.Screen options={SETTLED_OPTIONS} />
-          <Screen>
+          <Screen ground={SCREEN_GROUND.GROUPED}>
             <EmptyState
               title={hostDeniedTitle(now.box)}
               description={HOST_CONNECT_WORDS.DENIED}
@@ -255,16 +254,12 @@ function Pairing({ code }: { readonly code: string }) {
       return (
         <>
           <Stack.Screen options={SETTLED_OPTIONS} />
-          <Screen>
+          <Screen ground={SCREEN_GROUND.GROUPED}>
             {now.kind === STANDING.UNREAD ? (
               <EmptyState
                 title={HOST_CONNECT_WORDS.UNREAD}
                 symbol={GLYPH.FAILED}
-                action={{
-                  label: VERB.TRY_AGAIN,
-                  look: BUTTON_LOOK.BORDERED,
-                  onPress: () => void pairing.refetch(),
-                }}
+                retry={() => void pairing.refetch()}
               />
             ) : (
               <EmptyState title={HOST_CONNECT_WORDS.READING} symbol={PAIRING_SYMBOL} loading />
@@ -319,7 +314,7 @@ function Ask({
           gestureEnabled: !inFlight,
         }}
       />
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <SettingsForm>
           <ListSection footer={HOST_CONNECT_WORDS.MATCH}>
             <NoteRow
