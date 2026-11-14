@@ -79,8 +79,8 @@ export const WORKSPACE: Workspace = {
 export function automation(n: number, patch: Partial<AutomationSummary> = {}): AutomationSummary {
   return {
     id: `3f0e6f5c-7d1a-4f6e-9a55-${String(n).padStart(12, "0")}`,
-    planId: null,
-    planName: null,
+    taskId: null,
+    taskName: null,
     workspaceId: WORKSPACE.id,
     name: `Automation ${n}`,
     enabled: true,
@@ -140,7 +140,7 @@ const DIGEST_TASK = "2b4d6f8a-0c1e-4a3b-9d5f-7a9c1e3b5d7f";
 /** One agent of the workspace's on the repository, which a same-agent automation's runs may go to. */
 export const CI_DIGEST = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: DIGEST_TASK,
+  taskId: DIGEST_TASK,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "CI digest",
@@ -154,7 +154,7 @@ const LEDGER_TASK = "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32";
 
 /** An agent on a task in the workspace, working in the automations' repository, as the task list carries it. */
 export function onLedger(agent: AgentSummary): ListedAgent {
-  return { ...agent, planId: LEDGER_TASK, workspaceId: WORKSPACE.id, repository: "acme/ledger" };
+  return { ...agent, taskId: LEDGER_TASK, workspaceId: WORKSPACE.id, repository: "acme/ledger" };
 }
 
 /** The task list as the host lays it: failed before it carried any agent where the test says so, else carrying the test's agents. */

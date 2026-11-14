@@ -616,8 +616,6 @@ const inboxPostOptionSchema = EffectSchema.Struct({
   ),
 });
 
-export type InboxPostOption = typeof inboxPostOptionSchema.Type;
-
 /** One field of a form: its type, its label, which names its value in the answer, whether it must be filled, and a select's options, one perhaps recommended. */
 const inboxFieldSchema = EffectSchema.Struct({
   type: EffectSchema.Literals(Object.values(INBOX_FIELD)),
@@ -1466,7 +1464,7 @@ export function inboxStartTitle(
  */
 export const inboxItemHomeSchema = EffectSchema.Struct({
   agentId: wireUuidSchema,
-  planId: wireUuidSchema,
+  taskId: wireUuidSchema,
   workspaceId: EffectSchema.NonEmptyString,
 });
 

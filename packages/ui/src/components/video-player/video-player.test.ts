@@ -21,6 +21,8 @@ import { VIDEO_PLAYER_PLACE, VideoPlayer, type VideoPlayerPlace } from "../../in
  * player as one does, telling its events, and the player is read by what its
  * bar shows. Full screen, where the browser fills the screen with no element,
  * as Safari on an iPhone and jsdom alike, opens the video in that player.
+ * A recording plays muted with no Mute, unless its header names a sound
+ * track, where it plays with its sound and Mute takes it away.
  */
 
 const roots: Root[] = [];
@@ -49,6 +51,12 @@ const KEPT_URL = "data:video/webm;base64,GkXfo0KG";
  * (`23 E3 83 84 05 F5 E1 00`), and a Cluster's id, where the header ends.
  */
 const TENTH_FRAME_URL = "data:video/webm;base64,GkXfoyPjg4QF9eEAH0O2dQ==";
+
+/**
+ * A WebM header naming a sound track: the EBML header of doctype `webm`, a
+ * segment of unknown size, and a track entry of type 2, audio (`83 81 02`).
+ */
+const SOUND_URL = "data:video/webm;base64,GkXfo4dCgoR3ZWJtGFOAZwH/////////FlSua4Wug4OBAg==";
 
 /** How long the stand-in runs, in seconds. */
 const LENGTH_S = 20;
@@ -308,4 +316,17 @@ test("in the viewer the video waits for Play where motion is held still", () => 
   // Note that reduced motion holds motion at the tokens, which the setting's stylesheet would zero.
   document.documentElement.style.setProperty(DURATION_FAST, "1ms");
   expect(mountInViewer().autoplay).toBe(false);
+});
+
+test("a recording plays muted with no Mute, unless its header names a sound track, where Mute takes its sound away and gives it back", () => {
+  const silent = mountPlayer();
+  expect(silent.video.muted).toBe(true);
+  expect(silent.container.querySelector('button[aria-label="Mute"]')).toBeNull();
+
+  const heard = mountPlayer(undefined, SOUND_URL);
+  expect(heard.video.muted).toBe(false);
+  heard.pressButton("Mute");
+  expect(heard.video.muted).toBe(true);
+  heard.pressButton("Unmute");
+  expect(heard.video.muted).toBe(false);
 });

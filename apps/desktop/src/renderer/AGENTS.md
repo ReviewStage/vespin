@@ -20,6 +20,11 @@ records**: `App` asks the platform to apply session replay, which the desktop
 answers with `session-replay.ts`, and the recording carries no words
 (`session-replay.ts`).
 
+The floating call window's document, `call.html`, loads its own entry
+(`src/renderer/call/index.tsx`): the call card alone, drawn from the
+document's `voiceCall` slice, its presses acts main hands to the panel that
+holds the call. It reaches no host, never mounts `App`, and never records.
+
 ## The Electron window
 
 `docs/DESIGN.md` states how the window's panes move; the panel keeps to it
