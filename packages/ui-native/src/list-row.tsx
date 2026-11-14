@@ -321,6 +321,7 @@ export function rowPlacement(
   colors: BrandColors,
   selected = false,
   vertical: number = ROW_INSET.VERTICAL,
+  indent = 0,
 ) {
   return [
     listRowBackground("clear"),
@@ -328,7 +329,7 @@ export function rowPlacement(
     padding({ leading: ROW_INSET.LEADING, trailing: SPACE.EDGE, top: vertical, bottom: vertical }),
     ...(selected ? [background(colors.SELECTED)] : []),
     listRowSeparatorTint(colors.CHIP_EDGE),
-    alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT),
+    alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT + indent),
   ];
 }
 
@@ -403,12 +404,15 @@ export function RowFrame({
   preview,
   link,
   vertical,
+  indent,
   place = ROW_PLACE.LIST,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
   /** The row's top and bottom inset, where it stands roomier than the list's own, as an Inbox thread does. */
   readonly vertical?: number | undefined;
+  /** How far past the list's text column the row's words start, where it stands in deeper or its lead grows, so its hairline starts under them. */
+  readonly indent?: number | undefined;
   /** Whether it stands as a list's row or a sidebar's. */
   readonly place?: RowPlace | undefined;
 }) {
@@ -422,7 +426,7 @@ export function RowFrame({
     tag(id),
     ...(place === ROW_PLACE.SIDEBAR
       ? sidebarRowPlacement(colors, selected)
-      : rowPlacement(colors, selected, vertical)),
+      : rowPlacement(colors, selected, vertical, indent)),
     ...(heard === undefined
       ? []
       : [
@@ -844,9 +848,14 @@ export function TaskRow(props: TaskRowProps) {
   const colors = useColors();
   // Note that each level of sub-tasks stands in past a parent's fold, its column the lead's scaled width, so a sub-task's mark stands under its parent's at every size.
   const lead = useScaledSize(MARK_SIZE.LEAD);
+  const dot = useScaledSize(MARK_SIZE.DOT);
+  const column = lead + SPACE.ROW;
+  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth, past a parent's fold, and by however much the unread dot's column and the lead have grown, since the dot holds its width even while hidden.
+  const grown = lead - MARK_SIZE.LEAD + dot - MARK_SIZE.DOT;
+  const indent = depth * column + (fold === undefined ? 0 : column) + grown;
 
   const row: ReactElement = (
-    <HStack modifiers={[padding({ leading: depth * (lead + SPACE.ROW) })]}>
+    <HStack modifiers={[padding({ leading: depth * column })]}>
       <RowHead
         unread={unread}
         faded={finished}
@@ -895,6 +904,7 @@ export function TaskRow(props: TaskRowProps) {
       {...props}
       id={id}
       row={row}
+      indent={indent}
       menuActions={[...folding, ...(props.menuActions ?? [])]}
       heard={props.heard ?? taskHeard(props)}
     />
