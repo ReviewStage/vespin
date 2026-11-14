@@ -17,8 +17,10 @@ import {
   frame,
   listStyle,
   monospacedDigit,
+  onGeometryChange,
   refreshable,
   scrollContentBackground,
+  scrollContentMargins,
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -86,16 +88,6 @@ function selectedId(selection: readonly (string | number)[]): string | undefined
   return Predicate.isString(first) ? first : undefined;
 }
 
-/** How wide a plain list stands: the reading width at most, centered in the room it is given, which its ground then fills edge to edge. */
-function readingColumn(look: ListLook): readonly ModifierConfig[] {
-  return look === LIST_LOOK.PLAIN
-    ? [
-        frame({ maxWidth: READING_WIDTH }),
-        frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
-      ]
-    : [];
-}
-
 /**
  * What a list paints under itself: the brand's ground, never the system's
  * grays, but nothing for a sidebar, which stands clear on the system's own
@@ -108,14 +100,15 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
 /**
  * A list of `ListRow`s, each picked by its id. Note that a list on a screen
  * of its own keeps no selection, since a pick pushes the row's own screen and
- * the row should not stand selected on the way back. A plain list stands no
- * wider than the reading width, centered on its ground across a wider
- * window, as iOS's readable content guide stands a page, so a pull request's
- * page across a landscape iPad reads as a column rather than rows 1,400 pt
- * long. Note that the list itself is framed, since `listSectionMargins`
- * moved no plain list's rows on iPadOS 26 or 27, so a drag in the ground
- * beside the column doesn't scroll it; SwiftUI's `contentMargins` would keep
- * the whole width scrolling, but `@expo/ui` has no such modifier yet. In
+ * the row should not stand selected on the way back. A plain list wider than
+ * the reading width stands its rows in a centered column of that width, as
+ * iOS's readable content guide stands a page, so a pull request's page across
+ * a landscape iPad reads as a column rather than rows 1,400 pt long. Note
+ * that the column is the list's content margins (`scrollContentMargins`,
+ * SwiftUI's `contentMargins` through the app's `@expo/ui` patch), never a
+ * frame, so the list keeps the whole width and a drag, a trackpad or a pull
+ * to refresh in the ground beside the column scrolls it, as Mail's and
+ * Settings' do; `listSectionMargins` moved no plain list's rows. In
  * Select mode the list stands in SwiftUI's own edit mode, as Mail's Select
  * does: a round check leads each row, a tap ticks it rather than opening it,
  * two fingers dragged down tick a run, and the rows' swipes step aside, as
@@ -123,6 +116,8 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
  */
 export function RowList({ look, selected, onSelect, onRefresh, choosing, children }: RowListProps) {
   const colors = useColors();
+  const [width, setWidth] = useState(0);
+  const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
 
   // Note that a list in Select mode draws no row as the open one and reads nothing on a pull, since its checks say what is chosen and a pull there would read the rows from under them.
   return (
@@ -144,8 +139,9 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
       modifiers={[
         listStyle(look),
         scrollContentBackground("hidden"),
-        ...readingColumn(look),
         ...listGround(colors, look),
+        onGeometryChange(({ width: next }) => setWidth(next)),
+        ...(sides > 0 ? [scrollContentMargins({ edges: "horizontal", length: sides })] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
         scrollDismissesKeyboard("immediately"),
         ...(onRefresh === undefined || choosing !== undefined ? [] : [refreshable(onRefresh)]),
