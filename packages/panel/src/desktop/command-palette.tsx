@@ -90,7 +90,13 @@ import {
   TASK_TREE_ENTRY,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { SETTLED_STATUS, settleOffered, TASK_MARK, TASK_REGION } from "@repo/features/tasks-model";
+import {
+  SETTLED_STATUS,
+  settleOffered,
+  sidebarTasks,
+  TASK_MARK,
+  TASK_REGION,
+} from "@repo/features/tasks-model";
 import type { TasksTreeAnswer } from "@repo/features/tasks-view";
 import { TERMINAL_ASK } from "@repo/features/terminal-entry";
 import { noMatchWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
@@ -946,12 +952,13 @@ function taskRows(
 
   const listed = (task: TaskSummary) => listedId === undefined || task.workspaceId === listedId;
 
-  // The pinned stand first, as the sidebar's; the rest by their last
+  // The pinned stand first, newest pinned first, as the sidebar's; the rest by their last
   // activity, as the sidebar, Home's Recent, and the row's time read it.
-  const pinnedFirst = (each: readonly TaskSummary[]) => [
-    ...each.filter((task) => task.pinnedAt !== undefined),
-    ...orderTasks(each.filter((task) => task.pinnedAt === undefined)),
-  ];
+  const pinnedFirst = (each: readonly TaskSummary[]) => {
+    const { pinned, rest } = sidebarTasks(each);
+
+    return [...pinned, ...orderTasks(rest)];
+  };
 
   const here = every.filter(listed);
   const elsewhere = every.filter((task) => !listed(task));

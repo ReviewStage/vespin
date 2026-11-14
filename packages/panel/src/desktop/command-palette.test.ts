@@ -1687,6 +1687,36 @@ test("a task whose assignee and creator share a first name says the one the whol
   assert.deepEqual(rows(), ["Audit trail · relay · Charles Ward"]);
 });
 
+test("Search lists the pinned tasks first, the newest pinned first whenever each was started, then the rest", () => {
+  const task = (id: string, createdAt: number, pinnedAt?: number) => ({
+    id,
+    workspaceId: "workspace-personal",
+    name: id,
+    createdAt,
+    updatedAt: createdAt,
+    repository: "acme/relay",
+    ...(pinnedAt === undefined ? undefined : { pinnedAt }),
+  });
+
+  // Note that the task pinned last was started first, so the order the list was started in would stand it second.
+  openPalette(
+    tasksControl({
+      tasks: [
+        task("Rate limits", 3),
+        task("Invite emails", 2, 20),
+        task("Audit log export", 1, 30),
+      ],
+    }),
+  );
+  chooseFilter("Tasks");
+
+  assert.deepEqual(rows(), [
+    "Audit log export · relay",
+    "Invite emails · relay",
+    "Rate limits · relay",
+  ]);
+});
+
 test("a task Vespin or a coding agent made says who in its detail and is found by it, but wears who is on it rather than its maker", () => {
   const dean = { userId: "user-dean", name: "Dean Stratakos" };
 
