@@ -25,11 +25,14 @@ import {
   alignmentGuide,
   aspectRatio,
   background,
+  buttonStyle,
   disabled,
   font,
   foregroundStyle,
   frame,
   listRowBackground,
+  menuIndicator,
+  menuStyle,
   resizable,
   scrollContentBackground,
   scrollDismissesKeyboard,
@@ -62,11 +65,14 @@ const ACCOUNT_HEAD_FACE_SIZE = 72;
 export const PUSH_ROW_GOES = {
   /** A page of Settings, pushed over this one: iOS's own chevron, as every row that goes on draws it. */
   PAGE: GLYPH.DISCLOSURE,
-  /** Out of the app, to Safari or iOS's own Settings: the panel's arrow out. */
-  OUT: GLYPH.OPEN_EXTERNALLY,
+  /** Out of the app, to Safari or iOS's own Settings: iOS's own small arrow out, as its Settings marks a link. */
+  OUT: GLYPH.GOES_OUT,
 } as const satisfies Record<string, Glyph>;
 
 export type PushRowGoes = (typeof PUSH_ROW_GOES)[keyof typeof PUSH_ROW_GOES];
+
+/** What VoiceOver hears a row's ⋯ as. */
+const ROW_MORE_LABEL = "More";
 
 /** The size of the glyph leading a `MenuRow`, as a list's leading mark stands. */
 const GLYPH_SIZE = 15;
@@ -75,19 +81,50 @@ const GLYPH_SIZE = 15;
 const LEAD_GLYPH_SIZE = 17;
 
 /**
- * The mark at a row's end that says where a press goes, in the muted ink,
- * semibold at the row's small line, as iOS draws its chevron, so it grows
- * with the reader's text size.
+ * A row's value at its end, and the mark that says where a press goes, in
+ * the label hierarchy iOS's own Settings draws them in: a value in the
+ * secondary ink and the chevron in the tertiary, each of the words' own ink,
+ * so they stand lighter than the row's name rather than nearly as dark.
+ */
+const VALUE_INK = { type: "hierarchical", style: "secondary" } as const;
+const GOES_INK = { type: "hierarchical", style: "tertiary" } as const;
+
+/**
+ * The mark at a row's end that says where a press goes, in the tertiary
+ * ink, semibold at the row's small line, as iOS draws its chevron, so it
+ * grows with the reader's text size.
  */
 function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
-  const colors = useColors();
-
   return (
     <Image
       {...glyphImage(goes)}
-      color={colors.TEXT_MUTED}
-      modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" })]}
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
+        foregroundStyle(GOES_INK),
+      ]}
     />
+  );
+}
+
+/**
+ * The ⋯ at the end of a row whose acts would otherwise hide behind a long
+ * press and a swipe, such as a connection with nothing to press at its end:
+ * the system's menu of them under the glyph alone, in the secondary ink, so
+ * the row says it holds acts, as the panel's ⋯ does.
+ */
+function RowMoreMenu({ acts }: { readonly acts: readonly MenuRowAct[] }) {
+  return (
+    <Menu
+      label={<Image {...glyphImage(GLYPH.MORE)} modifiers={[foregroundStyle(VALUE_INK)]} />}
+      modifiers={[
+        menuStyle("button"),
+        buttonStyle("plain"),
+        menuIndicator("hidden"),
+        accessibilityLabel(ROW_MORE_LABEL),
+      ]}
+    >
+      <RowActs acts={acts} />
+    </Menu>
   );
 }
 
@@ -209,10 +246,12 @@ function HeadRow({ face, name, line, detail, onPress, testId }: HeadRowProps) {
     >
       {face}
       <VStack alignment="leading" spacing={2}>
+        {/* Note that the separator starts at the words, not the face, as every row of the form starts it. */}
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
             foregroundStyle(colors.TEXT),
+            alignmentGuide("listRowSeparatorLeading", 0),
           ]}
         >
           {name}
@@ -388,7 +427,7 @@ export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRo
         <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
         <Spacer />
         {detail === undefined ? null : (
-          <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{detail}</Text>
+          <Text modifiers={[foregroundStyle(VALUE_INK)]}>{detail}</Text>
         )}
         <GoesMark goes={goes} />
       </HStack>
@@ -434,7 +473,7 @@ export function ValueRow({ label, value }: { readonly label: string; readonly va
 
   return (
     <LabeledContent label={label} modifiers={[listRowBackground(colors.RAISED)]}>
-      <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{value}</Text>
+      <Text modifiers={[foregroundStyle(VALUE_INK)]}>{value}</Text>
     </LabeledContent>
   );
 }
@@ -480,8 +519,10 @@ type ActionRowProps = {
 };
 
 /**
- * A row a person presses to act, in the accent, or the system's red where it
- * ends something; dimmed where it takes no press, with a line under its
+ * A row a person presses to act, in the ink with its glyph leading where it
+ * has one, such as Invite's +, flashing the row's gray while held as
+ * Settings' rows do, or the system's red where it ends something; dimmed
+ * where it takes no press, with a line under its
  * name where one is given, such as why Unfollow is out for a task's
  * assignee.
  */
@@ -802,7 +843,9 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
     <HStack spacing={SPACE.ROW}>
       <Avatar name={name} picture={picture} size={faceSize} />
       <VStack alignment="leading" spacing={1}>
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>
+        <Text
+          modifiers={[foregroundStyle(colors.TEXT), alignmentGuide("listRowSeparatorLeading", 0)]}
+        >
           {badge === undefined ? name : `${name} · ${badge}`}
         </Text>
         <Text
@@ -812,8 +855,13 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
         </Text>
       </VStack>
       <Spacer />
-      {role === undefined ? null : (
-        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
+      {role === undefined ? null : <Text modifiers={[foregroundStyle(VALUE_INK)]}>{role}</Text>}
+      {/* Note that a row a press opens a menu on ends in the system's up-and-down chevron, as a menu picker's value does, so the reader knows it acts. */}
+      {acts.length === 0 ? null : (
+        <Image
+          {...glyphImage(GLYPH.MENU_OPENS)}
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(GOES_INK)]}
+        />
       )}
     </HStack>
   );
@@ -932,9 +980,7 @@ export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
         )}
       </VStack>
       <Spacer />
-      {value === undefined ? null : (
-        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{value}</Text>
-      )}
+      {value === undefined ? null : <Text modifiers={[foregroundStyle(VALUE_INK)]}>{value}</Text>}
     </HStack>
   );
 
@@ -1025,7 +1071,11 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
       )}
       {lines}
       <Spacer />
-      {pressed === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
+      {pressed !== undefined ? (
+        <GoesMark goes={PUSH_ROW_GOES.PAGE} />
+      ) : remove === undefined ? null : (
+        <RowMoreMenu acts={[{ ...remove, symbol: NOTE_REMOVE.SYMBOL, destructive: true }]} />
+      )}
     </HStack>
   );
 
@@ -1157,6 +1207,7 @@ export function ConnectionRow({ name, mark, lines, act, menu = [] }: ConnectionR
         )}
       </VStack>
       <Spacer />
+      {act === undefined && menu.length > 0 ? <RowMoreMenu acts={menu} /> : null}
       {act === undefined ? null : (
         <Button
           label={act.label}
