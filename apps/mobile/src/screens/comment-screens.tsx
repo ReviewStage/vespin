@@ -115,6 +115,7 @@ export function CommentThreadScreen() {
             <ThreadPage
               path={path}
               status={task?.status}
+              quoted
               title={quoteOf(thread.quote, thread.anchor !== undefined)}
               messages={threadMessages(thread, agentNames, pictureOf)}
               repository={task?.repository}
@@ -216,6 +217,7 @@ export function NewCommentScreen() {
             <ThreadPage
               path={path}
               status={overview?.task.status}
+              quoted
               title={quoteOf(block.quote ?? "", true)}
               messages={[]}
               repository={overview?.task.repository}
