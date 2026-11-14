@@ -152,6 +152,12 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
           "the default picked in Settings, never moved to another without a word",
         );
 
+        assert.deepEqual(
+          yield* route(target, { machineId: laptop }),
+          toLaptop,
+          "a call naming a machine goes there whatever the default",
+        );
+
         yield* changeMachine(owner, laptop, { makeDefault: true });
         assert.deepEqual(yield* route(target, {}), toLaptop, "followed as it changes");
 
