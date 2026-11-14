@@ -47,6 +47,7 @@ export default function SettingsLayout() {
         name="integrations"
         options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.INTEGRATIONS] }}
       />
+      <Stack.Screen name="integration" />
       <Stack.Screen name="machines" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.HOSTS] }} />
       <Stack.Screen name="machine-connect" options={{ title: HOST_CONNECT_WORDS.TITLE }} />
       <Stack.Screen name="skills" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.SKILLS] }} />

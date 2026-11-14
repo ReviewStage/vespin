@@ -1181,6 +1181,8 @@ type ConnectionRowProps = {
     | undefined;
   /** The rest of what it offers, in the menu a long press opens, a destructive one also behind a swipe from the trailing edge. */
   readonly menu?: readonly MemberRowAct[] | undefined;
+  /** Opens the connection's own page, as iOS Settings opens an account from its row: the whole row one press ending in the chevron, its acts on that page rather than at its end. */
+  readonly onOpen?: (() => void) | undefined;
 };
 
 /**
@@ -1192,9 +1194,11 @@ type ConnectionRowProps = {
  * capsule, in the ink as a quiet act stands, as the App Store's Get and
  * Settings' Add stand in a row, so the row keeps a list row's height; the rest in the menu a long press opens, and
  * a destructive one, such as Disconnect, behind a swipe too, which a full
- * swipe never runs, since it asks first.
+ * swipe never runs, since it asks first. A connection with a page of its
+ * own (`onOpen`) is one press ending in the chevron instead, its acts on
+ * that page.
  */
-export function ConnectionRow({ name, mark, lines, act, menu = [] }: ConnectionRowProps) {
+export function ConnectionRow({ name, mark, lines, act, menu = [], onOpen }: ConnectionRowProps) {
   const colors = useColors();
   const markSize = useScaledSize(CONNECTION_MARK_SIZE);
   const said = lines.map((line) => line.text).join(", ");
@@ -1235,8 +1239,11 @@ export function ConnectionRow({ name, mark, lines, act, menu = [] }: ConnectionR
         )}
       </VStack>
       <Spacer />
-      {act === undefined && menu.length > 0 ? <RowMoreMenu acts={menu} /> : null}
-      {act === undefined ? null : (
+      {onOpen !== undefined ? <GoesMark goes={PUSH_ROW_GOES.PAGE} /> : null}
+      {onOpen === undefined && act === undefined && menu.length > 0 ? (
+        <RowMoreMenu acts={menu} />
+      ) : null}
+      {onOpen !== undefined || act === undefined ? null : (
         <Button
           label={act.label}
           look={BUTTON_LOOK.BORDERED}
@@ -1247,6 +1254,14 @@ export function ConnectionRow({ name, mark, lines, act, menu = [] }: ConnectionR
       )}
     </HStack>
   );
+
+  if (onOpen !== undefined) {
+    return (
+      <PressedRow label={name} value={[said]} onPress={onOpen}>
+        {drawn}
+      </PressedRow>
+    );
+  }
 
   const placed = [listRowBackground(colors.RAISED), ...spokenValue(said)];
 

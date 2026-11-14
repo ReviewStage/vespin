@@ -17,6 +17,8 @@ export const SETTINGS_ROUTE = {
   ACCOUNT: "/settings/account",
   AGENTS: "/settings/agents",
   INTEGRATIONS: "/settings/integrations",
+  /** One connection's own page, by the `connection` it is pushed with, as a connected row of Integrations opens it. */
+  INTEGRATION: "/settings/integration",
   MACHINES: "/settings/machines",
   /** A machine's pairing, approved or denied by the `code` its link named. */
   MACHINE_CONNECT: "/settings/machine-connect",
