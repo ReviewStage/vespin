@@ -129,6 +129,7 @@ import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
+import { stackMenuItems } from "../stack-bar-menu.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
@@ -968,11 +969,13 @@ function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
 }
 
 /**
- * What a task's ⋯ holds, in the panel's order: Copy link, Rename, Version
- * history where the workspace's descriptions stand on, New sub-task, Move
- * to workspace where the reader may move it, Remove parent where it has
- * one, Open in browser, and Permanently delete, red, which asks first; then
- * Task relation, Move to section, and its repository. Its status is the
+ * What a task's ⋯ holds, the panel's acts in four groups set apart by the
+ * system's rule, as Reminders and Mail group a list's ⋯: where the task is
+ * (Copy link, Open in browser); the task itself (Rename, Version history
+ * where the workspace's descriptions stand on, Move to workspace where the
+ * reader may move it); where it stands among tasks (New sub-task, Remove
+ * parent where it has one, Task relation, its section and its repository);
+ * and Permanently delete, red, alone, which asks first. Its status is the
  * page's status chip's menu (`standingMenus`), so ⋯ holds no Status.
  */
 function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
@@ -988,39 +991,53 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         onPress: () => shareTaskLink(task, overview.workspace),
       },
       {
-        label: WORDS.RENAME,
-        symbol: GLYPH.RENAME,
-        onPress: () => askRename(task, overview.rename),
-      },
-      ...historyActions(task, doors.history),
-      {
-        label: WORDS.NEW_SUB_TASK,
-        symbol: GLYPH.ADD,
-        onPress: () => doors.newSubTask(task),
-      },
-      ...moveActions(doors.moveDoor(task)),
-      ...removeParentActs(task, overview.relations).map((action) => ({
-        label: action.label,
-        symbol: action.symbol,
-        onPress: action.onPress,
-      })),
-      {
         label: VERB.OPEN_IN_BROWSER,
         symbol: GLYPH.OPEN_EXTERNALLY,
         onPress: () =>
           openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, overview.workspace),
       },
+    ],
+    groups: [
       {
-        label: WORDS.DELETE,
-        symbol: GLYPH.DELETE,
-        destructive: true,
-        onPress: () => doors.askDelete(task),
+        actions: [
+          {
+            label: WORDS.RENAME,
+            symbol: GLYPH.RENAME,
+            onPress: () => askRename(task, overview.rename),
+          },
+          ...historyActions(task, doors.history),
+          ...moveActions(doors.moveDoor(task)),
+        ],
+      },
+      {
+        actions: [
+          {
+            label: WORDS.NEW_SUB_TASK,
+            symbol: GLYPH.ADD,
+            onPress: () => doors.newSubTask(task),
+          },
+          ...removeParentActs(task, overview.relations).map((action) => ({
+            label: action.label,
+            symbol: action.symbol,
+            onPress: action.onPress,
+          })),
+        ],
+        submenus: [
+          relationSubmenu(task, doors.openRelation),
+          ...placingSubmenus(task, overview.placing),
+        ].map(barSubmenu),
+      },
+      {
+        actions: [
+          {
+            label: WORDS.DELETE,
+            symbol: GLYPH.DELETE,
+            destructive: true,
+            onPress: () => doors.askDelete(task),
+          },
+        ],
       },
     ],
-    submenus: [
-      relationSubmenu(task, doors.openRelation),
-      ...placingSubmenus(task, overview.placing),
-    ].map(barSubmenu),
   };
 }
 
@@ -2028,44 +2045,7 @@ export function TaskScreen() {
       {menu === undefined ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-            {(menu.submenus ?? []).map((submenu) => (
-              <Stack.Toolbar.Menu
-                key={submenu.label}
-                title={submenu.label}
-                icon={glyphSymbol(submenu.symbol)}
-              >
-                {submenu.choices.map((choice) => (
-                  <Stack.Toolbar.MenuAction
-                    key={choice.label}
-                    {...(choice.symbol === undefined ? {} : { icon: glyphSymbol(choice.symbol) })}
-                    isOn={choice.on}
-                    onPress={choice.onPress}
-                  >
-                    {choice.label}
-                  </Stack.Toolbar.MenuAction>
-                ))}
-                {submenu.actions.map((action) => (
-                  <Stack.Toolbar.MenuAction
-                    key={action.label}
-                    {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
-                    destructive={action.destructive === true}
-                    onPress={action.onPress}
-                  >
-                    {action.label}
-                  </Stack.Toolbar.MenuAction>
-                ))}
-              </Stack.Toolbar.Menu>
-            ))}
-            {menu.actions.map((action) => (
-              <Stack.Toolbar.MenuAction
-                key={action.label}
-                {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
-                destructive={action.destructive === true}
-                onPress={action.onPress}
-              >
-                {action.label}
-              </Stack.Toolbar.MenuAction>
-            ))}
+            {stackMenuItems(menu)}
           </Stack.Toolbar.Menu>
         </Stack.Toolbar>
       )}
