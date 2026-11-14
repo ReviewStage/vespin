@@ -38,8 +38,8 @@ interface TaskCommentsSubject {
 }
 
 /**
- * One subject of a task's comments as Realtime would deliver it, over the
- * real migrations on PGlite: the statements run as Realtime runs them,
+ * One subject of a task's comments as a live read answers it, over the
+ * real migrations on PGlite: the statements run as raw SQL,
  * their rows decoded and joined as the desktop does, beside
  * `readDescriptionCommentThreads`, the held read a surface read them with. The two
  * agree for the description's own threads and for a page's, as threads are
@@ -78,11 +78,11 @@ function threadOf(outcome: DescriptionCommentOutcome): DescriptionCommentThread 
   return outcome.answer.thread;
 }
 
-/** The statement run as Realtime runs it. */
+/** The statement run as raw SQL. */
 const runLive = (statement: LiveStatement) =>
   Effect.flatMap(SqlClient.SqlClient, (sql) => sql.unsafe(statement.sql, [...statement.params]));
 
-/** One subject's threads as Realtime would deliver them to `reader`, as the desktop reads them. */
+/** One subject's threads as a live read answers them to `reader`, as the desktop reads them. */
 const liveThreadsOf = (reader: string, subject: TaskCommentsSubject) =>
   Effect.gen(function* () {
     const statements = Option.getOrThrow(

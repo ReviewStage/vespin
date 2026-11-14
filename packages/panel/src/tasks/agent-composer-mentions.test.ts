@@ -164,7 +164,7 @@ function workspaceAgent(
 ): AgentSummary {
   return {
     id,
-    planId: taskId,
+    taskId: taskId,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title,
@@ -240,7 +240,7 @@ function workspaceAnswer({ words = "" }: AgentWorkspaceListParams): readonly Age
   return WORKSPACE_AGENTS.filter(
     (agent) =>
       (agent.title ?? "").toLowerCase().includes(lower) ||
-      (agent.planId === BILLING.id && BILLING.name.toLowerCase().includes(lower)),
+      (agent.taskId === BILLING.id && BILLING.name.toLowerCase().includes(lower)),
   );
 }
 
@@ -783,7 +783,7 @@ test("off a plan's page a sent message's mention is still its chip, which opens 
   assert.deepEqual(opened, [
     {
       workspace: "",
-      place: { kind: LINK_DESTINATION.SECTION, planId: TASK_ID, anchor: "rollout" },
+      place: { kind: LINK_DESTINATION.SECTION, taskId: TASK_ID, anchor: "rollout" },
     },
   ]);
   assert.equal(carryingTarget(container), undefined);
@@ -1257,7 +1257,7 @@ test("a sent message's mention of a page or an agent is drawn as the chip that o
 
   assert.deepEqual(chips.map(chipName), [PAGE.title, STORE_AGENT.name]);
   assert.deepEqual(opened, [
-    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, planId: TASK_ID, pageId: PAGE.id } },
+    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, taskId: TASK_ID, pageId: PAGE.id } },
     {
       workspace: "acme",
       place: { kind: LINK_DESTINATION.AGENT, agentId: STORE_AGENT.id },

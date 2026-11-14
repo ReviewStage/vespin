@@ -17,7 +17,7 @@ import {
 } from "@repo/features/inbox-wire";
 import type { LinkDestination, ReadLink } from "@repo/features/link-grammar";
 import type { Task } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { agentTab } from "@repo/ui/tab-strip-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { act, createElement } from "react";
@@ -52,7 +52,7 @@ const TASK: Task = {
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Invite expiry job",
@@ -144,16 +144,16 @@ async function mount(onOpen: (link: ReadLink) => void): Promise<HTMLElement> {
   );
   // The account's feed holds the task's items, which its Inbox tab draws from.
   handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: ITEMS } },
+    rows: { [INBOX_SCOPE_KIND.TASK]: { [TASK.id]: ITEMS } },
   });
   pushedTranscripts(() => [
     { messages: [POSTED], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
   ]);
 
   const control = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: TASK },
+    region: { kind: TASK_REGION.READY, task: TASK },
     mainTabs: {
       ...tasksControl().mainTabs,
       tabs: [agentTab(AGENT.id)],

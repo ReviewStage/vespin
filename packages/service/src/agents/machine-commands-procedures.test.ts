@@ -21,7 +21,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
-import { registerDevice } from "@repo/database/models/device-store";
+import { changeMachine, registerDevice } from "@repo/database/models/device-store";
 import {
   claimMachineCommands,
   machineCommandResult,
@@ -34,6 +34,7 @@ import {
 import { createTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
+import { device } from "@repo/database/schemas/device";
 import { conversations } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, openTaskAgent, openWorkspace } from "@repo/database/testing";
@@ -257,9 +258,11 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
       Effect.gen(function* () {
         yield* account("user-no-mac");
 
+        // An agent's call names its agent, which the command's wire leaves out.
         const answer = yield* askMac("user-no-mac", {
           kind: MACHINE_COMMAND_KIND.SHELL,
           command: COMMAND.command,
+          agentId: "55555555-5555-4555-8555-555555555555",
         });
 
         const read = yield* emptyRead(request({ userId: "user-no-mac" }));
@@ -752,12 +755,17 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
             [studio, "Studio"],
           ] as const) {
             yield* registerDevice(userId, { id, name, ...DEVICE_LAYOUT });
+
+            yield* db
+              .update(device)
+              .set({ commandMode: MACHINE_COMMAND_MODE.ASK })
+              .where(eq(device.id, id));
+
+            yield* markMachineListening(userId, id);
           }
 
-          // The Studio listened last, so a call naming no machine goes to it.
-          yield* markMachineListening(userId, laptop);
-          yield* TestClock.adjust("1 second");
-          yield* markMachineListening(userId, studio);
+          // The Studio is the account's default, so a call naming no machine goes to it.
+          yield* changeMachine(userId, studio, { makeDefault: true });
 
           const answeredOn = (
             deviceId: string,
