@@ -39,7 +39,6 @@ import { workingTime } from "@repo/features/time-format";
 import type { AppHostRead } from "@repo/host/app-state";
 import {
   BAR_TITLE,
-  BUTTON_LOOK,
   BUZZ,
   buzz,
   CHECK_LOOK,
@@ -85,7 +84,6 @@ const MENU_WORDS = {
   COPY_GITHUB_LINK: "Copy GitHub link",
   OPEN_ON_GITHUB: "Open on GitHub",
   REFRESH: "Refresh",
-  TRY_AGAIN: "Try again",
 } as const;
 
 /** The id the comments row stands under, beside the checks' and the reviewers'. */
@@ -370,20 +368,19 @@ export function PullRequestScreen() {
       <>
         {bar}
         <Screen>
-          <EmptyState
-            title={failed ? PULL_REQUEST_READ_WORDS.FAILED : PULL_REQUEST_READ_WORDS.READING}
-            symbol={failed ? GLYPH.FAILED : GLYPH.PULL_REQUEST}
-            loading={!failed}
-            action={
-              failed
-                ? {
-                    label: MENU_WORDS.TRY_AGAIN,
-                    look: BUTTON_LOOK.BORDERED,
-                    onPress: () => void retry(),
-                  }
-                : undefined
-            }
-          />
+          {failed ? (
+            <EmptyState
+              title={PULL_REQUEST_READ_WORDS.FAILED}
+              symbol={GLYPH.FAILED}
+              retry={() => void retry()}
+            />
+          ) : (
+            <EmptyState
+              title={PULL_REQUEST_READ_WORDS.READING}
+              symbol={GLYPH.PULL_REQUEST}
+              loading
+            />
+          )}
         </Screen>
       </>
     );
