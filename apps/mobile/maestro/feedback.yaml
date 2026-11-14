@@ -1,4 +1,4 @@
-# feedback.yaml -- Settings' Send feedback on the Inbox fixture: the form under its Feedback and Prompt control, a note typed, signed by the fixture's account, and sent, landing back on Settings.
+# feedback.yaml -- Settings' Send feedback on the Inbox fixture: the form under its Feedback and Prompt control, a note typed, signed by the fixture's account, and sent, thanked on the page, then Back to Settings.
 #
 # Launched on the host's Inbox fixture, signed in as Ada Lovelace, whose
 # act door answers a send as delivered (`@repo/host/fixture-inbox`), so no
@@ -34,6 +34,11 @@ appId: dev.vespin.ios
 - tapOn: "Feedback"
 - tapOn: "Send"
 - waitForAnimationToEnd
+# The page stays and thanks the reader under the cleared field, since the
+# app's notice stands under the Settings sheet; Back then leaves without asking.
+- assertVisible: "Feedback sent. Thank you."
+- takeScreenshot: feedback-sent
+- tapOn: "Back"
+- waitForAnimationToEnd
 # Settings' list stands again, Email beside Send feedback under About.
 - assertVisible: "Email"
-- takeScreenshot: feedback-sent

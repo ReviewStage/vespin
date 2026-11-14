@@ -310,6 +310,7 @@
     "./trigger-catalog": "./src/trigger-catalog.js",
     "./time-format": "./src/time-format.js",
     "./number-format": "./src/number-format.js",
+    "./length-count": "./src/length-count.js",
     "./tool-call-block": "./src/tool-call-block.js",
     "./native-tool-calls": "./src/native-tool-calls.js",
     "./code-ref-words": "./src/code-ref-words.js",

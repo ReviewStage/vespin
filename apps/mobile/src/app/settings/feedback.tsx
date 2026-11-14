@@ -15,6 +15,7 @@ import {
   isFeedbackImageType,
   signatureLine,
 } from "@repo/features/feedback";
+import { lengthCountShown, lengthCountWords } from "@repo/features/length-count";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount } from "@repo/host/app-state-reads";
 import {
@@ -22,6 +23,7 @@ import {
   BUZZ,
   buzz,
   ConfirmAsk,
+  FOOTER_TONE,
   GLYPH,
   glyphSymbol,
   ListSection,
@@ -29,11 +31,12 @@ import {
   Screen,
   SettingsForm,
   ToggleRow,
+  useAnnounced,
   useColors,
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
@@ -63,6 +66,14 @@ const FEEDBACK_PICTURES: PictureBounds = {
   full: FEEDBACK_WORDS.FULL,
 };
 
+/** The field's count under it once its words near the endpoint's bound, as the panel's counter stands; nothing while well short of it. Note that it counts the words as they go, trimmed, as the bound is checked. */
+function counted(message: string): string | undefined {
+  const length = message.trim().length;
+  const limit = FEEDBACK_LIMITS.MESSAGE_MAX_LENGTH;
+
+  return lengthCountShown(length, limit) ? lengthCountWords(length, limit) : undefined;
+}
+
 /** No words yet, for either kind. */
 const NO_WORDS: Readonly<Record<FeedbackKind, string>> = {
   [FEEDBACK_KIND.FEEDBACK]: "",
@@ -86,14 +97,14 @@ function screenshotsOf(pictures: AttachedPictures): readonly FeedbackImage[] {
  * unsigned. Send in the bar is lit once there are words and no dropped
  * picture is still being read; what it carries is exactly what the page
  * shows (`draftSubmission`). A send refused says why under the words and
- * keeps the note; one that went buzzes and takes off what it carried, and
- * goes back to Settings unless the page still holds a note: the other
- * kind's, or what was written or attached while it was out. Back, or a
- * swipe down of Settings, asks first while the page holds a note.
+ * keeps the note; one that went buzzes, takes off what it carried, and says
+ * "Feedback sent. Thank you." under the field, told to VoiceOver, until the
+ * reader writes again. Back, or a swipe down of Settings, asks first while
+ * the page holds a note: the other kind's, or what was written or attached
+ * while the send was out.
  */
 export default function FeedbackScreen() {
   const colors = useColors();
-  const router = useRouter();
   const acts = useHostActs();
   const write = useWrite();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
@@ -105,7 +116,11 @@ export default function FeedbackScreen() {
   const [kind, setKind] = useState<FeedbackKind>(FEEDBACK_KIND.FEEDBACK);
   const [words, setWords] = useState(NO_WORDS);
   const [signed, setSigned] = useState(true);
+  // Why the note did not go, or what a bound or the picker refused, said under the field as every refusal reads, until the words change.
   const [note, setNote] = useState<string | undefined>(undefined);
+  // Whether the last note went, said under the field until the reader writes again.
+  const [thanked, setThanked] = useState(false);
+  useAnnounced(thanked ? FEEDBACK_WORDS.SENT : undefined);
   const [sending, setSending] = useState(false);
   // Whether a send is out, read at the press itself.
   const out = useRef(false);
@@ -197,16 +212,17 @@ export default function FeedbackScreen() {
       const otherHeld = now.words[other].trim() !== "" || now[other].length > 0;
 
       for (const id of sent) detach(id);
+      // Note that a note that went says so under the field, told to VoiceOver, and the page stays to say it, since the app's notice stands under the Settings sheet this page is drawn in, and a buzz alone is never heard with haptics off or by VoiceOver.
+      setThanked(true);
 
       if (!edited) {
         setWords((current) => ({ ...current, [kind]: "" }));
         setSends((count) => count + 1);
       }
 
-      // Note that a picture dropped while the send was out and still being read keeps the page too, so it lands where it can be seen.
+      // Note that once nothing is left on the page, Back leaves it without asking; a picture dropped while the send was out and still being read, or the other kind's note, keeps the ask.
       if (!standing.current || edited || added || otherHeld || now.reading) return;
       kept.release();
-      router.back();
     });
   };
 
@@ -216,6 +232,7 @@ export default function FeedbackScreen() {
     onPress: () => {
       setKind(choice.value);
       setNote(undefined);
+      setThanked(false);
     },
   }));
 
@@ -246,7 +263,11 @@ export default function FeedbackScreen() {
       <Screen>
         <ScopePicker label={FEEDBACK_WORDS.KIND} scopes={scopes}>
           <SettingsForm>
-            <ListSection footer={note}>
+            {/* Note that the field's count stands under it once its words near the bound, as the panel's counter does, and a refusal stands there instead in the danger's ink. */}
+            <ListSection
+              footer={note ?? (thanked ? FEEDBACK_WORDS.SENT : counted(message))}
+              footerTone={note === undefined ? FOOTER_TONE.NOTE : FOOTER_TONE.FAILURE}
+            >
               {/* Note that each kind's field stands apart, so a change of kind shows that kind's own words, and is drawn afresh once its words were sent. */}
               <Fragment key={sends}>
                 <WordsField
@@ -254,7 +275,12 @@ export default function FeedbackScreen() {
                   placeholder={FEEDBACK_COPY[kind].placeholder}
                   label={FEEDBACK_COPY[kind].field}
                   initialWords={message}
-                  onWords={(typed) => setWords((held) => ({ ...held, [kind]: typed }))}
+                  onWords={(typed) => {
+                    setWords((held) => ({ ...held, [kind]: typed }));
+                    // Note that writing again takes away what stood under the field, so a refusal that no longer holds never hides the count.
+                    setNote(undefined);
+                    setThanked(false);
+                  }}
                   autoFocus
                   testId={TEST_IDS.WORDS}
                 />
