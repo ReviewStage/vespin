@@ -63,9 +63,11 @@ export type SwitcherLook = (typeof SWITCHER_LOOK)[keyof typeof SWITCHER_LOOK];
 
 /** The heights the switcher's sheet stands at: half the screen first, then the whole, or the whole alone. */
 const SHEET_DETENTS = {
-  HALF_THEN_WHOLE: ["medium", "large"],
   WHOLE: ["large"],
 } as const;
+
+/** The room over the list's rows a sheet keeps for its grabber, which the rows' own reckoning leaves out. */
+const SHEET_GRABBER_ROOM = 24;
 
 /** How the switcher's list opens: a popover over its button, in a regular window such as an iPad's, or a sheet from the screen's foot, in a compact one such as an iPhone's, as Notion's switcher opens on each. Note that `@expo/ui`'s popover keeps itself a popover in a compact window too, so the caller says which the window takes. */
 export const SWITCHER_PRESENTATION = {
@@ -377,8 +379,11 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
   } = props;
 
   const colors = useColors();
-  // Note that at an accessibility size the sheet opens at its full height, since at its half height the account's row, the way into Settings, stood below the fold.
-  const detents = useAccessibilitySize() ? SHEET_DETENTS.WHOLE : SHEET_DETENTS.HALF_THEN_WHOLE;
+
+  // Note that the sheet first stands as tall as its rows rather than half the screen, so the account's row, the way into Settings, shows on a short screen such as the folded Duo's; at an accessibility size it opens at its full height, since the rows outgrow the reckoning.
+  const fitted = useAccessibilitySize()
+    ? SHEET_DETENTS.WHOLE
+    : [{ height: popoverHeight(props) + SHEET_GRABBER_ROOM }, "large" as const];
 
   const [presented, setPresented] = useState(false);
   // Note that the popover's list mounts on its first open and stays, since a closed popover's content stays mounted, every workspace's photo with it, and a list mounted anew on each open would draw each photo's letter tile again.
@@ -426,7 +431,7 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
       >
         <Group
           modifiers={[
-            presentationDetents([...detents]),
+            presentationDetents([...fitted]),
             presentationDragIndicator("visible"),
             presentationBackground(colors.GROUPED),
           ]}
