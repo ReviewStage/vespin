@@ -5,6 +5,10 @@ description: "Variables, software, setup scripts, and run actions for your cloud
 
 Each cloud agent works in its own sandbox: a Linux machine with a checkout of the task's repository. **Settings › Cloud environment** sets up what every sandbox in the workspace starts with. Owners and admins edit it. Members can read the scripts and see variable names.
 
+<Frame>
+  <img src="/images/cloud-environment.png" alt="Settings, Cloud environment: three variables listed by name, the install script, and setup scripts for acme/ledger and acme/relay, each saying when it last ran and that it exited 0" />
+</Frame>
+
 ## Variables
 
 Variables are set in every cloud agent's sandbox, in every repository. Use them for the keys your tests and dev server need. Once saved, a value is never shown again. Use **Replace value** in its row's menu to change it.
