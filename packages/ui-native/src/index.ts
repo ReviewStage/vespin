@@ -109,6 +109,7 @@ export {
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
+  type RowMenuGroup,
   type RowSubmenu,
   type RowSwipe,
   type TaskFold,
