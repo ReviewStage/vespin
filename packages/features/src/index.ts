@@ -149,10 +149,10 @@ export {
 export {
   WORKSPACE_CALL_FAILURE,
   type WorkspaceCallFailure,
-  type WorkspaceCallResult,
 } from "./workspace-call.js";
 
 export {
   HostedWorkspaceClient,
   type HostedWorkspaceClientOptions,
+  type WorkspaceCallResult,
 } from "./workspace-client.js";
