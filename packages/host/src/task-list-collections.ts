@@ -611,18 +611,15 @@ export function taskListCollections(
           const sinceAt = at === undefined ? undefined : { at };
 
           // Note that one past a sync id hands the pool only what moved and what it let go, the list's own and any a write's answer laid among its rows, so its work is as large as the change.
-          const answered = (held: ReadonlySet<string>, letGo: readonly string[]): Answered =>
-            past ? { gone: letGo, ...sinceAt } : { held: [...held], ...sinceAt };
+          const answered = (held: ReadonlySet<string>, letGo: Iterable<string>): Answered =>
+            past ? { gone: [...new Set(letGo)], ...sinceAt } : { held: [...held], ...sinceAt };
+
+          const plansAnswered = answered(planKeys, [...gone, ...left]);
+          const agentsAnswered = answered(agentKeys, [...gone, ...leftAgents]);
 
           return Effect.gen(function* () {
-            const plansMoved = yield* plans.answer(
-              rows.plans,
-              answered(planKeys, [...new Set([...gone, ...left])]),
-            );
-            const agentsMoved = yield* agents.answer(
-              rows.agents,
-              answered(agentKeys, [...new Set([...gone, ...leftAgents])]),
-            );
+            const plansMoved = yield* plans.answer(rows.plans, plansAnswered);
+            const agentsMoved = yield* agents.answer(rows.agents, agentsAnswered);
             // Note that a cold task the follow now answers is the follow's alone, so one it later lets go is gone from the list too.
             yield* settleCold;
             yield* inChunks(plansMoved, plansDrawn);
