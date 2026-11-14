@@ -45,7 +45,7 @@ import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
 import {
   BAR_ITEM_MENU,
-  type BarAction,
+  type BarFootItem,
   type BarMenu,
   BarMenuItem,
   barActItems,
@@ -148,7 +148,7 @@ type ThreadPageProps = {
   /** The open ask's card, such as its options, steps, or fields, under the messages. */
   readonly ask?: ReactNode | undefined;
   /** The thread's main acts as glyphs before its ⋯ in a split view's detail bar, such as Resolve; none in a compact window, whose ⋯ holds them. */
-  readonly acts?: readonly BarAction[] | undefined;
+  readonly acts?: readonly BarFootItem[] | undefined;
   /** The thread's ⋯ menu, such as Copy link, in a split view's detail bar; a compact window's stack holds it in its own bar. */
   readonly menu?: BarMenu | undefined;
   /** What stands at the page's foot under its scroll, such as a split view's composer (`ComposerFoot`). */

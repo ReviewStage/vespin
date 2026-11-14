@@ -48,6 +48,7 @@ import { conversations, messages, standingLine } from "../schemas/storage.js";
 import { task } from "../schemas/task.js";
 import { MESSAGE_SENDER, messageSenderSchema } from "../storage-vocabulary.js";
 import { InstantColumnSchema } from "./columns.js";
+import { isDefaultMachine } from "./device-store.js";
 import type { TaskStoreEffect } from "./task-store.js";
 import type { ConversationTarget } from "./writer.js";
 
@@ -152,6 +153,7 @@ const QueuedRowSchema = Schema.Struct({
   kind: KindSchema,
   command: Schema.String,
   timeoutSeconds: Schema.Number,
+  agentId: Schema.NullOr(Schema.String),
   now: Schema.Date,
 });
 
@@ -166,6 +168,7 @@ const insertCommand = SqlSchema.void({
         kind: row.kind,
         command: row.command,
         timeoutSeconds: row.timeoutSeconds,
+        agentId: row.agentId,
         queuedAt: row.now,
       }),
     ),
@@ -188,6 +191,7 @@ const insertDeviceCommand = SqlSchema.findAll({
               kind: sql<MachineCommandKind>`${row.kind}`.as("kind"),
               command: sql<string>`${row.command}::text`.as("command"),
               timeoutSeconds: sql<number>`${row.timeoutSeconds}::integer`.as("timeout_seconds"),
+              agentId: sql<string | null>`${row.agentId}::uuid`.as("agent_id"),
               queuedAt: sql<Date>`${row.now}::timestamptz`.as("queued_at"),
             })
             .from(device)
@@ -572,6 +576,7 @@ const findMacOwner = SqlSchema.findOneOption({
     workspaceId: Schema.NullOr(Schema.String),
     targetDeviceId: Schema.NullOr(Schema.String),
     deviceId: Schema.NullOr(Schema.String),
+    starterId: Schema.String,
   }),
   execute: ({ userId, conversationId }) =>
     Database.use((db) =>
@@ -582,6 +587,7 @@ const findMacOwner = SqlSchema.findOneOption({
           workspaceId: task.organizationId,
           targetDeviceId: ownAgent.targetDeviceId,
           deviceId: ownAgent.deviceId,
+          starterId: ownAgent.userId,
         })
         .from(conversations)
         .leftJoin(parent, eq(parent.id, conversations.parentConversationId))
@@ -600,7 +606,7 @@ const findMacOwner = SqlSchema.findOneOption({
     ),
 });
 
-/** The machines of the accounts given, as a call is routed to one: each with its owner's name, its command mode, and when it last listened for commands as a device, the latest first. */
+/** The machines of the accounts given, as a call is routed to one: each with its owner's name, its command mode, whether it is its owner's default, and when it last listened for commands as a device, the latest first. */
 const findCommandMachines = SqlSchema.findAll({
   Request: Schema.Struct({ userIds: Schema.Array(Schema.String) }),
   Result: Schema.Struct({
@@ -610,6 +616,7 @@ const findCommandMachines = SqlSchema.findAll({
     ownerName: Schema.String,
     commandMode: Schema.NullOr(Schema.Literals(Object.values(MACHINE_COMMAND_MODE))),
     computerUse: Schema.NullOr(Schema.Boolean),
+    isDefault: Schema.Boolean,
     seenAt: Schema.NullOr(InstantColumnSchema),
   }),
   execute: ({ userIds }) =>
@@ -622,6 +629,7 @@ const findCommandMachines = SqlSchema.findAll({
           ownerName: user.name,
           commandMode: device.commandMode,
           computerUse: device.computerUse,
+          isDefault: isDefaultMachine,
           seenAt: machineCommandDeviceListener.seenAt,
         })
         .from(device)
@@ -695,13 +703,14 @@ export function machineOwnerOf(target: ConversationTarget): TaskStoreEffect<stri
   return Effect.map(machineRoutingOf(target), (routing) => routing.userId);
 }
 
-/** What a conversation's commands are routed by: whose Mac runs them (`machineOwnerOf`), the task and workspace of its agent, the agent's default machine, and the machine it runs on itself; each none for a conversation that is no agent's. */
+/** What a conversation's commands are routed by: whose Mac runs them (`machineOwnerOf`), the task and workspace of its agent, the agent's default machine, the machine it runs on itself, and who started it; each none for a conversation that is no agent's. */
 export interface MachineRouting {
   readonly userId: string;
   readonly taskId: string | null;
   readonly workspaceId: string | null;
   readonly targetDeviceId: string | null;
   readonly deviceId: string | null;
+  readonly starterId: string | null;
 }
 
 /** What the conversation's commands are routed by (`MachineRouting`). */
@@ -714,11 +723,12 @@ export function machineRoutingOf(target: ConversationTarget): TaskStoreEffect<Ma
       workspaceId: null,
       targetDeviceId: null,
       deviceId: null,
+      starterId: null,
     })),
   );
 }
 
-/** One machine a call may be routed to: its id and name, its owner, its command mode and apps switch (none for a machine whose app never carried it up), and when it last listened for commands as a device (none where it never did). */
+/** One machine a call may be routed to: its id and name, its owner, its command mode and apps switch (none for a machine whose app never carried it up), whether it is its owner's default, and when it last listened for commands as a device (none where it never did). */
 export interface CommandMachine {
   readonly id: string;
   readonly name: string;
@@ -727,6 +737,8 @@ export interface CommandMachine {
   readonly commandMode: MachineCommandMode | null;
   /** Whether agents may use its apps, none for a machine whose app never carried its switch up. */
   readonly computerUse: boolean | null;
+  /** Whether it is its owner's default machine (`isDefaultMachine`). */
+  readonly isDefault: boolean;
   readonly seenAt: Date | null;
 }
 
@@ -739,7 +751,9 @@ export function commandMachinesOf(
 
 /**
  * Queues one command for the account's Mac, under the id its caller minted:
- * for the device given alone, or for any of its Macs where none is given.
+ * for the device given alone, or for any of its Macs where none is given,
+ * naming the agent whose call it is where there is one, which the ask its
+ * machine may post is drawn on.
  * Answers whether it was queued: a device that is not the account's, or
  * was removed, queues nothing, since no Mac could ever claim it, and its caller says so at once
  * rather than waiting out its result.
@@ -748,6 +762,7 @@ export function queueMachineCommand(
   userId: string,
   queued: MachineCommand,
   deviceId?: string,
+  agentId?: string,
 ): TaskStoreEffect<boolean> {
   return Effect.flatMap(DateTime.nowAsDate, (now) => {
     const row = {
@@ -756,6 +771,7 @@ export function queueMachineCommand(
       kind: queued.kind,
       command: storedMachineCommandText(queued),
       timeoutSeconds: queued.timeoutSeconds,
+      agentId: agentId ?? null,
       now,
     };
 

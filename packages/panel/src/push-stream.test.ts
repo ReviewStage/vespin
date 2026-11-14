@@ -28,8 +28,8 @@ const WINDOW = Symbol("window");
 const PANEL: ActSender = { sender: WINDOW, panel: true };
 
 /** An app link to a task, and to another, as the system hands them the app. */
-const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, planId: "task-1" } };
-const OTHER_LINK = { ...LINK, place: { kind: LINK_DESTINATION.TASK, planId: "task-2" } };
+const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, taskId: "task-1" } };
+const OTHER_LINK = { ...LINK, place: { kind: LINK_DESTINATION.TASK, taskId: "task-2" } };
 
 const opened: MessagePort[] = [];
 

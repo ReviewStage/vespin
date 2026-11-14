@@ -922,7 +922,7 @@ function SectionLink({
   tabbable: boolean;
 }): React.JSX.Element {
   const link = linkOf(
-    { kind: LINK_DESTINATION.SECTION, planId: linked.step, anchor },
+    { kind: LINK_DESTINATION.SECTION, taskId: linked.step, anchor },
     linked.place.workspace,
   );
 
@@ -939,7 +939,7 @@ function TitleLink({
   linked: LinkedTask;
   tabbable: boolean;
 }): React.JSX.Element {
-  const link = linkOf({ kind: LINK_DESTINATION.TASK, planId: linked.step }, linked.place.workspace);
+  const link = linkOf({ kind: LINK_DESTINATION.TASK, taskId: linked.step }, linked.place.workspace);
 
   return <UnitLinkButton link={link} label={LINK_COPY.LABEL} tabbable={tabbable} />;
 }
@@ -1481,7 +1481,7 @@ export const DescriptionBody = memo(function DescriptionBody({
   const comments = useDescriptionCommentsControl();
 
   const commentsHere =
-    comments !== undefined && comments.planId === task.id && sectionLinks !== undefined;
+    comments !== undefined && comments.taskId === task.id && sectionLinks !== undefined;
 
   const drawnSections = commentsHere ? textSections : undefined;
   // The toolbar over the editor's words selected starts a thread on them where the description's comments are drawn.

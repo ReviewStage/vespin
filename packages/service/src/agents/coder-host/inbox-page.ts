@@ -157,7 +157,7 @@ function accountStamps(userId: string): InboxStoreEffect<readonly InboxCursorSta
 /**
  * What waits on the developer across the account, held while its cursor is
  * still the reader's, and when it was read. Every agent stands on a task, so
- * its `planless`, `automations`, and `agents` are empty, as the live read's
+ * its `taskless`, `automations`, and `agents` are empty, as the live read's
  * parts are, which a released desktop still follows. Note that the instant
  * is taken before the items are, because an item written between the two
  * would otherwise read as changed before an answer that does not hold it.
@@ -177,8 +177,8 @@ export function accountInboxPast(
 
     return {
       items,
-      plans: tasks,
-      planless: [],
+      tasks: tasks,
+      taskless: [],
       automations: [],
       agents: [],
       failedRuns,

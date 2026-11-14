@@ -10,8 +10,8 @@ import type * as HttpClient from "effect/http/HttpClient";
 import {
   type AccountCallEffects,
   accountCall,
-  type CallCredential,
   callAnswered,
+  type HostedServiceOptions,
   jsonOf,
 } from "./account-call.js";
 import { startRefusedAs } from "./agent-client.js";
@@ -164,14 +164,6 @@ export type TaskCallResult<Answer, Failure> =
       readonly cause?: FailureFacts;
     };
 
-export interface HostedTaskClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-  requestTimeoutMs?: number;
-}
-
 const UNANSWERED = { ok: false, failure: TASK_CALL_FAILURE.UNANSWERED } as const;
 
 /** Why a keep the service refused in band was not kept, as the editor hears it. */
@@ -207,10 +199,10 @@ const NOT_FOUND_REFUSAL = {
 } as const;
 
 /** A plan's write as the client answers it: the task as it then stands, and the transaction it was written in where it changed a row. */
-function writtenOf(changed: { readonly plan: Task; readonly txid?: string }): TaskWritten {
+function writtenOf(changed: { readonly task: Task; readonly txid?: string }): TaskWritten {
   return changed.txid === undefined
-    ? { task: changed.plan }
-    : { task: changed.plan, txid: changed.txid };
+    ? { task: changed.task }
+    : { task: changed.task, txid: changed.txid };
 }
 
 /** A follower write's answer as the window takes it: the followers, and the transaction where the write changed a row. */
@@ -337,7 +329,7 @@ export class HostedTaskClient {
   readonly #call: AccountCallEffects;
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedTaskClientOptions) {
+  constructor(options: HostedServiceOptions) {
     const { credential } = options;
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
@@ -353,7 +345,7 @@ export class HostedTaskClient {
 
   /** A thread started on the description, or one of its task's pages, with its first comment, answered as it stands, or why not; a request the service would refuse by shape travels nowhere. */
   startComment(
-    planId: string,
+    taskId: string,
     request: DescriptionCommentStart,
   ): Effect.Effect<TasksCommentAnswer, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(
@@ -364,7 +356,7 @@ export class HostedTaskClient {
 
     return Effect.map(
       hostedCall(this.#hosted.descriptionComments.start, {
-        params: { id: planId },
+        params: { id: taskId },
         body: admitted,
       }),
       (started) => ("failure" in started ? bareFailure(started) : started.body),
@@ -373,7 +365,7 @@ export class HostedTaskClient {
 
   /** One thing done to one thread of the description, answered with the thread as it stands, its deletion, or why not. */
   actOnComment(
-    planId: string,
+    taskId: string,
     threadId: string,
     request: DescriptionCommentActionRequest,
   ): Effect.Effect<TasksCommentAnswer, never, HttpClient.HttpClient> {
@@ -385,7 +377,7 @@ export class HostedTaskClient {
 
     return Effect.map(
       hostedCall(this.#hosted.descriptionComments.act, {
-        params: { id: planId, thread: threadId },
+        params: { id: taskId, thread: threadId },
         body: admitted,
       }),
       (acted) => ("failure" in acted ? bareFailure(acted) : acted),
@@ -423,7 +415,7 @@ export class HostedTaskClient {
     return Effect.map(hostedCall(this.#hosted.tasks.open, { id: taskId }), (opened) =>
       "failure" in opened
         ? failedAs(opened, [TASK_CALL_FAILURE.NOT_FOUND])
-        : succeeded(opened.plan),
+        : succeeded(opened.task),
     );
   }
 
@@ -954,7 +946,7 @@ export class HostedTaskClient {
   > {
     return Effect.map(
       hostedCall(this.#hosted.tasks.restoreDescription, { id: taskId, seq: String(seq) }),
-      (answer) => ("failure" in answer ? undefined : { task: answer.plan, txid: answer.txid }),
+      (answer) => ("failure" in answer ? undefined : { task: answer.task, txid: answer.txid }),
     );
   }
 
@@ -1140,12 +1132,12 @@ function taskStartedOf(started: TaskStartAnswer): TaskStarted {
   const written = started.txid === undefined ? {} : { txid: started.txid };
 
   if (started.agent !== undefined) {
-    return { task: started.plan, agent: { agent: started.agent }, ...written };
+    return { task: started.task, agent: { agent: started.agent }, ...written };
   }
 
   if (started.agentRefusal !== undefined) {
-    return { task: started.plan, agent: startRefusedAs(started.agentRefusal), ...written };
+    return { task: started.task, agent: startRefusedAs(started.agentRefusal), ...written };
   }
 
-  return { task: started.plan, ...written };
+  return { task: started.task, ...written };
 }

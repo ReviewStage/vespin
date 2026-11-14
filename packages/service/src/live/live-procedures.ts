@@ -49,12 +49,12 @@
  * the same way, one statement a part that marks where it stands
  * (`task-record-live.ts`), after the task is read as the account, so one it
  * does not reach is not found, as its own read answers, woken by a write
- * that names the task (`taskRecordLive`), as its pages and its history are.
+ * that names the task (`taskRecordRead`), as its pages and its history are.
  * `GET /api/live/task-comments?id=` answers its description's own comment threads,
  * or with `&page=` one page's on every version, as three statements, the
  * threads, their entries, and the files their comments carry
- * (`description-comments-live.ts`), the same way and woken the same way
- * (`taskCommentsLive`).
+ * (`reads/task-comments.ts`), the same way and woken the same way
+ * (`taskCommentsRead`).
  * `GET /api/live/task-browser-tabs?id=` answers its Browser tabs as one
  * statement, the agent's pointer on each among them, woken by a write that
  * names the task, so a window draws the pointer moving within a moment of
@@ -64,7 +64,7 @@
  * `GET /api/live/mac-commands?kinds=` answers the commands of those kinds
  * no Mac of the account has claimed, as one statement, for the Mac to claim
  * each by its id (`../agents/machine-commands-procedures.ts`), woken by a write
- * to any command of the account (`machineCommandsLive`).
+ * to any command of the account (`machineCommandsRead`).
  *
  * `GET /api/live/sidebar` answers the account's sidebar sections, the tasks
  * and agents in them, and its pinned repositories as four, woken by a write
@@ -80,7 +80,7 @@
  * invitations as one, to an owner or an admin of it alone, with the origin
  * each accept link is built on, which the desktop needs since it builds the
  * links itself. Both are woken by a write to the workspace's topic
- * (`workspaceMembersLive`, `workspaceInvitationsLive`).
+ * (`workspaceMembersRead`, `workspaceInvitationsRead`).
  * `GET /api/live/workspace-memories?workspaceId=` answers its memories as
  * one, each with its keeper's name and whether the reader may forget it,
  * after the account is read as a member of it, so a workspace it is not in
@@ -94,6 +94,9 @@
  * its own settings for agents' commands and apps; woken by a machine
  * joining, removed, its settings changed, or its app coming or going
  * (`machinesRead`).
+ * `GET /api/live/machine-asks` answers the asks the account's machines hold
+ * for its answer, each with the answer that stands on it, the account's own
+ * alone; woken by an ask posted, answered, or taken down (`machineAsksRead`).
  * `GET /api/live/installed-skills?workspaceId=` answers the skills the
  * account sees there, the workspace's and its own, each with whether it may
  * manage it, on the same membership check; woken by one of them installed,
@@ -130,7 +133,7 @@
  * `GET /api/live/agent-origin?id=` answers the run of an automation that
  * started one coding agent as one statement (`agent-origin-live.ts`), after
  * the agent is read as the account, so one it does not reach is not found,
- * woken by the agent's own row (`agentOriginLive`).
+ * woken by the agent's own row (`agentOriginRead`).
  *
  * `GET /api/live/task-inbox?id=` and `GET /api/live/agent-inbox?id=` answer
  * one plan's inbox, or one agent's, the same way: its open items and its
@@ -227,6 +230,7 @@ import { hostsRead } from "./reads/hosts.js";
 import { inboxItemsRead } from "./reads/inbox-items.js";
 import { installedSkillsRead } from "./reads/installed-skills.js";
 import { integrationStatusesRead } from "./reads/integration-statuses.js";
+import { machineAsksRead } from "./reads/machine-asks.js";
 import { machineCommandsRead } from "./reads/machine-commands.js";
 import { machinesRead } from "./reads/machines.js";
 import { agentPagesRead, taskPagesRead } from "./reads/pages.js";
@@ -926,7 +930,6 @@ function answerBoundRead<Read extends AnyLiveRead>(read: BoundLiveRead<Read>) {
 }
 
 /** The live reads, each to a signed-in caller who is the account it names. */
-
 export function liveProcedures(seams: LiveProcedureSeams) {
   const signedIn = hosted.live.use(accountMiddleware(seams.resolveUserId));
   const answerWorkspaces = answerBoundRead(workspacesRead);
@@ -977,6 +980,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
 
     hosts: signedIn.hosts.effect(answerBoundRead(hostsRead)),
     machines: signedIn.machines.effect(answerBoundRead(machinesRead)),
+    machineAsks: signedIn.machineAsks.effect(answerBoundRead(machineAsksRead)),
     workspaceMemories: signedIn.workspaceMemories.effect(answerBoundRead(workspaceMemoriesRead)),
     installedSkills: signedIn.installedSkills.effect(answerBoundRead(installedSkillsRead)),
 
