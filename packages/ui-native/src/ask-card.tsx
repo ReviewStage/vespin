@@ -36,7 +36,7 @@ import { FIELD_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode } from "react";
 import { useAnnounced } from "./accessibility.js";
-import { Chip } from "./button.js";
+import { CHIP_LOOK, Chip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
@@ -91,6 +91,8 @@ export type AnswerField = {
 export type AskAct = {
   readonly label: string;
   readonly symbol: Glyph;
+  /** Whether it is the lesser of the card's acts, such as Couldn't do it beside Mark done, which stands quiet, as the panel's does. */
+  readonly quiet?: boolean | undefined;
   readonly onPress: () => void;
 };
 
@@ -158,7 +160,13 @@ export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
   return (
     <HStack spacing={SPACE.TIGHT * 2}>
       {acts.map((act) => (
-        <Chip key={act.label} label={act.label} symbol={act.symbol} onPress={act.onPress} />
+        <Chip
+          key={act.label}
+          label={act.label}
+          symbol={act.symbol}
+          look={act.quiet === true ? CHIP_LOOK.QUIET : CHIP_LOOK.BORDERED}
+          onPress={act.onPress}
+        />
       ))}
     </HStack>
   );
@@ -274,10 +282,11 @@ function FieldWords({
 /**
  * A text or number field: its label over the system's plain field, as the
  * panel stands a field's name over it, the field with no box of its own
- * inside the card's (one layer, as a Form's field stands in its row) and
- * prompting with its label while it is empty, as Contacts' fields do, so an
- * empty one never reads as a gap; heard by its label, a number's with the
- * decimal pad.
+ * inside the card's (one layer, as a Form's field stands in its row); a
+ * required one prompts "Required" while it is empty, as iOS's account forms
+ * do, so it never reads as a gap nor repeats the label over it, and an
+ * optional one, whose label already says so, prompts nothing; heard by its
+ * label, a number's with the decimal pad.
  */
 function TypedFieldRow({
   field,
@@ -299,7 +308,7 @@ function TypedFieldRow({
       />
       <TextField
         text={text}
-        placeholder={field.label}
+        placeholder={field.required ? FIELD_WORDS.REQUIRED : ""}
         onTextChange={onChange}
         modifiers={[
           textFieldStyle("plain"),
