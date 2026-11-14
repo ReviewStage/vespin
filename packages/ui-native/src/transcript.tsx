@@ -562,7 +562,6 @@ function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
 }
 
 /** One of the transcript's rows, as its kind draws it. */
-
 function TranscriptRow({
   item,
   drawing,
