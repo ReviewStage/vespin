@@ -119,12 +119,12 @@ it.effect(
       const { call, told } = yield* subject(service);
 
       const read = yield* call("TASKS_PICTURE_READ", {
-        planId: INVITES,
+        taskId: INVITES,
         attachmentId: "picture-1",
       });
 
       const gone = yield* call("TASKS_PICTURE_READ", {
-        planId: INVITES,
+        taskId: INVITES,
         attachmentId: "picture-2",
       });
 
@@ -207,13 +207,13 @@ it.effect(
       const { call } = yield* subject(service);
       const picture = "data:image/png;base64,iVBORw0KGgo=";
 
-      const kept = yield* call("TASKS_PICTURE_KEEP", { planId: INVITES, picture });
-      yield* call("TASKS_PICTURE_KEEP", { planId: INVITES, picture });
-      const third = yield* call("TASKS_PICTURE_KEEP", { planId: INVITES, picture });
+      const kept = yield* call("TASKS_PICTURE_KEEP", { taskId: INVITES, picture });
+      yield* call("TASKS_PICTURE_KEEP", { taskId: INVITES, picture });
+      const third = yield* call("TASKS_PICTURE_KEEP", { taskId: INVITES, picture });
 
       assert.deepEqual(kept, { id: "kept-1" });
       assert.deepEqual(
-        yield* call("TASKS_PICTURE_READ", { planId: INVITES, attachmentId: "kept-1" }),
+        yield* call("TASKS_PICTURE_READ", { taskId: INVITES, attachmentId: "kept-1" }),
         { contentType: PICTURE_TYPE.PNG, base64: "iVBORw0KGgo=" },
       );
       assert.deepEqual(third, { failure: PICTURE_KEEP_FAILURE.TOO_MANY });
@@ -480,7 +480,7 @@ it.effect(
       yield* relaunched.listed();
       yield* relaunched.settled;
 
-      assert.deepEqual(answered, { planId: INVITES });
+      assert.deepEqual(answered, { taskId: INVITES });
       assert.equal(waiting?.activeTaskId, INVITES, "the task stands open while it waits");
       assert.equal(
         waiting?.tasks.some((row) => row.id === INVITES),
@@ -579,7 +579,7 @@ it.effect(
       const agentStart = {
         agent: {
           id: "3c9e1d2a-6b7f-4e8a-9c0d-1e2f3a4b5c6d",
-          planId: INVITES,
+          taskId: INVITES,
           model: "anthropic/claude-opus-5.5",
           effort: "high",
           title: null,
@@ -595,7 +595,7 @@ it.effect(
 
       assert.equal(meanwhile, undefined, "no answer while it waits");
       assert.equal(drawn, true, "its row is drawn while it waits");
-      assert.deepEqual(yield* Fiber.join(starting), { planId: INVITES, agentStart });
+      assert.deepEqual(yield* Fiber.join(starting), { taskId: INVITES, agentStart });
       assert.deepEqual(
         service.createKeys,
         [undefined, undefined],
@@ -680,8 +680,8 @@ it.effect(
         quiet: true,
       });
 
-      assert.deepEqual(started, { planId: INVITES });
-      assert.deepEqual(withAgent, { planId: INVITES, agentStart: refusal });
+      assert.deepEqual(started, { taskId: INVITES });
+      assert.deepEqual(withAgent, { taskId: INVITES, agentStart: refusal });
       assert.equal(last()?.activeTaskId, undefined, "the task is not opened");
     }),
 );
@@ -728,7 +728,7 @@ it.effect(
       assert.deepEqual(refused, { failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE });
       assert.equal(takenBack, false, "a refused start's row is taken back");
       assert.equal(throughStale, true, "the row stands until the list carries the start");
-      assert.deepEqual(yield* Fiber.join(start), { planId: INVITES });
+      assert.deepEqual(yield* Fiber.join(start), { taskId: INVITES });
       assert.deepEqual(
         last()?.tasks.map((row) => row.id),
         [INVITES, BILLING],
@@ -838,7 +838,7 @@ it.effect("a start answered after another task was opened answers its task and o
     yield* Deferred.succeed(answered, undefined);
     yield* settled;
 
-    assert.deepEqual(starting.pollUnsafe(), Exit.succeed({ planId: INVITES }));
+    assert.deepEqual(starting.pollUnsafe(), Exit.succeed({ taskId: INVITES }));
     assert.equal(last()?.activeTaskId, BILLING, "the task opened since stays open");
   }),
 );
@@ -1432,7 +1432,7 @@ it.effect(
 
       const agent = {
         id: "3c9e1d2a-6b7f-4e8a-9c0d-1e2f3a4b5c6d",
-        planId: INVITES,
+        taskId: INVITES,
         model: "anthropic/claude-opus-5.5",
         effort: "high",
         title: null,
@@ -1454,9 +1454,9 @@ it.effect(
       };
       const refused = yield* call("TASKS_START", params);
 
-      assert.deepEqual(started, { planId: INVITES, agentStart: { agent } });
+      assert.deepEqual(started, { taskId: INVITES, agentStart: { agent } });
       assert.deepEqual(refused, {
-        planId: INVITES,
+        taskId: INVITES,
         agentStart: { failure: AGENT_CALL_FAILURE.INVALID_CHOICE },
       });
       assert.equal(last()?.activeTaskId, INVITES);
@@ -2128,10 +2128,10 @@ it.effect(
       assert.deepEqual(yield* call("TASKS_TREE", { ...place, path: "src" }), folder("src"));
       assert.deepEqual(yield* call("TASKS_SKILLS", place), skills("release"));
       assert.deepEqual(
-        yield* call("TASKS_TREE", { planId: INVITES, path: "docs" }),
+        yield* call("TASKS_TREE", { taskId: INVITES, path: "docs" }),
         folder("docs"),
       );
-      assert.deepEqual(yield* call("TASKS_SKILLS", { planId: INVITES }), skills("review"));
+      assert.deepEqual(yield* call("TASKS_SKILLS", { taskId: INVITES }), skills("review"));
     }),
 );
 
@@ -2155,7 +2155,7 @@ it.effect(
       });
 
       const { call, settled, reset } = yield* subject(service);
-      const asked = () => call("TASKS_SKILLS", { planId: INVITES });
+      const asked = () => call("TASKS_SKILLS", { taskId: INVITES });
 
       assert.deepEqual(yield* asked(), { failure: TASK_CALL_FAILURE.UNANSWERED });
       service.skills[INVITES] = skillsNamed("review");
@@ -2203,7 +2203,7 @@ it.effect(
       const { call, listed } = yield* subject(service);
       yield* call("TASKS_REFRESH", undefined);
       yield* listed();
-      const asked = () => call("TASKS_SKILLS", { planId: INVITES });
+      const asked = () => call("TASKS_SKILLS", { taskId: INVITES });
       service.skills[INVITES] = installed("review");
       assert.deepEqual(yield* asked(), installed("review"));
 
@@ -2934,7 +2934,7 @@ it.effect(
       };
 
       const resolve = call("TASKS_COMMENT_ACT", {
-        planId: INVITES,
+        taskId: INVITES,
         threadId: SEVEN_DAYS.id,
         action: { action: DESCRIPTION_COMMENT_ACTION.RESOLVE },
       });
@@ -3211,9 +3211,57 @@ it.effect(
 const LIVE_NOW = 1_800_000_000_000;
 
 /** One agent of the plan as the agents statement delivers its row, started `ago` before the list is read, with no turn yet. */
-function agentRow(planId: string, ago: number) {
-  return agentListRow(planId, LIVE_NOW - ago);
+function agentRow(taskId: string, ago: number) {
+  return agentListRow(taskId, LIVE_NOW - ago);
 }
+
+it.effect(
+  "a Done task untouched since the live set's instant leaves the list with its agents, one touched at it stays, opening the one let go draws it, and an edit brings it back",
+  () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(LIVE_NOW);
+      const since = LIVE_NOW - 1_000;
+
+      const service = fakeService([
+        task(BILLING, "Billing export", "# Billing", 10),
+        task(INVITES, "Teammate invitations", "# Invites", 20),
+      ]);
+
+      const { call, last, openTask } = yield* subject(service);
+      const done = { status: TASK_STATUS.DONE, completedAt: since - 1 };
+      const billing = { ...planRow(BILLING, "Billing export"), ...done, updatedAt: since - 1 };
+      const invites = { ...planRow(INVITES, "Teammate invitations"), ...done, updatedAt: since };
+
+      const listed = () =>
+        last()
+          ?.tasks.map((each) => each.name)
+          .toSorted();
+
+      // Both stand live at the instant the first answer was bound at.
+      service.liveSince = since - 1;
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, {
+        plans: [billing, invites],
+        agents: [agentRow(BILLING, 60_000)],
+        issues: [],
+      });
+      assert.deepEqual(listed(), ["Billing export", "Teammate invitations"]);
+
+      // The next answer is bound a moment later and carries no row, as a task only ages out.
+      service.liveSince = since;
+      yield* listAnswers(service, { plans: [billing, invites] });
+      assert.deepEqual(listed(), ["Teammate invitations"], "the task touched at the instant stays");
+      assert.deepEqual(last()?.taskAgents ?? [], [], "the agents of the one let go leave with it");
+
+      yield* openTask(BILLING);
+      assert.deepEqual(listed(), ["Billing export", "Teammate invitations"], "opened, it is drawn");
+
+      // An edit moves it, which the follow answers as it touches it.
+      const edited = { ...billing, name: "Billing export, monthly", updatedAt: LIVE_NOW };
+      yield* listAnswers(service, { plans: [edited, invites] });
+      assert.deepEqual(listed(), ["Billing export, monthly", "Teammate invitations"]);
+    }),
+);
 
 it.effect(
   "a list that could not be read says so beside what it drew and is read again, and a read refused as signed out ends the follow",
@@ -3308,7 +3356,7 @@ it.effect(
         [1, [AGENT_STATUS.STARTING]],
       );
       assert.deepEqual(
-        last()?.taskAgents?.map((each) => [each.planId, each.status, each.turnId]),
+        last()?.taskAgents?.map((each) => [each.taskId, each.status, each.turnId]),
         [[INVITES, AGENT_STATUS.STARTING, null]],
       );
 

@@ -13,14 +13,14 @@ On a Mac with the app, open **Settings › Vespin MCP & CLI** and click **Instal
 # Node 20 or later
 npm i -g vespin
 
-# Bundles its own Node; macOS (Apple silicon) or Linux
+# Bundles its own Node; macOS on Apple silicon, or Linux on x64 or arm64
 curl -fsSL https://vespin.dev/install.sh | sh -s cli
 
 # Run once without installing
 npx vespin --help
 ```
 
-`vespin update` updates a curl install in place. For an npm install it prints the command to run.
+The curl install puts `vespin` in `~/.local/bin`, which must be on your `PATH`. `vespin version` prints the version and how it was installed. `vespin update` updates a curl install in place, and prints the command to run for npm, pnpm, yarn, bun, or npx.
 
 ## Sign in
 
@@ -28,32 +28,43 @@ npx vespin --help
 vespin login
 ```
 
-It opens your browser. On a machine with no browser, such as one you reach over SSH, run `vespin login --no-browser` and paste back the address your browser lands on. The CLI appears in the **CLI** section of Settings › Vespin MCP & CLI, where **Sign out everywhere** signs it out.
+It opens your browser. On a machine with no browser, such as one you reach over SSH, run `vespin login --no-browser` and paste back the address your browser lands on. `vespin whoami` shows the account and its workspaces.
 
-If you're in more than one workspace, set the default with `vespin workspace use <slug>`, or pass `--workspace <slug>` to any command.
+On a Mac the sign-in is kept in the login Keychain. Elsewhere it's kept in `~/.config/vespin/credentials.json`, readable only by you. `vespin logout` signs this machine out. **Sign out everywhere**, in the **CLI** section of Settings › Vespin MCP & CLI, signs out every machine.
+
+## Choose a workspace
+
+A command acts in one workspace, chosen in this order:
+
+1. `-w` or `--workspace <slug>` on the command.
+2. The `VESPIN_WORKSPACE` environment variable.
+3. The default you set with `vespin workspace use <slug>`.
+4. Your only workspace, if you're in one.
+
+If none of these settles it, the command lists your workspaces and exits with code 2.
 
 ## Work from a repository
 
-Run these inside a checkout. The CLI reads the repository from the folder.
+`vespin task create` reads the repository from the folder's `origin` unless you pass `-R owner/name`.
 
 ```sh
 # Create a task here, with an agent on it
 echo "Fix the login redirect" | vespin task create "Login redirect" --prompt -
 
 # Stream the agent's turn, or block until it ends
-vespin agent logs <id> --follow
-vespin agent wait <id>
-
-# Continue it as a new agent on its task, which stops this one;
-# the new agent runs as you, on your own plan
-vespin agent continue <id>
-
-# Fetch its branch, as gh pr checkout does
-vespin agent checkout <id>
+vespin agent logs <agent> --follow
+vespin agent wait <agent>
 
 # Message the agent
-vespin agent send <id> "Also cover the signup page"
+echo "Also cover the signup page" | vespin agent send <agent> -F -
+
+# Fetch its branch into this checkout
+vespin agent checkout <agent>
 ```
+
+`--prompt` and `-F` take a file path, or `-` to read stdin, never the text itself. `agent checkout` needs the agent's branch pushed and a clean working tree.
+
+A task can be named by its id, its number, or its key, such as `ACME-42`.
 
 ## Answer your Inbox
 
@@ -62,18 +73,22 @@ vespin agent send <id> "Also cover the signup page"
 vespin inbox list
 
 # A thread and its open ask
-vespin inbox view <id>
+vespin inbox view <thread>
 
-# Pick an option, or done for a to-do
-vespin inbox answer <id> <option>
+# Pick an option, done or not-done for a to-do, or your own words
+vespin inbox answer <thread> <answer>
 
-# Write on the thread
-vespin inbox reply <id> "Use the staging database"
+# Write on the thread without answering
+echo "Use the staging database" | vespin inbox reply <thread> -F -
 ```
 
 ## Scripts and coding agents
 
-Output is a table at a terminal, and JSON when piped or with `--json`. `--quiet` prints only ids. The exit code says how a command ended:
+Output is text at a terminal, and JSON when piped or with `--json`. `-q` (`--quiet`) prints only ids, one per line. With JSON or `-q`, `agent logs --follow` prints once, when the turn ends. Notes and errors always go to stderr.
+
+A command that asks for confirmation needs `-y` (`--yes`) when stdin isn't a terminal. It never reads a `y` from stdin.
+
+The exit code says how a command ended:
 
 | Code | Meaning |
 | --- | --- |
@@ -82,9 +97,26 @@ Output is a table at a terminal, and JSON when piped or with `--json`. `--quiet`
 | 2 | Usage error |
 | 3 | Not signed in |
 | 4 | Unreachable, or a server error |
-| 5 | The agent's turn failed or was stopped |
+| 5 | The agent's turn failed or was stopped (`--wait` and `agent wait` only) |
 | 6 | Timed out waiting |
+
+| Variable | What it does |
+| --- | --- |
+| `VESPIN_WORKSPACE` | The workspace to act in, after `-w` |
+| `VESPIN_URL` | The service to use, as `--url` sets it |
+| `VESPIN_TOKEN` | A bearer token used before the stored sign-in, never renewed or stored |
 
 The npm package ships a skill, `skills/vespin/SKILL.md`, that teaches a coding agent the commands, `--json`, and these codes. For Claude Code, copy the `skills/vespin` folder into `~/.claude/skills/`. For Codex and Cursor, add the skill's text to your `AGENTS.md`. To connect an agent to Vespin without a shell, use [Vespin MCP](/vespin-mcp) instead.
 
-`vespin --help`, and `--help` on any command, lists every command with examples.
+## Reference
+
+Every command, with its flags and examples:
+
+- [Account](/cli/account): `login`, `logout`, `whoami`, `version`, `update`
+- [Tasks](/cli/tasks): `task`, `section`, `page`, `comment`
+- [Agents](/cli/agents): `agent`
+- [Pull requests](/cli/pull-requests): `pr`
+- [Inbox](/cli/inbox): `inbox`
+- [Workspace](/cli/workspace): `workspace`, `env`, `github`, `repo`, `setup`, `slack`, `sentry`, `integrations`, `keys`, `preferences`, `models`
+- [Automations](/cli/automations): `automation`
+- [MCP and API](/cli/mcp-and-api): `mcp`, `api`

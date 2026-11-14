@@ -309,7 +309,7 @@ export function automationsOfLiveRows(
   return orderedLiveRows(AUTOMATIONS_READ.parts.automations, rows.automations).map((row) =>
     withWebhookUrl(serviceBaseUrl, {
       id: row.id,
-      planId: row.taskId,
+      taskId: row.taskId,
       planName: row.taskName,
       ...(row.organizationId === null ? undefined : { workspaceId: row.organizationId }),
       name: row.name,

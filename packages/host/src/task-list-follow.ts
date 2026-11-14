@@ -38,6 +38,9 @@ import {
  * for ends the follow, which the next sign-in starts again.
  */
 
+/** What an answer says beside its rows (`TASK_LIST_READ.beside`). */
+export type TaskListBeside = Pick<TaskListLiveAnswer, "taskWorkspaces" | "liveSince">;
+
 /** A read as the follow asks for it, its rows inline; a failure where the service answered none, `gone` where it never will again. */
 type Sealed = TaskListLiveAnswer | LiveFailure;
 
@@ -46,11 +49,11 @@ export interface TaskListFollowDependencies {
   readonly live: (sync: string | undefined) => Effect.Effect<Sealed>;
   /** The sync id the list already drawn was read at, as the entity store kept it, which the first read asks past; every read after asks whole. */
   readonly from?: string;
-  /** Takes each answer's rows, both parts, decoded, as its poll answers, with where it stands by sync id and the workspaces it says hold any task, where it says. */
+  /** Takes each answer's rows, both parts, decoded, as its poll answers, with where it stands by sync id and what it says beside them: the workspaces holding any task and the instant its live set was bound at, where it says. */
   readonly take: (
     rows: TaskListLiveRows,
     standing?: SyncStanding,
-    taskWorkspaces?: readonly string[],
+    beside?: TaskListBeside,
   ) => Effect.Effect<void>;
   /** That the list could not be read, each time a read goes unanswered; the list already drawn stands. */
   readonly failed: () => void;
@@ -88,11 +91,12 @@ function followRows(
 
     return Option.isSome(rows)
       ? Effect.as(
-          dependencies.take(
-            rows.value,
-            syncStandingOf<"plans" | "agents">(read),
-            read.taskWorkspaces,
-          ),
+          dependencies.take(rows.value, syncStandingOf<"plans" | "agents">(read), {
+            ...(read.taskWorkspaces === undefined
+              ? undefined
+              : { taskWorkspaces: read.taskWorkspaces }),
+            ...(read.liveSince === undefined ? undefined : { liveSince: read.liveSince }),
+          }),
           true,
         )
       : Effect.succeed(true);

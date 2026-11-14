@@ -62,7 +62,7 @@ const TURN: AgentTurn = {
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: "plan-1",
+  taskId: "plan-1",
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Retry audit",

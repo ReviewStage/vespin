@@ -79,7 +79,7 @@ const TASK: Task = {
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Retry the webhook",
@@ -271,6 +271,17 @@ test("the dialog lists the other workspaces, disables one whose GitHub cannot re
 
   assert.deepEqual(moves, [[TASK.id, ACME.id]]);
   assert.equal(dialog(), null, "a move landed puts the dialog away");
+});
+
+test("where no other workspace's GitHub reaches the repository, the dialog says so and Move stays off", () => {
+  openMenu(openTab(TASK, [STUDIO, NORTHWIND, OCTO]));
+  const moving = chooseMove();
+
+  assert.ok(
+    moving.textContent?.includes("No other workspace can reach acme-corp/relay on GitHub."),
+    "the dialog says why no workspace can take the plan",
+  );
+  assert.equal(button(moving, "Move").disabled, true, "Move stays off");
 });
 
 test("a row calls the account's own first workspace personal while no one else is in it, and counts the one member of a team no one has joined yet", () => {

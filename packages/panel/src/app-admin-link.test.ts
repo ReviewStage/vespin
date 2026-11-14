@@ -213,7 +213,7 @@ test.each([
   [
     "a task's version",
     "/acme/task/7/version/3",
-    { kind: LINK_DESTINATION.VERSION, planId: "7", revision: 3 },
+    { kind: LINK_DESTINATION.VERSION, taskId: "7", revision: 3 },
   ],
 ] as const)(
   "a link to %s already standing leaves it standing, as pressing the place standing always has",
@@ -317,7 +317,7 @@ test("a version history loaded on a task number the service finds nothing for gi
 /** An agent of Acme's task numbered 7, which no list the window holds names, as the service reads its page. */
 const SEVEN_AGENT: AgentPage = {
   id: "agent-of-seven",
-  planId: ACME_SEVEN.id,
+  taskId: ACME_SEVEN.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Retry the relay",

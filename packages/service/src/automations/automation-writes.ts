@@ -215,7 +215,7 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   return {
     id: automation.id,
     // Note that no automation stands on a task, and the wire still names one because a released desktop reads it.
-    planId: null,
+    taskId: null,
     planName: null,
     workspaceId: automation.organizationId,
     name: automation.name,
@@ -335,7 +335,7 @@ const standingOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   made: typeof automationCreateRequestSchema.Type,
 ): Effect.fn.Return<Standing, HostedRefusal, DatabaseServices | GitHubApp | HttpClient.HttpClient> {
   // Note that a released desktop may still name a task, on which no automation stands any more.
-  if (made.planId !== undefined || made.workspaceId === undefined) {
+  if (made.taskId !== undefined || made.workspaceId === undefined) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
 

@@ -7,6 +7,7 @@ import {
 } from "@repo/settings/settings-views";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useRef } from "react";
+import { useSettingsMachineStore } from "./places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
 
 /**
@@ -61,6 +62,7 @@ export function useSettingsRoute(input: {
   const router = useRouter();
   const navigate = useNavigate();
   const here = useWindowPlace();
+  const landings = useSettingsMachineStore();
   const standing = here.place === ROUTED_PLACE.SETTINGS;
   const { params } = here;
   const slug = standing ? params.workspace : undefined;
@@ -106,6 +108,15 @@ export function useSettingsRoute(input: {
   };
 
   const open = (link: SettingsLink) => {
+    const { machineId } = link;
+
+    // Note that a machine asked for again lands again, on the page already standing too, and a link naming none lands on none.
+    landings.setState((held) => {
+      const asks = held.asks + 1;
+
+      return { asks, at: machineId === undefined ? undefined : { machineId, ask: asks } };
+    });
+
     // Note that entering Settings in a narrow room stands it on its page list, which a link to the list keeps.
     const to = link.listed === true ? undefined : link.page;
     // A page opened from a narrow room's list is a step after it; any other turn of Settings takes its step in place, and so

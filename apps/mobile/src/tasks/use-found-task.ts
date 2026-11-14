@@ -73,7 +73,7 @@ export function useFoundTask(named: string | undefined, workspace: string | unde
   const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
 
   const number =
-    named === undefined ? undefined : taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: named });
+    named === undefined ? undefined : taskNumberOf({ kind: LINK_DESTINATION.TASK, taskId: named });
 
   const home = workspace === undefined ? undefined : workspaceOfSlug(workspaces ?? [], workspace);
 

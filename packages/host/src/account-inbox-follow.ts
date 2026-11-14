@@ -170,14 +170,14 @@ function rowsChanged(
     if (changed !== "gone") return [changed];
 
     if (counted(entry, readerId)) {
-      answered.set(entry.planId, (answered.get(entry.planId) ?? 0) + 1);
+      answered.set(entry.taskId, (answered.get(entry.taskId) ?? 0) + 1);
     }
 
     return [];
   });
 
   const plans = rows.plans.map((plan) => {
-    const fewer = answered.get(plan.planId) ?? 0;
+    const fewer = answered.get(plan.taskId) ?? 0;
 
     return fewer === 0 || plan.toDo === undefined
       ? plan
@@ -202,7 +202,7 @@ export function accountInboxes(
         const items = yield* answeredCollection({ getKey: (row: Entry) => row.id });
 
         const plans = yield* answeredCollection({
-          getKey: (row: AccountInboxLiveRows["plans"][number]) => row.planId,
+          getKey: (row: AccountInboxLiveRows["plans"][number]) => row.taskId,
         });
 
         let wait: TxWait | undefined;

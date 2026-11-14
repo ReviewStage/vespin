@@ -82,6 +82,11 @@ export function workspaceTakesTask(
   return repository === null || workspaceReaches(workspace, repository);
 }
 
+/** What the move says where no other workspace's GitHub reaches the task's repository, so the reader sees why Move stands off. */
+export function moveNoneTakesWords(repository: string): string {
+  return `No other workspace can reach ${repository} on GitHub.`;
+}
+
 /** The workspace chosen: the one picked where it can take the task, else the first that can. */
 export function moveChosen(
   targets: readonly Workspace[],

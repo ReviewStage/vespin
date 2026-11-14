@@ -133,7 +133,7 @@ it.effect(
 
       const agent = {
         id: "3c9e1d2a-6b7f-4e8a-9c0d-1e2f3a4b5c6d",
-        planId: TASK_ID,
+        taskId: TASK_ID,
         model: "anthropic/claude-opus-5.5",
         effort: "high",
         title: null,

@@ -60,7 +60,7 @@ import {
   undeliveredOn,
   undeliveredReplies,
 } from "./inbox-undelivered.js";
-import { type HeldUpdate, joinedAhead } from "./refused-send.js";
+import { type HeldUpdate, heldUpdateOver, joinedAhead } from "./refused-send.js";
 
 /**
  * use-task-inbox.ts -- the open task's inbox as one control: its items, drawn from the account's feed at once and from the holder's own read as the host holds it, and the answers on their way back.
@@ -249,12 +249,7 @@ export interface TaskInboxControl {
   readonly drafted: boolean;
   /** Keeps what the developer has put on the item's card, at its revision. */
   readonly onDraft: (item: InboxItem, draft: InboxDraft) => void;
-  /** Moves the files on the item's card on from what they are as the write lands, so two reads landing in one render both stand. */
-  readonly onAttachments: (
-    item: InboxItem,
-    next: (was: readonly AgentAttachment[]) => readonly AgentAttachment[],
-  ) => void;
-  /** Moves the words and files on the item's card on together from what they are as the write lands, as a refused send put back does (`refused-send.ts`). */
+  /** Moves the words and files on the item's card on together from what they are as the write lands: every change its box makes, and a refused send put back (`refused-send.ts`). */
   readonly onHeld: (item: InboxItem, next: Parameters<HeldUpdate>[0]) => void;
   /** Nods to a notice, settling it at the revision drawn, after every message of the item's on its way; nothing where a nod is out. Got it pressed hands its nod to `held` once its turn comes, which holds it behind an Undo (`inbox-acknowledge.tsx`); an opening sends it as it is (`useNodOnOpen`). */
   readonly onAcknowledge: (item: InboxItem, held?: InboxAcknowledger) => void;
@@ -411,7 +406,7 @@ export interface InboxImageReads {
 
 /** Where an item's card keeps its draft: the item, whatever its revision or status, so a message landing on it never moves the words being written. */
 function draftPlace(item: InboxItem, taskId: string | null): InboxPlace {
-  return { kind: DRAFT_PLACE.INBOX, planId: taskId, agentId: item.agentId, itemId: item.id };
+  return { kind: DRAFT_PLACE.INBOX, taskId: taskId, agentId: item.agentId, itemId: item.id };
 }
 
 /** The items with one replaced by the service's newer word on it. */
@@ -505,10 +500,7 @@ function holdsNothing(draft: Draft): boolean {
 }
 
 /** The doors of a held read's cards' drafts (`useInboxCardDrafts`). */
-type InboxCardDrafts = Pick<
-  TaskInboxControl,
-  "draftOf" | "drafted" | "onDraft" | "onAttachments" | "onHeld"
->;
+type InboxCardDrafts = Pick<TaskInboxControl, "draftOf" | "drafted" | "onDraft" | "onHeld">;
 
 /**
  * A held read without its cards' drafts, which the window's Inbox reads in
@@ -998,7 +990,7 @@ export function useInboxDraftsLetGo(
   // which stand on the ask as it was, while the words and files being written stay as they are.
   useEffect(() => {
     if (!drawn || taskId === undefined) return;
-    const covered = standings.filter(({ place }) => place.planId === taskId);
+    const covered = standings.filter(({ place }) => place.taskId === taskId);
 
     const gone =
       whole === undefined
@@ -1072,24 +1064,11 @@ export function useInboxCardDrafts(
     [writer, draftsOn],
   );
 
-  const onAttachments = useCallback(
-    (item: InboxItem, next: (was: readonly AgentAttachment[]) => readonly AgentAttachment[]) =>
-      writer.update(draftPlace(item, draftsOn), (was) => ({
-        ...was,
-        attachments: next(was.attachments),
-      })),
-    [writer, draftsOn],
-  );
-
   const onHeld = useCallback(
     (item: InboxItem, next: Parameters<HeldUpdate>[0]) =>
-      writer.update(draftPlace(item, draftsOn), (was) => {
-        const moved = next(was);
-
-        return moved === undefined ? was : { ...was, ...moved };
-      }),
+      heldUpdateOver<Draft>((moved) => writer.update(draftPlace(item, draftsOn), moved))(next),
     [writer, draftsOn],
   );
 
-  return { draftOf, drafted, onDraft, onAttachments, onHeld };
+  return { draftOf, drafted, onDraft, onHeld };
 }

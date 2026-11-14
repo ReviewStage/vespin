@@ -4,6 +4,8 @@ export * from "./components/account-words/account-words.js";
 
 export * from "./components/address-field/address-field.js";
 
+export * from "./components/agent-pointer/agent-pointer.js";
+
 export * from "./components/anchored-popover/anchored-popover.js";
 
 export * from "./components/anchored-popover/press-away.js";

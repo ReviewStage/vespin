@@ -2283,14 +2283,14 @@ account's personal automation, or one in a workspace the account left, is
 
 - `GET /api/automations` answers the automations the account may read
   newest first, or one workspace's under `?workspaceId=`, each with its
-  newest run, and `[]` under `?planId=`, kept for the released desktops
+  newest run, and `[]` under `?taskId=`, kept for the released desktops
   that still send it;
   `POST /api/automations` makes one (`201`) in the workspace its
   `workspaceId` names, on its `repositories`, each reached through the
   workspace's installation (`standingOf`). A schedule that does not
   read (five-field cron, a known zone, no more often than every fifteen
   minutes), a model the catalog does not offer the account, a key the
-  frame does not name, a `planId`, no workspace or no repositories, or the
+  frame does not name, a `taskId`, no workspace or no repositories, or the
   `workspace` scope in the account's personal workspace is
   `invalid-request`, a workspace the account is not in is `not-found`, and
   a GitHub trigger with no repository is `no-repository`

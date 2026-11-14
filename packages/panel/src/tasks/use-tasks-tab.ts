@@ -315,10 +315,10 @@ type TaskTabPlace =
       | typeof LINK_DESTINATION.WORKER
       | typeof LINK_DESTINATION.CHANGES
       | typeof LINK_DESTINATION.PULL_REQUEST_THREAD
-    > & { readonly planId: string })
+    > & { readonly taskId: string })
   | Extract<
       LinkDestination,
-      { readonly kind: typeof LINK_DESTINATION.PAGE; readonly planId: string }
+      { readonly kind: typeof LINK_DESTINATION.PAGE; readonly taskId: string }
     >;
 
 /** The step a workspace's address names it by: its slug, or its id where an older service answered none, as `linkOf` writes it. */
@@ -451,7 +451,7 @@ export interface TasksControl {
   onSectionRevealed: (ask: number) => void;
   /** The last ask to open one of a task's comment threads, as a link to it asks, under the task it was asked of; counted so each ask is its own. */
   commentReveal:
-    | { readonly planId: string; readonly thread: string; readonly ask: number }
+    | { readonly taskId: string; readonly thread: string; readonly ask: number }
     | undefined;
   /** The task's page took the ask, so a later visit to the task opens the thread neither beside its words nor in its list again. */
   onCommentRevealed: (ask: number) => void;
@@ -1568,7 +1568,7 @@ export function useTasksTab(input: {
   const routedNumber =
     routedStep === undefined
       ? undefined
-      : taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: routedStep });
+      : taskNumberOf({ kind: LINK_DESTINATION.TASK, taskId: routedStep });
 
   const routedHome =
     historyRoute.workspace === undefined
@@ -2298,7 +2298,7 @@ export function useTasksTab(input: {
     if (!descriptionsOnFor(taskId, opening.workspace)) {
       linkArrive(
         () => standLinkedTask(taskId),
-        () => showOverview({ kind: LINK_DESTINATION.TASK, planId: taskId }),
+        () => showOverview({ kind: LINK_DESTINATION.TASK, taskId: taskId }),
       );
 
       return;
@@ -2376,8 +2376,8 @@ export function useTasksTab(input: {
       return;
     }
 
-    showTask(place.planId);
-    mainTabs.onShow(place.planId, MAIN_TAB.OVERVIEW);
+    showTask(place.taskId);
+    mainTabs.onShow(place.taskId, MAIN_TAB.OVERVIEW);
   };
 
   // A link to a tab of the task standing opens it in the panel, as any link
@@ -2386,13 +2386,13 @@ export function useTasksTab(input: {
   const linkPanelTab = (place: TaskTabPlace, tab: SidePanelTab) => {
     if (onTasksTab(place, standingTask()) === ON_STANDING_TASK.BESIDE) {
       pressTab({ sidePanel, mainTabs, onKeys }, { kind: TAB_PRESS.PANEL, tab });
-    } else showPanelTab(place.planId, tab);
+    } else showPanelTab(place.taskId, tab);
   };
 
   // Note that a pull request two of the open task's agents share opens in the tab already open on it, whichever agent it stands under, as the panel's own door picks it (`changesTabOf`), so a link never stands a second tab on one pull request.
   // Only a tab the task draws is taken, its agent one of the task's agents at hand: not an archived agent's, nor one of a page the panel stands beside instead.
-  const sharedChangesAgent = (planId: string, agentId: string): string => {
-    const url = planId === tasks.activeTaskId ? agents.pullRequests.get(agentId)?.url : undefined;
+  const sharedChangesAgent = (taskId: string, agentId: string): string => {
+    const url = taskId === tasks.activeTaskId ? agents.pullRequests.get(agentId)?.url : undefined;
 
     if (url === undefined) return agentId;
     const drawn = agents.agentIds ?? [];
@@ -2454,7 +2454,7 @@ export function useTasksTab(input: {
       return;
     }
 
-    showOverview({ kind: LINK_DESTINATION.SECTION, planId: mention.taskId, anchor });
+    showOverview({ kind: LINK_DESTINATION.SECTION, taskId: mention.taskId, anchor });
     sectionAsks.current += 1;
     setSectionReveal({ taskId: mention.taskId, reveal: { anchor, ask: sectionAsks.current } });
   };
@@ -2533,26 +2533,26 @@ export function useTasksTab(input: {
    * the agent's tab opens with it, and that its tab is opened with no task
    * words, since a link carries none; its own rows name its task once they land.
    */
-  const openOnTask = (planId: string, place: AgentPlace) => {
+  const openOnTask = (taskId: string, place: AgentPlace) => {
     const column = agentTab(place.agentId);
     // A tab of the side panel a link opens, and the link a narrow room's step on it stands at (`places/task-step.ts`).
-    const sideOf = (tab: SidePanelTab) => ({ tab, link: stripTabLink(tab, { taskId: planId }) });
+    const sideOf = (tab: SidePanelTab) => ({ tab, link: stripTabLink(tab, { taskId: taskId }) });
 
     switch (place.kind) {
       case LINK_DESTINATION.WORKER: {
         const tab = subagentTab(place.callId, { agent: place.agentId, task: "" });
-        linkOnTask({ taskId: planId, column, side: sideOf(tab) }, () => {
-          showColumnTab(planId, column);
-          linkPanelTab({ ...place, planId }, tab);
+        linkOnTask({ taskId: taskId, column, side: sideOf(tab) }, () => {
+          showColumnTab(taskId, column);
+          linkPanelTab({ ...place, taskId }, tab);
         });
 
         return;
       }
 
       case LINK_DESTINATION.CHANGES: {
-        const tab = changesTab(sharedChangesAgent(planId, place.agentId));
-        linkOnTask({ taskId: planId, side: sideOf(tab) }, () =>
-          linkPanelTab({ ...place, planId }, tab),
+        const tab = changesTab(sharedChangesAgent(taskId, place.agentId));
+        linkOnTask({ taskId: taskId, side: sideOf(tab) }, () =>
+          linkPanelTab({ ...place, taskId }, tab),
         );
 
         return;
@@ -2560,11 +2560,11 @@ export function useTasksTab(input: {
 
       // A review thread opens its agent's Pull request tab on the view the link names.
       case LINK_DESTINATION.PULL_REQUEST_THREAD: {
-        const changes = sharedChangesAgent(planId, place.agentId);
+        const changes = sharedChangesAgent(taskId, place.agentId);
         const tab = changesTab(changes);
-        linkOnTask({ taskId: planId, side: sideOf(tab) }, () => {
+        linkOnTask({ taskId: taskId, side: sideOf(tab) }, () => {
           sidePanel.onPullRequestView(tab, place.view);
-          linkPanelTab({ ...place, planId }, tab);
+          linkPanelTab({ ...place, taskId }, tab);
           revealThread(changes, place);
         });
 
@@ -2572,12 +2572,12 @@ export function useTasksTab(input: {
       }
 
       case LINK_DESTINATION.AGENT:
-        linkOnTask({ taskId: planId, column }, () => showColumnTab(planId, column));
+        linkOnTask({ taskId: taskId, column }, () => showColumnTab(taskId, column));
 
         return;
       case LINK_DESTINATION.MESSAGE:
-        linkOnTask({ taskId: planId, column }, () => {
-          showColumnTab(planId, column);
+        linkOnTask({ taskId: taskId, column }, () => {
+          showColumnTab(taskId, column);
           revealMessage(place);
         });
 
@@ -2634,7 +2634,7 @@ export function useTasksTab(input: {
 
   // An agent's place opened by the agent as the list or the service has it: on its task, an archived agent's tab among its tabs.
   const openFoundAgent = (agent: AgentSummary, place: AgentPlace) =>
-    openOnTask(agent.planId, place);
+    openOnTask(agent.taskId, place);
 
   /**
    * An agent's place opened on its task, or through its own address, which says it is not found, where it is not read.
@@ -2654,9 +2654,9 @@ export function useTasksTab(input: {
         return;
       }
 
-      const onTask = { kind: LINK_DESTINATION.PAGE, planId: agent.planId, pageId } as const;
+      const onTask = { kind: LINK_DESTINATION.PAGE, taskId: agent.taskId, pageId } as const;
       const tab = pageTab(pageId);
-      linkOnTask({ taskId: agent.planId, side: { tab, link: onTask } }, () =>
+      linkOnTask({ taskId: agent.taskId, side: { tab, link: onTask } }, () =>
         linkPanelTab(onTask, tab),
       );
     };
@@ -2680,7 +2680,7 @@ export function useTasksTab(input: {
     const open = tasks.activeTaskId;
     const listed = listedAgentIn(tasks, place.agentId);
 
-    if (place.planId !== undefined) openOnTask(place.planId, place);
+    if (place.taskId !== undefined) openOnTask(place.taskId, place);
     else if (open !== undefined && agents.agentIds?.includes(place.agentId))
       openOnTask(open, place);
     else if (listed !== undefined) openFoundAgent(listed, place);
@@ -2708,20 +2708,20 @@ export function useTasksTab(input: {
   const openInboxItemOn = (
     workspace: string,
     place: InboxItemPlace,
-    planId: string | undefined,
+    taskId: string | undefined,
   ) => {
     // An item of a task the account lists is shown in the task's own workspace, whatever the slug says.
     const holder =
-      planId === undefined ? undefined : viewed.tasks.find((task) => task.id === planId);
+      taskId === undefined ? undefined : viewed.tasks.find((task) => task.id === taskId);
 
     const linked = linkedHome(holder?.workspaceId ?? workspace);
 
     // Note that an item whose agent was not found is named by its id alone, which the Inbox says is missing where no read holds it.
     const chosen: InboxChoice =
-      planId === undefined
+      taskId === undefined
         ? { itemId: place.itemId, opened: true }
         : {
-            taskId: planId,
+            taskId: taskId,
             ...("agentId" in place ? { itemAgentId: place.agentId } : undefined),
             itemId: place.itemId,
             opened: true,
@@ -2773,7 +2773,7 @@ export function useTasksTab(input: {
           itemId: place.itemId,
         };
 
-        openInboxItemOn(home.workspaceId, found, home.planId);
+        openInboxItemOn(home.workspaceId, found, home.taskId);
       });
     });
   };
@@ -2789,17 +2789,17 @@ export function useTasksTab(input: {
     const open = tasks.activeTaskId;
     const listed = "agentId" in place ? listedAgentIn(tasks, place.agentId) : undefined;
 
-    if ("planId" in place) openInboxItemOn(workspace, place, place.planId);
+    if ("taskId" in place) openInboxItemOn(workspace, place, place.taskId);
     else if (!("agentId" in place)) openInboxItemById(place);
     else if (open !== undefined && agents.agentIds?.includes(place.agentId))
       openInboxItemOn(workspace, place, open);
-    else if (listed !== undefined) openInboxItemOn(workspace, place, listed.planId);
+    else if (listed !== undefined) openInboxItemOn(workspace, place, listed.taskId);
     else {
       const current = linkRead();
       const opening = keepLinkLanded();
       readAgentById(queryClient, place.agentId).then((agent) => {
         if (!current()) return;
-        opening(() => openInboxItemOn(workspace, place, agent?.planId));
+        opening(() => openInboxItemOn(workspace, place, agent?.taskId));
       });
     }
   };
@@ -2816,12 +2816,14 @@ export function useTasksTab(input: {
    * A person's page in `home`, the listed workspace where none is named,
    * listed first where another is, because the page reads the listed
    * workspace's work, and only listed, as a link's place is: reopening its
-   * last plan behind the page would only hide it again.
+   * last plan behind the page would only hide it again. A link naming one
+   * of their machines opens it at that machine (`machineId`).
    */
   const openPerson = (
     userId: string,
     name: string | undefined,
     home: Pick<Workspace, "id" | "slug"> | undefined,
+    machineId?: string,
   ) => {
     const shown = home ?? listedWorkspace;
 
@@ -2830,7 +2832,7 @@ export function useTasksTab(input: {
     // asked before it, answering late, lists nothing and leaves nothing over it; both follow the move, so a move kept at a
     // page's leave ask lets that answer land and lists nothing.
     linkArrive(
-      () => routedPerson.onOpen(userId, name, stepOf(shown)),
+      () => routedPerson.onOpen(userId, name, stepOf(shown), machineId),
       () => {
         navigations.current += 1;
 
@@ -2911,18 +2913,18 @@ export function useTasksTab(input: {
     switch (declared) {
       case LINK_ROUTED_PLACE.COMMENT: {
         if (place.kind !== LINK_DESTINATION.COMMENT) return;
-        const { planId } = place;
+        const { taskId } = place;
 
-        if (!descriptionsOnFor(planId, workspace)) {
-          linkOnTask({ taskId: planId }, () => showTaskAgents(planId));
+        if (!descriptionsOnFor(taskId, workspace)) {
+          linkOnTask({ taskId: taskId }, () => showTaskAgents(taskId));
 
           return;
         }
 
-        linkOnTask({ taskId: planId, column: MAIN_TAB.OVERVIEW }, () => {
+        linkOnTask({ taskId: taskId, column: MAIN_TAB.OVERVIEW }, () => {
           showOverview(place);
           commentAsks.current += 1;
-          setCommentReveal({ planId, thread: place.threadId, ask: commentAsks.current });
+          setCommentReveal({ taskId, thread: place.threadId, ask: commentAsks.current });
         });
 
         return;
@@ -2930,10 +2932,10 @@ export function useTasksTab(input: {
 
       case LINK_ROUTED_PLACE.SECTION: {
         if (place.kind !== LINK_DESTINATION.SECTION) return;
-        const { planId, anchor } = place;
-        const column = descriptionsOnFor(planId) ? MAIN_TAB.OVERVIEW : undefined;
-        linkOnTask({ taskId: planId, column }, () =>
-          showMention({ kind: MENTION_KIND.SECTION, taskId: planId, anchor }),
+        const { taskId, anchor } = place;
+        const column = descriptionsOnFor(taskId) ? MAIN_TAB.OVERVIEW : undefined;
+        linkOnTask({ taskId: taskId, column }, () =>
+          showMention({ kind: MENTION_KIND.SECTION, taskId: taskId, anchor }),
         );
 
         return;
@@ -2951,7 +2953,7 @@ export function useTasksTab(input: {
           return;
         }
 
-        const step = { taskId: place.planId, side: { tab, link: place } };
+        const step = { taskId: place.taskId, side: { tab, link: place } };
         linkOnTask(step, () => linkPanelTab(place, tab));
 
         return;
@@ -2988,7 +2990,7 @@ export function useTasksTab(input: {
         return;
       case LINK_ROUTED_PLACE.TASK: {
         if (place.kind !== LINK_DESTINATION.TASK) return;
-        const taskId = place.planId;
+        const taskId = place.taskId;
         linkArrive(
           () => standLinkedTask(taskId),
           () => showMention({ kind: MENTION_KIND.TASK, taskId }),
@@ -2999,7 +3001,7 @@ export function useTasksTab(input: {
 
       case LINK_ROUTED_PLACE.VERSION:
         if (place.kind !== LINK_DESTINATION.VERSION) return;
-        openHistory(place.planId, {
+        openHistory(place.taskId, {
           spot: { revision: place.revision, opened: undefined, listed: false },
           workspace,
         });
@@ -3008,7 +3010,12 @@ export function useTasksTab(input: {
       case LINK_ROUTED_PLACE.PERSON: {
         if (place.kind !== LINK_DESTINATION.PERSON) return;
         // A person's page is theirs in the workspace the link names, listed first; one the reader is not in names nobody they can see.
-        openPerson(place.userId, undefined, workspaceOfSlug(viewed.workspaces, workspace));
+        openPerson(
+          place.userId,
+          undefined,
+          workspaceOfSlug(viewed.workspaces, workspace),
+          place.machineId,
+        );
 
         return;
       }
@@ -3017,7 +3024,7 @@ export function useTasksTab(input: {
       case LINK_ROUTED_PLACE.INBOX: {
         if (place.kind !== LINK_DESTINATION.INBOX) return;
         const linked = linkedHome(workspace);
-        standInbox(inboxIn(linked.id, place.planId), undefined, linked.list);
+        standInbox(inboxIn(linked.id, place.taskId), undefined, linked.list);
 
         return;
       }
@@ -3543,7 +3550,7 @@ export function useTasksTab(input: {
     // the blocker.
     onShowAgent: (taskId, agentId) =>
       arriveAt(taskId, () =>
-        openOnTask(taskId, { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId }),
+        openOnTask(taskId, { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId }),
       ),
     onShowColumnTab: (taskId, tab, over) =>
       arriveAt(taskId, () => showColumnTab(taskId, tab), over),
@@ -3635,7 +3642,7 @@ export function useTasksTab(input: {
           // An agent's pin opens as its row's card does (`onShowAgent`).
           openOnTask(pin.task, {
             kind: LINK_DESTINATION.AGENT,
-            planId: pin.task,
+            taskId: pin.task,
             agentId: tab.agent,
           });
         },

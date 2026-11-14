@@ -7,7 +7,7 @@ import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { beginAgentBoot } from "@repo/database/models/agent-boot-store";
 import { pointBrowserTab, upsertBrowserTab } from "@repo/database/models/agent-browser-tabs";
 import { recordAgentSandboxBooting } from "@repo/database/models/agent-sandboxes";
-import { createAgent } from "@repo/database/models/agent-store";
+import { createAgent, pinAgent } from "@repo/database/models/agent-store";
 import { startDescriptionCommentThread } from "@repo/database/models/description-comments";
 import { approveHostPairing, openHostPairing } from "@repo/database/models/host-pairing-store";
 import { enrollOwnDevice, removeHost } from "@repo/database/models/host-store";
@@ -29,7 +29,12 @@ import {
   writeSlackDefaultRepository,
 } from "@repo/database/models/slack-installation-store";
 import { writePage } from "@repo/database/models/task-pages";
-import { createTask, createTaskCommitted, deleteTask } from "@repo/database/models/task-store";
+import {
+  createTask,
+  createTaskCommitted,
+  deleteTask,
+  updateTask,
+} from "@repo/database/models/task-store";
 import { ensurePersonalWorkspace } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
@@ -99,6 +104,7 @@ import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
 import { TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
+import { TASK_STATUS } from "@repo/features/task-wire";
 import { TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
 import {
   WORKSPACE_INTEGRATIONS_READ,
@@ -1226,7 +1232,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
         yield* beginAgentBoot(agent.id, new Date(0), undefined);
         const sql = yield* SqlClient.SqlClient;
 
-        // The boot's statement as Realtime runs it for `reader`, the agent's own transcript followed.
+        // The boot's statement run as raw SQL for `reader`, the agent's own transcript followed.
         const bootRowsFor = (reader: string) => {
           const statement = Option.getOrThrow(
             agentTranscriptRead.statements({
@@ -2428,6 +2434,39 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
           "a hold nothing moved ends with nothing",
         );
         assert.equal(held.plans.sync?.past, next);
+      }),
+  );
+
+  it.effect(
+    "a Done task past the live window leaves with its unpin, and its agent with the agent's, each answered gone, and the pin back brings both",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+        const shipped = yield* startTask(dana, { name: "Old invitations" });
+        const agentId = yield* openTaskAgent(dana, shipped.workspaceId, shipped.id);
+        const db = yield* Database;
+        yield* db
+          .update(task)
+          .set({ status: TASK_STATUS.DONE, updatedAt: new Date(0), completedAt: new Date(0) })
+          .where(eq(task.id, shipped.id));
+        yield* updateTask(dana, shipped.id, { pinned: true });
+        yield* pinAgent(dana, agentId, true);
+        // The list is read years after the rows were written, so the task stands only by its pins.
+        yield* TestClock.setTime(Date.parse("2040-01-01T00:00:00Z"));
+        const whole = yield* askTasks(dana, "");
+        assert.deepEqual(idsOf(whole.plans), [shipped.id]);
+        assert.deepEqual(idsOf(whole.agents), [agentId]);
+
+        yield* updateTask(dana, shipped.id, { pinned: false });
+        yield* pinAgent(dana, agentId, false);
+        const unpinned = yield* askTasks(dana, whole.plans.sync?.next);
+        assert.deepEqual(unpinned.plans.gone, [shipped.id]);
+        assert.deepEqual(unpinned.agents.gone, [agentId]);
+
+        yield* updateTask(dana, shipped.id, { pinned: true });
+        const repinned = yield* askTasks(dana, unpinned.plans.sync?.next);
+        assert.deepEqual(idsOf(repinned.plans), [shipped.id]);
+        assert.deepEqual(idsOf(repinned.agents), [agentId]);
       }),
   );
 

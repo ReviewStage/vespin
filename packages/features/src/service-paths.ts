@@ -319,7 +319,7 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_MACHINE_COMMANDS: "/api/live/mac-commands",
   /**
    * The account's automations: list them, newest first, or one task's where
-   * `planId` names it (GET), or make one (POST). `automation-wire.ts`
+   * `taskId` names it (GET), or make one (POST). `automation-wire.ts`
    * declares the bodies.
    */
   AUTOMATIONS: "/api/automations",

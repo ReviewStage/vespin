@@ -10,7 +10,7 @@ const NOW = 1_800_000_100_000;
 
 const ITEM = {
   id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
-  planId: "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e",
+  taskId: "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e",
   agentId: "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
   agentTitle: null,
   agentModel: "anthropic/claude-opus-5.5",
@@ -34,7 +34,7 @@ const RUN = {
 const ROWS: AccountInboxLiveRows = {
   items: [ITEM],
   planless: [],
-  plans: [{ planId: ITEM.planId, items: 1, updatedAt: ITEM.updatedAt }],
+  plans: [{ taskId: ITEM.taskId, items: 1, updatedAt: ITEM.updatedAt }],
   automations: [],
   failedRuns: [RUN],
 };
@@ -47,7 +47,7 @@ describe("a live answer's cursor", () => {
     assert.equal(cursorOf(ROWS), cursorOf({ ...ROWS }, NOW + 60_000));
     assert.equal(
       cursorOf(ROWS),
-      cursorOf({ ...ROWS, plans: [{ planId: ITEM.planId, items: 2, updatedAt: NOW }] }),
+      cursorOf({ ...ROWS, plans: [{ taskId: ITEM.taskId, items: 2, updatedAt: NOW }] }),
       "the tasks holding items are compared apart",
     );
   });

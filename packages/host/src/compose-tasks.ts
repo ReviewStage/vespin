@@ -41,6 +41,7 @@ import {
   TASK_RELATIONS_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_READ,
+  type TaskListLiveRows,
 } from "@repo/features/task-list-live";
 import { pagesOfLiveRows, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
@@ -165,10 +166,15 @@ import {
   keptOfTask,
   PageVersionKey,
 } from "./kept-content.js";
+import { drawnAs } from "./list-moves.js";
 import { type HeldAnswers, heldSlice, rowWriteOn } from "./live-collection.js";
 import { confirmWrite, FOLLOW_BACKOFF, type TxWait } from "./live-follow.js";
 import { pushLive } from "./live-push.js";
-import type { PullRequestListing } from "./pull-request-parts.js";
+import {
+  type ListDrawing,
+  type PullRequestListing,
+  pullRequestListing,
+} from "./pull-request-parts.js";
 import { type OfflineRefused, TASK_QUEUED_WRITE, untaken } from "./queued-writes.js";
 import type { RunMode } from "./run-mode.js";
 import { sidebarCollections, sidebarWrites } from "./sidebar-collections.js";
@@ -206,6 +212,14 @@ import { followSidebarRows } from "./workspaces-follow.js";
  * connected, are carried on the view beside the tasks, drawn there by the
  * workspaces' own concern (`compose-workspaces.ts`).
  */
+
+/** The view's lists each a live query of the task list draws, which cross as what moved in them (`list-moves.ts`). */
+const LISTED_PARTS = [
+  "tasks",
+  "taskAgents",
+  "taskPullRequests",
+  "agentPullRequests",
+] as const satisfies readonly (keyof TasksView)[];
 
 /** A task's pin and where it stands as the list carries them, each only where it stands. */
 type TaskMarkStamps = Pick<Task, "pinnedAt" | "pinPosition">;
@@ -268,7 +282,7 @@ const COMMENT_UNANSWERED: TasksCommentAnswer = { failure: TASK_CALL_FAILURE.UNAN
 
 /** A plan's skills, by its id and the workspace and repository the list names it in, so a plan moved to another of either is another key, its workspace's installed skills among what is read. */
 class PlanSkillsKey extends Data.Class<{
-  readonly planId: string;
+  readonly taskId: string;
   readonly workspaceId: string | undefined;
   readonly repository: string | undefined;
 }> {}
@@ -750,7 +764,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     return Effect.map(
       served(
         key instanceof PlanSkillsKey
-          ? client.readSkills(key.planId)
+          ? client.readSkills(key.taskId)
           : client.readRepositorySkills(
               key.repository === undefined
                 ? { workspaceId: key.workspaceId }
@@ -881,10 +895,14 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   let screenAsks = 0;
 
   function publish(): void {
+    const drawn = view;
     // Note that the view keeps the identity of what it shares with the one
     // last told, so a view that says nothing new is that one, and what is
     // told shares every part that did not move with what was told before.
     view = keepIdentity(published, view);
+
+    // Note that a list laid anew over the one told is the drawing it was laid from, so its delivery is told what moved in it rather than walking it (`list-moves.ts`).
+    for (const part of LISTED_PARTS) drawnAs(view[part], drawn[part]);
 
     if (view === published) return;
     published = view;
@@ -1115,11 +1133,11 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
   /** The windows' writes to a task's comments, each drawn over its thread at once; behind a closed gate each answers unanswered, taken back as it is drawn. */
   const commentWrites = descriptionCommentWrites({
-    start: (planId, start) =>
-      gate() ? served(client.startComment(planId, start)) : Effect.succeed(COMMENT_UNANSWERED),
-    act: (planId, threadId, action) =>
+    start: (taskId, start) =>
+      gate() ? served(client.startComment(taskId, start)) : Effect.succeed(COMMENT_UNANSWERED),
+    act: (taskId, threadId, action) =>
       gate()
-        ? served(client.actOnComment(planId, threadId, action))
+        ? served(client.actOnComment(taskId, threadId, action))
         : Effect.succeed(COMMENT_UNANSWERED),
     member: dependencies.member,
     now: kernel.now,
@@ -1184,6 +1202,9 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     PubSub.shutdown,
   );
 
+  /** The agents and their pull requests as the list last drew them, which the next drawing's listing is told the moves since. */
+  let drawnBefore: ListDrawing | undefined;
+
   const openTaskList = Effect.gen(function* () {
     const scope = yield* Scope.make();
 
@@ -1208,12 +1229,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
             taskAgentPins,
           });
           documents.relisted();
-          PubSub.publishUnsafe(listings, {
-            statuses: new Map(taskAgents.map((agent) => [agent.id, agent.status])),
-            pullRequests: agentPullRequests,
-          });
+          const listing = { taskAgents, agentPullRequests };
+          PubSub.publishUnsafe(listings, pullRequestListing(drawnBefore, listing));
+          drawnBefore = listing;
         },
         txWait: () => listWait,
+        readAgain: (id) => readTaskRows(id),
       }),
     );
 
@@ -1249,6 +1270,26 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   /** Whether a task outside the list can be read into it now: signed in, and the list answered, since until then every task is outside it. */
   const readableOutside = (): boolean =>
     gate() && dependencies.accountId() !== undefined && view.listStatus === TASKS_READ.READY;
+
+  /** The task or the agent `id` names read again for the list, as a task it let go while a read of it was out is (`task-list-collections.ts`); none where the service did not answer, which is read again at the list's next answer, as an open's read is. */
+  const readTaskRows = (id: string): Effect.Effect<TaskListLiveRows | undefined> =>
+    Effect.gen(function* () {
+      const userId = dependencies.accountId();
+      const { collections } = taskList;
+
+      if (userId === undefined) return undefined;
+      const sealed = yield* served(client.liveRead(TASK_ROWS_READ, { id, userId }, {}));
+
+      if ("failure" in sealed) {
+        if (taskList.collections === collections && !inboxAsked.has(id)) coldWaiting.add(id);
+
+        return undefined;
+      }
+
+      const { plans, agents } = sealed.queries;
+
+      return Option.getOrUndefined(decodeTaskRows({ plans: plans.rows, agents: agents.rows }));
+    });
 
   const readOutside = (id: string): Effect.Effect<void> =>
     Effect.suspend(() => {
@@ -1498,7 +1539,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
                   : sealed,
             ),
       // Note that an answer's read standing rides the list it draws, so a window is told both at once.
-      take: (rows, standing, taskWorkspaces) =>
+      take: (rows, standing, { taskWorkspaces, liveSince } = {}) =>
         Effect.gen(function* () {
           view = {
             ...view,
@@ -1508,7 +1549,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           };
           const entities = dependencies.entities();
           const { collections } = taskList;
-          const moved = yield* collections.answer(rows, standing);
+          const moved = yield* collections.answer(rows, standing, liveSince);
           const waiting = [...coldWaiting];
           coldWaiting.clear();
           yield* Effect.forEach(waiting, openedOutside, { discard: true });
@@ -2261,7 +2302,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
                   } else if (opened !== undefined && !waits) yield* startedBack(opened, id);
 
                   return untaken<FieldChange<PlanRow>, TasksStartAnswer>(went, {
-                    kept: { planId: id },
+                    kept: { taskId: id },
                     refused: {
                       failure,
                       ...(localAgentRefusal === undefined ? undefined : { localAgentRefusal }),
@@ -2277,7 +2318,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
                 return {
                   answer: {
-                    planId: task.id,
+                    taskId: task.id,
                     ...(agent === undefined ? undefined : { agentStart: agent }),
                   },
                   txid,
@@ -2292,7 +2333,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     queue: {
       name: TASK_QUEUED_WRITE.START,
       input: startKeptSchema,
-      queued: ({ request }) => ({ planId: request.id }),
+      queued: ({ request }) => ({ taskId: request.id }),
       holds: ({ request }) => request.agent !== undefined,
     },
   };
@@ -2680,8 +2721,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         };
 
         const answer = yield* served(
-          "planId" in asked
-            ? client.readTree(asked.planId, folder)
+          "taskId" in asked
+            ? client.readTree(asked.taskId, folder)
             : client.readRepositoryTree(asked, folder),
         );
 
@@ -2697,12 +2738,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
 
         const listed =
-          "planId" in asked ? view.tasks.find((each) => each.id === asked.planId) : undefined;
+          "taskId" in asked ? view.tasks.find((each) => each.id === asked.taskId) : undefined;
 
         const key: SkillsKey =
-          "planId" in asked
+          "taskId" in asked
             ? new PlanSkillsKey({
-                planId: asked.planId,
+                taskId: asked.taskId,
                 workspaceId: listed?.workspaceId,
                 repository: listed?.repository ?? undefined,
               })
@@ -2862,9 +2903,9 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     TASKS_PICTURE_READ: (read) =>
       gate()
         ? kept.answer(
-            new DescriptionPictureKey({ planId: read.planId, attachmentId: read.attachmentId }),
+            new DescriptionPictureKey({ taskId: read.taskId, attachmentId: read.attachmentId }),
             dependencies.accountId,
-            served(client.readPicture(read.planId, read.attachmentId)),
+            served(client.readPicture(read.taskId, read.attachmentId)),
             (answer) => ("base64" in answer ? answer : undefined),
           )
         : Effect.succeed({ failure: TASK_CALL_FAILURE.UNANSWERED }),
@@ -2878,7 +2919,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     // the description's text names it once the editor lays its address in.
     TASKS_PICTURE_KEEP: (read) =>
       gate()
-        ? served(client.keepPicture(read.planId, read.picture))
+        ? served(client.keepPicture(read.taskId, read.picture))
         : Effect.succeed({ failure: TASK_CALL_FAILURE.UNANSWERED }),
     // The service answers the task as restored, so the list's row and its
     // held description take it in place and nothing is read again. It is confirmed
