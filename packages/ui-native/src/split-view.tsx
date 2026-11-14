@@ -142,7 +142,7 @@ export type ColumnBar = {
   readonly foot?: readonly BarFootItem[] | undefined;
 };
 
-/** What a bar's foot holds: an act, or a menu that opens from its words, such as Remind me's times. */
+/** What a bar's foot holds: an act, or a menu that opens from its glyph (from its words at a list column's foot), such as Remind me's times. */
 export type BarFootItem = BarAction | BarMenu;
 
 /** Whether a foot's item is a menu rather than one act. */
