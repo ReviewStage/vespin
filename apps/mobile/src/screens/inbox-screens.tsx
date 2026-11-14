@@ -419,12 +419,20 @@ function moreMenu(
   };
 }
 
+/** A menu whose every act stands dimmed while `dim` holds, so a bar keeps its place for it, as Mail's edit bar stands Remind me dimmed until a message is chosen. */
+function dimmedWhile(dim: boolean, menu: BarMenu): BarMenu {
+  return dim ? { ...menu, actions: menu.actions.map((act) => ({ ...act, disabled: true })) } : menu;
+}
+
 /**
  * What the Inbox offers for the threads chosen in Select mode, as the panel's
  * selection does (`inbox-selection.tsx`): Mark as read while one is unread,
  * else Mark as unread; Remind me, its time set on every one; and Resolve
  * while one is open, each taking only the threads it would change. Each act
- * lets Select mode go, as Mail's do. None while nothing is chosen.
+ * lets Select mode go, as Mail's do. Note that every act keeps its place,
+ * dimmed while it would change nothing, as Mail's edit bar stands its acts
+ * dimmed until a message is chosen, so the bar never pops in on the first
+ * tick nor shifts as Resolve comes and goes.
  */
 function chosenActs(
   chosen: readonly InboxItem[],
@@ -432,30 +440,18 @@ function chosenActs(
   remind: ReturnType<typeof useRemind>,
   stop: () => void,
 ): readonly BarFootItem[] {
-  if (chosen.length === 0) return [];
+  const none = chosen.length === 0;
   const unread = chosen.filter(isUnread);
   const open = chosen.filter((item) => item.status === INBOX_STATUS.OPEN);
   const marking = unread.length > 0 ? unread : chosen;
 
-  const resolve =
-    open.length === 0
-      ? []
-      : [
-          {
-            label: RESOLVE,
-            symbol: GLYPH.RESOLVED,
-            onPress: () => {
-              acts.resolveMany(open);
-              stop();
-            },
-          },
-        ];
-
   return [
     {
-      label: unread.length > 0 ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-      symbol: unread.length > 0 ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+      label: unread.length > 0 || none ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
+      symbol: unread.length > 0 || none ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+      disabled: none,
       onPress: () => {
+        if (none) return;
         acts.markMany(
           marking.map((item) => item.id),
           unread.length === 0,
@@ -463,8 +459,17 @@ function chosenActs(
         stop();
       },
     },
-    remind.menu(chosen, stop),
-    ...resolve,
+    dimmedWhile(none, remind.menu(chosen, stop)),
+    {
+      label: RESOLVE,
+      symbol: GLYPH.RESOLVED,
+      disabled: open.length === 0,
+      onPress: () => {
+        if (open.length === 0) return;
+        acts.resolveMany(open);
+        stop();
+      },
+    },
   ];
 }
 
@@ -926,6 +931,15 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
         title:
           pickedItems.length === 0 ? SELECTION_WORDS.SELECT : selectedWords(pickedItems.length),
         acts: chosenActs(pickedItems, acts, remind, selecting.stop),
+        // Note that Select all takes every thread listed, and Select none lets them go once all are chosen, as Mail's edit bar leads with them.
+        all: (pickedItems.length === listing.listed.length && pickedItems.length > 0
+          ? { label: SELECTION_WORDS.SELECT_NONE, onPress: () => selecting.choose([]) }
+          : {
+              label: SELECTION_WORDS.SELECT_ALL,
+              // Note that with nothing listed, such as under a search that finds nothing, Select all stands dimmed, so its press never lets go of the threads chosen before.
+              disabled: listing.listed.length === 0,
+              onPress: () => selecting.choose(listing.listed.map(({ item }) => item.id)),
+            }) satisfies BarAction,
         done: { label: SELECT_DONE, onPress: selecting.stop } satisfies BarAction,
       }
     : undefined;
@@ -948,7 +962,7 @@ function InboxStackList(words: InboxSearch) {
 
   const field = useRefilledSearchField(search);
 
-  // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
+  // Note that Select mode names how many are chosen in the title's place, stands Select all where the switcher stood and Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
   return (
     <>
       <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }}>
@@ -963,7 +977,19 @@ function InboxStackList(words: InboxSearch) {
           />
         )}
       </Stack.Screen>
-      {choosing !== undefined ? null : <SettingsBarButton switcher={switcher} />}
+      {choosing !== undefined ? (
+        <Stack.Toolbar placement="left">
+          <Stack.Toolbar.Button
+            variant="plain"
+            disabled={choosing.all.disabled === true}
+            onPress={choosing.all.onPress}
+          >
+            {choosing.all.label}
+          </Stack.Toolbar.Button>
+        </Stack.Toolbar>
+      ) : (
+        <SettingsBarButton switcher={switcher} />
+      )}
       <Stack.Toolbar placement="right">
         {choosing !== undefined ? (
           <Stack.Toolbar.Button variant="plain" onPress={choosing.done.onPress}>
@@ -989,6 +1015,7 @@ function InboxStackList(words: InboxSearch) {
               <Stack.Toolbar.Button
                 key={act.label}
                 accessibilityLabel={act.label}
+                disabled={act.disabled === true}
                 onPress={act.onPress}
               >
                 {act.symbol === undefined ? null : (
@@ -1090,7 +1117,7 @@ function InboxSplitScreen({
         {rows}
       </ScopePicker>
     ),
-    // Note that Select mode names how many are chosen in the column's title, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
+    // Note that Select mode names how many are chosen in the column's title, leads its bar with Select all, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
     bar:
       choosing === undefined
         ? {
@@ -1101,7 +1128,12 @@ function InboxSplitScreen({
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
           }
-        : { title: choosing.title, action: choosing.done, foot: choosing.acts },
+        : {
+            title: choosing.title,
+            lead: [choosing.all],
+            action: choosing.done,
+            foot: choosing.acts,
+          },
   };
 
   const detail =

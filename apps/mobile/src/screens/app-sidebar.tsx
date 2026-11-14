@@ -140,8 +140,12 @@ export function useListColumn(list: ListColumn): FirstColumn {
 
   return {
     sidebar: list.view,
-    // Note that an action the list's bar names, such as Select mode's Done, stands in New task's place.
-    sidebarBar: { ...list.bar, leading, action: list.bar.action ?? compose },
+    // Note that an action the list's bar names, such as Select mode's Done, stands in New task's place, and acts it leads with, such as Select all, stand in the switcher's, as on the iPhone, since a second leading item folds into the bar's overflow.
+    sidebarBar: {
+      ...list.bar,
+      leading: (list.bar.lead ?? []).length > 0 ? undefined : leading,
+      action: list.bar.action ?? compose,
+    },
     sidebarShown: shown,
     onSidebarShownChange: setShown,
   };
