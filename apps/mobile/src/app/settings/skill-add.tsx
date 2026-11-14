@@ -209,12 +209,17 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
       went: BUZZ.SUCCESS,
     }).then((went) => {
       out.current = false;
-      setInstalling(false);
 
       // Note that words changed while the install was out keep the page, as Send feedback keeps its own, so nothing typed meanwhile goes unasked.
       const edited = JSON.stringify(shownRequest.current) !== JSON.stringify(request);
 
-      if (!went || !standing.current || edited) return;
+      if (!went || !standing.current || edited) {
+        setInstalling(false);
+
+        return;
+      }
+
+      // Note that a page that leaves stays held, as Add memory's does, because a paste field enabled again takes back the focus it held, and a List torn down around a field taking focus aborts the app.
       kept.release();
       router.back();
     });
