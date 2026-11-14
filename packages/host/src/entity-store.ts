@@ -145,7 +145,7 @@ const keptRowsSchema = Schema.Struct({
   [KEPT_READ.AUTOMATIONS]: Schema.Record(Schema.String, AUTOMATIONS_READ.rows),
   [KEPT_READ.INBOX]: Schema.Struct({
     /** The first items the follow held, as it took them from the service, each with the plan it is on. */
-    items: Schema.Array(Schema.Struct({ item: inboxItemSchema, planId: Schema.String })),
+    items: Schema.Array(Schema.Struct({ item: inboxItemSchema, taskId: Schema.String })),
     /** The sync id the items were read at, kept only where they are every item the follow held, so the next launch reads past it; absent where the follow kept only its first ones, and reads whole. */
     at: Schema.optionalKey(Schema.String),
   }),

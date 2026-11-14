@@ -345,7 +345,7 @@ test("an item opened at its address alone, as a reloaded window opens it, gives 
       request.kind === ACT_KIND.AGENTS_INBOX_ITEM_HOME
         ? Promise.resolve({
             status: FAKE_ANSWER.DONE,
-            value: { planId: BILLING.id, agentId: AGENT.id, workspaceId: ACME.id },
+            value: { taskId: BILLING.id, agentId: AGENT.id, workspaceId: ACME.id },
           })
         : previous(request),
   });

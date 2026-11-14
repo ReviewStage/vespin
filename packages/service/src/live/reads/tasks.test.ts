@@ -115,7 +115,7 @@ import {
 
 /**
  * The plan list's live statements against the held read it stands in for:
- * run as raw SQL as Realtime runs them, decoded as the desktop decodes the
+ * run as raw SQL, decoded as the desktop decodes the
  * rows, and built into the list at the instant the held read was read, they
  * answer what the held read answers, for every member and for no one else.
  *

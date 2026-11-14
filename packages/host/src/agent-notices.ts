@@ -307,9 +307,9 @@ function waitingTasks(items: readonly AccountInboxEntry[]): AppInboxSlice["waiti
       ...reminderOf(item),
     };
 
-    const held = tasks.get(item.planId);
+    const held = tasks.get(item.taskId);
 
-    if (held === undefined) tasks.set(item.planId, [waiting]);
+    if (held === undefined) tasks.set(item.taskId, [waiting]);
     else held.push(waiting);
   }
 
@@ -333,7 +333,7 @@ function sameTasks(one: readonly AccountInboxTask[], other: readonly AccountInbo
 
       return (
         was !== undefined &&
-        was.planId === task.planId &&
+        was.taskId === task.taskId &&
         was.items === task.items &&
         was.toDo === task.toDo &&
         was.updatedAt === task.updatedAt
@@ -495,7 +495,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
                   : "Your agent failed.",
             place: {
               kind: LINK_DESTINATION.AGENT,
-              planId: agent.taskId,
+              taskId: agent.taskId,
               agentId,
             },
           },
@@ -511,7 +511,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     function sliceOf(answer: InboxAnswered): AppInboxSlice {
       return {
         waiting: waitingTasks(answer.items),
-        tasks: answer.plans.map(({ planId: taskId, ...holding }) => ({
+        tasks: answer.plans.map(({ taskId, ...holding }) => ({
           ...holding,
           taskId,
         })),
@@ -605,9 +605,9 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         if (item.asking !== true) continue;
         now.set(item.id, {
           kind: NOTICE_KIND.ITEM_ASKED,
-          title: dependencies.taskName(item.planId) ?? item.agentTitle ?? UNNAMED_AGENT,
+          title: dependencies.taskName(item.taskId) ?? item.agentTitle ?? UNNAMED_AGENT,
           body: item.title,
-          place: { kind: LINK_DESTINATION.INBOX_ITEM, planId: item.planId, itemId: item.id },
+          place: { kind: LINK_DESTINATION.INBOX_ITEM, taskId: item.taskId, itemId: item.id },
         });
       }
 
@@ -721,10 +721,10 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
 
     /** The agent as the ledger holds it. */
     function heldOf(
-      agent: Pick<AgentSummary, "planId" | "status" | "turn" | "turnId" | "startedBy" | "title">,
+      agent: Pick<AgentSummary, "taskId" | "status" | "turn" | "turnId" | "startedBy" | "title">,
     ): HeldAgent {
       return {
-        taskId: agent.planId,
+        taskId: agent.taskId,
         status: agent.status,
         failure: agent.turn?.failure,
         turnId: agent.turnId,

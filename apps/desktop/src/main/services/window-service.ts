@@ -261,7 +261,7 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
     if (displayId !== undefined) panels.focusIfExpanded(displayId);
     windowPushes.push(holder, PUSH.SHOW_LINK, {
       workspace: "",
-      place: { kind: LINK_DESTINATION.AGENT, planId: call.taskId, agentId: call.agentId },
+      place: { kind: LINK_DESTINATION.AGENT, taskId: call.taskId, agentId: call.agentId },
     });
 
     return true;

@@ -151,7 +151,7 @@ const DESCRIPTION_TEXT = "## Goal\n\nInvite by email.\n\n## Roll it out\n\nStore
 
 const SWEEP: AutomationSummary = {
   id: "3f0e6f5c-7d1a-4f6e-9a55-000000000001",
-  planId: null,
+  taskId: null,
   planName: null,
   workspaceId: ACME.id,
   name: "Nightly sweep",
@@ -191,7 +191,7 @@ const STATE: AppStateSnapshot = (() => {
       taskAgents: [
         {
           id: SWEEP_AGENT,
-          planId: TASK_ID,
+          taskId: TASK_ID,
           turnId: null,
           title: "Sweep the flaky tests",
           model: "anthropic/claude-opus-5.5",

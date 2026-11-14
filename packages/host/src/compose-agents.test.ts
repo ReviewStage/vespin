@@ -2058,11 +2058,11 @@ const OTHER_ITEM: InboxItem = {
   updatedAt: ITEM.updatedAt - 60_000,
 };
 
-/** Where an item on `planId` stands as its stamp carries it, waiting on Dana with nothing on its thread, unless `moved` says otherwise. */
-function stampOf(item: InboxItem, planId: string, moved: WireRecord = {}) {
+/** Where an item on `taskId` stands as its stamp carries it, waiting on Dana with nothing on its thread, unless `moved` says otherwise. */
+function stampOf(item: InboxItem, taskId: string, moved: WireRecord = {}) {
   return {
     id: item.id,
-    planId,
+    taskId,
     agentId: item.agentId,
     revision: item.revision,
     version: item.version,
@@ -2204,8 +2204,8 @@ it.effect(
 
       yield* (yield* keptStore(earlier)).keep(KEPT_READ.INBOX, {
         items: [
-          { item: kept, planId: TASK_ID },
-          { item: OTHER_ITEM, planId: OTHER_TASK_ID },
+          { item: kept, taskId: TASK_ID },
+          { item: OTHER_ITEM, taskId: OTHER_TASK_ID },
         ],
         at: "7",
       });
@@ -2704,7 +2704,7 @@ it.effect(
       sealAccount(LIVE_ANSWERED);
       yield* call(GATEWAY_METHOD.AGENTS_ACCOUNT_INBOX_FOLLOW);
       yield* settled;
-      const plan = { planId: TASK_ID, items: 1, toDo: 1, updatedAt: ITEM.updatedAt };
+      const plan = { taskId: TASK_ID, items: 1, toDo: 1, updatedAt: ITEM.updatedAt };
       const parts = { planless: [], automations: [], failedRuns: [] };
       const update = { ...WAITING, asking: false };
       live.account.set({ ...parts, items: [update], plans: [plan] }, ["9100"]);

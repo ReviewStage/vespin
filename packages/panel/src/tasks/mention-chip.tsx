@@ -803,7 +803,7 @@ function WrittenDateChip({
 
 /** The task a place in the app names, where it names one. */
 function placeTaskId(place: LinkDestination): string | undefined {
-  return "planId" in place ? place.planId : undefined;
+  return "taskId" in place ? place.taskId : undefined;
 }
 
 /** The mark a place in the app leads with: its entity's (`entity-mark.tsx`), as a mention of the same entity leads with it. */

@@ -70,6 +70,7 @@ import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
 import {
   CommandMachineRow,
+  DefaultMachineRow,
   MachineAgentRows,
   machineAgentFacts,
   machineListedOf,
@@ -119,8 +120,9 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
  * account's says so where turning it on or off is refused. A browser tab has no This
  * Mac, so it draws none.
  *
- * Under the list stands what agents may do on each of the member's
- * machines, a host or a Mac that only runs the app alike
+ * The list opens with the member's default machine, where agents' calls go
+ * that name none (`DefaultMachineRow`), and under each machine stands what
+ * agents may do on it, a host or a Mac that only runs the app alike
  * (`machine-settings-section.tsx`).
  *
  * The list is the host's (`LIVE_READ.HOSTS`): followed live while the page
@@ -709,6 +711,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         <SettingsLine>{WORDS.NONE}</SettingsLine>
       ) : loaded ? (
         <>
+          <DefaultMachineRow machines={machines} thisMac={thisMac} />
           {thisMac === undefined ? null : (
             <SettingsRowsFold
               room={false}
