@@ -215,3 +215,4 @@ ipad27-landscape-ipad27-light wrap-task-relations.yaml: fails TIMEOUT (watchdog;
   ax none on ipad27: contrast disabled transparency-key 
 ipad27-landscape-ipad27-light wrap-answer.yaml: fails TIMEOUT (watchdog; steps 1, shots 2) 
   ax none on ipad27: contrast disabled transparency-key 
+ipad27-landscape-ipad27-light wrap-navigation.yaml: fails TIMEOUT (watchdog; steps 2, shots 2) 
