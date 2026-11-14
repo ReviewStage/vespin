@@ -88,3 +88,11 @@ duo-folded-duo-light wrap-pull-request.yaml: fails 2 shots 2   Scrolling UP unti
 duo-folded-duo-dark wrap-pull-request.yaml: fails 2 shots 4   Assert that "grace" is visible... FAILED
   ax none on duo: contrast disabled transparency-key 
 duo-folded-duo-light wrap-settings.yaml: fails 0 shots 11 
+duo-folded-duo-dark wrap-settings.yaml: fails 0 shots 11 
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-inbox.yaml: fails 2 shots 5   Assert that ".*walked the invite flow.*" is visible... FAILED
+duo-folded-duo-dark wrap-inbox.yaml: fails 2 shots 5   Assert that ".*walked the invite flow.*" is visible... FAILED
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-task-relations.yaml: fails 0 shots 5 
+duo-folded-duo-dark wrap-task-relations.yaml: fails 0 shots 5 
+  ax none on duo: contrast disabled transparency-key 
