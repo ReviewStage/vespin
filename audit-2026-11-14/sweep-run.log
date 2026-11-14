@@ -148,3 +148,10 @@ ipad26-landscape-ipad26-dark wrap-workspace.yaml: fails 2 shots 6   Assert that 
 ipad26-landscape-ipad26-light wrap-search.yaml: fails 0 shots 4 
 ipad26-landscape-ipad26-dark wrap-search.yaml: fails 0 shots 4 
   ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-pull-request.yaml: fails 2 shots 7   Scrolling DOWN until ".*#128 Invite a teammate by email" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+ipad26-landscape-ipad26-dark wrap-pull-request.yaml: fails 2 shots 7   Scrolling DOWN until ".*#128 Invite a teammate by email" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-settings.yaml: fails 0 shots 11 
+ipad26-landscape-ipad26-dark wrap-settings.yaml: fails 0 shots 11 
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-inbox.yaml: fails 3 shots 5     Tap on "Open.*"... FAILED
