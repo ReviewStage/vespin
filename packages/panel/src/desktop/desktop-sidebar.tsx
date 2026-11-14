@@ -15,7 +15,6 @@ import {
   ASSIGNED_TO,
   type AssignedTo,
   type ChildTaskCount,
-  childTaskCounts,
   type DrawnTaskRow,
   drawnTaskRows,
   followingTasks,
@@ -32,7 +31,6 @@ import {
   taskInView,
   taskSections,
   tasksAssignedTo,
-  tasksById,
   taskTime,
 } from "@repo/features/task-list-model";
 import type { TaskSectionWrite } from "@repo/features/task-section-wire";
@@ -45,9 +43,13 @@ import {
   unplaceAllWrites,
 } from "@repo/features/task-sections-model";
 import { FOLLOWING_HEAD } from "@repo/features/task-tree-model";
-import type { TaskAgentPin, TaskSummary } from "@repo/features/task-wire";
-import { repositoryPageUrl, TASK_MARK } from "@repo/features/tasks-model";
-import { EXPERIMENT } from "@repo/settings";
+import {
+  TASK_SETTLED,
+  type TaskAgentPin,
+  type TaskStatus,
+  type TaskSummary,
+} from "@repo/features/task-wire";
+import { renamedTasks, repositoryPageUrl, TASK_MARK } from "@repo/features/tasks-model";
 import type { UpdateControl } from "@repo/settings/settings-controls";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -116,7 +118,19 @@ import {
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, sameTab } from "@repo/ui/tab-strip-model";
 import { useVirtualRuns, VIRTUAL_ROW_KEY_ATTRIBUTE } from "@repo/ui/virtual-rows";
-import { caseWhen, coalesce, gt, useLiveQuery } from "@tanstack/react-db";
+import {
+  and,
+  caseWhen,
+  coalesce,
+  count,
+  eq,
+  gt,
+  inArray,
+  isUndefined,
+  not,
+  sum,
+  useLiveQuery,
+} from "@tanstack/react-db";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
@@ -168,9 +182,9 @@ import { useReadMark, useUnreadTasks } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
-import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { runningRuns } from "./automation-runs-tab.js";
+import { hadTasks } from "./desktop-welcome.js";
 import { useFailedRunsMark } from "./failed-runs.js";
 import { withoutFinishedRunTasks } from "./finished-runs.js";
 import { type FoldedGroups, useFoldedGroups } from "./folded-groups.js";
@@ -224,6 +238,9 @@ import { WorkspaceSwitcher } from "./workspace-switcher.js";
  * sidebar is dragged no wider than the window less this.
  */
 const WORK_RESERVE = 360;
+
+/** The statuses a child task counts as finished in (`taskFinished`), as a live query matches them. */
+const SETTLED_STATUSES: TaskStatus[] = [...TASK_SETTLED];
 
 /** What the Automations row's count counts, as a reader hears it after the figure. */
 const RUNNING_NOUN = "running";
@@ -470,6 +487,107 @@ function useActivityOrder(): readonly TaskSummary[] {
 }
 
 /**
+ * The listed workspace's tasks, pinned or not as `pinned` asks, as one live
+ * query over the window's task collection keeps them, every workspace's
+ * while none is listed (`TasksControl.listed`).
+ */
+function useListedPart(workspaceId: string | undefined, pinned: boolean): readonly TaskSummary[] {
+  const collections = useTaskListCollections();
+
+  return useLiveQuery({
+    query: (q) =>
+      q.from({ task: collections.tasks }).where(({ task }) => {
+        const pin = pinned ? not(isUndefined(task.pinnedAt)) : isUndefined(task.pinnedAt);
+
+        return workspaceId === undefined ? pin : and(eq(task.workspaceId, workspaceId), pin);
+      }),
+  }).data;
+}
+
+/**
+ * How many of each parent's child tasks are finished, of all of them, by
+ * the parent's id (`childTaskCounts`), as one live query grouping the
+ * window's task collection keeps them. Note that every task counts, the
+ * finished ones the view hides among them, since the count is how many of
+ * them there are.
+ */
+function useChildCounts(): ReadonlyMap<string, ChildTaskCount> {
+  const collections = useTaskListCollections();
+
+  const { data } = useLiveQuery({
+    query: (q) =>
+      q
+        .from({ task: collections.tasks })
+        .where(({ task }) =>
+          and(not(isUndefined(task.parentTaskId)), not(eq(task.parentTaskId, task.id))),
+        )
+        .groupBy(({ task }) => task.parentTaskId)
+        .select(({ task }) => ({
+          parentTaskId: task.parentTaskId,
+          total: count(task.id),
+          finished: sum(caseWhen(inArray(task.status, SETTLED_STATUSES), 1, 0)),
+        })),
+  });
+
+  return useMemo(
+    () =>
+      new Map(
+        data.flatMap(({ parentTaskId, finished, total }) =>
+          parentTaskId === undefined ? [] : [[parentTaskId, { finished, total }] as const],
+        ),
+      ),
+    [data],
+  );
+}
+
+/** The listed tasks as the sidebar reads them, every list off the window's task collection, so Pinned, the sections, and Tasks never disagree on a task for a frame. */
+interface ListedTasks {
+  /** The listed tasks pinned, in no order of their own (`pinnedRows` orders them). */
+  readonly pinned: readonly TaskSummary[];
+  /** The listed tasks not pinned, which the sections and Tasks are drawn from, in no order of their own. */
+  readonly unpinned: readonly TaskSummary[];
+  /** Every task by its id, through which a child task under a parent the view hides is walked to the ancestor it stands under. */
+  readonly every: TasksById;
+  /** The listed task `taskId` names, pinned or not; none where the listed workspace holds no such task. */
+  readonly task: (taskId: string) => TaskSummary | undefined;
+  /** How many of a task's child tasks are finished, of all of them, by its id. */
+  readonly childCounts: ReadonlyMap<string, ChildTaskCount>;
+}
+
+/**
+ * The listed tasks off the window's task collection (`ListedTasks`), each
+ * with the name being typed for it drawn over its own (`renamedTasks`), so a
+ * delivery moves only the lists holding the tasks it changed, and a task
+ * pinned or unpinned leaves one list in the same frame it joins the other.
+ */
+function useListedTasks(tasks: TasksControl): ListedTasks {
+  const collections = useTaskListCollections();
+  const workspaceId = tasks.workspace?.id;
+  const pinnedRows = useListedPart(workspaceId, true);
+  const unpinnedRows = useListedPart(workspaceId, false);
+  const childCounts = useChildCounts();
+  const { typedNames } = tasks;
+  const pinned = useMemo(() => renamedTasks(pinnedRows, typedNames), [pinnedRows, typedNames]);
+
+  const unpinned = useMemo(
+    () => renamedTasks(unpinnedRows, typedNames),
+    [unpinnedRows, typedNames],
+  );
+
+  const task = (taskId: string): TaskSummary | undefined => {
+    const held = collections.tasks.get(taskId);
+
+    if (held === undefined || (workspaceId !== undefined && held.workspaceId !== workspaceId)) {
+      return undefined;
+    }
+
+    return renamedTasks([held], typedNames)[0];
+  };
+
+  return { pinned, unpinned, every: collections.tasks, task, childCounts };
+}
+
+/**
  * `tasks` newest active first, read off `order` (`useActivityOrder`), each
  * task as `tasks` hands it. Note that a task the collection does not hold
  * yet, between a document landing and its live query answering, is merged
@@ -670,7 +788,11 @@ const placeOf = (row: PinnedRow): PinPlace => row.place;
  * pinned, which is made its plan's own pin as soon as the list names the
  * plan (`use-tasks-tab.ts`).
  */
-function pinnedRows(pinned: readonly TaskSummary[], tasks: SidebarTasks): PinnedRow[] {
+function pinnedRows(
+  pinned: readonly TaskSummary[],
+  listed: (taskId: string) => TaskSummary | undefined,
+  tasks: SidebarTasks,
+): PinnedRow[] {
   const taskRows = pinned.map(
     (task): PinnedRow => ({
       task,
@@ -680,7 +802,7 @@ function pinnedRows(pinned: readonly TaskSummary[], tasks: SidebarTasks): Pinned
   );
 
   const taskAgentRows = tasks.taskAgentPins.flatMap((pin): PinnedRow[] => {
-    const task = tasks.listed.tasks.find((each) => each.id === pin.taskId);
+    const task = listed(pin.taskId);
     const agent = tasks.liveAgents?.find((each) => each.id === pin.agentId);
 
     if (task === undefined || agent === undefined) return [];
@@ -691,7 +813,7 @@ function pinnedRows(pinned: readonly TaskSummary[], tasks: SidebarTasks): Pinned
 
   const tabRows = tasks.sidePanel.pins.flatMap((pin): PinnedRow[] => {
     const place = { position: pin.position, at: pin.at };
-    const task = tasks.listed.tasks.find((each) => each.id === pin.task);
+    const task = listed(pin.task);
 
     return task === undefined || pin.tab === SIDE_PANEL_TAB.DESCRIPTION
       ? []
@@ -2029,15 +2151,7 @@ function SidebarColumn({
   // Only a workspace somebody shares has people to filter by, so one nobody shares lists every task.
   const { memberCount } = tasks.workspace ?? {};
   const shared = memberCount === undefined ? (reader.members?.length ?? 0) > 1 : memberCount > 1;
-  // Following stands while the workspace has it on; a list kept narrowed to the tasks followed reads as the reader's own while it is off.
-  const followingOn = useWorkspaceExperiment(tasks.workspace?.id, EXPERIMENT.FOLLOWING);
-  const kept = taskView.view.assignedTo;
-
-  const assignedTo: AssignedTo = !shared
-    ? { kind: ASSIGNED_TO.ANYONE }
-    : kept.kind === ASSIGNED_TO.FOLLOWING && !followingOn
-      ? { kind: ASSIGNED_TO.ME }
-      : kept;
+  const assignedTo: AssignedTo = shared ? taskView.view.assignedTo : { kind: ASSIGNED_TO.ANYONE };
 
   useTaskViewCommands({
     offered: tasks.signedIn && tasks.workspace !== undefined,
@@ -2057,9 +2171,8 @@ function SidebarColumn({
   const currentTask = (task: TaskSummary) => current(task.id);
   const listedInbox = useListedInbox(tasks);
   // The list is the chosen workspace's; the unread marks above read every task.
-  const { listed: listedRows } = tasks;
-  const pinned = tasks.listed.tasks.filter((task) => task.pinnedAt !== undefined);
-  const pinnedSection = pinnedRows(pinned, tasks);
+  const listedTasks = useListedTasks(tasks);
+  const pinnedSection = pinnedRows(listedTasks.pinned, listedTasks.task, tasks);
   // The pin the open task was opened from is marked in its task's place,
   // whichever of the task's tabs is shown, while its row still stands.
   const { chosenPin } = tasks;
@@ -2079,7 +2192,7 @@ function SidebarColumn({
   const sectioned = sectionedTasks(
     tasks.taskSections,
     sectionsShown ? tasks.workspace?.id : undefined,
-    tasks.listed.tasks.filter((task) => task.pinnedAt === undefined),
+    listedTasks.unpinned,
   );
 
   // The view's filters thin the sections' tasks as they thin the list's, a row dropped among them landing among those drawn.
@@ -2088,7 +2201,7 @@ function SidebarColumn({
   );
 
   // Note that a child task is walked to the ancestor it stands under through every listed task, the finished ones the view hides among them.
-  const everyTask = useMemo(() => tasksById(tasks.listed.tasks), [tasks.listed.tasks]);
+  const everyTask = listedTasks.every;
   const sectionDialogs = useSectionDialogs(tasks, tasks.shown && overlay.inSight);
   const sectionEdits = useSectionEdits();
 
@@ -2155,8 +2268,14 @@ function SidebarColumn({
   const { chosen } = overlay;
   // The reader's own tasks, which the list holds until the reader chooses otherwise.
   const mine: AssignedTo = { kind: ASSIGNED_TO.ME };
-  // The Tasks head and its list are called whose tasks the list holds.
-  const tasksHead = tasksHeadWords(assignedTo, shared, reader, tasks.listed.tasks);
+
+  // The Tasks head and its list are called whose tasks the list holds, a member's name read off every listed task.
+  const everyListed = useMemo(
+    () => [...listedTasks.pinned, ...listedTasks.unpinned],
+    [listedTasks.pinned, listedTasks.unpinned],
+  );
+
+  const tasksHead = tasksHeadWords(assignedTo, shared, reader, everyListed);
 
   // New section stands on the Tasks head while the account keeps sections.
   // Note that a new section is named in place at the foot of the sections, so the sidebar stays standing rather than being put away as a choice puts it.
@@ -2168,7 +2287,7 @@ function SidebarColumn({
 
   const newSectionOffered = sectionsShown && tasks.workspace !== undefined;
   // Note that the count reads every listed task, not the rows the view draws, which hides the finished ones by default.
-  const childCounts = useMemo(() => childTaskCounts(tasks.listed.tasks), [tasks.listed.tasks]);
+  const { childCounts } = listedTasks;
 
   const context: RowContext = {
     tasks,
@@ -2213,14 +2332,14 @@ function SidebarColumn({
   // Note that the pins are never filtered, because a pin is already the
   // reader's own choice. A task an automation's run made leaves Tasks too, once its run finished and it holds nothing of the reader's (`finished-runs.ts`).
   const unpinnedTasks = withoutFinishedRunTasks(
-    listedRows.tasks.filter(
-      (task) => task.pinnedAt === undefined && !sectioned.taskIds.has(task.id),
-    ),
+    listedTasks.unpinned.filter((task) => !sectioned.taskIds.has(task.id)),
     { unread, inbox: listedInbox.inbox, shown: current, pullRequests: listedPullRequests },
   );
 
   // Note that an archived task, which the list does not show, counts for nothing here.
-  const unlisted = listedRows.tasks.length === 0;
+  const unlisted = listedTasks.pinned.length === 0 && listedTasks.unpinned.length === 0;
+  // Note that a workspace listing none may still have had tasks the list does not hold, old and finished ones, so it says none match rather than that there are none yet.
+  const neverHadTasks = unlisted && !hadTasks(tasks, tasks.workspace?.id);
   // A row names its repository as its group's header would, its owner's picture and its name, owner and all where two share a name.
   const named = repositoriesOf(unpinnedTasks);
 
@@ -2276,9 +2395,7 @@ function SidebarColumn({
   const pinnedOwn = pinnedHeld(pinnedSection);
 
   // The tasks the reader follows that no list above holds stand under Following, a task drawn in one place (`followingTasks`).
-  const followed = followingOn
-    ? followingTasks(unpinnedTasks, statusTasks, taskView.view, tasks.me)
-    : [];
+  const followed = followingTasks(unpinnedTasks, statusTasks, taskView.view, tasks.me);
 
   const homed = homedTaskRows(
     [
@@ -2589,7 +2706,6 @@ function SidebarColumn({
                                 shown={tasks.shown && overlay.inSight}
                                 control={taskView}
                                 shared={shared}
-                                following={followingOn}
                                 filtered={shared && assignedTo.kind !== mine.kind}
                               />
                             </>
@@ -2645,19 +2761,25 @@ function SidebarColumn({
                       data-row-drop={sectionsShown ? TASKS_DROP_ZONE : undefined}
                       {...motionRows()}
                     >
-                      {assignedTo.kind !== ASSIGNED_TO.ANYONE &&
-                      assigned.length === 0 &&
-                      shownSections.every((drawn) => drawn.tasks.length === 0) &&
-                      !unlisted &&
+                      {((assignedTo.kind !== ASSIGNED_TO.ANYONE &&
+                        assigned.length === 0 &&
+                        shownSections.every((drawn) => drawn.tasks.length === 0)) ||
+                        unlisted) &&
+                      !neverHadTasks &&
                       tasks.listRead &&
                       !tasks.listFailed ? (
                         <NoteLine look={NOTE_LINE_LOOK.ROWS}>
-                          {NONE_MATCH}{" "}
-                          <Button
-                            onClick={() => taskView.onAssignedTo({ kind: ASSIGNED_TO.ANYONE })}
-                          >
-                            Show all
-                          </Button>
+                          {NONE_MATCH}
+                          {assignedTo.kind === ASSIGNED_TO.ANYONE ? null : (
+                            <>
+                              {" "}
+                              <Button
+                                onClick={() => taskView.onAssignedTo({ kind: ASSIGNED_TO.ANYONE })}
+                              >
+                                Show all
+                              </Button>
+                            </>
+                          )}
                         </NoteLine>
                       ) : null}
                       {/* Note that rows the list still holds stand with no line over them while the app is offline, since the Offline mark says why; a list with none still says it. */}
@@ -2675,7 +2797,7 @@ function SidebarColumn({
                       {tasks.signedIn && unlisted && !tasks.listRead && !tasks.listFailed ? (
                         <TaskRowsSkeleton widths={LIST_SKELETON} />
                       ) : null}
-                      {tasks.signedIn && unlisted && tasks.listRead && !tasks.listFailed ? (
+                      {tasks.signedIn && neverHadTasks && tasks.listRead && !tasks.listFailed ? (
                         <NoteLine look={NOTE_LINE_LOOK.ROWS}>No tasks yet.</NoteLine>
                       ) : null}
                       {tasks.signedIn ? null : (

@@ -1,3 +1,4 @@
+import { computerAppNamed } from "@repo/features/agent-parts";
 import { CHECK_SUMMARY } from "@repo/features/agent-wire";
 import { fileName } from "@repo/features/code-ref-words";
 import {
@@ -18,7 +19,7 @@ import { useAutomation } from "../automation-directory.js";
 import { TILE_SIZE, WorkspaceTile } from "../desktop/workspace-tile.js";
 import { usePerson } from "../member-directory.js";
 import { providerOf } from "../tasks/agent-model.js";
-import { KeptAppIcon, useKeptApps } from "../tasks/agent-pictures.js";
+import { KeptAppIcon, useComputerApps } from "../tasks/agent-pictures.js";
 import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { FileTypeIcon } from "../tasks/file-type-icon.js";
 import { InboxItemChipGlyph } from "../tasks/inbox-item-chip.js";
@@ -29,6 +30,7 @@ import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { SkillMark } from "../tasks/skill-ref.js";
 import { AgentGlyph, AgentMark, PlanGlyph } from "../tasks/tab-look.js";
 import { useAgentStatus, useTaskStatus } from "../tasks/use-known-names.js";
+import { useTaskReadIn } from "../tasks/use-task-outside.js";
 import { MachineMark } from "../tasks/workspace-machines.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { EntityGlyph } from "./entity-glyph.js";
@@ -76,8 +78,10 @@ type EntityMark<T> = (entity: T, at: EntityMarkAt) => ReactNode;
 /** The marks, one entry per kind. */
 type EntityMarks = { readonly [K in EntityKind]: EntityMark<EntityOf<K>> };
 
-/** A plan's glyph, wearing its status where the window holds the task, as its row does. */
+/** A plan's glyph, wearing its status where the window holds the task, as its row does; a task it holds not is read into its list (`useTaskReadIn`), and wears its status once it lands. */
 function PlanMark({ taskId }: { taskId: string }): React.JSX.Element {
+  useTaskReadIn(taskId);
+
   return <PlanGlyph status={useTaskStatus(taskId)} />;
 }
 
@@ -203,7 +207,7 @@ function MacAppMark({ app }: { app: string }): React.JSX.Element {
   const onMac = useMacAppIcon(app);
   const posted = useAllowedAppIcon(app);
   const own = onMac ?? posted;
-  const kept = useKeptApps().get(app)?.icon;
+  const kept = computerAppNamed(useComputerApps(), app)?.icon;
 
   return own === undefined && kept !== undefined ? (
     <KeptAppIcon id={kept} />

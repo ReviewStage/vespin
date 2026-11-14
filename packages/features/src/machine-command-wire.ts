@@ -184,7 +184,8 @@ export const COMPUTER_RECORDING_BOUNDS = {
   MAX_BASE64_CHARS: 4 * Math.ceil(MAX_REQUEST_DATA_URL_BYTES / 3),
 } as const;
 
-const appName = EffectSchema.String.check(
+/** An app as agents and the settings name it: by its bundle id, or its name where it has none. */
+export const appName = EffectSchema.String.check(
   EffectSchema.isMinLength(1),
   EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_APP_CHARS),
 );
@@ -472,16 +473,38 @@ export function computerPermissionsNamed(permissions: readonly ComputerPermissio
 }
 
 /**
+ * How a call that ran nothing came to run nothing, as data beside the
+ * words the model reads, so the transcript names each case in its own
+ * words: the developer's answer to an ask, no answer to it in time, or no
+ * word back from the machine at all. A refusal of another kind names none.
+ */
+export const MACHINE_REFUSAL = {
+  /** The developer denied the ask. */
+  DECLINED: "declined",
+  /** No one answered the ask before it closed. */
+  UNANSWERED: "unanswered",
+  /** The machine never said what the command came to, so it may or may not have run. */
+  NO_ANSWER: "no-answer",
+} as const;
+
+export type MachineRefusal = (typeof MACHINE_REFUSAL)[keyof typeof MACHINE_REFUSAL];
+
+export const machineRefusalSchema = EffectSchema.Literals(Object.values(MACHINE_REFUSAL));
+
+/**
  * A command the Mac would not run, such as one of a kind it cannot run, and
  * why, in words the agent can act on; for an action refused because the Mac
  * lacks a grant it needs, those grants too, so the transcript can offer the
- * place they are turned on.
+ * place they are turned on; and for an ask that was declined or went
+ * unanswered, which (`outcome`). Note that a service older than `outcome`
+ * refuses the key, which the service, deployed first, never is.
  */
 const machineCommandRefusalSchema = EffectSchema.Struct({
   refused: EffectSchema.String.check(
     EffectSchema.isMinLength(1),
     EffectSchema.isMaxLength(MACHINE_COMMAND_BOUNDS.MAX_OUTPUT_CHARS),
   ),
+  outcome: EffectSchema.optionalKey(machineRefusalSchema),
   missingPermissions: EffectSchema.optionalKey(
     EffectSchema.Array(EffectSchema.Literals(Object.values(COMPUTER_PERMISSION))).check(
       EffectSchema.isMinLength(1),
@@ -643,6 +666,8 @@ export const MACHINE_UNREACHED = {
   NOT_LET: "not-let",
   /** The machine is set to Never, so it runs no terminal command. */
   COMMANDS_NEVER: "commands-never",
+  /** The machine's switch that lets agents use its apps is off, so it takes no computer use. */
+  APPS_OFF: "apps-off",
   /** The agent's default machine was removed, or its owner no longer lets the task's agents use it. */
   DEFAULT_GONE: "default-gone",
   /** The call named a machine this task's agents may not use. */
@@ -676,14 +701,19 @@ export const machineCommandListeningAnswerSchema = EffectSchema.Struct({
 /**
  * A machine's own say over agents' terminal commands and computer use, as
  * the service keeps it for the device: how commands run there, the same
- * three modes its own setting names, and the apps agents use there without
- * asking, by bundle id, or by name where an app has none.
+ * three modes its own setting names, the apps agents use there without
+ * asking, by bundle id, or by name where an app has none, and whether
+ * agents may use its apps at all, its own switch beside the mode. Note
+ * that the switch is absent from a desktop older than it, whose join and
+ * writes leave the service's as it stands, and from a service older than
+ * it, or one that holds none for the device yet.
  */
 export const machineDeviceSettingsSchema = EffectSchema.Struct({
   commandMode: machineCommandModeSchema,
   alwaysAllowedApps: EffectSchema.Array(appName).check(
     EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_APPS),
   ),
+  computerUse: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 export type MachineDeviceSettings = typeof machineDeviceSettingsSchema.Type;

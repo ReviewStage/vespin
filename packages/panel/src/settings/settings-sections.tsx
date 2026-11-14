@@ -145,10 +145,7 @@ export const SECTION = {
   PRIVACY: "privacy",
   NEW_AGENTS: "new-agents",
   ALWAYS_ALLOWED: SETTINGS_SEARCH_ROW.ALWAYS_ALLOWED,
-  COMPUTER_USE: "computer-use",
-  COMPUTER_USE_APPS: "computer-use-apps",
-  STARTUP: "startup",
-  DICTATION: "dictation",
+  PERMISSIONS: "permissions",
   NOTIFICATIONS: "notifications",
   YOUR_SOUNDS: "your-sounds",
   APPEARANCE_GROUP: "appearance-group",
@@ -242,13 +239,9 @@ const SETTINGS_SECTIONS = {
       "always allow allowlist allowed commands permissions approval ask run without asking shell bash claude code",
     drawn: accountDrawn,
   },
-  [SECTION.COMPUTER_USE]: {
+  [SECTION.PERMISSIONS]: {
     found: SECTION_FOUND.PAGE,
-    head: "Computer use",
-  },
-  [SECTION.COMPUTER_USE_APPS]: {
-    found: SECTION_FOUND.PAGE,
-    head: "Always-allowed apps",
+    head: "Permissions",
   },
   [SECTION.ADD_HOSTS]: {
     found: SECTION_FOUND.HEAD,
@@ -261,7 +254,8 @@ const SETTINGS_SECTIONS = {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.HOSTS,
     head: MACHINES_WORDS.TITLE,
-    words: "machines machine hosts host connected list",
+    words:
+      "machines machine hosts host connected list agents terminal commands run computer use apps always allow allowed never ask every time remove",
     drawn: accountDrawn,
   },
   [SECTION.INTEGRATIONS_GROUP]: {
@@ -306,16 +300,6 @@ const SETTINGS_SECTIONS = {
   [SECTION.APPEARANCE_GROUP]: {
     found: SECTION_FOUND.ROWS,
     rows: SECTION_ROWS.SCHEMA,
-  },
-  [SECTION.STARTUP]: {
-    found: SECTION_FOUND.ROWS,
-    rows: SECTION_ROWS.SCHEMA,
-    head: "Startup",
-  },
-  [SECTION.DICTATION]: {
-    found: SECTION_FOUND.ROWS,
-    rows: SECTION_ROWS.SCHEMA,
-    head: "Dictation",
   },
   [SECTION.EXPERIMENTS_WORKSPACE]: {
     found: SECTION_FOUND.HEAD,

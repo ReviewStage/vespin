@@ -111,7 +111,12 @@ type KeptByWorkspace =
 
 /** Each kept read's rows as the file keeps them: what its follow last answered, the task list's with the sync id it was read at. */
 const keptRowsSchema = Schema.Struct({
-  [KEPT_READ.TASK_LIST]: Schema.Struct({ rows: TASK_LIST_READ.rows, at: Schema.String }),
+  [KEPT_READ.TASK_LIST]: Schema.Struct({
+    rows: TASK_LIST_READ.rows,
+    at: Schema.String,
+    /** The workspaces the answer said hold any task, where it said; absent from a file kept before they were. */
+    taskWorkspaces: Schema.optionalKey(Schema.Array(Schema.String)),
+  }),
   [KEPT_READ.SIDEBAR]: Schema.Struct({
     sections: Schema.Array(taskSectionSchema),
     entries: Schema.Array(taskSectionEntrySchema),

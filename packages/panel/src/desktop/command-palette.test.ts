@@ -367,9 +367,9 @@ const SETTINGS_PAGES = [
   "Vespin MCP & CLI",
   "Appearance",
   "This Mac",
-  "Experimental",
   "About",
   "Keyboard shortcuts",
+  "Experimental",
 ];
 
 test("the Settings filter lists every Settings page by its name, ahead of the settings", () => {

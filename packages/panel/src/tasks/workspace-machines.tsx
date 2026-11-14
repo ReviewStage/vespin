@@ -5,7 +5,15 @@ import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { type WorkspaceMachine, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { HoverCard, HoverCardHead, HoverCardNote, STATUS_TONE } from "@repo/ui";
+import { MACHINE_COMMAND_MODE_LABEL } from "@repo/settings";
+import {
+  HOVER_CARD_ROW_LOOK,
+  HoverCard,
+  HoverCardHead,
+  HoverCardNote,
+  HoverCardRow,
+  STATUS_TONE,
+} from "@repo/ui";
 import { personActor } from "@repo/ui/actor-model";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { Duration } from "effect";
@@ -194,6 +202,11 @@ const MACHINE_CARD_WORDS = {
   ONLINE: "Online",
   OFFLINE: "Offline",
   DEFAULT: "This agent's default machine",
+  /** The rows of what the machine lets agents do, named as Settings › Machines names them. */
+  COMMANDS: "Terminal commands",
+  COMPUTER_USE: "Computer use",
+  ON: "On",
+  OFF: "Off",
 } as const;
 
 /** Whose machine it is, as its card's second line says it with its platform: This Mac, Your Mac, or its owner's; the platform alone where the owner is not known. */
@@ -210,12 +223,36 @@ function machineWhose(input: {
   return input.owner === undefined ? input.kind : `${input.owner}'s ${input.kind}`;
 }
 
+/** What a machine lets agents do, a row each, as its card says it to any member: its terminal commands mode and its apps switch, each where the machine carried it up. */
+function MachineSettingsRows({ machine }: { machine: WorkspaceMachine }): React.JSX.Element {
+  return (
+    <>
+      {machine.commandMode === undefined ? null : (
+        <HoverCardRow
+          look={HOVER_CARD_ROW_LOOK.DETAIL}
+          label={MACHINE_CARD_WORDS.COMMANDS}
+          end={MACHINE_COMMAND_MODE_LABEL[machine.commandMode]}
+        />
+      )}
+      {machine.computerUse === undefined ? null : (
+        <HoverCardRow
+          look={HOVER_CARD_ROW_LOOK.DETAIL}
+          label={MACHINE_CARD_WORDS.COMPUTER_USE}
+          end={machine.computerUse ? MACHINE_CARD_WORDS.ON : MACHINE_CARD_WORDS.OFF}
+        />
+      )}
+    </>
+  );
+}
+
 /**
  * A machine's card, read the same for every machine: its glyph and its own
  * name, then whose it is with its platform (This Mac, Your Mac, or its
- * owner's), and whether it is online in the corner; that it is the agent's
- * default machine where it is read in that agent's transcript; or that the
- * workspace no longer lists it.
+ * owner's), and whether it is online in the corner; what it lets agents do,
+ * its terminal commands mode and its apps switch, so any member sees why a
+ * call there would be refused; that it is the agent's default machine where
+ * it is read in that agent's transcript; or that the workspace no longer
+ * lists it.
  */
 export function MachineChipCard({
   machineId,
@@ -266,6 +303,7 @@ export function MachineChipCard({
         }
         cornerTone={machine?.online === true ? STATUS_TONE.COMPLETE : STATUS_TONE.NEUTRAL}
       />
+      {machine === undefined ? null : <MachineSettingsRows machine={machine} />}
       {routed === machineId ? <HoverCardNote>{MACHINE_CARD_WORDS.DEFAULT}</HoverCardNote> : null}
       {read && machine === undefined ? <HoverCardNote>{UNLISTED_WORDS}</HoverCardNote> : null}
     </HoverCard>

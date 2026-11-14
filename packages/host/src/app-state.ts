@@ -45,6 +45,7 @@ import type { InstalledSkillSummary } from "@repo/features/installed-skill-route
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import type { IntegrationToolsAnswer } from "@repo/features/integration-wire";
 import { LIVE_READ, type LiveRead } from "@repo/features/live-wire";
+import type { MachineLine } from "@repo/features/machine-live";
 import type { McpClientsAnswer } from "@repo/features/mcp-client-wire";
 import type { MemorySummary } from "@repo/features/memory-wire";
 import type { MirrorStandings } from "@repo/features/mirror-steps";
@@ -144,6 +145,8 @@ export const RUN_PROFILE = {
   SETTINGS_AGENTS: "settings-agents",
   /** The same account, Settings on Hosts: a server online, one to upgrade, and one offline. */
   SETTINGS_HOSTS: "settings-hosts",
+  /** The same account in the desktop app, Settings on This Mac: Computer use on with Accessibility still to allow, and many apps always allowed. */
+  SETTINGS_THIS_MAC: "settings-this-mac",
   /** The same account, Settings on Integrations: some connected, some with their sign-in expired. */
   SETTINGS_INTEGRATIONS: "settings-integrations",
   /** The same account, Settings on MCP & CLI: the agents it let in, how to connect another, and the `vespin` command's install and sign-in. */
@@ -497,6 +500,9 @@ export interface AppHostsHeld {
 /** The account's hosts the windows hold, by the account, as the host's read of them stands. */
 export type AppHosts = Readonly<Record<string, AppHostRead<AppHostsHeld>>>;
 
+/** The account's machines the windows hold, by the account, as the host's read of them stands: each by name, with its own settings for agents, every change still out drawn over it and a removal drawn gone. */
+export type AppMachines = Readonly<Record<string, AppHostRead<readonly MachineLine[]>>>;
+
 /**
  * Each workspace's pending invitations the host holds for an owner's or an
  * admin's windows (`workspace-invitations-read.ts`): those a window draws,
@@ -732,6 +738,7 @@ export interface AppHostReads {
   [LIVE_READ.REVIEW_OPTIONS]: AgentReviewOptionsAnswerView;
   [LIVE_READ.DEVICE_PRESENCE]: AppDevicePresence;
   [LIVE_READ.HOSTS]: AppHostsHeld;
+  [LIVE_READ.MACHINES]: readonly MachineLine[];
   [LIVE_READ.WORKSPACE_INVITATIONS]: readonly WorkspaceInvitation[];
   [LIVE_READ.THIS_MAC_HOST]: AppThisMacHost;
   [LIVE_READ.TRANSCRIPT]: AppTranscript;
@@ -905,6 +912,8 @@ export interface AppState {
   [LIVE_READ.DEVICE_PRESENCE]: AppDevicePresences;
   /** The account's hosts, held while Settings › Hosts draws them and a while after: what that page lists. */
   [LIVE_READ.HOSTS]: AppHosts;
+  /** The account's machines with their own settings for agents' commands and apps, held while Settings › Machines draws them and a while after: what its settings for every machine read. */
+  [LIVE_READ.MACHINES]: AppMachines;
   /** Each workspace's pending invitations an owner's or an admin's windows draw, held while a window draws them and a while after: what Settings › Workspace lists under Invitations. */
   [LIVE_READ.WORKSPACE_INVITATIONS]: AppWorkspaceInvitations;
   /** Which machine This Mac is and the device its host's record names, held for the signed-in session and told as it moves: what Settings › Hosts and Runs on name This Mac by. */
@@ -1109,6 +1118,7 @@ export const HOST_READ_SLICE = {
   [LIVE_READ.BROWSER_TABS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.DEVICE_PRESENCE]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.HOSTS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
+  [LIVE_READ.MACHINES]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.WORKSPACE_INVITATIONS]: {
     keys: READ_KEYS.ONE,
     on: KEYS_ON.SLICE,

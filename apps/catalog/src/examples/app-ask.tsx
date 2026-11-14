@@ -72,6 +72,7 @@ function ready(url: string, width: number, height: number) {
 
 /** Apps past the two the stack draws behind its front, to pile. */
 const MORE_APPS = ["Notes", "Calculator", "Maps", "Music", "Preview"].map((name) => ({
+  id: name,
   name,
   iconSrc: ICON,
 }));
@@ -114,21 +115,23 @@ function AppAsks(): React.JSX.Element {
       <CatalogSection id="app-window-stack" title="The apps an agent is using">
         <Inline>
           <Stack
-            apps={[{ name: "Simulator", iconSrc: ICON, window: ready(PHONE, 236, 512) }]}
-            using="Simulator"
-          />
-          <Stack
             apps={[
-              { name: "Xcode", window: ready(EDITOR, 640, 400) },
-              { name: "Simulator", iconSrc: ICON },
-              { name: "Safari" },
+              { id: "Simulator", name: "Simulator", iconSrc: ICON, window: ready(PHONE, 236, 512) },
             ]}
             using="Simulator"
           />
           <Stack
             apps={[
-              { name: "Xcode", window: ready(EDITOR, 640, 400) },
-              { name: "Simulator", iconSrc: ICON },
+              { id: "Xcode", name: "Xcode", window: ready(EDITOR, 640, 400) },
+              { id: "Simulator", name: "Simulator", iconSrc: ICON },
+              { id: "Safari", name: "Safari" },
+            ]}
+            using="Simulator"
+          />
+          <Stack
+            apps={[
+              { id: "Xcode", name: "Xcode", window: ready(EDITOR, 640, 400) },
+              { id: "Simulator", name: "Simulator", iconSrc: ICON },
               ...MORE_APPS,
             ]}
             using="Xcode"
@@ -136,6 +139,7 @@ function AppAsks(): React.JSX.Element {
           <Stack
             apps={[
               {
+                id: "Simulator",
                 name: "Simulator",
                 iconSrc: ICON,
                 window: { state: { kind: PICTURE_STATE.READING }, width: 236, height: 512 },
@@ -145,6 +149,7 @@ function AppAsks(): React.JSX.Element {
           <Stack
             apps={[
               {
+                id: "Simulator",
                 name: "Simulator",
                 iconSrc: ICON,
                 window: {
@@ -164,12 +169,20 @@ function AppAsks(): React.JSX.Element {
       <CatalogSection id="app-stack-pill" title="The apps minimized, at work and done">
         <Inline>
           <AppStackPill
-            apps={[{ name: "Simulator", iconSrc: ICON }, { name: "Xcode" }, { name: "Safari" }]}
+            apps={[
+              { id: "Simulator", name: "Simulator", iconSrc: ICON },
+              { id: "Xcode", name: "Xcode" },
+              { id: "Safari", name: "Safari" },
+            ]}
             using="Simulator"
             onRestore={() => undefined}
           />
           <AppStackPill
-            apps={[{ name: "Simulator", iconSrc: ICON }, { name: "Xcode" }, { name: "Safari" }]}
+            apps={[
+              { id: "Simulator", name: "Simulator", iconSrc: ICON },
+              { id: "Xcode", name: "Xcode" },
+              { id: "Safari", name: "Safari" },
+            ]}
             onRestore={() => undefined}
           />
         </Inline>

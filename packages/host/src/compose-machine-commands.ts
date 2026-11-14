@@ -19,6 +19,7 @@ import {
   MACHINE_COMMAND_BOUNDS,
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
+  MACHINE_REFUSAL,
   type MacComputerCommand,
   type MachineCommandKind,
   type MachineCommandMode,
@@ -30,6 +31,7 @@ import {
   machineCommandKindsQuery,
   machineCommandResultSchema,
 } from "@repo/features/machine-command-wire";
+import { MACHINES_READ, machinesOfLiveRows } from "@repo/features/machine-live";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
@@ -42,6 +44,7 @@ import {
   FiberHandle,
   FiberSet,
   Option,
+  Queue,
   Schedule,
   Schema,
   type Scope,
@@ -133,10 +136,13 @@ import type { ThisMachineDevice } from "./this-machine-device.js";
  * install keeps for it (`this-machine-device.ts`), and every read, claim, and
  * presence names that device, so the service hands it what was queued for
  * it or for no machine, and never what was meant for another of the
- * account's. The join carries this Mac's own settings for commands and apps
- * up where the service holds none for it yet, and the service's are written
- * over Settings where they differ; from then on each change to them here is
- * written to the service. Until it has joined, or where it cannot, the Mac
+ * account's. The join carries this Mac's own settings for commands and apps,
+ * its switch for apps among them, up where the service holds none for it
+ * yet, and the service's are written over Settings where they differ; from
+ * then on each change to them here is written to the service, and the
+ * service's own row for the device is followed live (`MACHINES_READ`), so a
+ * change made on another device or the web is written over Settings as it
+ * lands, without joining again. Until it has joined, or where it cannot, the Mac
  * claims as the account alone, as it did before devices claimed.
  *
  * A live read writes nothing, so the Mac says it listens for its kinds
@@ -178,6 +184,29 @@ const VARIABLE = { HOME: "HOME", SHELL: "SHELL" } as const;
 
 /** How often the Mac looks again at whether it has joined, and whether its settings here differ from the service's, beside each change that may move either: a join or a write the service did not answer is tried again so. */
 const DEVICE_LOOK_EVERY = Duration.seconds(15);
+
+/** What the device's looks run on: a look again at whether it joined and its settings moved, or the service's say over it heard live. */
+const DEVICE_LOOK = { AGAIN: "again", HEARD: "heard" } as const;
+
+/** The device this Mac joined as for an account, the settings the service keeps for it as last read or written, the service's say Settings has not yet taken, and the apps whose looks it last posted for it; none before it posted any. */
+interface Joined {
+  readonly userId: string;
+  readonly deviceId: string;
+  readonly settings: MachineDeviceSettings;
+  readonly pending?: MachineDeviceSettings | undefined;
+  readonly looks?: readonly string[] | undefined;
+}
+
+/** One turn of the device's looks: a look again, or the service's say over the device it joined as (`from`), heard live. */
+type DeviceLook =
+  | { readonly kind: typeof DEVICE_LOOK.AGAIN }
+  | {
+      readonly kind: typeof DEVICE_LOOK.HEARD;
+      readonly from: Joined;
+      readonly service: MachineDeviceSettings;
+    };
+
+const LOOK_AGAIN: DeviceLook = { kind: DEVICE_LOOK.AGAIN };
 
 /** How long the helper has to name an app before it is asked about, apart from the action's own time. */
 const DESCRIBE_WITHIN = Duration.seconds(10);
@@ -253,14 +282,6 @@ export interface MachineCommandsDependencies {
   device?: MachineCommandsDevice;
 }
 
-/** The device this Mac joined as for an account, the settings the service keeps for it as last read or written, and the apps whose looks it last posted for it; none before it posted any. */
-interface Joined {
-  readonly userId: string;
-  readonly deviceId: string;
-  readonly settings: MachineDeviceSettings;
-  readonly looks?: readonly string[] | undefined;
-}
-
 /** The device the Mac joined as for the account given; none where it has not joined for it. */
 const joinedAs = (joined: Joined | undefined, userId: string) =>
   joined?.userId === userId ? joined.deviceId : undefined;
@@ -269,9 +290,19 @@ const joinedAs = (joined: Joined | undefined, userId: string) =>
 const sameApps = (one: readonly string[], other: readonly string[]) =>
   one.length === other.length && one.every((app, index) => app === other[index]);
 
-/** Whether two says over commands and apps are the same, the apps in order. */
+/** Whether two says over commands and apps are the same, the apps in order, and a switch for apps only one names told apart, so a Mac carries its own up where the service holds none. */
 const sameSettings = (one: MachineDeviceSettings, other: MachineDeviceSettings) =>
-  one.commandMode === other.commandMode && sameApps(one.alwaysAllowedApps, other.alwaysAllowedApps);
+  one.commandMode === other.commandMode &&
+  one.computerUse === other.computerUse &&
+  sameApps(one.alwaysAllowedApps, other.alwaysAllowedApps);
+
+/** The service's say over this Mac as the account's machines read names it, by the device it joined as; none where the read names no such machine, or one whose app never joined. */
+function heardSettings(
+  rows: typeof MACHINES_READ.rows.Type,
+  deviceId: string,
+): MachineDeviceSettings | undefined {
+  return machinesOfLiveRows(rows.machines).find((machine) => machine.id === deviceId)?.settings;
+}
 
 /** An app as the helper names and draws it: by the bundle id it was asked for, its name, and its icon where it drew one. */
 interface NamedApp {
@@ -371,12 +402,14 @@ const SWITCHED_OFF: MacShellResult = {
 /** What a command the developer declined answers. */
 const DECLINED: MachineCommandRefusal = {
   refused: "Not run: the developer declined this command.",
+  outcome: MACHINE_REFUSAL.DECLINED,
 };
 
 /** What a command the developer did not answer for answers: not run, since its timeout had passed before it could start. */
 const UNANSWERED: MachineCommandRefusal = {
   refused:
     "Not run: the developer did not answer in time whether to allow this command on their Mac.",
+  outcome: MACHINE_REFUSAL.UNANSWERED,
 };
 
 /** What a command asked under an account that signed out before it was answered answers. */
@@ -397,11 +430,13 @@ const APPS_SWITCHED_OFF: MachineCommandRefusal = { refused: `Not run: ${APPS_OFF
 /** What an action on an app the developer declined answers. */
 const APP_DECLINED: MachineCommandRefusal = {
   refused: "Not run: the developer declined to let agents use this app.",
+  outcome: MACHINE_REFUSAL.DECLINED,
 };
 
 /** What an action on an app the developer did not answer for in time answers. */
 const APP_UNANSWERED: MachineCommandRefusal = {
   refused: "Not run: the developer did not answer in time whether agents may use this app.",
+  outcome: MACHINE_REFUSAL.UNANSWERED,
 };
 
 /** What an action on an app agents are never offered answers, by the app's name. */
@@ -1192,6 +1227,18 @@ export function composeMachineCommands(
         const here = yield* device.settings;
 
         if (standing?.userId === userId) {
+          // Note that a say heard from the service that Settings refused is written again before anything goes up, since this Mac's own then is no edit of the developer's but the one the service's replaced.
+          if (standing.pending !== undefined) {
+            if (
+              sameSettings(here, standing.pending) ||
+              (yield* device.applySettings(standing.pending))
+            ) {
+              return yield* SubscriptionRef.set(joined, { ...standing, pending: undefined });
+            }
+
+            return yield* Effect.sleep(DEVICE_LOOK_EVERY);
+          }
+
           if (sameSettings(here, standing.settings)) return;
           const saved = yield* asked(client.saveDeviceSettings(standing.deviceId, here));
 
@@ -1234,6 +1281,102 @@ export function composeMachineCommands(
 
         yield* SubscriptionRef.set(joined, { userId, deviceId, settings: answer.settings });
       });
+
+    /**
+     * The service's say over this Mac as its live read carried it, taken
+     * where it moved since it was last read or written: held as the
+     * device's, then written over Settings where they differ, so a change
+     * made on another device or the web reaches this Mac without joining
+     * again. It runs in turn with the looks (`reconciled`), never beside
+     * one, so a look never carries this Mac's say up over the service's
+     * between the two. Note that a write Settings refused is held as
+     * pending, which the next look writes again rather than carrying this
+     * Mac's old say up over it, and that a say heard for an account no longer
+     * signed in is let go.
+     */
+    const heard = (device: MachineCommandsDevice, from: Joined, service: MachineDeviceSettings) =>
+      Effect.gen(function* () {
+        const standing = yield* SubscriptionRef.get(joined);
+
+        if (
+          dependencies.accountId() !== from.userId ||
+          standing?.userId !== from.userId ||
+          standing.deviceId !== from.deviceId ||
+          (sameSettings(standing.settings, service) && standing.pending === undefined)
+        )
+          return;
+
+        const taken =
+          sameSettings(yield* device.settings, service) || (yield* device.applySettings(service));
+
+        yield* SubscriptionRef.set(joined, {
+          ...standing,
+          settings: service,
+          pending: taken ? undefined : service,
+        });
+      });
+
+    /** Waits until the Mac no longer stands joined as the device it joined as for `from`'s account. */
+    const unjoined = (from: Joined) =>
+      SubscriptionRef.changes(joined).pipe(
+        Stream.filter((now) => now?.userId !== from.userId || now.deviceId !== from.deviceId),
+        Stream.runHead,
+      );
+
+    /**
+     * The account's machines followed (`MACHINES_READ`, which polls the
+     * service, held) for as long as the Mac stands joined as one device,
+     * each change to its own row's say handed to `take`; the read asked
+     * again after a pause where the service did not answer it or broke it
+     * off, and followed again as the Mac joins as another device or for
+     * another account. Note that it waits, reading nothing, while the Mac
+     * has not joined.
+     */
+    const settingsFollowed = (
+      take: (from: Joined, service: MachineDeviceSettings) => Effect.Effect<void>,
+    ) =>
+      Effect.forever(
+        Effect.gen(function* () {
+          const from = yield* SubscriptionRef.get(joined);
+
+          if (from === undefined) {
+            return yield* Effect.asVoid(
+              SubscriptionRef.changes(joined).pipe(
+                Stream.filter((now) => now !== undefined),
+                Stream.runHead,
+              ),
+            );
+          }
+
+          const read = (after?: string) =>
+            asked(
+              client.liveRead(
+                MACHINES_READ,
+                { userId: from.userId },
+                after === undefined ? undefined : { after },
+              ),
+            );
+
+          const sealed = yield* asked(client.liveRead(MACHINES_READ, { userId: from.userId }));
+
+          if ("failure" in sealed) {
+            return yield* Effect.raceFirst(
+              waitOrRegained(LIVE_RESTART),
+              Effect.asVoid(unjoined(from)),
+            );
+          }
+
+          const rows = decodedLiveRows({ poll: read }, sealed, MACHINES_READ.rows);
+
+          const following = Stream.runForEach(rows, (now) => {
+            const service = heardSettings(now, from.deviceId);
+
+            return service === undefined ? Effect.void : take(from, service);
+          }).pipe(Effect.catch(() => waitOrRegained(LIVE_RESTART)));
+
+          yield* Effect.raceFirst(following, Effect.asVoid(unjoined(from)));
+        }),
+      );
 
     /**
      * How this Mac names and draws the apps it always allows, posted for the
@@ -1388,23 +1531,40 @@ export function composeMachineCommands(
       if (dependencies.device !== undefined) {
         const device = dependencies.device;
 
+        // Note that what the service says of this Mac is heard on the same stream the looks run off, so the two never run beside each other.
+        const said = yield* Queue.unbounded<DeviceLook>();
+        const again = () => LOOK_AGAIN;
+
         const looks = Stream.merge(
-          Stream.succeed(undefined),
+          Stream.succeed(LOOK_AGAIN),
           Stream.merge(
-            yield* dependencies.changed,
-            Stream.fromSchedule(Schedule.spaced(DEVICE_LOOK_EVERY)),
+            Stream.merge(Stream.map(yield* dependencies.changed, again), Stream.fromQueue(said)),
+            Stream.map(Stream.fromSchedule(Schedule.spaced(DEVICE_LOOK_EVERY)), again),
+          ),
+        );
+
+        const look = (event: DeviceLook) =>
+          event.kind === DEVICE_LOOK.HEARD
+            ? heard(device, event.from, event.service)
+            : Effect.andThen(
+                Effect.andThen(reconciled(device), tellDevice),
+                computer === undefined ? Effect.void : looksPosted(computer),
+              );
+
+        yield* Effect.forkScoped(
+          Stream.runForEach(looks, (event) =>
+            Effect.catchDefect(look(event), () =>
+              Effect.sync(() => report("this Mac could not join as a device")),
+            ),
           ),
         );
 
         yield* Effect.forkScoped(
-          Stream.runForEach(looks, () =>
-            Effect.catchDefect(
-              Effect.andThen(
-                Effect.andThen(reconciled(device), tellDevice),
-                computer === undefined ? Effect.void : looksPosted(computer),
-              ),
-              () => Effect.sync(() => report("this Mac could not join as a device")),
+          Effect.catchDefect(
+            settingsFollowed((from, service) =>
+              Effect.asVoid(Queue.offer(said, { kind: DEVICE_LOOK.HEARD, from, service })),
             ),
+            () => Effect.sync(() => report("this Mac could not follow its settings")),
           ),
         );
       }
