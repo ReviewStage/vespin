@@ -3,9 +3,16 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { BAR_TITLE, FailureNoticeProvider, KeepingProvider, useColors } from "@repo/ui-native";
+import {
+  BAR_TITLE,
+  type BrandColors,
+  FailureNoticeProvider,
+  KeepingProvider,
+  useColors,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { useMemo } from "react";
 import { useColorScheme } from "react-native";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -30,11 +37,28 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 // The splash stands until the host's first screen has drawn (`HostProvider`), rather than going with expo-router's own hide over a blank screen.
 holdSplash();
 
-/** The navigators' theme in each color scheme: react-navigation's own colors, which every bar here overrides, with only its `dark` flag following the system. */
-const NAVIGATION_THEME = {
-  LIGHT: DefaultTheme,
-  DARK: { ...DefaultTheme, dark: true },
-} as const;
+/**
+ * The navigators' theme: react-navigation's own for the color scheme, its
+ * `dark` flag following the system's and its colors the brand's, so a screen
+ * or a bar that sets no ground, title or tint of its own stands on the
+ * brand's ground in its ink, never a white body or the system's blue.
+ */
+function navigationTheme(colors: BrandColors, dark: boolean) {
+  const base = dark ? DarkTheme : DefaultTheme;
+
+  return {
+    ...base,
+    dark,
+    colors: {
+      primary: colors.TEXT,
+      background: colors.GROUND,
+      card: colors.GROUND,
+      text: colors.TEXT,
+      border: colors.CHIP_EDGE,
+      notification: colors.ACCENT,
+    },
+  };
+}
 
 /** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
 const SHORT_SHEET_DETENTS = [0.5, 1];
@@ -181,9 +205,11 @@ function KeptScreens() {
  */
 export default function RootLayout() {
   const dark = useColorScheme() === "dark";
+  const colors = useColors();
+  const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
 
   return (
-    <ThemeProvider value={dark ? NAVIGATION_THEME.DARK : NAVIGATION_THEME.LIGHT}>
+    <ThemeProvider value={theme}>
       <HostProvider>
         <FailureNoticeProvider>
           <VoiceCallProvider>
