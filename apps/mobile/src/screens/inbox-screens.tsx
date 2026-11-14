@@ -42,6 +42,7 @@ import {
   selectAgentNames,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
+import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   BAR_TITLE,
   type BarAction,
@@ -145,6 +146,22 @@ const VIDEO_LABEL = "Video";
 
 /** No agent's name held. */
 const NO_NAMES: ReadonlyMap<string, string> = new Map();
+
+/** The panel's pager words, said by VoiceOver for an open thread's arrows. */
+const STEP_WORDS = {
+  PREVIOUS: APP_SHORTCUTS[APP_COMMAND.PREVIOUS_INBOX_ITEM].label,
+  NEXT: APP_SHORTCUTS[APP_COMMAND.NEXT_INBOX_ITEM].label,
+} as const;
+
+/**
+ * The Inbox's rows, by id, in the order the compact list drew them as one
+ * was opened: its scope and its search as they stood, so an open thread's
+ * arrows step through what the reader was looking at, as the panel's K and
+ * J step through the list held on screen. Note that it lives as long as the
+ * app does, and a thread it doesn't hold, such as one a notification opened,
+ * steps through the kept scope's live rows instead.
+ */
+let heldOrder: readonly string[] = [];
 
 /** What an agent is called where the task list does not hold it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
@@ -486,8 +503,11 @@ function useAgentHarness(agentId: string): ModelProvider | undefined {
  * names the path and which draws its own Remind me sheet, or a split view's
  * detail, which opens the sheet its screen draws outside the split view.
  */
+/** The threads either side of an open one, in the list's order; none at an end. */
+type ThreadSteps = { readonly previous?: string | undefined; readonly next?: string | undefined };
+
 type ThreadPlace =
-  | { readonly inStack: true }
+  | { readonly inStack: true; readonly steps: ThreadSteps }
   | {
       readonly inStack: false;
       readonly onRemind: (item: InboxItem) => void;
@@ -611,6 +631,11 @@ function ThreadDetail({
 
     if (place.inStack) router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
     else place.onOpen(id);
+  };
+
+  // An arrow opens the thread above or below in this one's place, as Mail's message arrows do, so Back still lands on the list.
+  const stepTo = (id: string | undefined) => {
+    if (id !== undefined) router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
   };
 
   const answer = useThreadAnswer(listed, openStarted);
@@ -784,6 +809,21 @@ function ThreadDetail({
         }}
       />
       <Stack.Toolbar placement="right">
+        {/* Note that the arrows and ⋯ stand in one bar, since a screen's last `Stack.Toolbar` of a placement replaces the ones before it, and an arrow at the list's end stands dimmed rather than gone, so the other one never moves under the thumb, as Mail's do. */}
+        <Stack.Toolbar.Button
+          accessibilityLabel={STEP_WORDS.PREVIOUS}
+          disabled={place.steps.previous === undefined}
+          onPress={() => stepTo(place.steps.previous)}
+        >
+          <Stack.Toolbar.Icon xcasset={GLYPH.PREVIOUS_ITEM} renderingMode="template" />
+        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          accessibilityLabel={STEP_WORDS.NEXT}
+          disabled={place.steps.next === undefined}
+          onPress={() => stepTo(place.steps.next)}
+        >
+          <Stack.Toolbar.Icon xcasset={GLYPH.NEXT_ITEM} renderingMode="template" />
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
           <Stack.Toolbar.Menu inline>
             {pathActions.map((action) => (
@@ -988,11 +1028,12 @@ function InboxStackList(words: InboxSearch) {
               look={LIST_LOOK.PLAIN}
               listed={listing.listed}
               readerId={listing.readerId}
-              onSelect={(id) =>
+              onSelect={(id) => {
+                heldOrder = listing.listed.map(({ item }) => item.id);
                 router.push(
                   onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
-                )
-              }
+                );
+              }}
               onRefresh={acts.refresh}
               onMark={acts.mark}
               onRemind={remind.open}
@@ -1108,6 +1149,27 @@ function InboxSplitScreen({
   );
 }
 
+/**
+ * The threads either side of an open one: in the order the list held as it
+ * was opened, or, for a thread that order doesn't hold, in the kept scope's
+ * live rows, the open thread kept among them, as the panel's list keeps the
+ * item its pane shows, which are then held for the arrows' next steps.
+ */
+function useThreadSteps(id: string): ThreadSteps {
+  const { show } = useInboxScope();
+  const listing = useInboxListing({ show, search: "", chosen: id });
+  const held = heldOrder.includes(id);
+  const order = held ? heldOrder : listing.listed.map(({ item }) => item.id);
+  const at = order.indexOf(id);
+
+  // Note that a thread the held order doesn't hold starts a run of its own on the live rows, held from then on, so a step to a thread an older order also holds keeps to this run's order rather than jumping to that one's.
+  useEffect(() => {
+    if (!held) heldOrder = order;
+  }, [held, order]);
+
+  return at < 0 ? {} : { previous: order[at - 1], next: order[at + 1] };
+}
+
 /** The Inbox tab's root screen: its list, laid out by the window's size class, its search held here so a rotation or a fold keeps it. */
 export function InboxListScreen() {
   const sizeClass = useWindowSizeClass();
@@ -1126,6 +1188,7 @@ export function InboxListScreen() {
 export function InboxThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { listed, readerId, feed, retry } = useInboxThread(id);
+  const steps = useThreadSteps(id);
   const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
 
@@ -1137,7 +1200,7 @@ export function InboxThreadScreen() {
         options={{ headerBackTitle: INBOX_TITLE, ...(listed === undefined && { title: "" }) }}
       />
       {listed !== undefined ? (
-        <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: true }} />
+        <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: true, steps }} />
       ) : (
         <Screen>
           <ThreadNotDrawn feed={feed} onRetry={retry} />
