@@ -600,7 +600,8 @@ function TranscriptRow({
               }
             />
           ))}
-          {item.words.trim() === "" ? null : (
+          {/* Note that a line of pictures alone draws no empty bubble under them, while a line of other files alone, which the phone leaves to the panel, keeps its bubble so the line still stands. */}
+          {item.words.trim() === "" && (item.pictures ?? []).length > 0 ? null : (
             <CopyWordsMenu words={item.words}>
               <View style={styles.saidHeld}>
                 <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
