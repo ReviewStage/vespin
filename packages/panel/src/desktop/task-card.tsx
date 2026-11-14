@@ -15,6 +15,7 @@ import {
 } from "@repo/features/task-wire";
 import { repositoryPageUrl } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
+import { ACT_KIND } from "@repo/host/acts";
 import {
   AttentionMark,
   AVATAR_SIZE,
@@ -41,7 +42,8 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, actorName, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
-import { Fragment } from "react";
+import { Fragment, useEffect } from "react";
+import { tellAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, actorCard, UnassignedMark } from "../actor-ref.js";
 import { useCreator, useMemberDirectory, usePerson } from "../member-directory.js";
 import { useActorDoor } from "../person-door.js";
@@ -371,7 +373,7 @@ function TaskRelations({
   workspaceName: string | undefined;
   onOpenTask: ((taskId: string) => void) | undefined;
 }): React.JSX.Element {
-  const count = subTaskCount(subTasks);
+  const count = subTaskCount(task, subTasks);
 
   const groups = [
     {
@@ -482,6 +484,9 @@ export function TaskCard({
 }): React.JSX.Element {
   const { members } = useMemberDirectory();
   const { agents: agentRows, pullRequests: pullRequestRows } = useTaskWork(task.id);
+
+  // Note that the tasks related to the task are read past the list the window holds as its card hangs, so a finished sub-task or an old blocker stands in it.
+  useEffect(() => tellAct(ACT_KIND.TASKS_RELATIONS_READ, { taskId: task.id }), [task.id]);
 
   const parent =
     task.parentTaskId === undefined || task.parentTaskId === task.id

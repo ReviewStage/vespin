@@ -1,5 +1,5 @@
 /**
- * relay.ts -- one tunnel: the desktop's socket piped to a bridge in the PTY of the agent's running sandbox, closing when no bytes have crossed it for `SANDBOX_IDLE`.
+ * relay.ts -- one tunnel: the desktop's socket piped to a bridge in the PTY of the agent's running sandbox, open until either side leaves.
  *
  * A connection reaches its agent through the one rule every agent route
  * keeps, as a Terminal's does, then opens a PTY only on a sandbox that is
@@ -13,10 +13,11 @@
  * read only for its shape; its bytes are never read, kept, logged, or
  * counted, here or anywhere the relay writes.
  *
- * A tunnel never holds its sandbox up: only agent or terminal activity does
- * (`@repo/sandbox`'s `SANDBOX_IDLE`), so a sandbox a tunnel reaches stops on
- * that rule alone, and the tunnel with it. A connection also closes as idle
- * once no byte has crossed it either way for `SANDBOX_IDLE`.
+ * A tunnel never closes for being quiet: a hot-reload socket may carry
+ * nothing for hours and still be wanted. It stays open until the desktop
+ * leaves or the bridge does, which it does when its sandbox stops; what
+ * keeps that sandbox up is its holds (`@repo/database`'s
+ * `agent-sandbox-holds`), never the bytes crossing here.
  *
  * How the connection ended is the close code the desktop reads as the
  * tunnel's state (`@repo/features/sandbox-tunnel-wire`'s `TUNNEL_CLOSE`).
@@ -28,11 +29,9 @@
 
 import { TUNNEL_CLOSE, tunnelFrameSchema } from "@repo/features/sandbox-tunnel-wire";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
-import { type InteractiveShell, ptyLinesOf, SANDBOX_IDLE, type SandboxError } from "@repo/sandbox";
+import { type InteractiveShell, ptyLinesOf, type SandboxError } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
-  Clock,
-  DateTime,
   Deferred,
   Duration,
   Effect,
@@ -40,7 +39,6 @@ import {
   Option,
   Ref,
   Result,
-  Schedule,
   Schema,
   type Scope,
   Stream,
@@ -53,10 +51,6 @@ import { TUNNEL_BRIDGE_WORD, type TunnelBridge, tunnelBridge } from "./bridge.js
 import { MIRROR_BRIDGE_STEP, type MirrorBridgeStep } from "./mirror-bridge.js";
 
 const TUNNEL_RELAY_BOUNDS = {
-  /** How long a tunnel stays connected past the last byte that crossed it either way: as long as the sandbox it holds runs past its last use. */
-  IDLE: SANDBOX_IDLE,
-  /** How often a connection asks whether it has gone the idle bound without traffic. */
-  IDLE_CHECK_EVERY: Duration.seconds(30),
   /** How long the bridge may take to say it is ready once its PTY is open. */
   READY_TIMEOUT: Duration.seconds(15),
   /** The PTY the bridge runs in: its size is nothing to it, and its text is UTF-8. */
@@ -97,7 +91,6 @@ const NORMAL_CLOSE = 1000;
 const PIPE_END = {
   DEVICE_LEFT: "device-left",
   BRIDGE_LEFT: "bridge-left",
-  IDLE: "idle",
 } as const;
 
 type PipeEnd = (typeof PIPE_END)[keyof typeof PIPE_END];
@@ -105,7 +98,6 @@ type PipeEnd = (typeof PIPE_END)[keyof typeof PIPE_END];
 /** The close each end of the pipe is answered with; a desktop that left takes nothing. */
 const CLOSE_OF_END = {
   [PIPE_END.BRIDGE_LEFT]: TUNNEL_CLOSE.UNAVAILABLE,
-  [PIPE_END.IDLE]: TUNNEL_CLOSE.IDLE,
 } as const satisfies Record<Exclude<PipeEnd, typeof PIPE_END.DEVICE_LEFT>, number>;
 
 /** Why the relay closed the desktop's socket, as its span and its log line say. */
@@ -119,7 +111,6 @@ const CLOSE_WHY = {
   READY_TIMEOUT: "ready-timeout",
   BRIDGE_FAILED: "bridge-failed",
   BRIDGE_LEFT: "bridge-left",
-  IDLE: "idle",
 } as const;
 
 type CloseWhy = (typeof CLOSE_WHY)[keyof typeof CLOSE_WHY];
@@ -129,7 +120,6 @@ const EXPECTED_CLOSES: ReadonlySet<CloseWhy> = new Set([
   CLOSE_WHY.GONE,
   CLOSE_WHY.NO_SESSION,
   CLOSE_WHY.NOT_RUNNING,
-  CLOSE_WHY.IDLE,
 ]);
 
 /** The spans of a connection and of each step to its bridge ready. */
@@ -184,17 +174,8 @@ function closeFor(
   });
 }
 
-/** Notes a byte crossing at the instant now. */
-function crossed(lastCrossed: Ref.Ref<number>): Effect.Effect<void> {
-  return Effect.flatMap(DateTime.nowAsDate, (at) => Ref.set(lastCrossed, at.getTime()));
-}
-
 /** The desktop's frames to the bridge, one line each, a frame of no tunnel shape dropped. */
-function deviceToBridge(
-  device: RelaySocket,
-  pty: RelaySocket,
-  noteCrossed: Effect.Effect<void>,
-): Effect.Effect<PipeEnd> {
+function deviceToBridge(device: RelaySocket, pty: RelaySocket): Effect.Effect<PipeEnd> {
   return Effect.as(
     Stream.runForEach(device.frames, (frame) => {
       if (!("text" in frame) || Result.isFailure(readDeviceFrame(jsonOf(frame.text)))) {
@@ -204,7 +185,7 @@ function deviceToBridge(
       // Note that a line break in valid JSON stands only between its tokens, so dropping it keeps the frame one line and whole.
       const line = `${frame.text.replace(/[\r\n]/g, "")}\n`;
 
-      return Effect.andThen(noteCrossed, pty.send({ bytes: new TextEncoder().encode(line) }));
+      return pty.send({ bytes: new TextEncoder().encode(line) });
     }),
     PIPE_END.DEVICE_LEFT,
   );
@@ -216,7 +197,6 @@ function bridgeToDevice(
   pty: RelaySocket,
   ready: Deferred.Deferred<void>,
   failedStep: Ref.Ref<MirrorBridgeStep | undefined>,
-  noteCrossed: Effect.Effect<void>,
 ): Effect.Effect<PipeEnd> {
   return Effect.as(
     Stream.runForEach(ptyLinesOf(pty.frames), (line) => {
@@ -229,26 +209,9 @@ function bridgeToDevice(
 
       if (Result.isFailure(readBridgeFrame(value))) return Effect.void;
 
-      return Effect.andThen(noteCrossed, device.send({ text: line.replace(/\r$/, "") }));
+      return device.send({ text: line.replace(/\r$/, "") });
     }),
     PIPE_END.BRIDGE_LEFT,
-  );
-}
-
-/** Ends once no byte has crossed the tunnel either way for the idle bound. */
-function idleWatch(lastCrossed: Ref.Ref<number>): Effect.Effect<PipeEnd> {
-  const crossedLately = Effect.gen(function* () {
-    const since = (yield* Clock.currentTimeMillis) - (yield* Ref.get(lastCrossed));
-
-    return since < Duration.toMillis(TUNNEL_RELAY_BOUNDS.IDLE);
-  });
-
-  return Effect.as(
-    Effect.repeat(crossedLately, {
-      schedule: Schedule.spaced(TUNNEL_RELAY_BOUNDS.IDLE_CHECK_EVERY),
-      while: (lately) => lately,
-    }),
-    PIPE_END.IDLE,
   );
 }
 
@@ -292,9 +255,6 @@ export function relayTunnel(
       return yield* close(TUNNEL_CLOSE.NOT_RUNNING, CLOSE_WHY.NOT_RUNNING);
     }
 
-    const openedAt = yield* DateTime.nowAsDate;
-    const lastCrossed = yield* Ref.make(openedAt.getTime());
-
     const pty = yield* Effect.result(
       deps.connect(sandbox.shell).pipe(Effect.withSpan(TUNNEL_SPAN.CONNECT)),
     );
@@ -315,13 +275,12 @@ export function relayTunnel(
         rows: TUNNEL_RELAY_BOUNDS.PTY.ROWS,
       }),
     });
-    const noteCrossed = crossed(lastCrossed);
     // Note that the bridge's lines are read from its start, so its ready word is caught by the reader that then carries its frames.
     const ready = yield* Deferred.make<void>();
     const failedStep = yield* Ref.make<MirrorBridgeStep | undefined>(undefined);
 
     const fromBridge = yield* Effect.forkScoped(
-      bridgeToDevice(device, pty.success, ready, failedStep, noteCrossed),
+      bridgeToDevice(device, pty.success, ready, failedStep),
     );
 
     // Note that what the desktop sent before the bridge was ready waits in its socket's queue, since the PTY would echo it until raw mode.
@@ -338,16 +297,14 @@ export function relayTunnel(
     }
 
     const end = yield* Effect.raceAll([
-      deviceToBridge(device, pty.success, noteCrossed),
+      deviceToBridge(device, pty.success),
       Fiber.join(fromBridge),
-      idleWatch(lastCrossed),
     ]);
 
     yield* pty.success.close(NORMAL_CLOSE);
 
     if (end === PIPE_END.DEVICE_LEFT) return;
 
-    if (end === PIPE_END.IDLE) return yield* close(CLOSE_OF_END[end], CLOSE_WHY.IDLE);
     const step = yield* Ref.get(failedStep);
     yield* close(
       CLOSE_OF_END[end],

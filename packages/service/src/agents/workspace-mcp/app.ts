@@ -1,7 +1,7 @@
 /**
  * app.ts -- our MCP server: the tools that touch the app, served to a native harness's agent over streamable HTTP under its runner's bearer.
  *
- * Claude Code (`mcp__workspace__<tool>`) and Codex (`mcp_servers.workspace`) both reach
+ * Claude Code (`mcp__team__<tool>`) and Codex (`mcp_servers.team`) both reach
  * it as a standard MCP server: JSON-RPC 2.0 over streamable HTTP, each
  * request one POST answered with one JSON body. It keeps no session: every
  * POST carries the runner's bearer and is admitted on it alone
@@ -103,8 +103,8 @@ export function workspaceIntegrationMcpUrl(origin: string, connection: string): 
 
 /** The function the server is deployed as. */
 export const WORKSPACE_MCP_FUNCTION = {
-  /** The duration its bundle declares: the longest `run_on_mac` a call may wait on, and two minutes for the store and the Mac's answer around it. */
-  MAX_DURATION_SECONDS: MACHINE_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS + 120,
+  /** The duration its bundle declares: the longest ask and run a `run_on_mac` call may wait on, and 80 seconds for the claim, the store, and the Mac's answer around them; the platform's longest. */
+  MAX_DURATION_SECONDS: MACHINE_COMMAND_BOUNDS.ASK_AND_RUN_SECONDS + 80,
 } as const;
 
 /**

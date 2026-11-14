@@ -93,7 +93,7 @@ const STATE: AppStateSnapshot = (() => {
       taskAgents: [
         {
           id: AGENT,
-          planId: TASK_ID,
+          taskId: TASK_ID,
           title: "Expire old invitations",
           model: "anthropic/claude-opus-5.5",
           effort: "high",
@@ -105,7 +105,7 @@ const STATE: AppStateSnapshot = (() => {
         },
         {
           id: TRIAGE_AGENT,
-          planId: TASK_ID,
+          taskId: TASK_ID,
           turnId: null,
           title: "Triage new Sentry issues",
           model: "anthropic/claude-opus-5.5",
@@ -271,16 +271,16 @@ test("a press on a place's chip opens the place in the window", async () => {
   }
 
   assert.deepEqual(opened, [
-    { kind: LINK_DESTINATION.AGENT, planId: TASK_ID, agentId: AGENT },
+    { kind: LINK_DESTINATION.AGENT, taskId: TASK_ID, agentId: AGENT },
     { kind: LINK_DESTINATION.PERSON, userId: SAM },
   ]);
 });
 
 /** An archived agent as the task list carries it, on the task given, on the model given. */
-function archivedAgent(id: string, planId: string, model: string) {
+function archivedAgent(id: string, taskId: string, model: string) {
   return {
     id,
-    planId,
+    taskId,
     model,
     effort: "high",
     title: "Retired sweep",

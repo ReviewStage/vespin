@@ -108,7 +108,7 @@ const readAllProcedure = declaredProcedure.errors(refuses(HOSTED_API_ERROR.ALREA
 
 /** The public paths that name a task, an agent, or an item by its id. */
 const INBOX_PROCEDURE_PATH = {
-  TASK: "/api/plans/{id}/inbox",
+  TASK: "/api/tasks/{id}/inbox",
   AGENT: "/api/agents/{id}/inbox",
   ITEM: "/api/inbox/{id}",
   ITEM_CLOSE: "/api/inbox/{id}/close",

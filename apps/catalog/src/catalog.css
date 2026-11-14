@@ -332,6 +332,52 @@ body {
   height: auto;
 }
 
+.catalog-edge-frames {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-16);
+}
+
+/* A frame drawing its edge and clipping nothing, as a dialog's card does. */
+.catalog-edge-frame {
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  height: 180px;
+  max-width: 100%;
+  border: 1px solid var(--ui-color-border-strong);
+  border-radius: var(--ui-dialog-radius);
+  background: var(--ui-color-surface);
+}
+
+.catalog-edge-shape {
+  position: relative;
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+
+.catalog-edge-head {
+  padding: var(--ui-space-8) var(--ui-space-12);
+  border-bottom: 1px solid var(--ui-color-border);
+}
+
+/* What the frame holds, drawn to its corners in the accent so a corner it covered would show. */
+.catalog-edge-body {
+  flex: auto;
+  align-self: stretch;
+  background: var(--ui-color-accent);
+}
+
+/* A picture's place the agent's pointer stands over (app-ask.tsx): positioned, so the pointer places its tip by share of it. */
+.catalog-pointer-ground {
+  position: relative;
+  width: 160px;
+  height: 100px;
+  border: 1px solid var(--ui-color-border-strong);
+  border-radius: var(--ui-dialog-radius);
+  background: var(--ui-color-surface);
+}
+
 /* A column narrower than a phone, where long words have to wrap. */
 .catalog-narrow {
   display: flex;
@@ -422,6 +468,12 @@ body {
   padding: var(--ui-space-8);
   border: 1px dashed var(--ui-color-border-strong);
   border-radius: var(--ui-radius-8);
+}
+
+/* The room a conversation's rail stands down the edge of. */
+.catalog-rail {
+  position: relative;
+  height: 200px;
 }
 
 .catalog-frame-wide {

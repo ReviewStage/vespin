@@ -218,7 +218,7 @@ export function hostedRouter(seams: HostedRouterSeams): HostedRouter {
     messages: messagesProcedures(seams),
     models: modelsProcedures(seams),
     descriptionComments: descriptionCommentsProcedures(seams),
-    plans: tasksProcedures(seams),
+    tasks: tasksProcedures(seams),
     pullRequestChapters: pullRequestChaptersProcedures(published),
     pullRequests: repositoryPullRequestProcedures(seams),
     pushDevices: pushDevicesProcedures(seams),

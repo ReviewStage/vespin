@@ -218,7 +218,9 @@ function signInRevocation(
 ): SignInRevocationService {
   const githubGrants = (userId: string) =>
     github.userToken(userId).pipe(
-      Effect.map((token): readonly SignInGrant[] => [{ provider: SIGN_IN_PROVIDER.GITHUB, token }]),
+      Effect.map((bearer): readonly SignInGrant[] => [
+        { provider: SIGN_IN_PROVIDER.GITHUB, token: bearer.token },
+      ]),
       // An account with no GitHub token, or none that opens, has nothing at GitHub to revoke.
       Effect.catchTag(GITHUB_SIGN_IN_REQUIRED_TAG, () => Effect.succeed([])),
     );

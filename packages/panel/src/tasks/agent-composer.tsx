@@ -54,6 +54,7 @@ import {
 import { AgentModelChip } from "./agent-model-chip.js";
 import { PayerValue, usePayerPlan } from "./agent-payer.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
+import { useAgentTalk } from "./agent-talk.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
 import { FOLD_WIDTH, MessageBox, OVERFLOW_PRESS, useMessageBox } from "./message-box.js";
 import type { MoveCarry } from "./move-agent.js";
@@ -85,7 +86,8 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * (`agent-approvals.tsx`),
  * the ring that shows, once a step has ended, how full the agent's model's
  * context is and opens what fills it (`agent-context.tsx`), the
- * microphone, and the round button. The box takes a message to the agent:
+ * microphone, Talk or a call's controls where the box calls its agent
+ * (`agent-talk.tsx`), and the round button. The box takes a message to the agent:
  * Enter sends it, Shift+Enter is a new line (on a coarse pointer Enter is,
  * and the round Send sends: `composer-editor.ts`), and Escape leaves the box; the
  * box is an editor (`composer-field.tsx`) that holds plain words and a
@@ -311,6 +313,7 @@ function continuedInCloud(
 
 export function AgentComposer({
   agentId,
+  talksIn,
   status,
   stoppable = status === AGENT_STATUS.RUNNING,
   steers = stoppable,
@@ -355,6 +358,8 @@ export function AgentComposer({
 }: {
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
   agentId?: string | undefined;
+  /** The task the agent works on, which a call into it names; none where the box offers no Talk, as every box but an agent's own tab's (`agent-talk.tsx`). */
+  talksIn?: string | undefined;
   status: AgentStatus;
   /** Whether Stop stands in Send's place while the box is empty: while the agent runs where unsaid, and while a turn runs that a Stop can cancel where the tab knows (`offersStop`). */
   stoppable?: boolean;
@@ -487,8 +492,9 @@ export function AgentComposer({
   const statuses = useIntegrationStatuses();
 
   const box = useMessageBox({
-    draft: composer.draft,
-    setDraft: composer.setDraft,
+    draft: composer.held.text,
+    // Note that the box's words are moved on from what its draft holds as the change lands, never from a render's copy, since one keystroke may hand back several words.
+    setDraft: (text) => composer.updateHeld((now) => ({ ...now, text })),
     // Note that a closed box asks for nothing, since it takes nothing.
     placeholder: closed
       ? ""
@@ -496,7 +502,11 @@ export function AgentComposer({
     label: wording?.label ?? "Message to the agent",
     maxLength,
     held,
-    holder: { attachments: composer.attachments, update: composer.setAttachments },
+    holder: {
+      attachments: composer.held.attachments,
+      update: (next) =>
+        composer.updateHeld((now) => ({ ...now, attachments: next(now.attachments) })),
+    },
     pastesTextAsFile: true,
     self: agentId,
     skills,
@@ -527,6 +537,11 @@ export function AgentComposer({
     keystrokeSpan: answer === undefined ? undefined : PANEL_SPAN.KEYSTROKE_INBOX_ANSWER,
   });
 
+  const talk = useAgentTalk(
+    agentId === undefined || talksIn === undefined ? undefined : { agentId, taskId: talksIn },
+    box.dictation,
+  );
+
   const { editor, room, frame, files } = box;
   // Note that Send waits while files are read, so no message goes without a file the developer already handed the box.
   const sendHeld = held || !sendable || files.reading;
@@ -536,7 +551,7 @@ export function AgentComposer({
     answer === undefined
       ? !sendsEmpty &&
         !editingQueued &&
-        !hasWordsOrFiles(composer.draft.trim(), composer.attachments)
+        !hasWordsOrFiles(composer.held.text.trim(), composer.held.attachments)
       : !answer.sendable;
 
   const showsStop = empty && stoppable && !composer.sending && !editingQueued;
@@ -687,7 +702,7 @@ export function AgentComposer({
     switch (name) {
       case SLASH_COMMAND.COMPACT:
       case SLASH_COMMAND.GOAL: {
-        const words = leadingCommand(composer.draft)?.words ?? "";
+        const words = leadingCommand(composer.held.text)?.words ?? "";
 
         if (chosen) editor.current?.replace(`/${name} ${words}`);
 
@@ -727,7 +742,7 @@ export function AgentComposer({
    */
   const typedCommand = (): SlashCommand | undefined => {
     if (editingQueued) return undefined;
-    const typed = leadingCommand(composer.draft);
+    const typed = leadingCommand(composer.held.text);
 
     if (typed === undefined || !isSlashCommand(typed.name)) return undefined;
 
@@ -817,6 +832,8 @@ export function AgentComposer({
         }
         plus={plusRows}
         tools={tools?.(box.folds(FOLD_WIDTH.TOOLS))}
+        call={talk?.press}
+        dictates={talk?.onCall !== true}
         actions={
           <>
             {actions?.(box.folds(FOLD_WIDTH.ACTIONS))}
@@ -859,6 +876,7 @@ export function AgentComposer({
                   ],
                 },
               ]),
+          ...(talk?.offer === undefined ? [] : [talk.offer]),
         ]}
         beforeSend={beforeSend?.(box.folds(FOLD_WIDTH.ACTIONS))}
         send={{

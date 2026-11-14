@@ -36,7 +36,6 @@ import {
   WORKSPACE_CALL_FAILURE,
   WORKSPACE_RENAMES,
   type WorkspaceCallFailure,
-  type WorkspaceCallResult,
 } from "./workspace-call.js";
 import {
   type WorkspaceEnvironmentAnswer,
@@ -57,6 +56,7 @@ import {
 } from "./workspace-sandbox-setup-wire.js";
 import {
   type Workspace,
+  type WorkspaceMachinesAnswer,
   type WorkspaceMember,
   type WorkspacePhotoType,
   workspaceCreateRequestSchema,
@@ -75,7 +75,7 @@ import {
 } from "./workspace-wire.js";
 
 /**
- * workspace-client.ts -- the account's workspaces as the host asks the service for them: the list, a workspace created, renamed, given a slug or a photo, or handed over, a GitHub organization connected or disconnected, and its members read, removed, given a role, or left.
+ * workspace-client.ts -- the account's workspaces as the host asks the service for them: the list, a workspace created, renamed, given a slug or a photo, or handed over, a GitHub organization connected or disconnected, its members read, removed, given a role, or left, and its members' machines read.
  *
  * Every call is the account call, so the bearer is read fresh per attempt
  * and a 401 is renewed and retried once. A workspace's photo is read apart
@@ -87,6 +87,9 @@ import {
  * is asked through `hostedCall`, so a refusal is read as its contract
  * declares it, in the words `workspace-call.ts` derives from them.
  */
+
+/** One workspace call's answer, or why there is none. */
+export type WorkspaceCallResult<Answer> = TaskCallResult<Answer, WorkspaceCallFailure>;
 
 export interface HostedWorkspaceClientOptions {
   /** What authorizes each call on the signed-in account, read fresh for every attempt. */
@@ -526,6 +529,20 @@ export class HostedWorkspaceClient {
   ): Effect.Effect<WorkspaceCallResult<MergeQueueAnswer>, never, HttpClient.HttpClient> {
     return resultOf(
       hostedCall(this.#hosted.workspaceMergeQueue.read, { workspaceId }),
+      (answer) => answer,
+    );
+  }
+
+  /** The machines of the workspace's members, or of one member where `userId` names one, as any member of it reads them: each one's id, name, platform, and whose it is. */
+  machines(
+    workspaceId: string,
+    userId?: string,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceMachinesAnswer>, never, HttpClient.HttpClient> {
+    return resultOf(
+      hostedCall(
+        this.#hosted.workspaces.machines,
+        userId === undefined ? { workspaceId } : { workspaceId, userId },
+      ),
       (answer) => answer,
     );
   }

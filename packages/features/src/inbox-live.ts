@@ -66,7 +66,7 @@ function latestOrder<Key extends string>(key: Key) {
  * inbox's answer (`account-inbox-wire.ts`), the items of agents with no
  * repository among them only where the reader asks
  * (`ACCOUNT_INBOX_REPOSITORYLESS`). Every agent works on a task, so
- * `planless`, `automations`, and `agents` hold nothing; they stay declared
+ * `taskless`, `automations`, and `agents` hold nothing; they stay declared
  * for a released desktop (v0.22.0), which reads them, and keeps every part
  * but `agents`, whose decode strips it, so it sends the digest over those
  * (`olderParts`). This build reads none of the three. The service answers `unavailable` where its
@@ -88,8 +88,8 @@ export const ACCOUNT_INBOX_READ = liveRead({
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
     items: liveRows({ row: accountInboxEntrySchema, key: "id", order: latestOrder("id") }),
-    planless: liveRows({ row: tasklessLiveRowSchema, key: "id", order: latestOrder("id") }),
-    plans: liveRows({ row: accountInboxTaskSchema, key: "planId", order: latestOrder("planId") }),
+    taskless: liveRows({ row: tasklessLiveRowSchema, key: "id", order: latestOrder("id") }),
+    tasks: liveRows({ row: accountInboxTaskSchema, key: "taskId", order: latestOrder("taskId") }),
     automations: liveRows({
       row: accountInboxAutomationSchema,
       key: "automationId",
@@ -108,7 +108,7 @@ export const ACCOUNT_INBOX_READ = liveRead({
       order: [["failedAt", ORDER.DESC]],
     }),
   },
-  olderParts: ["items", "planless", "plans", "automations", "failedRuns"],
+  olderParts: ["items", "taskless", "tasks", "automations", "failedRuns"],
 });
 
 export type AccountInboxLiveAnswer = LiveReadAnswer<typeof ACCOUNT_INBOX_READ>;
@@ -199,8 +199,8 @@ export function accountInboxOfLiveRows(
 ): AccountInboxAnswer {
   const answer = {
     items: rows.items.toSorted(latestFirst((item) => item.id)),
-    plans: rows.plans.toSorted(latestFirst((plan) => plan.planId)),
-    planless: rows.planless
+    tasks: rows.tasks.toSorted(latestFirst((plan) => plan.taskId)),
+    taskless: rows.taskless
       .map(({ workspaceId, ...item }) => (workspaceId === null ? item : { ...item, workspaceId }))
       .toSorted(latestFirst((item) => item.id)),
     automations: rows.automations.toSorted(
@@ -510,7 +510,7 @@ export function inboxOfLiveRows(rows: ScopeInboxLiveRows): readonly InboxItem[] 
  */
 const inboxItemStampRowSchema = EffectSchema.Struct({
   id: EffectSchema.String,
-  planId: EffectSchema.String,
+  taskId: EffectSchema.String,
   agentId: EffectSchema.String,
   revision: countedNumber,
   version: countedNumber,

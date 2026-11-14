@@ -255,6 +255,7 @@ export function PickerRow({
   error,
   density,
   indent,
+  leading,
   labelReplayUnmasked = false,
   action,
   ...picker
@@ -271,6 +272,8 @@ export function PickerRow({
   density?: SettingsRowDensity | undefined;
   /** Whether the row stands inset under the row above, one of its things. */
   indent?: SettingsRowIndent | undefined;
+  /** The glyph the row leads with, where what it sets has one. */
+  leading?: React.ReactNode;
   /** A control of the row's own beside the picker, as a Play beside a sound; none where the picker stands alone. */
   action?: React.ReactNode;
 }): React.JSX.Element {
@@ -278,6 +281,7 @@ export function PickerRow({
     <SettingsRow
       density={density}
       indent={indent}
+      leading={leading}
       label={<ReplayWords unmasked={labelReplayUnmasked}>{picker.label}</ReplayWords>}
       adornment={<SavedTick saves={saves} />}
       description={detail}

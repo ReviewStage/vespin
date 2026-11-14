@@ -1,5 +1,5 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import { type MentionPlace, sectionAnchors } from "@repo/features/mention-link";
 import type { CatalogModel } from "@repo/features/models-wire";
@@ -26,7 +26,7 @@ import {
 import { askAct } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import type { MentionNode } from "../description-editor/contract.js";
-import { descriptionDocumentQuery } from "../live-reads.js";
+import { heldTaskQuery } from "../live-reads.js";
 import type { LinkDrawer } from "../markdown-message.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { agentActor, agentName } from "./agent-model.js";
@@ -275,7 +275,7 @@ async function newestRevisionText(taskId: string): Promise<string | null> {
   if (newest === undefined) return "";
   const answer = await askAct(ACT_KIND.TASKS_REVISION, { taskId, seq: newest.seq });
 
-  return "revision" in answer ? answer.revision.document.body : null;
+  return "revision" in answer ? answer.revision.description.body : null;
 }
 
 /**
@@ -289,8 +289,8 @@ async function newestRevisionText(taskId: string): Promise<string | null> {
 export function useSavedDescriptionText(
   task: Pick<TaskSummary, "id" | "updatedAt"> | undefined,
 ): string | undefined {
-  const held = useQuery({ ...descriptionDocumentQuery(task?.id), enabled: false }).data;
-  const openText = held !== undefined && "task" in held ? held.task.document.body : undefined;
+  const held = useQuery({ ...heldTaskQuery(task?.id), enabled: false }).data;
+  const openText = held !== undefined && "task" in held ? held.task.description.body : undefined;
   const reading = openText === undefined ? task?.id : undefined;
   const savedAt = task?.updatedAt;
 
@@ -341,7 +341,7 @@ export function mentionableAgent(
     id: agent.id,
     name,
     actor: agentActor(agent, name),
-    task: { id: agent.planId, name: names.get(agent.planId) },
+    task: { id: agent.taskId, name: names.get(agent.taskId) },
     archived: agent.archivedAt !== undefined,
     summary: agent,
   };

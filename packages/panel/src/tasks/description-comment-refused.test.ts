@@ -76,7 +76,7 @@ const THREAD: DescriptionCommentThread = {
 const PLAN: Task = {
   ...DOCUMENT_TASK,
   id: "plan-1",
-  document: { body: "## Goal\n\nAn invite is a single-use link.", assumptions: [] },
+  description: { body: "## Goal\n\nAn invite is a single-use link.", assumptions: [] },
 };
 
 const roots: Root[] = [];
@@ -136,7 +136,7 @@ function drawn(
   account: Identity = DEAN,
 ): HTMLElement {
   const control: DescriptionCommentsControl = {
-    planId: "plan-1",
+    taskId: "plan-1",
     threads: [THREAD],
     read: true,
     failed: false,

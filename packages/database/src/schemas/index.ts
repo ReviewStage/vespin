@@ -84,6 +84,8 @@ export * from "./live-activity.js";
 
 export * from "./machine-command.js";
 
+export * from "./machine-command-ask.js";
+
 export * from "./memory.js";
 
 export * from "./native-call-key.js";

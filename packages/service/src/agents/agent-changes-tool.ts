@@ -123,9 +123,9 @@ export function runReadAgentChanges(
       const read = yield* Effect.result(
         githubReadRefusal(
           Effect.gen(function* () {
-            const { token } = yield* agentPullRequestReach(userId, agent);
+            const { bearer } = yield* agentPullRequestReach(userId, agent);
 
-            return yield* pullRequestChangesRead(token, agent, pullRequest);
+            return yield* pullRequestChangesRead(bearer, agent, pullRequest);
           }),
         ),
       );

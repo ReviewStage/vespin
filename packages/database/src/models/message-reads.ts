@@ -614,6 +614,50 @@ export function listMessagesPast(
   });
 }
 
+const findCallLines = SqlSchema.findAll({
+  Request: Schema.Struct({
+    conversationId: Schema.String,
+    userId: Schema.String,
+    callId: Schema.String,
+    limit: Schema.Number,
+  }),
+  Result: SelectedMessageRowSchema,
+  execute: (options) =>
+    Database.use((db) =>
+      db
+        .select(MESSAGE_FIELDS)
+        .from(messages)
+        .innerJoin(conversations, MESSAGE_CONVERSATION_STANDS)
+        .where(
+          and(
+            eq(messages.conversationId, options.conversationId),
+            eq(messages.userId, options.userId),
+            sql`${messages.metadata} ->> 'voice_session_id' = ${options.callId}`,
+          ),
+        )
+        .orderBy(desc(messages.seq))
+        .limit(options.limit),
+    ),
+});
+
+/**
+ * The newest lines of one voice call, both speakers', oldest first: what a
+ * holder taking the call over goes on from. At most a page of them, which
+ * is more than one delegation hands on, so the caller's lines no
+ * delegation took yet are among them.
+ */
+export function listCallLines(
+  userId: string,
+  conversationId: string,
+  callId: string,
+  tools: ToolSet,
+): Effect.Effect<MessageListRead, StoreFailure, DatabaseServices> {
+  return Effect.flatMap(
+    findCallLines({ conversationId, userId, callId, limit: MAXIMUM_READ_PAGE }),
+    (selected) => readSelected(selected.toReversed(), tools),
+  );
+}
+
 const findHighestSeq = SqlSchema.findAll({
   Request: Schema.Struct({ conversationId: Schema.String, userId: Schema.String }),
   Result: Schema.Struct({ seq: Schema.Number }),
