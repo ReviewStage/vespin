@@ -105,7 +105,7 @@ function draw(
     [ACT_KIND.TASKS_START]: (start) => {
       sent.started?.push(start);
 
-      return Promise.resolve({ planId: "t-9" });
+      return Promise.resolve({ taskId: "t-9" });
     },
   });
 

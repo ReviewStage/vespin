@@ -329,7 +329,7 @@ function InboxRow({
         },
       ]}
       link={linkOf(
-        { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+        { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
         workspaceStep,
       )}
       preview={
@@ -574,7 +574,7 @@ function ThreadDetail({
   const openOnWeb = () => {
     const place = {
       kind: LINK_DESTINATION.INBOX_ITEM,
-      planId: holder.task.id,
+      taskId: holder.task.id,
       itemId: item.id,
     } as const;
 
@@ -629,7 +629,7 @@ function ThreadDetail({
     onCopyLink: () =>
       keeping.copyWords(
         linkOf(
-          { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+          { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
           workspaceStep,
         ),
       ),
@@ -646,7 +646,7 @@ function ThreadDetail({
       symbol: GLYPH.TASK,
       onPress: () => {
         if (toDetail({ kind: PUSHED_PAGE.TASK, taskId: holder.task.id })) return;
-        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: holder.task.id })));
+        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: holder.task.id })));
       },
     },
     {
@@ -760,7 +760,7 @@ function ThreadDetail({
                 linkOf(
                   {
                     kind: LINK_DESTINATION.PAGE,
-                    planId: page.place.taskId,
+                    taskId: page.place.taskId,
                     pageId: page.pageId,
                   },
                   workspaceStep,

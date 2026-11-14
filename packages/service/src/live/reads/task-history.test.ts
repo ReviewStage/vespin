@@ -19,8 +19,8 @@ import { added } from "../../testing/task-contents.js";
 import { taskHistoryRead } from "./task-history.js";
 
 /**
- * A task's newest page of description history as Realtime would deliver it, over
- * the real migrations on PGlite: the statement run as Realtime runs it, its
+ * A task's newest page of description history as a live read answers it, over
+ * the real migrations on PGlite: the statement run as raw SQL, its
  * rows decoded and ordered as the desktop does, beside `listRevisions`, the
  * held read the version history read it with. The two agree as the notetaker, a
  * coding agent, and the developer save, a revision is restored,
@@ -39,11 +39,11 @@ const openUser = Effect.gen(function* () {
   return userId;
 });
 
-/** The statement run as Realtime runs it. */
+/** The statement run as raw SQL. */
 const runLive = (statement: LiveStatement) =>
   Effect.flatMap(SqlClient.SqlClient, (sql) => sql.unsafe(statement.sql, [...statement.params]));
 
-/** The newest page of the task's history as Realtime would deliver it to `reader`, as the desktop reads it. */
+/** The newest page of the task's history as a live read answers it to `reader`, as the desktop reads it. */
 const liveHistoryOf = (reader: string, taskId: string) =>
   Effect.gen(function* () {
     const statements = Option.getOrThrow(

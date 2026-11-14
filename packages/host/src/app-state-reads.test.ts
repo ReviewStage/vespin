@@ -93,7 +93,7 @@ const AGENT_ID = "a1b2c3d4-0000-4000-8000-0000000000aa";
 
 const UNTITLED_AGENT = {
   id: AGENT_ID,
-  planId: "a1b2c3d4-0000-4000-8000-0000000000bb",
+  taskId: "a1b2c3d4-0000-4000-8000-0000000000bb",
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: null,

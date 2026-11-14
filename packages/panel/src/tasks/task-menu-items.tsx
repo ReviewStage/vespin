@@ -35,7 +35,7 @@ export function taskLinkDestination(
 
 /** A task's link: its own address, naming it by its number where it has one. */
 function taskLink(task: Pick<TaskSummary, "id" | "number">, place: MentionPlace): string {
-  return linkOf({ kind: LINK_DESTINATION.TASK, planId: taskLinkStep(task) }, place.workspace);
+  return linkOf({ kind: LINK_DESTINATION.TASK, taskId: taskLinkStep(task) }, place.workspace);
 }
 
 /** Opens a task in a tab of its own, which a middle-click on its row or card takes; none where the window opens no tabs. */

@@ -296,6 +296,7 @@ const UNREACHED_LABEL = {
   [MACHINE_UNREACHED.DEFAULT_GONE]: "No default machine",
   [MACHINE_UNREACHED.UNKNOWN_MACHINE]: "Unknown machine",
   [MACHINE_UNREACHED.NO_MACHINE]: "No machine",
+  [MACHINE_UNREACHED.OWN_SHELL]: "Use own shell",
 } as const satisfies Record<MachineUnreached, string>;
 
 /** What a call that ran nothing says at its line's end, by how. */
@@ -1301,6 +1302,12 @@ const READ_SEARCH: ToolReader = ({ input, output }) => ({
   output: output === undefined ? undefined : wordsOutput(output, "content"),
 });
 
+/** What a search of files by their names says in place of the search's verb, since it finds files rather than words in them. */
+const FOUND_FILES = "Found files";
+
+/** A search of files by their names: a search, which says it found files before the pattern. */
+const READ_GLOB: ToolReader = (call) => ({ ...READ_SEARCH(call), description: FOUND_FILES });
+
 const READ_WEB_SEARCH: ToolReader = ({ input, output }) => ({
   kind: CALL_KIND.WEB_SEARCH,
   subject: stringAt(input, "query") ?? "",
@@ -1547,7 +1554,7 @@ const AGENT_TOOL_VIEWS = {
     input: textBlock(stringAt(input, "content") ?? ""),
     output: output === undefined ? undefined : wordsOutput(output, "path"),
   }),
-  [AGENT_TOOL.GLOB]: READ_SEARCH,
+  [AGENT_TOOL.GLOB]: READ_GLOB,
   [AGENT_TOOL.GREP]: READ_SEARCH,
   [AGENT_TOOL.APPLY_PATCH]: ({ input, output }) => {
     const patchText = stringAt(input, "patchText") ?? "";
@@ -1815,8 +1822,8 @@ export function placeOfTaskTarget(
   target: Extract<ToolTarget, { readonly kind: typeof TOOL_TARGET.TASK }>,
 ): LinkDestination {
   return target.agent === undefined
-    ? { kind: LINK_DESTINATION.TASK, planId: target.task }
-    : { kind: LINK_DESTINATION.AGENT, planId: target.task, agentId: target.agent };
+    ? { kind: LINK_DESTINATION.TASK, taskId: target.task }
+    : { kind: LINK_DESTINATION.AGENT, taskId: target.task, agentId: target.agent };
 }
 
 /** What the hover over a row says it opens, by its target's kind. */
@@ -1866,6 +1873,23 @@ function namedThread(call: TargetedCall): ToolTarget {
   return item === undefined
     ? { kind: TOOL_TARGET.INBOX, key }
     : { kind: TOOL_TARGET.INBOX, key, item };
+}
+
+/**
+ * The thread a read of one answered, by its id and key, which its chip is
+ * linked by; the whole Inbox for a read that answered none, or one of another
+ * agent's threads, which this agent's Inbox does not hold.
+ */
+function readThread(call: TargetedCall): ToolTarget {
+  const thread = isRecord(call.output) ? call.output.thread : undefined;
+  const item = stringAt(thread, "id");
+  const key = stringAt(thread, "key");
+
+  if (item === undefined || key === undefined || stringAt(thread, "agentId") !== undefined) {
+    return INBOX_TARGET;
+  }
+
+  return { kind: TOOL_TARGET.INBOX, key, item };
 }
 
 /** The agent a call names in its input, as a read of or a message to one does. */
@@ -2020,7 +2044,7 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
   [AGENT_TOOL.WITHDRAW_ASK, namedThread],
   [RETIRED_TOOL.CLOSE_INBOX_ITEM, () => INBOX_TARGET],
   [AGENT_TOOL.LIST_THREADS, () => INBOX_TARGET],
-  [AGENT_TOOL.READ_THREAD, () => INBOX_TARGET],
+  [AGENT_TOOL.READ_THREAD, readThread],
   [RETIRED_TOOL.READ_THREADS, () => INBOX_TARGET],
   [RETIRED_TOOL.READ_INBOX, () => INBOX_TARGET],
   [RETIRED_TOOL.REPLY_INBOX, () => INBOX_TARGET],
@@ -2075,13 +2099,13 @@ export function targetLink(target: ToolTarget, place: TargetPlace): string | und
 
   switch (target.kind) {
     case TOOL_TARGET.TASK:
-      return linked({ kind: LINK_DESTINATION.TASK, planId: target.task });
+      return linked({ kind: LINK_DESTINATION.TASK, taskId: target.task });
     case TOOL_TARGET.DESCRIPTION: {
       const taskId = place.holder?.taskId;
 
       return taskId === undefined
         ? undefined
-        : linked({ kind: LINK_DESTINATION.TASK, planId: taskId });
+        : linked({ kind: LINK_DESTINATION.TASK, taskId: taskId });
     }
 
     case TOOL_TARGET.PAGE: {
@@ -2089,7 +2113,7 @@ export function targetLink(target: ToolTarget, place: TargetPlace): string | und
 
       return taskId === undefined
         ? undefined
-        : linked({ kind: LINK_DESTINATION.PAGE, planId: taskId, pageId: target.page });
+        : linked({ kind: LINK_DESTINATION.PAGE, taskId: taskId, pageId: target.page });
     }
 
     case TOOL_TARGET.INBOX:

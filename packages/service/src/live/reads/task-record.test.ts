@@ -19,8 +19,8 @@ import { TestClock } from "effect/testing";
 import { taskRecordRead } from "./task-record.js";
 
 /**
- * An open task's record as Realtime would deliver it, over the real
- * migrations on PGlite: each part's statement run as Realtime runs it and its
+ * An open task's record as a live read answers it, over the real
+ * migrations on PGlite: each part's statement run as raw SQL and its
  * rows decoded as the desktop decodes them, beside the held reads the desktop
  * reads that part with (`listPages`, `readTranscript`). A part
  * moves exactly when its held read would answer something new.
@@ -44,11 +44,11 @@ const openUser = Effect.gen(function* () {
   return userId;
 });
 
-/** One part's statement run as Realtime runs it. */
+/** One part's statement run as raw SQL. */
 const runLive = (statement: LiveStatement) =>
   Effect.flatMap(SqlClient.SqlClient, (sql) => sql.unsafe(statement.sql, [...statement.params]));
 
-/** The task's record as Realtime would deliver it to `reader`, decoded as the desktop decodes it. */
+/** The task's record as a live read answers it to `reader`, decoded as the desktop decodes it. */
 const liveRecordOf = (reader: string, taskId: string) =>
   Effect.gen(function* () {
     const statements = Option.getOrThrow(taskRecordRead.statements({ userId: reader, id: taskId }));

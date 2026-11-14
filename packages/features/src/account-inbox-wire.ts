@@ -64,7 +64,7 @@ export const ACCOUNT_INBOX_REPOSITORYLESS = {
 /** One open item as the account's read carries it: where it waits, who posted it, and what it is called. */
 export const accountInboxEntrySchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  planId: wireUuidSchema,
+  taskId: wireUuidSchema,
   agentId: wireUuidSchema,
   /** The agent's title as its row holds it now; null until it has one. */
   agentTitle: EffectSchema.NullOr(EffectSchema.String),
@@ -103,7 +103,7 @@ export type AccountInboxEntry = typeof accountInboxEntrySchema.Type;
 
 /** One task the account's read lists as holding inbox items: the task, how many it holds, open and settled alike, how many of them are the reader's to do, and when the latest of them changed. */
 export const accountInboxTaskSchema = EffectSchema.Struct({
-  planId: wireUuidSchema,
+  taskId: wireUuidSchema,
   items: countedNumber,
   /**
    * How many of the task's items wait on the reader: open, an ask not

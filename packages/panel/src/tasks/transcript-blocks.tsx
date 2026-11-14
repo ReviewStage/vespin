@@ -97,6 +97,7 @@ import {
 import {
   AlarmClockCheckIcon,
   AlarmClockOffIcon,
+  AppWindowMacIcon,
   ArchiveIcon,
   ArchiveRestoreIcon,
   CalendarCheckIcon,
@@ -1218,7 +1219,7 @@ function CutWords({
 const CALL_ICON = {
   [CALL_KIND.COMMAND]: TerminalIcon,
   [CALL_KIND.MACHINE_COMMAND]: LaptopIcon,
-  [CALL_KIND.BROWSER]: GlobeIcon,
+  [CALL_KIND.BROWSER]: AppWindowMacIcon,
   [CALL_KIND.COMPUTER]: () => <GLYPH.COMPUTER_USE />,
   [CALL_KIND.READ_FILE]: FileTextIcon,
   [CALL_KIND.WRITE_FILE]: FilePenIcon,

@@ -499,7 +499,7 @@ export type StartCallFailure = (typeof START_CALL_FAILURES)[number];
  */
 export const tasksStartAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({
-    planId: EffectSchema.String,
+    taskId: EffectSchema.String,
     agentStart: EffectSchema.optionalKey(agentAgentAnswerSchema),
   }),
   EffectSchema.Struct({
@@ -675,7 +675,7 @@ export type TasksFileAnswer = typeof tasksFileAnswerSchema.Type;
  * the repository where no plan names it, and the folder's path from the root.
  */
 export const tasksTreeParamsSchema = EffectSchema.Union([
-  EffectSchema.Struct({ planId: EffectSchema.NonEmptyString, ...taskTreeRequestSchema.fields }),
+  EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString, ...taskTreeRequestSchema.fields }),
   EffectSchema.Struct({ ...repositoryPlaceFields, ...taskTreeRequestSchema.fields }),
 ]);
 
@@ -690,7 +690,7 @@ export type TasksTreeAnswer = typeof tasksTreeAnswerSchema.Type;
 
 /** The skills a developer may choose, as the window asks the host for them: the plan they are chosen on, or the workspace and the repository where no plan names it, or the workspace alone for an agent with no repository, which is offered its installed skills alone. */
 export const tasksSkillsParamsSchema = EffectSchema.Union([
-  EffectSchema.Struct({ planId: EffectSchema.NonEmptyString }),
+  EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString }),
   EffectSchema.Struct({
     workspaceId: repositoryPlaceFields.workspaceId,
     repository: EffectSchema.optionalKey(repositoryPlaceFields.repository),
@@ -866,7 +866,7 @@ export type TasksRevisionAnswer = typeof tasksRevisionAnswerSchema.Type;
 
 /** One attachment of a description, as the window drawing it names it: the plan, and the id its text or a comment's file names. */
 export const tasksPictureParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   attachmentId: EffectSchema.NonEmptyString,
 });
 
@@ -892,7 +892,7 @@ export type TasksPictureAnswer = typeof tasksPictureAnswerSchema.Type;
 
 /** A picture kept on a description, as the editor that took it asks: the plan, and the picture, video, or PDF as a `data:` URL. */
 export const tasksPictureKeepParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   picture: descriptionFileDataUrlSchema,
 });
 
@@ -1115,7 +1115,7 @@ export type TasksCommentsFollow = typeof tasksCommentsFollowSchema.Type;
 
 /** A thread started on a description, as the window asks it. */
 export const tasksCommentStartParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   start: descriptionCommentStartRequestSchema,
 });
 
@@ -1123,7 +1123,7 @@ export type TasksCommentStartParams = typeof tasksCommentStartParamsSchema.Type;
 
 /** One thing done to one thread of a description, as the window asks it. */
 export const tasksCommentActParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   threadId: EffectSchema.NonEmptyString,
   action: descriptionCommentActionRequestSchema,
 });

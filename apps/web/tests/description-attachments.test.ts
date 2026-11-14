@@ -181,7 +181,7 @@ const openSharedTask = Effect.gen(function* () {
   yield* joinWorkspace(workspace, teammate);
   const { id: taskId } = yield* createTask(owner, { organizationId: workspace, name: "Invites" });
 
-  return { owner, teammate, outsider, planId: taskId };
+  return { owner, teammate, outsider, taskId: taskId };
 });
 
 it.layer(getTestDB())("a description's picture routes", (it) => {
@@ -189,7 +189,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
     "a file a teammate's comment carries is served to every member as its bytes, and to nobody else",
     () =>
       Effect.gen(function* () {
-        const { owner, teammate, outsider, planId: taskId } = yield* openSharedTask;
+        const { owner, teammate, outsider, taskId } = yield* openSharedTask;
         const text = "## Goal\n\nInvites expire in seven days.\n";
         yield* saveDescriptionText(owner, taskId, text);
         const pdf = new TextEncoder().encode("%PDF-1.4\n");
@@ -238,7 +238,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
     "a picture a teammate keeps on the description is served to every member as its bytes, and to nobody else",
     () =>
       Effect.gen(function* () {
-        const { owner, teammate, outsider, planId: taskId } = yield* openSharedTask;
+        const { owner, teammate, outsider, taskId } = yield* openSharedTask;
 
         const kept = yield* ask(upload(taskId, teammate, pictureBody(PNG_URL)));
 
@@ -265,7 +265,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
 
   it.effect("bytes that are not the image their label names are refused, and nothing is kept", () =>
     Effect.gen(function* () {
-      const { owner, planId: taskId } = yield* openSharedTask;
+      const { owner, taskId } = yield* openSharedTask;
       const mislabeled = PNG_URL.replace("image/png", "image/webp");
 
       const refused = yield* ask(upload(taskId, owner, pictureBody(mislabeled)));
@@ -282,7 +282,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
     "an upload refuses as the old route did, byte for byte: no bearer before its body is read, a key the upload does not name, and a body past its bound",
     () =>
       Effect.gen(function* () {
-        const { owner, planId: taskId } = yield* openSharedTask;
+        const { owner, taskId } = yield* openSharedTask;
 
         const bare = (answered: Answered) => ({
           status: answered.status,
@@ -336,7 +336,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
 
   it.effect("a description holding its bound of pictures refuses one more in band", () =>
     Effect.gen(function* () {
-      const { owner, planId: taskId } = yield* openSharedTask;
+      const { owner, taskId } = yield* openSharedTask;
       const db = yield* Database;
       yield* db.insert(attachment).values(
         Array.from({ length: DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION }, () => ({
@@ -360,7 +360,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
     "a recording a member keeps is served as the video it was sent, and one past a sent video's bound, or past the description's videos, is not kept",
     () =>
       Effect.gen(function* () {
-        const { owner, teammate, planId: taskId } = yield* openSharedTask;
+        const { owner, teammate, taskId } = yield* openSharedTask;
         const recording = webmBytes(1280, 800);
 
         const videoUrl = (bytes: Uint8Array) =>

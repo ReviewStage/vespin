@@ -415,25 +415,25 @@ const wholeSchema = EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(0
 const linkDestinationSchema = EffectSchema.Union([
   EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.HOME) }),
   EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.BOARD) }),
-  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.TASK), planId: idSchema }),
+  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.TASK), taskId: idSchema }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.SECTION),
-    planId: idSchema,
+    taskId: idSchema,
     anchor: EffectSchema.String.check(EffectSchema.isPattern(ANCHOR)),
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.COMMENT),
-    planId: idSchema,
+    taskId: idSchema,
     threadId: idSchema,
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.VERSION),
-    planId: idSchema,
+    taskId: idSchema,
     revision: wholeSchema,
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.PAGE),
-    planId: idSchema,
+    taskId: idSchema,
     pageId: idSchema,
   }),
   EffectSchema.Struct({
@@ -443,40 +443,40 @@ const linkDestinationSchema = EffectSchema.Union([
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.AGENT),
-    planId: EffectSchema.optionalKey(idSchema),
+    taskId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.WORKER),
-    planId: EffectSchema.optionalKey(idSchema),
+    taskId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
     callId: idSchema,
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.CHANGES),
-    planId: EffectSchema.optionalKey(idSchema),
+    taskId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.PULL_REQUEST_THREAD),
-    planId: EffectSchema.optionalKey(idSchema),
+    taskId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
     threadId: idSchema,
     view: EffectSchema.Literals(Object.values(PULL_REQUEST_THREAD_VIEW)),
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.MESSAGE),
-    planId: EffectSchema.optionalKey(idSchema),
+    taskId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
     messageId: idSchema,
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.INBOX),
-    planId: EffectSchema.optionalKey(idSchema),
+    taskId: EffectSchema.optionalKey(idSchema),
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.INBOX_ITEM),
-    planId: idSchema,
+    taskId: idSchema,
     itemId: idSchema,
   }),
   EffectSchema.Struct({
@@ -602,7 +602,7 @@ function taskFields(taskId: string, rest: readonly string[]) {
 
   // A picture in an item's words opens the item, and nothing of the picture.
   if (step === STEP.INBOX && id !== undefined && namesItemPicture(more)) {
-    return { kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId: id };
+    return { kind: LINK_DESTINATION.INBOX_ITEM, taskId: taskId, itemId: id };
   }
 
   if (id === undefined || more.length > 0) return undefined;
@@ -610,19 +610,19 @@ function taskFields(taskId: string, rest: readonly string[]) {
   switch (step) {
     case STEP.VERSION:
       return WHOLE.test(id)
-        ? { kind: LINK_DESTINATION.VERSION, planId: taskId, revision: Number(id) }
+        ? { kind: LINK_DESTINATION.VERSION, taskId: taskId, revision: Number(id) }
         : undefined;
     case STEP.PAGE:
-      return { kind: LINK_DESTINATION.PAGE, planId: taskId, pageId: id };
+      return { kind: LINK_DESTINATION.PAGE, taskId: taskId, pageId: id };
     case STEP.WORK:
-      return WHOLE.test(id) ? { kind: LINK_DESTINATION.TASK, planId: taskId } : undefined;
+      return WHOLE.test(id) ? { kind: LINK_DESTINATION.TASK, taskId: taskId } : undefined;
     case STEP.WORKER:
-      return { kind: LINK_DESTINATION.TASK, planId: taskId };
+      return { kind: LINK_DESTINATION.TASK, taskId: taskId };
     case STEP.INBOX:
-      return { kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId: id };
+      return { kind: LINK_DESTINATION.INBOX_ITEM, taskId: taskId, itemId: id };
     // A picture of the task's description opens the task, and nothing of the picture.
     case STEP.FILES:
-      return PICTURE_ID.test(id) ? { kind: LINK_DESTINATION.TASK, planId: taskId } : undefined;
+      return PICTURE_ID.test(id) ? { kind: LINK_DESTINATION.TASK, taskId: taskId } : undefined;
     default:
       return undefined;
   }
@@ -631,7 +631,7 @@ function taskFields(taskId: string, rest: readonly string[]) {
 /** The steps after an agent's id, under the task an older link names it under or none: the agent itself, a worker, its Changes, a message, an Inbox item of its own, or a page an older link names under it. */
 function agentFields(taskId: string | undefined, agentId: string, rest: readonly string[]) {
   const [step, id, ...more] = rest;
-  const task = taskId === undefined ? {} : { planId: taskId };
+  const task = taskId === undefined ? {} : { taskId: taskId };
 
   if (step === undefined) return { kind: LINK_DESTINATION.AGENT, ...task, agentId };
 
@@ -663,7 +663,7 @@ function agentFields(taskId: string | undefined, agentId: string, rest: readonly
 
 /** A review thread's steps after its agent's Changes, `<view>/thread/<threadId>`; nothing for any other. */
 function threadFields(
-  task: { readonly planId?: string },
+  task: { readonly taskId?: string },
   agentId: string,
   rest: readonly string[],
 ) {
@@ -731,7 +731,7 @@ function inboxFields(step: string | undefined, rest: readonly string[]) {
 
     return taskId === undefined || more.length > 0
       ? undefined
-      : { kind: LINK_DESTINATION.INBOX, planId: taskStepOf(taskId) };
+      : { kind: LINK_DESTINATION.INBOX, taskId: taskStepOf(taskId) };
   }
 
   return rest.length === 0 || namesItemPicture(rest)
@@ -768,13 +768,13 @@ function workspaceStep(workspace: string): boolean {
 /** A task's link, or a section's by its fragment, an empty one the task's own; the anchor read in lower case. */
 function taskLink(taskId: string, hash: string): LinkDestination | undefined {
   if (hash === "" || hash === "#") {
-    return Option.getOrUndefined(readPlace({ kind: LINK_DESTINATION.TASK, planId: taskId }));
+    return Option.getOrUndefined(readPlace({ kind: LINK_DESTINATION.TASK, taskId: taskId }));
   }
 
   const anchor = decodedStep(hash.slice(1))?.toLowerCase();
 
   return Option.getOrUndefined(
-    readPlace({ kind: LINK_DESTINATION.SECTION, planId: taskId, anchor }),
+    readPlace({ kind: LINK_DESTINATION.SECTION, taskId: taskId, anchor }),
   );
 }
 
@@ -801,33 +801,33 @@ function placePath(place: LinkDestination): readonly string[] {
     case LINK_DESTINATION.TASK:
     case LINK_DESTINATION.SECTION:
     case LINK_DESTINATION.COMMENT:
-      return [STEP.TASK, place.planId];
+      return [STEP.TASK, place.taskId];
     case LINK_DESTINATION.VERSION:
-      return [STEP.TASK, place.planId, STEP.VERSION, String(place.revision)];
+      return [STEP.TASK, place.taskId, STEP.VERSION, String(place.revision)];
     case LINK_DESTINATION.PAGE:
-      return "planId" in place
-        ? [STEP.TASK, place.planId, STEP.PAGE, place.pageId]
+      return "taskId" in place
+        ? [STEP.TASK, place.taskId, STEP.PAGE, place.pageId]
         : [STEP.AGENT, place.agentId, STEP.PAGE, place.pageId];
     case LINK_DESTINATION.AGENT:
-      return agentPath(place.planId, place.agentId);
+      return agentPath(place.taskId, place.agentId);
     case LINK_DESTINATION.WORKER:
-      return [...agentPath(place.planId, place.agentId), STEP.WORKER, place.callId];
+      return [...agentPath(place.taskId, place.agentId), STEP.WORKER, place.callId];
     case LINK_DESTINATION.CHANGES:
-      return [...agentPath(place.planId, place.agentId), STEP.CHANGES];
+      return [...agentPath(place.taskId, place.agentId), STEP.CHANGES];
     case LINK_DESTINATION.PULL_REQUEST_THREAD:
       return [
-        ...agentPath(place.planId, place.agentId),
+        ...agentPath(place.taskId, place.agentId),
         STEP.CHANGES,
         place.view,
         STEP.THREAD,
         place.threadId,
       ];
     case LINK_DESTINATION.MESSAGE:
-      return [...agentPath(place.planId, place.agentId), STEP.MESSAGE, place.messageId];
+      return [...agentPath(place.taskId, place.agentId), STEP.MESSAGE, place.messageId];
     case LINK_DESTINATION.INBOX:
-      return place.planId === undefined ? [STEP.INBOX] : [STEP.INBOX, STEP.TASK, place.planId];
+      return place.taskId === undefined ? [STEP.INBOX] : [STEP.INBOX, STEP.TASK, place.taskId];
     case LINK_DESTINATION.INBOX_ITEM:
-      if ("planId" in place) return [STEP.TASK, place.planId, STEP.INBOX, place.itemId];
+      if ("taskId" in place) return [STEP.TASK, place.taskId, STEP.INBOX, place.itemId];
 
       return "agentId" in place
         ? [STEP.AGENT, place.agentId, STEP.INBOX, place.itemId]
@@ -916,7 +916,7 @@ export function readLink(target: string): ReadLink | undefined {
   const read =
     taskOwn && thread.length === 1
       ? Option.getOrUndefined(
-          readPlace({ kind: LINK_DESTINATION.COMMENT, planId: taskId, threadId: thread[0] }),
+          readPlace({ kind: LINK_DESTINATION.COMMENT, taskId: taskId, threadId: thread[0] }),
         )
       : taskOwn
         ? taskLink(taskId, url.hash)
@@ -935,12 +935,12 @@ export function readLink(target: string): ReadLink | undefined {
 
 /** The number a place names its task by in its link's workspace, `42` from `/task/42`, which the service finds the task by; nothing for a place naming its task by its id, or no task. */
 export function taskNumberOf(place: LinkDestination): number | undefined {
-  return "planId" in place && TASK_NUMBER.test(place.planId) ? Number(place.planId) : undefined;
+  return "taskId" in place && TASK_NUMBER.test(place.taskId) ? Number(place.taskId) : undefined;
 }
 
 /** The place with its task named by the id the service found for its number, everything else as it was. */
 export function withTaskId(place: LinkDestination, taskId: string): LinkDestination {
-  return "planId" in place ? { ...place, planId: taskId } : place;
+  return "taskId" in place ? { ...place, taskId: taskId } : place;
 }
 
 /**

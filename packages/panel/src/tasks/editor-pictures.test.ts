@@ -231,9 +231,9 @@ test("a video of another description pasted in is kept on this description as it
   const kept: string[] = [];
   fakeActPort({
     ...fakeActPortCalls(),
-    [ACT_KIND.TASKS_PICTURE_READ]: ({ planId }) =>
+    [ACT_KIND.TASKS_PICTURE_READ]: ({ taskId }) =>
       Promise.resolve(
-        planId === OTHER_TASK
+        taskId === OTHER_TASK
           ? { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: "GkXfow==" }
           : { failure: "not-found" },
       ),

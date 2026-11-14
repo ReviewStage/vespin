@@ -38,7 +38,7 @@ const LISTED: TasksView = {
   taskAgents: [
     listedAgent({
       id: "agent-invites",
-      planId: INVITES.id,
+      taskId: INVITES.id,
       title: "Expire stale invitations",
       model: "anthropic/claude-opus-5.5",
       effort: "high",
@@ -104,7 +104,7 @@ describe("the task list's collections", () => {
     expect([...window.taskList.tasks.keys()].sort()).toEqual(
       [INVITES.id, BILLING.id, SEARCH.id].sort(),
     );
-    expect(window.taskList.agents.get("agent-invites")?.planId).toBe(INVITES.id);
+    expect(window.taskList.agents.get("agent-invites")?.taskId).toBe(INVITES.id);
   });
 
   it("write only the row a delivery moved, and delete the row that went", async () => {

@@ -173,7 +173,7 @@ function useSubject(signedIn: boolean): Subject {
 
   const task =
     taskNamed ??
-    (agent === undefined ? undefined : view?.tasks?.find(({ id }) => id === agent.planId));
+    (agent === undefined ? undefined : view?.tasks?.find(({ id }) => id === agent.taskId));
 
   const workspaceId = thread?.holder.task.workspaceId ?? task?.workspaceId;
   const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
@@ -188,7 +188,7 @@ function useSubject(signedIn: boolean): Subject {
   if (thread !== undefined) {
     address = linked({
       kind: LINK_DESTINATION.INBOX_ITEM,
-      planId: thread.holder.task.id,
+      taskId: thread.holder.task.id,
       itemId: thread.item.id,
     });
     enabled.push(MENU_COMMAND.TOGGLE_READ, ...REMIND_PRESETS.keys());
@@ -200,12 +200,12 @@ function useSubject(signedIn: boolean): Subject {
     address = linked(
       task === undefined
         ? { kind: LINK_DESTINATION.AGENT, agentId: agent.id }
-        : { kind: LINK_DESTINATION.AGENT, planId: task.id, agentId: agent.id },
+        : { kind: LINK_DESTINATION.AGENT, taskId: task.id, agentId: agent.id },
     );
 
     if (task !== undefined) enabled.push(MENU_COMMAND.NEW_AGENT);
   } else if (task !== undefined) {
-    address = linked({ kind: LINK_DESTINATION.TASK, planId: task.id });
+    address = linked({ kind: LINK_DESTINATION.TASK, taskId: task.id });
     enabled.push(MENU_COMMAND.NEW_AGENT, MENU_COMMAND.TOGGLE_READ, MENU_COMMAND.PIN);
 
     if (task.status !== TASK_STATUS.DONE) enabled.push(MENU_COMMAND.MARK_DONE);
@@ -245,7 +245,7 @@ function useAgentsWorking(taskId: string | undefined): boolean {
       taskId !== undefined &&
       (selectTasks(state).taskAgents ?? []).some(
         (agent) =>
-          agent.planId === taskId &&
+          agent.taskId === taskId &&
           agent.archivedAt === undefined &&
           agentStillWriting(agent.status),
       ),
