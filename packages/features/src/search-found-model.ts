@@ -75,6 +75,26 @@ export function noResultsWords(query: string): string {
   return `No ${TERM.RESULT.many} match “${query.trim()}”.`;
 }
 
+/** What opens a kind's every row from under All, as the panel's lists say it. */
+export const SHOW_ALL = "Show all";
+
+/** Each kind's rows counted many, as Show all is heard naming them. */
+const SEARCH_FOUND_MANY = {
+  [SEARCH_FOUND_KIND.TASKS]: TERM.TASK.many,
+  [SEARCH_FOUND_KIND.INBOX]: `Inbox ${TERM.INBOX_ITEM.many}`,
+  [SEARCH_FOUND_KIND.AGENTS]: TERM.AGENT.many,
+} as const satisfies Record<SearchFoundKind, string>;
+
+/** What Show all is heard as: "Show all 12 Inbox items". */
+export function showAllHeard(kind: SearchFoundKind, total: number): string {
+  return `${SHOW_ALL} ${total} ${SEARCH_FOUND_MANY[kind]}`;
+}
+
+/** What stands under a kind's own scope where it lists fewer than the search found, so the cut is said rather than silent: "Showing 50 of 132." */
+export function shownOfWords(shown: number, total: number): string {
+  return `Showing ${shown} of ${total}.`;
+}
+
 /** Each kind's rows a search found, best first. */
 export type FoundByKind<Task, Item, Agent> = {
   readonly [SEARCH_FOUND_KIND.TASKS]: readonly Task[];

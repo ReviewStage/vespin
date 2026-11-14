@@ -196,7 +196,17 @@ type ListSectionProps = {
   readonly progress?: SectionProgress | undefined;
   /** What a + at the header's end adds to the section, such as New sub-task; none where it adds nothing. */
   readonly add?: SectionAdd | undefined;
+  /** What a Show all at the header's end opens: every row the section holds a few of, as a search's section under All; none where it holds them all. */
+  readonly more?: SectionMore | undefined;
   readonly children: ReactNode;
+};
+
+/** A section's Show all: the words it draws, the words it is heard by, and what it opens. */
+type SectionMore = {
+  readonly label: string;
+  /** What it is heard as, naming what it shows: "Show all 12 tasks". */
+  readonly heard: string;
+  readonly onPress: () => void;
 };
 
 /** How many of a section's rows are finished of all of them, and the words a reader hears in the figures' place. */
@@ -340,6 +350,34 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
 }
 
 /**
+ * A section header's Show all, as Mail's and Music's search sections end:
+ * its words in the header's size, in the ink rather than muted so it reads as
+ * a press, beside the header so VoiceOver hears it apart from the heading.
+ */
+function SectionMoreButton({ more }: { readonly more: SectionMore }) {
+  const colors = useColors();
+
+  // Note that the target's frame and shape stand on the words, the button's label, since a borderless button answers only where its label is hit.
+  return (
+    <Button
+      onPress={more.onPress}
+      modifiers={[buttonStyle("borderless"), accessibilityLabel(more.heard)]}
+    >
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "medium" }),
+          foregroundStyle(colors.TEXT),
+          frame({ minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
+      >
+        {more.label}
+      </Text>
+    </Button>
+  );
+}
+
+/**
  * A section of a list or a form under a small muted header with its count,
  * as Linear's and Cursor's groups stand rather than the system's uppercase
  * caption. A foldable section folds in place on a press of its header, its
@@ -357,6 +395,7 @@ export function ListSection({
   footer,
   onDropLink,
   add,
+  more,
   children,
 }: ListSectionProps) {
   const [folded, setFolded] = useState(false);
@@ -400,12 +439,13 @@ export function ListSection({
     );
 
   const header =
-    dropped === undefined || add === undefined ? (
+    dropped === undefined || (add === undefined && more === undefined) ? (
       dropped
     ) : (
       <HStack spacing={0}>
         {dropped}
-        <SectionAddButton add={add} />
+        {more === undefined ? null : <SectionMoreButton more={more} />}
+        {add === undefined ? null : <SectionAddButton add={add} />}
       </HStack>
     );
 
