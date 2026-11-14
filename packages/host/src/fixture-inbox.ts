@@ -1226,12 +1226,13 @@ const HOSTS: readonly HostLine[] = [
 ];
 
 /** Ada's machines as the account's machines read names them, her MacBook first, which the ask below is held by. */
-const MACHINES: readonly MachineLine[] = HOSTS.map((host) => ({
+const MACHINES: readonly MachineLine[] = HOSTS.map((host, index) => ({
   id: host.id,
   name: host.name,
   ...(host.platform === undefined ? undefined : { platform: host.platform }),
   host: true,
   listening: host.away !== true,
+  isDefault: index === 0,
 }));
 
 /** What the invitations agent's run on Ada's MacBook waits on her for: a command its Mac asks before it runs, about four minutes left in its window. */
