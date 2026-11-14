@@ -8,7 +8,7 @@ import {
   type TaskSummary,
 } from "./task-wire.js";
 import {
-  type HeldDescriptionDocument,
+  type HeldTask,
   type RepositoryCallFailure,
   type StartCallFailure,
   TASK_CALL_FAILURE,
@@ -34,8 +34,8 @@ const RECENT_REPOSITORY_LIMIT = 5;
 export const TASKS_PAGE = {
   /** The tab's home, whenever no task is open: a line saying so, and New task. */
   HOME: "home",
-  /** The open task's saved document and its microphone. */
-  DOCUMENT: "document",
+  /** The open task: its description and its microphone. */
+  TASK: "task",
 } as const;
 
 export type TasksPage = (typeof TASKS_PAGE)[keyof typeof TASKS_PAGE];
@@ -48,11 +48,11 @@ export type TasksPage = (typeof TASKS_PAGE)[keyof typeof TASKS_PAGE];
  * task list is the sidebar's.
  */
 export function tasksPage(view: TasksView): TasksPage {
-  return view.activeTaskId === undefined ? TASKS_PAGE.HOME : TASKS_PAGE.DOCUMENT;
+  return view.activeTaskId === undefined ? TASKS_PAGE.HOME : TASKS_PAGE.TASK;
 }
 
 /** Which state the document region draws. */
-export const DOCUMENT_REGION = {
+export const TASK_REGION = {
   /** No task is open: the tab shows the list instead. */
   NONE: "none",
   READING: "reading",
@@ -64,16 +64,16 @@ export const DOCUMENT_REGION = {
   MISSING: "missing",
 } as const;
 
-export type DocumentRegion =
-  | { readonly kind: typeof DOCUMENT_REGION.NONE }
-  | { readonly kind: typeof DOCUMENT_REGION.READING }
-  | { readonly kind: typeof DOCUMENT_REGION.READY; readonly task: Task }
-  | { readonly kind: typeof DOCUMENT_REGION.FAILED }
-  | { readonly kind: typeof DOCUMENT_REGION.MISSING };
+export type TaskRegion =
+  | { readonly kind: typeof TASK_REGION.NONE }
+  | { readonly kind: typeof TASK_REGION.READING }
+  | { readonly kind: typeof TASK_REGION.READY; readonly task: Task }
+  | { readonly kind: typeof TASK_REGION.FAILED }
+  | { readonly kind: typeof TASK_REGION.MISSING };
 
 /** The open task's description as the host holds it for the window: what its read answered, absent until it first does, and whether it failed before it ever had. */
 export interface HeldDocumentRead {
-  readonly rows?: HeldDescriptionDocument | undefined;
+  readonly rows?: HeldTask | undefined;
   readonly failed?: boolean;
 }
 
@@ -86,21 +86,21 @@ export interface HeldDocumentRead {
 export function documentRegion(
   view: { readonly activeTaskId?: string | undefined },
   held: HeldDocumentRead | undefined,
-): DocumentRegion {
+): TaskRegion {
   const { activeTaskId } = view;
 
-  if (activeTaskId === undefined) return { kind: DOCUMENT_REGION.NONE };
+  if (activeTaskId === undefined) return { kind: TASK_REGION.NONE };
   const rows = held?.rows;
 
-  if (rows !== undefined && !("task" in rows)) return { kind: DOCUMENT_REGION.MISSING };
+  if (rows !== undefined && !("task" in rows)) return { kind: TASK_REGION.MISSING };
 
   if (rows !== undefined && rows.task.id === activeTaskId) {
-    return { kind: DOCUMENT_REGION.READY, task: rows.task };
+    return { kind: TASK_REGION.READY, task: rows.task };
   }
 
-  if (rows === undefined && held?.failed === true) return { kind: DOCUMENT_REGION.FAILED };
+  if (rows === undefined && held?.failed === true) return { kind: TASK_REGION.FAILED };
 
-  return { kind: DOCUMENT_REGION.READING };
+  return { kind: TASK_REGION.READING };
 }
 
 /**
@@ -269,16 +269,24 @@ function named<Named extends { id: string; name: string }>(task: Named, renames:
   return name === undefined ? task : { ...task, name };
 }
 
+/** `tasks` with each name given drawn in place of the one it replaces, the same list where none is given. */
+export function renamedTasks<Named extends { id: string; name: string }>(
+  tasks: readonly Named[],
+  renames: TaskNames,
+): readonly Named[] {
+  return renames.size === 0 ? tasks : tasks.map((task) => named(task, renames));
+}
+
 /** The view with each name given drawn in place of the one it replaces in the list. */
 export function renamedView(view: TasksView, renames: TaskNames): TasksView {
   if (renames.size === 0) return view;
 
-  return { ...view, tasks: view.tasks.map((task) => named(task, renames)) };
+  return { ...view, tasks: renamedTasks(view.tasks, renames) };
 }
 
 /** The region with the name given for its task drawn in place of the one it replaces, as the list draws it. */
-export function renamedRegion(region: DocumentRegion, renames: TaskNames): DocumentRegion {
-  if (region.kind !== DOCUMENT_REGION.READY) return region;
+export function renamedRegion(region: TaskRegion, renames: TaskNames): TaskRegion {
+  if (region.kind !== TASK_REGION.READY) return region;
   const task = named(region.task, renames);
 
   return task === region.task ? region : { ...region, task };

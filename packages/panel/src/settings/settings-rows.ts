@@ -19,7 +19,6 @@ import {
 } from "@repo/settings/settings-views";
 import type { AppSettingsView } from "@repo/settings/wire";
 import type { SettingsSearchInput } from "../settings-search.js";
-import type { WorkspaceSettingsControl } from "./workspace-page.js";
 
 /**
  * settings-rows.ts -- what the settings pages offer, judged without drawing one.
@@ -30,6 +29,12 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
  * (`desktop-settings.tsx`), and a static import of a page from the shell would
  * pull every page into the bundle each launch parses.
  */
+
+/** The account's workspaces as the Workspace page reads them: every one it is a member of, and the one the sidebar lists, none before they are read. */
+interface ListedWorkspaces {
+  readonly workspaces: readonly Workspace[];
+  readonly workspaceId: string | undefined;
+}
 
 /**
  * The capability a page stands on, for each page whose every row is one
@@ -117,9 +122,7 @@ export function shownSettingsView(
 }
 
 /** The workspace the page shows: the one the sidebar lists, else the first; none before the workspaces are read. */
-export function shownWorkspace(
-  control: Pick<WorkspaceSettingsControl, "workspaces" | "workspaceId">,
-): Workspace | undefined {
+export function shownWorkspace(control: ListedWorkspaces): Workspace | undefined {
   return (
     control.workspaces.find((each) => each.id === control.workspaceId) ?? control.workspaces[0]
   );
@@ -152,7 +155,7 @@ export function settingsRowsInput({
   settings?: AppSettingsView | undefined;
   account: AccountSnapshot;
   capabilities: readonly HostCapability[];
-  workspace?: Pick<WorkspaceSettingsControl, "workspaces" | "workspaceId"> | undefined;
+  workspace?: ListedWorkspaces | undefined;
 }): SettingsSearchInput | undefined {
   if (!settings) return undefined;
   const accountDrawn = account.status === ACCOUNT_STATUS.SIGNED_IN;

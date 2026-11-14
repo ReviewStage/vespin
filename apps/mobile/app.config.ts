@@ -271,6 +271,15 @@ const SHARE_EXTENSION: AppExtension = {
 // run in it, and a local build, which never uploads, is build 1.
 const BUILD_NUMBER = process.env.VESPIN_IOS_BUILD_NUMBER ?? "1";
 
+// The camera's purpose string. The app never opens the camera, but WebRTC's
+// library, which a call's audio rides on, links the camera's APIs, and App
+// Store Connect refuses a build that links them without this key (ITMS-90683).
+const CAMERA_USAGE = "Vespin never uses the camera: a call with an agent is audio only.";
+
+// What the system's microphone prompt says, the first time Talk calls an
+// agent (`src/voice-call.tsx`): the one use the app has for the microphone.
+const MICROPHONE_USAGE = "Vespin uses the microphone while you talk with an agent on a call.";
+
 // The version TestFlight lists the build under, beside its number.
 const VERSION = "0.1.0";
 
@@ -823,9 +832,14 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // clears its notification (`src/notification-task.ts`).
       // The member's running agents stand in a Live Activity the service
       // starts and updates by push (`live-activity/`).
+      // A call into an agent keeps on with the screen locked or another app
+      // in front (`audio`): WebRTC's audio session, for voice chat with the
+      // voice on the speaker (`modules/voice-audio/`), holds the microphone
+      // and the voice while the call stands, and none once it ends, so the
+      // app is kept running for a call alone.
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
-        UIBackgroundModes: ["remote-notification"],
+        UIBackgroundModes: ["remote-notification", "audio"],
         NSSupportsLiveActivities: true,
         // A screen handed over from another of the member's devices arrives
         // as our own activity type, spelled again in Swift
@@ -845,14 +859,24 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
     plugins: [
       "expo-router",
       // A message's photo is picked in the system's photo picker, which reads
-      // only what the person picks, so no camera or microphone is asked for.
+      // only what the person picks, so the camera is never asked for. Both
+      // purpose strings are still named here, since the picker's plugin
+      // otherwise writes or clears each key over WebRTC's: a cleared camera
+      // key is what App Store Connect refused build 32 for.
       [
         "expo-image-picker",
         {
           photosPermission: "Vespin attaches the photos you pick to a message to an agent.",
-          cameraPermission: false,
-          microphonePermission: false,
+          cameraPermission: CAMERA_USAGE,
+          microphonePermission: MICROPHONE_USAGE,
         },
+      ],
+      // A voice call's audio rides on WebRTC (`src/voice-call.tsx`), its
+      // native module linked from the app's dependencies; the plugin writes
+      // the microphone's and the camera's purpose strings and turns bitcode off.
+      [
+        "@config-plugins/react-native-webrtc",
+        { cameraPermission: CAMERA_USAGE, microphonePermission: MICROPHONE_USAGE },
       ],
       [
         "expo-splash-screen",

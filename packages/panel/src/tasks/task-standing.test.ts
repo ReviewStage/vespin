@@ -48,7 +48,7 @@ const TASK: Task = {
   status: TASK_STATUS.TODO,
   priority: TASK_PRIORITY.HIGH,
   number: 42,
-  document: { body: "", assumptions: [] },
+  description: { body: "", assumptions: [] },
 };
 
 const roots: Root[] = [];

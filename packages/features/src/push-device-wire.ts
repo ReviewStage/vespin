@@ -30,7 +30,7 @@ export type PushEnvironment = (typeof PUSH_ENVIRONMENT)[keyof typeof PUSH_ENVIRO
 
 export const pushEnvironmentSchema = EffectSchema.Literals(Object.values(PUSH_ENVIRONMENT));
 
-export const PUSH_DEVICE_BOUNDS = {
+const PUSH_DEVICE_BOUNDS = {
   /** The fewest hex characters a token may be: Apple's is 32 bytes today, and says not to assume its length, so only a token far shorter than that is refused. */
   MIN_TOKEN_CHARS: 32,
   /** The most hex characters a token may be, with room for Apple to lengthen it. */
@@ -51,7 +51,7 @@ export const pushDeviceTokenSchema = EffectSchema.String.check(
   EffectSchema.isPattern(DEVICE_TOKEN_PATTERN),
 );
 
-export const pushDeviceBundleIdSchema = EffectSchema.String.check(
+const pushDeviceBundleIdSchema = EffectSchema.String.check(
   EffectSchema.isMinLength(1),
   EffectSchema.isMaxLength(PUSH_DEVICE_BOUNDS.MAX_BUNDLE_ID_CHARS),
   EffectSchema.isPattern(BUNDLE_ID_PATTERN),
@@ -63,8 +63,6 @@ export const pushDeviceRegisterRequestSchema = EffectSchema.Struct({
   environment: pushEnvironmentSchema,
   bundleId: pushDeviceBundleIdSchema,
 });
-
-export type PushDeviceRegisterRequest = typeof pushDeviceRegisterRequestSchema.Type;
 
 /** Unregistering the phone (POST to `/unregister`): the token and its gateway; one the account does not hold is passed over. */
 export const pushDeviceUnregisterRequestSchema = EffectSchema.Struct({
@@ -93,16 +91,12 @@ export const pushNotifySchema = EffectSchema.Literals(Object.values(PUSH_NOTIFY)
 /** Reading the phone's standing (POST to `/status`): its token and gateway, as an unregister names them. */
 export const pushDeviceStatusRequestSchema = pushDeviceUnregisterRequestSchema;
 
-export type PushDeviceStatusRequest = typeof pushDeviceStatusRequestSchema.Type;
-
 /** Setting the phone's "Notify me" (POST to `/notify`): its token and gateway, and the choice. */
 export const pushDeviceNotifyRequestSchema = EffectSchema.Struct({
   token: pushDeviceTokenSchema,
   environment: pushEnvironmentSchema,
   notify: pushNotifySchema,
 });
-
-export type PushDeviceNotifyRequest = typeof pushDeviceNotifyRequestSchema.Type;
 
 /** The most characters of a failure's reason the service keeps: Apple's reasons are a word, such as `BadTopic`. */
 export const PUSH_FAILURE_REASON_MAX_CHARS = 120;
@@ -133,8 +127,6 @@ export const pushDeviceStatusAnswerSchema = EffectSchema.Struct({
 });
 
 export type PushDeviceStatusAnswer = typeof pushDeviceStatusAnswerSchema.Type;
-
-export type PushDeviceUnregisterRequest = typeof pushDeviceUnregisterRequestSchema.Type;
 
 /** What a register or an unregister answers once it is done: nothing a phone needs to read. */
 export const pushDeviceDoneAnswerSchema = EffectSchema.Struct({

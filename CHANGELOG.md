@@ -72,6 +72,73 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.34.1 — 2026-11-13
+
+### Improvements
+
+- A cloud agent's Cloud chip opens Where this agent works, with a Default
+  machine row choosing which of your machines its terminal commands run on, and
+  each command's row ends in the chip of the machine it ran on
+  ([#9043](https://github.com/ReviewStage/vespin/pull/9043),
+  [#9157](https://github.com/ReviewStage/vespin/pull/9157))
+- A command an agent could not run on a machine says why under its row, such as
+  the machine being offline, and offers each other machine that could take it,
+  making the one you pick the agent's default and asking the agent to try again
+  there ([#9110](https://github.com/ReviewStage/vespin/pull/9110),
+  [#9123](https://github.com/ReviewStage/vespin/pull/9123))
+- The @ list in a message box offers your workspace's machines under Machines,
+  or alone after @machines:, each with its online dot, and tells the agent which
+  machine you named ([#9120](https://github.com/ReviewStage/vespin/pull/9120))
+- Each pull request in the split bar docked over an agent's box hangs its card
+  on hover, as a lone pull request's row does
+  ([#9176](https://github.com/ReviewStage/vespin/pull/9176))
+- Clearing a saved setup script in Settings › Cloud environment turns its Save
+  into Delete script, which asks before it deletes
+  ([#9074](https://github.com/ReviewStage/vespin/pull/9074),
+  [#9078](https://github.com/ReviewStage/vespin/pull/9078))
+- Cards, sheets, the chosen tab, and the open row stand on Geist's card shadow,
+  edged in one solid gray that reads the same on every background
+  ([#9081](https://github.com/ReviewStage/vespin/pull/9081),
+  [#9083](https://github.com/ReviewStage/vespin/pull/9083),
+  [#9111](https://github.com/ReviewStage/vespin/pull/9111))
+- Vespin spends less of your Mac's time keeping an account with many pull
+  requests and tasks up to date
+  ([#9126](https://github.com/ReviewStage/vespin/pull/9126),
+  [#9130](https://github.com/ReviewStage/vespin/pull/9130))
+
+### Fixes
+
+- Fixed every Mac on 0.33.0 or 0.34.0 refusing to start a local agent, saying
+  the Mac was offline, because Vespin's host crashed each time it launched
+  ([#9177](https://github.com/ReviewStage/vespin/pull/9177))
+- Fixed a new task's page drawing a placeholder conversation while its agent
+  started, where it now says Starting…
+  ([#9107](https://github.com/ReviewStage/vespin/pull/9107))
+- Fixed the working line under a message you sent appearing, vanishing, and
+  starting its count over
+  ([#9155](https://github.com/ReviewStage/vespin/pull/9155))
+- Fixed a queued message's words staying in the box after a saved edit sent it
+  at once ([#9092](https://github.com/ReviewStage/vespin/pull/9092))
+- Fixed a pasted picture's card left standing in the window's top-left corner
+  ([#9051](https://github.com/ReviewStage/vespin/pull/9051))
+- Fixed a spinner flickering over each file named in a message while it sent
+  ([#9076](https://github.com/ReviewStage/vespin/pull/9076))
+- Fixed a video playing in the file viewer or a transcript drawing over its
+  frame's rounded corners
+  ([#9098](https://github.com/ReviewStage/vespin/pull/9098))
+- Fixed the transcript rail's bubble lighting the rail's whole height during a
+  fast scroll ([#9072](https://github.com/ReviewStage/vespin/pull/9072))
+- Fixed the open task's card in the sidebar keeping a solid square at its end
+  where the list fades out
+  ([#9068](https://github.com/ReviewStage/vespin/pull/9068))
+
+### Misc
+
+- Moved moving an agent between the cloud, your Macs, and your hosts behind
+  Settings › Experimental as Move agents: until you turn it on, an agent's Move
+  to › and its place chip's menu of places are hidden, while Move to cloud stays
+  ([#9104](https://github.com/ReviewStage/vespin/pull/9104))
+
 ## 0.34.0 — 2026-11-13
 
 ### Run actions
@@ -80,6 +147,8 @@ Each repository's commands, kept in Settings › Cloud environment, run from the
 Run button over an agent's tabs, from ⌘K, or with ⌥⌘R, in a cloud agent's
 sandbox or on the Mac a local agent runs on, for every workspace.
 ([#8962](https://github.com/ReviewStage/vespin/pull/8962))
+
+![The Run button over an agent's tabs reads Dev server, and its menu is open on acme/relay's run actions: Dev server, pnpm dev, marked Default with ⌥⌘R; Members tests, pnpm test src/members; Seed pending invites, pnpm db:seed --invites; Email previews, pnpm email:dev; and Edit run actions…](apps/web/public/changelog/0.34.0/run-actions.png)
 
 ### Automations once, and on merges and releases
 
@@ -98,13 +167,7 @@ working on that pull request. Vespin reacts with 👀 and posts the agent's firs
 answer back as a comment with a link to it.
 ([#8898](https://github.com/ReviewStage/vespin/pull/8898))
 
-### Find any line sent to an agent
-
-A rail down an agent's transcript marks every line sent into it, by you,
-teammates, other agents, GitHub, or automations, with the lines in view held in
-a bubble. Hovering it lists each line with its sender, and pressing one jumps
-there; on a phone, the rail opens the same list as a sheet.
-([#8485](https://github.com/ReviewStage/vespin/pull/8485))
+![Two GitHub comments: danamoreno, a member, asks the vespin-agent bot to make an expired invite link read “This invite is no longer valid” and offer a new invite, her comment wearing a 👀 reaction; the vespin-agent bot answers that it opened #232 with Ask for a new invite and a passing test, ending in Open in Vespin](apps/web/public/changelog/0.34.0/mention-vespin-on-github.png)
 
 ### Copy and paste pictures and files
 
@@ -115,6 +178,8 @@ pictures, and a description's picture pastes into a message box too.
 
 ### Improvements
 
+- A rail down an agent's transcript marks every line sent into it, and lists
+  each with its sender to jump to ([#8485](https://github.com/ReviewStage/vespin/pull/8485))
 - The first time you open Automations, the Inbox, or an agent's Browser tab, a
   card says what the page is for, with Learn more and Got it
   ([#8875](https://github.com/ReviewStage/vespin/pull/8875),

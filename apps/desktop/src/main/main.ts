@@ -99,7 +99,7 @@ protocol.registerSchemesAsPrivileged([PAGE_SCHEME_PRIVILEGES]);
 // apart. The page's ground is drawn both ways at once while a region holds
 // nothing but something turning (a transcript still being read, its spinner
 // alone in the column): that region's tiles came out #0c0c0e and the rest of
-// the column #0c0c0d (the old ground), a faint box around the spinner. Drawing in sRGB leaves
+// the column #0c0c0d, a faint box around the spinner. Drawing in sRGB leaves
 // the one conversion to macOS, so the ground is one color wherever it falls.
 // Electron reads the switch once, before the app is ready.
 app.commandLine.appendSwitch("force-color-profile", "srgb");

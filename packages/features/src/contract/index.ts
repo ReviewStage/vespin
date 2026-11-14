@@ -49,6 +49,8 @@ import { workspaceSentryContract } from "./workspace-sentry.js";
 import { workspaceSlackBotContract } from "./workspace-slack-bot.js";
 import { workspacesContract } from "./workspaces.js";
 
+export { AGENT_PORTS_FORWARDING, type AgentPortsForwarding } from "./agent-ports.js";
+
 export { AGENT_START_STATUS } from "./agents.js";
 
 export { bodyCap, getBodyCap } from "./base.js";
@@ -97,7 +99,7 @@ export type HostedContract = {
   messages: typeof messagesContract;
   models: typeof modelsContract;
   descriptionComments: typeof descriptionCommentsContract;
-  plans: typeof tasksContract;
+  tasks: typeof tasksContract;
   pullRequestChapters: typeof pullRequestChaptersContract;
   pullRequests: typeof pullRequestsContract;
   pushDevices: typeof pushDevicesContract;
@@ -144,7 +146,7 @@ export const hostedContract: HostedContract = {
   messages: messagesContract,
   models: modelsContract,
   descriptionComments: descriptionCommentsContract,
-  plans: tasksContract,
+  tasks: tasksContract,
   pullRequestChapters: pullRequestChaptersContract,
   pullRequests: pullRequestsContract,
   pushDevices: pushDevicesContract,

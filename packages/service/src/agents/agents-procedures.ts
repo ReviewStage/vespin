@@ -9,7 +9,7 @@
  * `agents-app.ts`'s header, the group these moved from, and of the
  * shells below.
  *
- * A Start (`POST /api/plans/{id}/agents`) takes the one path a start takes
+ * A Start (`POST /api/tasks/{id}/agents`) takes the one path a start takes
  * (`coder-host/start.ts`), reaching the agent's sessions for the account
  * the request resolved to (`coder-host/runtime-sessions.ts`), and answers
  * 201 for the agent it made or 200 for the one a retry under the same key
@@ -27,9 +27,9 @@
  *
  * The shells (`/api/agents/{id}/terminals`) are the agent's Terminal tab's:
  * listed, started, named, and ended in its sandbox, and the sandbox resumed
- * on the developer's click and nothing else; a list never wakes a stopped
- * sandbox, a shell starts only in a running one, and an archived agent's
- * shells are gone. Nothing here reads or writes a byte of what a shell
+ * on the developer's click: its Resume, or a shell or run action started in
+ * it, which resumes a stopped sandbox first (`startedWaking`); a list never
+ * wakes a stopped sandbox, and an archived agent's shells are gone. Nothing here reads or writes a byte of what a shell
  * printed: a list is each shell's name, foreground command, and folder,
  * read from tmux in the sandbox (`terminal/`).
  */
@@ -45,6 +45,7 @@ import {
   listWorkspaceAgentLines,
   nativeRouteOfReached,
   readVisibleAgentWorkspace,
+  updateAgentTargetDevice,
 } from "@repo/database/models/agent-store";
 import { devicesNamed } from "@repo/database/models/device-store";
 import { readTaskWorkspace } from "@repo/database/models/task-store";
@@ -61,10 +62,11 @@ import {
 } from "@repo/features/agent-wire";
 import { AGENT_START_STATUS } from "@repo/features/contract";
 import type { Sandbox } from "@repo/sandbox";
-import { Clock, Effect, type Layer, Option, type Redacted, Result } from "effect";
+import { Clock, Effect, type Layer, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import { HostedEnvironment } from "../environment.js";
 import { recordServerEventIn, SERVER_AGENT_TOOL, SERVER_EVENT } from "../events/server-events.js";
+import type { GitHubBearer } from "../github/github-app.js";
 import { changesPeople, namedReviewOptions } from "../github/github-people.js";
 import {
   pullRequestByNumber,
@@ -90,7 +92,8 @@ import {
   rewoundAgentById,
   warmedAgent,
 } from "./agent-lifecycle.js";
-import { controlsAgent, reachedAgentById } from "./agent-reach.js";
+import { admitsPlanWriter, controlsAgent, reachedAgentById } from "./agent-reach.js";
+import { agentSandboxName } from "./agent-sandbox-open.js";
 import {
   askedPullRequest,
   githubReadRefusal,
@@ -107,6 +110,7 @@ import {
   type PublishedReach,
 } from "./coder-host/published.js";
 import { productionSummaryModel, type SummaryModelOf } from "./coder-host/replay-summary.js";
+import { sandboxLetGo } from "./coder-host/runner-sessions.js";
 import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   acceptedAgentChoice,
@@ -127,6 +131,11 @@ import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { turnChangesOf } from "./coder-host/turn-changes.js";
 import { pressReplyButton, readReplyButtonView } from "./reply-buttons/press.js";
 import { ranRunAction, stoppedRunAction } from "./run-actions.js";
+import {
+  keptSandboxTerminals,
+  recordedTerminalEnded,
+  recordedTerminalOpened,
+} from "./sandbox-use.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
 import { AgentSandbox } from "./terminal/agent-sandbox.js";
@@ -135,9 +144,10 @@ import {
   reachedAgentSession,
   sandboxOrUpstream,
   shellRefusal,
+  startedWaking,
 } from "./terminal/sandbox-reach.js";
 import { listedPage } from "./workspace-agents.js";
-import { runOnMacStanding } from "./workspace-tools.js";
+import { defaultMachineChoices, runOnMacStanding } from "./workspace-tools.js";
 
 export interface AgentsProcedureSeams extends PublishedReach, SandboxDeleteReach {
   resolveUserId: UserIdResolver;
@@ -218,7 +228,7 @@ const reachedSession = (userId: string, id: string) =>
  * its repository (`github/repository-pull-request.ts`).
  */
 export const pullRequestChangesRead = (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   subject: PullRequestSubject,
   pullRequest: AgentPullRequest,
 ) =>
@@ -226,17 +236,17 @@ export const pullRequestChangesRead = (
     // Note that the pull request itself is read beside its files for its head and base, which its changed files are read whole at; a read that does not land names neither.
     const [files, people, whole] = yield* Effect.all(
       [
-        pullRequestFiles(token, subject.repository, pullRequest),
-        changesPeople(token, subject, pullRequest.number),
+        pullRequestFiles(bearer, subject.repository, pullRequest),
+        changesPeople(bearer, subject, pullRequest.number),
         Effect.orElseSucceed(
-          pullRequestByNumber(token, subject.repository, pullRequest.number),
+          pullRequestByNumber(bearer, subject.repository, pullRequest.number),
           () => Option.none(),
         ),
       ],
       { concurrency: "unbounded" },
     );
 
-    const commits = yield* readCommits(token, subject.repository, whole, files.files);
+    const commits = yield* readCommits(bearer, subject.repository, whole, files.files);
 
     return {
       url: pullRequest.url,
@@ -264,9 +274,9 @@ export const agentChangesOf = (
 
     const changes = yield* githubReadRefusal(
       Effect.gen(function* () {
-        const { token } = yield* agentPullRequestReach(userId, agent);
+        const { bearer } = yield* agentPullRequestReach(userId, agent);
 
-        return yield* pullRequestChangesRead(token, agent, pullRequest);
+        return yield* pullRequestChangesRead(bearer, agent, pullRequest);
       }),
     );
 
@@ -306,7 +316,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     },
   });
 
-  // Whose Mac the agent's `run_on_mac` runs on, and whether it would run there now.
+  // Whose Mac the agent's `run_on_mac` runs on, whether it would run there now, and the machines its default may be set to.
   const workspaceToolsOf = (userId: string, agentId: string) =>
     Effect.gen(function* () {
       const { agent, target } = yield* reachedAgentById(userId, agentId);
@@ -316,7 +326,9 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       if (Option.isNone(visible)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const runOnMac = yield* hostedStoreOrUnavailable(runOnMacStanding(agent, target));
 
-      return runOnMac === undefined ? {} : { runOnMac };
+      if (runOnMac === undefined) return {};
+
+      return { runOnMac, machines: yield* hostedStoreOrUnavailable(defaultMachineChoices(target)) };
     });
 
   return {
@@ -611,9 +623,14 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
 
       return { agent: yield* summaryOf(userId, agent) };
     }),
-    /** The agent on screen kept warm (`agent-lifecycle.ts`): answered at once, its runner launched past the answer where none runs. */
+    /** The agent whose chat is shown kept warm and its sandbox held, or its chat's hold let go as it is hidden (`agent-lifecycle.ts`): answered at once, its runner launched past the answer where none runs. */
     warm: signedIn.warm.effect(function* ({ input, context }) {
-      yield* warmedAgent(context.userId, input.id);
+      const { id, chat, holder } = input;
+      yield* warmedAgent(
+        context.userId,
+        id,
+        chat === undefined || holder === undefined ? undefined : { chat, holder },
+      );
 
       return { warm: true as const };
     }),
@@ -669,11 +686,11 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
 
       return yield* githubReadRefusal(
         Effect.gen(function* () {
-          const { token } = yield* agentPullRequestReach(userId, agent);
+          const { bearer } = yield* agentPullRequestReach(userId, agent);
 
           return yield* namedReviewOptions(
             agent,
-            yield* pullRequestReviewOptions(token, agent.repository),
+            yield* pullRequestReviewOptions(bearer, agent.repository),
           );
         }),
       );
@@ -682,29 +699,79 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     workspaceTools: signedIn.workspaceTools.effect(function* ({ input, context }) {
       return yield* workspaceToolsOf(context.userId, input.id);
     }),
-    /** The agent's sandbox resumed from its snapshot (`agent-lifecycle.ts`), the developer's click and nothing else, answering where it stands after. */
+    /**
+     * The agent's default machine set, where its terminal commands and
+     * computer use go when a call names none, by a member who may message it,
+     * and only to a machine of someone who lets the task's agents use theirs
+     * (`defaultMachineChoices`), online or not; answering its tools as they
+     * then stand.
+     */
+    setDefaultMachine: signedIn.setDefaultMachine.effect(function* ({ input, context }) {
+      const { userId, agent, target } = yield* reachedAgentById(context.userId, input.params.id);
+
+      if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+      yield* admitsPlanWriter(userId, agent);
+      const { machineId } = input.body;
+      const choices = yield* hostedStoreOrUnavailable(defaultMachineChoices(target));
+
+      if (!choices.some((machine) => machine.id === machineId)) {
+        return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+      }
+
+      yield* hostedStoreOrUnavailable(updateAgentTargetDevice(userId, agent.id, machineId));
+
+      return yield* workspaceToolsOf(userId, agent.id);
+    }),
+    /** The agent's sandbox resumed from its snapshot (`agent-lifecycle.ts`), on the developer's click, answering where it stands after. */
     sandboxResume: signedIn.sandboxResume.effect(function* ({ input, context }) {
       return { sandbox: yield* inSandbox(resumedAgentSandbox(context.userId, input.id)) };
     }),
     /** The agent's shells and where its sandbox stands. */
     terminals: signedIn.terminals.effect(function* ({ input, context }) {
       const sessionId = yield* reachedSession(context.userId, input.id);
+      const listedAt = yield* Clock.currentTimeMillis;
+      const listed = yield* inSandbox(listedShells(sessionId));
 
-      return yield* inSandbox(listedShells(sessionId));
+      // Note that a shell that ended inside the sandbox, or with its run, holds it no longer; one opened since the list began stands.
+      if (sessionId !== undefined)
+        yield* keptSandboxTerminals(
+          agentSandboxName(sessionId),
+          listed.terminals.map((terminal) => terminal.id),
+          listedAt,
+        );
+
+      return listed;
     }),
-    /** A shell started in the agent's running sandbox, under an id the service mints. */
+    /** A shell started in the agent's sandbox, under an id the service mints, the sandbox resumed first where it stopped. */
     openTerminal: signedIn.openTerminal.effect(function* ({ input, context }) {
       const sessionId = yield* reachedSession(context.userId, input.params.id);
 
       if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
       const { title } = input.body;
 
+      const sandboxName = agentSandboxName(sessionId);
+      const terminalId = randomUUID();
+
+      // Note that the tab holds the sandbox before its shell starts, so a stop as a turn ends never takes the sandbox from under it.
+      yield* recordedTerminalOpened(sandboxName, terminalId);
+
       const opened = yield* inSandbox(
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
-          const started = yield* sandboxOrUpstream(sandbox.start(sessionId, randomUUID(), title));
 
-          if (Result.isFailure(started)) return yield* Effect.fail(shellRefusal(started.failure));
+          const started = yield* sandboxOrUpstream(
+            startedWaking(sessionId, sandbox.start(sessionId, terminalId, title)),
+          );
+
+          // Note that a refused start started nothing, so it lets go; one the sandbox did not answer may have started, so a later list's prune decides.
+          if (Result.isFailure(started)) {
+            yield* recordedTerminalEnded(sandboxName, terminalId);
+
+            return yield* Effect.fail(shellRefusal(started.failure));
+          }
+
+          // Note that the hold is written again once the shell stands, so a list that read before it started, and pruned it, never leaves it unheld.
+          yield* recordedTerminalOpened(sandboxName, terminalId);
 
           return { terminal: started.success };
         }),
@@ -739,10 +806,10 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       );
     }),
     /**
-     * One of the agent's repository's run actions run in its running sandbox
+     * One of the agent's repository's run actions run in its sandbox
      * (`run-actions.ts`), with the workspace's variables, answering its
      * shell; the press is the only thing that runs one, and a stopped
-     * sandbox is refused rather than woken.
+     * sandbox is resumed first.
      */
     runAction: signedIn.runAction.effect(function* ({ input, context }) {
       const actionId = yield* pathUuid(input.action);
@@ -766,10 +833,15 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
           const killed = yield* sandboxOrUpstream(sandbox.kill(sessionId, terminalId));
+          // Note that a shell the sandbox no longer has holds it no longer either.
+          yield* recordedTerminalEnded(agentSandboxName(sessionId), terminalId);
 
           if (Result.isFailure(killed)) return yield* Effect.fail(shellRefusal(killed.failure));
+          const listed = yield* listedShells(sessionId);
+          // Note that the tab may have been the sandbox's last hold, with no turn running.
+          yield* sandboxLetGo(sessionId);
 
-          return yield* listedShells(sessionId);
+          return listed;
         }),
       );
     }),

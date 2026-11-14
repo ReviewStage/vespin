@@ -132,6 +132,8 @@ interface InlineRefFace {
   fit?: InlineRefFit | undefined;
   /** The mark of what kind of thing it names, before the name; hidden from a screen reader, which hears `kind` in its place. */
   glyph?: ReactNode;
+  /** A small mark right before the name, after the glyph, hidden from a screen reader as the glyph is: a teammate's face on a machine of theirs. */
+  before?: ReactNode;
   /** What kind of thing it names, in words a screen reader hears before the name and nothing draws: "pull request". */
   kind?: string | undefined;
   /** The name it goes by. */
@@ -228,7 +230,8 @@ function rootClass({
 }
 
 /**
- * A token's glyph, centered in a box the line's size; a pill's in the muted
+ * A token's glyph, centered in a box the line's size, a glyph wearing a
+ * status dot (`StatusGlyph`) at the same size as a bare one; a pill's in the muted
  * ink. An icon is drawn a line of words tall, and so is a glyph seated in a
  * slot of its own (`--ui-glyph-size`), a working agent's say, so every bare
  * glyph in a line stands one size. Note that a pill's box is a line of
@@ -247,7 +250,7 @@ function rootClass({
  */
 function glyphClass(look: InlineRefLook, fit: InlineRefFit): string {
   const parts = [
-    "ui-inline-ref-glyph inline-flex flex-none items-center justify-center empty:hidden [--ui-glyph-size:1em] [&>svg]:size-[1em]",
+    "ui-inline-ref-glyph inline-flex flex-none items-center justify-center empty:hidden [--ui-glyph-size:1em] [&>svg]:size-[1em] [&>.ui-status-glyph>svg]:size-[1em]",
   ];
 
   const pill = look === INLINE_REF_LOOK.PILL;
@@ -390,6 +393,7 @@ function InlineRefRoot({
   look,
   fit: ownFit,
   glyph,
+  before,
   kind,
   label,
   name = INLINE_REF_NAME.NAME,
@@ -426,6 +430,11 @@ function InlineRefRoot({
       {glyph === undefined ? null : (
         <span className={glyphClass(look, fit)} aria-hidden="true">
           {glyph}
+        </span>
+      )}
+      {before === undefined || before === null ? null : (
+        <span className={glyphClass(look, fit)} aria-hidden="true">
+          {before}
         </span>
       )}
       {labelHidden ? (

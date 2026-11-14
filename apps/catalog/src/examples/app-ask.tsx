@@ -1,7 +1,10 @@
 import {
+  AGENT_POINTER_KIND,
+  AgentPointer,
   APP_ICON_SIZE,
   AppAsk,
   AppIcon,
+  AppStackPill,
   AppWindowStack,
   BUTTON_VARIANT,
   Button,
@@ -21,10 +24,14 @@ import { CatalogSection } from "../section";
  * by a screen's glyph where there is none to draw; and the ask that lets an
  * agent use an app, opened from its button and put away by any of its
  * answers, Escape, or a press on the dimmed window, for an app with its icon
- * and bundle id and for one with neither; and the windows of the apps an
+ * and bundle id and for one with neither; the agent's pointer over a
+ * picture, moved there, pressing, and typing; and the windows of the apps an
  * agent is using, as the stack that floats over its box, for one app whose
- * window is a phone's, several apps, an app whose window is still being
- * read, and one whose window's read did not land, with Retry.
+ * window is a phone's, the agent's pointer where it pressed, three apps, the
+ * pointer mirrored at the front window's corner, more apps than the stack draws behind
+ * its front, which pile, an app whose window is still being read, and one
+ * whose window's read did not land, with Retry; and the stack minimized to
+ * its pill, while the agent works in an app and once it is done.
  */
 
 /** A synthetic app's icon, a rounded square with a phone in it, as a Mac's app sends one. */
@@ -42,14 +49,48 @@ const EDITOR = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 320 200"><rect width="320" height="200" fill="#1f2125"/><rect width="320" height="20" fill="#2b2e33"/><circle cx="12" cy="10" r="4" fill="#ff5f57"/><circle cx="24" cy="10" r="4" fill="#febc2e"/><circle cx="36" cy="10" r="4" fill="#28c840"/><rect y="20" width="70" height="180" fill="#26292e"/><rect x="80" y="34" width="150" height="6" rx="3" fill="#7aa2f7"/><rect x="80" y="48" width="200" height="6" rx="3" fill="#9ece6a"/><rect x="80" y="62" width="120" height="6" rx="3" fill="#bb9af7"/></svg>',
 )}`;
 
-/** The apps' windows an agent is using as the stack floating over its box draws them, its press doing nothing here. */
+/** The apps an agent is using as the stack floating over its box draws them, every press doing nothing here. */
 function Stack({
   apps,
+  using,
 }: {
   apps: Parameters<typeof AppWindowStack>[0]["apps"];
+  using?: string;
 }): React.JSX.Element {
-  return <AppWindowStack label="Apps in use" apps={apps} onOpen={() => undefined} />;
+  return (
+    <AppWindowStack
+      label="Apps in use"
+      apps={apps}
+      using={using}
+      onPick={() => undefined}
+      onOpen={() => undefined}
+      onMinimize={() => undefined}
+    />
+  );
 }
+
+/** The newest window an app's read kept, ready, at its own shape. */
+function ready(url: string, width: number, height: number) {
+  return { state: { kind: PICTURE_STATE.READY, url }, width, height } as const;
+}
+
+/** The agent's pointer over a window, where its last press landed, as a share of the window. */
+function pointerAt(x: number, y: number) {
+  return { x, y, kind: AGENT_POINTER_KIND.CLICK, move: "press", shown: true } as const;
+}
+
+/** Apps past the two the stack draws behind its front, to pile. */
+const MORE_APPS = ["Notes", "Calculator", "Maps", "Music", "Preview"].map((name) => ({
+  id: name,
+  name,
+  iconSrc: ICON,
+}));
+
+/** How long an ask the catalog opens has left: about four minutes, as one shown a minute ago. */
+const ASK_LEFT_MS = 252_000;
+
+/** The most characters of a Deny's words, as the Mac takes them. */
+const NOTE_MAX_LENGTH = 2000;
 
 /** A button that puts the ask about `app` to the developer, whose answers put it away. */
 function Asking({
@@ -60,14 +101,28 @@ function Asking({
   app: { name: string; bundleId?: string; iconSrc?: string };
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  const [expiresAt, setExpiresAt] = useState(0);
   const close = () => setOpen(false);
+
+  const ask = () => {
+    setExpiresAt(Date.now() + ASK_LEFT_MS);
+    setOpen(true);
+  };
 
   return (
     <>
-      <Button variant={BUTTON_VARIANT.OUTLINE} aria-haspopup="dialog" onClick={() => setOpen(true)}>
+      <Button variant={BUTTON_VARIANT.OUTLINE} aria-haspopup="dialog" onClick={ask}>
         {label}
       </Button>
-      <AppAsk open={open} app={app} onAllowOnce={close} onAllowAlways={close} onDeny={close} />
+      <AppAsk
+        open={open}
+        app={app}
+        onAllowOnce={close}
+        onAllowAlways={close}
+        onDeny={close}
+        expiresAt={expiresAt}
+        noteMaxLength={NOTE_MAX_LENGTH}
+      />
     </>
   );
 }
@@ -86,38 +141,52 @@ function AppAsks(): React.JSX.Element {
           </Text>
         </Inline>
       </CatalogSection>
+      <CatalogSection id="agent-pointer" title="The agent's pointer: moved, pressed, typing">
+        <Inline>
+          {Object.values(AGENT_POINTER_KIND).map((kind) => (
+            <div key={kind} className="catalog-pointer-ground">
+              <AgentPointer x={0.4} y={0.4} kind={kind} move={kind} shown />
+            </div>
+          ))}
+        </Inline>
+      </CatalogSection>
       <CatalogSection id="app-window-stack" title="The apps an agent is using">
         <Inline>
           <Stack
             apps={[
               {
+                id: "Simulator",
                 name: "Simulator",
                 iconSrc: ICON,
-                window: {
-                  state: { kind: PICTURE_STATE.READY, url: PHONE },
-                  width: 236,
-                  height: 512,
-                },
+                window: { ...ready(PHONE, 236, 512), pointer: pointerAt(0.5, 0.47) },
               },
             ]}
+            using="Simulator"
           />
           <Stack
             apps={[
               {
+                id: "Xcode",
                 name: "Xcode",
-                window: {
-                  state: { kind: PICTURE_STATE.READY, url: EDITOR },
-                  width: 640,
-                  height: 400,
-                },
+                window: { ...ready(EDITOR, 640, 400), pointer: pointerAt(0.97, 0.95) },
               },
-              { name: "Simulator", iconSrc: ICON },
-              { name: "Safari" },
+              { id: "Simulator", name: "Simulator", iconSrc: ICON },
+              { id: "Safari", name: "Safari" },
             ]}
+            using="Simulator"
+          />
+          <Stack
+            apps={[
+              { id: "Xcode", name: "Xcode", window: ready(EDITOR, 640, 400) },
+              { id: "Simulator", name: "Simulator", iconSrc: ICON },
+              ...MORE_APPS,
+            ]}
+            using="Xcode"
           />
           <Stack
             apps={[
               {
+                id: "Simulator",
                 name: "Simulator",
                 iconSrc: ICON,
                 window: { state: { kind: PICTURE_STATE.READING }, width: 236, height: 512 },
@@ -127,6 +196,7 @@ function AppAsks(): React.JSX.Element {
           <Stack
             apps={[
               {
+                id: "Simulator",
                 name: "Simulator",
                 iconSrc: ICON,
                 window: {
@@ -140,6 +210,27 @@ function AppAsks(): React.JSX.Element {
                 },
               },
             ]}
+          />
+        </Inline>
+      </CatalogSection>
+      <CatalogSection id="app-stack-pill" title="The apps minimized, at work and done">
+        <Inline>
+          <AppStackPill
+            apps={[
+              { id: "Simulator", name: "Simulator", iconSrc: ICON },
+              { id: "Xcode", name: "Xcode" },
+              { id: "Safari", name: "Safari" },
+            ]}
+            using="Simulator"
+            onRestore={() => undefined}
+          />
+          <AppStackPill
+            apps={[
+              { id: "Simulator", name: "Simulator", iconSrc: ICON },
+              { id: "Xcode", name: "Xcode" },
+              { id: "Safari", name: "Safari" },
+            ]}
+            onRestore={() => undefined}
           />
         </Inline>
       </CatalogSection>
