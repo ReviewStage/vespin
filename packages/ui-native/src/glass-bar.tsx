@@ -3,9 +3,18 @@
 import { GlassEffectContainer, Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import { frame, type ModifierConfig, onGeometryChange, padding } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import {
+  type ComponentRef,
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Keyboard,
+  type KeyboardMetrics,
   type LayoutChangeEvent,
   StyleSheet,
   useWindowDimensions,
@@ -71,23 +80,36 @@ const styles = StyleSheet.create({
   },
 });
 
-/** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. */
-function useKeyboardHeight(): number {
-  const [height, setHeight] = useState(0);
-  useEffect(() => {
-    const rising = Keyboard.addListener("keyboardWillShow", ({ endCoordinates }) =>
-      setHeight(endCoordinates.height),
-    );
+/** Where the system's keyboard stands as it moves: how tall it is, and the screen's height its top edge stands at; none of either while it is down. */
+type KeyboardStand = { readonly height: number; readonly top: number | undefined };
 
-    const falling = Keyboard.addListener("keyboardWillHide", () => setHeight(0));
+/** The keyboard while it is down. */
+const KEYBOARD_DOWN: KeyboardStand = { height: 0, top: undefined };
+
+/** Where the system's keyboard stands, as it begins to rise, to change its height (such as its suggestion strip growing), and to fall. */
+function useKeyboard(): KeyboardStand {
+  const [stand, setStand] = useState(KEYBOARD_DOWN);
+  useEffect(() => {
+    const moved = ({ endCoordinates }: { readonly endCoordinates: KeyboardMetrics }) =>
+      setStand({ height: endCoordinates.height, top: endCoordinates.screenY });
+
+    const rising = Keyboard.addListener("keyboardWillShow", moved);
+    const changing = Keyboard.addListener("keyboardWillChangeFrame", moved);
+    const falling = Keyboard.addListener("keyboardWillHide", () => setStand(KEYBOARD_DOWN));
 
     return () => {
       rising.remove();
+      changing.remove();
       falling.remove();
     };
   }, []);
 
-  return height;
+  return stand;
+}
+
+/** How tall the system's keyboard stands, in points; none while it is down. */
+function useKeyboardHeight(): number {
+  return useKeyboard().height;
 }
 
 /**
@@ -271,16 +293,36 @@ export function GlassDock({
   readonly children: ReactNode;
   readonly bar: ReactNode;
 }) {
-  // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
-  const keyboard = useKeyboardHeight();
+  // Note that the bar is lifted by as much of the dock as the keyboard covers, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI; a dock that ends above the screen's foot, as an iPad's form sheet does, is lifted only by the overlap, where its full height stood the bar far above the keyboard.
+  const keyboard = useKeyboard();
+  const dock = useRef<ComponentRef<typeof View>>(null);
+  const [dockFoot, setDockFoot] = useState<number | undefined>(undefined);
+
+  const placed = () =>
+    dock.current?.measureInWindow((_left: number, top: number, _width: number, tall: number) =>
+      setDockFoot(top + tall),
+    );
+
+  // Note that the dock is measured again once the keyboard stands, because an iPad's form sheet rises with the keyboard and its new place moves no layout.
+  useEffect(() => {
+    const stood = Keyboard.addListener("keyboardDidShow", placed);
+
+    return () => stood.remove();
+  }, []);
+
+  const lift =
+    keyboard.top === undefined || dockFoot === undefined
+      ? keyboard.height
+      : Math.max(0, Math.min(keyboard.height, dockFoot - keyboard.top));
+
   const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
   // Note that the column holds the window's side safe areas too, which the bar's own safe area view pads inside it, so its glass spans the reading width.
   const { left, right } = useSafeAreaInsets();
 
   return (
-    <View style={styles.dock}>
+    <View ref={dock} style={styles.dock} onLayout={placed}>
       <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
-      <View style={[styles.docked, { bottom: keyboard }]}>
+      <View style={[styles.docked, { bottom: lift }]}>
         <View style={[styles.column, { maxWidth: READING_WIDTH + left + right }]}>
           <DockMeasure.Provider value={setRoom}>{bar}</DockMeasure.Provider>
         </View>
