@@ -849,21 +849,24 @@ export function composeMachineCommands(
      */
     const ended = (id: string, landed: Deferred.Deferred<boolean>, answered: boolean) =>
       Effect.gen(function* () {
-        const up = yield* Effect.timeoutOption(Deferred.await(landed), POST_WITHIN);
+        const later = Effect.andThen(Deferred.await(landed), (late) =>
+          Effect.andThen(
+            setPosted(id, false),
+            !late
+              ? Effect.void
+              : answered
+                ? askedOfService(client.closeAsk(id))
+                : askedOfService(client.lapseAsk(id)),
+          ),
+        );
+
+        // Note that a wait cut short, as a command interrupted is, leaves the post to the same follow-up a slow one gets.
+        const up = yield* Effect.timeoutOption(Deferred.await(landed), POST_WITHIN).pipe(
+          Effect.onInterrupt(() => errand(later)),
+        );
 
         if (Option.isNone(up)) {
-          yield* errand(
-            Effect.andThen(Deferred.await(landed), (late) =>
-              Effect.andThen(
-                setPosted(id, false),
-                !late
-                  ? Effect.void
-                  : answered
-                    ? askedOfService(client.closeAsk(id))
-                    : askedOfService(client.lapseAsk(id)),
-              ),
-            ),
-          );
+          yield* errand(later);
 
           return undefined;
         }
@@ -909,7 +912,7 @@ export function composeMachineCommands(
       <A>(wait: Effect.Effect<A>): Effect.Effect<A> =>
         wait.pipe(
           Effect.onInterrupt(() =>
-            settled(id, refusal).pipe(Effect.timeoutOption(WITHDRAWN_SETTLE), Effect.ignore),
+            settled(id, refusal).pipe(Effect.timeoutOption(WITHDRAWN_SETTLE), Effect.asVoid),
           ),
         );
 
@@ -1244,9 +1247,7 @@ export function composeMachineCommands(
           cursorHolder === undefined ? undefined : CURSOR_TAKEN_WORDS,
         );
 
-        yield* Effect.ignore(
-          computer.helper.ask({ op: COMPUTER_HELPER_OP.RELEASE_CURSOR }, RELEASE_WITHIN, free),
-        );
+        yield* computer.helper.ask({ op: COMPUTER_HELPER_OP.RELEASE_CURSOR }, RELEASE_WITHIN, free);
       });
 
     /**

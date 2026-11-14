@@ -27,9 +27,27 @@ type SkillRead =
   | { readonly kind: typeof SKILL_READ.FAILED };
 
 /**
+ * A frontmatter value as one span of inline code: its lines folded to one,
+ * and fenced by more backticks than any run inside it, so a block scalar's
+ * blank line, a `#`, a `-`, or a fence it holds stays words in its list item
+ * rather than breaking out into a heading or a paragraph of its own.
+ */
+function inlineCode(value: string): string {
+  const line = value.replace(/\s*\n\s*/gu, " ").trim();
+
+  if (line.length === 0) return "";
+
+  const longest = Math.max(0, ...(line.match(/`+/gu) ?? []).map((run) => run.length));
+  const fence = "`".repeat(longest + 1);
+  const pad = line.startsWith("`") || line.endsWith("`") ? " " : "";
+
+  return `${fence}${pad}${line}${pad}${fence}`;
+}
+
+/**
  * The skill's words, then its files by path and size, as the panel's Open
  * lists them. Note that the frontmatter's keys stand as a list, each key in
- * code beside its value, then the body under them as the Markdown it is, so
+ * code beside its value in code, then the body under them as the Markdown it is, so
  * both wrap to the phone's width rather than standing as one block of code
  * a reader scrolls sideways through. The name is left out, since the page's
  * heading says it. A file with no frontmatter to read, or none but its
@@ -41,7 +59,9 @@ function skillWords(content: InstalledSkillContent): string {
   const body = read?.body.trim() ?? "";
 
   const keys = [...(read?.keys ?? [])]
-    .flatMap(([key, value]) => (key === SKILL_KEY.NAME ? [] : [`- \`${key}\`: ${value}`]))
+    .flatMap(([key, value]) =>
+      key === SKILL_KEY.NAME ? [] : [`- \`${key}\`: ${inlineCode(value)}`],
+    )
     .join("\n");
 
   const words =
