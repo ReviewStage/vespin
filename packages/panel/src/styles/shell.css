@@ -853,5 +853,5 @@
    bar's buttons stand over the toolbar's start, so it starts past them: the
    room the bar reads its start from (`--ui-toolbar-start-at`). */
 .desktop-shell[data-sidebar-collapsed="true"] .desktop-main {
-  --ui-toolbar-start-at: calc(var(--sidebar-toggle-clearance) - var(--ui-space-48)));
+  --ui-toolbar-start-at: var(--sidebar-toggle-clearance);
 }
