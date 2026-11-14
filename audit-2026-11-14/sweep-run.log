@@ -55,3 +55,14 @@ iphone-iphone-light wrap-update-needed.yaml: fails 0 shots 1
 iphone-iphone-dark wrap-update-needed.yaml: fails 0 shots 1 
   ax none on iphone: contrast disabled transparency-key 
 iphone-iphone-light wrap-task-history.yaml: fails 0 shots 3 
+iphone-iphone-dark wrap-task-history.yaml: fails NOSTART (steps 1, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+remote: 
+remote: GitHub found 5 vulnerabilities on ReviewStage/vespin's default branch (2 moderate, 3 low). To find out more, visit:        
+remote:      https://github.com/ReviewStage/vespin/security/dependabot        
+remote: 
+pushed iphone      306 files 09:32:31
+== duo 09:33:32
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-new-task.yaml: fails 2 shots 3   Hide Keyboard... FAILED
+duo-folded-duo-dark wrap-new-task.yaml: fails 2 shots 3   Hide Keyboard... FAILED
+  ax none on duo: contrast disabled transparency-key 
