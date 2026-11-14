@@ -101,6 +101,7 @@ export function PageScreen({
           <SealedPage
             html={read.html}
             title={named}
+            onDrawing={() => setDrawing(DRAWING.DRAWING)}
             onDrawn={() => setDrawing(DRAWING.DRAWN)}
             onFailed={() => setDrawing(DRAWING.FAILED)}
           />
