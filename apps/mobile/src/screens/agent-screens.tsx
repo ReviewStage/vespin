@@ -37,6 +37,7 @@ import {
   AgentTranscript,
   AskNote,
   AttachedPictures,
+  askForName,
   BAR_TITLE,
   type BarAction,
   type BarMenu,
@@ -64,7 +65,6 @@ import {
   openCuts,
   PickRows,
   QueuedLines,
-  RenameAsk,
   Screen,
   SettingsForm,
   SkillSuggestions,
@@ -170,11 +170,10 @@ const ADD_WORDS = {
   OPTIONS: "Options",
 } as const;
 
-/** What Rename asks, as the system's alert asks for a name. */
+/** What Rename asks, in the system's alert a task's Rename asks in too (`askForName`). */
 const RENAME_WORDS = {
   TITLE: "Rename agent",
   ACT: "Rename",
-  PLACEHOLDER: "Agent name",
 } as const;
 
 /** The options sheet's words: its name, its rows, its close, and when a change reaches the agent, as the panel's chip applies one. */
@@ -825,8 +824,16 @@ export function AgentConversation({
   useWarmAgent(id);
   const hasPorts = useAgentHasPorts(id);
   const openPorts = () => router.push({ pathname: "/agent-ports", params: { agent: id } });
-  // Whether Rename's alert, or Archive's or Permanently delete's question, stands over the page.
-  const [renaming, setRenaming] = useState(false);
+
+  const askRename = () =>
+    askForName({
+      title: RENAME_WORDS.TITLE,
+      act: RENAME_WORDS.ACT,
+      name: actions.title,
+      onName: actions.rename,
+    });
+
+  // Whether Archive's or Permanently delete's question stands over the page.
   const [archiving, setArchiving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const deleteQuestion = actions.deleteQuestion(title);
@@ -940,18 +947,6 @@ export function AgentConversation({
       {asked === undefined ? null : (
         <CardMergeAsk agentId={id} pullRequest={asked} onDone={() => setMerging(undefined)} />
       )}
-      <RenameAsk
-        title={RENAME_WORDS.TITLE}
-        act={RENAME_WORDS.ACT}
-        name={actions.title}
-        placeholder={RENAME_WORDS.PLACEHOLDER}
-        presented={renaming}
-        onRename={(name) => {
-          setRenaming(false);
-          actions.rename(name);
-        }}
-        onDismiss={() => setRenaming(false)}
-      />
       <ConfirmAsk destructive {...talk.switching} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
@@ -995,7 +990,7 @@ export function AgentConversation({
           runActions,
           copyTranscript,
           shareTranscript,
-          onRename: () => setRenaming(true),
+          onRename: askRename,
           onArchive: askArchive,
           onDelete: () => setDeleting(true),
         })}
@@ -1048,10 +1043,7 @@ export function AgentConversation({
           </Stack.Toolbar.Menu>
           {agent === undefined ? null : (
             <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(GLYPH.RENAME)}
-                onPress={() => setRenaming(true)}
-              >
+              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RENAME)} onPress={askRename}>
                 {MENU_WORDS.RENAME}
               </Stack.Toolbar.MenuAction>
               {barActs ? null : (

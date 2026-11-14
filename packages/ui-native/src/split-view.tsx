@@ -516,7 +516,7 @@ export function DetailPage({
   readonly children: ReactNode;
   /** What stands at the page's foot under its content, such as an agent's composer (`ComposerFoot`). */
   readonly foot?: ReactNode | undefined;
-  /** The system's alerts the page asks in, such as `ConfirmAsk` and `RenameAsk`, which are React Native hosts of their own. */
+  /** The system's alerts the page asks in, such as `ConfirmAsk`, which are React Native hosts of their own. */
   readonly asks?: ReactNode | undefined;
 }) {
   const page =

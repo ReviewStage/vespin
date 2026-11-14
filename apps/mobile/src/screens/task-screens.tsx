@@ -1880,7 +1880,7 @@ type TaskDetail = {
 };
 
 /** What a task's status set asks through before its Overview is read. */
-const NO_STATUS_DOORS = { setStatus: () => undefined, agentsWorking: () => false } as const;
+const NO_STATUS_DOORS = { setStatus: () => undefined, workingAgents: () => 0 } as const;
 
 /**
  * A task's page as a split view's detail draws it, wherever it stands: the
@@ -2078,9 +2078,7 @@ export function TaskScreen() {
   const found = useFoundTask(id, workspace);
   const held = useTaskOverview(found.taskId);
 
-  const { setStatus, question } = useStatusAsk(
-    held ?? { setStatus: () => undefined, agentsWorking: () => false },
-  );
+  const { setStatus, question } = useStatusAsk(held ?? NO_STATUS_DOORS);
 
   const overview = held === undefined ? undefined : { ...held, setStatus };
   const { remove } = useTaskWrites();
