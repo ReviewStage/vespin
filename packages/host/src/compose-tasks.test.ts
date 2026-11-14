@@ -1078,6 +1078,46 @@ it.effect(
     }),
 );
 
+it.effect(
+  "a task's relations the service did not answer are read again at the list's next answer",
+  () =>
+    Effect.gen(function* () {
+      const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+
+      const billing = {
+        ...task(BILLING, "Billing export", "# Billing export", 20),
+        parentTaskId: INVITES,
+        status: TASK_STATUS.DONE,
+      };
+
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(invites)], agents: [], issues: [] });
+
+      const listed = () =>
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted();
+
+      service.taskRowsFail = true;
+      yield* call("TASKS_RELATIONS_READ", { taskId: INVITES });
+      assert.deepEqual(
+        listed(),
+        [INVITES],
+        "nothing is drawn of a read the service did not answer",
+      );
+
+      service.taskRowsFail = false;
+      yield* listAnswers(service, { plans: [rowOfTask(invites)], agents: [], issues: [] });
+      assert.deepEqual(
+        listed(),
+        [BILLING, INVITES].toSorted(),
+        "the finished sub-task is drawn once read again",
+      );
+    }),
+);
+
 it.effect("a person's finished task outside the list is counted and read into it", () =>
   Effect.gen(function* () {
     const ada = { userId: "user-ada", name: "Ada Lovelace" };

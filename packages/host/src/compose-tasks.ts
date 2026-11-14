@@ -1343,7 +1343,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           client.liveRead(TASK_RELATIONS_READ, { id: taskId, userId }, {}),
         );
 
-        if ("failure" in sealed) return;
+        // Note that a read the service did not answer is read again at the list's next answer, since the window that asked asks no more.
+        if ("failure" in sealed) {
+          relationsWaiting.add(taskId);
+
+          return;
+        }
+
         const { plans, agents } = sealed.queries;
         const rows = decodeRelationRows({ plans: plans.rows, agents: agents.rows });
 
