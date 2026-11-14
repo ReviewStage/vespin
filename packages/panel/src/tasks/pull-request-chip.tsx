@@ -11,7 +11,7 @@ import { linkPressOf } from "./use-open-link.js";
 /**
  * pull-request-chip.tsx -- a pull request as a compact chip: GitHub's mark in GitHub's color for where it stands, and its number.
  *
- * The plan's Agents list ends an agent's row with it (`plan-agents.tsx`),
+ * The plan's Agents list ends an agent's row with it (`overview-agents.tsx`),
  * and a related task's row ends with one for each of the task's open pull
  * requests (`task-list-row.tsx`), so a pull request reads the same in both.
  * It hangs the card its owner hands, the pull request's one card

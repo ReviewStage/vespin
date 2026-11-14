@@ -32,7 +32,7 @@ interface CommandEntry {
 }
 
 /** The commands the `/` list offers, in its order, `/new` named by `/clear`'s alias rather than a row of its own. */
-export const LISTED_COMMANDS = [
+const LISTED_COMMANDS = [
   SLASH_COMMAND.MODEL,
   SLASH_COMMAND.COMPACT,
   SLASH_COMMAND.CLEAR,

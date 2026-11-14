@@ -37,7 +37,12 @@ import {
   workspaceRunActionsPutRequestSchema,
   workspaceSandboxSetupAnswerSchema,
 } from "@repo/features/workspace-sandbox-setup-wire";
-import { workspaceMemberSchema, workspaceSchema } from "@repo/features/workspace-wire";
+import {
+  workspaceMachinesAnswerSchema,
+  workspaceMachinesRequestSchema,
+  workspaceMemberSchema,
+  workspaceSchema,
+} from "@repo/features/workspace-wire";
 import { WORKSPACE_EXPERIMENT_LIST } from "@repo/settings";
 import { ACT } from "@repo/sync";
 import { Schema as EffectSchema } from "effect";
@@ -277,6 +282,13 @@ export const WORKSPACE_ACTS = declaredActs({
     input: tasksWorkspaceParamsSchema,
     output: mergeQueueAnswerSchema,
     refusal: "Could not read that workspace's merge queues on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+  }),
+  WORKSPACE_MACHINES_READ: hostAct({
+    input: workspaceMachinesRequestSchema,
+    output: workspaceMachinesAnswerSchema,
+    refusal: "Could not read that workspace's machines on this system.",
     panelOnly: true,
     door: ACT.READ,
   }),

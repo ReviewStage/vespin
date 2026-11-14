@@ -35,6 +35,15 @@ export {
   StatusChip,
 } from "./button.js";
 
+export {
+  CallAccessory,
+  CallCardRow,
+  type CallPresses,
+  COMPOSER_CALL,
+  type ComposerCall,
+  type StandingCallCard,
+} from "./call.js";
+
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
@@ -57,7 +66,7 @@ export {
   SkillSuggestions,
 } from "./composer-head.js";
 
-export { EmptyState } from "./empty-state.js";
+export { EmptyState, NoSelection } from "./empty-state.js";
 
 export {
   FailureNoticeProvider,
@@ -134,7 +143,9 @@ export { MarkdownPage } from "./markdown-page.js";
 export {
   AgentTile,
   Avatar,
+  FACE_KIND,
   type Face,
+  type FaceKind,
   FailedMark,
   NeedsYouDot,
   TaskStatusMark,
@@ -167,6 +178,9 @@ export {
 
 export {
   ConfirmAsk,
+  githubFace,
+  MARK_FACE,
+  type MarkFace,
   MarkRow,
   MergeActRow,
   type MergeMethodChoice,

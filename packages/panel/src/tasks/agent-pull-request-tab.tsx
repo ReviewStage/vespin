@@ -57,6 +57,11 @@ import {
   Avatar,
   BUTTON_VARIANT,
   ButtonLink,
+  CARD_CORNER,
+  CARD_ELEMENT,
+  CARD_LOOK,
+  CARD_PADDING,
+  Card,
   CHIP_LOOK,
   CHOICE_BAR_FOLD,
   CHOICE_BAR_LOOK,
@@ -1776,12 +1781,16 @@ function EntryFrame({
   ...props
 }: Omit<ComponentProps<"li">, "className">): React.JSX.Element {
   return (
-    <li
-      className="pull-request-entry flex min-w-0 flex-col gap-item-gap rounded-control border border-border px-boxed-inset py-row-inset text-caption-inline"
+    <Card
       {...props}
+      as={CARD_ELEMENT.LI}
+      look={CARD_LOOK.OUTLINE}
+      corner={CARD_CORNER.CONTROL}
+      padding={CARD_PADDING.NONE}
+      className="pull-request-entry flex min-w-0 flex-col gap-item-gap px-boxed-inset py-row-inset text-caption-inline"
     >
       {children}
-    </li>
+    </Card>
   );
 }
 

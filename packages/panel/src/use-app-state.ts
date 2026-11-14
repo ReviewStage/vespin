@@ -5,12 +5,12 @@ import {
   followAppStateOver,
   shareAppState,
 } from "@repo/host/app-state-reads";
+import { type TaskListCollections, taskListFollowing } from "@repo/host/task-list-following";
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { Data, Effect, Predicate } from "effect";
 import { appBridge } from "./app-bridge.js";
 import { QUERY_ROOT } from "./query-keys.js";
 import { rendererPromise } from "./renderer-runtime.js";
-import { type TaskListCollections, taskListFollowing } from "./task-list-collections.js";
 import { onFixtureMoved } from "./tasks/fixture-moves.js";
 import {
   handFixtureClient,
@@ -27,7 +27,6 @@ export {
   memoizedSelect,
   type SignedInAccount,
   sameAccount,
-  selectAccess,
   selectAccount,
   selectAdminAccess,
   selectAdminAccessPending,

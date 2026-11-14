@@ -41,8 +41,8 @@ const SCHEDULE = {
 
 const SUMMARY = {
   id: AUTOMATION_ID,
-  planId: null,
-  planName: null,
+  taskId: null,
+  taskName: null,
   workspaceId: WORKSPACE_ID,
   name: "Triage new issues",
   enabled: true,
@@ -132,7 +132,7 @@ it.effect("each call goes to its own path, and the list names its workspace in t
     assert.deepEqual(runs, { runs: [run] });
     assert.deepEqual(deleted, { deleted: true });
     assert.equal(api.requests()[0]?.searchParams.get("workspaceId"), WORKSPACE_ID);
-    assert.equal(api.requests()[0]?.searchParams.get("planId"), null);
+    assert.equal(api.requests()[0]?.searchParams.get("taskId"), null);
   }),
 );
 

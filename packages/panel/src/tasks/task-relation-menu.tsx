@@ -31,7 +31,7 @@ import {
 import { CornerLeftUpIcon, GLYPH, HandIcon, NetworkIcon, OctagonMinusIcon } from "@repo/ui/icons";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useEffect, useId, useRef, useState } from "react";
-
+import { useServiceTaskSearch } from "./use-service-task-search.js";
 /**
  * task-relation-menu.tsx -- the one menu that relates a task to another: the relation first, as what it does ("Add sub-task…"), then the workspace's other tasks, searched by name or key, under a head saying what a pick does.
  *
@@ -233,6 +233,9 @@ export function TaskRelationMenu({
 }): React.JSX.Element {
   const [chosen, setChosen] = useState<TaskRelationKind | undefined>(undefined);
   const kind = opened ?? chosen;
+  const [query, setQuery] = useState("");
+  // Note that the tasks the window lists not are asked of the service as the typing pauses, as ⌘K asks them, and join the list the rows are built from, one row each.
+  useServiceTaskSearch(query, kind !== undefined);
   const place = embedded ? { layer: SEARCHABLE_MENU_LAYER.EMBEDDED } : { align };
 
   if (kind === undefined) {
@@ -257,7 +260,13 @@ export function TaskRelationMenu({
   }
 
   // Note that a search chosen from the kinds goes back to them, by its head or Escape, rather than closing.
-  const back = opened === undefined ? () => setChosen(undefined) : undefined;
+  const back =
+    opened === undefined
+      ? () => {
+          setChosen(undefined);
+          setQuery("");
+        }
+      : undefined;
 
   const head: MenuHead = {
     words: TASK_RELATION_VERBS[kind].head,
@@ -293,6 +302,7 @@ export function TaskRelationMenu({
       rows={relationRows(task, door, kind)}
       value={undefined}
       noMatch={NO_TASKS_MATCH}
+      onQuery={setQuery}
       foot={foot}
       leaving={leaving}
       ref={menuRef}

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { VOICE_SPEAKER, type VoiceSpeaker } from "@repo/features/agent-wire";
 import { type AutomationFiring, FIRING_HANDS_OUTSIDE_WORDS } from "@repo/features/automation-wire";
+import type { CheckoutRestoreSnapshot } from "@repo/features/checkout-restore";
 import {
   RUN_EVENT,
   RUN_STATUS,
@@ -121,7 +122,6 @@ import {
   requeueUntaken,
   startTurn,
   stopTurn,
-  type TurnCheckoutSnapshot,
 } from "./turn-state.js";
 
 /**
@@ -539,13 +539,13 @@ type LostLinesResent = Result.Result<
  * client id of the row it was written under, which the runner was handed
  * with the line.
  */
-/** The line a turn took, by its words or its client id, with the checkout as the runner recorded it before the turn where the line opened one (`turn-state.ts`'s `TurnCheckoutSnapshot`). */
+/** The line a turn took, by its words or its client id, with the checkout as the runner recorded it before the turn where the line opened one (`@repo/features/checkout-restore`'s `CheckoutRestoreSnapshot`). */
 type AwaitingLineTake =
   | { readonly text: string; readonly turnId: string }
   | {
       readonly clientId: string;
       readonly turnId: string;
-      readonly snapshot?: TurnCheckoutSnapshot | undefined;
+      readonly snapshot?: CheckoutRestoreSnapshot | undefined;
     };
 
 /**

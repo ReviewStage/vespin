@@ -571,7 +571,7 @@ test("a column's + opens a draft there whose chips change it, and Return adds it
     [ACT_KIND.TASKS_START]: (start) => {
       added.push(start);
 
-      return Promise.resolve({ planId: "t-50" });
+      return Promise.resolve({ taskId: "t-50" });
     },
   });
   const board = await mountBoard();
