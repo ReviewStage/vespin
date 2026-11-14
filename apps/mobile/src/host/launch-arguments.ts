@@ -1,5 +1,5 @@
 /**
- * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, and `-sentryTest <js|native>`, which sends a test crash report.
+ * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses,, `-sentryTest <js|native>`, which sends a test crash report, and `-sealCheck true`, which checks the native sealer against the JavaScript one and times both (`seal-check.ts`).
  *
  * iOS registers a launch argument of the form `-key value` in the app's
  * `NSUserDefaults` argument domain, which React Native's `Settings` reads,
@@ -24,6 +24,7 @@ const LAUNCH_ARGUMENT = {
   UPDATE_NEEDED: "updateNeeded",
   REFUSE_WRITES: "refuseWrites",
   SENTRY_TEST: "sentryTest",
+  SEAL_CHECK: "sealCheck",
 } as const;
 
 /** The test reports `-sentryTest` may ask for: a handled JavaScript error, or a native crash. */
@@ -107,4 +108,9 @@ export function launchSentryTest(): LaunchSentryTest | undefined {
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.SENTRY_TEST);
 
   return Object.values(LAUNCH_SENTRY_TEST).find((test) => test === named);
+}
+
+/** Whether this launch runs the seal check, as `-sealCheck true` asks (`seal-check.ts`); never on any other platform. */
+export function launchSealCheck(): boolean {
+  return launchSaysTrue(LAUNCH_ARGUMENT.SEAL_CHECK);
 }

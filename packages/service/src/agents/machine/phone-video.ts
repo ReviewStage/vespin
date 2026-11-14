@@ -27,7 +27,7 @@ import { PHONE_VIDEO_BOUNDS, streamableMp4 } from "@repo/features/video-signatur
 import type { CommandAsk, CommandRun } from "@repo/sandbox";
 
 /** How a run ends where it made no copy. */
-export const PHONE_VIDEO_EXIT = {
+const PHONE_VIDEO_EXIT = {
   NO_FILE: 3,
   NO_ENCODER: 4,
   ENCODER: 5,

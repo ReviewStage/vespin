@@ -11,6 +11,7 @@ import {
 } from "react";
 import { middlePressOf } from "../../middle-press.js";
 import { pulseOnPress } from "../../press-pulse.js";
+import { MarkedWords, type WordsMark } from "../marked-words/marked-words.js";
 import { useLinkAddress } from "../menu/link-address.js";
 import { ClippedLine, ONE_LINE_ELEMENT, ONE_LINE_END } from "../one-line/clipped-line.js";
 import { TEXT_ELEMENT, TEXT_FONT, TEXT_TRUNCATE, TEXT_VARIANT, Text } from "../text/text.js";
@@ -134,6 +135,8 @@ interface InlineRefFace {
   glyph?: ReactNode;
   /** A small mark right before the name, after the glyph, hidden from a screen reader as the glyph is: a teammate's face on a machine of theirs. */
   before?: ReactNode;
+  /** A small mark set inside the name, before the part it marks, hidden from a screen reader as the glyph is: a teammate's face before their machine's name in an app's "Simulator on Theo's MacBook Pro". */
+  mark?: WordsMark | undefined;
   /** What kind of thing it names, in words a screen reader hears before the name and nothing draws: "pull request". */
   kind?: string | undefined;
   /** The name it goes by. */
@@ -394,6 +397,7 @@ function InlineRefRoot({
   fit: ownFit,
   glyph,
   before,
+  mark,
   kind,
   label,
   name = INLINE_REF_NAME.NAME,
@@ -446,7 +450,7 @@ function InlineRefRoot({
           end={ONE_LINE_END.FADE}
           words={label}
         >
-          {label}
+          <MarkedWords words={label} mark={mark} />
         </ClippedLine>
       ) : (
         <Text
@@ -460,7 +464,7 @@ function InlineRefRoot({
           {name === INLINE_REF_NAME.PATH && fit === INLINE_REF_FIT.LINE ? (
             <bdi>{label}</bdi>
           ) : (
-            label
+            <MarkedWords words={label} mark={mark} />
           )}
         </Text>
       )}

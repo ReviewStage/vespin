@@ -630,15 +630,13 @@ export type MemorySaveParams = typeof memorySaveParamsSchema.Type;
  */
 export const MEMORY_SAVE_FAILURE = failureSetOf({ saveMemory: accountContract.saveMemory });
 
-export type MemorySaveFailure = (typeof MEMORY_SAVE_FAILURE)[keyof typeof MEMORY_SAVE_FAILURE];
-
 /** A keep, as the window hears it: what it came to and the memory as it then stands, or why nothing was kept. */
 export const memorySaveAnswerViewSchema = answerView(accountContract.saveMemory);
 
 export type MemorySaveAnswerView = typeof memorySaveAnswerViewSchema.Type;
 
 /** The commands the account always allows its coding agents to run, as the window hears them read: the list, the earliest added first, or why there is no answer. */
-export const allowedCommandsAnswerViewSchema = answerView(accountContract.allowedCommands);
+const allowedCommandsAnswerViewSchema = answerView(accountContract.allowedCommands);
 
 export type AllowedCommandsAnswerView = typeof allowedCommandsAnswerViewSchema.Type;
 
@@ -999,8 +997,6 @@ export const agentApprovalAnswerParamsSchema = EffectSchema.Struct({
   approvalId: EffectSchema.NonEmptyString,
   ...approvalAnswerRequestSchema.fields,
 });
-
-export type AgentApprovalAnswerParams = typeof agentApprovalAnswerParamsSchema.Type;
 
 /** One agent archived or brought back, as the window asks it: the agent, and which. */
 export const agentArchiveParamsSchema = EffectSchema.Struct({
