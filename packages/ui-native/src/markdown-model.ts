@@ -189,6 +189,12 @@ export interface MarkdownReading {
    * join a paragraph's lines with a space, as Markdown reads them.
    */
   readonly typed?: boolean | undefined;
+  /**
+   * Whether raw HTML in the words stays unseen, as GitHub's own page hides a
+   * pull request body's comments, templates and tags; elsewhere it is drawn
+   * as the words it was written with.
+   */
+  readonly hidesHtml?: boolean | undefined;
 }
 
 /** A line break inside a paragraph's words, which Markdown reads as a space. */
@@ -423,6 +429,8 @@ function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): Markdo
   switch (node.type) {
     case "text":
     case "html":
+      if (node.type === "html" && reader.reading.hidesHtml === true) return [];
+
       return wordsRun(
         reader.reading.typed === true ? node.value : node.value.replace(SOFT_BREAK, " "),
         marks,
@@ -568,7 +576,9 @@ function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
     case "thematicBreak":
       return [{ kind: MARKDOWN_BLOCK.RULE }];
     case "html":
-      return [{ kind: MARKDOWN_BLOCK.PARAGRAPH, runs: wordsRun(node.value, PLAIN) }];
+      return reader.reading.hidesHtml === true
+        ? []
+        : [{ kind: MARKDOWN_BLOCK.PARAGRAPH, runs: wordsRun(node.value, PLAIN) }];
     case "footnoteDefinition":
       return blocksOf(node.children, reader);
     // Note that a definition is read through by its references, and front matter is no message's.
@@ -654,6 +664,19 @@ export function heardLine(
   const hearing = { chip: chipHeard, suggestion: suggestionHeard };
 
   return runs.some(holdsChip) ? runs.map((run) => heardRun(run, hearing)).join("") : undefined;
+}
+
+/**
+ * Whether Markdown draws anything at all once read, such as a pull request
+ * body that holds only a template's HTML comments. Note that the reader's
+ * repository, clock and zone only name chips and dates, never whether a
+ * block stands, so none is asked for.
+ */
+export function markdownShows(
+  words: string,
+  { hidesHtml }: Pick<MarkdownReading, "hidesHtml">,
+): boolean {
+  return markdownBlocks(words, { repository: null, now: 0, zone: "UTC", hidesHtml }).length > 0;
 }
 
 /** Markdown as the blocks the app draws, read as the panel reads it; words nested too deep to parse safely are one block of plain text. */

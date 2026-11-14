@@ -33,11 +33,22 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Ready to merge"
     timeout: 30000
-- assertVisible: "grace"
+# Its description, as its agent wrote it, under the heading.
+- assertVisible: "Adds Invite by email.*"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-ready
+# Note that the description stands above the checks, so the reviewer's row,
+# the page's last, may stand below the fold on a phone and is scrolled to.
+- scrollUntilVisible:
+    element: "grace"
+    direction: DOWN
+    timeout: 5000
 # Merging is the press under the heading, in every window, and it asks
-# first, as the card's Merge does.
+# first, as the card's Merge does, scrolled back up to after the reviewer.
+- scrollUntilVisible:
+    element: "Squash and merge"
+    direction: UP
+    timeout: 5000
 - tapOn: "Squash and merge"
 - assertVisible: "Merge this pull request?"
 - waitForAnimationToEnd

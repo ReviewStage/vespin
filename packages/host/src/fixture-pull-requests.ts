@@ -103,19 +103,23 @@ function check(name: string, state: CheckState, ago: number, ran: number): PullR
   };
 }
 
+/** A pull request with no description, as GitHub answers one: both forms empty. */
+const NO_DESCRIPTION = { body: "", html: "" } as const;
+
 /** A pull request as its own read answers it, open, before any move. */
 function pullRequestOf(
   number: number,
   title: string,
   head: string,
   standing: Pick<AgentOverviewPullRequest, "merge" | "merging" | "requested">,
+  description: Pick<AgentOverviewPullRequest, "body" | "html"> = NO_DESCRIPTION,
 ): AgentOverviewPullRequest {
   return {
     number,
     title,
     url: `${REPOSITORY_URL}/pull/${number}`,
     state: PULL_REQUEST_STATE.OPEN,
-    html: "",
+    ...description,
     base: "main",
     head,
     createdAt: LANDED - 3 * HOUR,
@@ -125,6 +129,20 @@ function pullRequestOf(
     ...standing,
   };
 }
+
+/** The ready pull request's description, as its agent wrote it and as GitHub renders it, so its page draws one. */
+const READY_DESCRIPTION = {
+  body: [
+    "Adds **Invite by email** to Settings › Members, which sends the invitation through Resend.",
+    "",
+    "- Checks the address before it sends",
+    "- Shows the invitation as pending until it's accepted",
+  ].join("\n"),
+  html: [
+    "<p>Adds <strong>Invite by email</strong> to Settings › Members, which sends the invitation through Resend.</p>",
+    "<ul><li>Checks the address before it sends</li><li>Shows the invitation as pending until it's accepted</li></ul>",
+  ].join("\n"),
+} as const;
 
 const READY = pullRequestOf(
   FIXTURE_PULL_REQUEST.READY,
@@ -144,6 +162,7 @@ const READY = pullRequestOf(
       checks: CHECK_SUMMARY.PASSING,
     },
   },
+  READY_DESCRIPTION,
 );
 
 const FAILING = pullRequestOf(

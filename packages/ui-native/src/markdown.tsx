@@ -1173,6 +1173,8 @@ type MarkdownProps = {
   readonly onOpenLink: (address: string) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
+  /** Whether raw HTML in the words stays unseen, as GitHub's page hides a pull request body's comments and tags; it is drawn as written where none is given. */
+  readonly hidesHtml?: boolean | undefined;
   /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way, and `null` where it could not be read. Each is drawn from the address it names where none is given. */
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
@@ -1226,6 +1228,7 @@ export function Markdown({
   repository = null,
   onOpenLink,
   typed,
+  hidesHtml,
   pictureSource = namedSource,
   videoAt = noVideo,
   headings = false,
@@ -1236,8 +1239,9 @@ export function Markdown({
   const { fontScale, width } = useWindowDimensions();
 
   const blocks = useMemo(
-    () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
-    [words, repository, typed],
+    () =>
+      markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed, hidesHtml }),
+    [words, repository, typed, hidesHtml],
   );
 
   const drawing: Drawing = {
