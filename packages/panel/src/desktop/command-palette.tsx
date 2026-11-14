@@ -204,6 +204,7 @@ import {
   settingsSearchEntries,
 } from "../settings-search.js";
 import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
+import { type TaskListRows, useNamedTasks, useTaskListRows } from "../task-list-collections.js";
 import { agentSummaryEnd } from "../tasks/agent-menu-row.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
@@ -852,6 +853,7 @@ function taskDetail(
  */
 function taskRows(
   tasks: TasksControl,
+  every: readonly TaskSummary[],
   members: readonly WorkspaceMember[] | undefined,
   open: (taskId: string) => void,
   showAgent: TasksControl["onShowAgent"],
@@ -861,9 +863,9 @@ function taskRows(
   const carded = { ...tasks, onShowAgent: showAgent };
 
   // Note that a repository's name is weighed against each repository listed once, not against each task, since many tasks share one.
-  const repositories = [...new Set(tasks.tasks.map((task) => task.repository))].map(
-    (repository) => ({ repository }),
-  );
+  const repositories = [...new Set(every.map((task) => task.repository))].map((repository) => ({
+    repository,
+  }));
 
   // Note that only the listed workspace's members are read, so another workspace's assignee stands by the wire's name, never as having left.
   const listedMembers = (task: TaskSummary) =>
@@ -951,8 +953,8 @@ function taskRows(
     ...orderTasks(each.filter((task) => task.pinnedAt === undefined)),
   ];
 
-  const here = tasks.tasks.filter(listed);
-  const elsewhere = tasks.tasks.filter((task) => !listed(task));
+  const here = every.filter(listed);
+  const elsewhere = every.filter((task) => !listed(task));
 
   return [...pinnedFirst(here).map(taskOf), ...pinnedFirst(elsewhere).map(taskOf)];
 }
@@ -998,6 +1000,7 @@ function paletteEntries(entry: AddEntry): readonly AddEntry[] {
  */
 function agentRows(
   tasks: TasksControl,
+  rows: TaskListRows,
   inboxWaiting: readonly AppInboxTask[],
   inboxStanding: InboxStanding,
   doors: PanelOfferDoors,
@@ -1008,7 +1011,7 @@ function agentRows(
   const taskId = tasks.activeTaskId;
 
   if (taskId === undefined) return [];
-  const taskName = tasks.tasks.find((task) => task.id === taskId)?.name;
+  const taskName = rows.task(taskId)?.name;
   // Note that an item main says waits on the task holds its Inbox with no agent read yet.
   const waiting = inboxWaiting.find((each) => each.taskId === taskId)?.items.length ?? 0;
   const inbox = inboxEntries(tasks.agents, waiting, () => tasks.onShowInbox({ taskId }));
@@ -1039,7 +1042,7 @@ function agentRows(
         onNewTerminal: doors.onNewTerminal,
         onNewLocal: doors.onNewLocal,
         viewedAgent: undefined,
-        plan: openPlanStanding(tasks),
+        plan: openPlanStanding(tasks, rows),
         cards: {
           agents: tasks.agents,
           held: NOTHING_HELD,
@@ -1103,10 +1106,12 @@ function agentRows(
  */
 function runRows(
   offer: RunOffer | undefined,
-  tasks: TasksControl,
+  tasks: Pick<TasksControl, "activeTaskId">,
+  rows: Pick<TaskListRows, "task">,
   show: (pick: () => void) => void,
 ): readonly PaletteRow[] {
-  const taskName = tasks.tasks.find((task) => task.id === tasks.activeTaskId)?.name;
+  const taskName =
+    tasks.activeTaskId === undefined ? undefined : rows.task(tasks.activeTaskId)?.name;
 
   return runPaletteRows(offer).map((row) => ({
     replayMasked: true,
@@ -1473,11 +1478,12 @@ function copyLinkRows(
  */
 function panelTabRows(
   tasks: TasksControl,
+  rows: TaskListRows,
   inbox: InboxStanding,
   show: (pick: () => void) => void,
 ): readonly PaletteRow[] {
   if (tasks.region.kind !== TASK_REGION.READY || !holdsTaskPanel(tasks, inbox)) return [];
-  const plan = openPlanStanding(tasks);
+  const plan = openPlanStanding(tasks, rows);
   const kinds = offeredPanelKinds(SIDE_PANEL_HOLDER.TASK);
 
   return kinds.map((tab) => {
@@ -2056,6 +2062,9 @@ export function CommandPalette({
   const automationsDoor = useAutomationsDoor(tasks);
   const inboxDoor = useInboxDoor(tasks);
   const inboxStanding = useInboxView(tasks);
+  // The task list's rows read by id, and every task for the task rows, each name as it is being typed.
+  const rows = useTaskListRows(tasks.typedNames);
+  const everyTask = useNamedTasks(tasks.typedNames);
   // A task, and an agent's tab, are always opened on the Tasks tab, as a
   // press in the sidebar is.
   const { placeLeave } = tasks;
@@ -2175,6 +2184,7 @@ export function CommandPalette({
       tasksShown
         ? taskRows(
             tasks,
+            everyTask,
             members,
             // Note that a task jumped to goes back to work on it, as a sidebar row does (`onResume`).
             (id) => onTasks(() => tasks.onResume(id)),
@@ -2182,7 +2192,7 @@ export function CommandPalette({
             originOf,
           )
         : [],
-    [tasksShown, tasks, members, onTasks, originOf],
+    [tasksShown, tasks, everyTask, members, onTasks, originOf],
   );
 
   const reads = useReadMarks();
@@ -2245,7 +2255,7 @@ export function CommandPalette({
   };
 
   const taskId = tasks.activeTaskId;
-  const repository = tasks.tasks.find((task) => task.id === taskId)?.repository ?? null;
+  const repository = (taskId === undefined ? undefined : rows.task(taskId))?.repository ?? null;
 
   // Note that a task's files are searched only while its panel is the one standing, which an agent's page holds otherwise.
   const filesOpen =
@@ -2332,6 +2342,7 @@ export function CommandPalette({
       [
         ...agentRows(
           tasks,
+          rows,
           inboxWaiting,
           inboxStanding,
           offerDoors,
@@ -2339,7 +2350,7 @@ export function CommandPalette({
           changesPeople,
           directory,
         ),
-        ...runRows(runOffer, tasks, onTasks),
+        ...runRows(runOffer, tasks, rows, onTasks),
       ],
     ],
     [PALETTE_FILTER.PEOPLE]: () => [
@@ -2373,7 +2384,7 @@ export function CommandPalette({
           choose,
           historyOffered,
         ),
-        ...panelTabRows(tasks, inboxStanding, onTasks),
+        ...panelTabRows(tasks, rows, inboxStanding, onTasks),
         ...actionRows(OPEN_THING_SHOW_COMMANDS, runCommand, experiments),
         ...actionRows(OPEN_THING_LAST_COMMANDS, runCommand, experiments),
         ...actionRows(GO_TO_COMMANDS, runCommand, experiments),

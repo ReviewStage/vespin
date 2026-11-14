@@ -77,6 +77,7 @@ import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { keyPressed, reportEventTiming } from "../testing/event-timing.js";
 import { restOn } from "../testing/hint-rest.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { openTaskMenu } from "../testing/task-menu.js";
 import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
@@ -117,11 +118,12 @@ type WindowPaletteProps = Omit<Parameters<typeof CommandPalette>[0], "links"> & 
   place?: RoutedPlace | undefined;
 };
 
-/** The palette offering the links at hand through the window's own Copy link. */
+/** The palette offering the links at hand through the window's own Copy link, over task collections holding every task its tab holds. */
 function LinkedPalette({ place, ...props }: WindowPaletteProps): React.JSX.Element {
   const links = useCopyLink(props.tasks, undefined, true, SHELL_ROOM.WIDE, undefined, place);
 
-  return createElement(CommandPalette, { ...props, links });
+  // The window's task collections hold every task the tab holds, as its root feeds them beside the tab.
+  return overEveryTask(props.tasks, createElement(CommandPalette, { ...props, links }));
 }
 
 /** The palette as the window draws it, under a window's router standing at `at`, `/app` unless said, whose place its links read, an Inbox item there standing where `held` says. */
@@ -1688,11 +1690,12 @@ test("a task whose assignee and creator share a first name says the one the whol
 test("a task Vespin or a coding agent made says who in its detail and is found by it, but wears who is on it rather than its maker", () => {
   const dean = { userId: "user-dean", name: "Dean Stratakos" };
 
-  const task = (id: string, origin?: TaskSummary["origin"]) => ({
+  // Note that each is started after the next, as the list the host hands lists them newest started first.
+  const task = (id: string, createdAt: number, origin?: TaskSummary["origin"]) => ({
     id,
     workspaceId: "workspace-personal",
     name: id,
-    createdAt: 1,
+    createdAt,
     updatedAt: 1,
     repository: "acme/relay",
     ownerId: dean.userId,
@@ -1705,9 +1708,9 @@ test("a task Vespin or a coding agent made says who in its detail and is found b
     tasksControl({
       me: dean.userId,
       tasks: [
-        task("Invite emails", { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" }),
-        task("Audit log export", { actor: DESCRIPTION_ACTOR.NOTETAKER }),
-        task("Rate limits"),
+        task("Invite emails", 3, { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" }),
+        task("Audit log export", 2, { actor: DESCRIPTION_ACTOR.NOTETAKER }),
+        task("Rate limits", 1),
       ],
     }),
   );

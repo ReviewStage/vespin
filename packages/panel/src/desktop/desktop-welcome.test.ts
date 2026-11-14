@@ -47,5 +47,5 @@ test.each<{
   },
 ])("an account $case is new: $fresh", ({ signedIn, listRead, tasks, taskWorkspaces, fresh }) => {
   const said = taskWorkspaces === undefined ? undefined : { taskWorkspaces };
-  assert.equal(welcomed(tasksControl({ signedIn, listRead, tasks, ...said })), fresh);
+  assert.equal(welcomed(tasksControl({ signedIn, listRead, ...said }), tasks.length > 0), fresh);
 });
