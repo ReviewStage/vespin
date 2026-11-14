@@ -434,8 +434,12 @@ export function ThreadPage(props: ThreadPageProps) {
             {messages.map((message) => (
               <MessageView key={message.id} message={message} {...drawing} />
             ))}
+            {/* Note that the ask stands where the messages' words do, past the writers' faces, so a notice's Got it and a card line up under what they answer. */}
             {ask === undefined ? null : (
-              <VStack alignment="leading" modifiers={[padding({ horizontal: SPACE.EDGE })]}>
+              <VStack
+                alignment="leading"
+                modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
+              >
                 {ask}
               </VStack>
             )}

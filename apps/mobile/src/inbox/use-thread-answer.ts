@@ -88,6 +88,8 @@ interface ThreadHeld {
   readonly asNew?: boolean;
   /** The key the last thread start went under and its words, which a start of the same words goes under again, so a retry starts one thread. */
   readonly started?: { readonly key: string; readonly words: string };
+  /** Whether a Got it is out, which takes Got it off the thread at once, and sends nothing on a second press before the first lands. */
+  readonly nodding?: boolean;
 }
 
 /** A thread the app holds nothing of. */
@@ -346,7 +348,7 @@ export interface ThreadAnswer {
   readonly send: (pressed?: InboxDraft) => void;
   /** Resolves the thread without an answer, with Undo once it went. */
   readonly resolve: () => void;
-  /** Whether the thread is a notice its box offers Got it on: open, asking nothing, and the box empty, the nod drawn by the host at once once pressed. */
+  /** Whether the thread is a notice its box offers Got it on: open, asking nothing, the box empty, and no Got it out, so a press takes it away at once. */
   readonly nods: boolean;
   /** Settles the notice with Got it, messaging nobody, with Undo once it went. */
   readonly acknowledge: () => void;
@@ -356,9 +358,6 @@ export interface ThreadAnswer {
   /** Starts a new thread with the thread's agent, the box's words its first message, and opens it once the service took it. */
   readonly start: () => void;
 }
-
-/** The nods out, by the item's id, so a second press of Got it before the first lands sends nothing. */
-const nodding = new Set<string>();
 
 /** The new threads out, by the item's id, so a second start waits for the first's answer rather than racing it for the box's words. */
 const starting = new Set<string>();
@@ -378,7 +377,7 @@ export function useThreadAnswer(
   const { item } = listed;
   const itemId = item.id;
   const store = useSyncExternalStore(subscribe, heldNow);
-  const { draft, note, asNew = false } = store.get(itemId) ?? NOTHING_HELD;
+  const { draft, note, asNew = false, nodding = false } = store.get(itemId) ?? NOTHING_HELD;
   const thread = item.thread ?? [];
 
   const onDraft = useCallback(
@@ -485,11 +484,10 @@ export function useThreadAnswer(
 
   // Got it nods at the revision drawn, so an agent's change since is never settled unseen; one settled first by someone else is passed over quietly, with no Undo, since what was asked already stands.
   const acknowledge = () => {
-    if (nodding.has(itemId)) return;
-    nodding.add(itemId);
+    if (held.get(itemId)?.nodding === true) return;
     const key = randomUUID();
     let taken = false;
-    hold(itemId, (was) => ({ ...was, note: undefined }));
+    hold(itemId, (was) => ({ ...was, note: undefined, nodding: true }));
     void write(
       () =>
         acts[ACT_KIND.AGENTS_INBOX_ANSWER]({
@@ -514,7 +512,7 @@ export function useThreadAnswer(
         went: BUZZ.SUCCESS,
       },
     ).then((went) => {
-      nodding.delete(itemId);
+      hold(itemId, (was) => ({ ...was, nodding: false }));
 
       if (went && taken) settled([{ item, key }], SETTLE.ACKNOWLEDGE);
     });
@@ -589,7 +587,12 @@ export function useThreadAnswer(
       unreadableNumber(thread, draft) !== undefined || inboxThreadSend(thread, draft) !== undefined,
     send,
     resolve,
-    nods: !asNew && awaitsNod(item) && draft.note.trim() === "" && draft.attachments.length === 0,
+    nods:
+      !asNew &&
+      !nodding &&
+      awaitsNod(item) &&
+      draft.note.trim() === "" &&
+      draft.attachments.length === 0,
     acknowledge,
     asNew,
     setAsNew,
