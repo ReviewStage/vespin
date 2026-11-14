@@ -1283,6 +1283,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   const relationReads = yield* FiberMap.make<string>();
   /** The tasks whose relations were read into this list, which a card hung again reads not, and a session signing in reads again. */
   const relationsRead = new Set<string>();
+  /** The tasks whose relations are being read now, which a sign-out meanwhile reads again for the session signing in. */
+  const relationsPending = new Set<string>();
   /** The tasks whose relations were asked while the list could not be read outside of, each read once the list answers. */
   const relationsWaiting = new Set<string>();
 
@@ -1328,7 +1330,14 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         yield* collections.cold(rows.value, mark);
       });
 
-      return Effect.asVoid(FiberMap.run(relationReads, taskId, read, { onlyIfMissing: true }));
+      relationsPending.add(taskId);
+
+      const pending = Effect.ensuring(
+        read,
+        Effect.sync(() => relationsPending.delete(taskId)),
+      );
+
+      return Effect.asVoid(FiberMap.run(relationReads, taskId, pending, { onlyIfMissing: true }));
     });
 
   const decodeSearchRows = Schema.decodeUnknownOption(TASK_SEARCH_READ.rows);
@@ -2990,7 +2999,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       yield* FiberMap.clear(coldReads);
 
       // Note that the relations read are read again for the session signing in, as the cold tasks are.
-      for (const id of relationsRead) relationsWaiting.add(id);
+      for (const id of [...relationsRead, ...relationsPending]) relationsWaiting.add(id);
 
       yield* FiberMap.clear(relationReads);
       relationsRead.clear();
