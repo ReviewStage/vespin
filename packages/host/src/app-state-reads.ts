@@ -551,7 +551,7 @@ const NO_INBOX_READS: InboxReads = new Map();
 function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxReads {
   const rows = feed.rows;
 
-  return rows === undefined ? NO_INBOX_READS : new Map(Object.entries(rows[INBOX_SCOPE_KIND.PLAN]));
+  return rows === undefined ? NO_INBOX_READS : new Map(Object.entries(rows[INBOX_SCOPE_KIND.TASK]));
 }
 
 /** Each workspace's select of its Inbox's holders as last made (`selectInboxGroupsIn`), by the workspace's id. */
@@ -685,7 +685,7 @@ export function inboxFeedHolds(state: AppStateSnapshot, itemId: string | undefin
 
   if (rows === undefined || itemId === undefined) return false;
 
-  return Object.values(rows[INBOX_SCOPE_KIND.PLAN]).some((items) =>
+  return Object.values(rows[INBOX_SCOPE_KIND.TASK]).some((items) =>
     items.some((item) => item.id === itemId),
   );
 }

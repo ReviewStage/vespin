@@ -1073,7 +1073,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           ],
           transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
           integrations: [LINEAR_SERVER],
-          allowedDomains: [],
           installedSkills: "/opt/agent/installed-skills",
           warm: true,
         });

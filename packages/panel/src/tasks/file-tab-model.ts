@@ -3,7 +3,6 @@ import { GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_FILE_REFUSAL, type TaskFileRefusal } from "@repo/features/task-wire";
 import type { TasksFileAnswer } from "@repo/features/tasks-view";
-import type { OpenFile } from "./use-side-panel.js";
 
 /**
  * file-tab-model.ts -- what a File tab holds of its file, apart from drawing it: its whole text, where it was read, and why a file is not shown.
@@ -77,7 +76,13 @@ export function refusalLine(
  * the tab draws; its lit lines marked where it still has them: a file
  * shortened past them, which the tab lights nothing of, opens at its top.
  */
-export function fileUrl(held: FileText, file: OpenFile): string {
+export function fileUrl(
+  held: FileText,
+  file: {
+    readonly path: string;
+    readonly range: { readonly startLine: number; readonly endLine: number } | undefined;
+  },
+): string {
   const page = {
     kind: GITHUB_PAGE.FILE,
     repository: held.repository,

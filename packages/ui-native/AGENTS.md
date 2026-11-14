@@ -38,7 +38,7 @@ builds a control of its own.
   answer's fields, and `AskNote` for what a send that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
-  merge under the checks in a regular window), `ConfirmAsk` (the system's
+  merge under its heading), `ConfirmAsk` (the system's
   alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a form's words,
   pictures and choices, `ComposeSheet` for a sheet that starts work (its
@@ -138,8 +138,10 @@ builds a control of its own.
   takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
   items, which expo-router types as plain names, take `GLYPH.X` too
   (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
-  where iOS draws the thing its own way (Share, and the chevron at the end of
-  a Settings row that goes on) or where the panel draws a
+  where iOS draws the thing its own way (Share, the chevron at the end of a
+  Settings row that goes on, the small arrow out at the end of one that
+  leaves the app, and the up-and-down chevron at the end of one whose press
+  opens a menu) or where the panel draws a
   mark of its own rather than a Lucide glyph (a check box, a face, an MCP
   server, the panel's product mark). A task's status ring is the panel's own
   mark, cut into the asset catalog from `@repo/brand`'s table
@@ -157,7 +159,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
 
 - **Type scale** (`tokens/type.ts`'s `TYPE_ROLE`), each role a Dynamic Type
   text style, never a fixed size: a row's title 15 pt (`subheadline`),
-  medium while unread and regular once read, over a 13 pt muted line
+  semibold while unread and regular once read, over a 13 pt muted line
   (`footnote`); a time 12 pt (`caption`); a group header 13 pt muted; a
   screen's title 17 pt semibold, inline in its bar; and a page's heading,
   a thread's or a task's title, 20 pt semibold (`title3`, the style nearest
@@ -207,7 +209,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   is handed a hover effect: the system draws its own on each style, where
   an added highlight drew a second platter on iPadOS 26.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
-  unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
+  unread dot in the margin, at 9 pt the strongest mark a row carries as
+  Mail's is, a 14 pt leading mark in an 18 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from
   `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
   words. An Inbox thread stands roomier, as Mail's message rows do
@@ -249,8 +252,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   system's default button, so it flashes the row's gray while held, as
   Settings' rows do; a choice among a few is `PickRows`, each a row with
   what it does under its name where it says and the picked one checked in
-  copper, the one pick look every form uses; a connection's one act is a
-  small bordered capsule at its end; what a section means is said in its
+  copper, the one pick look every form uses; a connection leads with its
+  provider's own mark, the desktop's vector (`INTEGRATION_MARK_ASSET`), and
+  its one act is a small bordered capsule at its end; what went wrong is a
+  `ProblemLine`, muted words led by the alert glyph in the attention ink,
+  never red words, wherever a refusal stands under a row or a field; what a section means is said in its
   footer, never in a line under a switch; a row that leaves the app ends in
   the arrow out; and the Account page heads with the
   account's photo, name and address centered on the ground, closing with
@@ -282,12 +288,13 @@ navigation, tab bar, swipes, menus, sheets and glass.
   GitHub's color, the merge queue's in the attention ink with its place
   ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
   its checks and reviewers as rows, each glyph the panel's own
-  (`pull-request-look.ts`); and its acts in the bar, an act that
-  asks first asking in `ConfirmAsk`, but for the merge's press in a regular
-  window, whose bar folds it into More: it stands under the checks as a
-  large button as wide as its words (`MergeActRow`), as GitHub's own app
-  draws Merge, and as a split button where the repository merges more than
-  one way, its chevron choosing the way as the panel's merge box does.
+  (`pull-request-look.ts`); the merge's press under the heading in every
+  window, as the panel's head stands Merge under the title, a large button
+  as wide as its words (`MergeActRow`), and a split button where the
+  repository merges more than one way, its chevron choosing the way as the
+  panel's merge box does; and the rest of its acts in the bar's ⋯, an act
+  that asks first asking in `ConfirmAsk`. The bar holds no press of words,
+  which pushed the page's path out of a compact bar.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
   New task; a regular window's bar keeps its labels. A window wide enough
@@ -321,7 +328,10 @@ here once, so a screen gets them by composing these pieces.
   (unread, needs you, its status, its time by `sinceHeard`). A row holding a
   button of its own, such as `AgentRow`'s pull request, stays apart instead.
   A group header, a page's heading, and a message's writer line are headings;
-  a glyph its words already say is hidden. What happens out of the reader's
+  a glyph its words already say is hidden. A message's `Video` that can play
+  is one element, its name, which opens the system's player full screen, as
+  Messages does, since the inline player's own views stood a thread's
+  video in an iPad's split view past the depth XCTest can read. What happens out of the reader's
   sight is told with `useAnnounced`: an agent's change of state,
   a held call, and a send refused (`AskNote`). A line of Markdown offers
   each chip and link it holds as one of its VoiceOver actions ("Open …"),

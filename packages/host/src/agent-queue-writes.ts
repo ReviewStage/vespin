@@ -132,20 +132,20 @@ const AGENT_OUTBOX: RowKind<OutboxRow, OutboxChange> = {
 };
 
 /** A change of an agent's queue as the host writes it: the window's params, and the member it is queued by. */
-export type QueueWrite = AgentQueueParams & { readonly queuedBy: string };
+type QueueWrite = AgentQueueParams & { readonly queuedBy: string };
 
 /**
  * A change of an agent's queue as the host sends it: the write, when it was
  * asked by the host's clock, and for a steer, its message as it then goes,
  * read from the queue as it stood as it was asked.
  */
-export type QueuedWrite = QueueWrite & {
+type QueuedWrite = QueueWrite & {
   readonly sentAt: number;
   readonly steered?: SendingMessage;
 };
 
 /** A message sent as the host writes it: the window's params, when it went by the host's clock, and the account signed in as it was sent. */
-export type MessageWrite = AgentMessageParams & {
+type MessageWrite = AgentMessageParams & {
   readonly sentAt: number;
   readonly sentBy: string | undefined;
 };

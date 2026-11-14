@@ -4,6 +4,8 @@ export * from "./components/account-words/account-words.js";
 
 export * from "./components/address-field/address-field.js";
 
+export * from "./components/agent-pointer/agent-pointer.js";
+
 export * from "./components/anchored-popover/anchored-popover.js";
 
 export * from "./components/anchored-popover/press-away.js";
@@ -218,7 +220,11 @@ export * from "./components/list-row/list-row.js";
 
 export * from "./components/list-row/list-row-hint.js";
 
+export * from "./components/mac-app-card/mac-app-card.js";
+
 export * from "./components/mark-strip/mark-strip.js";
+
+export type { WordsMark } from "./components/marked-words/marked-words.js";
 
 export * from "./components/menu/context-menu.js";
 

@@ -26,6 +26,7 @@ import {
   ListSection,
   PUSH_ROW_GOES,
   PushRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   useColors,
@@ -33,9 +34,9 @@ import {
   WorkspaceRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import Constants from "expo-constants";
 import { Stack, useRouter } from "expo-router";
 import { openBrowserAsync } from "expo-web-browser";
+import { buildWords } from "../../build-words.js";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { NOTIFICATION_STANDING, useNotificationPermission } from "../../notification-permission.js";
@@ -54,14 +55,6 @@ export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
 /** What the row that writes the team a mail is called, as the panel's Help menu names it. */
 const CONTACT_WORDS = { EMAIL: "Email" } as const;
-
-/** This build's version and build number, as iOS's own About names an app's: "1.4.0 (212)". */
-function buildWords(): string {
-  const version = Constants.expoConfig?.version ?? "";
-  const build = Constants.expoConfig?.ios?.buildNumber;
-
-  return build === undefined ? version : `${version} (${build})`;
-}
 
 /** Opens one of our public pages, the changelog or the docs, in the app's own Safari sheet, tinted copper, so the member stays in Settings. */
 function openInSheet(address: string, tint: string): void {
@@ -113,7 +106,7 @@ export default function SettingsScreen() {
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button onPress={() => router.back()}>Done</Stack.Toolbar.Button>
       </Stack.Toolbar>
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <SettingsForm>
           {account?.status === ACCOUNT_STATUS.SIGNED_IN ? (
             <ListSection>

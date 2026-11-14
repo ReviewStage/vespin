@@ -54,7 +54,7 @@ export { AUTOMATION_PRESET, type AutomationPresetName } from "./automation-prese
  * the member's own zone; a GitHub event, kept to the repository's default
  * branch where it says so; or an integration's event, unfiltered.
  */
-export type AutomationPresetTrigger =
+type AutomationPresetTrigger =
   | { readonly kind: typeof AUTOMATION_TRIGGER.SCHEDULE; readonly cron: string }
   | {
       readonly kind: typeof AUTOMATION_TRIGGER.GITHUB;
