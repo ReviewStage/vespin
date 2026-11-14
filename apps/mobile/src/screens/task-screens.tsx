@@ -1214,7 +1214,7 @@ function subTasksFinishedWords(finished: number, total: number): string {
 }
 
 /**
- * The task's relations as the panel's two groups list them (`plan-relations.tsx`):
+ * The task's relations as the panel's two groups list them (`overview-relations.tsx`):
  * its sub-tasks, counted finished of all of them, its header's + offering
  * New sub-task, which opens New task for one, and Link existing task, which
  * opens the Task relation sheet on Add sub-task; and, only while it holds a

@@ -23,17 +23,17 @@ import type {
   TaskSummary,
 } from "@repo/features/task-wire";
 import {
-  DOCUMENT_REGION,
-  type DocumentRegion,
   documentRegion,
   renamedRegion,
   renamedView,
   SETTLED_STATUS,
   sidebarTasks,
   TASK_MARK,
+  TASK_REGION,
   TASKS_PAGE,
   type TaskMark,
   type TaskNames,
+  type TaskRegion,
   type TasksPage,
   tasksPage,
 } from "@repo/features/tasks-model";
@@ -77,12 +77,7 @@ import { useAutomationsRoute } from "../automations-route.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { useChosenWorkspace } from "../desktop/chosen-workspace.js";
 import { type InboxAt, listedInboxChoice, useInboxRoute } from "../inbox-route.js";
-import {
-  descriptionDocumentQuery,
-  historyQuery,
-  historyRetryMutation,
-  pagesQuery,
-} from "../live-reads.js";
+import { heldTaskQuery, historyQuery, historyRetryMutation, pagesQuery } from "../live-reads.js";
 import { useMergeQueueRoute } from "../merge-queue-route.js";
 import {
   beginPanelSpan,
@@ -367,7 +362,7 @@ export interface TasksControl {
   listFailed: boolean;
   /** Whether the list drawn is one the service answered, rather than the empty one before the first read lands. */
   listRead: boolean;
-  region: DocumentRegion;
+  region: TaskRegion;
   /** Copies the description drawn as Markdown, answered with a toast, since its press stands in a menu. */
   copy: { onPress: () => void };
   /** The task's column's tabs: its agents' and its draft's, and which is shown. */
@@ -1093,7 +1088,7 @@ export function useTasksTab(input: {
   const page = tasksPage(tasks);
   // The open task's description is held whenever a task is open, so a task held lately draws its description in
   // its first frame, and one never held reads; a name being typed draws over it as over the list.
-  const heldDescription = useQuery(descriptionDocumentQuery(viewed.activeTaskId));
+  const heldDescription = useQuery(heldTaskQuery(viewed.activeTaskId));
   const heldDescriptionRows = heldDescription.data;
   const heldDescriptionFailed = heldDescription.isError;
   const openedTaskId = viewed.activeTaskId;
@@ -1113,7 +1108,7 @@ export function useTasksTab(input: {
   // A started agent's tab opens selected; the column's tabs are built after
   // the agents they draw, so the opening reaches them through this late binding.
   const mainRef = useRef<MainTabsControl | undefined>(undefined);
-  const openDocument = region.kind === DOCUMENT_REGION.READY ? region.task : undefined;
+  const openDocument = region.kind === TASK_REGION.READY ? region.task : undefined;
 
   // The open task's own words, which a dictation into one of its agents' boxes listens for.
   const dictationWords = useMemo(
@@ -1481,7 +1476,7 @@ export function useTasksTab(input: {
   // The description of the task a press asked for is held from the press, rather than once the host binds it a round
   // trip later, so its read runs beside the select. Note that a fixture's tasks are read nowhere, so nothing is read
   // ahead of them.
-  useQuery(descriptionDocumentQuery(fixture === undefined ? boundFor : undefined));
+  useQuery(heldTaskQuery(fixture === undefined ? boundFor : undefined));
 
   // The description of the task the pointer comes to rest on is held ahead of the press, by an observer of its own
   // rather than state, because a pointer crossing the sidebar must not draw the tab again at every row. Note that it is
@@ -1508,7 +1503,7 @@ export function useTasksTab(input: {
           Effect.sleep(POINT_RESTS),
           Effect.sync(() => {
             pointedHold.current?.release();
-            const observer = new QueryObserver(queryClient, descriptionDocumentQuery(taskId));
+            const observer = new QueryObserver(queryClient, heldTaskQuery(taskId));
             pointedHold.current = { taskId, release: observer.subscribe(() => {}) };
           }),
         ),
@@ -1547,7 +1542,7 @@ export function useTasksTab(input: {
   // mention it, else by the listed one. Its choices are read off main's document, as the description's own page reads
   // them (`useWorkspaceExperiment`), so the two agree.
   const choosing = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_CHOOSING;
-  const openWorkspace = region.kind === DOCUMENT_REGION.READY ? region.task.workspaceId : undefined;
+  const openWorkspace = region.kind === TASK_REGION.READY ? region.task.workspaceId : undefined;
 
   const workspaceOfTask = (taskId: string, step?: string): string | undefined =>
     tasks.tasks.find((each) => each.id === taskId)?.workspaceId ??
@@ -1595,9 +1590,7 @@ export function useTasksTab(input: {
     routedStep === undefined
       ? undefined
       : (tasks.tasks.find(namesTask) ??
-        (region.kind === DOCUMENT_REGION.READY && namesTask(region.task)
-          ? region.task
-          : undefined));
+        (region.kind === TASK_REGION.READY && namesTask(region.task) ? region.task : undefined));
 
   const findsTask =
     heldTask === undefined && routedNumber !== undefined && historyRoute.workspace !== undefined;
@@ -1632,13 +1625,13 @@ export function useTasksTab(input: {
     routedHistoryTask !== undefined &&
     routedHistoryTask === boundFor &&
     descriptionsOnFor(routedHistoryTask, historyRoute.workspace) &&
-    region.kind !== DOCUMENT_REGION.MISSING;
+    region.kind !== TASK_REGION.MISSING;
 
   // A plan the service would not hand the reader has no history to show, so its step gives way to the task, whose Not found stands, as a version's link may ask for one.
   const historyMissing =
     routedHistoryTask !== undefined &&
     routedHistoryTask === tasks.activeTaskId &&
-    region.kind === DOCUMENT_REGION.MISSING;
+    region.kind === TASK_REGION.MISSING;
 
   const giveHistoryWay = useRef(historyRoute.onGiveWay);
   giveHistoryWay.current = historyRoute.onGiveWay;
@@ -1679,7 +1672,7 @@ export function useTasksTab(input: {
     undefined,
   );
 
-  const readyTask = region.kind === DOCUMENT_REGION.READY ? region.task : undefined;
+  const readyTask = region.kind === TASK_REGION.READY ? region.task : undefined;
   useEffect(() => {
     const timed = opening.current;
 
@@ -2054,7 +2047,7 @@ export function useTasksTab(input: {
   // Copy formats the document drawn now and hands it to main's clipboard;
   // it asks the model nothing and reads no flag.
   const pressCopy = () => {
-    if (region.kind !== DOCUMENT_REGION.READY) return;
+    if (region.kind !== TASK_REGION.READY) return;
     copyWithToast(descriptionMarkdown(region.task), TASK_COPIED_NOTE);
   };
 
@@ -2117,7 +2110,7 @@ export function useTasksTab(input: {
     [sendRestore],
   );
 
-  const historyTaskId = region.kind === DOCUMENT_REGION.READY ? region.task.id : undefined;
+  const historyTaskId = region.kind === TASK_REGION.READY ? region.task.id : undefined;
 
   // The open task's history is held while its version history is shown, and main keeps it a while after, so one opened again lists its versions in its first frame.
   const historyRead = useQuery({
@@ -2140,8 +2133,8 @@ export function useTasksTab(input: {
     source: historySource,
     taskId: historyTaskId,
     history: heldHistory,
-    editedAt: region.kind === DOCUMENT_REGION.READY ? region.task.lastEdit?.at : undefined,
-    name: region.kind === DOCUMENT_REGION.READY ? region.task.name : undefined,
+    editedAt: region.kind === TASK_REGION.READY ? region.task.lastEdit?.at : undefined,
+    name: region.kind === TASK_REGION.READY ? region.task.name : undefined,
     at: shown && historyOpen ? historyRoute.spot : undefined,
     seek: historySeek?.taskId === historyTaskId ? historySeek?.save : undefined,
     narrow: input.room === SHELL_ROOM.NARROW,
@@ -2257,9 +2250,7 @@ export function useTasksTab(input: {
     // The open document stands for its task where the list read did not land, as its menu reads it.
     taskOf: (taskId) =>
       tasks.tasks.find((each) => each.id === taskId) ??
-      (region.kind === DOCUMENT_REGION.READY && region.task.id === taskId
-        ? region.task
-        : undefined),
+      (region.kind === TASK_REGION.READY && region.task.id === taskId ? region.task : undefined),
     place: {
       atHome: () => homeNow.current.home.open && homeNow.current.boundFor === undefined,
       arrivals,
@@ -3256,8 +3247,7 @@ export function useTasksTab(input: {
   );
 
   // A strip's tab is viewed only while the task's page is on screen, nothing standing over it.
-  const taskOnScreen =
-    stateShown && page === TASKS_PAGE.DOCUMENT && !overPlan && !historyRoute.open;
+  const taskOnScreen = stateShown && page === TASKS_PAGE.TASK && !overPlan && !historyRoute.open;
 
   const pinnedHere = (tab: StripTab) => {
     const pin = stripTabPin(tab);
@@ -3430,7 +3420,7 @@ export function useTasksTab(input: {
   // The tab rests on no task, so only an open task steps back,
   // and a panel filling the window over it is the nearer layer.
   const back = useCallback((): boolean => {
-    if (page !== TASKS_PAGE.DOCUMENT) return false;
+    if (page !== TASKS_PAGE.TASK) return false;
 
     if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
     else leaveTask();
@@ -3459,7 +3449,7 @@ export function useTasksTab(input: {
   // The window's Escape on an open task, past a panel filling the window, is the toolbar's Back: one step back, to the
   // page the task was opened from, and the task is left as ever only where no step stands behind it.
   const escapeTask = (): boolean => {
-    if (page !== TASKS_PAGE.DOCUMENT || (!shutsWhole && sidePanel.fullScreen)) return back();
+    if (page !== TASKS_PAGE.TASK || (!shutsWhole && sidePanel.fullScreen)) return back();
 
     if (shutsWhole) paneBack();
     else backs.task(leaveTask);

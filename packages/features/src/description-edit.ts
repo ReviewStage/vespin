@@ -18,10 +18,6 @@ import { descriptionLastEditSchema, TASK_BOUNDS, taskSchema, taskTxidSchema } fr
  * answered with what the text holds now, and nothing is changed: the
  * developer chooses whether their text stands. The conflict names who last
  * wrote the text it met, so the editor can say whose words those are.
- *
- * Note that `plan` keeps the wire's legacy spelling of a task, because a
- * released desktop sends and reads them; they are renamed with the wire in a
- * follow-up, with no alias.
  */
 
 /**
@@ -75,7 +71,7 @@ export const DESCRIPTION_EDIT_REFUSAL = {
  * read drops it.
  */
 export const descriptionEditAnswerSchema = EffectSchema.Union([
-  EffectSchema.Struct({ plan: taskSchema, txid: EffectSchema.optionalKey(taskTxidSchema) }),
+  EffectSchema.Struct({ task: taskSchema, txid: EffectSchema.optionalKey(taskTxidSchema) }),
   EffectSchema.Struct({ conflict: descriptionEditConflictSchema }),
   EffectSchema.Struct({ refused: EffectSchema.Literals(Object.values(DESCRIPTION_EDIT_REFUSAL)) }),
 ]);

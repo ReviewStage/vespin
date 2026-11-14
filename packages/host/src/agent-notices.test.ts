@@ -41,9 +41,9 @@ function agent(status: AgentStatus, patch: Partial<AgentSummary> = {}): AgentSum
 
 /** An inbox read's answer as a test gives it: its tasks holding items left out where none does. */
 type InboxAnswerGiven =
-  | Exclude<AgentAccountInboxAnswerView, { readonly plans: unknown }>
-  | (Omit<Extract<AgentAccountInboxAnswerView, { readonly plans: unknown }>, "plans"> & {
-      readonly plans?: Extract<AgentAccountInboxAnswerView, { readonly plans: unknown }>["plans"];
+  | Exclude<AgentAccountInboxAnswerView, { readonly tasks: unknown }>
+  | (Omit<Extract<AgentAccountInboxAnswerView, { readonly tasks: unknown }>, "tasks"> & {
+      readonly tasks?: Extract<AgentAccountInboxAnswerView, { readonly tasks: unknown }>["tasks"];
     });
 
 /**
@@ -165,7 +165,7 @@ function fixture() {
     /** The account's inbox as the host tells it next; no task holds an item but where the answer says. */
     answerInbox: (answer: InboxAnswerGiven) => {
       assert.ok(inboxAnswers);
-      Queue.offerUnsafe(inboxAnswers, "failure" in answer ? answer : { plans: [], ...answer });
+      Queue.offerUnsafe(inboxAnswers, "failure" in answer ? answer : { tasks: [], ...answer });
     },
     inboxFollows: () => inboxFollows,
     waiting,
@@ -496,7 +496,7 @@ it.effect(
           waitingItem(ITEM_A, { startedBy: ACCOUNT_ID }),
           waitingItem(ITEM_B, { taskId: teamTask, startedBy: teammate }),
         ],
-        plans: [
+        tasks: [
           { taskId: TASK_ID, items: 1, updatedAt: READ_AT },
           { taskId: teamTask, items: 1, updatedAt: READ_AT },
         ],
@@ -510,7 +510,7 @@ it.effect(
           waitingItem(ITEM_B, { taskId: teamTask, startedBy: teammate }),
           waitingItem(ITEM_C, { taskId: teamTask, startedBy: teammate, updatedAt: READ_AT + 1 }),
         ],
-        plans: [
+        tasks: [
           { taskId: TASK_ID, items: 1, updatedAt: READ_AT },
           { taskId: teamTask, items: 2, updatedAt: READ_AT + 1 },
         ],
@@ -580,7 +580,7 @@ it.effect(
       const answer = (toDo: number) =>
         f.answerInbox({
           items: [waitingItem(ITEM_A, { startedBy: ACCOUNT_ID })],
-          plans: [{ taskId: TASK_ID, items: 3, toDo, updatedAt: READ_AT }],
+          tasks: [{ taskId: TASK_ID, items: 3, toDo, updatedAt: READ_AT }],
           cursor: "1",
           readAt: READ_AT,
         });
