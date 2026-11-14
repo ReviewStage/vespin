@@ -145,9 +145,16 @@ export function listTerminals(): CommandAsk {
   return script(LIST_SCRIPT);
 }
 
-/** Starts a shell detached in the agent's checkout, under its id, named where the developer named it. */
-export function startTerminal(terminalId: string, title: string | undefined): CommandAsk {
-  const start = ["new-session", "-d", "-s", sessionOf(terminalId), "-c", TMUX.START_DIRECTORY];
+/** Starts a shell detached in the agent's checkout, under its id, with the workspace's variables, named where the developer named it. */
+export function startTerminal(
+  terminalId: string,
+  title: string | undefined,
+  environment: Readonly<Record<string, string>>,
+): CommandAsk {
+  const start = [
+    ...["new-session", "-d", "-s", sessionOf(terminalId), "-c", TMUX.START_DIRECTORY],
+    ...environmentOf(environment),
+  ];
 
   return tmux(
     title === undefined
@@ -176,8 +183,8 @@ export interface RunActionStart {
 }
 
 /** The workspace's variables as tmux's `-e` takes them, one argument each. */
-function environmentOf(run: RunActionStart): readonly string[] {
-  return Object.entries(run.environment).flatMap(([name, value]) => [
+function environmentOf(environment: Readonly<Record<string, string>>): readonly string[] {
+  return Object.entries(environment).flatMap(([name, value]) => [
     "-e",
     literal(`${name}=${value}`),
   ]);
@@ -221,7 +228,7 @@ export function startRunAction(terminalId: string, run: RunActionStart): Command
     [
       targetOf(terminalId),
       ...["new-session", "-d", "-s", sessionOf(terminalId), "-c", TMUX.START_DIRECTORY],
-      ...environmentOf(run),
+      ...environmentOf(run.environment),
       ...processOf(run),
       ...[";", "set-option", "-w", "-t", target, TMUX.REMAIN_OPTION, "on"],
       ...[";", "set-option", "-t", target, TMUX.TITLE_OPTION, literal(run.label)],
@@ -241,7 +248,7 @@ export function rerunAction(terminalId: string, run: RunActionStart): CommandAsk
 
   return tmux([
     ...["respawn-pane", "-t", target, "-c", TMUX.START_DIRECTORY],
-    ...environmentOf(run),
+    ...environmentOf(run.environment),
     ...processOf(run),
     ...[";", "set-option", "-t", target, TMUX.TITLE_OPTION, literal(run.label)],
   ]);

@@ -182,6 +182,8 @@ export interface AgentSandboxService {
     sessionId: string,
     terminalId: string,
     title: string | undefined,
+    /** The workspace's variables the shell starts with, as a run action's does. */
+    environment: Readonly<Record<string, string>>,
   ) => ShellEffect<TerminalSummary>;
   /**
    * A run action run in the agent's running sandbox: its shell where its
@@ -219,6 +221,8 @@ export interface AgentSandboxService {
   readonly attach: (
     sessionId: string,
     terminalId: string,
+    /** The workspace's variables a shell made afresh starts with; one that stands keeps what it started with, as any shell does. */
+    environment: Readonly<Record<string, string>>,
   ) => Effect.Effect<SandboxAttach, SandboxError>;
   /** A PTY minted on the running sandbox for a command of the caller's own, or where the sandbox stands; a stopped sandbox is never woken here. */
   readonly open: (sessionId: string) => Effect.Effect<SandboxOpen, SandboxError>;
@@ -409,10 +413,10 @@ function agentSandboxOver(
 
         return route === undefined ? null : { port: sharedPortOf(route.port), url: route.url };
       }),
-    start: (sessionId, terminalId, title) =>
+    start: (sessionId, terminalId, title, environment) =>
       inRunning(sessionId, (running) =>
         Effect.gen(function* () {
-          const started = yield* api.run(running, startTerminal(terminalId, title));
+          const started = yield* api.run(running, startTerminal(terminalId, title, environment));
 
           // A shell tmux could not start, or could not list once started, is an outage: the id is the service's own, so it names nothing missing.
           if (started.exitCode !== 0) return yield* Effect.fail(new SandboxUnavailable({}));
@@ -506,7 +510,7 @@ function agentSandboxOver(
       ),
     rename: (sessionId, terminalId, title) => onShell(sessionId, renameTerminal(terminalId, title)),
     kill: (sessionId, terminalId) => onShell(sessionId, killTerminal(terminalId)),
-    attach: (sessionId, terminalId) =>
+    attach: (sessionId, terminalId, environment) =>
       Effect.gen(function* () {
         const sandboxName = agentSandboxName(sessionId);
 
@@ -545,7 +549,7 @@ function agentSandboxOver(
 
         // A shell a stop forgot is made here, before its PTY attaches, so the hold written again below follows a shell that stands. Note that a start refused because another attach made it first leaves that one.
         if (standingShell.exitCode === TMUX_EXIT.NO_SESSION) {
-          yield* api.run(running, startTerminal(terminalId, undefined));
+          yield* api.run(running, startTerminal(terminalId, undefined, environment));
         }
 
         // Note that the hold is written again once the shell stands, so a list that read before it started, and pruned it, never leaves it unheld.

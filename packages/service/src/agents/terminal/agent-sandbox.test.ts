@@ -312,7 +312,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           return {
             listed: yield* sandbox.terminals(SESSION),
             ports: yield* sandbox.listeningPorts(SESSION),
-            started: yield* sandbox.start(SESSION, SHELL, undefined),
+            started: yield* sandbox.start(SESSION, SHELL, undefined, {}),
           };
         }).pipe(Effect.provide(api.layer));
 
@@ -432,7 +432,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           const sandbox = yield* AgentSandbox;
 
           return {
-            started: yield* sandbox.start(SESSION, SHELL, undefined),
+            started: yield* sandbox.start(SESSION, SHELL, undefined, {}),
             renamedOther: yield* sandbox.rename(SESSION, other, "tests"),
           };
         }).pipe(Effect.provide(api.layer));
@@ -670,7 +670,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
         const unknown = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
 
         const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
-          sandbox.attach(SESSION, unknown),
+          sandbox.attach(SESSION, unknown, {}),
         ).pipe(Effect.provide(api.layer));
 
         assert.equal(attached.state, SANDBOX_STATE.RUNNING);
@@ -702,7 +702,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
         sandboxNameOf.name = tmux.sandboxName;
 
         const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
-          sandbox.attach(tmux.session, SHELL),
+          sandbox.attach(tmux.session, SHELL, {}),
         ).pipe(Effect.provide(tmux.layer));
 
         assert.equal(attached.state, SANDBOX_STATE.RUNNING);
@@ -716,9 +716,9 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
       Effect.gen(function* () {
         const tmux = yield* heldTmux(SANDBOX_STATUS.RUNNING, []);
 
-        yield* Effect.flatMap(AgentSandbox, (sandbox) => sandbox.attach(tmux.session, SHELL)).pipe(
-          Effect.provide(tmux.layer),
-        );
+        yield* Effect.flatMap(AgentSandbox, (sandbox) =>
+          sandbox.attach(tmux.session, SHELL, {}),
+        ).pipe(Effect.provide(tmux.layer));
 
         // A list begun after the attach, before the relay's PTY has started anything, lets go of every hold whose shell it did not read.
         yield* TestClock.adjust(Duration.seconds(1));
@@ -758,7 +758,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
       const unknown = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
 
       const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
-        sandbox.attach(SESSION, unknown),
+        sandbox.attach(SESSION, unknown, {}),
       ).pipe(Effect.provide(api.layer), Effect.flip);
 
       assert.ok(attached instanceof SandboxUnavailable);

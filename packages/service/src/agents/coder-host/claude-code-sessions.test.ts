@@ -4181,6 +4181,54 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a warm runner whose workspace's variables changed since its launch is ended and relaunched for the next message, which its new launch is handed",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const ring = parseKeyRing(Redacted.make(RING));
+        assert.ok(Result.isSuccess(ring));
+        const workspace = agent.organizationId;
+        const sequence = { next: 1 };
+        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* runnerTook(agent.id);
+        sequence.next = 2;
+        // A member sets a variable while the runner stands warm.
+        yield* setWorkspaceVariable(
+          workspace,
+          "DATABASE_URL",
+          sealWorkspaceVariable(
+            ring.success,
+            { organizationId: workspace, name: "DATABASE_URL" },
+            Redacted.make("postgres://fixture"),
+          ),
+          new Date(yield* Clock.currentTimeMillis),
+        );
+
+        const sent = yield* sentAndDelivered(
+          sessions,
+          opened.sessionId,
+          agent,
+          "Use the database.",
+        );
+
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const [first, second] = api.commands;
+        assert.ok(first !== undefined && second !== undefined);
+        assert.notEqual(first.exitCode, null);
+        assert.ok(JSON.stringify(yield* handedLines(userId, second)).includes("Use the database."));
+      }),
+  );
+
+  it.effect(
     "a message sent while another call holds the lease waits on it where the warm runner was launched in another mode, and goes to a launch in the agent's mode",
     () =>
       Effect.gen(function* () {
