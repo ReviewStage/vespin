@@ -530,8 +530,11 @@ export function RowHead({
     <HStack spacing={SPACE.TIGHT} alignment="center">
       <UnreadDot unread={unread} faded={faded} />
       <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
-        {fold}
-        <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        {/* Note that the fold and the mark stand centered on each other, so the chevron, laid out at no height, sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
+        <HStack spacing={SPACE.ROW} alignment="center">
+          {fold}
+          <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        </HStack>
         {stacked ? (
           <VStack alignment="leading" spacing={2}>
             {words}
@@ -778,9 +781,6 @@ function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou"
   }
 }
 
-/** How far each level of sub-tasks stands in, in points: past a parent's mark, so a sub-task's mark stands under its parent's name. */
-const SUB_TASK_INDENT = MARK_SIZE.LEAD + SPACE.ROW;
-
 /** What a parent's chevron is heard as, folded and open. */
 const SHOW_SUB_TASKS = "Show sub-tasks";
 const HIDE_SUB_TASKS = "Hide sub-tasks";
@@ -842,9 +842,11 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
 export function TaskRow(props: TaskRowProps) {
   const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
   const colors = useColors();
+  // Note that each level of sub-tasks stands in past a parent's fold, its column the lead's scaled width, so a sub-task's mark stands under its parent's at every size.
+  const lead = useScaledSize(MARK_SIZE.LEAD);
 
   const row: ReactElement = (
-    <HStack modifiers={[padding({ leading: depth * SUB_TASK_INDENT })]}>
+    <HStack modifiers={[padding({ leading: depth * (lead + SPACE.ROW) })]}>
       <RowHead
         unread={unread}
         faded={finished}
