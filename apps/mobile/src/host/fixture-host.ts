@@ -43,7 +43,6 @@ import {
 } from "@repo/host/fixture-inbox";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { Predicate } from "effect";
-import { launchMachineAsk } from "./launch-arguments.js";
 
 /** The one workspace a fixture run's account is in. */
 const FIXTURE_WORKSPACE_IDS: readonly string[] = [FIXTURE_IDS.WORKSPACE];
@@ -77,6 +76,9 @@ const REMINDERS = new WeakMap<object, InboxReminders>();
 
 /** No reminder set yet. */
 const NO_REMINDERS: InboxReminders = new Map();
+
+/** The runs that hold a machine's ask, as `-machineAsk true` asks, by the store each stages, since a stage after a press is asked with none of the launch's own. */
+const MACHINE_ASKED = new WeakSet<object>();
 
 /** The machines' asks each run answered, by the store the run stages, each set replaced whole as one is answered. */
 const ANSWERED_ASKS = new WeakMap<object, ReadonlySet<string>>();
@@ -124,11 +126,16 @@ function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateS
  * live run. Where `updateNeeded`, as `-updateNeeded true` asks, the network
  * stands as the service's refusal of an old build leaves it, so a flow
  * shoots the screen that asks for the update (`maestro/update-needed.yaml`).
+ * Where `machineAsk`, as `-machineAsk true` asks, the run holds an ask of
+ * Ada's MacBook for an agent's command from then on (`maestro/machine-ask.yaml`).
  */
 export function stageFixture(
   state: Pick<AppStateStore, "snapshot" | "update">,
   updateNeeded = false,
+  machineAsk = false,
 ): void {
+  if (machineAsk) MACHINE_ASKED.add(state);
+
   const snapshot = state.snapshot();
 
   if (!snapshot.run.fixtureMode || snapshot.run.profile === RUN_PROFILE.IDLE) return;
@@ -147,7 +154,7 @@ export function stageFixture(
     MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
   );
 
-  const reminded = launchMachineAsk()
+  const reminded = MACHINE_ASKED.has(state)
     ? machineAskAppState(saved, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
     : saved;
 
