@@ -1,3 +1,4 @@
+import { lengthCountShown } from "@repo/features/length-count";
 import { formatCount } from "@repo/features/number-format";
 import { useState } from "react";
 import { useDisclosure } from "../../use-disclosure.js";
@@ -25,9 +26,6 @@ const COUNTER =
 const COUNT =
   "ui-length-counter-count inline-block data-[move=up]:animate-tick-up data-[move=down]:animate-tick-down";
 
-/** How far toward its limit a field's words go before the counter shows. */
-export const COUNTER_FROM = 0.8;
-
 /** Which way the count last moved, which its tick travels. */
 const COUNT_MOVE = {
   UP: "up",
@@ -46,7 +44,7 @@ export function LengthCounter({
   /** How many it takes at most. */
   limit: number;
 }): React.JSX.Element | null {
-  const shown = useDisclosure(length >= limit * COUNTER_FROM);
+  const shown = useDisclosure(lengthCountShown(length, limit));
   const [was, setWas] = useState(length);
   const [move, setMove] = useState<CountMove | undefined>(undefined);
 

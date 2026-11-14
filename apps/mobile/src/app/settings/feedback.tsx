@@ -15,6 +15,7 @@ import {
   isFeedbackImageType,
   signatureLine,
 } from "@repo/features/feedback";
+import { lengthCountShown, lengthCountWords } from "@repo/features/length-count";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount } from "@repo/host/app-state-reads";
 import {
@@ -22,14 +23,17 @@ import {
   BUZZ,
   buzz,
   ConfirmAsk,
+  FOOTER_TONE,
   GLYPH,
   glyphSymbol,
   ListSection,
+  NOTICE_KIND,
   ScopePicker,
   Screen,
   SettingsForm,
   ToggleRow,
   useColors,
+  useFailureNotices,
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -62,6 +66,14 @@ const FEEDBACK_PICTURES: PictureBounds = {
   quality: 0.5,
   full: FEEDBACK_WORDS.FULL,
 };
+
+/** The field's count under it once its words near the endpoint's bound, as the panel's counter stands; nothing while well short of it. */
+function counted(message: string): string | undefined {
+  const length = message.length;
+  const limit = FEEDBACK_LIMITS.MESSAGE_MAX_LENGTH;
+
+  return lengthCountShown(length, limit) ? lengthCountWords(length, limit) : undefined;
+}
 
 /** No words yet, for either kind. */
 const NO_WORDS: Readonly<Record<FeedbackKind, string>> = {
@@ -105,7 +117,9 @@ export default function FeedbackScreen() {
   const [kind, setKind] = useState<FeedbackKind>(FEEDBACK_KIND.FEEDBACK);
   const [words, setWords] = useState(NO_WORDS);
   const [signed, setSigned] = useState(true);
+  // Why the note did not go, or what a bound or the picker refused, said under the field in the danger's ink.
   const [note, setNote] = useState<string | undefined>(undefined);
+  const notices = useFailureNotices();
   const [sending, setSending] = useState(false);
   // Whether a send is out, read at the press itself.
   const out = useRef(false);
@@ -197,6 +211,8 @@ export default function FeedbackScreen() {
       const otherHeld = now.words[other].trim() !== "" || now[other].length > 0;
 
       for (const id of sent) detach(id);
+      // Note that a note that went says so where the reader looks next, as the panel thanks them, rather than with a buzz alone, which haptics off or VoiceOver never hear.
+      notices.say({ kind: NOTICE_KIND.DONE, words: FEEDBACK_WORDS.SENT });
 
       if (!edited) {
         setWords((current) => ({ ...current, [kind]: "" }));
@@ -246,7 +262,11 @@ export default function FeedbackScreen() {
       <Screen>
         <ScopePicker label={FEEDBACK_WORDS.KIND} scopes={scopes}>
           <SettingsForm>
-            <ListSection footer={note}>
+            {/* Note that the field's count stands under it once its words near the bound, as the panel's counter does, and a refusal stands there instead in the danger's ink. */}
+            <ListSection
+              footer={note ?? counted(message)}
+              footerTone={note === undefined ? FOOTER_TONE.NOTE : FOOTER_TONE.FAILURE}
+            >
               {/* Note that each kind's field stands apart, so a change of kind shows that kind's own words, and is drawn afresh once its words were sent. */}
               <Fragment key={sends}>
                 <WordsField
