@@ -264,7 +264,7 @@ function SwitcherList({
 }: {
   readonly props: WorkspaceSwitcherProps;
   readonly closed: (then: () => void) => void;
-  /** Told the height its rows stand in, for the popover to fit them; none in a sheet. */
+  /** Told the height its rows stand in, for the popover or the sheet to fit them. */
   readonly onContentHeight?: ((height: number) => void) | undefined;
 }) {
   const { workspaces, chosen, onChoose, account, actions, onWorkspaceSettings } = props;
@@ -395,17 +395,20 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
 
   const colors = useColors();
 
-  // Note that the sheet first stands as tall as its rows rather than half the screen, so the account's row, the way into Settings, shows on a short screen such as the folded Duo's; at an accessibility size it opens at its full height, since the rows outgrow the reckoning.
-  const fitted = useAccessibilitySize()
-    ? SHEET_DETENTS.WHOLE
-    : [{ height: popoverHeight(props) + SHEET_GRABBER_ROOM }, "large" as const];
-
   const [presented, setPresented] = useState(false);
   // Note that the popover's list mounts on its first open and stays, since a closed popover's content stays mounted, every workspace's photo with it, and a list mounted anew on each open would draw each photo's letter tile again.
   const [opened, setOpened] = useState(false);
   const [after, setAfter] = useState<{ readonly act: () => void } | undefined>(undefined);
-  // Note that the popover grows to the height its list's rows lay out at, since a reckoning at the default text size cut its last section off, but never stands shorter than the reckoning, since the list measures nothing (0) before the popover first draws, and a popover of no height never draws.
+  // Note that the popover and the sheet grow to the height their list's rows lay out at, since a reckoning at the default text size cut the last section off, but never stand shorter than the reckoning, since the list measures nothing (0) before it first draws, and a popover of no height never draws.
   const [measured, setMeasured] = useState<number | undefined>(undefined);
+  // Note that the sheet's reckoning grows with the reader's text, so its first open, before its list has measured, still holds the account's row at a larger size; once measured, the sheet stands as tall as its rows lay out, with no band under them.
+  const reckoned = useScaledSize(popoverHeight(props));
+  const sheetRows = measured !== undefined && measured > 0 ? measured : reckoned;
+
+  // Note that the sheet first stands as tall as its rows rather than half the screen, so the account's row, the way into Settings, shows on a short screen such as the folded Duo's; at an accessibility size it opens at its full height, since the rows outgrow any reckoning.
+  const fitted = useAccessibilitySize()
+    ? SHEET_DETENTS.WHOLE
+    : [{ height: sheetRows + SHEET_GRABBER_ROOM }, "large" as const];
 
   // Note that the act is taken off as it runs, so a second dismissal never runs it again.
   const gone = () => {
@@ -419,9 +422,10 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
     setPresented(false);
   };
 
-  // Note that a window crossing between a sheet and a popover drops the list without telling it gone, so an act left waiting is dropped with it rather than run by a later close.
+  // Note that a window crossing between a sheet and a popover drops the list without telling it gone, so an act left waiting is dropped with it rather than run by a later close, and the other list's height with it.
   useEffect(() => {
     setAfter(undefined);
+    setMeasured(undefined);
   }, [presentation]);
 
   const face = (
@@ -430,6 +434,8 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
       look={look}
       tileSize={tileSize}
       onPress={() => {
+        // Note that an open starts with no act waiting, so one a missed dismissal left never runs on a later row's press.
+        setAfter(undefined);
         setOpened(true);
         setPresented(true);
       }}
@@ -451,7 +457,7 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
             presentationBackground(colors.GROUPED),
           ]}
         >
-          <SwitcherList props={props} closed={closed} />
+          <SwitcherList props={props} closed={closed} onContentHeight={setMeasured} />
         </Group>
       </BottomSheet>
     );
