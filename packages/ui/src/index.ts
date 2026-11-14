@@ -224,6 +224,8 @@ export * from "./components/mac-app-card/mac-app-card.js";
 
 export * from "./components/mark-strip/mark-strip.js";
 
+export type { WordsMark } from "./components/marked-words/marked-words.js";
+
 export * from "./components/menu/context-menu.js";
 
 export * from "./components/menu/link-address.js";

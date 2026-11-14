@@ -7,6 +7,7 @@ import { BUTTON_SIZE, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_LOOK, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
 import { CardPress } from "../card-press/card-press.js";
 import { CHIP_LOOK, CHIP_SIZE, Chip, ChipName, StaticChip } from "../chip/chip.js";
+import { MarkedWords, type WordsMark } from "../marked-words/marked-words.js";
 import { Menu, useMenu } from "../menu/menu.js";
 import { PictureStandIn } from "../picture-set/picture-set.js";
 import { PICTURE_TILE_FACE, PictureTile } from "../picture-tile/picture-tile.js";
@@ -101,8 +102,8 @@ export interface StackedApp {
     | undefined;
   /** The card its name's chip hangs (`MacAppCard`); none where the caller has none. */
   readonly card?: ReactNode;
-  /** What stands before its name in its title, as a teammate's face stands before a machine's name where its title names their machine; none for the rest. */
-  readonly before?: ReactNode;
+  /** A mark set inside its name, before the part it marks: a teammate's face before their machine's name where its title names their machine ("Simulator on Theo's MacBook Pro"); none for the rest. */
+  readonly mark?: WordsMark | undefined;
 }
 
 /** Apps as a pile of their icons, at most four, each overlapping the one before it, the first on top. */
@@ -177,8 +178,9 @@ function AppName({
   const face = (
     <>
       <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />
-      {app.before}
-      <ChipName>{app.name}</ChipName>
+      <ChipName>
+        <MarkedWords words={app.name} mark={app.mark} />
+      </ChipName>
     </>
   );
 
@@ -244,13 +246,12 @@ function BehindTitle({
       <CardPress label={WORDS.FORWARD(app.name)} onPress={() => onPick(app.id)}>
         <span className="flex min-w-0 items-center gap-ui-6 pt-ui-4 pb-ui-12 ps-ui-8 pe-ui-8">
           <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />
-          {app.before}
           <Text
             variant={TEXT_VARIANT.LABEL}
             tone={using ? TEXT_TONE.DEFAULT : TEXT_TONE.MUTED}
             truncate
           >
-            {app.name}
+            <MarkedWords words={app.name} mark={app.mark} />
           </Text>
           {using ? <WorkingMark /> : null}
         </span>

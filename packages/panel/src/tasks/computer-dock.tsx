@@ -155,6 +155,9 @@ export function appsInUse(
   return { apps, using };
 }
 
+/** The words between an app's name and its machine's in a title that names both. */
+const ON_MACHINE = " on ";
+
 /** What an app's title says: its name, and the machine it is on where another app in use shares its name on another machine ("Simulator on Mac mini"), so the two never read alike. */
 function titleOf(app: ComputerApp, apps: readonly ComputerApp[], thisMac: ThisMac): string {
   const machine = app.machine;
@@ -167,7 +170,7 @@ function titleOf(app: ComputerApp, apps: readonly ComputerApp[], thisMac: ThisMa
 
   if (!twinned || machine === undefined) return app.name;
 
-  return `${app.name} on ${machineName({ deviceId: machine.id, name: machine.name }, [], thisMac)}`;
+  return `${app.name}${ON_MACHINE}${machineName({ deviceId: machine.id, name: machine.name }, [], thisMac)}`;
 }
 
 /** Every agent whose stack the reader put down while it worked, this window's session, so it stays down as the tab comes back. */
@@ -307,11 +310,14 @@ function AppsFloat({
     const iconSrc = icon?.kind === PICTURE_STATE.READY ? icon.url : undefined;
     const name = titleOf(each, inUse.apps, thisMac);
 
-    // Note that a title naming a teammate's machine wears their face before the name, as the machine's own chip does.
-    const before =
-      name === each.name || each.machine === undefined ? undefined : (
-        <MachineOwnerFace userId={each.machine.owner.userId} />
-      );
+    // Note that a title naming a teammate's machine wears their face right before the machine's name, as the machine's own chip does.
+    const mark =
+      name === each.name || each.machine === undefined
+        ? undefined
+        : {
+            at: each.name.length + ON_MACHINE.length,
+            mark: <MachineOwnerFace userId={each.machine.owner.userId} />,
+          };
 
     const card = (
       <MacAppChipCard
@@ -329,7 +335,7 @@ function AppsFloat({
           name,
           iconSrc,
           card,
-          before,
+          mark,
           window: {
             state: window,
             width: front.window.width,
@@ -337,7 +343,7 @@ function AppsFloat({
             pointer: cursor?.app === each.id ? pointer : undefined,
           },
         }
-      : { id: each.id, name, iconSrc, card, before };
+      : { id: each.id, name, iconSrc, card, mark };
   });
 
   const putAway = () => {

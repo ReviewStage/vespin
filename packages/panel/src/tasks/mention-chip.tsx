@@ -92,7 +92,12 @@ import { useNamesOf, useWordTargets } from "./use-known-names.js";
 import { useLinkStanding, useNumberedTaskId, useWordsWorkspaceId } from "./use-link-standing.js";
 import { useOpenLink } from "./use-open-link.js";
 import { useWordsDates } from "./words-dates.js";
-import { MachineChipOwner, useMachineOwnerHeard, useMachinePress } from "./workspace-machines.js";
+import {
+  MachineChipOwner,
+  useMachineNameMark,
+  useMachineOwnerHeard,
+  useMachinePress,
+} from "./workspace-machines.js";
 
 /**
  * mention-chip.tsx -- a mention drawn in words as its chip: its kind's glyph and its name, a button that opens what it names, or a link where that leaves the app, hanging a card that says what that is, struck through where what it names is gone.
@@ -661,6 +666,10 @@ function MentionChip({
   // Note that a teammate's machine, or an app on one, is heard as theirs, since the face that says so to the eye is hidden from a screen reader.
   const ownerHeard = useMachineOwnerHeard(ownedMachineOf(mention), machineWorkspace);
 
+  // Note that an app's chip that names a teammate's machine ("Simulator on Theo's MacBook Pro") wears their face right before the machine's name, not the app's.
+  const appMachine = mention.kind === MENTION_KIND.MAC_APP ? mention.machine : undefined;
+  const machineMark = useMachineNameMark(appMachine, machineWorkspace, label);
+
   const card = (
     <MentionCard
       mention={mention}
@@ -690,6 +699,7 @@ function MentionChip({
       label={label}
       name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
       before={ownerOf(mention, target, doors)}
+      mark={machineMark}
       heard={ownerHeard}
       state={told ?? standing?.state}
       gone={state === MENTION_STATE.GONE}
@@ -720,15 +730,13 @@ function ownedMachineOf(mention: Mention): string | undefined {
   return mention.kind === MENTION_KIND.MAC_APP ? mention.machine : undefined;
 }
 
-/** What stands before a machine's chip's name, or an app's on a machine: the machine's owner's face, where it is a teammate's; nothing for any other mention. */
+/** What stands before a machine's chip's name: its owner's face, where it is a teammate's; nothing for any other mention. */
 function ownerOf(mention: Mention, target: string, doors: MentionDoors): ReactNode {
-  const machineId = ownedMachineOf(mention);
-
-  if (machineId === undefined) return undefined;
+  if (mention.kind !== MENTION_KIND.MACHINE) return undefined;
 
   return (
     <MachineChipOwner
-      machineId={machineId}
+      machineId={mention.machineId}
       workspace={readLink(target)?.workspace ?? doors.place.workspace}
     />
   );
