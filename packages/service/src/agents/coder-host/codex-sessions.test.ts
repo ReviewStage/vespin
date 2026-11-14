@@ -22,7 +22,6 @@ import {
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
 import { registerDevice } from "@repo/database/models/device-store";
-import { recordHostVersion } from "@repo/database/models/host-store";
 import {
   type KeyRing,
   parseKeyRing,
@@ -491,8 +490,6 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         assert.equal(routing.runnerTokenHash, runnerTokenDigest(bearer));
         // The bearer is sealed in the row.
         assert.equal(plan.stored.includes(bearer), false, "a secret in the row in the clear");
-        // A Mac whose host bundles a runner from before the transcript store keeps its threads on its disk alone.
-        assert.equal(plan.config.transcriptsUrl, undefined);
         // Nor does a Mac that never said its runner reads a mode run one that asks: it is refused by name rather than run with full access.
         const asking = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
         yield* updateAgentPermissionModeCommitted(userId, asking.id, AGENT_PERMISSION_MODE.ASK);
@@ -522,9 +519,9 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           "a launch queued for a runner that would run the mode unasked",
         );
 
-        // From the host release whose runner mirrors them, they are kept at the service, no Codex home
-        // named, since the runner mirrors them from Codex's own default under the machine's home.
-        // That release's host also says its runner reads a mode.
+        // A Mac's threads are kept at the service, no Codex home named, since the runner mirrors them
+        // from Codex's own default under the machine's home. A host that says its runner reads a mode
+        // is handed one.
         yield* registerDevice(userId, {
           id: deviceId,
           name: "Studio",
@@ -532,7 +529,6 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           codexExecutable,
           capabilities: [DEVICE_CAPABILITY.PERMISSION_MODES],
         });
-        yield* recordHostVersion(deviceId, "0.11.0");
         const onKept = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
         yield* updateAgentPermissionModeCommitted(userId, onKept.id, AGENT_PERMISSION_MODE.ASK);
         const kept = yield* launched(onKept);
