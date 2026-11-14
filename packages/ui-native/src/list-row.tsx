@@ -48,7 +48,7 @@ import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent, menuLabel } from "./glyph-label.js";
+import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink } from "./interactions.js";
 import {
@@ -121,7 +121,10 @@ export type RowActionTone = (typeof ROW_ACTION_TONE)[keyof typeof ROW_ACTION_TON
 export type RowAction = {
   /** The act's name, as the panel's menu names it: Mark done, Mark unread. */
   readonly label: string;
-  readonly symbol: Glyph;
+  /** Its glyph; none for an act that stands as words alone, such as a reminder's time. */
+  readonly symbol?: Glyph | undefined;
+  /** What a menu says under its words, such as when a reminder's time comes due. */
+  readonly detail?: string | undefined;
   readonly tone: RowActionTone;
   readonly onPress: () => void;
 };
@@ -181,7 +184,7 @@ type ListRowProps = RowActs & {
   readonly line?: InboxLineKind | undefined;
   /** The thread's last line: an ask's options or steps, or the last message's words. */
   readonly summary?: string | undefined;
-  /** Whether the thread is unread, which carries the dot and sets its title in medium. */
+  /** Whether the thread is unread, which carries the dot and sets its title in semibold. */
   readonly unread?: boolean | undefined;
   /** Whether the thread is done, which mutes its words. */
   readonly done?: boolean | undefined;
@@ -202,7 +205,7 @@ type TaskRowProps = RowActs & {
   readonly id: string;
   readonly name: string;
   readonly status: TaskStatus;
-  /** Whether the task has news unread, which carries the dot and sets its name in medium. */
+  /** Whether the task has news unread, which carries the dot and sets its name in semibold. */
   readonly unread?: boolean | undefined;
   /** Whether the task is done or canceled, which mutes its name, as a search finds one. */
   readonly finished?: boolean | undefined;
@@ -225,7 +228,7 @@ export function actionButton(action: RowAction, colors: BrandColors) {
   return (
     <Button
       key={action.label}
-      {...actContent(action.label, action.symbol)}
+      {...menuActContent(action.label, action.symbol, action.detail)}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
       modifiers={destructive ? [] : [tint(colors.TEXT_MUTED)]}
@@ -495,6 +498,7 @@ export function RowHead({
   unread,
   faded,
   lead,
+  beside,
   title,
   ink,
   end,
@@ -502,6 +506,8 @@ export function RowHead({
   readonly unread: boolean;
   readonly faded: boolean;
   readonly lead: ReactNode;
+  /** What stands between the lead and the title, such as the avatar of the App that runs a check; nothing where none is given. */
+  readonly beside?: ReactNode;
   readonly title: string;
   readonly ink: string;
   readonly end: ReactNode;
@@ -513,7 +519,7 @@ export function RowHead({
   const words = (
     <Text
       modifiers={[
-        font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "medium" : "regular" }),
+        font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "semibold" : "regular" }),
         foregroundStyle(ink),
         lineLimit(lines.title),
       ]}
@@ -528,6 +534,7 @@ export function RowHead({
       <UnreadDot unread={unread} faded={faded} />
       <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
         <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        {beside}
         {stacked ? (
           <VStack alignment="leading" spacing={2}>
             {words}
@@ -593,36 +600,41 @@ function TaskLine({ task }: { readonly task: NonNullable<ListRowProps["task"]> }
 }
 
 /**
- * An Inbox row's last line, under the title: an ask's glyph, where the task's
- * line leads the row rather than it, and the thread's last words, 13 pt in
- * the muted ink, as the panel's row reads: only the ask's glyph stands in the
- * attention ink.
+ * An Inbox row's last line, under the title: an ask's glyph in the lead
+ * column, where the task's line leads the row rather than it, and the
+ * thread's last words in the title's column, 13 pt in the muted ink, as the
+ * panel's row reads and as Mail's preview stands under its subject: only the
+ * ask's glyph stands in the attention ink. Note that it stands on the same
+ * columns as the title's line, the unread dot's left empty, so the words
+ * hang under the title at every size, a glyph or none before them.
  */
 function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
   const { line, summary, glyph } = props;
   const colors = useColors();
   const lines = useRowLines();
+  const leadWidth = useScaledSize(MARK_SIZE.LEAD);
   const words = summary?.trim() === "" ? undefined : summary;
 
   if (words === undefined) return null;
 
   return (
-    <HStack
-      spacing={SPACE.TIGHT + 1}
-      alignment="center"
-      modifiers={[padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING })]}
-    >
-      {glyph ? <LineGlyph line={line} /> : null}
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.ROW_LINE }),
-          foregroundStyle(colors.TEXT_MUTED),
-          lineLimit(lines.line),
-        ]}
-      >
-        {words}
-      </Text>
-      <Spacer />
+    <HStack spacing={SPACE.TIGHT} alignment="center">
+      <UnreadDot unread={false} />
+      <HStack spacing={SPACE.ROW} alignment="center">
+        <HStack modifiers={[frame({ width: leadWidth })]}>
+          {glyph ? <LineGlyph line={line} /> : null}
+        </HStack>
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            lineLimit(lines.line),
+          ]}
+        >
+          {words}
+        </Text>
+        <Spacer />
+      </HStack>
     </HStack>
   );
 }

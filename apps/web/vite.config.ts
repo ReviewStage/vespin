@@ -6,6 +6,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 import { panelBuild } from "./scripts/panel-build";
 import { siteMarkdown } from "./scripts/site-markdown";
+import { skewProtection } from "./scripts/skew-protection";
 
 const resolveEntry = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
@@ -22,6 +23,13 @@ const WEB_DEPLOYMENT_DEFINES = {
   WEB_DEPLOYMENT_COMMIT: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? ""),
   WEB_SENTRY_DSN: JSON.stringify(process.env.SENTRY_DSN ?? ""),
 };
+
+// The deployment a Vercel build is for, where the project's Skew Protection is
+// on, which every address the build writes names, so a tab open across a
+// deploy is answered its chunks from the deployment it loaded
+// (`scripts/skew-protection.ts`).
+const SKEW_PROTECTED_DEPLOYMENT =
+  process.env.VERCEL_SKEW_PROTECTION_ENABLED === "1" ? process.env.VERCEL_DEPLOYMENT_ID : undefined;
 
 /**
  * The page a frame shows where the deployment has no sandbox, served in
@@ -52,6 +60,7 @@ export default defineConfig({
     ...panelBuild(PANEL_ASSET_BASE),
     siteMarkdown(),
     pageInMacAppAtCleanPath(),
+    skewProtection(SKEW_PROTECTED_DEPLOYMENT),
   ],
   build: {
     // Vite's own gzip report is only a cost to every build.

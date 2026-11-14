@@ -123,10 +123,11 @@ export const SETTINGS_ROW_DENSITY = {
 
 export type SettingsRowDensity = (typeof SETTINGS_ROW_DENSITY)[keyof typeof SETTINGS_ROW_DENSITY];
 
-/** Where a row's edge stands: at the card's, or at the words of a parent row a mark leads. */
+/** Where a row's edge stands: at the card's, at the words of a parent row a mark leads, or a step further, under one of that row's own marked rows. */
 export const SETTINGS_ROW_INDENT = {
   NONE: "none",
   MARK: "mark",
+  MARK_TWICE: "mark-twice",
 } as const;
 
 export type SettingsRowIndent = (typeof SETTINGS_ROW_INDENT)[keyof typeof SETTINGS_ROW_INDENT];
@@ -351,7 +352,7 @@ export function SettingsRow({
 
   return (
     <div
-      className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent data-[editing=true]:rounded-control data-[editing=true]:ring-1 data-[editing=true]:ring-accent-fill data-[editing=true]:ring-inset"
+      className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent data-[indent=mark-twice]:ms-settings-row-indent-twice data-[editing=true]:rounded-control data-[editing=true]:ring-1 data-[editing=true]:ring-accent-fill data-[editing=true]:ring-inset"
       data-invalid={failed}
       data-editing={editing || undefined}
       data-density={density}
@@ -361,7 +362,7 @@ export function SettingsRow({
       data-led={led}
       {...landedMark(landed, LANDED.WITHIN)}
     >
-      <Item size={density} className={indent === SETTINGS_ROW_INDENT.MARK ? "ps-0" : undefined}>
+      <Item size={density} className={indent === SETTINGS_ROW_INDENT.NONE ? undefined : "ps-0"}>
         {end === undefined ? (
           <div className={cn(wraps ? LINE_CLASS.WRAPPING : LINE_CLASS.PLAIN, top)}>{words}</div>
         ) : (

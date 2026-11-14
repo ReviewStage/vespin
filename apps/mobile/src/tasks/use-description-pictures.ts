@@ -141,7 +141,7 @@ export function useDescriptionPictures(body: string | undefined): DescriptionPic
         if (mounted.current) setRead((held) => withRead(held, owner, id, picture));
       };
 
-      acts[ACT_KIND.TASKS_PICTURE_READ]({ planId: owner, attachmentId: id })
+      acts[ACT_KIND.TASKS_PICTURE_READ]({ taskId: owner, attachmentId: id })
         .then(async (answer) => {
           if ("base64" in answer) {
             landed(await readOf(id, answer.contentType, answer.base64));

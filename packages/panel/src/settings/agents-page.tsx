@@ -1,3 +1,4 @@
+import { DEFAULT_SAVE_FAILED_NOTE } from "@repo/features/agent-refusal-words";
 import { CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { remedyLabel } from "@repo/features/failure-remedy";
 import {
@@ -141,7 +142,7 @@ const PAGE_LINE = {
   FAILED: "The default could not be read.",
   MODELS_NONE_MATCH: "No models match",
   SIGNED_OUT: SIGNED_OUT_WORDS,
-  WRITE_FAILED: "The default could not be saved. Try again.",
+  WRITE_FAILED: DEFAULT_SAVE_FAILED_NOTE,
 } as const;
 
 /**

@@ -69,8 +69,8 @@ import {
  * the rows it holds by message id (`joinedWindowRows`), and takes an answer whole
  * where it names no cursor of the follow's, as after a rewind; a page is
  * read again only when the
- * turns, the titles, the workers, the queue, or a device agent's launch
- * move, since what it carries beside its messages, the agent's status, its
+ * turns, the titles, the workers, the queue, a device agent's launch, or
+ * the calls standing on the agent move, since what it carries beside its messages, the agent's status, its
  * usage priced from the model catalog, its context, its workers, and where
  * its launch stands, is still the service's.
  * Where the service says the clock alone may move the page in so long, as
@@ -193,7 +193,7 @@ export type TranscriptFollows<Key = TranscriptKey> = RcMap.RcMap<Key, Standing, 
  * The rows a page beside the messages is read by as one text, in no order of
  * Postgres's, so only a change to one moves it: the turns, the titles, the
  * workers, the queue's revision, a device agent's newest launch line, a
- * first launch's boot, and the developer's lines still awaiting a turn. Note that the messages and the journal's revision are left out,
+ * first launch's boot, the voice calls standing on the agent, and the developer's lines still awaiting a turn. Note that the messages and the journal's revision are left out,
  * because the window's own rows carry the messages; and that a line awaiting
  * its turn is in, because whoever wrote it, a queue's hand-off or another
  * member, the agent's status moves with it, which only a page says. Held
@@ -209,6 +209,7 @@ function digestOf(rows: AgentTranscriptLiveRows): string {
     queue: rows.queueRevision ?? [],
     launch: rows.launch ?? [],
     boot: rows.boot ?? [],
+    calls: rows.calls ?? [],
     awaiting: rows.window
       .filter((row) => row.role === MESSAGE_ROLE.USER && row.turnStatus === null)
       .map(({ id }) => ({ id })),

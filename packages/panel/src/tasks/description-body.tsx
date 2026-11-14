@@ -1,5 +1,5 @@
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
-import { type DescriptionSection, descriptionSections } from "@repo/features/description-document";
+import { type DescriptionSection, descriptionSections } from "@repo/features/description-sections";
 import { LINK_DESTINATION, linkOf, taskLinkStep } from "@repo/features/link-grammar";
 import {
   type DescriptionMention,
@@ -634,7 +634,7 @@ function unitsAfter(
 
 /** A task's document cut into its sections, each keeping its id from the same task's document before. */
 function drawnUnits(task: Task, held: DrawnUnits | undefined): DrawnUnits {
-  const { body } = task.document;
+  const { body } = task.description;
   const sections = descriptionSections(body);
   const same = held?.taskId === task.id ? held : undefined;
   const { views, nextId } = unitsAfter(same?.views ?? [], sections, same?.nextId ?? 0);
@@ -652,7 +652,7 @@ function useDrawnUnits(task: Task, drawn: boolean): DrawnUnits | undefined {
 
   if (!drawn) return undefined;
 
-  if (held !== undefined && held.taskId === task.id && held.body === task.document.body) {
+  if (held !== undefined && held.taskId === task.id && held.body === task.description.body) {
     return held;
   }
 
@@ -800,7 +800,7 @@ function savedOver(
   edit: { readonly base: string; readonly value: string },
   kept: string | undefined,
 ): Promise<Kept> {
-  return save({ document: edit }).then((answer) => {
+  return save({ description: edit }).then((answer) => {
     if (!("saved" in answer)) return notKept(answer);
     writes.saved =
       kept === undefined ? undefined : { taskId: drawn.id, over: drawn.body, text: kept };
@@ -922,7 +922,7 @@ function SectionLink({
   tabbable: boolean;
 }): React.JSX.Element {
   const link = linkOf(
-    { kind: LINK_DESTINATION.SECTION, planId: linked.step, anchor },
+    { kind: LINK_DESTINATION.SECTION, taskId: linked.step, anchor },
     linked.place.workspace,
   );
 
@@ -939,7 +939,7 @@ function TitleLink({
   linked: LinkedTask;
   tabbable: boolean;
 }): React.JSX.Element {
-  const link = linkOf({ kind: LINK_DESTINATION.TASK, planId: linked.step }, linked.place.workspace);
+  const link = linkOf({ kind: LINK_DESTINATION.TASK, taskId: linked.step }, linked.place.workspace);
 
   return <UnitLinkButton link={link} label={LINK_COPY.LABEL} tabbable={tabbable} />;
 }
@@ -1291,7 +1291,7 @@ export const DescriptionBody = memo(function DescriptionBody({
   const documented = useWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS);
   const onSince = useWorkspaceExperimentOnSince(task.workspaceId, EXPERIMENT.DESCRIPTIONS);
   const editable = edit !== undefined && documented;
-  const text = editable ? task.document.body : undefined;
+  const text = editable ? task.description.body : undefined;
   const editReader = useEditReader(reader);
   // Note that what each section is drawn from is held steady across draws,
   // because a section drawn again parses its Markdown again
@@ -1481,7 +1481,7 @@ export const DescriptionBody = memo(function DescriptionBody({
   const comments = useDescriptionCommentsControl();
 
   const commentsHere =
-    comments !== undefined && comments.planId === task.id && sectionLinks !== undefined;
+    comments !== undefined && comments.taskId === task.id && sectionLinks !== undefined;
 
   const drawnSections = commentsHere ? textSections : undefined;
   // The toolbar over the editor's words selected starts a thread on them where the description's comments are drawn.
@@ -1516,14 +1516,14 @@ export const DescriptionBody = memo(function DescriptionBody({
   const latestDescription = useRef({
     cut,
     id: task.id,
-    body: task.document.body,
+    body: task.description.body,
     saves: edit !== undefined,
   });
 
   latestDescription.current = {
     cut,
     id: task.id,
-    body: task.document.body,
+    body: task.description.body,
     saves: edit !== undefined,
   };
 
@@ -1643,7 +1643,7 @@ export const DescriptionBody = memo(function DescriptionBody({
 
   // The text a thread being started is laid over, handed to the units only while one is, since every unit is drawn again when it changes.
   const { pending } = useCommentFocus();
-  const pendingText = pending === undefined ? undefined : task.document.body;
+  const pendingText = pending === undefined ? undefined : task.description.body;
 
   // The document's one Tab stop: the block selected last while it still stands, or its title, or its first section, or its placeholder where it has none.
   const standing =
@@ -1794,7 +1794,7 @@ export const DescriptionBody = memo(function DescriptionBody({
                 shown={shown}
                 unitClass={UNIT_CLASS}
                 sections={drawnSections}
-                text={task.document.body}
+                text={task.description.body}
                 doors={{ control: comments, agents, me: reader.readerId }}
                 editor={editing.editor === undefined ? undefined : editorHandle}
               />
@@ -1816,7 +1816,7 @@ export const DescriptionBody = memo(function DescriptionBody({
   return documented ? (
     <DescriptionPictures
       taskId={task.id}
-      text={task.document.body}
+      text={task.description.body}
       sectionNote={(heading) => pictureNoteOf(marks, heading)}
       editable={editable}
     >

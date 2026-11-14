@@ -179,7 +179,7 @@ function saver(
   taskId: string,
 ): (base: string, value: string) => Promise<TasksEditAnswer> {
   return (base, value) =>
-    send({ taskId, edit: { document: { base, value } } }).catch(
+    send({ taskId, edit: { description: { base, value } } }).catch(
       unreachedAs(TASK_CALL_FAILURE.UNANSWERED),
     );
 }
@@ -308,7 +308,7 @@ export function useAddToDescription(): ViewerAction | undefined {
       if ("refused" in keeping) return failed(keeping.refused, keeping.refused, true);
       const { url } = keeping;
 
-      const kept = await sendKeep({ planId: taskId, picture: url }).catch(
+      const kept = await sendKeep({ taskId: taskId, picture: url }).catch(
         unreachedAs(PICTURE_KEEP_FAILURE.UNANSWERED),
       );
 

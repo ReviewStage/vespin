@@ -1431,7 +1431,7 @@ const MEMBER_EDIT_DESCRIPTION_TOOL = memberMcpTool({
 
 /*
  * A description's history. Each runs the operation the window's History tab
- * runs through its procedure (`plans.descriptionRevisions`,
+ * runs through its procedure (`tasks.descriptionRevisions`,
  * `descriptionRevision`, `restoreDescription`): the history read under the
  * member's membership of the task's workspace, and a restore the member's own
  * save, kept as a revision naming the one it brought back.
@@ -1565,7 +1565,7 @@ const READ_DESCRIPTION_REVISION_TOOL = memberMcpTool({
           return agentToolRejected(DESCRIPTION_HISTORY_REFUSAL.NO_REVISION);
         }
 
-        const text = cutOnLine(revision.value.document.body, DESCRIPTION_TEXT_READ_CHARS);
+        const text = cutOnLine(revision.value.description.body, DESCRIPTION_TEXT_READ_CHARS);
 
         return {
           status: ACTION_RESULT_STATUS.ACCEPTED,

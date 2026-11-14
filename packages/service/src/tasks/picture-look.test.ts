@@ -15,7 +15,7 @@ import { unparsedWire } from "@repo/wire";
 import { webmBytes } from "@repo/wire/testing";
 import { Effect } from "effect";
 import { Base64 } from "effect/encoding";
-import type { DescriptionDocumentBinding } from "./description-notes.js";
+import type { DescriptionBinding } from "./description-notes.js";
 import {
   lookNamedOnly,
   type PdfWrite,
@@ -67,24 +67,24 @@ const openPicturedTasks = Effect.gen(function* () {
     return assert.fail("the picture was not kept");
   const address = descriptionAttachmentAddress({ taskId: task.id, attachmentId: kept.id }, "acme");
 
-  return { owner, outsider, planId: task.id, otherId: other.id, attachmentId: kept.id, address };
+  return { owner, outsider, taskId: task.id, otherId: other.id, attachmentId: kept.id, address };
 });
 
 /** A look as a turn makes one: bound to the description as the account. */
-function lookCall(userId: string, taskId: string): DescriptionDocumentBinding {
+function lookCall(userId: string, taskId: string): DescriptionBinding {
   return { userId, taskId: taskId };
 }
 
 /** A writer for a look that names no PDF, which writes nothing. */
 const noPdfWrite: PdfWrite = () => Effect.die(new Error("a PDF was written"));
 
-const look = (call: DescriptionDocumentBinding, address: string) =>
+const look = (call: DescriptionBinding, address: string) =>
   runLookAtPicture(call, unparsedWire({ address }), noPdfWrite);
 
 it.layer(getTestDB())("look_at_picture", (it) => {
   it.effect("a member's look answers the picture, its type and its bytes", () =>
     Effect.gen(function* () {
-      const { owner, planId: taskId, address } = yield* openPicturedTasks;
+      const { owner, taskId, address } = yield* openPicturedTasks;
       const base64 = Base64.encode(PICTURE.bytes);
 
       const answered = yield* look(lookCall(owner, taskId), address);
@@ -101,14 +101,8 @@ it.layer(getTestDB())("look_at_picture", (it) => {
     "a picture of another description, one the description does not hold, an outsider's look, and an address that is no picture's are refused, in words the model reads and keeps",
     () =>
       Effect.gen(function* () {
-        const {
-          owner,
-          outsider,
-          planId: taskId,
-          otherId,
-          attachmentId,
-          address,
-        } = yield* openPicturedTasks;
+        const { owner, outsider, taskId, otherId, attachmentId, address } =
+          yield* openPicturedTasks;
 
         const missing = descriptionAttachmentAddress(
           { taskId: taskId, attachmentId: randomUUID() },
@@ -143,7 +137,7 @@ it.layer(getTestDB())("look_at_picture", (it) => {
     "a turn looks at the description's pictures as often as it asks, and every look answers the picture",
     () =>
       Effect.gen(function* () {
-        const { owner, planId: taskId, address } = yield* openPicturedTasks;
+        const { owner, taskId, address } = yield* openPicturedTasks;
 
         const statuses: string[] = [];
 
@@ -162,7 +156,7 @@ it.layer(getTestDB())("look_at_picture", (it) => {
     "a look at a video the description holds is refused, pointing at its words, and the model is handed none of its bytes",
     () =>
       Effect.gen(function* () {
-        const { owner, planId: taskId } = yield* openPicturedTasks;
+        const { owner, taskId } = yield* openPicturedTasks;
 
         const video: Picture = {
           contentType: PICTURE_MEDIA_TYPE.WEBM,

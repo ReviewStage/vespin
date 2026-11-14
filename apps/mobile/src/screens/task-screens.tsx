@@ -59,7 +59,14 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { provenanceText } from "@repo/features/time-format";
-import { countWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
+import {
+  CHOOSE_AN_ITEM_WORDS,
+  countWords,
+  readFailedWords,
+  readingWords,
+  TERM,
+  VERB,
+} from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -85,6 +92,7 @@ import {
   type ListLook,
   ListSection,
   menuWithout,
+  NoSelection,
   PATH_PART,
   RelationRow,
   ROW_ACTION_TONE,
@@ -155,7 +163,7 @@ import {
   useTaskWrites,
 } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, type SidebarTasks, useListColumn, useListLook } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, type SidebarTasks, useListColumn } from "./app-sidebar.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -163,9 +171,6 @@ import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./rela
 
 /** The Tasks tab's name, at its head and on its back button. */
 const TASKS_TITLE = "Tasks";
-
-/** What the task's column says before a task is picked, in a regular window. */
-const SELECT_A_TASK = "Select a task";
 
 /** What a pushed task's screen says where the read list holds no task its link names, such as one deleted since. */
 const TASK_NOT_FOUND = "Task not found";
@@ -237,7 +242,7 @@ function shareTaskLink(task: TaskSummary, workspace: Workspace | undefined): voi
   if (workspace === undefined) return;
   shareLink(
     linkOf(
-      { kind: LINK_DESTINATION.TASK, planId: taskLinkStep(task) },
+      { kind: LINK_DESTINATION.TASK, taskId: taskLinkStep(task) },
       workspace.slug ?? workspace.id,
     ),
   );
@@ -474,7 +479,7 @@ function rowActs(
         symbol: GLYPH.OPEN_EXTERNALLY,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () =>
-          openOnWeb({ kind: LINK_DESTINATION.TASK, planId: task.id }, listing.workspace),
+          openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
       },
       {
         label: WORDS.DELETE,
@@ -578,7 +583,7 @@ export function TaskListRow({
         listing.workspace === undefined
           ? undefined
           : linkOf(
-              { kind: LINK_DESTINATION.TASK, planId: task.id },
+              { kind: LINK_DESTINATION.TASK, taskId: task.id },
               listing.workspace.slug ?? listing.workspace.id,
             )
       }
@@ -617,7 +622,7 @@ function droppedTask(tree: TaskTree, url: string): TaskSummary | undefined {
     .flatMap((group) => group.rows)
     .map(({ task }) => task);
 
-  return listed.find((task) => task.id === place.planId || String(task.number) === place.planId);
+  return listed.find((task) => task.id === place.taskId || String(task.number) === place.taskId);
 }
 
 /** Each task's drops, counted as they are made, and the newest of them the service took, so an older drop's follow-up never undoes a newer one. */
@@ -644,7 +649,7 @@ function countDrop(taskId: string): (landed: boolean) => boolean {
  * What a task dropped on a group's header does there, keeping it in one
  * place as the panel's drag does: onto Pinned it leaves the section the
  * member keeps it in, a pinned task's stored entry among them, and is
- * pinned once that is taken; onto a section it is put in it, and onto a
+ * pinned at the same moment, both drawn at once; onto a section it is put in it, and onto a
  * repository group it leaves its section, each unpinning it once the move
  * is taken. A refused move leaves the task where it stood, and a drop's
  * pin or unpin is skipped where a newer drop of the same task has landed
@@ -660,17 +665,12 @@ function placeIn(
 
   if (group.kind === TASK_TREE_GROUP.PINNED) {
     return (task) => {
-      const newest = countDrop(task.id);
+      // Note that the drop is counted and taken at once, so an older drop's pending unpin yields to it.
+      countDrop(task.id)(true);
 
-      if (listing.sectionOf(task.id) === undefined) {
-        if (newest(true)) listing.pin(task.id, true);
-
-        return;
-      }
-
-      void listing.place(task.id, null).then((landed) => {
-        if (newest(landed)) listing.pin(task.id, true);
-      });
+      // Note that both writes go at once rather than the pin waiting on the move, so the row leaves its section and stands under Pinned in the same frame; each refused one rolls back with its own notice.
+      if (listing.sectionOf(task.id) !== undefined) void listing.place(task.id, null);
+      listing.pin(task.id, true);
     };
   }
 
@@ -1009,7 +1009,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         label: VERB.OPEN_IN_BROWSER,
         symbol: GLYPH.OPEN_EXTERNALLY,
         onPress: () =>
-          openOnWeb({ kind: LINK_DESTINATION.TASK, planId: task.id }, overview.workspace),
+          openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, overview.workspace),
       },
       {
         label: WORDS.DELETE,
@@ -1211,7 +1211,7 @@ function subTasksFinishedWords(finished: number, total: number): string {
 }
 
 /**
- * The task's relations as the panel's two groups list them (`plan-relations.tsx`):
+ * The task's relations as the panel's two groups list them (`overview-relations.tsx`):
  * its sub-tasks, counted finished of all of them, its header's + offering
  * New sub-task, which opens New task for one, and Link existing task, which
  * opens the Task relation sheet on Add sub-task; and, only while it holds a
@@ -1226,7 +1226,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const { task, document, tasks, relations } = overview;
   const byId = new Map(tasks.map((each) => [each.id, each]));
   const subTasks = subTasksOf(tasks, task.id);
-  const finished = subTaskCount(subTasks);
+  const finished = subTaskCount(task, subTasks);
 
   // Note that each side is listed apart, since one task may both wait on this one and hold it up.
   const sides = [
@@ -1362,9 +1362,10 @@ type UseAgentArchiveAskResult = {
  * an agent, and `ask` is the system's alert that asks it, which the screen
  * stands beside its `<Screen>`, as every list's questions stand. Note that
  * the question reads where the agent stands now, as the agent page's menu
- * asks (`useArchiveAsk`), read afresh as it's raised and checked again as
- * its act is pressed, because one that starts working while the alert is up
- * would otherwise be stopped and archived without a word of it.
+ * asks (`useArchiveAsk`), raised at once on where the list holds it and
+ * checked afresh as its act is pressed, because one that starts working
+ * while the alert is up would otherwise be stopped and archived without a
+ * word of it.
  */
 export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
   const acts = useAgentRowActs();
@@ -1747,7 +1748,7 @@ function OverviewPage({
   // A related task opens on its own Overview, and an agent on its page, where its transcript and its composer stand.
   const open = (id: string) => {
     if (related.has(id))
-      router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id })));
+      router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })));
     else if (agents.has(id)) router.push(onTab(iosAgentRoute(id)));
   };
 
@@ -1763,8 +1764,8 @@ function OverviewPage({
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
-      ) : document === undefined || document.document.body.trim() === "" ? null : (
-        <OverviewDescription overview={overview} body={document.document.body} />
+      ) : document === undefined || document.description.body.trim() === "" ? null : (
+        <OverviewDescription overview={overview} body={document.description.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
     </RowList>
@@ -1816,7 +1817,7 @@ function TasksStackList(words: TasksSearch) {
           look={LIST_LOOK.PLAIN}
           search={search}
           onSelect={(id) =>
-            router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id })))
+            router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })))
           }
           onRefresh={refreshTasks}
         />
@@ -1855,7 +1856,6 @@ function TasksSplitScreen({
   const read = useTasksRead();
   const archiveAsk = useAgentArchiveAsk();
   const threeColumns = useThreeColumns();
-  const look = useListLook();
   const picked = useTasksCollection();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
@@ -1868,7 +1868,7 @@ function TasksSplitScreen({
     view: (
       <TasksTree
         listing={listing}
-        look={look}
+        look={LIST_LOOK.PLAIN}
         search={search}
         collection={collection}
         selected={selected}
@@ -1891,11 +1891,11 @@ function TasksSplitScreen({
         onArchiveAgent={archiveAsk.archive}
       />
     ) : selected === undefined ? (
-      <EmptyState title={SELECT_A_TASK} symbol={GLYPH.TASK} />
+      <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (
-      <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
+      <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
     );
 
   const acts = taskActs(overview?.task, { newAgent, newSubTask });
@@ -1959,7 +1959,7 @@ export function TasksListScreen() {
 function numberedIn(id: string, workspace: string | undefined): boolean {
   return (
     workspace !== undefined &&
-    taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: id }) !== undefined
+    taskNumberOf({ kind: LINK_DESTINATION.TASK, taskId: id }) !== undefined
   );
 }
 
@@ -2008,7 +2008,8 @@ export function TaskScreen() {
   // Note that a number a link names in its workspace is handed to the split view only once found, as the task's id, since the split view's selection names no workspace; one not found stays here to say so.
   const handing = numberedIn(id, workspace) ? found.taskId : id;
   const handed = useHandToSplit(SPLIT_TAB.TASKS, handing) && handing !== undefined;
-  useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);
+  // Note that the open is told apart by the task's id, as the split view's is, so a number found and handed over on an unfold carries the same open; a number not yet found shows no task to count.
+  useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
 
   if (handed) return null;
@@ -2047,7 +2048,7 @@ export function TaskScreen() {
                 {submenu.actions.map((action) => (
                   <Stack.Toolbar.MenuAction
                     key={action.label}
-                    icon={glyphSymbol(action.symbol)}
+                    {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
                     destructive={action.destructive === true}
                     onPress={action.onPress}
                   >
@@ -2059,7 +2060,7 @@ export function TaskScreen() {
             {menu.actions.map((action) => (
               <Stack.Toolbar.MenuAction
                 key={action.label}
-                icon={glyphSymbol(action.symbol)}
+                {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
                 destructive={action.destructive === true}
                 onPress={action.onPress}
               >
@@ -2079,7 +2080,7 @@ export function TaskScreen() {
         ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         ) : (
-          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
+          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
         )}
       </Screen>
       <StatusQuestionAsk question={question} />

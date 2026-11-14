@@ -7,12 +7,10 @@ import {
   GLYPH,
   GroupRow,
   LIST_LOOK,
-  type ListLook,
   ListSection,
   MARK_SIZE,
   RowList,
   SWITCHER_LOOK,
-  useThreeColumns,
   WorkspaceSwitcherItem,
 } from "@repo/ui-native";
 import { useRouter } from "expo-router";
@@ -232,9 +230,4 @@ export function useAppSidebar(
     sidebarShown: shown,
     onSidebarShownChange: setShown,
   };
-}
-
-/** How a tab's list stands: plain beside the app sidebar, in the sidebar's look where it stands first. */
-export function useListLook(): ListLook {
-  return useThreeColumns() ? LIST_LOOK.PLAIN : LIST_LOOK.SIDEBAR;
 }

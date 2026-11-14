@@ -89,6 +89,8 @@ export const ENTITY_KIND = {
   MAC_APP: MENTION_KIND.MAC_APP,
   /** The developer's Mac as a whole. */
   COMPUTER: MENTION_KIND.COMPUTER,
+  /** A machine of the workspace, a member's Mac or host. */
+  MACHINE: MENTION_KIND.MACHINE,
 } as const satisfies Record<string, Entity["kind"]>;
 
 export type EntityKind = (typeof ENTITY_KIND)[keyof typeof ENTITY_KIND];
@@ -237,7 +239,7 @@ const ENTITY_NAME: EntityNames = {
   [ENTITY_KIND.VERSION]: {
     live: false,
     held: (version, known) => {
-      const taskName = known.tasks.get(version.planId);
+      const taskName = known.tasks.get(version.taskId);
 
       return taskName === undefined ? undefined : `${taskName}, version ${version.revision}`;
     },
@@ -296,6 +298,7 @@ const ENTITY_NAME: EntityNames = {
   [ENTITY_KIND.DATE]: NO_LIVE_NAME,
   [ENTITY_KIND.MAC_APP]: NO_LIVE_NAME,
   [ENTITY_KIND.COMPUTER]: NO_LIVE_NAME,
+  [ENTITY_KIND.MACHINE]: NO_LIVE_NAME,
 };
 
 /**
@@ -340,6 +343,7 @@ export const ENTITY_WORD: Readonly<Record<EntityKind, string>> = {
   [ENTITY_KIND.DATE]: "date",
   [ENTITY_KIND.MAC_APP]: "app",
   [ENTITY_KIND.COMPUTER]: "computer",
+  [ENTITY_KIND.MACHINE]: "machine",
 };
 
 /**
@@ -380,15 +384,15 @@ type DestinationEntities = {
 
 /** The entity each kind of destination names. */
 const DESTINATION_ENTITY: DestinationEntities = {
-  [LINK_DESTINATION.TASK]: (place) => ({ kind: ENTITY_KIND.PLAN, taskId: place.planId }),
+  [LINK_DESTINATION.TASK]: (place) => ({ kind: ENTITY_KIND.PLAN, taskId: place.taskId }),
   [LINK_DESTINATION.SECTION]: (place) => ({
     kind: ENTITY_KIND.SECTION,
-    taskId: place.planId,
+    taskId: place.taskId,
     anchor: place.anchor,
   }),
   [LINK_DESTINATION.PAGE]: (place) =>
-    "planId" in place
-      ? { kind: ENTITY_KIND.PAGE, taskId: place.planId, pageId: place.pageId }
+    "taskId" in place
+      ? { kind: ENTITY_KIND.PAGE, taskId: place.taskId, pageId: place.pageId }
       : { kind: ENTITY_KIND.PAGE, agentId: place.agentId, pageId: place.pageId },
   // Note that an older link naming the agent under its task names the agent alone, as its mention does.
   [LINK_DESTINATION.AGENT]: (place) => ({ kind: ENTITY_KIND.AGENT, agentId: place.agentId }),

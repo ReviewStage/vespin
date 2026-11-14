@@ -47,8 +47,8 @@ export function useOpenFollowing(): (taskId: string) => void {
 /**
  * The task page's Following chip: the followers' faces, four then a count of
  * the rest, and Following where the reader follows or Follow where they
- * don't, opening the Following sheet; none while the task's workspace has
- * Following off.
+ * don't, opening the Following sheet; none where the task carries no
+ * followers.
  */
 export function useFollowingChip(taskId: string): PageFollowing | undefined {
   const following = useTaskFollowing(taskId);
