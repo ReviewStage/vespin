@@ -33,7 +33,7 @@ const TASK: Task = {
   priority: TASK_PRIORITY.HIGH,
   number: 42,
   parentTaskId: "1a2b3c4d-0000-4000-8000-000000000001",
-  document: { body: "", assumptions: [] },
+  description: { body: "", assumptions: [] },
 };
 
 /** A task of the workspace beside it, by id, name, and repository. */

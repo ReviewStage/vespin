@@ -168,11 +168,11 @@ A description's pictures are its own rows, `description_attachment`, with their 
 `bytea` column held to `PICTURE_BOUNDS.MAX_BYTES` (`@repo/features/picture-wire`),
 or to `MAX_VIDEO_BYTES` for a WebM an agent recorded
 (`packages/database/src/models/description-attachments.ts`), gated by the same
-`taskReachableBy`. `POST /api/plans/<id>/attachments { picture }` keeps one, a
+`taskReachableBy`. `POST /api/tasks/<id>/attachments { picture }` keeps one, a
 `data:` URL of a PNG, JPEG, WebP, or WebM whose bytes sniff as its label, on a task
 that is not archived and whose description holds fewer than `MAX_PER_DESCRIPTION`, and, for a WebM,
 fewer than `MAX_VIDEOS_PER_DESCRIPTION` videos, answering `{ id }`
-or `{ refused: "too-many" }` or `{ refused: "too-many-videos" }`; `GET /api/plans/<id>/attachments/<picture>`
+or `{ refused: "too-many" }` or `{ refused: "too-many-videos" }`; `GET /api/tasks/<id>/attachments/<picture>`
 serves the bytes under their sniffed type, `nosniff` and `private, no-store`,
 to a member alone, anyone else reading `not-found`. The description's text names a
 picture by its address (`@repo/features/description-attachment-link`); a picture
@@ -437,6 +437,21 @@ again and is refused where the server would have refused to start, and no
 function's bundle may reach the module: `localOnlyReach`
 (`server/function-bundles.ts`) fails `tests/vercel-functions.test.ts` and the
 deploy's bundle step on one that does.
+
+To run the web app over the demo's acme world on one machine:
+
+1. Start the throwaway database, `node tools/demo-postgres/demo-postgres.ts
+   --url-file <path>`, which migrates it, runs `auth:seed`, and writes its URL
+   to `<path>`.
+2. Seed it: `pnpm --filter @repo/web demo:seed` with `DATABASE_URL` set to
+   that URL (`server/demo-seed.ts`).
+3. Start the local server with `DATABASE_URL` and `DATABASE_URL_UNPOOLED` set
+   to that URL; `BETTER_AUTH_SECRET` and `CRON_SECRET` set to fresh random
+   strings; `PROVIDER_KEY_ENCRYPTION_KEYS` set to `1:` and 32 random bytes in
+   base64 (the same ring the seed was given, where it was given a credential);
+   and `BETTER_AUTH_URL` and `APP_DEPLOYMENT_ORIGIN` set to the server's own
+   origin.
+4. Open `/sign-in`, which signs in as Dean and lands on `/app`.
 
 ## The data layer
 

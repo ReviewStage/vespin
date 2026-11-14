@@ -14,10 +14,10 @@
  * The connection touches the sandbox (`@repo/sandbox`'s `touchedWhileUsed`)
  * from its attach and then while it is used, a byte typed in or printed by
  * the shell, so a developer typing after the agent's turn ended is never cut
- * off by its idle stop, and a terminal left open and quiet lets the sandbox
- * stop `SANDBOX_IDLE` after its last use, as every sandbox does. Nothing here
- * closes a connection for want of typing; the host ends it when the tab
- * goes, or once the terminal has gone `TERMINAL_IDLE` unused (`@repo/host`'s
+ * off by its idle stop; a terminal left open and quiet is held up by its
+ * shell's hold instead (`@repo/database`'s `agent-sandbox-holds.ts`).
+ * Nothing here closes a connection for want of typing, and neither does the
+ * host, which ends it only when the tab goes (`@repo/host`'s
  * `compose-terminals.ts`). While a terminal is connected, the GitHub token at the sandbox's firewall
  * is kept fresh on the rule the agent's own steps keep it by, claimed
  * in the store (`sandbox-terminal-lease.ts`) so two windows mint one token between them: the
@@ -382,8 +382,6 @@ export function relayTerminal(
 
     if (Result.isFailure(attached)) return yield* device.close(TERMINAL_RELAY_CLOSE.UNAVAILABLE);
     const sandbox = attached.success;
-
-    if ("gone" in sandbox) return yield* device.close(TERMINAL_RELAY_CLOSE.GONE);
 
     if (sandbox.state !== SANDBOX_STATE.RUNNING) {
       return yield* device.close(

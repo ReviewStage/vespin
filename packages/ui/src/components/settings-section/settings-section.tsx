@@ -1,6 +1,7 @@
 import { searchAnchorProps } from "@repo/settings/settings-anchors";
 import { type ReactNode, useId, useRef } from "react";
 import { said } from "../../said.js";
+import { CARD_CORNER, CARD_PADDING, Card } from "../card/card.js";
 import { RevealArea, revealArea } from "../reveal/reveal.js";
 import { SettingsRow, SettingsRowValue } from "../settings-row/settings-row.js";
 import { SKELETON_KIND, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
@@ -302,7 +303,7 @@ function SectionFrame({
   frame?: SettingsSectionFrame;
   children: ReactNode;
 }): React.JSX.Element {
-  const card = useRef<HTMLDivElement>(null);
+  const card = useRef<HTMLElement>(null);
   const rows = frame === SETTINGS_SECTION_FRAME.ROWS;
 
   return (
@@ -328,13 +329,15 @@ function SectionFrame({
         </div>
       ) : frame === SETTINGS_SECTION_FRAME.CARD ? (
         <RevealArea root={card}>
-          <div
+          <Card
             ref={card}
-            className="ui-settings-section-card flex min-w-0 flex-col rounded-control border border-border bg-surface"
+            corner={CARD_CORNER.CONTROL}
+            padding={CARD_PADDING.NONE}
+            className="ui-settings-section-card flex min-w-0 flex-col"
             {...revealArea()}
           >
             {children}
-          </div>
+          </Card>
         </RevealArea>
       ) : (
         children

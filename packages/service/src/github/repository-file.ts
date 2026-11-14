@@ -7,22 +7,15 @@
  * brain checkout's probe. A path GitHub would resolve outside the
  * repository's contents (an empty, `.`, or `..` segment, which a URL folds
  * away) is asked nothing and reads as no file. A link, a directory, or a
- * submodule is no regular file. The request composes over the App
- * module's own kit (`githubRead`, `readBody`), so the token leaves this
- * module no more than it leaves that one.
+ * submodule is no regular file. The request is sent on the bearer's
+ * `@repo/github` client, so the token leaves this module no more than it
+ * leaves that one.
  */
 
-import { Effect, type Redacted, Result, Schema } from "effect";
+import type { GitHubFailure } from "@repo/github";
+import { Effect, Option, Result, Schema } from "effect";
 import { Base64 } from "effect/encoding";
-import type * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import {
-  GITHUB_HTTP_STATUS,
-  type GitHubUnavailable,
-  githubRead,
-  readBody,
-  send,
-} from "./github-app.js";
+import { type GitHubBearer, githubRead, readOptional, repositoryParts } from "./github-app.js";
 
 /** What GitHub answers for a regular file: its size, and its bytes in base64 where it carries them (up to a megabyte). */
 const FileContentsSchema = Schema.Struct({
@@ -69,44 +62,38 @@ export function repositorySegments(path: string): readonly string[] | undefined 
   return segments;
 }
 
-/** The path's segments encoded for the URL, or nothing where a segment would leave the repository's contents. */
-function contentsPath(path: string): string | undefined {
-  return repositorySegments(path)?.map(encodeURIComponent).join("/");
-}
-
-/** The repository's file at the path on the branch or at the commit named, as the contents API holds it; read anonymously where the token is `null`. */
+/** The repository's file at the path on the branch or at the commit named, as the contents API holds it. */
 export function readRepositoryFile(
-  token: Redacted.Redacted | null,
+  bearer: GitHubBearer,
   repository: { readonly fullName: string },
   ref: string,
   path: string,
-): Effect.Effect<RepositoryFile, GitHubUnavailable, HttpClient.HttpClient> {
+): Effect.Effect<RepositoryFile, GitHubFailure> {
   return Effect.gen(function* () {
-    const encoded = contentsPath(path);
+    if (repositorySegments(path) === undefined) return NOT_REGULAR;
 
-    if (encoded === undefined) return NOT_REGULAR;
-
-    const request = githubRead(`/repos/${repository.fullName}/contents/${encoded}`, token).pipe(
-      HttpClientRequest.setUrlParams({ ref }),
+    const read = yield* readOptional(
+      githubRead(
+        bearer.client.request("GET /repos/{owner}/{repo}/contents/{path}", {
+          ...repositoryParts(repository.fullName),
+          path,
+          ref,
+        }),
+        ContentsSchema,
+      ),
     );
 
-    return yield* Effect.scoped(
-      Effect.gen(function* () {
-        const response = yield* send(request);
+    if (Option.isNone(read)) return NOT_FOUND;
+    const answer = read.value;
 
-        if (response.status === GITHUB_HTTP_STATUS.NOT_FOUND) return NOT_FOUND;
-        const answer = yield* readBody(response, ContentsSchema);
+    if (!Schema.is(FileContentsSchema)(answer)) return NOT_REGULAR;
 
-        if (!Schema.is(FileContentsSchema)(answer)) return NOT_REGULAR;
+    const decoded =
+      answer.encoding === BASE64
+        ? Result.getOrUndefined(Base64.decode(answer.content.replace(/\s/gu, "")))
+        : undefined;
 
-        const decoded =
-          answer.encoding === BASE64
-            ? Result.getOrUndefined(Base64.decode(answer.content.replace(/\s/gu, "")))
-            : undefined;
-
-        return { regular: true, bytes: answer.size, content: decoded } satisfies RepositoryFile;
-      }),
-    );
+    return { regular: true, bytes: answer.size, content: decoded } satisfies RepositoryFile;
   });
 }
 
@@ -121,24 +108,19 @@ const BranchRefSchema = Schema.Struct({
  * no commit for it.
  */
 export function readBranchHead(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   repository: { readonly fullName: string },
   branch: string,
-): Effect.Effect<string | undefined, GitHubUnavailable, HttpClient.HttpClient> {
-  return Effect.gen(function* () {
-    // Note that a branch's name may hold a slash, which stays a step of the ref's path.
-    const ref = branch.split("/").map(encodeURIComponent).join("/");
-    const request = githubRead(`/repos/${repository.fullName}/git/ref/heads/${ref}`, token);
+): Effect.Effect<string | undefined, GitHubFailure> {
+  const read = githubRead(
+    bearer.client.request("GET /repos/{owner}/{repo}/git/ref/{ref}", {
+      ...repositoryParts(repository.fullName),
+      ref: `heads/${branch}`,
+    }),
+    BranchRefSchema,
+  );
 
-    return yield* Effect.scoped(
-      Effect.gen(function* () {
-        const response = yield* send(request);
-
-        if (response.status === GITHUB_HTTP_STATUS.NOT_FOUND) return undefined;
-        const answer = yield* readBody(response, BranchRefSchema);
-
-        return answer.object.sha;
-      }),
-    );
-  });
+  return Effect.map(readOptional(read), (answer) =>
+    Option.getOrUndefined(Option.map(answer, (each) => each.object.sha)),
+  );
 }

@@ -4,6 +4,7 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { opensTurn } from "@repo/features/voice-call-lines";
 import { andList, countWords, type Noun } from "@repo/features/words";
 import {
   Checkbox,
@@ -240,7 +241,8 @@ export function rewindPoints(
       continue;
     }
 
-    const opens = message.arrivedIn === undefined;
+    // Note that a line said on a call opens a turn only where a delegation handed it on, so small talk is no place to cut at.
+    const opens = message.arrivedIn === undefined && opensTurn(message);
     const answered = message.clientId === undefined || !going.has(message.clientId);
 
     // Note that an edit drops what follows the line, so its words are read before the line itself is counted.

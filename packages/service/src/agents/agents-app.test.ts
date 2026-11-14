@@ -1243,7 +1243,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           }),
         ).agent;
 
-        assert.equal(forked.planId, sweep.id);
+        assert.equal(forked.taskId, sweep.id);
         assert.deepEqual(replayed(), ["Said: Fixed the shared temp dir."]);
 
         const before = agentSessions.opened.length;
@@ -1317,7 +1317,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           }),
         ).agent;
 
-        assert.equal(fromTask.planId, task.id);
+        assert.equal(fromTask.taskId, task.id);
         assert.equal(Option.getOrThrow(yield* readAgent(owner, fromTask.id)).taskId, task.id);
 
         // A retry is answered with the agent its key made though the source is gone since.
@@ -1584,7 +1584,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
     () =>
       Effect.gen(function* () {
         const held: RepositoryScript = (sent) =>
-          sent.url.endsWith(`/repos/${RELAY_FULL_NAME}/git/ref/heads/luke/stacked`)
+          sent.url.endsWith(`/repos/${RELAY_FULL_NAME}/git/ref/heads%2Fluke%2Fstacked`)
             ? Response.json({ object: { type: "commit", sha: "a".repeat(40) } })
             : undefined;
 

@@ -1,5 +1,6 @@
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { cn } from "../cn.js";
+import { MenuCardFrame } from "../components/card/card.js";
 import { ChevronRightIcon } from "../icons/lucide-glyphs.js";
 
 /**
@@ -57,9 +58,9 @@ export const DROPDOWN_MENU_ITEM =
 export const DROPDOWN_MENU_ITEM_LIT =
   "hover:not-disabled:not-aria-disabled:bg-secondary focus-visible:not-disabled:not-aria-disabled:bg-secondary data-popup-open:not-disabled:not-aria-disabled:bg-secondary data-[variant=destructive]:hover:not-disabled:bg-destructive/16 data-[variant=destructive]:focus-visible:not-disabled:bg-destructive/16";
 
-/** The surface every menu stands on, a list its owner hangs and keys itself included. */
+/** The surface every menu stands on, a list its owner hangs and keys itself included: its layout and motion, its ground, edge, corner, and shadow a floating `Card`'s (`MenuCardFrame`). */
 export const DROPDOWN_MENU_SURFACE =
-  "flex flex-col rounded-menu border border-border-strong bg-background p-menu-inset text-foreground shadow-menu animate-menu-in data-[leaving=true]:pointer-events-none data-[leaving=true]:animate-menu-leave data-[leaving=true]:transition-none data-ending-style:pointer-events-none data-ending-style:animate-menu-leave data-ending-style:transition-none data-[placed=false]:invisible";
+  "flex flex-col p-menu-inset text-foreground animate-menu-in data-[leaving=true]:pointer-events-none data-[leaving=true]:animate-menu-leave data-[leaving=true]:transition-none data-ending-style:pointer-events-none data-ending-style:animate-menu-leave data-ending-style:transition-none data-[placed=false]:invisible";
 
 /** A menu's own popup on that surface: a menu's width, and no taller than the room Base UI finds for it, its rows scrolling inside it rather than the popup itself. */
 const DROPDOWN_MENU_POPUP = "max-h-menu-max max-w-menu-most min-w-menu-least overflow-hidden";
@@ -111,6 +112,7 @@ function DropdownMenuContent({
       >
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
+          render={(frame) => <MenuCardFrame {...frame} />}
           className={cn(DROPDOWN_MENU_SURFACE, DROPDOWN_MENU_POPUP, className)}
           {...props}
         />

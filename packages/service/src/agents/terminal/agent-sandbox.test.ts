@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { AGENT_USER } from "@repo/agent-runner/pins";
-import { Database } from "@repo/database/core/query";
+import { Database, type DatabaseServices } from "@repo/database/core/query";
+import { agentSandboxHeld } from "@repo/database/models/agent-sandbox-holds";
+import { recordAgentSandboxOpen } from "@repo/database/models/agent-sandboxes";
 import { user } from "@repo/database/schemas/auth";
-import { getTestDB } from "@repo/database/testing";
+import { getTestDB, openAgentOnOwnTask, openWorkspace } from "@repo/database/testing";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import {
@@ -15,13 +17,14 @@ import {
   SandboxUnavailable,
 } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { Duration, Effect, Fiber, Layer, Redacted, Result } from "effect";
+import { Clock, type Context, Duration, Effect, Fiber, Layer, Redacted, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
 import { AgentImage } from "../coder-host/agent-image.js";
+import { keptSandboxTerminals } from "../sandbox-use.js";
 import { AgentSandbox, agentSandboxLayer, SHELL_REFUSAL } from "./agent-sandbox.js";
-import { RUN_ACTION_EXIT, RUN_ACTION_SIGNAL, TMUX_EXIT } from "./tmux.js";
+import { attachTerminal, RUN_ACTION_EXIT, RUN_ACTION_SIGNAL, TMUX, TMUX_EXIT } from "./tmux.js";
 
 /**
  * A coding agent's sandbox as its Terminal tab reaches it, through `Sandbox`
@@ -29,8 +32,9 @@ import { RUN_ACTION_EXIT, RUN_ACTION_SIGNAL, TMUX_EXIT } from "./tmux.js";
  * shells and is never woken by a list or a start, a running one's shells are
  * read from tmux in its running session, a shell starts under the id given
  * and is read back, one tmux does not hold is not found, a list tmux could
- * not give is an outage, and only a resume wakes a stopped sandbox, by its
- * name. A GitHub credential is set at the firewall in its shape: an
+ * not give is an outage, and a resume, or a tab's attach, wakes a stopped
+ * sandbox, by its name, the attach making the tab's shell afresh where it is
+ * gone. A GitHub credential is set at the firewall in its shape: an
  * installation's on GitHub's two hosts, a member's own on its repository's
  * paths alone, its record kept in the test's own database under a key ring
  * of the suite's.
@@ -161,7 +165,7 @@ function actionTmux(probesLived?: number) {
         );
       }
 
-      if (rest[0] === "new-session") {
+      if (rest.includes("new-session")) {
         started = (rest[rest.indexOf("-s") + 1] ?? "").replace("terminal-", "");
       }
 
@@ -205,6 +209,95 @@ function actionTmux(probesLived?: number) {
     signals: () => [...sent],
   };
 }
+
+/**
+ * A sandbox of its own, recorded open for a new account's agent so a tab's
+ * hold on it is kept, standing in the status given; its tmux holds the
+ * sessions it is given, an ordinary shell's by id, as tmux would: a start
+ * under an id it holds is refused, but for a run action's start that ends
+ * an ordinary shell under its id first where its script asks tmux to, and
+ * the list and the shell check read what it holds. `during` runs as the shell
+ * check is asked, with the suite's database.
+ */
+function heldTmux(
+  status: SandboxStatus,
+  ordinary: readonly string[],
+  during: Effect.Effect<void, never, DatabaseServices> = Effect.void,
+) {
+  return Effect.gen(function* () {
+    const session = `wrun_${randomUUID()}`;
+    const sandboxName = agentSandboxName(session);
+    const owner = `user-${randomUUID()}`;
+    yield* (yield* Database)
+      .insert(user)
+      .values({ id: owner, name: "Test User", email: `${owner}@app.test` });
+    const agentId = yield* openAgentOnOwnTask(owner, yield* openWorkspace(owner));
+    const at = new Date(yield* Clock.currentTimeMillis);
+    yield* recordAgentSandboxOpen(agentId, { sandboxName, at, writtenBefore: at });
+    const database: Context.Context<DatabaseServices> = yield* Effect.context<DatabaseServices>();
+    // Each session by its shell's id, with the run action it was started for, where it was.
+    const sessions = new Map<string, string | undefined>(ordinary.map((id) => [id, undefined]));
+
+    const listed = () =>
+      [...sessions].map(([id, action]) =>
+        action === undefined
+          ? listedShell(id, "", "bash")
+          : [listedShell(id, "Dev server", "bash"), field(action), field("0  ")].join(" "),
+      );
+
+    const sandbox = memorySandbox({
+      run: ({ ask }) => {
+        const scriptAt = ask.args.indexOf("-c") + 1;
+        const text = ask.args[scriptAt] ?? "";
+        const rest = ask.args.slice(scriptAt + 2);
+
+        if (rest.length === 0) return ran(0, listed().join("\n"));
+
+        if (rest.includes("new-session")) {
+          const id = (rest[rest.indexOf("-s") + 1] ?? "").replace(TMUX.SESSION_PREFIX, "");
+          const marked = rest.indexOf(TMUX.RUN_ACTION_OPTION);
+          const replaces = text.includes("kill-session") && sessions.get(id) === undefined;
+
+          if (sessions.has(id) && !replaces) return ran(1);
+          sessions.set(id, marked === -1 ? undefined : rest[marked + 1]);
+
+          return ran(0);
+        }
+
+        const id = (rest[0] ?? "").replace(`=${TMUX.SESSION_PREFIX}`, "");
+
+        if (!text.includes("has-session")) return ran(sessions.has(id) ? 0 : 1);
+
+        return Effect.as(
+          Effect.provideContext(during, database),
+          sessions.has(id) ? ran(0, sessions.get(id) ?? "") : ran(TMUX_EXIT.NO_SESSION),
+        );
+      },
+    });
+
+    sandbox.stand({
+      name: sandboxName,
+      status,
+      running: RUNNING_SESSION,
+      tags: { sessionId: session },
+    });
+
+    const layer = Layer.provide(
+      agentSandboxLayer,
+      Layer.mergeAll(
+        LOCAL_AGENT_ENVIRONMENT,
+        Layer.succeed(AgentImage, FIXTURE_IMAGE),
+        sandbox.layer,
+      ),
+    );
+
+    return { session, sandboxName, layer };
+  });
+}
+
+/** Whether a member holds the sandbox open now. */
+const heldNow = (sandboxName: string) =>
+  Effect.flatMap(Clock.currentTimeMillis, (now) => agentSandboxHeld(sandboxName, new Date(now)));
 
 it.layer(getTestDB())("a coding agent's sandbox", (it) => {
   it.effect(
@@ -461,7 +554,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
 
             if (tmuxArgs.length === 0) return ran(0, shells.join("\n"));
 
-            if (tmuxArgs[0] !== "new-session") return ran(0);
+            if (!tmuxArgs.includes("new-session")) return ran(0);
             shells = [
               [
                 `terminal-${action}`,
@@ -569,55 +662,107 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
       }),
   );
 
-  it.effect("an attach mints the running session's PTY and never wakes a stopped sandbox", () =>
-    Effect.gen(function* () {
-      const running = standing(SANDBOX_STATUS.RUNNING);
-      const stopped = standing(SANDBOX_STATUS.STOPPED);
-
-      const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
-        sandbox.attach(SESSION, SHELL),
-      ).pipe(Effect.provide(running.layer));
-
-      const refused = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
-        sandbox.attach(SESSION, SHELL),
-      ).pipe(Effect.provide(stopped.layer));
-
-      assert.equal(attached.state, SANDBOX_STATE.RUNNING);
-      assert.ok("shell" in attached);
-      assert.deepEqual(running.state.interactive, [{ name: SANDBOX, running: RUNNING_SESSION }]);
-      assert.deepEqual(refused, { state: SANDBOX_STATE.STOPPED });
-      assert.deepEqual(stopped.state.resumed, []);
-      assert.deepEqual(stopped.state.interactive, []);
-    }),
-  );
-
-  it.effect("an attach to a shell tmux does not hold is gone, and no PTY is minted for it", () =>
-    Effect.gen(function* () {
-      const api = standing(SANDBOX_STATUS.RUNNING);
-      const unknown = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
-
-      const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
-        sandbox.attach(SESSION, unknown),
-      ).pipe(Effect.provide(api.layer));
-
-      assert.deepEqual(attached, { state: SANDBOX_STATE.RUNNING, gone: true });
-      assert.deepEqual(api.state.interactive, []);
-    }),
-  );
-
   it.effect(
-    "a tmux that could not be asked is an outage the tab may retry, never a shell gone",
+    "an attach to a stopped sandbox whose tab's shell is gone resumes it and mints its PTY, whose attach makes the shell afresh",
     () =>
       Effect.gen(function* () {
-        const api = standing(SANDBOX_STATUS.RUNNING, [], 0, 1);
+        const api = standing(SANDBOX_STATUS.STOPPED);
         const unknown = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
 
         const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
           sandbox.attach(SESSION, unknown),
-        ).pipe(Effect.provide(api.layer), Effect.flip);
+        ).pipe(Effect.provide(api.layer));
 
-        assert.ok(attached instanceof SandboxUnavailable);
+        assert.equal(attached.state, SANDBOX_STATE.RUNNING);
+        assert.ok("shell" in attached && !attached.readOnly);
+        assert.deepEqual(
+          api.state.resumed.map((each) => each.name),
+          [SANDBOX],
+        );
+        assert.equal(api.state.interactive.length, 1);
+        assert.ok(attachTerminal(unknown).args.join(" ").includes("new-session -A"));
       }),
+  );
+
+  it.effect(
+    "an attach to a stopped sandbox holds it before it wakes it, so a stop deciding while the attach is under way finds the tab's hold",
+    () =>
+      Effect.gen(function* () {
+        const seen: boolean[] = [];
+        const sandboxNameOf = { name: "" };
+
+        const during = Effect.orDie(
+          Effect.map(
+            Effect.suspend(() => heldNow(sandboxNameOf.name)),
+            (held) => void seen.push(held),
+          ),
+        );
+
+        const tmux = yield* heldTmux(SANDBOX_STATUS.STOPPED, [], during);
+        sandboxNameOf.name = tmux.sandboxName;
+
+        const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
+          sandbox.attach(tmux.session, SHELL),
+        ).pipe(Effect.provide(tmux.layer));
+
+        assert.equal(attached.state, SANDBOX_STATE.RUNNING);
+        assert.deepEqual(seen, [true]);
+      }),
+  );
+
+  it.effect(
+    "an attach whose shell a stop forgot makes it before the PTY attaches, so a list read after the attach keeps the tab's hold",
+    () =>
+      Effect.gen(function* () {
+        const tmux = yield* heldTmux(SANDBOX_STATUS.RUNNING, []);
+
+        yield* Effect.flatMap(AgentSandbox, (sandbox) => sandbox.attach(tmux.session, SHELL)).pipe(
+          Effect.provide(tmux.layer),
+        );
+
+        // A list begun after the attach, before the relay's PTY has started anything, lets go of every hold whose shell it did not read.
+        yield* TestClock.adjust(Duration.seconds(1));
+        const listedAt = yield* Clock.currentTimeMillis;
+
+        const listed = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
+          sandbox.terminals(tmux.session),
+        ).pipe(Effect.provide(tmux.layer));
+
+        yield* keptSandboxTerminals(
+          tmux.sandboxName,
+          listed.terminals.map((terminal) => terminal.id),
+          listedAt,
+        );
+        assert.equal(yield* heldNow(tmux.sandboxName), true);
+      }),
+  );
+
+  it.effect(
+    "a run action whose shell a stop forgot, and a tab's attach made an ordinary shell under its id, starts again in place of that shell",
+    () =>
+      Effect.gen(function* () {
+        const tmux = yield* heldTmux(SANDBOX_STATUS.RUNNING, [ACTION]);
+
+        const ran = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
+          sandbox.run(tmux.session, ACTION, ACTION_RUN),
+        ).pipe(Effect.provide(tmux.layer));
+
+        assert.ok(Result.isSuccess(ran));
+        assert.equal(ran.success.runAction, ACTION);
+      }),
+  );
+
+  it.effect("a tmux that could not be asked is an outage the tab may retry", () =>
+    Effect.gen(function* () {
+      const api = standing(SANDBOX_STATUS.RUNNING, [], 0, 1);
+      const unknown = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
+
+      const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
+        sandbox.attach(SESSION, unknown),
+      ).pipe(Effect.provide(api.layer), Effect.flip);
+
+      assert.ok(attached instanceof SandboxUnavailable);
+    }),
   );
 
   it.effect(

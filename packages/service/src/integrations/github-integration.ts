@@ -72,7 +72,10 @@ export const githubSignInGrant = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (Result.isFailure(read)) return Result.fail(refusalOf(read.failure));
   const now = yield* Clock.currentTimeMillis;
 
-  return Result.succeed({ token: read.success, expiresAt: now + USER_TOKEN_REFRESH_MARGIN_MS });
+  return Result.succeed({
+    token: read.success.token,
+    expiresAt: now + USER_TOKEN_REFRESH_MARGIN_MS,
+  });
 });
 
 /** Where GitHub stands for the account: connected while its GitHub sign-in yields a token. */

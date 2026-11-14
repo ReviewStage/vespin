@@ -48,7 +48,7 @@ const KEPT_ID = "0b6f6b52-2c1e-4f8e-9a4d-7f1c2e9d5a01";
 const TASK: Task = {
   ...DOCUMENT_TASK,
   id: TASK_ID,
-  document: { body: "## Approach\n\nThe invite email follows the mock.\n", assumptions: [] },
+  description: { body: "## Approach\n\nThe invite email follows the mock.\n", assumptions: [] },
 };
 
 const PAGE: TaskMentionsValue = {
@@ -56,7 +56,7 @@ const PAGE: TaskMentionsValue = {
   taskName: "Invitations",
   workspace: "acme",
   repository: null,
-  text: () => TASK.document.body,
+  text: () => TASK.description.body,
   doors: {
     holder: { taskId: TASK_ID },
     place: { workspace: "acme", repository: null },
@@ -130,7 +130,7 @@ async function editing(): Promise<HTMLElement> {
     createElement(DescriptionBody, {
       task: TASK,
       edit: descriptionEditMutation(TASK.id, (request) => {
-        saved.push(request.document.value);
+        saved.push(request.description.value);
 
         return Promise.resolve({ saved: true });
       }),
@@ -231,9 +231,9 @@ test("a video of another description pasted in is kept on this description as it
   const kept: string[] = [];
   fakeActPort({
     ...fakeActPortCalls(),
-    [ACT_KIND.TASKS_PICTURE_READ]: ({ planId }) =>
+    [ACT_KIND.TASKS_PICTURE_READ]: ({ taskId }) =>
       Promise.resolve(
-        planId === OTHER_TASK
+        taskId === OTHER_TASK
           ? { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: "GkXfow==" }
           : { failure: "not-found" },
       ),

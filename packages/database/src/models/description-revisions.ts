@@ -2,11 +2,11 @@ import {
   type DescriptionSectionWriter,
   type DescriptionSectionWriterWho,
   sectionWritersOf,
-} from "@repo/features/description-document";
+} from "@repo/features/description-sections";
 import {
   DESCRIPTION_ACTOR,
   DESCRIPTION_HISTORY_BOUNDS,
-  type DescriptionDocument,
+  type Description,
   type DescriptionEditor,
   type DescriptionLastEdit,
   type DescriptionRevisionAnswer,
@@ -134,7 +134,7 @@ const insertRevision = SqlSchema.findOne({
     actor: Schema.Literals(Object.values(DESCRIPTION_ACTOR)),
     userId: Schema.NullOr(Schema.String),
     agentId: Schema.NullOr(Schema.String),
-    document: Schema.String,
+    description: Schema.String,
     changes: Schema.Number,
     startedAt: Schema.Date,
     at: Schema.Date,
@@ -149,7 +149,7 @@ const moveRevisionOn = SqlSchema.findOne({
   Request: Schema.Struct({
     taskId: Schema.String,
     seq: Schema.Number,
-    document: Schema.String,
+    description: Schema.String,
     changes: Schema.Number,
     at: Schema.Date,
   }),
@@ -267,7 +267,7 @@ const findRevisionLines = SqlSchema.findAll({
 const RevisionContentRowSchema = Schema.Struct({
   seq: Schema.Number,
   // Every revision is the description's text since the backfill, so a row with none is the store breaking its own contract.
-  document: Schema.String,
+  description: Schema.String,
 });
 
 /** The content of the description at each revision named, with the task's name as it stands now. */
@@ -283,7 +283,7 @@ const findRevisionContents = SqlSchema.findAll({
       db
         .select({
           seq: descriptionRevision.seq,
-          document: descriptionRevision.document,
+          description: descriptionRevision.description,
         })
         .from(descriptionRevision)
         .innerJoin(task, eq(task.id, descriptionRevision.taskId))
@@ -303,7 +303,7 @@ const SectionRevisionRowSchema = Schema.Struct({
   editorName: Schema.NullOr(Schema.String),
   agentId: Schema.NullOr(Schema.String),
   at: InstantColumnSchema,
-  document: Schema.String,
+  description: Schema.String,
 });
 
 type SectionRevisionRow = typeof SectionRevisionRowSchema.Type;
@@ -321,7 +321,7 @@ const findSectionRevisions = SqlSchema.findAll({
           editorName: user.name,
           agentId: descriptionRevision.agentId,
           at: descriptionRevision.at,
-          document: descriptionRevision.document,
+          description: descriptionRevision.description,
         })
         .from(descriptionRevision)
         .leftJoin(user, eq(user.id, descriptionRevision.userId))
@@ -408,7 +408,7 @@ function recordEarlier(
           actor: DESCRIPTION_ACTOR.EARLIER,
           userId: null,
           agentId: null,
-          document: record.before,
+          description: record.before,
           changes: 0,
           startedAt: at,
           at,
@@ -448,7 +448,7 @@ export function recordRevision(
       const moved = yield* moveRevisionOn({
         taskId: record.taskId,
         seq: newest.value.seq,
-        document: after,
+        description: after,
         changes: newest.value.changes + record.changes,
         at: now,
       }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
@@ -464,7 +464,7 @@ export function recordRevision(
       actor: writer.actor,
       userId: memberOf(record),
       agentId: agentOf(writer),
-      document: after,
+      description: after,
       changes: record.changes,
       startedAt: now,
       at: now,
@@ -507,12 +507,12 @@ export function readSectionWriters(
       rows.length <= DESCRIPTION_REVISION.SECTION_HISTORY &&
       first.actor !== DESCRIPTION_ACTOR.EARLIER;
 
-    const base = fromStart ? "" : first.document;
+    const base = fromStart ? "" : first.description;
     const written = fromStart ? rows : rows.slice(1);
 
     return sectionWritersOf(
       base,
-      written.map((row) => ({ text: row.document, who: writerOf(row), at: row.at.getTime() })),
+      written.map((row) => ({ text: row.description, who: writerOf(row), at: row.at.getTime() })),
     );
   });
 }
@@ -559,7 +559,7 @@ export function readRevisionContent(
   seq: number,
 ): Effect.Effect<Option.Option<string>, StoreFailure, DatabaseServices> {
   return Effect.map(findRevisionContents({ userId, taskId, seqs: [seq] }), (rows) =>
-    Option.map(Option.fromNullishOr(rows[0]), (row) => row.document),
+    Option.map(Option.fromNullishOr(rows[0]), (row) => row.description),
   );
 }
 
@@ -579,16 +579,16 @@ export function readRevision(
   DatabaseServices
 > {
   return Effect.map(findRevisionContents({ userId, taskId, seqs: [seq - 1, seq] }), (rows) => {
-    const documentAt = (at: number): DescriptionDocument | null => {
+    const documentAt = (at: number): Description | null => {
       const row = rows.find((each) => each.seq === at);
 
-      return row === undefined ? null : { body: row.document, assumptions: [] };
+      return row === undefined ? null : { body: row.description, assumptions: [] };
     };
 
     const document = documentAt(seq);
 
     return document === null
       ? Option.none()
-      : Option.some({ seq, document, previous: documentAt(seq - 1) });
+      : Option.some({ seq, description: document, previous: documentAt(seq - 1) });
   });
 }

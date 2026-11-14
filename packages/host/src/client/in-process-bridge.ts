@@ -153,6 +153,7 @@ export function createInProcessBridge(
       onMenuCommand: neverDelivered,
       // The tab's own doors play a chime where it is heard (`web-notices.ts`), so none is pushed.
       onChime: neverDelivered,
+      onVoiceCallPress: neverDelivered,
     };
 
     const events: InProcessEvents = {
