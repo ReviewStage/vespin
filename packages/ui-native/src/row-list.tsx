@@ -1,16 +1,6 @@
 // row-list.tsx -- a list of rows and its sections, as SwiftUI's own List draws them, each section under a small muted header that folds.
 
-import {
-  Button,
-  HStack,
-  Image,
-  List,
-  Menu,
-  Section,
-  Spacer,
-  Text,
-  ZStack,
-} from "@expo/ui/swift-ui";
+import { Button, HStack, Image, List, Menu, Section, Spacer, Text } from "@expo/ui/swift-ui";
 import type { ModifierConfig } from "@expo/ui/swift-ui/modifiers";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
@@ -21,10 +11,14 @@ import {
   accessibilityValue,
   background,
   buttonStyle,
+  containerRelativeFrame,
   environment,
   font,
   foregroundStyle,
   frame,
+  listRowBackground,
+  listRowInsets,
+  listRowSeparator,
   listSectionMargins,
   listStyle,
   monospacedDigit,
@@ -88,7 +82,7 @@ type RowListProps = {
   readonly onRefresh?: (() => Promise<void>) | undefined;
   /** Its Select mode, while it stands in one; none for a list a tap opens rows in. */
   readonly choosing?: RowChoosing | undefined;
-  /** What stands over the list while it holds no rows, such as an `EmptyState` saying why; none while it holds rows. */
+  /** What the list says while it holds no rows, such as an `EmptyState` saying why; none while it holds rows. */
   readonly empty?: ReactNode | undefined;
   readonly children: ReactNode;
 };
@@ -110,6 +104,29 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
 }
 
 /**
+ * The one row a list with nothing to show holds: its empty state, on the
+ * list's ground with no hairline, three quarters of the list's height tall so
+ * it stands near the middle without making the list scroll. Note that it
+ * stands inside the list rather than over it, because SwiftUI's words and
+ * glyphs take a touch, so a pull begun on the state's title stopped there
+ * when it stood over the list; inside it, a pull anywhere scrolls the list.
+ */
+function EmptyRow({ children }: { readonly children: ReactNode }) {
+  return (
+    <HStack
+      modifiers={[
+        listRowBackground("clear"),
+        listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
+        listRowSeparator("hidden"),
+        containerRelativeFrame({ axes: "vertical", count: 4, span: 3 }),
+      ]}
+    >
+      {children}
+    </HStack>
+  );
+}
+
+/**
  * A list of `ListRow`s, each picked by its id. Note that a list on a screen
  * of its own keeps no selection, since a pick pushes the row's own screen and
  * the row should not stand selected on the way back. A plain list wider than
@@ -119,9 +136,9 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
  * SwiftUI's own edit mode, as Mail's Select does: a round check leads each
  * row, a tap ticks it rather than opening it, two fingers dragged down tick
  * a run, and the rows' swipes step aside, as the system's do. A list with
- * nothing to show still stands, its empty state over it, as iOS sets its
- * content-unavailable view over a list, so a pull still reads it again and
- * the state's own press, such as Try again, still takes a tap.
+ * nothing to show still stands, its empty state its one row, as iOS stands
+ * its content-unavailable view in a list's place, so a pull still reads it
+ * again and the state's own press, such as Try again, still takes a tap.
  */
 export function RowList({
   look,
@@ -137,7 +154,7 @@ export function RowList({
   const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
 
   // Note that a list in Select mode draws no row as the open one and reads nothing on a pull, since its checks say what is chosen and a pull there would read the rows from under them.
-  const list = (
+  return (
     <List
       selection={
         choosing !== undefined ? [...choosing.chosen] : selected === undefined ? [] : [selected]
@@ -169,19 +186,10 @@ export function RowList({
       <RowOpenContext value={onSelect}>
         <RowSelectedContext value={choosing === undefined ? selected : undefined}>
           {children}
+          {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
         </RowSelectedContext>
       </RowOpenContext>
     </List>
-  );
-
-  // Note that the empty state stands over the list rather than in its place, and takes a touch only where it draws, so a pull on the space around it still scrolls the list.
-  return empty === undefined ? (
-    list
-  ) : (
-    <ZStack>
-      {list}
-      {empty}
-    </ZStack>
   );
 }
 
