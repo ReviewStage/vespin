@@ -99,7 +99,7 @@ const OTHER: TaskSummary = { ...TASK, id: OTHER_TASK, name: "Invitation funnel s
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Batch the invitations",
@@ -276,7 +276,7 @@ async function inbox(
   });
   // The account's feed holds the task's one item, which the Inbox draws from.
   handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [ITEM] } },
+    rows: { [INBOX_SCOPE_KIND.TASK]: { [TASK.id]: [ITEM] } },
   });
   // The host lays the agent's transcript, which names a page of its task, once its tab holds it.
   pushedTranscripts(() => [TRANSCRIPT]);

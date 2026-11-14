@@ -127,6 +127,13 @@ function WhyWords({
       return "The agent named a machine this task's agents can't use.";
     case MACHINE_UNREACHED.NO_MACHINE:
       return "None of the machines this agent may use could take it.";
+    case MACHINE_UNREACHED.OWN_SHELL:
+      return (
+        <>
+          This agent runs on {name ?? "that machine"} itself, so it runs commands there in its own
+          shell.
+        </>
+      );
   }
 }
 
