@@ -45,7 +45,6 @@ import {
   selectListedTasks,
 } from "../use-app-state.js";
 import { startFailureNote as agentStartFailureNote, choiceRequest } from "./agent-model.js";
-import type { NewTaskPress } from "./new-task-composer.js";
 import { NEW_TASK_PURPOSE, type NewTaskPurpose } from "./new-task-purpose.js";
 import type { NewTaskRelation } from "./new-task-relation.js";
 import type { RepositoryChooser } from "./repository-chip.js";
@@ -144,6 +143,23 @@ export interface NewTaskPreset {
   readonly purpose?: NewTaskPurpose;
   /** The card as it pressed Start, and why the start was refused, where the card is opened again on a refusal. */
   readonly refused?: NewTaskRefusal;
+}
+
+/** What one Agent-mode press asked beside its key: the task's repository and workspace, and where its agents run, and the agent's words, files, and the model picked, none for the account's default. */
+export interface AgentAsk {
+  readonly repository: string | null;
+  readonly workspaceId: string | undefined;
+  /** The device the task's agents run on, by its id; none for the cloud. */
+  readonly deviceId?: string | undefined;
+  /** The relations the task starts in, in the order they were picked. */
+  readonly relations: readonly TaskCreateRelation[];
+  readonly agent: Omit<NewTaskAgent, "idempotencyKey">;
+}
+
+/** One Agent-mode press: what it asked, and the key it carried. */
+export interface NewTaskPress {
+  readonly ask: AgentAsk;
+  readonly key: string;
 }
 
 /** The card as it pressed Start, and why the start was refused, which the card opens again on. */

@@ -24,6 +24,7 @@ import {
   ToggleRow,
   useAsyncAction,
 } from "@repo/ui-native";
+import { actionRefused } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
@@ -126,6 +127,8 @@ export default function AccountScreen() {
                       return write(
                         () => acts[ACT_KIND.SETTING_UPDATE]({ field: "usageData", value: on }),
                         {
+                          // Note that a refusal comes back in the answer rather than thrown, so it is read from it.
+                          refused: actionRefused,
                           inPlace: (words) => {
                             said.words = words;
                           },

@@ -41,7 +41,7 @@ import { agentToolRejected } from "./agent-tools.js";
 import type { AgentSandbox } from "./terminal/agent-sandbox.js";
 
 /** Why a call changed nothing, in words the model can act on. */
-export const PORT_TOOL_REFUSAL = {
+const PORT_TOOL_REFUSAL = {
   UNREADABLE_SHARE:
     `Not shared: give a port from ${FORWARD_PORT.MIN} to ${FORWARD_PORT.MAX}, as ` +
     `${AGENT_TOOL.LIST_PORTS} lists them, or null to stop sharing.`,

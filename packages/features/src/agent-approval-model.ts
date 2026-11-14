@@ -72,7 +72,7 @@ export interface HeldAsk<Answering, Failure> {
 }
 
 /** The line an ask that stopped waiting with no answer of this window's settles into. */
-export function vanishedLine(byMessage: boolean, running: boolean): string {
+function vanishedLine(byMessage: boolean, running: boolean): string {
   if (byMessage) return HELD_WORDS.DENIED;
 
   return running ? HELD_WORDS.ELSEWHERE : HELD_WORDS.EXPIRED;
