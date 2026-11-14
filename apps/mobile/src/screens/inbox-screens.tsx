@@ -859,7 +859,11 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
 
-  if (listing.listed.length > 0) globalThis.__perfMark?.("inbox-rows", { rows: listing.listed.length });
+  if (listing.listed.length > 0 && globalThis.__perfMark !== undefined) {
+    globalThis.__perfMark("inbox-rows", { rows: listing.listed.length });
+    globalThis.__perfStartup?.();
+    globalThis.__perfStartup = undefined;
+  }
 
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);

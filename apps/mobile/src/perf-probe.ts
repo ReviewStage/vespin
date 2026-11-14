@@ -51,6 +51,21 @@ globalThis.__perfMark = (name, data = {}) => {
   stamp("mark", { name, ...data });
 };
 globalThis.__perfMark("bundle");
+
+// React Native's own startup marks, in performance.now()'s timebase: the instance's start, the runtime's, and the bundle's entry, read once the first rows draw, since they are filled as the launch goes.
+globalThis.__perfStartup = () => {
+  try {
+    const timing = performance.rnStartupTiming;
+    stamp("startup", {
+      start: timing.startTime,
+      runtime: timing.initializeRuntimeStart,
+      entry: timing.executeJavaScriptBundleEntryPointStart,
+      end: timing.endTime,
+    });
+  } catch (error) {
+    stamp("startup", { error: String(error) });
+  }
+};
 stamp("probe-hook", { hooked: globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__?.renderers?.size ?? -1 });
 
 // Native events as they reach JS, before React handles them; continuous ones are left out.
