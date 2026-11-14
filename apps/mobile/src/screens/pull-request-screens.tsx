@@ -50,6 +50,7 @@ import {
   ListSection,
   MarkRow,
   MergeActRow,
+  markdownShows,
   PATH_PART,
   PUSH_ROW_GOES,
   PullRequestHead,
@@ -408,8 +409,9 @@ export function PullRequestScreen() {
 
   const action = pullRequest === undefined ? undefined : mergeActionFor(pullRequest);
   const summary = checks === undefined ? undefined : checksSummaryOf(checks);
-  // Note that a pull request with no description, or one read from a service before it, shows no Description section, rather than the panel's "No description provided.", since the phone draws no empty section.
-  const description = pullRequest?.body?.trim() ?? "";
+  // Note that a pull request with no description, one read from a service before it, or one that holds only HTML GitHub's page hides (a template's comments, a bot's badges), shows no Description section, rather than the panel's "No description provided.", since the phone draws no empty section.
+  const description = pullRequest?.body ?? "";
+  const described = markdownShows(description, { hidesHtml: true });
 
   const reviewers =
     pullRequest === undefined
@@ -490,11 +492,16 @@ export function PullRequestScreen() {
               <WriteNoteRow words={writes.note.words} said={writes.note.said} />
             )}
           </ListSection>
-          {description === "" ? null : (
+          {described ? (
             <ListSection title={DESCRIPTION_WORDS}>
-              <WordsRow words={description} repository={agent?.repository} onOpenLink={openLink} />
+              <WordsRow
+                words={description}
+                repository={agent?.repository}
+                onOpenLink={openLink}
+                hidesHtml
+              />
             </ListSection>
-          )}
+          ) : null}
           <ListSection
             title="Checks"
             count={
