@@ -5,6 +5,7 @@ import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
+import { cardTitle } from "@repo/features/plain-words";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
@@ -375,11 +376,13 @@ function useSheetStart(
           onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: answer.taskId })),
         );
 
-        // Note that the agent's page is handed the brief it was started on, which names it in the bar until the task list does, rather than a bare "Agent".
+        // Note that the agent's page is handed the title its brief reads as, which names it in the bar until the task list does, rather than a bare "Agent"; the title alone travels in the route, never the brief's whole words.
+        const title = brief === undefined ? "" : cardTitle(brief);
+
         if (answer.agentId !== undefined) {
           router.push({
             pathname: onTab(iosAgentRoute(answer.agentId)),
-            params: brief === undefined ? {} : { brief },
+            params: title === "" ? {} : { brief: title },
           });
         }
       })
@@ -457,7 +460,8 @@ export function NewAgentScreen({
             })
           : startSuggested(opened.suggestion),
       pictures.refusal,
-      prompt.trim(),
+      // Note that a suggestion's start is named by its own title where it has one, as the service names the agent.
+      opened?.suggestion.title ?? prompt.trim(),
     );
 
   return (
