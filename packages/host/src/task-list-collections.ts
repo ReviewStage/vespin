@@ -161,7 +161,7 @@ export interface TaskListCollections {
 }
 
 /** Where a read outside the list was asked: the follow's answers given by then, and how many such reads were asked before it. */
-export interface ColdMark {
+interface ColdMark {
   readonly answers: number;
   readonly asked: number;
 }
