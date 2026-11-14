@@ -7,6 +7,7 @@ import {
   Image,
   LabeledContent,
   Menu,
+  ProgressView,
   Spacer,
   Button as SwiftUIButton,
   SwipeActions,
@@ -467,6 +468,22 @@ export function ToggleRow({ label, detail, on, disabled: off = false, onChange }
   );
 }
 
+/**
+ * A group's rows while they are read: the system's small spinner beside the
+ * read's words in the muted ink, as Settings stands one in a group still
+ * filling, so a header never stands over nothing.
+ */
+export function LoadingRow({ words }: { readonly words: string }) {
+  const colors = useColors();
+
+  return (
+    <HStack spacing={SPACE.ROW} modifiers={[listRowBackground(colors.RAISED)]}>
+      <ProgressView modifiers={[tint(colors.TEXT_MUTED)]} />
+      <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{words}</Text>
+    </HStack>
+  );
+}
+
 /** A setting's name and where it stands, as the system lays a value out beside its label. */
 export function ValueRow({ label, value }: { readonly label: string; readonly value: string }) {
   const colors = useColors();
@@ -781,7 +798,7 @@ export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
             spacing={SPACE.ROW}
             modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
           >
-            <Avatar name={name} picture={picture} size={faceSize} />
+            <Avatar name={name} id={id} picture={picture} size={faceSize} />
             <VStack alignment="leading" spacing={1}>
               <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
                 {name}
@@ -887,6 +904,8 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
 type FollowerRowProps = {
   /** Their name, or You for the reader. */
   readonly name: string;
+  /** Their member id, which their letters' hue is read off. */
+  readonly id: string;
   readonly picture?: string | undefined;
   /** The muted word after their name, such as Assignee; none for none. */
   readonly role?: string | undefined;
@@ -903,7 +922,7 @@ type FollowerRowProps = {
  * press. VoiceOver hears it as one element, its name then its role and what
  * agents may do there, since the laptop alone says that on screen.
  */
-export function FollowerRow({ name, picture, role, machines, heard }: FollowerRowProps) {
+export function FollowerRow({ name, id, picture, role, machines, heard }: FollowerRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(ROW_FACE_SIZE);
 
@@ -917,7 +936,7 @@ export function FollowerRow({ name, picture, role, machines, heard }: FollowerRo
         ...spokenValue(role, heard),
       ]}
     >
-      <Avatar name={name} picture={picture} size={faceSize} />
+      <Avatar name={name} id={id} picture={picture} size={faceSize} />
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
       {role === undefined ? null : (
         <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
