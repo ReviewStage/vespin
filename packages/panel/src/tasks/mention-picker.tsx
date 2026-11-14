@@ -1025,7 +1025,8 @@ function appRows(sources: AppSources): MentionRow[] {
   const offered = machineAppsOf(sources);
 
   if (offered.length === 0) return [];
-  const machines = new Set(offered.map((each) => each.machineName));
+  // Note that machines are counted by their ids, so two of the same name still count as two.
+  const machines = new Set(offered.map((each) => each.machine ?? each.machineName));
   const named = machines.size > 1;
   const onHowMany = new Map<string, number>();
 
