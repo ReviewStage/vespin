@@ -62,6 +62,7 @@ import {
   WorkingMark,
 } from "./marks.js";
 import { RowOpenContext, RowSelectedContext } from "./row-open.js";
+import { SELECT_PROBE, selectProbe } from "./select-probe.js";
 import {
   type BrandColors,
   STATUS_TONE,
@@ -326,7 +327,7 @@ export function rowPlacement(
   vertical: number = ROW_INSET.VERTICAL,
 ) {
   return [
-    listRowBackground("clear"),
+    ...(selectProbe === SELECT_PROBE.ROW_GROUND ? [] : [listRowBackground("clear")]),
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
     padding({ leading: ROW_INSET.LEADING, trailing: SPACE.EDGE, top: vertical, bottom: vertical }),
     ...(selected ? [background(colors.SELECTED)] : []),
@@ -435,7 +436,7 @@ export function RowFrame({
         ]),
     ...(link === undefined ? [] : [dragLink(link)]),
     // Note that a row of a list that opens its rows draws no keyboard focus ring around its cell, as iPadOS's own sidebars draw none, since its selection already stands on the `SELECTED` fill; it's set by whether the row opens at all, not by whether it's selected now, so the modifiers don't change as the selection does.
-    ...(open === undefined ? [] : [cellFocusRingOff()]),
+    ...(open === undefined || selectProbe === SELECT_PROBE.NO_RING ? [] : [cellFocusRingOff()]),
   ];
 
   if (swiped.length + menuSubmenus.length + menuActions.length === 0 && preview === undefined) {

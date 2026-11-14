@@ -31,6 +31,7 @@ import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
 import { RowOpenContext, RowSelectedContext } from "./row-open.js";
+import { SELECT_PROBE, selectProbe } from "./select-probe.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -131,7 +132,13 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
         if (id !== undefined) onSelect?.(id);
       }}
       modifiers={[
-        listStyle(look),
+        listStyle(
+          choosing !== undefined && selectProbe === SELECT_PROBE.INSET
+            ? "inset"
+            : choosing !== undefined && selectProbe === SELECT_PROBE.AUTOMATIC
+              ? "automatic"
+              : look,
+        ),
         scrollContentBackground("hidden"),
         ...listGround(colors, look),
         onGeometryChange(({ width: next }) => setWidth(next)),
@@ -140,7 +147,12 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
         scrollDismissesKeyboard("immediately"),
         ...(onRefresh === undefined || choosing !== undefined ? [] : [refreshable(onRefresh)]),
         // Note that a ticked check is what the reader chose, so Select mode tints it copper, as Mail's checks take its accent, where the screen's ink drew a pale disc in dark.
-        ...(choosing === undefined ? [] : [environment("editMode", "active"), tint(colors.ACCENT)]),
+        ...(choosing === undefined
+          ? []
+          : [
+              environment("editMode", "active"),
+              ...(selectProbe === SELECT_PROBE.NO_TINT ? [] : [tint(colors.ACCENT)]),
+            ]),
       ]}
     >
       <RowOpenContext value={onSelect}>
