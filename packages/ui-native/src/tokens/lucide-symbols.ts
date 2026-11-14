@@ -92,7 +92,7 @@ export const LUCIDE_SYMBOL = {
   MESSAGE_SQUARE_PLUS: "MessageSquarePlus",
   MIC: "Mic",
   MIC_OFF: "MicOff",
-  MONITOR: "Monitor",
+  MOUSE_POINTER_CLICK: "MousePointerClick",
   NETWORK: "Network",
   OCTAGON_MINUS: "OctagonMinus",
   PANEL_LEFT: "PanelLeft",

@@ -50,6 +50,7 @@ import {
 } from "@repo/features/turn-rows";
 import { keyWordsIn } from "@repo/features/workspace-key";
 import {
+  APP_ICON_STAND_IN,
   DISCLOSURE_BODY,
   DISCLOSURE_LOOK,
   DISCLOSURE_SUMMARY,
@@ -125,7 +126,6 @@ import {
   LayoutListIcon,
   LinkIcon,
   type LucideIcon,
-  MonitorIcon,
   PencilLineIcon,
   PlayIcon,
   PlugIcon,
@@ -1219,7 +1219,7 @@ const CALL_ICON = {
   [CALL_KIND.COMMAND]: TerminalIcon,
   [CALL_KIND.MACHINE_COMMAND]: LaptopIcon,
   [CALL_KIND.BROWSER]: GlobeIcon,
-  [CALL_KIND.COMPUTER]: MonitorIcon,
+  [CALL_KIND.COMPUTER]: () => <GLYPH.COMPUTER_USE />,
   [CALL_KIND.READ_FILE]: FileTextIcon,
   [CALL_KIND.WRITE_FILE]: FilePenIcon,
   [CALL_KIND.EDIT]: FilePenIcon,
@@ -1585,7 +1585,12 @@ export function TranscriptTool({
           provider !== undefined ? (
             <ProviderMark provider={provider} />
           ) : appIcon !== undefined || kind === CALL_KIND.COMPUTER ? (
-            <KeptAppIcon id={appIcon} />
+            <KeptAppIcon
+              id={appIcon}
+              standIn={
+                kind === CALL_KIND.COMPUTER ? APP_ICON_STAND_IN.COMPUTER_USE : APP_ICON_STAND_IN.APP
+              }
+            />
           ) : (
             <Icon aria-hidden="true" />
           )
