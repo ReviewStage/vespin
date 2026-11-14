@@ -658,8 +658,8 @@ function MentionChip({
   const press =
     machineId === undefined ? pressOf(mention, target, state, doors, openLink) : machinePress;
 
-  // Note that a teammate's machine is heard as theirs, since the face that says so to the eye is hidden from a screen reader.
-  const ownerHeard = useMachineOwnerHeard(machineId, machineWorkspace);
+  // Note that a teammate's machine, or an app on one, is heard as theirs, since the face that says so to the eye is hidden from a screen reader.
+  const ownerHeard = useMachineOwnerHeard(ownedMachineOf(mention), machineWorkspace);
 
   const card = (
     <MentionCard
@@ -713,13 +713,22 @@ function MentionChip({
   );
 }
 
-/** What stands before a machine's chip's name: its owner's face, where it is a teammate's; nothing for any other mention. */
+/** The machine a mention says is someone's: a machine's own, or the one an app on a machine is on; none for any other mention. */
+function ownedMachineOf(mention: Mention): string | undefined {
+  if (mention.kind === MENTION_KIND.MACHINE) return mention.machineId;
+
+  return mention.kind === MENTION_KIND.MAC_APP ? mention.machine : undefined;
+}
+
+/** What stands before a machine's chip's name, or an app's on a machine: the machine's owner's face, where it is a teammate's; nothing for any other mention. */
 function ownerOf(mention: Mention, target: string, doors: MentionDoors): ReactNode {
-  if (mention.kind !== MENTION_KIND.MACHINE) return undefined;
+  const machineId = ownedMachineOf(mention);
+
+  if (machineId === undefined) return undefined;
 
   return (
     <MachineChipOwner
-      machineId={mention.machineId}
+      machineId={machineId}
       workspace={readLink(target)?.workspace ?? doors.place.workspace}
     />
   );
