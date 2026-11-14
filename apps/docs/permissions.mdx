@@ -9,7 +9,7 @@ An agent runs in one of three permission modes. In the two that ask, it stops be
 
 | Mode | Claude Code asks before | Codex asks before |
 | --- | --- | --- |
-| **Ask for approval** | Every file edit and shell command | Writing outside its checkout or using the network |
+| **Ask for approval** | Every file edit and shell command, bar [always allowed commands](#always-allowed-commands) | Writing outside its checkout or using the network |
 | **Approve for me** | Only actions Claude Code flags as unsafe | Nothing. Codex's own review answers for you. |
 | **Full access** | Nothing | Nothing |
 
