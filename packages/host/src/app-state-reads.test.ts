@@ -31,6 +31,18 @@ describe("shareAppState", () => {
     expect(shared.tasks[0]).toBe(kept);
     expect(shared.tasks[1]).toBe(changed);
   });
+
+  it("answers a list a row joined at its head with the document's own rows, not each row laid over its neighbor", () => {
+    const by = { userId: "user-ada", name: "Ada" };
+    const first = { id: "first", title: "First", sentBy: { ...by }, files: [] };
+    const second = { id: "second", title: "Second", sentBy: { ...by }, files: [] };
+    const joined = { id: "joined", title: "Joined", sentBy: { ...by }, files: [] };
+    const document = { threads: [joined, first, second] };
+
+    const shared = shareAppState({ threads: [first, second] }, document);
+
+    expect(shared).toBe(document);
+  });
 });
 
 describe("answerKeeper", () => {
