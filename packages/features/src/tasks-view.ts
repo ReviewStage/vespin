@@ -810,11 +810,6 @@ export const tasksSettledPageAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
 ]);
 
-/** A parent whose sub-tasks the window asks the host to read past the list it holds, as a list showing finished sub-tasks draws it. */
-export const tasksSubTasksParamsSchema = EffectSchema.Struct({
-  taskId: EffectSchema.NonEmptyString,
-});
-
 /** A person's tasks and agents in a workspace, as their page asks the host for them. */
 export const tasksPersonPageParamsSchema = EffectSchema.Struct({
   workspaceId: EffectSchema.NonEmptyString,

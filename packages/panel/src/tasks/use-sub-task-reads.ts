@@ -5,8 +5,9 @@
  * finished sub-tasks may stand outside the list while its row's count, the
  * service's (`TaskSummary.subTasks`), names them. While the list shows
  * finished sub-tasks, each such parent's children are asked of the host
- * once (`TASKS_SUB_TASKS`), which reads them and draws each the list holds
- * not into it as a cold task, under its parent as any. Nothing is read back
+ * once through its relations (`TASKS_RELATIONS_READ`), which reads its
+ * sub-tasks among them and draws each the list holds not into it as a cold
+ * task, under its parent as any. Nothing is read back
  * here: the answer arrives as the list's, and a parent whose children the
  * list then holds is asked no more.
  */
@@ -26,7 +27,7 @@ export function useSubTaskReads(parents: readonly string[], asked: boolean): voi
     for (const taskId of parents) {
       if (askedFor.current.has(taskId)) continue;
       askedFor.current.add(taskId);
-      tellAct(ACT_KIND.TASKS_SUB_TASKS, { taskId });
+      tellAct(ACT_KIND.TASKS_RELATIONS_READ, { taskId });
     }
   }, [asked, parents]);
 }

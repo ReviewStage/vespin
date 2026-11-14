@@ -42,9 +42,9 @@ import {
   PERSON_PAGE_READ,
   TASK_LIST_READ,
   TASK_PAGE_READ,
+  TASK_RELATIONS_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_READ,
-  TASK_SUB_TASKS_READ,
 } from "@repo/features/task-list-live";
 import { AGENT_PAGES_READ, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
@@ -172,6 +172,8 @@ export interface FakeService extends TasksClient, WorkspacesClient {
   liveListReads: number;
   /** Whether a delete is refused, as a service that did not answer refuses it. */
   deleteFails: boolean;
+  /** Whether a read of one task outside the list goes unanswered, as a service that did not answer leaves it. */
+  taskRowsFail: boolean;
   /** What a delete's answer waits on, so a test can see what is drawn while it is out. */
   deleteAnswered: Effect.Effect<void>;
   /** Whether a relation's change is refused, as a service that did not answer refuses it. */
@@ -668,6 +670,7 @@ export function fakeService(tasks: Task[]): FakeService {
     agents: {},
     liveListReads: 0,
     deleteFails: false,
+    taskRowsFail: false,
     deleteAnswered: Effect.void,
     relationFails: false,
     relationAnswered: Effect.void,
@@ -1273,9 +1276,33 @@ export function fakeService(tasks: Task[]): FakeService {
         // One task outside the list, read with its agents, none of which the fake's tasks hold.
         if (read.name === TASK_ROWS_READ.name) {
           service.reads.push(`task-rows:${params.id}`);
+
+          if (service.taskRowsFail) return Effect.succeed(UNANSWERED_LIVE);
           const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
           rows.set({
             plans: service.tasks.filter((each) => each.id === params.id).map(rowOfTask),
+            agents: [],
+          });
+
+          return Effect.succeed(rows.first());
+        }
+
+        // A task's relations, its sub-tasks, its parent, and its blocks among the fake's tasks, none with agents.
+        if (read.name === TASK_RELATIONS_READ.name) {
+          service.reads.push(`task-relations:${params.id}`);
+          const of = service.tasks.find((each) => each.id === params.id);
+          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+
+          const related = new Set([
+            ...(of?.parentTaskId === undefined ? [] : [of.parentTaskId]),
+            ...(of?.blockedBy ?? []),
+            ...(of?.blocks ?? []),
+          ]);
+
+          rows.set({
+            plans: service.tasks
+              .filter((each) => related.has(each.id) || each.parentTaskId === params.id)
+              .map(rowOfTask),
             agents: [],
           });
 
@@ -1290,17 +1317,6 @@ export function fakeService(tasks: Task[]): FakeService {
             plans: service.tasks
               .filter((each) => each.name.toLowerCase().includes(query))
               .map(rowOfTask),
-            agents: [],
-          });
-
-          return Effect.succeed(rows.first());
-        }
-
-        // A parent's sub-tasks, each of the fake's tasks under the parent named, none with agents.
-        if (read.name === TASK_SUB_TASKS_READ.name) {
-          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
-          rows.set({
-            plans: service.tasks.filter((each) => each.parentTaskId === params.id).map(rowOfTask),
             agents: [],
           });
 
@@ -1970,5 +1986,7 @@ export function rowOfTask(each: Task) {
     status: each.status ?? TASK_STATUS.TODO,
     priority: each.priority ?? TASK_PRIORITY.NONE,
     parentTaskId: each.parentTaskId ?? null,
+    blockedBy: each.blockedBy ?? [],
+    blocks: each.blocks ?? [],
   };
 }

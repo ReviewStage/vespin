@@ -598,12 +598,12 @@ export const TASKS_ACT_KIND = {
   TASKS_FIND: "tasks.find",
   /** The tasks a search's words find on the service, read into the task list as cold tasks where it holds them not, so the window's own search finds them; answered once asked, never on the document. */
   TASKS_SEARCH: "tasks.search",
+  /** The tasks related to a task, its sub-tasks, its parent, and its blocks, read from the service into the task list as cold tasks where it holds them not, as its card hangs; answered once asked, never on the document. */
+  TASKS_RELATIONS_READ: "tasks.relationsRead",
   /** The task a tab pinned in a window stands on, read into the task list as a cold task where it holds it not, so the pin draws its task; answered once asked, never on the document. */
   TASKS_LOAD: "tasks.load",
   /** A page of a workspace's settled tasks, the newest finished first, read from the service into the task list as cold tasks (`task-list-collections.ts`); the cursor the next page reads past is answered to the list that asked, never on the document. */
   TASKS_SETTLED_PAGE: "tasks.settledPage",
-  /** A parent's direct children read from the service into the task list as cold tasks where it holds them not, for a list showing finished sub-tasks under a parent whose count names more than it holds; answered once asked, never on the document. */
-  TASKS_SUB_TASKS: "tasks.subTasks",
   /** A person's tasks and agents in a workspace, their newest read from the service into the task list as cold tasks (`task-list-collections.ts`) and how many of each the service counts answered to their page, never on the document. */
   TASKS_PERSON_PAGE: "tasks.personPage",
   /** A page of a description's history, read from the service and answered to the view; an older page is laid on the task's held history too (`LIVE_READ.HISTORY`) where it is held. */
@@ -1252,9 +1252,9 @@ export const PORT_ACT_USE = {
   TASKS_COLOR_CODE: ACT_USE.FETCH,
   TASKS_FIND: ACT_USE.FETCH,
   TASKS_SEARCH: ACT_USE.FETCH,
+  TASKS_RELATIONS_READ: ACT_USE.FETCH,
   TASKS_LOAD: ACT_USE.FETCH,
   TASKS_SETTLED_PAGE: ACT_USE.FETCH,
-  TASKS_SUB_TASKS: ACT_USE.FETCH,
   TASKS_PERSON_PAGE: ACT_USE.FETCH,
   TASKS_REVISIONS: ACT_USE.FETCH,
   TASKS_REVISION: ACT_USE.FETCH,

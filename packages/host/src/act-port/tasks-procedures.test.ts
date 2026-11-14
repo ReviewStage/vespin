@@ -132,7 +132,6 @@ const DECLARED: readonly {
   },
   { name: "TASKS_FIND", payload: { workspace: "acme", number: 7 } },
   { name: "TASKS_SETTLED_PAGE", payload: { workspaceId: "acme" } },
-  { name: "TASKS_SUB_TASKS", payload: TASK },
   { name: "TASKS_PERSON_PAGE", payload: { workspaceId: "acme", personId: "user-1" } },
   { name: "TASKS_REVISIONS", payload: TASK },
   { name: "TASKS_REVISION", payload: { ...TASK, seq: 3 } },

@@ -1,5 +1,5 @@
 /**
- * add-suggestion.ts -- `add_suggestion`: a suggestion a coding agent puts in its reply, beside the line it is about, of a new agent started on a brief it wrote, or of its words sent to a running agent, which a member opens filled in, may edit, and sends.
+ * add-suggestion.ts -- `add_suggestion`: a suggestion a coding agent puts in its reply or a thread's message, beside the line it is about, of a new agent started on a brief it wrote, or of its words sent to a running agent, which a member opens filled in, may edit, and sends.
  *
  * The agent never writes what a suggestion does into its reply: it calls
  * this tool with the suggestion's label and what it suggests, which is
@@ -123,18 +123,18 @@ type Asked = typeof ADD_SUGGESTION_INPUT.Type;
 export const ADD_SUGGESTION_TOOL = {
   name: AGENT_TOOL.ADD_SUGGESTION,
   description:
-    "Put a suggestion in your reply of work the developer may want next, beside the line it " +
-    "is about: a new agent started on a brief you write, or words sent to an agent already " +
-    "running. A member who presses it opens it filled in, in a new agent's box or that " +
+    "Put a suggestion in your reply or a thread of work the developer may want next, beside " +
+    "the line it is about: a new agent started on a brief you write, or words sent to an agent " +
+    "already running. A member who presses it opens it filled in, in a new agent's box or that " +
     "agent's, may edit it, and sends it as themselves; nothing runs until they do. Use it " +
-    "where your reply names a next step that runs apart from your own work, such as a " +
-    "follow-up found along the way, rather than asking the developer to start it by hand; " +
+    "where your reply or a thread names a next step that runs apart from your own work, such " +
+    "as a follow-up found along the way, rather than asking the developer to start it by hand; " +
     "never for what you will do yourself. Give its label and exactly one of start or send. It " +
     "is checked now, so a refusal says what to mend. Answers `accepted` with the suggestion's " +
-    "link, which you write in your reply as `[<label>](<link>)` at the end of the line it is " +
-    "about, where the developer sees it as the suggestion, or `rejected` and why none was " +
-    "made. A suggestion is sent once, whoever sends it, and what it reaches reads that you " +
-    "suggested it.",
+    "link, which you write in your reply, or in a thread's message, as `[<label>](<link>)` at " +
+    "the end of the line it is about, where the developer sees it as the suggestion, or " +
+    "`rejected` and why none was made. A suggestion is sent once, whoever sends it, and what " +
+    "it reaches reads that you suggested it.",
   inputSchema: ADD_SUGGESTION_INPUT,
 } as const;
 

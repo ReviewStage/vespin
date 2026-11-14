@@ -270,6 +270,27 @@ const COMPUTER_ACTION_WORDS = {
   [COMPUTER_ACTION.STOP_RECORDING]: "Stopped recording",
 } as const satisfies { readonly [Action in ComputerAction]: string };
 
+/** What a computer call's line says it would have done where its machine ran nothing, as "Didn't look at" Notes. */
+const COMPUTER_ACTION_NOT_RUN_WORDS = {
+  [COMPUTER_ACTION.LIST_APPS]: "Didn't list the apps",
+  [COMPUTER_ACTION.GET_APP_STATE]: "Didn't look at",
+  [COMPUTER_ACTION.CLICK]: "Didn't click in",
+  [COMPUTER_ACTION.TYPE_TEXT]: "Didn't type in",
+  [COMPUTER_ACTION.PRESS_KEY]: "Didn't press a key in",
+  [COMPUTER_ACTION.SCROLL]: "Didn't scroll in",
+  [COMPUTER_ACTION.DRAG]: "Didn't drag in",
+  [COMPUTER_ACTION.SET_VALUE]: "Didn't set a value in",
+  [COMPUTER_ACTION.PERFORM_SECONDARY_ACTION]: "Didn't act in",
+  [COMPUTER_ACTION.RECORD]: "Didn't start recording",
+  [COMPUTER_ACTION.STOP_RECORDING]: "Didn't stop recording",
+} as const satisfies { readonly [Action in ComputerAction]: string };
+
+/** What a call that ran nothing on its machine says in its kind's verb's place: a command not run, or an app not used where its action is one this build does not know. */
+export const MACHINE_NOT_RUN_WORDS = {
+  COMMAND: "Didn't run",
+  APP: "Didn't use",
+} as const;
+
 const COMPUTER_ACTIONS: ReadonlySet<string> = new Set(Object.values(COMPUTER_ACTION));
 
 /** Whether a call's action is one this build knows. */
@@ -282,6 +303,13 @@ export function computerCallWords(action: string | undefined): string | undefine
   return action === undefined || !isComputerAction(action)
     ? undefined
     : COMPUTER_ACTION_WORDS[action];
+}
+
+/** What a computer call's line says where its machine ran nothing: what it would have done, or that it used no app where its action is one this build does not know. */
+export function computerNotRunWords(action: string | undefined): string {
+  return action === undefined || !isComputerAction(action)
+    ? MACHINE_NOT_RUN_WORDS.APP
+    : COMPUTER_ACTION_NOT_RUN_WORDS[action];
 }
 
 /**

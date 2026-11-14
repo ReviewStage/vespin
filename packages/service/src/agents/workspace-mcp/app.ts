@@ -1,7 +1,7 @@
 /**
  * app.ts -- our MCP server: the tools that touch the app, served to a native harness's agent over streamable HTTP under its runner's bearer.
  *
- * Claude Code (`mcp__workspace__<tool>`) and Codex (`mcp_servers.workspace`) both reach
+ * Claude Code (`mcp__team__<tool>`) and Codex (`mcp_servers.team`) both reach
  * it as a standard MCP server: JSON-RPC 2.0 over streamable HTTP, each
  * request one POST answered with one JSON body. It keeps no session: every
  * POST carries the runner's bearer and is admitted on it alone

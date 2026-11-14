@@ -1292,7 +1292,7 @@ it.effect.each([
 
       // Our server is named in every mode, so the first turn waits on it; an integration is allowed by a hook
       // in a mode that asks, since a rule naming it would hold the first turn while it connects.
-      assert.ok(options.allowedTools?.includes("mcp__workspace"));
+      assert.ok(options.allowedTools?.includes("mcp__team"));
       assert.ok(!options.allowedTools?.includes("mcp__linear"));
 
       const integrationHook = options.hooks?.PreToolUse?.find(
@@ -1733,13 +1733,13 @@ it.effect(
 
       const worker = options.agents?.worker;
 
-      for (const tool of ["Edit", "Write", "mcp__workspace"]) {
+      for (const tool of ["Edit", "Write", "mcp__team"]) {
         assert.ok(worker?.disallowedTools?.includes(tool), tool);
       }
 
       // In the cloud's sandbox the CLI reaches our server over HTTP under the bearer, which no other option carries.
       const { mcpServers, ...rest } = options;
-      assert.deepEqual(mcpServers?.workspace, {
+      assert.deepEqual(mcpServers?.team, {
         type: "http",
         url: CONFIG.mcpUrl,
         headers: { authorization: `Bearer ${BEARER}` },
@@ -1795,8 +1795,8 @@ it.effect("denies the worker only the tools of ours the config names, and keeps 
     yield* Fiber.join(run);
 
     const denied = cli.options?.agents?.worker?.disallowedTools;
-    assert.ok(denied?.includes("mcp__workspace__post_thread"));
-    assert.ok(!denied?.includes("mcp__workspace"));
+    assert.ok(denied?.includes("mcp__team__post_thread"));
+    assert.ok(!denied?.includes("mcp__team"));
   }),
 );
 
@@ -1915,7 +1915,7 @@ function fakeCliTransport() {
 function launchWithMcp(
   mcp: ReturnType<typeof fakeMcpRoute>,
   named: { readonly name: string; readonly url: string } = {
-    name: "workspace",
+    name: "team",
     url: CONFIG.mcpUrl,
   },
 ) {
@@ -1990,7 +1990,7 @@ it.effect(
       yield* write(FIRST_MESSAGE);
       yield* Fiber.join(run);
 
-      assert.deepEqual(Object.keys(cli.options?.mcpServers ?? {}), ["workspace", "linear"]);
+      assert.deepEqual(Object.keys(cli.options?.mcpServers ?? {}), ["team", "linear"]);
       assert.deepEqual(channel.sent, [{ jsonrpc: "2.0", id: 1, result: { tools: [] } }]);
       assert.deepEqual(
         mcp.calls.map(({ authorization, body }) => ({ authorization, body })),

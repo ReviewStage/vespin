@@ -89,7 +89,6 @@ import {
   tasksSkillsParamsSchema,
   tasksStartAnswerSchema,
   tasksStartRequestSchema,
-  tasksSubTasksParamsSchema,
   tasksTreeAnswerSchema,
   tasksTreeParamsSchema,
   tasksWriteSectionParamsSchema,
@@ -415,10 +414,10 @@ export const TASKS_ACTS = declaredActs({
     door: ACT.READ,
     unanswered: undefined,
   }),
-  TASKS_SUB_TASKS: hostAct({
-    input: tasksSubTasksParamsSchema,
+  TASKS_RELATIONS_READ: hostAct({
+    input: taskIdParamsSchema,
     output: EffectSchema.Void,
-    refusal: "Could not read that task's sub-tasks on this system.",
+    refusal: "Could not read that task's relations on this system.",
     panelOnly: true,
     door: ACT.READ,
     unanswered: undefined,

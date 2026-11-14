@@ -32,9 +32,9 @@ import { taskRecordRead } from "../live/reads/task-record.js";
 import {
   personPageRead,
   taskPageRead,
+  taskRelationsRead,
   taskRowsRead,
   taskSearchRead,
-  taskSubTasksRead,
   tasksRead,
 } from "../live/reads/tasks.js";
 import { workspaceIntegrationsRead } from "../live/reads/workspace-integrations.js";
@@ -49,7 +49,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   taskRowsRead,
   taskSearchRead,
   taskPageRead,
-  taskSubTasksRead,
+  taskRelationsRead,
   personPageRead,
   accountInboxRead,
   inboxItemsRead,

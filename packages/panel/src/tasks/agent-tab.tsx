@@ -784,6 +784,7 @@ function ToolCallView({
         errorText={part.errorText}
         cut={cut}
         held={held}
+        notRun={view.notRun}
         answered={
           inBody ? (
             <CallPictures

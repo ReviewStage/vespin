@@ -70,9 +70,9 @@ import {
   settledPageCursorOf,
   TASK_LIST_READ,
   TASK_PAGE_READ,
+  TASK_RELATIONS_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_READ,
-  TASK_SUB_TASKS_READ,
   taskAgentPinsOfLiveRows,
   taskAgentsOfLiveRows,
   taskListOfLiveRows,
@@ -106,9 +106,9 @@ import type { SyncMoved } from "../../sync/live-query.js";
 import {
   personPageRead,
   taskPageRead,
+  taskRelationsRead,
   taskRowsRead,
   taskSearchRead,
-  taskSubTasksRead,
   tasksRead,
 } from "./tasks.js";
 
@@ -252,6 +252,22 @@ const taskRowsOf = (userId: string, id: string) =>
     };
   });
 
+/** The tasks related to the task `id` names and their agents, as its relations' read delivers them to the account, decoded as the desktop decodes them. */
+const relatedOf = (userId: string, id: string) =>
+  Effect.gen(function* () {
+    const statements = Option.getOrThrow(taskRelationsRead.statements({ userId, id }));
+
+    const rows = yield* Schema.decodeUnknownEffect(TASK_RELATIONS_READ.rows)({
+      plans: yield* runLive(statements.plans),
+      agents: yield* runLive(statements.agents),
+    });
+
+    return {
+      plans: rows.plans.map((plan) => plan.id).toSorted(),
+      agents: rows.agents.map((agent) => agent.id).toSorted(),
+    };
+  });
+
 /** The tasks and agents a search delivers to the account, decoded as the desktop decodes them. */
 const searchedOf = (userId: string, query: string) =>
   Effect.gen(function* () {
@@ -295,22 +311,6 @@ const settledPageOf = (userId: string, workspaceId: string, before?: SettledPage
       names: plans.map((plan) => plan.name),
       agents: rows.agents.map((agent) => agent.id).toSorted(),
       next: settledPageCursorOf(rows.plans),
-    };
-  });
-
-/** The tasks and agents a parent's sub-task read delivers to the account, decoded as the desktop decodes them. */
-const subTasksOf = (userId: string, id: string) =>
-  Effect.gen(function* () {
-    const statements = Option.getOrThrow(taskSubTasksRead.statements({ userId, id }));
-
-    const rows = yield* Schema.decodeUnknownEffect(TASK_SUB_TASKS_READ.rows)({
-      plans: yield* runLive(statements.plans),
-      agents: yield* runLive(statements.agents),
-    });
-
-    return {
-      plans: rows.plans.map((plan) => plan.id).toSorted(),
-      agents: rows.agents.map((agent) => agent.id).toSorted(),
     };
   });
 
@@ -1152,6 +1152,37 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
+    "deliver a task's sub-tasks, parent, and blocks with their agents, to a member and to no one else",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const plan = yield* startTask(owner, { name: "Teammate invitations" });
+        const parent = yield* startTask(owner, { name: "Onboarding" });
+        const child = yield* startTask(owner, { name: "Invitation emails" });
+        const blocker = yield* startTask(owner, { name: "Invitation links" });
+        const blocked = yield* startTask(owner, { name: "Seat billing" });
+        yield* startTask(owner, { name: "Billing export" });
+        yield* joinWorkspace(plan.workspaceId, teammate);
+        yield* db.update(task).set({ parentTaskId: parent.id }).where(eq(task.id, plan.id));
+        yield* db.update(task).set({ parentTaskId: plan.id }).where(eq(task.id, child.id));
+        yield* addTaskBlock(owner, { blockerTaskId: blocker.id, blockedTaskId: plan.id });
+        yield* addTaskBlock(owner, { blockerTaskId: plan.id, blockedTaskId: blocked.id });
+        const agent = yield* openAgent(owner, { taskId: child.id }, 30_000);
+        yield* openAgent(owner, { taskId: plan.id }, 30_000);
+
+        assert.deepEqual(yield* relatedOf(teammate, plan.id), {
+          plans: [parent.id, child.id, blocker.id, blocked.id].toSorted(),
+          agents: [agent.id],
+        });
+        assert.deepEqual(yield* relatedOf(outsider, plan.id), { plans: [], agents: [] });
+      }),
+  );
+
+  it.effect(
     "find a task by every word of its name or by its key, with its agents, for a member and no one else",
     () =>
       Effect.gen(function* () {
@@ -1248,7 +1279,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
       }),
   );
   it.effect(
-    "count a task's direct children the reader reaches, the finished apart, and send both parents of a child moved between them past a sync id, and read a parent's children, to a member and no one else",
+    "count a task's direct children the reader reaches, the finished apart, and send both parents of a child moved between them past a sync id to a member and no one else",
     () =>
       Effect.gen(function* () {
         const owner = yield* openUser;
@@ -1327,17 +1358,6 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           ].toSorted((a, b) => a.id.localeCompare(b.id)),
           "the child and both its parents are sent, each counted anew",
         );
-
-        // The other parent's children are read with their agents for a member, the one on a token they do not reach left out, and for no one else.
-        yield* db.update(task).set({ parentTaskId: other.id }).where(eq(task.id, hidden.id));
-        const agent = yield* openAgent(owner, { taskId: shipped.id }, 60_000);
-        const read = { plans: [shipped.id], agents: [agent.id] };
-        assert.deepEqual(yield* subTasksOf(teammate, other.id), read);
-        assert.deepEqual(yield* subTasksOf(owner, other.id), {
-          plans: [shipped.id, hidden.id].toSorted(),
-          agents: [agent.id],
-        });
-        assert.deepEqual(yield* subTasksOf(outsider, other.id), { plans: [], agents: [] });
       }),
   );
 

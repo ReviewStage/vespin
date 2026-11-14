@@ -3273,15 +3273,28 @@ const stoppedHolding = (machine: MachineLifecycle, unheld: UnheldSandbox) =>
       return false;
     }
 
+    const place = recordOf(found.value, userId, agentId);
+    const { runner } = found.value;
+
     // The runner is told of no longer before the sandbox stops, its launch kept for a late END, so
-    // the next message relaunches it rather than writing to a runner the stop ended.
+    // the next message relaunches it rather than writing to a runner the stop ended. Note that a
+    // stop that fails puts the runner back, because the runner may still run, and a launch beside
+    // it would read the same lines twice.
     yield* machine.recordRunner(
-      recordOf(found.value, userId, agentId),
+      place,
       launch === undefined
         ? { kind: RUNNER_RECORD.NONE }
         : { kind: RUNNER_RECORD.LAUNCHED, mark: launch },
     );
-    yield* machine.stop(running);
+    yield* machine
+      .stop(running)
+      .pipe(
+        Effect.tapError(() =>
+          runner === undefined
+            ? Effect.void
+            : Effect.ignore(machine.recordRunner(place, { kind: RUNNER_RECORD.RUNNING, runner })),
+        ),
+      );
     yield* recordedSandboxStopped(sandboxName);
 
     return true;

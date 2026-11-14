@@ -61,10 +61,10 @@ import {
   SETTLED_PAGE_SIZE,
   TASK_LIST_READ,
   TASK_PAGE_READ,
+  TASK_RELATIONS_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_LIMIT,
   TASK_SEARCH_READ,
-  TASK_SUB_TASKS_READ,
 } from "@repo/features/task-list-live";
 import { TASK_BLOCK_RELATION, TASK_SETTLED, TASK_STATUS } from "@repo/features/task-wire";
 import { SANDBOX_IDLE } from "@repo/sandbox";
@@ -635,6 +635,62 @@ export const taskRowsRead = bindLiveRead(TASK_ROWS_READ, {
   },
 });
 
+/** The task a relation is read from, apart from the row a statement reads. */
+const relatedFrom = alias(task, "related_from");
+
+/**
+ * The tasks related to the task `id` names: each sub-task of it, its
+ * parent, and each task it waits on or holds up. Note that the parent is
+ * read off the task itself under an alias of its own, so the statement's
+ * row is never shadowed.
+ */
+function taskRelatedTo(id: string): SQL {
+  const parent = queryBuilder
+    .select({ id: relatedFrom.parentTaskId })
+    .from(relatedFrom)
+    .where(eq(relatedFrom.id, id));
+
+  const blockers = queryBuilder
+    .select({ id: taskBlock.blockerTaskId })
+    .from(taskBlock)
+    .where(eq(taskBlock.blockedTaskId, id));
+
+  const blocked = queryBuilder
+    .select({ id: taskBlock.blockedTaskId })
+    .from(taskBlock)
+    .where(eq(taskBlock.blockerTaskId, id));
+
+  return (
+    or(
+      eq(task.parentTaskId, id),
+      sql`${task.id} in (${parent})`,
+      sql`${task.id} in (${blockers})`,
+      sql`${task.id} in (${blocked})`,
+    ) ?? sql`false`
+  );
+}
+
+/**
+ * The tasks related to one task (`taskRelations`), by the task its `id`
+ * names: the list's own statements narrowed to its sub-tasks, its parent,
+ * and the tasks it waits on and holds up, and every agent of them, on the
+ * list's rule of who reads them, so a task the account does not reach reads
+ * no row. It is read once, as a window opens the task or hangs its card,
+ * and never followed, so it wakes as the list does.
+ */
+export const taskRelationsRead = bindLiveRead(TASK_RELATIONS_READ, {
+  reads: TASK_LIST_TABLES,
+  topics: ({ userId }) => readerAndWorkspaceTopics(userId),
+  statements: ({ userId, id }) => {
+    const related = queryBuilder.select({ id: task.id }).from(task).where(taskRelatedTo(id));
+
+    return {
+      plans: tasksStatement(userId, taskRelatedTo(id)),
+      agents: agentsStatement(userId, sql`${agentTable.taskId} in (${related})`),
+    };
+  },
+});
+
 /** A query that is a task's key (`ACME-42`), its number taken; the prefix is read off the workspace's name, so the number alone is matched and the key's prefix ranked by the window. */
 const KEY_QUERY = /^[\p{L}\p{N}]{1,4}-(\d+)$/u;
 
@@ -762,36 +818,6 @@ export const taskPageRead = bindLiveRead(TASK_PAGE_READ, {
     return {
       plans: tasksStatement(userId, sql`${task.id} in (${page})`),
       agents: agentsStatement(userId, sql`${agentTable.taskId} in (${page})`),
-    };
-  },
-});
-
-/**
- * A parent's sub-tasks (`taskSubTasks`): the list's own statements narrowed
- * to the direct children of the task `id` names and every agent of them, on
- * the list's rule of who reads them, so a child the account does not reach
- * is never read, and a parent it does not reach reads none of its children
- * either. It is read once, as a list showing finished sub-tasks draws a
- * parent whose count names children it does not hold, and never followed,
- * so it wakes as the list does.
- */
-export const taskSubTasksRead = bindLiveRead(TASK_SUB_TASKS_READ, {
-  reads: TASK_LIST_TABLES,
-  topics: ({ userId }) => readerAndWorkspaceTopics(userId),
-  statements: ({ userId, id }) => {
-    const parent = queryBuilder
-      .select({ id: task.id })
-      .from(task)
-      .where(and(eq(task.id, id), taskReachableBy(userId)));
-
-    const children = queryBuilder
-      .select({ id: subTask.id })
-      .from(subTask)
-      .where(inArray(subTask.parentTaskId, parent));
-
-    return {
-      plans: tasksStatement(userId, sql`${task.id} in (${children})`),
-      agents: agentsStatement(userId, sql`${agentTable.taskId} in (${children})`),
     };
   },
 });
