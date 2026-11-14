@@ -37,7 +37,7 @@ appId: dev.vespin.ios
 # The second turn: the page it showed as a card, and its recording, read as
 # its MP4 copy, which the system's player plays in place.
 # Note that the card is left near the top as it scrolls in, clear of Jump to
-# latest, which floats over the middle of a short window such as the Duo's.
+# latest, which floats over the foot of a short window such as the Duo's.
 - scrollUntilVisible:
     element: "Invite funnel, Page"
     direction: UP

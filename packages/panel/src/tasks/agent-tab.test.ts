@@ -1046,7 +1046,11 @@ test("a call of an integration's tool is one row wearing the integration's mark,
   assert.equal(container.querySelector("[data-turn-fold] > summary")?.textContent, "1 tool call");
   const row = container.querySelector<HTMLElement>('[data-call-id="call-linear_remote"] summary');
   assert.ok(row, "the call's row is a fold's line");
-  assert.match(row.textContent ?? "", /^Ran\s*list_issues\s*Linear$/u);
+  assert.match(
+    row.textContent ?? "",
+    /^Ran\s*list_issues$/u,
+    "a lone account's row ends in no tag",
+  );
   assert.equal(
     row.querySelector("svg")?.outerHTML,
     renderToStaticMarkup(createElement(ProviderMark, { provider: INTEGRATION_PROVIDER.LINEAR })),
@@ -1056,6 +1060,30 @@ test("a call of an integration's tool is one row wearing the integration's mark,
   const body = container.querySelector('[data-call-id="call-linear_remote"]')?.textContent ?? "";
   assert.ok(body.includes("LUKE"), "the body holds the input list_issues was sent");
   assert.ok(!body.includes("parentCallId"), "the body holds no envelope around it");
+});
+
+test("a call on one of its owner's several accounts ends in the account's chip, named as the call keeps it", () => {
+  const { container } = drawn(
+    assistant([
+      toolPart(
+        "linear_remote",
+        {
+          remoteTool: "save_issue",
+          parentCallId: "call-linear_remote",
+          input: {},
+          connection: "linear-2",
+          account: "Acme",
+        },
+        {},
+      ),
+    ]),
+    true,
+  );
+
+  const row = container.querySelector<HTMLElement>('[data-call-id="call-linear_remote"] summary');
+  assert.ok(row, "the call's row is a fold's line");
+  assert.match(row.textContent ?? "", /^Ran\s*save_issue\s*Acme$/u);
+  assert.equal(row.querySelector(".tool-place")?.textContent?.trim(), "Acme");
 });
 
 test("a connection_execute with no integration's call under it keeps its own row", () => {

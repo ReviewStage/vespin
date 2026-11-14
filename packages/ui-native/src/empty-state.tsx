@@ -14,17 +14,35 @@ import { type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
+/** What a press to read or send again says, as the app says it everywhere: the panel's Retry in the phone's words. */
+export const TRY_AGAIN_WORDS = "Try again";
+
 /** The room around a column's words while it waits for a pick, in points. */
 const EMPTY_SPACING = 12;
 
-export type EmptyStateProps = {
+/** The one act an empty screen offers: its own, or the Try again a read that failed offers; never both, since one would stand in the other's place. */
+type EmptyStateAct =
+  | {
+      /** The one act that fills the screen, such as Sign in, filled unless it names a quieter look. */
+      readonly action?:
+        | { readonly label: string; readonly onPress: () => void; readonly look?: ButtonLook }
+        | undefined;
+      readonly retry?: undefined;
+    }
+  | {
+      readonly action?: undefined;
+      /**
+       * Reads what failed again: the bordered Try again in the act's place,
+       * quiet rather than filled, since a failure is no screen's main act, as
+       * every read that failed offers it.
+       */
+      readonly retry: () => void;
+    };
+
+export type EmptyStateProps = EmptyStateAct & {
   readonly title: string;
   readonly symbol: Glyph;
   readonly description?: string | undefined;
-  /** The one act that fills the screen, such as Sign in, filled unless it names a quieter look, as a failure's Try again does. */
-  readonly action?:
-    | { readonly label: string; readonly onPress: () => void; readonly look?: ButtonLook }
-    | undefined;
   /** Whether what the screen shows is still read, which stands the system's spinner over the title in the symbol's place, so a read under way never looks like nothing to show. */
   readonly loading?: boolean | undefined;
 };
@@ -61,13 +79,20 @@ export function EmptyState({
   title,
   symbol,
   description,
-  action,
+  action: given,
+  retry,
   loading = false,
 }: EmptyStateProps) {
   const colors = useColors();
 
   if (loading) return <LoadingState title={title} />;
+
   const image = glyphImage(symbol);
+
+  const action =
+    retry === undefined
+      ? given
+      : { label: TRY_AGAIN_WORDS, onPress: retry, look: BUTTON_LOOK.BORDERED };
 
   return (
     <ContentUnavailableView
