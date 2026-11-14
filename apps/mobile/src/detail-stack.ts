@@ -302,13 +302,14 @@ export const DetailPlaceProvider = DetailPlace.Provider;
 export const PageKeyProvider = PageKey.Provider;
 
 /**
- * Pushes a page over the detail the calling view stands in, answering
- * whether it did: false outside a three-column split view's detail, where
- * the caller pushes its route as it always has, so a compact window and a
- * portrait iPad stand their pages over the window as before.
+ * Pushes a page over the detail the calling view stands in, or over `at`'s
+ * where the caller draws that detail's bar from outside it, answering
+ * whether it did: false outside a split view's detail that stands its own
+ * stack, where the caller pushes its route as it always has, so a compact
+ * window stands its pages over the window as before.
  */
-export function useDetailPush(): (page: PushedPage) => boolean {
-  const place = useContext(DetailPlace);
+export function useDetailPush(at?: SidebarPlace | undefined): (page: PushedPage) => boolean {
+  const place = useContext(DetailPlace) ?? at;
 
   return useCallback(
     (page) => {
