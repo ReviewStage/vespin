@@ -1265,8 +1265,8 @@ test("files attached in this window stay as its draft when another window lets t
   roots.push(root);
   await act(async () => root.render(windowRouter().provide(withQueryClient(createElement(Box)))));
   const box = () => composer ?? assert.fail("the box is drawn");
-  act(() => box().setDraft("Review this"));
-  act(() => box().setAttachments((held) => [...held, notes]));
+  act(() => box().updateHeld((now) => ({ ...now, text: "Review this" })));
+  act(() => box().updateHeld((now) => ({ ...now, attachments: [...now.attachments, notes] })));
 
   // The other window, where the developer went, let the words go, which is all of the draft storage holds.
   leaveWindow();
@@ -1275,5 +1275,5 @@ test("files attached in this window stay as its draft when another window lets t
     window.dispatchEvent(new StorageEvent("storage", { key: "app.composerDrafts" }));
   });
   await settle();
-  assert.deepEqual([box().draft, box().attachments], ["", [notes]]);
+  assert.deepEqual([box().held.text, box().held.attachments], ["", [notes]]);
 });

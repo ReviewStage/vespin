@@ -30,6 +30,7 @@ import { useAgentDefault } from "../account-choices.js";
 import { appPlatform } from "../app-platform.js";
 import {
   DRAFT_PLACE,
+  type Draft,
   type DraftPlace,
   EMPTY_DRAFT,
   useDraft,
@@ -58,7 +59,7 @@ import {
   treeRelationOf,
 } from "./new-task-relation.js";
 import { NoRepositoriesBanner } from "./no-repositories-banner.js";
-import { putBackRefused } from "./refused-send.js";
+import { heldUpdateOver, putBackRefused } from "./refused-send.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
 import { keptSkills } from "./repository-skills.js";
 import { NewTaskRunsOnChip, newTaskRunsOn, useNewTaskRunsOn } from "./runs-on.js";
@@ -453,12 +454,9 @@ export function NewTaskComposer({
     putBackRefused({
       went: { text: kept, attachments: press.ask.agent.attachments },
       most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
-      update: (next) =>
-        writer.update(newTaskPlace(workspaceNow.current, purpose), (now) => {
-          const joined = next(now);
-
-          return joined === undefined ? now : { ...now, ...joined };
-        }),
+      update: heldUpdateOver<Draft>((next) =>
+        writer.update(newTaskPlace(workspaceNow.current, purpose), next),
+      ),
     });
   }, []);
   // The last agent press's key and what it asked, until a start lands.
@@ -730,19 +728,25 @@ export function NewTaskComposer({
   );
 
   const composer: AgentComposerControl = {
-    draft: words,
-    // Note that every word the field hands back is written, as every box writes them, because `words` is the last drawn and one keystroke may hand back several.
-    setDraft: (text) => {
-      draft.update((was) => ({ ...was, text }));
+    held: draft.draft,
+    updateHeld: (next) => {
+      let edited = false;
+      // Note that the words are told against the draft as the change lands, never a render's copy, so an echo of the
+      // words it holds, as the field's of a refused card's, is no edit.
+      heldUpdateOver<Draft>((move) =>
+        draft.update((was) => {
+          const moved = move(was);
+          edited = moved.text !== was.text;
 
-      // Note that the words handed back as they stand, as the field echoes the words a refused card opens on, take no note down.
-      if (text === words) return;
+          return moved;
+        }),
+      )(next);
+
+      // An edit of the words lets a refusal go.
+      if (!edited) return;
       setHanded(undefined);
       starts.clear();
     },
-    attachments,
-    setAttachments: (next) =>
-      draft.update((was) => ({ ...was, attachments: next(was.attachments) })),
     sending: starting,
     // Note that a read of the devices that failed is said over any note before it, and read again by its Retry.
     note: devicesFailed ? DEVICES_UNREAD : note,

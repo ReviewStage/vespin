@@ -401,7 +401,7 @@ test("a draft asks nothing of the service, one per plan, until its first message
   const prompt = "Rename the invite email's subject.";
   const choice = { model: "openai/gpt-6.1-sol", effort: "xhigh" };
   const disabledServers = [INTEGRATION_PROVIDER.LINEAR];
-  act(() => tab.control().onDraftChange({ prompt }));
+  act(() => tab.control().onDraftHeld((now) => ({ ...now, text: prompt })));
   act(() => tab.control().onDraftChange({ choice }));
   act(() => tab.control().onDraftChange({ disabledServers }));
   await tab.stand({ taskId: OTHER_TASK });
@@ -430,7 +430,9 @@ test("a draft asks nothing of the service, one per plan, until its first message
 
   // The files attached to the words are the draft's too, and go with the prompt.
   const notes = { name: "notes.md", mediaType: "text/plain", data: "IyBOb3Rlcw==" } as const;
-  act(() => tab.control().onDraftAttachments((held) => [...held, notes]));
+  act(() =>
+    tab.control().onDraftHeld((now) => ({ ...now, attachments: [...now.attachments, notes] })),
+  );
   assert.deepEqual(tab.control().draft?.attachments, [notes]);
   await act(async () => {
     failed = await tab.control().startPrompt(draft, prompt, undefined, [notes], disabledServers);
@@ -502,11 +504,13 @@ test("a draft's words outlast a relaunch, the plan opening on its draft again un
   });
   const prompt = "Rename the invite email's subject.";
   const notes = { name: "notes.md", mediaType: "text/plain", data: "IyBOb3Rlcw==" } as const;
-  act(() => before.control().onDraftChange({ prompt }));
+  act(() => before.control().onDraftHeld((now) => ({ ...now, text: prompt })));
   act(() =>
     before.control().onDraftChange({ choice: { model: "openai/gpt-6.1-sol", effort: "xhigh" } }),
   );
-  act(() => before.control().onDraftAttachments((held) => [...held, notes]));
+  act(() =>
+    before.control().onDraftHeld((now) => ({ ...now, attachments: [...now.attachments, notes] })),
+  );
   relaunch();
 
   const after = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [] });
@@ -550,7 +554,11 @@ test("a suggestion's draft keeps its suggestion through a chip change; another s
     tab.control().onDraftChange({ choice: { model: "openai/gpt-6.1-sol", effort: "low" } }),
   );
   assert.deepEqual(tab.control().draft?.suggestion, invite, "a chip changed keeps the suggestion");
-  act(() => tab.control().onDraftChange({ prompt: "Send the invite email, and retry once." }));
+  act(() =>
+    tab
+      .control()
+      .onDraftHeld((now) => ({ ...now, text: "Send the invite email, and retry once." })),
+  );
 
   act(() => {
     tab.control().onSuggestDraft(digest, "Count invites apart.", undefined);
@@ -582,8 +590,8 @@ test("two windows' draft agents on one plan each keep their own words under thei
   act(() => {
     second.control().onNewDraft();
   });
-  act(() => second.control().onDraftChange({ prompt: "Ship now" }));
-  act(() => first.control().onDraftChange({ prompt: "Wait for review" }));
+  act(() => second.control().onDraftHeld((now) => ({ ...now, text: "Ship now" })));
+  act(() => first.control().onDraftHeld((now) => ({ ...now, text: "Wait for review" })));
 
   assert.equal(first.control().draft?.prompt, "Wait for review");
   assert.equal(first.control().draft?.id, "first-1");
@@ -607,7 +615,9 @@ test("a draft of files alone waits while another plan is open, but no relaunch b
   act(() => {
     before.control().onNewDraft();
   });
-  act(() => before.control().onDraftAttachments((held) => [...held, notes]));
+  act(() =>
+    before.control().onDraftHeld((now) => ({ ...now, attachments: [...now.attachments, notes] })),
+  );
   await before.stand({ taskId: OTHER_TASK });
   await before.stand({ taskId: TASK });
   assert.deepEqual(before.control().draft?.attachments, [notes]);
@@ -730,7 +740,7 @@ test("a fork joins the task's draft under a key of its own, its words kept and i
     draft = tab.control().onNewDraft();
   });
   const words = "Try the queue instead.";
-  act(() => tab.control().onDraftChange({ prompt: words }));
+  act(() => tab.control().onDraftHeld((now) => ({ ...now, text: words })));
   act(() =>
     tab.control().onDraftChange({ choice: { model: "openai/gpt-6.1-sol", effort: "low" } }),
   );
@@ -801,7 +811,7 @@ test("a fork's × lets the fork go and leaves an ordinary draft with its words a
     draft = tab.control().onForkDraft(fork);
   });
   assert.equal(tab.control().draft?.id, draft);
-  act(() => tab.control().onDraftChange({ prompt: "Keep going" }));
+  act(() => tab.control().onDraftHeld((now) => ({ ...now, text: "Keep going" })));
   act(() => tab.control().onDropFork());
   assert.deepEqual(tab.control().draft, {
     id: draft,
@@ -821,7 +831,7 @@ test("a fork's draft with words outlasts a relaunch still a fork, under the same
   act(() => {
     draft = before.control().onForkDraft(fork);
   });
-  act(() => before.control().onDraftChange({ prompt: "Try the queue" }));
+  act(() => before.control().onDraftHeld((now) => ({ ...now, text: "Try the queue" })));
   relaunch();
 
   const after = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [STARTED] });
@@ -835,7 +845,7 @@ test("a fork's draft with words outlasts a relaunch still a fork, under the same
     fork,
   });
   act(() => after.control().onDropFork());
-  act(() => after.control().onDraftChange({ prompt: "Try the queue, then retry" }));
+  act(() => after.control().onDraftHeld((now) => ({ ...now, text: "Try the queue, then retry" })));
   assert.deepEqual(after.control().draft, {
     id: draft,
     prompt: "Try the queue, then retry",
@@ -875,7 +885,7 @@ test("a continue opens the task's draft with the closed box's words and files af
   act(() => {
     before.control().onNewDraft();
   });
-  act(() => before.control().onDraftChange({ prompt: "Check the logs first." }));
+  act(() => before.control().onDraftHeld((now) => ({ ...now, text: "Check the logs first." })));
   let draft = "";
   act(() => {
     draft = before.control().onContinueDraft(AGENT, " Now add the dark variant. ", [notes]);
