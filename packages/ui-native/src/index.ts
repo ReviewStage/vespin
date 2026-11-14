@@ -77,6 +77,8 @@ export {
 
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
 
+export { releaseFields } from "./field-focus.js";
+
 export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
 
 export { GlassBar, GlassDock } from "./glass-bar.js";
@@ -161,7 +163,7 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { monogramOf } from "./monogram.js";
 
-export { RenameAsk, SwitchRow } from "./option-rows.js";
+export { SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
