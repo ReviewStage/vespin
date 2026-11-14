@@ -49,6 +49,7 @@ import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
+import { type NavigatorState, tabStackBacks, tabsInFront } from "./window-back.js";
 
 /** What Sign Out asks first, since it leaves the phone with no account until the next sign-in. */
 const SIGN_OUT_ASK = {
@@ -62,15 +63,6 @@ const SHEET_ROUTE = {
   NEW_TASK: "/start-task",
   NEW_AGENT: "/start-agent",
 } as const;
-
-/** The root stack's route the tabs stand under (`app/_layout.tsx`); any other route in front is a sheet or a signed-out screen. */
-const TABS_ROUTE = "(tabs)";
-
-/** A navigator's state, as far as Back reads it: the route in front, and each route's own navigator. */
-type NavigatorState = {
-  readonly index?: number;
-  readonly routes: readonly { readonly name: string; readonly state?: NavigatorState }[];
-};
 
 /** The commands that act on no one thing, enabled whenever an account is signed in. */
 const SIGNED_IN_COMMANDS: readonly MenuCommand[] = [
@@ -117,24 +109,6 @@ interface Subject {
 /** Whether a link's word names the task: its id, or its number as a task link spells one. */
 function namesTask(task: TaskSummary, named: string): boolean {
   return task.id === named || (task.number !== undefined && String(task.number) === named);
-}
-
-/** The route a navigator stands in front, or none before it has one. */
-function focusedRoute(state: NavigatorState | undefined) {
-  return state?.routes[state.index ?? 0];
-}
-
-/**
- * Whether the tab shown has pushed a page over its root, which the window's
- * Back pops. Note that this reads the tab's own stack rather than
- * `router.canGoBack()`, because the tab bar answers Back too, by going to the
- * first tab (NativeTabs' `initialRoute` back behavior), so Back from the
- * Tasks or Search list would have jumped to the Inbox.
- */
-function tabStackBacks(tabs: NavigatorState["routes"][number]): boolean {
-  const stack = focusedRoute(tabs.state)?.state;
-
-  return (stack?.index ?? 0) > 0;
 }
 
 /** Reads what the route stands in front into what each command may do to it. */
@@ -270,12 +244,11 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   // Note that Back pops a page pushed over the detail in front, else a page the tab pushed over the window, as a stack's own Back does; never a sheet, which closes with its own Done or Cancel.
   const detailFront = useDetailFront();
   const root: NavigatorState = useRootNavigationState();
-  const tabs = focusedRoute(root);
-  const overTabs = tabs?.name === TABS_ROUTE;
+  const tabs = tabsInFront(root);
 
   const backs =
     signedIn &&
-    overTabs &&
+    tabs !== undefined &&
     (detailFront === DETAIL_FRONT.NONE ? tabStackBacks(tabs) : detailFront === DETAIL_FRONT.PUSHED);
 
   const enabled = [
