@@ -6,6 +6,7 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
+import { MachineAskAlert } from "../agents/machine-ask-alert.js";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -96,6 +97,8 @@ function GuardedScreens() {
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
+      {/* An ask one of the developer's machines holds for an agent, over whatever screen stands. */}
+      <MachineAskAlert signedIn={signedIn && !updateNeeded} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={signedIn && !updateNeeded}>
           <Stack.Screen name="index" />

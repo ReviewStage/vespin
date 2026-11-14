@@ -1,0 +1,20 @@
+# machine-ask.yaml -- an ask Ada's MacBook holds for an agent's command, put to her in the system's alert over whatever screen stands, with a Deny's words and Always allow, Just this once and Deny.
+#
+# No machine asks a simulator, so the launch asks the fixture run to hold
+# one (`-machineAsk true`, `src/host/fixture-host.ts`). The alert opens over
+# the Inbox, the first screen; Just this once answers it, and it goes.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      machineAsk: "true"
+- extendedWaitUntil:
+    visible: "Run on Ada's MacBook Pro?"
+    timeout: 10000
+- assertVisible: "Tell the agent why (optional)"
+- waitForAnimationToEnd
+- takeScreenshot: machine-ask
+- tapOn: "Just this once"
+- assertNotVisible: "Run on Ada's MacBook Pro?"

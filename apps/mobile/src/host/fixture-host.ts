@@ -25,13 +25,13 @@ import type {
 import {
   type AgentChoices,
   agentChangeOf,
-  answeredMachineAsksAppState,
   chosenTasksView,
   type InboxReminders,
   inboxActAnswer,
   inboxAppState,
   inboxRemindersAppState,
   inboxTasksView,
+  machineAskAppState,
   NEW_MEMORY_ID,
   olderPageAnswer,
   olderPageAppState,
@@ -43,6 +43,7 @@ import {
 } from "@repo/host/fixture-inbox";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { Predicate } from "effect";
+import { launchMachineAsk } from "./launch-arguments.js";
 
 /** The one workspace a fixture run's account is in. */
 const FIXTURE_WORKSPACE_IDS: readonly string[] = [FIXTURE_IDS.WORKSPACE];
@@ -141,13 +142,14 @@ export function stageFixture(
     OLDER_ASKS.get(state) ?? 0,
   );
 
-  const reminded = answeredMachineAsksAppState(
-    savedMemoriesAppState(
-      inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS),
-      MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
-    ),
-    ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS,
+  const saved = savedMemoriesAppState(
+    inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS),
+    MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
   );
+
+  const reminded = launchMachineAsk()
+    ? machineAskAppState(saved, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
+    : saved;
 
   const staged = {
     ...reminded,
@@ -171,7 +173,7 @@ function keepReminder(
   stageFixture(state);
 }
 
-/** Keeps a machine's ask the fixture answered and takes it off the document at once, as the service's read drops it (`answeredMachineAsksAppState`); nothing for any other act. */
+/** Keeps a machine's ask the fixture answered and takes it off the document at once, as the service's read drops it (`machineAskAppState`); nothing for any other act. */
 function keepMachineAnswer(
   state: Pick<AppStateStore, "snapshot" | "update">,
   kind: PortActKind,

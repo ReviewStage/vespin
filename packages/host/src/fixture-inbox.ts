@@ -2106,8 +2106,6 @@ export function inboxAppState(
         rows: { hosts: HOSTS, installScriptUrl: "https://vespin.dev/install-host.sh" },
       },
     },
-    [LIVE_READ.MACHINES]: { [ADA.userId]: { rows: MACHINES } },
-    [LIVE_READ.MACHINE_ASKS]: { [ADA.userId]: { rows: MACHINE_ASKS } },
     [LIVE_READ.HISTORY]: { ...state[LIVE_READ.HISTORY], [TASK.INVITES]: { rows: INVITES_HISTORY } },
     [LIVE_READ.WORKSPACE_PHOTOS]: {
       ...state[LIVE_READ.WORKSPACE_PHOTOS],
@@ -2163,20 +2161,23 @@ export function inboxRemindersAppState(
 /** The words a fixture run saved, by the memory's id: one of its own corrected, or a new one under the id the save answered. */
 export type SavedMemoryWords = ReadonlyMap<string, string>;
 
-/** The document with the machines' asks a fixture run answered taken off, as the service's read drops an ask once answered; as it was where none was. */
-export function answeredMachineAsksAppState(
+/**
+ * The document with Ada's MacBook asking before the invitations agent's test
+ * command runs, and her machines that name it, those of the asks a fixture
+ * run answered taken off, as the service's read drops an ask once answered.
+ * Only a run that asks for it lays this over (the mobile app's
+ * `-machineAsk true`), since the ask's card opens over every screen.
+ */
+export function machineAskAppState(
   state: AppStateSnapshot,
   answered: ReadonlySet<string>,
 ): AppStateSnapshot {
-  const held = state[LIVE_READ.MACHINE_ASKS][ADA.userId]?.rows;
-
-  if (answered.size === 0 || held === undefined) return state;
-
   return {
     ...state,
+    [LIVE_READ.MACHINES]: { ...state[LIVE_READ.MACHINES], [ADA.userId]: { rows: MACHINES } },
     [LIVE_READ.MACHINE_ASKS]: {
       ...state[LIVE_READ.MACHINE_ASKS],
-      [ADA.userId]: { rows: held.filter((ask) => !answered.has(ask.id)) },
+      [ADA.userId]: { rows: MACHINE_ASKS.filter((ask) => !answered.has(ask.id)) },
     },
   };
 }
@@ -2394,7 +2395,7 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
-  // Note that an ask is answered as the service answers the first answer given, which stands; the mobile fixture takes the ask off the document itself (`answeredMachineAsksAppState`).
+  // Note that an ask is answered as the service answers the first answer given, which stands; the mobile fixture takes the ask off the document itself (`machineAskAppState`).
   [ACT_KIND.MACHINE_ASK_ANSWER]: ({ decision, note }) =>
     note === undefined ? { decision } : { decision, note },
   // Note that a pairing is read, approved, and denied as the service would answer, though nothing here makes a machine.
