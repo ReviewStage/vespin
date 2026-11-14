@@ -5,12 +5,7 @@ import {
   revisionWriterName,
   VERSION_HISTORY_WORDS,
 } from "@repo/features/description-history-words";
-import {
-  VERSION_CHANGE,
-  type VersionDiff,
-  versionDiff,
-  writtenWords,
-} from "@repo/features/description-version-diff";
+import { type VersionDiff, versionDiff } from "@repo/features/description-version-diff";
 import type { DescriptionRevisionLine } from "@repo/features/task-wire";
 import { agoText, dayAndTimeText } from "@repo/features/time-format";
 import { readingWords, showMoreWords, VERB } from "@repo/features/words";
@@ -190,13 +185,12 @@ export function VersionScreen() {
   );
 }
 
-/** One version and its restore; `at` its latest save, which titles it, and `newest` the description as it stands, which a restore's Undo puts back, each none where the route did not carry it. */
 /**
  * A version's words against the version before it, as the panel's version
  * page draws them: each section a row, one written in or changed edged in
  * green, one struck edged in red and dimmed. The phone's Markdown draws no
  * mark inside its words, so a changed section reads as it was written,
- * its struck words left out. A version that changed nothing says so under
+ * its struck words left out (`plain`). A version that changed nothing says so under
  * its words; the first, with nothing before it, says nothing.
  */
 function VersionWords({
@@ -219,7 +213,7 @@ function VersionWords({
           <WordsRow
             // A section's heading may stand twice, struck and written again, so its place keys it.
             key={at}
-            words={unit.change === VERSION_CHANGE.CHANGED ? writtenWords(unit) : unit.words}
+            words={unit.plain}
             change={unit.change}
             last={at === diff.units.length - 1}
             onOpenLink={onOpenLink}
@@ -232,6 +226,7 @@ function VersionWords({
   );
 }
 
+/** One version and its restore; `at` its latest save, which titles it, and `newest` the description as it stands, which a restore's Undo puts back, each none where the route did not carry it. */
 function Version({
   taskId,
   seq,
