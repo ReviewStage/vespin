@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -16,11 +16,12 @@ import UniformTypeIdentifiers
 /// The names the modifiers are registered under, which `interactions.ts` names too.
 private enum ModifierName {
   static let cellFocusRingOff = "vespinCellFocusRingOff"
-  static let barSubtitle = "vespinBarSubtitle"
+  static let columnSubtitle = "vespinColumnSubtitle"
+  static let stackSubtitle = "vespinStackSubtitle"
   static let dragLink = "vespinDragLink"
   static let dropPictures = "vespinDropPictures"
   static let dropLink = "vespinDropLink"
-  static let all = [cellFocusRingOff, barSubtitle, dragLink, dropPictures, dropLink]
+  static let all = [cellFocusRingOff, columnSubtitle, stackSubtitle, dragLink, dropPictures, dropLink]
 }
 
 /// How a dropped picture is kept for JavaScript to read: a JPEG at the quality the photo picker reads one at (`use-attached-pictures.ts`).
@@ -35,8 +36,11 @@ public final class NativeInteractionsModule: Module {
       ViewModifierRegistry.register(ModifierName.cellFocusRingOff) { params, appContext, _ in
         return try CellFocusRingOffModifier(from: params, appContext: appContext)
       }
-      ViewModifierRegistry.register(ModifierName.barSubtitle) { params, appContext, _ in
-        return try BarSubtitleModifier(from: params, appContext: appContext)
+      ViewModifierRegistry.register(ModifierName.columnSubtitle) { params, appContext, _ in
+        return try ColumnSubtitleModifier(from: params, appContext: appContext)
+      }
+      ViewModifierRegistry.register(ModifierName.stackSubtitle) { params, appContext, _ in
+        return try StackSubtitleModifier(from: params, appContext: appContext)
       }
       ViewModifierRegistry.register(ModifierName.dragLink) { params, appContext, _ in
         return try DragLinkModifier(from: params, appContext: appContext)
@@ -116,46 +120,57 @@ private final class CellFocusEffectProbe: UIView {
 
 // MARK: - Subtitle
 
-/// A bar's subtitle under its title, as Mail names its filter under Inbox.
+/// A split view column's subtitle under its title, as Mail names its filter under Inbox: SwiftUI's own bar reads `navigationSubtitle`.
 ///
-/// Note that it's set twice over, since two kinds of bar hold a screen's
-/// title: SwiftUI's own, in a split view's columns, which reads
-/// `navigationSubtitle`, and the native stack's, in a compact window, which
-/// react-native-screens draws from its screen's `UINavigationItem` and which
-/// no SwiftUI modifier reaches. So the view also carries a probe that finds
-/// the view controller its navigation controller holds and sets that item's
-/// `subtitle` (iOS 26), clearing what it set once it leaves. An empty
-/// subtitle sets none.
-internal struct BarSubtitleModifier: ViewModifier, Record {
+/// Note that the modifier stands on the column whether or not it has a
+/// subtitle, an empty one drawing none, because adding or removing a
+/// modifier changes the column's view type and so redraws everything under
+/// it, the lists a tab keeps behind the one shown among them.
+internal struct ColumnSubtitleModifier: ViewModifier, Record {
   @Field var subtitle: String = ""
 
   func body(content: Content) -> some View {
-    content
-      .navigationSubtitle(subtitle)
-      .background(BarSubtitleProbe(subtitle: subtitle))
+    content.navigationSubtitle(subtitle)
+  }
+}
+
+/// A compact screen's subtitle under the title of the native stack's bar it's pushed under.
+///
+/// Note that react-native-screens draws that bar from its screen's
+/// `UINavigationItem`, which no SwiftUI modifier reaches. So the screen
+/// carries a probe that finds the view controller its navigation controller
+/// holds and sets that item's `subtitle` (iOS 26), clearing it as it leaves
+/// only while it still reads what the probe wrote. A probe with an empty
+/// subtitle that has written nothing touches nothing.
+internal struct StackSubtitleModifier: ViewModifier, Record {
+  @Field var subtitle: String = ""
+
+  func body(content: Content) -> some View {
+    content.background(StackSubtitleProbe(subtitle: subtitle))
   }
 }
 
 /// The probe a screen carries: an empty view that writes its subtitle to the stack's item each time it's placed or redrawn.
-private struct BarSubtitleProbe: UIViewRepresentable {
+private struct StackSubtitleProbe: UIViewRepresentable {
   let subtitle: String
 
-  func makeUIView(context: Context) -> BarSubtitleView {
-    BarSubtitleView()
+  func makeUIView(context: Context) -> StackSubtitleView {
+    StackSubtitleView()
   }
 
-  func updateUIView(_ view: BarSubtitleView, context: Context) {
+  func updateUIView(_ view: StackSubtitleView, context: Context) {
     view.subtitle = subtitle
   }
 
-  static func dismantleUIView(_ view: BarSubtitleView, coordinator: ()) {
-    view.subtitle = ""
+  static func dismantleUIView(_ view: StackSubtitleView, coordinator: ()) {
+    view.clear()
   }
 }
 
-private final class BarSubtitleView: UIView {
-  /// The subtitle this probe last set, so it clears only its own.
+private final class StackSubtitleView: UIView {
+  /// The item this probe wrote to, and what it wrote there, so it clears only its own.
   private weak var item: UINavigationItem?
+  private var written: String?
 
   var subtitle = "" {
     didSet { write() }
@@ -176,23 +191,30 @@ private final class BarSubtitleView: UIView {
     write()
   }
 
-  /// Sets the subtitle on the item of the nearest view controller a navigation controller holds, or clears the one it set before.
+  /// Clears the subtitle this probe wrote, unless something else has written over it since.
+  func clear() {
+    if let item, item.subtitle == written {
+      item.subtitle = nil
+    }
+    item = nil
+    written = nil
+  }
+
+  /// Sets the subtitle on the item of the nearest view controller a navigation controller holds, moving off an item it wrote to before.
   private func write() {
     guard window != nil, let held = heldController() else {
       clear()
       return
     }
     if item !== held.navigationItem { clear() }
+    if subtitle.isEmpty && written == nil { return }
+    let shown = subtitle.isEmpty ? nil : subtitle
+    held.navigationItem.subtitle = shown
     item = held.navigationItem
-    held.navigationItem.subtitle = subtitle.isEmpty ? nil : subtitle
+    written = shown
   }
 
-  private func clear() {
-    item?.subtitle = nil
-    item = nil
-  }
-
-  /// The view controller above the probe whose parent is a navigation controller: the stack's screen, past any hosting controller standing inside it.
+  /// The view controller above the probe whose parent is a navigation controller: the stack's screen, past the hosting controller standing inside it.
   private func heldController() -> UIViewController? {
     var responder: UIResponder? = next
     while let current = responder {

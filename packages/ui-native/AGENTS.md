@@ -29,8 +29,10 @@ builds a control of its own.
   (`scopeMenu`, beside the app sidebar only), a subtitle under its title
   such as the narrowing scope's "Filtered by:" line (`scopeSubtitle`), as
   Mail's, which `Screen`'s `subtitle` sets under a compact screen's stack bar
-  too (`barSubtitle`, the one modifier both go through: SwiftUI's
-  `navigationSubtitle` and the stack's `UINavigationItem.subtitle`), a
+  too (`barSubtitle`: SwiftUI's `navigationSubtitle` for a column, the
+  stack's `UINavigationItem.subtitle` for a screen, each standing whether
+  or not it has words, since a modifier coming or going redraws all under
+  it), a
   `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says, and `SplitOverTabs`, the one split view a window wide enough

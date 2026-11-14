@@ -33,7 +33,7 @@ import { BarContent } from "./bar-content.js";
 import type { Scope } from "./button.js";
 import { GLYPH, type Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
-import { barSubtitle } from "./interactions.js";
+import { BAR_KIND, barSubtitle } from "./interactions.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 import { useColors } from "./tokens/colors.js";
@@ -352,7 +352,7 @@ function Column({
               navigationTitle(bar.title),
               toolbarTitleDisplayMode(sidebar ? "inline" : "inlineLarge"),
             ]),
-        ...(bar.subtitle === undefined ? [] : [barSubtitle(bar.subtitle)]),
+        barSubtitle(BAR_KIND.COLUMN, bar.subtitle),
       ]}
     >
       {view}

@@ -10,20 +10,37 @@ import { flow, Option, Schema } from "effect";
 /** The names the native module registers each modifier under, which its Swift names too. */
 const MODIFIER = {
   CELL_FOCUS_RING_OFF: "vespinCellFocusRingOff",
-  BAR_SUBTITLE: "vespinBarSubtitle",
+  COLUMN_SUBTITLE: "vespinColumnSubtitle",
+  STACK_SUBTITLE: "vespinStackSubtitle",
   DRAG_LINK: "vespinDragLink",
   DROP_PICTURES: "vespinDropPictures",
   DROP_LINK: "vespinDropLink",
 } as const;
+
+/** Which bar a subtitle stands under: a split view column's, SwiftUI's own, or the native stack's a compact screen is pushed under. */
+export const BAR_KIND = { COLUMN: "column", STACK: "stack" } as const;
+
+export type BarKind = (typeof BAR_KIND)[keyof typeof BAR_KIND];
 
 /** A list's row whose cell draws no keyboard focus ring, such as a row of a list that keeps a selection, which its own fill already shows; the views inside the row keep their own focus effects. */
 export function cellFocusRingOff(): ModifierConfig {
   return createModifier(MODIFIER.CELL_FOCUS_RING_OFF, {});
 }
 
-/** A screen's bar subtitle under its title, as Mail names its filter under Inbox: set on the view that sets the bar's title, a split view's column or a compact window's screen; an empty one sets none. */
-export function barSubtitle(subtitle: string): ModifierConfig {
-  return createModifier(MODIFIER.BAR_SUBTITLE, { subtitle });
+/**
+ * A bar's subtitle under its title, as Mail names its filter under Inbox:
+ * SwiftUI's own, for a split view's column, or the native stack's, for a
+ * compact screen, whose bar no SwiftUI modifier reaches. Note that a view
+ * takes it whether or not it has a subtitle, an empty one drawing none,
+ * since adding or removing a modifier redraws everything under the view.
+ */
+export function barSubtitle(bar: BarKind, subtitle: string | undefined): ModifierConfig {
+  return createModifier(
+    bar === BAR_KIND.COLUMN ? MODIFIER.COLUMN_SUBTITLE : MODIFIER.STACK_SUBTITLE,
+    {
+      subtitle: subtitle ?? "",
+    },
+  );
 }
 
 /** A view dragged out as its link: another app takes it as a URL, and a place here that takes a link reads it back. */

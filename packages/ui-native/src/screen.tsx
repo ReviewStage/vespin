@@ -3,7 +3,7 @@
 import { Host, Spacer } from "@expo/ui/swift-ui";
 import { tint } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode } from "react";
-import { barSubtitle } from "./interactions.js";
+import { BAR_KIND, barSubtitle } from "./interactions.js";
 import { useColors } from "./tokens/colors.js";
 
 /**
@@ -28,7 +28,7 @@ export function Screen({
   return (
     <Host
       style={{ flex: 1, backgroundColor: colors.GROUND }}
-      modifiers={[tint(colors.TEXT), ...(subtitle === undefined ? [] : [barSubtitle(subtitle)])]}
+      modifiers={[tint(colors.TEXT), barSubtitle(BAR_KIND.STACK, subtitle)]}
     >
       {children}
     </Host>
