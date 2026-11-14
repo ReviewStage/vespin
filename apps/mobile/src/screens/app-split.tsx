@@ -102,11 +102,12 @@ function stackPages(place: SidebarPlace, pages: readonly HeldPage[], front: bool
  * Mail's full-screen message does, since New task belongs to the list the
  * page stands beside and stays on ⌘N. With nothing picked the bar holds
  * New task alone, since a lone page has nothing to stand across the window,
- * as Mail shows expand only over an open message. A page opened from the detail, such as a task's agent or its pull
- * request, is pushed over it inside the detail's own column, with a Back
- * there, as Mail opens a message's related pages, so the sidebar and the
- * list stand beside it; each place keeps its own pages, which go as another
- * row is picked (`detail-stack.ts`).
+ * as Mail shows expand only over an open message. A page opened from the
+ * detail, such as a task's agent or its pull request, is pushed over it
+ * inside the detail's own column, with a Back there, as Mail opens a
+ * message's related pages, so the sidebar and the list stand beside it; each
+ * place keeps its own pages, which go as another row is picked
+ * (`detail-stack.ts`).
  */
 export function AppSplit({
   place,
