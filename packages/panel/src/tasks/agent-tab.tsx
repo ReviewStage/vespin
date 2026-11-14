@@ -3574,7 +3574,7 @@ function AgentTabView({
       <AgentBootLine
         line={bootLine}
         machine={agent.machine ?? AGENT_MACHINE.VERCEL}
-        host={agent.mac?.name}
+        host={agent.mac}
         retry={startedByReader ? agent.id : undefined}
       />
     );
@@ -3585,7 +3585,7 @@ function AgentTabView({
   const signIn: GitHubSignInDoors | undefined =
     onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined
       ? {
-          host: agent.mac?.name,
+          host: agent.mac,
           repository: published?.repository ?? undefined,
           onRetry,
           onMoveToCloud: onMoveToCloud === undefined ? undefined : () => onMoveToCloud(),
