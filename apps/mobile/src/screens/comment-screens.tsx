@@ -397,6 +397,8 @@ export function NewComment({
     });
 
     if (threadId === undefined) return;
+    // Note that the same words sent again go under the same thread's id, so a refusal parked for an earlier send of them is let go rather than reopening this one.
+    earlyRefusals.delete(threadId);
     openingThreads.add(threadId);
 
     if (detail !== undefined) {

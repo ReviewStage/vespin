@@ -411,8 +411,8 @@ export function useCommentStart(
           inPlace: (why, noticed) => {
             const now = startDraftOf(taskId, block);
 
-            // Note that words typed toward this block since the send, in a field opened on it again, are kept over the refused ones.
-            if (now === undefined || now.words.trim() === "") {
+            // Note that words typed toward this block since the send, in a field opened on it again, are kept over the refused ones; an earlier refusal's draft gives way to this one.
+            if (now === undefined || now.sent !== undefined || now.words.trim() === "") {
               keepStartDraft(taskId, block, { words: kept, sent: start, note: why });
             }
 
