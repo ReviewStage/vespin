@@ -160,8 +160,6 @@ export const accountTasklessEntrySchema = EffectSchema.Struct({
   snoozedUntil: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
 });
 
-export type AccountTasklessEntry = typeof accountTasklessEntrySchema.Type;
-
 /** One automation the account's read lists as holding items of its runs' agents with no task, as a task is listed for its own: how many, open and settled alike, and when the latest changed; null groups the agents no standing automation the reader may read names. */
 export const accountInboxAutomationSchema = EffectSchema.Struct({
   automationId: EffectSchema.NullOr(wireUuidSchema),

@@ -16,6 +16,7 @@ import {
   useAppSidebar,
   useComposeAction,
 } from "./app-sidebar.js";
+import { useDetailStackColumn } from "./detail-stack-column.js";
 import { useSidebarTasks } from "./task-screens.js";
 
 /** A sidebar pick's place, and the place the route stood in when it was made. */
@@ -68,7 +69,11 @@ function keptViews(
  * Mail's expand button, which stands the page alone across the window and
  * back, with New task's compose beside it, as Mail keeps both over the
  * message rather than over its list; the page's main acts stand in the same
- * bar.
+ * bar. A page opened from the detail, such as a task's agent or its pull
+ * request, is pushed over it inside the detail's own column, with a Back
+ * there, as Mail opens a message's related pages, so the sidebar and the
+ * list stand beside it; each place keeps its own pages, which go as another
+ * row is picked (`detail-stack.ts`).
  */
 export function AppSplit({
   place,
@@ -109,14 +114,22 @@ export function AppSplit({
     hold({ place: picked, over: place }),
   );
 
+  // Note that a place whose root has handed nothing yet names no root, so the pages it pushed while the window stood two columns stay over its detail.
+  const stack = useDetailStackColumn(
+    standing,
+    columns === undefined ? undefined : { id: columns.root },
+    front,
+  );
+
   return (
     <Screen>
       <SplitView
         {...sidebar}
         content={<KeptColumns shown={standing} views={keptViews(kept, standing, front)} />}
         contentBar={columns?.contentBar}
-        detail={<InFrontProvider value={front}>{columns?.detail}</InFrontProvider>}
+        detail={stack.wrap(columns?.detail)}
         detailBar={{ ...columns?.detailBar, lead: [expand, compose] }}
+        detailStack={stack.detailStack}
         searchKey={standing}
         detailOnly={detailOnly}
         onDetailOnlyChange={setDetailOnly}

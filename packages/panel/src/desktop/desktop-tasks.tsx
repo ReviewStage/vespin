@@ -134,7 +134,14 @@ import {
 import { OverviewAgents } from "./overview-agents.js";
 import { OverviewHead } from "./overview-head.js";
 import { OverviewPages } from "./overview-pages.js";
-import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
+import {
+  PhoneBack,
+  PhoneHead,
+  PlaceMore,
+  phoneBar,
+  phoneFindGroups,
+  type TaskHeadBack,
+} from "./phone-head.js";
 import {
   changesTabOf,
   SIDE_PANEL_HOLDER,
@@ -156,7 +163,6 @@ import {
   screenBack,
   TASK_PANE,
   TaskHead,
-  type TaskHeadBack,
   type TaskPane,
   taskPaneOf,
 } from "./task-pane-switcher.js";

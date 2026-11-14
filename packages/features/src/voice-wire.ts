@@ -92,12 +92,8 @@ export const voiceSessionRequestSchema = EffectSchema.Struct({
   ),
 });
 
-export type VoiceSessionRequest = typeof voiceSessionRequestSchema.Type;
-
 /** The opened call: its id, and the SDP answer the panel sets as its peer's remote description; nothing else of the session. */
 export const voiceSessionAnswerSchema = EffectSchema.Struct({
   callId: wireUuidSchema,
   sdp: EffectSchema.String,
 });
-
-export type VoiceSessionAnswer = typeof voiceSessionAnswerSchema.Type;

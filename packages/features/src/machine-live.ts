@@ -75,7 +75,7 @@ export type MachinesLiveAnswer = LiveReadAnswer<typeof MACHINES_READ>;
 export type MachineLiveRow = LiveRowOf<typeof MACHINES_READ.parts.machines>;
 
 /** A machine's own say over agents there, once its app has joined: how commands run, whether agents may use its apps, none where it never said, and the apps it lets them use unasked. */
-export interface MachineSettingsLine {
+interface MachineSettingsLine {
   readonly commandMode: MachineCommandMode;
   readonly computerUse?: boolean;
   readonly alwaysAllowedApps: readonly string[];

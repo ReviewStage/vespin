@@ -146,8 +146,6 @@ export const machineAskAnsweredSchema = EffectSchema.Struct({
   txid: EffectSchema.optionalKey(EffectSchema.String),
 });
 
-export type MachineAskAnswered = typeof machineAskAnsweredSchema.Type;
-
 /**
  * The words an agent is handed, as its owner's, once its ask was allowed
  * after its window closed and its call was answered as not answered: what
