@@ -10,8 +10,8 @@ import type * as HttpClient from "effect/http/HttpClient";
 import {
   type AccountCallEffects,
   accountCall,
-  type CallCredential,
   callAnswered,
+  type HostedServiceOptions,
   jsonOf,
 } from "./account-call.js";
 import { startRefusedAs } from "./agent-client.js";
@@ -163,14 +163,6 @@ export type TaskCallResult<Answer, Failure> =
       /** The facts of what failed beneath a call no refusal named (`failure-facts.ts`), which a window reports and never draws. */
       readonly cause?: FailureFacts;
     };
-
-export interface HostedTaskClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-  requestTimeoutMs?: number;
-}
 
 const UNANSWERED = { ok: false, failure: TASK_CALL_FAILURE.UNANSWERED } as const;
 
@@ -337,7 +329,7 @@ export class HostedTaskClient {
   readonly #call: AccountCallEffects;
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedTaskClientOptions) {
+  constructor(options: HostedServiceOptions) {
     const { credential } = options;
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,

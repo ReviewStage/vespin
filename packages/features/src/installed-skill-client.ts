@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { CallCredential } from "./account-call.js";
+import type { HostedServiceOptions } from "./account-call.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { HOSTED_DEADLINE, type HostedClient, hostedClient } from "./hosted-link.js";
 import type {
@@ -27,14 +27,6 @@ import { HOSTED_API_ERROR } from "./service-wire.js";
  * service's answer whole, the transaction it committed in among it, which
  * the host waits for on the skills it holds live (`INSTALLED_SKILLS_READ`).
  */
-
-export interface HostedInstalledSkillClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-  requestTimeoutMs?: number;
-}
 
 /** What an install sends: the paste, whose the skills are, and for a source the skills chosen and the commit previewed, for text its name and description. */
 export type InstalledSkillInstallParams = typeof installedSkillInstallRequestSchema.Type;
@@ -80,7 +72,7 @@ function spelledBySkill<Answer extends object>(
 export class HostedInstalledSkillClient {
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedInstalledSkillClientOptions) {
+  constructor(options: HostedServiceOptions) {
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
       credential: options.credential,
