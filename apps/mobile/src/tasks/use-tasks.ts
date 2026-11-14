@@ -466,17 +466,27 @@ function useServiceTaskSearch(search: string, listRead: boolean): boolean {
   const [answered, setAnswered] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    // Note that a field cleared forgets the last answer, so the same words typed again wait on their own search.
+    if (words === undefined) setAnswered(undefined);
+
     if (!listRead || words === undefined) return;
+    // Note that only the search of the words standing now records its answer, so an older one that answers late never marks newer words answered.
+    let standing = true;
 
     const pause = setTimeout(
       () =>
         void acts[ACT_KIND.TASKS_SEARCH]({ query: words })
           .catch(refused("The task search"))
-          .finally(() => setAnswered(words)),
+          .finally(() => {
+            if (standing) setAnswered(words);
+          }),
       TASK_SEARCH_PAUSE_MILLIS,
     );
 
-    return () => clearTimeout(pause);
+    return () => {
+      standing = false;
+      clearTimeout(pause);
+    };
   }, [acts, listRead, words]);
 
   return listRead && words !== undefined && answered !== words;

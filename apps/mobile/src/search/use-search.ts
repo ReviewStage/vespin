@@ -50,7 +50,7 @@ export interface SearchFound {
   readonly current: boolean;
   /** Whether the Inbox's first read is still out, so an Inbox item it would find may not be held yet. */
   readonly inboxReading: boolean;
-  /** Whether the task list, which holds the tasks and the agents on them, is still being read, or the service still searched for the tasks past it, so a task or an agent it would find may not be held yet. */
+  /** Whether the task list, which holds the tasks and the agents on them, is not yet read, or the service is still searched for the tasks past it, so a task or an agent it would find may not be held yet. */
   readonly tasksReading: boolean;
 }
 
@@ -87,15 +87,25 @@ export function useSearchFound(typed: string): SearchFound {
       agents: rankedBySearch(agents, query, (agent) =>
         agentSearchSubject(agent, names.get(agent.planId)),
       ).map((agent) => agentLine(agent, waiting.byAgent, view)),
+    };
+  }, [listing.found, inbox.listed, view, workspace, waiting, query]);
+
+  const inboxReading = inbox.feed === INBOX_FEED.READING;
+
+  // Note that a task or agent found past the list held comes only with the service's search, and one on a list not yet read with its first read.
+  const tasksReading =
+    view === undefined || TASKS_STILL_READING.has(view.listStatus) || listing.searching;
+
+  // Note that what the rows are read through and whether the finding has caught up are joined after the ranking, so neither a key typed nor a search answered ranks again.
+  return useMemo(
+    () => ({
+      ...ranked,
       listing,
       readerId: inbox.readerId,
-      inboxReading: inbox.feed === INBOX_FEED.READING,
-      // Note that a list read from the phone's disk is still being read again, and a task or agent it would find may only come with that read.
-      tasksReading:
-        view === undefined || TASKS_STILL_READING.has(view.listStatus) || listing.searching,
-    };
-  }, [listing, inbox, view, workspace, waiting, query]);
-
-  // Note that whether the finding has caught up is joined after the ranking, so a key typed, which only moves `typed`, never ranks again.
-  return useMemo(() => ({ ...ranked, current: query === typed }), [ranked, query, typed]);
+      inboxReading,
+      tasksReading,
+      current: query === typed,
+    }),
+    [ranked, listing, inbox.readerId, inboxReading, tasksReading, query, typed],
+  );
 }

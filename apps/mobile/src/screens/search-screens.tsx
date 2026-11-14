@@ -50,7 +50,7 @@ import { StatusQuestionAsk, TaskAgentRow, TaskRows, useAgentArchiveAsk } from ".
 const SEARCH_TITLE = "Search";
 
 /** What a search under Tasks or Agents says while the task list is still being read. */
-const READING_TASKS = readingWords("your tasks");
+const READING_TASKS = `${readingWords("your tasks")}…`;
 
 /** What the scopes choose, heard by VoiceOver before the scope chosen. */
 const SCOPE_LABEL = "Show";
