@@ -382,6 +382,24 @@ export function computerAppIcon(output: WireValue | undefined): string | undefin
   return stringAt(output.app.icon.picture, "id");
 }
 
+/**
+ * Where a computer call's answer says the agent's cursor stands on the Mac,
+ * as a share of the app's last read window from its top left, and whether
+ * it pressed there, as every action that moves it does, rather than resting
+ * there as a read leaves it; none where the answer names none, as an action
+ * that moves no cursor, or an answer from before it named one.
+ */
+export function computerCursor(
+  output: WireValue | undefined,
+): { readonly x: number; readonly y: number; readonly pressed: boolean } | undefined {
+  if (!isRecord(output) || !isRecord(output.cursor)) return undefined;
+  const { xFraction, yFraction } = output.cursor;
+
+  if (!isWireNumber(xFraction) || !isWireNumber(yFraction)) return undefined;
+
+  return { x: xFraction, y: yFraction, pressed: isWireString(output.done) };
+}
+
 /** The one file a call's `filePath` names, as a list; none where it names none. */
 function filesAt(input: WireValue | undefined): readonly string[] {
   const path = stringAt(input, "filePath");

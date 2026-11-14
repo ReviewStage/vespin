@@ -3,7 +3,7 @@
  *
  * A video's frames are the page's own, and the pointer the panel draws over
  * a cloud Browser tab's live view is no part of them
- * (`@repo/panel`'s `cloud-browser-cursor.tsx`), so the pointer is drawn into
+ * (`@repo/ui`'s `AgentPointer`), so the pointer is drawn into
  * the page instead, in the panel's look. Two recorders add it: the browser
  * tool's (`sandbox-recorder.ts`), to every page it records, and an agent's own
  * Playwright script, which the coder's instructions tell to add the image's
@@ -63,9 +63,9 @@ export const RECORDING_CURSOR_FILE = {
  * tokens are
  * no part of the page, so their values are written out here: the pointer's
  * copper and its glow from the brand's accent (`BRAND_PALETTE`), as the
- * panel's `--agent-pointer` and its `-on-dark` and `-glow` siblings are; hold
+ * `--ui-color-agent-pointer` and its `-on-dark` and `-glow` siblings are; hold
  * the rest to its `-edge` and `-shadow`,
- * to the `.cloud-browser-cursor` rules, and to `--ui-color-tooltip`, its edge,
+ * to the `.ui-agent-pointer` rules (`agent-pointer.css`), and to `--ui-color-tooltip`, its edge,
  * text, and chord inks, `--ui-tooltip-radius`, and `--ui-tooltip-shadow`; the
  * caps stand larger than a tooltip's words, which a compressed video blurs. Note that it does not sway while
  * still, as the panel's does while the agent works, because a video shows the
