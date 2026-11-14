@@ -30,6 +30,7 @@ import {
   ErrorState,
   Fill,
   GAP,
+  type GroupFold,
   LIST_INSET,
   List,
   ListRow,
@@ -209,26 +210,23 @@ function headName(person: Actor): string {
   return person.kind === ACTOR_KIND.PERSON ? person.name : actorName(person);
 }
 
-/** A section: its name and count, then its rows, folding on a press on its head. */
+/** A section: its name and count, then its rows, folding on a press on its head, open at first unless its owner holds its fold. */
 function PersonSection({
   title,
   count,
   noun,
+  fold = PERSON_SECTION_FOLD,
   children,
 }: {
   title: string;
   count: number;
   noun: Noun;
+  /** How it folds, where its owner holds it open or shut. */
+  fold?: GroupFold | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <PersonSectionFrame
-      label={title}
-      title={title}
-      count={count}
-      noun={noun}
-      fold={PERSON_SECTION_FOLD}
-    >
+    <PersonSectionFrame label={title} title={title} count={count} noun={noun} fold={fold}>
       <List label={title} inset={LIST_INSET.ROW} moves>
         {children}
       </List>
@@ -695,6 +693,22 @@ function usePersonMachines(workspaceId: string | undefined, userId: string): Per
   return read.isError ? { ...none, failed: true } : { ...none, reading: true };
 }
 
+/**
+ * The Machines section's fold, open at first, which a machine the page is
+ * opened at opens again, each time it is asked for, so its row is drawn to
+ * land on.
+ */
+function useMachinesFold(landing: PersonLanding | undefined): GroupFold {
+  const [open, setOpen] = useState(true);
+  const ask = landing?.ask;
+
+  useEffect(() => {
+    if (ask !== undefined) setOpen(true);
+  }, [ask]);
+
+  return { open, onOpenChange: setOpen };
+}
+
 /** The id a machine's row wears, which a landing finds it by. */
 function machineRowId(machineId: string): string {
   return `person-machine-${machineId}`;
@@ -1014,6 +1028,7 @@ function PersonColumn({
   const theirMachines = usePersonMachines(tasks.workspace?.id, userId);
   const { machines } = theirMachines;
   const thisMac = useThisMac();
+  const machinesFold = useMachinesFold(landing);
   const read = useWaitingItems(tasks);
 
   // An item is theirs where it waits on them (`inboxWaitsOn`), on a task its assignee or else its agent's starter, by the list followed live from a service that names neither.
@@ -1200,7 +1215,12 @@ function PersonColumn({
             <RowsSkeleton label={`Reading ${theirs} automations…`} />
           ) : null}
           {machines.length === 0 ? null : (
-            <PersonSection title={MACHINES_TITLE} count={machines.length} noun={MACHINE_NOUN}>
+            <PersonSection
+              title={MACHINES_TITLE}
+              count={machines.length}
+              noun={MACHINE_NOUN}
+              fold={machinesFold}
+            >
               <MachineRows
                 machines={machines}
                 thisMac={you ? thisMac : undefined}

@@ -741,6 +741,23 @@ test("a page opened at one of their machines lights that machine's row, and agai
   await vi.waitFor(() => assert.deepEqual(landedRows(page), ["build-box"], "opened there again"));
 });
 
+test("a page opened at one of their machines while Machines stands folded opens it to light that machine's row", async () => {
+  machinesOf = new Map([["user-sam", SAM_MACHINES]]);
+  const { page } = mount("user-sam");
+  await settle();
+
+  const head = page.querySelector<HTMLButtonElement>(
+    'section[aria-label="Machines"] button[aria-expanded]',
+  );
+
+  act(() => head?.click());
+  await vi.waitFor(() => assert.deepEqual(sections(page).Machines, []));
+
+  act(() => personRouteNow?.onOpen("user-sam", undefined, "acme", "machine-2"));
+  await vi.waitFor(() => assert.deepEqual(landedRows(page), ["build-box"]));
+  assert.equal(head?.getAttribute("aria-expanded"), "true");
+});
+
 test("a person's address loaded at one of their machines lights that machine's row", async () => {
   machinesOf = new Map([["user-sam", SAM_MACHINES]]);
 
