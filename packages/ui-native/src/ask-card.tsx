@@ -9,7 +9,10 @@ import {
   Button as SwiftUIButton,
   Text,
   TextField,
+  type TextFieldRef,
   Toggle,
+  Toolbar,
+  ToolbarItem,
   useNativeState,
   VStack,
 } from "@expo/ui/swift-ui";
@@ -34,7 +37,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { FIELD_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type ReactNode, useRef, useState } from "react";
 import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -61,6 +64,9 @@ export function CardDivider({ inset }: { readonly inset: number }) {
 
 /** What a ticked step is heard as after its words. */
 const TICKED = "ticked";
+
+/** What lowers a number pad, which has no return key of its own. */
+const KEYBOARD_DONE = "Done";
 
 /** What a select's picker reads before an option is picked. */
 const CHOOSE = "Choose";
@@ -310,6 +316,28 @@ function TypedFieldRow({
 }) {
   const colors = useColors();
   const text = useNativeState(Predicate.isString(field.value) ? field.value : "");
+  const fieldRef = useRef<TextFieldRef>(null);
+  const [focused, setFocused] = useState(false);
+  const number = field.kind === ANSWER_FIELD.NUMBER;
+
+  const input = (
+    <TextField
+      ref={fieldRef}
+      text={text}
+      placeholder={field.required ? FIELD_WORDS.REQUIRED : FIELD_WORDS.OPTIONAL}
+      onTextChange={onChange}
+      onFocusChange={setFocused}
+      modifiers={[
+        textFieldStyle("plain"),
+        font({ textStyle: TYPE_ROLE.ROW_TITLE }),
+        foregroundStyle(colors.TEXT),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        accessibilityLabel(field.label),
+        accessibilityIdentifier(`answer-field-${field.label}`),
+        ...(number ? [keyboardType("decimal-pad")] : []),
+      ]}
+    />
+  );
 
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
@@ -319,20 +347,27 @@ function TypedFieldRow({
         textStyle={TYPE_ROLE.ROW_LINE}
         ink={colors.TEXT_MUTED}
       />
-      <TextField
-        text={text}
-        placeholder={field.required ? FIELD_WORDS.REQUIRED : FIELD_WORDS.OPTIONAL}
-        onTextChange={onChange}
-        modifiers={[
-          textFieldStyle("plain"),
-          font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-          foregroundStyle(colors.TEXT),
-          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-          accessibilityLabel(field.label),
-          accessibilityIdentifier(`answer-field-${field.label}`),
-          ...(field.kind === ANSWER_FIELD.NUMBER ? [keyboardType("decimal-pad")] : []),
-        ]}
-      />
+      {/* Note that a number pad has no return key, so a number field stands Done over it, as Settings' and Contacts' number pads do, offered only while this field is focused so two number fields never stand two Dones. */}
+      {number ? (
+        <Toolbar>
+          {input}
+          <Toolbar.Content>
+            {focused ? (
+              <ToolbarItem placement="keyboard">
+                <HStack>
+                  <Spacer />
+                  <SwiftUIButton
+                    label={KEYBOARD_DONE}
+                    onPress={() => void fieldRef.current?.blur()}
+                  />
+                </HStack>
+              </ToolbarItem>
+            ) : null}
+          </Toolbar.Content>
+        </Toolbar>
+      ) : (
+        input
+      )}
     </VStack>
   );
 }
