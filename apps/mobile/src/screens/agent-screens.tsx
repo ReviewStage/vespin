@@ -824,6 +824,7 @@ export function AgentConversation({
   useWarmAgent(id);
   const hasPorts = useAgentHasPorts(id);
   const openPorts = () => router.push({ pathname: "/agent-ports", params: { agent: id } });
+
   const askRename = () =>
     askForName({
       title: RENAME_WORDS.TITLE,
@@ -831,6 +832,7 @@ export function AgentConversation({
       name: actions.title,
       onName: actions.rename,
     });
+
   // Whether Archive's or Permanently delete's question stands over the page.
   const [archiving, setArchiving] = useState(false);
   const [deleting, setDeleting] = useState(false);
