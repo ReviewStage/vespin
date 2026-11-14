@@ -941,7 +941,9 @@ export function DesktopShell({
       ? undefined
       : columnTab.agent;
 
-  const agentShown = tab === PANEL_TAB.TASKS ? (tasks.agentView.agentId ?? columnAgent) : undefined;
+  // Note that the update screen standing in the work's place shows no agent, so a call into one keeps its card.
+  const agentShown =
+    tab === PANEL_TAB.TASKS && !updateNeeded ? (tasks.agentView.agentId ?? columnAgent) : undefined;
 
   // Note that while the plan's description is read, the window is named by the task as the list holds it.
   const namedTask =
