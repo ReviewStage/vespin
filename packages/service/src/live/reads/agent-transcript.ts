@@ -58,7 +58,7 @@ import {
 import { countAnswerBytes, countAnswerWait } from "../transcript-metrics.js";
 
 /**
- * agent-transcript.ts -- a coding agent's transcript bound (`AGENT_TRANSCRIPT_READ`): what it is read from, written for Neon Realtime, so a reader hears the moment a page past its cursor would say something new, the tables they read, the topics that wake it, and where its cursor stands.
+ * agent-transcript.ts -- a coding agent's transcript bound (`AGENT_TRANSCRIPT_READ`): what it is read from, so a reader hears the moment a page past its cursor would say something new, the tables they read, the topics that wake it, and where its cursor stands.
  *
  * A page of the transcript (`transcript.ts`) is assembled from many reads,
  * some priced against the model catalog, which lives outside Postgres, so
@@ -78,7 +78,7 @@ import { countAnswerBytes, countAnswerWait } from "../transcript-metrics.js";
  * account that started the agent, as the held read does, and only while
  * the reader is a member of the agent's workspace: the membership is joined
  * in the statement, so a member taken out of the workspace stops hearing
- * anything at once, as Neon's guide asks, rather than at the next seal.
+ * anything at once rather than at the next seal.
  * The newest messages themselves are followed too, as rows (`window`): the
  * last `TRANSCRIPT_WINDOW` by sequence, one row a message keyed by its id,
  * each with what the page carries beside it joined in rather than read
@@ -90,7 +90,7 @@ import { countAnswerBytes, countAnswerWait } from "../transcript-metrics.js";
  * reader's to ask for at the end of its hold.
  */
 
-/** A number Postgres holds as `bigint`, as a number rather than the text Realtime would carry. */
+/** A number Postgres holds as `bigint`, as a number rather than the text it would answer. */
 const asNumber = (value: SQL): SQL<number> => sql<number>`(${value})::float8`;
 
 /** When a turn last changed: the latest of the stamps its opening, start, settling, and Stop write. */

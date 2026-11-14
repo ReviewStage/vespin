@@ -276,7 +276,7 @@ export function useOpenWorkspaceGitHub(
   return useCallback(
     (taskId: string) => {
       const listed = listedIn(queryClient);
-      const held = appStateIn(queryClient)?.[LIVE_READ.DESCRIPTION_DOCUMENT];
+      const held = appStateIn(queryClient)?.[LIVE_READ.HELD_TASK];
 
       const workspaceId =
         listed.tasks.find((task) => task.id === taskId)?.workspaceId ??

@@ -791,7 +791,7 @@ it.effect(
 );
 
 it.effect(
-  "a member makes, starts, messages, stops, changes, shares a port of, drives a browser of, plans, comments, remembers, runs, and reads or disconnects the Sentry of nothing in a workspace they are not in",
+  "a member makes, starts, messages, stops, changes, wakes, shares a port of, drives a browser of, plans, comments, remembers, runs, and reads or disconnects the Sentry of nothing in a workspace they are not in",
   () =>
     Effect.gen(function* () {
       const { auth, fetch, services } = yield* standing;
@@ -927,6 +927,7 @@ it.effect(
           ],
           [MEMBER_MCP_TOOL.STOP_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true }],
+          [MEMBER_MCP_TOOL.WAKE_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.LIST_AGENT_PORTS, { agentId }],
           [MEMBER_MCP_TOOL.SHARE_AGENT_PORT, { agentId, port: 3000 }],
           [MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS, { agentId }],

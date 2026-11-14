@@ -33,7 +33,7 @@ import {
   tint,
   toggleStyle,
 } from "@expo/ui/swift-ui/modifiers";
-import { FIELD_WORDS } from "@repo/features/words";
+import { CHOOSE_AN_ITEM_WORDS, FIELD_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode } from "react";
 import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
@@ -62,9 +62,6 @@ export function CardDivider({ inset }: { readonly inset: number }) {
 
 /** What a ticked step is heard as after its words. */
 const TICKED = "ticked";
-
-/** What a select's picker reads before an option is picked. */
-const CHOOSE = "Choose";
 
 /** The kinds of field an answer ask types its values in. */
 export const ANSWER_FIELD = {
@@ -358,7 +355,7 @@ function SelectRow({
         ...(large ? [] : [fixedSize()]),
       ]}
     >
-      <Text modifiers={[tag("")]}>{CHOOSE}</Text>
+      <Text modifiers={[tag("")]}>{CHOOSE_AN_ITEM_WORDS}</Text>
       {(field.options ?? []).map((option) => (
         <Text key={option} modifiers={[tag(option)]}>
           {option === field.recommended ? `${option} (${recommendedWord})` : option}

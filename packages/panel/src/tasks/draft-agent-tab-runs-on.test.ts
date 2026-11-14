@@ -62,7 +62,7 @@ const DRAFT: AgentDraft = {
 function agent(id: string, userId: string, createdAt: number, onStudio: boolean): AgentSummary {
   return {
     id,
-    planId: TASK_ID,
+    taskId: TASK_ID,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,

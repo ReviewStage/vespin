@@ -13,6 +13,7 @@ import {
   type AutomationScope,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -22,7 +23,11 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
-import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
+import {
+  WORKSPACE_ROLE,
+  type WorkspaceMachine,
+  type WorkspaceMember,
+} from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppHostRead,
@@ -60,6 +65,7 @@ import {
   waitingOf,
 } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
+import { type PersonRoute, usePersonRoute } from "../workspace-routes.js";
 import { PersonPage } from "./person-page.js";
 
 /**
@@ -89,8 +95,8 @@ function automation(
 ): AutomationSummary {
   return {
     id: `5a0c4d2e-0000-4c3a-9e7d-${String(n).padStart(12, "0")}`,
-    planId: null,
-    planName: null,
+    taskId: null,
+    taskName: null,
     workspaceId: "workspace-acme",
     name,
     enabled: true,
@@ -200,7 +206,7 @@ function followedOf(tasks: readonly TaskSummary[]): readonly ListedAgent[] {
           ...line,
           model: "anthropic/claude-opus-5.5",
           effort: "high",
-          planId: summary.id,
+          taskId: summary.id,
           createdAt: at,
           turnId: null,
           ...(line.status === AGENT_STATUS.RUNNING ? { runStartedAt: at } : { settledAt: at }),
@@ -282,6 +288,22 @@ let membersHeld = false;
 /** Whether the read of the workspace's people is refused, as a read that failed is. */
 let membersRefused = false;
 
+/** The machines each member's profile lists, by their id; none for anyone else. */
+let machinesOf: ReadonlyMap<string, readonly WorkspaceMachine[]> = new Map();
+
+/** Whether the read of a member's machines is refused, as a read that failed is. */
+let machinesRefused = false;
+
+/** The person route as the page drawn last reads it, whose opener a test opens a page at a machine by. */
+let personRouteNow: PersonRoute | undefined;
+
+/** Hands the test the person route the page reads, as a link's opener reaches it. */
+function HoldsPersonRoute(): null {
+  personRouteNow = usePersonRoute();
+
+  return null;
+}
+
 /** Lays the held-back people on the document, the fixture's members and who left. */
 let answerMembers: () => void = () => undefined;
 
@@ -296,6 +318,8 @@ beforeEach(() => {
   automationsHeld = false;
   membersHeld = false;
   membersRefused = false;
+  machinesOf = new Map();
+  machinesRefused = false;
   copied = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   window.localStorage.clear();
@@ -306,7 +330,7 @@ beforeEach(() => {
       Promise.resolve({
         agent: {
           id: agentId,
-          planId: CACHE.id,
+          taskId: CACHE.id,
           model: "anthropic/claude-opus-5.5",
           effort: "high",
           title: CACHE_KEYS.title,
@@ -344,7 +368,7 @@ function feedNow(): AppHostRead<AppInboxItems> {
 
   return {
     rows: {
-      [INBOX_SCOPE_KIND.PLAN]: Object.fromEntries(
+      [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(
         [...INBOXES].filter(([, items]) => items.length > 0),
       ),
     },
@@ -368,6 +392,10 @@ function holdPeople(deliver: HostReadsHanded["deliverMembers"]): void {
   });
   fakeActPort({
     ...fakeActPortCalls(),
+    [ACT_KIND.WORKSPACE_MACHINES_READ]: ({ userId }) =>
+      machinesRefused
+        ? Promise.reject(new Error("The machines read was refused."))
+        : Promise.resolve({ machines: machinesOf.get(userId ?? "") ?? [] }),
     [ACT_KIND.WORKSPACE_MEMBERS_RETRY]: ({ workspaceId }) => {
       deliver({ [workspaceId]: people() });
 
@@ -387,6 +415,7 @@ function mountWith(
   name?: string,
   memberCount = MEMBERS.length,
   away?: { label: string; onPress: () => void },
+  fragment = "",
 ) {
   const opened: Opened = { tasks: [], agents: [], settings: [] };
   handInbox(inboxRead);
@@ -416,7 +445,9 @@ function mountWith(
 
   // The page stands at its person's address under Acme, as the router stands it.
   const router = windowRouter(
-    createMemoryHistory({ initialEntries: [`/acme/person/${encodeURIComponent(userId)}`] }),
+    createMemoryHistory({
+      initialEntries: [`/acme/person/${encodeURIComponent(userId)}${fragment}`],
+    }),
   );
 
   const draw = (tasks: TasksControl) =>
@@ -427,6 +458,7 @@ function mountWith(
             createElement(
               OpenSettingsProvider,
               { value: (link: SettingsLink) => opened.settings.push(link) },
+              createElement(HoldsPersonRoute),
               createElement(PersonPage, { tasks, userId, name, away }),
             ),
           ),
@@ -589,6 +621,157 @@ test("a member with nothing here yet is named, and the page says there is nothin
   assert.deepEqual(head(page), ["Sam Ortiz", "Member · sam@example.com"]);
   assert.deepEqual(sections(page), {});
   assert.match(page.textContent ?? "", /Nothing of theirs here yet\./u);
+});
+
+test("a member's machines are listed by name, each saying what it is and, to a reader, whether it is online, and the page is not called empty", async () => {
+  machinesOf = new Map([
+    [
+      "user-sam",
+      [
+        {
+          id: "machine-1",
+          name: "Studio",
+          platform: DEVICE_PLATFORM.DARWIN,
+          userId: "user-sam",
+          online: true,
+        },
+        {
+          id: "machine-2",
+          name: "build-box",
+          platform: DEVICE_PLATFORM.LINUX,
+          userId: "user-sam",
+          online: false,
+        },
+      ],
+    ],
+  ]);
+
+  const { page } = mount("user-sam");
+  await settle();
+
+  assert.deepEqual(sections(page), { Machines: ["Studio", "build-box"] });
+  assert.match(page.textContent ?? "", /Mac, Online/u);
+  assert.match(page.textContent ?? "", /Linux server, Offline/u);
+  assert.doesNotMatch(page.textContent ?? "", /Nothing of theirs here yet\./u);
+});
+
+test("machines read again that could not be read say so and offer Retry, their last answer still drawn", async () => {
+  vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+  onTestFinished(() => {
+    vi.useRealTimers();
+  });
+  machinesOf = new Map([
+    [
+      "user-sam",
+      [
+        {
+          id: "machine-1",
+          name: "Studio",
+          platform: DEVICE_PLATFORM.DARWIN,
+          userId: "user-sam",
+          online: true,
+        },
+      ],
+    ],
+  ]);
+
+  const { page } = mount("user-sam");
+  await settle();
+  assert.doesNotMatch(page.textContent ?? "", /could not be read/u);
+
+  machinesRefused = true;
+  await act(() => vi.advanceTimersByTimeAsync(30_000));
+  // Note that the refused read lands some ticks after the poll that asked it, so the words are waited for.
+  await vi.waitFor(() =>
+    assert.match(page.textContent ?? "", /Their machines could not be read\./u),
+  );
+
+  assert.deepEqual(sections(page), { Machines: ["Studio"] });
+});
+
+/** Sam's two machines, a Mac and a Linux box, as the machines read answers them. */
+const SAM_MACHINES: readonly WorkspaceMachine[] = [
+  {
+    id: "machine-1",
+    name: "Studio",
+    platform: DEVICE_PLATFORM.DARWIN,
+    userId: "user-sam",
+    online: true,
+  },
+  {
+    id: "machine-2",
+    name: "build-box",
+    platform: DEVICE_PLATFORM.LINUX,
+    userId: "user-sam",
+    online: false,
+  },
+];
+
+/** The titles of the rows lit as landed on in `page`. */
+function landedRows(page: HTMLElement): (string | null)[] {
+  return [...page.querySelectorAll("li[data-landed] .ui-list-row-title")].map(
+    (row) => row.textContent,
+  );
+}
+
+/** Takes every row's landed light away, as the light's own end does. */
+function unlight(page: HTMLElement): void {
+  for (const row of page.querySelectorAll("li[data-landed]")) row.removeAttribute("data-landed");
+}
+
+test("a page opened at one of their machines lights that machine's row, and again each time it is opened there", async () => {
+  machinesOf = new Map([["user-sam", SAM_MACHINES]]);
+  const { page } = mount("user-sam");
+  await settle();
+
+  assert.deepEqual(landedRows(page), [], "opened at no machine");
+
+  act(() => personRouteNow?.onOpen("user-sam", undefined, "acme", "machine-2"));
+  await vi.waitFor(() => assert.deepEqual(landedRows(page), ["build-box"]));
+
+  unlight(page);
+  act(() => personRouteNow?.onOpen("user-sam", undefined, "acme"));
+  act(() => personRouteNow?.onOpen("user-sam", undefined, "acme", "machine-2"));
+  await vi.waitFor(() =>
+    assert.deepEqual(landedRows(page), ["build-box"], "opened there after opened at none"),
+  );
+
+  unlight(page);
+  act(() => personRouteNow?.onOpen("user-sam", undefined, "acme", "machine-2"));
+  await vi.waitFor(() => assert.deepEqual(landedRows(page), ["build-box"], "opened there again"));
+});
+
+test("a page opened at one of their machines while Machines stands folded opens it to light that machine's row", async () => {
+  machinesOf = new Map([["user-sam", SAM_MACHINES]]);
+  const { page } = mount("user-sam");
+  await settle();
+
+  const head = page.querySelector<HTMLButtonElement>(
+    'section[aria-label="Machines"] button[aria-expanded]',
+  );
+
+  act(() => head?.click());
+  await vi.waitFor(() => assert.deepEqual(sections(page).Machines, []));
+
+  act(() => personRouteNow?.onOpen("user-sam", undefined, "acme", "machine-2"));
+  await vi.waitFor(() => assert.deepEqual(landedRows(page), ["build-box"]));
+  assert.equal(head?.getAttribute("aria-expanded"), "true");
+});
+
+test("a person's address loaded at one of their machines lights that machine's row", async () => {
+  machinesOf = new Map([["user-sam", SAM_MACHINES]]);
+
+  const { page } = mountWith(
+    {},
+    "user-sam",
+    undefined,
+    MEMBERS.length,
+    undefined,
+    "#machine-machine-1",
+  );
+
+  await settle();
+  await vi.waitFor(() => assert.deepEqual(landedRows(page), ["Studio"]));
 });
 
 test("each row opens what it names: an agent its tab, an item the Inbox on it, and a task the task", async () => {

@@ -92,12 +92,12 @@ test("a Vespin link opens its place in the window, a task at its section, an age
   assert.deepEqual(opened, [
     {
       workspace: "",
-      place: { kind: LINK_DESTINATION.SECTION, planId: TASK_ID, anchor: "rollout" },
+      place: { kind: LINK_DESTINATION.SECTION, taskId: TASK_ID, anchor: "rollout" },
     },
-    { workspace: "", place: { kind: LINK_DESTINATION.TASK, planId: TASK_ID } },
+    { workspace: "", place: { kind: LINK_DESTINATION.TASK, taskId: TASK_ID } },
     {
       workspace: "acme",
-      place: { kind: LINK_DESTINATION.AGENT, planId: TASK_ID, agentId: AGENT_ID },
+      place: { kind: LINK_DESTINATION.AGENT, taskId: TASK_ID, agentId: AGENT_ID },
     },
     {
       workspace: "acme",

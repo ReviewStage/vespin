@@ -192,8 +192,8 @@ function numberedPlaceIn(
   place: LinkDestination,
   workspace: string,
 ): LinkDestination {
-  if (!NUMBERED_PLACES.has(place.kind) || !("planId" in place)) return place;
-  const task = planning?.tasks.find((each) => each.id === place.planId);
+  if (!NUMBERED_PLACES.has(place.kind) || !("taskId" in place)) return place;
+  const task = planning?.tasks.find((each) => each.id === place.taskId);
 
   if (planning === undefined || task?.number === undefined) return place;
   const home = workspaceOfSlug(planning.workspaces, workspace);

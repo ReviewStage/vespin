@@ -157,14 +157,14 @@ const CLI_CALLS: readonly {
     tool: "Glob",
     input: { pattern: "src/**/*.ts" },
     output: `${CHECKOUT}/src/invoice.ts\n${CHECKOUT}/src/export.ts`,
-    line: ["Searched", "src/**/*.ts"],
+    line: ["Found files", "src/**/*.ts"],
     body: [`${CHECKOUT}/src/export.ts`],
   },
   {
     tool: "Grep",
     input: { pattern: "invoiceTotal", output_mode: "files_with_matches" },
     output: "Found 1 file\nsrc/invoice.ts",
-    line: ["Searched", "invoiceTotal"],
+    line: ["Searched for", "invoiceTotal"],
     body: ["Found 1 file"],
   },
   {

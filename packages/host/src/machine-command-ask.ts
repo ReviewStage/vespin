@@ -1,3 +1,10 @@
+import {
+  MACHINE_ASK_BOUNDS,
+  MACHINE_ASK_DECISION,
+  type MachineAskDecision,
+  machineAskDecisionSchema,
+  machineAskNoteSchema,
+} from "@repo/features/machine-ask-wire";
 import { Schema } from "effect";
 
 /**
@@ -5,17 +12,19 @@ import { Schema } from "effect";
  *
  * With Settings › This Mac on Ask every time, the host claims a shell
  * command, and for any setting, an action on an app not yet allowed, and
- * holds it here until the developer answers or the command's own
- * timeout passes (`compose-machine-commands.ts`); the asks waiting ride the
- * document (`app-state.ts`'s `machineCommands`), the panel draws the oldest as a
- * prompt, and its answer comes back by the ask's id.
+ * holds it here until the developer answers or its window closes
+ * (`machineAskSeconds`, counted from when it is shown,
+ * `compose-machine-commands.ts`); the asks waiting ride the document
+ * (`app-state.ts`'s `machineCommands`), the panel draws the oldest as a
+ * prompt with the time it has left, and its answer comes back by the ask's id.
  */
 
-/** One shell command waiting on the developer: the ask's id, which is the command's, the shell text, and when the Mac asked, by its clock. */
+/** One shell command waiting on the developer: the ask's id, which is the command's, the shell text, and when the Mac asked and when the ask closes, by its clock. */
 const machineShellAskSchema = Schema.Struct({
   id: Schema.String,
   command: Schema.String,
   askedAt: Schema.Number,
+  expiresAt: Schema.Number,
 });
 
 export type MachineShellAsk = typeof machineShellAskSchema.Type;
@@ -23,7 +32,8 @@ export type MachineShellAsk = typeof machineShellAskSchema.Type;
 /**
  * One app an agent asked to use, waiting on the developer: the ask's id,
  * which is the action's command's, the app by its name, bundle id, and icon
- * as a 64px PNG, and when the Mac asked, by its clock.
+ * as a 64px PNG, the agent that asked where the command names one, and when
+ * the Mac asked and when the ask closes, by its clock.
  */
 const macAppAskSchema = Schema.Struct({
   id: Schema.String,
@@ -32,7 +42,9 @@ const macAppAskSchema = Schema.Struct({
     bundleId: Schema.optionalKey(Schema.String),
     iconPng: Schema.optionalKey(Schema.String),
   }),
+  agentId: Schema.optionalKey(Schema.String),
   askedAt: Schema.Number,
+  expiresAt: Schema.Number,
 });
 
 export type MacAppAsk = typeof macAppAskSchema.Type;
@@ -58,23 +70,23 @@ export const machineCommandDeviceSchema = Schema.Struct({
 
 /**
  * What the developer answers an ask: run it this once, run it and every later
- * one without asking, or not at all. For an app, this once holds the app for
- * the conversation that asked until the account or the setting moves, and every
+ * one without asking, or not at all, as any of the owner's devices answers
+ * it (`MACHINE_ASK_DECISION`). For an app, this once holds the app for the
+ * conversation that asked until the account or the setting moves, and every
  * later one adds the app to the apps agents use without asking.
  */
-export const MACHINE_COMMAND_DECISION = {
-  ALLOW_ONCE: "allow-once",
-  ALLOW_ALWAYS: "allow-always",
-  DENY: "deny",
-} as const;
+export const MACHINE_COMMAND_DECISION = MACHINE_ASK_DECISION;
 
-export type MachineCommandDecision =
-  (typeof MACHINE_COMMAND_DECISION)[keyof typeof MACHINE_COMMAND_DECISION];
+export type MachineCommandDecision = MachineAskDecision;
 
-/** One ask answered, by its id. */
+/** The most characters of the words a denial hands the agent. */
+export const MACHINE_COMMAND_NOTE_MAX_CHARS = MACHINE_ASK_BOUNDS.MAX_NOTE_CHARS;
+
+/** One ask answered, by its id, and for a denial, the words the developer gave the agent with it. */
 export const machineCommandAnswerSchema = Schema.Struct({
   id: Schema.String,
-  decision: Schema.Literals(Object.values(MACHINE_COMMAND_DECISION)),
+  decision: machineAskDecisionSchema,
+  note: Schema.optionalKey(machineAskNoteSchema),
 });
 
 export type MachineCommandAnswer = typeof machineCommandAnswerSchema.Type;
