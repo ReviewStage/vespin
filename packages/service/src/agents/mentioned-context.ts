@@ -373,8 +373,10 @@ function personNoteOf(userId: string, name: string, reads: MentionedReads): stri
  * routing its description gives, and how to name it. Note that it allows
  * nothing: the Mac still asks the developer about an app not yet allowed.
  */
-function macAppNoteOf({ app }: MacAppMention, name: string): string {
-  return `The developer pointed you at the app ${name} on their Mac (\`${app}\`) for this message: use \`${AGENT_TOOL.COMPUTER}\` on it with \`app: "${app}"\`, ahead of the other routes its description puts first, for this app alone. Where it is not running, your first \`get_app_state\` opens it behind their windows; their Mac may still ask them to allow it.`;
+function macAppNoteOf({ app, machine }: MacAppMention, name: string): string {
+  const on = machine === undefined ? "" : ` and \`machine: "${machine}"\``;
+
+  return `The developer pointed you at the app ${name} on their Mac (\`${app}\`) for this message: use \`${AGENT_TOOL.COMPUTER}\` on it with \`app: "${app}"\`${on}, ahead of the other routes its description puts first, for this app alone. Where it is not running, your first \`get_app_state\` opens it behind their windows; their Mac may still ask them to allow it.`;
 }
 
 /** What a mention of the developer's Mac as a whole is handed as: that `computer` is welcome on it for this message, ahead of the routing its description gives, and how to start. */
@@ -544,7 +546,12 @@ function sameMention(first: Handed, second: Handed): boolean {
     case MENTION_KIND.PERSON:
       return second.kind === MENTION_KIND.PERSON && first.userId === second.userId;
     case MENTION_KIND.MAC_APP:
-      return second.kind === MENTION_KIND.MAC_APP && first.app === second.app;
+      // Note that the same app on two machines is two apps, so two mentions of it name one only on the same machine, or both on none.
+      return (
+        second.kind === MENTION_KIND.MAC_APP &&
+        first.app === second.app &&
+        first.machine === second.machine
+      );
     case MENTION_KIND.COMPUTER:
       return second.kind === MENTION_KIND.COMPUTER;
     case MENTION_KIND.MACHINE:
