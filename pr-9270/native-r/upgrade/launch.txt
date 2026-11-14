@@ -1,0 +1,71 @@
+2026-11-14 05:06:11.680 Vespin[2532:10407695] Session replay disabled via configuration
+2026-11-14 05:06:11.795 Vespin[2532:10407695] _setUpFeatureFlags called with release level 2
+2026-11-14 05:06:11.797 Vespin[2532:10407695] EXTaskService: Restoring tasks configuration: {
+    mainApplication =     {
+        tasks =         {
+            "inbox-settled-push" =             {
+                consumerClass = "ExpoNotifications.NotificationsBackgroundTaskConsumer";
+                consumerVersion = 0;
+                name = "inbox-settled-push";
+                options =                 {
+                };
+            };
+        };
+    };
+}
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+W1114 05:06:12.040660 1873637376 ReactInstance.cpp:312] ReactInstance: evaluateJavaScript() with JS bundle
+(audio_device_module_ios.mm:54): current platform is IOS
+(audio_device_module_ios.mm:55): iPhone Audio APIs will be utilized.
+(input_volume_stats_reporter.cc:95): Will not log any `WebRTC.Audio.Apm.AppliedInputVolume.*` histogram stats.
+(input_volume_stats_reporter.cc:95): Will not log any `WebRTC.Audio.Apm.RecommendedInputVolume.*` histogram stats.
+(audio_processing_impl.cc:484): Injected APM submodules:
+Echo control factory: 0
+Echo detector: 0
+Capture analyzer: 0
+Capture post processor: 0
+Render pre processor: 0
+Neural residual echo estimator 0
+(audio_processing_impl.cc:499): AudioProcessing: AudioProcessing::Config{ pipeline: { maximum_internal_processing_rate: 32000, multi_channel_render: 1, multi_channel_capture: 1 }, pre_amplifier: { enabled: 0, fixed_gain_factor: 1 },capture_level_adjustment: { enabled: 0, pre_gain_factor: 1, post_gain_factor: 1, analog_mic_gain_emulation: { enabled: 0, initial_level: 255 }}, high_pass_filter: { enabled: 0 }, echo_canceller: { enabled: 0, enforce_high_pass_filtering: 1 }, noise_suppression: { enabled: 0, level: Moderate }, transient_suppression: { enabled: 0 }, gain_controller1: { enabled: 0, mode: AdaptiveAnalog, target_level_dbfs: 3, compression_gain_db: 9, enable_limiter: 1, analog_gain_controller { enabled: 1, startup_min_volume: 0, clipped_level_min: 70, enable_digital_adaptive: 1, clipped_level_step: 15, clipped_ratio_threshold: 0.1, clipped_wait_frames: 300, clipping_predictor:  { enabled: 0, mode: 0, window_length: 5, reference_window_length: 5, reference_window_delay: 5, clipping_threshold: -1, crest_factor_margin: 3, use_predicted_step: 1 }}}, gain_controller2: { enabled: 0, fixed_digital: { gain_db: 0 }, adaptive_digital: { enabled: 0, headroom_db: 5, max_gain_db: 50, initial_gain_db: 15, max_gain_change_db_per_second: 6, max_output_noise_level_dbfs: -50 }, input_volume_control : { enabled 0}}
+(webrtc_voice_engine.cc:533): WebRtcVoiceEngine::WebRtcVoiceEngine
+(connection_context.cc:135): 
+***************************************************************
+* DEPRECATION: A worker thread distinct from the network      *
+* thread is configured. Support for a separate worker thread  *
+* is being removed. Applications must stop supplying          *
+* PeerConnectionFactoryDependencies::worker_thread.           *
+* PSA: https://groups.google.com/g/discuss-webrtc/c/Fs_Hd5XNJh0
+***************************************************************
+E1114 05:06:14.571079 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:06:14.571234 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:06:14.579370 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:06:14.579466 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:06:14.641273 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: default
+E1114 05:06:14.644850 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: search
+E1114 05:06:14.682451 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:06:14.682595 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:06:14.682873 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:06:14.682941 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:06:14.705295 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:06:14.705492 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:06:14.705862 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:06:14.705942 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:06:14.706151 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: cancel
+E1114 05:06:14.706224 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: destructive
+E1114 05:06:14.708477 1873637376 accessibilityPropsConversions.h:760] Unsupported Role value: default
+I1114 05:06:14.979815 1873637376 UIManagerBinding.cpp:150] instanceHandle is null, event of type topHeaderHeightChange will be dropped
+I1114 05:06:14.980170 1873637376 UIManagerBinding.cpp:150] instanceHandle is null, event of type topHeaderHeightChange will be dropped
+dev.vespin.ios: 2532
+getpwuid_r did not find a match for uid 501
+Timestamp               Ty Process[PID:TID]
+2026-11-14 05:06:12.452 E  Vespin[2532:9ed1d7] [com.facebook.react.log:javascript] [seal-check] PASS HChaCha20 (draft-irtf-cfrg-xchacha-03 2.2.1)
+2026-11-14 05:06:12.453 E  Vespin[2532:9ed1d7] [com.facebook.react.log:javascript] [seal-check] PASS AEAD_XChaCha20_Poly1305 seal and open (draft-irtf-cfrg-xchacha-03 A.3.1)
+2026-11-14 05:06:12.465 E  Vespin[2532:9ed1d7] [com.facebook.react.log:javascript] [seal-check] PASS a sealing noble made, as every earlier build wrote the kept file, opens natively
+2026-11-14 05:06:12.469 E  Vespin[2532:9ed1d7] [com.facebook.react.log:javascript] [seal-check] PASS a native sealing opens in noble, as a build without the module opens it
+2026-11-14 05:06:12.479 E  Vespin[2532:9ed1d7] [com.facebook.react.log:javascript] [seal-check] PASS a changed native sealing is refused
+2026-11-14 05:06:14.386 E  Vespin[2532:9ed1d7] [com.facebook.react.log:javascript] [seal-check] 1.00 MB seal: noble and Base64 1389 ms, native 5 ms
+2026-11-14 05:06:14.387 E  Vespin[2532:9ed1d7] [com.facebook.react.log:javascript] [seal-check] 1.00 MB open: noble and Base64 503 ms, native 6 ms
+2026-11-14 05:06:14.388 E  Vespin[2532:9ed1d7] [com.facebook.react.log:javascript] [seal-check] PASS 1 MB sealed and opened both ways for the timings
+2026-11-14 05:06:14.405 E  Vespin[2532:9ed1d7] [com.facebook.react.log:javascript] [seal-check] DONE 6 passed, 0 failed; check key deleted
+2026-11-14 05:06:14.505 E  Vespin[2532:9ed1d7] [com.facebook.react.log:javascript] [seal-check] kept file opened natively: 0.00 MB in 1 ms
+2026-11-14 05:06:55.941 Df log[4475:0] [com.apple.log:] log run noninteractively, parent: 99520 (launchd_sim), args: 'log' 'show' '--last' '2m' '--style' 'compact' '--predicate' 'eventMessage CONTAINS "[seal-check]"'

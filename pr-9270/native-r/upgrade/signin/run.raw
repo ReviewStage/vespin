@@ -1,0 +1,11 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow p9270-signin
+Launch app "dev.vespin.ios" with clear state (launch arguments: {authServer=stub})... COMPLETED
+Assert that "Sign in to Vespin" is visible... COMPLETED
+Tap on "Continue with GitHub"... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Tap on (Optional) "Allow"... WARNED
+Take screenshot p9270-signed-in-main... COMPLETED

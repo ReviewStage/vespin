@@ -1,0 +1,28 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow share9241-iphone
+Launch app "com.apple.mobilesafari"... COMPLETED
+Open https://example.com in browser... COMPLETED
+Assert that "Example Domain" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when "More" is visible...
+Run flow when "More" is visible... SKIPPED
+Run flow when "Share" is not visible...
+  Tap on point (92%,94%)... COMPLETED
+Run flow when "Share" is not visible... COMPLETED
+Tap on "Share"... FAILED
+
+Element not found: Text matching regex: Share
+
+Element with Text matching regex: Share not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/jrt/9241/9241-iphone-light/2026-11-14_050701

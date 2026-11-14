@@ -1,0 +1,5 @@
+signin on Vmain: fails 0 shots 2
+container data: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/1B8640DC-395F-4CD9-8586-D0A95244606C
+-rw-r--r--@ 1 deanstratakos  staff  652 Nov 14 05:05 /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/1B8640DC-395F-4CD9-8586-D0A95244606C/Documents/host/entities.sealed
+installed Vn2.app over main 05:06:09
+find: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/1B8640DC-395F-4CD9-8586-D0A95244606C: No such file or directory
