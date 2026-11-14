@@ -113,10 +113,13 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
  * window, as iOS's readable content guide stands a page, so a pull request's
  * page across a landscape iPad reads as a column rather than rows 1,400 pt
  * long. Note that the list itself is framed, since `listSectionMargins`
- * moved no plain list's rows on iPadOS 26 or 27. In Select mode the list stands in
- * SwiftUI's own edit mode, as Mail's Select does: a round check leads each
- * row, a tap ticks it rather than opening it, two fingers dragged down tick
- * a run, and the rows' swipes step aside, as the system's do.
+ * moved no plain list's rows on iPadOS 26 or 27, so a drag in the ground
+ * beside the column doesn't scroll it; SwiftUI's `contentMargins` would keep
+ * the whole width scrolling, but `@expo/ui` has no such modifier yet. In
+ * Select mode the list stands in SwiftUI's own edit mode, as Mail's Select
+ * does: a round check leads each row, a tap ticks it rather than opening it,
+ * two fingers dragged down tick a run, and the rows' swipes step aside, as
+ * the system's do.
  */
 export function RowList({ look, selected, onSelect, onRefresh, choosing, children }: RowListProps) {
   const colors = useColors();
