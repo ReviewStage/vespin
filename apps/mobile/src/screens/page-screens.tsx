@@ -7,6 +7,8 @@ import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { EmptyState, GLYPH, glyphSymbol, Screen, SealedPage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
+import { StyleSheet, View } from "react-native";
 import { usePageHtml } from "../agents/use-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari } from "../open-link.js";
@@ -18,6 +20,20 @@ const PAGE_WORDS = {
   READING: "Reading the page",
   FAILED: "The page could not be read.",
 } as const;
+
+/** Where WebKit stands with a page handed to it: drawing it, drawn, or failed. */
+const DRAWING = {
+  DRAWING: "drawing",
+  DRAWN: "drawn",
+  FAILED: "failed",
+} as const;
+
+type Drawing = (typeof DRAWING)[keyof typeof DRAWING];
+
+const styles = StyleSheet.create({
+  page: { flex: 1 },
+  over: StyleSheet.absoluteFill,
+});
 
 /** The page's address on vespin.dev, under its workspace and its task; none until both are read. */
 function usePageAddress(
@@ -59,6 +75,10 @@ export function PageScreen({
   const read = usePageHtml(taskId, pageId, version);
   const address = usePageAddress(workspaceId, taskId, pageId);
   const named = "title" in read && read.title !== "" ? read.title : title;
+  // Note that the page's words stand over the web view until WebKit has drawn it, since its first launch can take seconds and draws nothing meanwhile.
+  const [drawing, setDrawing] = useState<Drawing>(DRAWING.DRAWING);
+  const failed = "failed" in read || drawing === DRAWING.FAILED;
+  const standing = "html" in read && drawing === DRAWING.DRAWN;
 
   return (
     <>
@@ -76,17 +96,28 @@ export function PageScreen({
         </Stack.Toolbar>
       )}
       {/* Note that the page stands as the screen's root, outside its SwiftUI host, since the web view sizes itself to the screen. */}
-      {"html" in read ? (
-        <SealedPage html={read.html} title={named} />
-      ) : (
-        <Screen>
-          <EmptyState
-            title={"failed" in read ? PAGE_WORDS.FAILED : PAGE_WORDS.READING}
-            symbol={"failed" in read ? GLYPH.FAILED : GLYPH.PAGE}
-            loading={!("failed" in read)}
+      <View style={styles.page}>
+        {"html" in read ? (
+          <SealedPage
+            html={read.html}
+            title={named}
+            onDrawing={() => setDrawing(DRAWING.DRAWING)}
+            onDrawn={() => setDrawing(DRAWING.DRAWN)}
+            onFailed={() => setDrawing(DRAWING.FAILED)}
           />
-        </Screen>
-      )}
+        ) : null}
+        {standing ? null : (
+          <View style={styles.over}>
+            <Screen>
+              <EmptyState
+                title={failed ? PAGE_WORDS.FAILED : PAGE_WORDS.READING}
+                symbol={failed ? GLYPH.FAILED : GLYPH.PAGE}
+                loading={!failed}
+              />
+            </Screen>
+          </View>
+        )}
+      </View>
     </>
   );
 }
