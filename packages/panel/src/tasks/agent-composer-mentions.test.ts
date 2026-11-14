@@ -849,7 +849,7 @@ test("an @ in the box browses the account's connected MCP servers as one kind, a
   ]);
 });
 
-test("with Computer use on, on the Mac the agent's calls go to, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
+test("with Computer use on, on the Mac the agent's calls go to, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id on this Mac", async () => {
   const sent: string[] = [];
 
   const sender: MessageSender = (_agentId, { text }) => {
@@ -895,7 +895,7 @@ test("with Computer use on, on the Mac the agent's calls go to, an @ in the box 
 
   assert.deepEqual(apps, ["Apps", ["Simulator"]]);
   assert.deepEqual(sent, [
-    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.iphonesimulator" }, "Simulator", PLACE)}`,
+    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.iphonesimulator", machine: STUDIO_ID }, "Simulator", PLACE)}`,
   ]);
 });
 
@@ -908,7 +908,7 @@ const OFF_THAT_MAC = {
 } as const;
 
 test.each(Object.values(OFF_THAT_MAC))(
-  "off the Mac the agent's calls go to, in %s, an @ in the box offers the apps the reader's machines always allow, each by the name its machine posted and saying the machines it is allowed on, a pick sent as the app's mention by its bundle id",
+  "off the Mac the agent's calls go to, in %s, an @ in the box offers the apps the reader's machines always allow, one row for each machine that allows an app, grouped by machine with the window's own first, each by the name its machine posted and saying its machine, a pick of an app on two sent as the app's mention by its bundle id on that machine, its chip naming the machine",
   async (window) => {
     const sent: string[] = [];
 
@@ -968,20 +968,32 @@ test.each(Object.values(OFF_THAT_MAC))(
       row.querySelector(".ui-combobox-option-detail")?.textContent ?? "",
     ]);
 
-    typeInComposer(container, "slack");
+    typeInComposer(container, "notes");
     await settle();
     pressInComposer(container, "Enter");
     await settle();
     pressInComposer(container, "Enter");
     await settle();
 
+    // Note that the rows are grouped by machine, the window's own Mac first where it is one of the reader's.
+    const onStudio = [
+      ["Notes", "Studio"],
+      ["Slack", "Studio"],
+    ];
+
+    const onLaptop = [["Notes", "Laptop"]];
+    const studioFirst = window === OFF_THAT_MAC.ANOTHER_MACHINE;
+
+    const first = studioFirst
+      ? { machine: STUDIO_ID, written: "Notes on Studio" }
+      : { machine: LAPTOP_ID, written: "Notes on Laptop" };
+
     assert.deepEqual(rows, [
       ["Computer", ""],
-      ["Notes", "Always allowed on Studio, Laptop"],
-      ["Slack", "Always allowed on Studio"],
+      ...(studioFirst ? [...onStudio, ...onLaptop] : [...onLaptop, ...onStudio]),
     ]);
     assert.deepEqual(sent, [
-      `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.tinyspeck.slackmacgap" }, "Slack", PLACE)}`,
+      `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.Notes", machine: first.machine }, first.written, PLACE)}`,
     ]);
   },
 );

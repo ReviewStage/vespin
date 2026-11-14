@@ -1994,7 +1994,7 @@ export function TaskScreen() {
   const held = useTaskOverview(found.taskId);
 
   const { setStatus, question } = useStatusAsk(
-    held ?? { setStatus: () => undefined, agentsWorking: () => false },
+    held ?? { setStatus: () => undefined, workingAgents: () => 0 },
   );
 
   const overview = held === undefined ? undefined : { ...held, setStatus };

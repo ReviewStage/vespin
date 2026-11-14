@@ -1,6 +1,15 @@
 // form-rows.tsx -- the rows a sheet's Form holds: the words to send, the pictures attached to them, and a choice among many in the system's menu picker; and the words on a compose sheet's own page.
 
-import { Button, HStack, Image, Picker, Text, TextField, useNativeState } from "@expo/ui/swift-ui";
+import {
+  Button,
+  HStack,
+  Image,
+  Picker,
+  Text,
+  TextField,
+  type TextFieldRef,
+  useNativeState,
+} from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
@@ -18,6 +27,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { useEffect, useRef } from "react";
 import { type AttachedPicture, AttachedPictures } from "./composer-head.js";
+import { forgetField, noteFieldFocus } from "./field-focus.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { dropPictures } from "./interactions.js";
 import type { PickOption } from "./settings-form.js";
@@ -82,6 +92,16 @@ export function WordsField({
   const colors = useColors();
   const text = useNativeState(words ?? initialWords);
   const shown = useRef(words ?? initialWords);
+  const field = useRef<TextFieldRef>(null);
+
+  // Note that a field that leaves the screen is forgotten, so a later close never lowers a handle no longer drawn.
+  useEffect(() => {
+    const drawn = field.current;
+
+    return () => {
+      if (drawn !== null) forgetField(drawn);
+    };
+  }, []);
 
   // Note that the field is handed the holder's words only where they moved apart from what was typed, so typing never fights its own echo.
   useEffect(() => {
@@ -97,7 +117,11 @@ export function WordsField({
 
   return (
     <TextField
+      ref={field}
       text={text}
+      onFocusChange={(holds) => {
+        if (field.current !== null) noteFieldFocus(field.current, holds);
+      }}
       placeholder={placeholder}
       axis="vertical"
       autoFocus={autoFocus}
