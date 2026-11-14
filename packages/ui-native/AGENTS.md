@@ -67,7 +67,10 @@ builds a control of its own.
   `DeniesWaiting` (that a message sent now denies the call waiting, a press
   scrolling to the call's row, whose Deny and Allow alone answer it), a
   `HeldCallBanner` only for a call no row draws, such as a subagent's (with
-  Deny and Allow), the `SkillSuggestions` a `/` offers, its `QueuedLines` (Steer and
+  Deny and Allow), a `MachineAskBanner` for each ask one of the
+  developer's machines holds for the agent (the machine, the time left, the
+  command or app, and Deny, Just this once and Always allow), the
+  `SkillSuggestions` a `/` offers, its `QueuedLines` (Steer and
   Delete), its `AttachedPictures`, and an `AskNote`.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full

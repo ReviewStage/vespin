@@ -455,8 +455,10 @@ type WordsAskProps = {
   /** The words the field holds as the alert opens, such as the name a rename starts from. */
   readonly initial?: string | undefined;
   readonly kind: WordsAskKind;
-  /** Its acts, the last the one Return presses; each dimmed while the field is empty. */
+  /** Its acts, the last the one Return presses; each dimmed while the field is empty, unless the words are `optional`. */
   readonly acts: readonly WordsAskAct[];
+  /** Whether an act may go with the field empty, as a Deny's words for the agent may. */
+  readonly optional?: boolean | undefined;
   readonly presented: boolean;
   /** Called as the alert goes, by an act or Cancel. */
   readonly onDismiss: () => void;
@@ -465,7 +467,7 @@ type WordsAskProps = {
 /**
  * Words asked for in the system's alert, as iOS asks a rename or an
  * address: its field, Cancel, and its acts, each dimmed until something is
- * typed. The field starts from `initial` each time the alert opens. It
+ * typed where the words are not optional. The field starts from `initial` each time the alert opens. It
  * stands in a host of its own, the size of nothing, as `ConfirmAsk` does.
  */
 export function WordsAsk({
@@ -475,6 +477,7 @@ export function WordsAsk({
   initial = "",
   kind,
   acts,
+  optional = false,
   presented,
   onDismiss,
 }: WordsAskProps) {
@@ -485,7 +488,7 @@ export function WordsAsk({
     typed.value = initial;
     setWords(initial);
   }, [presented, initial, typed]);
-  const empty = words.trim().length === 0;
+  const shut = !optional && words.trim().length === 0;
 
   const field =
     kind === WORDS_ASK_KIND.EMAIL
@@ -521,7 +524,7 @@ export function WordsAsk({
               key={act.label}
               label={act.label}
               onPress={() => act.onAct(words.trim())}
-              modifiers={[disabled(empty)]}
+              modifiers={[disabled(shut)]}
             />
           ))}
         </Alert.Actions>

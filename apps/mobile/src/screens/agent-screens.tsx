@@ -14,6 +14,7 @@ import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/feature
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
+import { MACHINE_ASK_DECISION } from "@repo/features/machine-ask-wire";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -51,6 +52,7 @@ import {
   glyphSymbol,
   HeldCallBanner,
   ListSection,
+  MachineAskBanner,
   MenuPickRow,
   MenuRow,
   type MenuRowAct,
@@ -73,6 +75,8 @@ import {
   transcriptOriginOf,
   useAnnounced,
   useColors,
+  WORDS_ASK_KIND,
+  WordsAsk,
   withSending,
   withWaitingLine,
 } from "@repo/ui-native";
@@ -102,6 +106,7 @@ import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useAgentServers } from "../agents/use-agent-servers.js";
+import { type MachineAsks, useMachineAsks } from "../agents/use-machine-asks.js";
 import {
   type OpenedSuggestion,
   useOpenedSuggestion,
@@ -155,6 +160,14 @@ const COPY_TRANSCRIPT_WORDS = {
 const ADD_WORDS = {
   PHOTOS: "Photos",
   OPTIONS: "Options",
+} as const;
+
+/** What Deny on a machine's ask asks, in the panel's words: the reason for the agent, which may be left empty. */
+const DENY_WORDS = {
+  TITLE: "Deny",
+  MESSAGE: "Why you denied it",
+  PLACEHOLDER: "Tell the agent why (optional)",
+  ACT: "Deny",
 } as const;
 
 /** What Rename asks, as the system's alert asks for a name. */
@@ -275,6 +288,8 @@ function CardMergeAsk({
 function AgentComposerBar({
   composer,
   approvals,
+  machineAsks,
+  onDenyMachineAsk,
   onShowWaiting,
   addMenu,
   note,
@@ -283,6 +298,10 @@ function AgentComposerBar({
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
+  /** The asks the developer's machines hold for the agent, each answered over the field. */
+  readonly machineAsks: MachineAsks;
+  /** Opens the ask for a Deny's words for the agent, for the ask its id names. */
+  readonly onDenyMachineAsk: (id: string) => void;
   /** Scrolls the transcript to the call waiting; none where no row draws one. */
   readonly onShowWaiting: (() => void) | undefined;
   readonly addMenu: ComposerMenu;
@@ -303,6 +322,7 @@ function AgentComposerBar({
   const head =
     !denies &&
     banner === undefined &&
+    machineAsks.asks.length === 0 &&
     composer.queued.length === 0 &&
     composer.paused === undefined &&
     composer.attached.length === 0 &&
@@ -321,6 +341,19 @@ function AgentComposerBar({
           />
         )}
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
+        {machineAsks.asks.map((ask) => (
+          <MachineAskBanner
+            key={ask.id}
+            machine={ask.machine}
+            subject={ask.subject}
+            expiresAt={ask.expiresAt}
+            lapsed={ask.lapsed}
+            answering={ask.answering}
+            note={ask.note}
+            onAllow={(decision) => machineAsks.answer(ask.id, decision)}
+            onDeny={() => onDenyMachineAsk(ask.id)}
+          />
+        ))}
         {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
         <QueuedLines
           lines={composer.queued}
@@ -565,6 +598,9 @@ export function AgentScreen() {
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
   const drawn = useMemo(() => drawnCallIds(items), [items]);
   const approvals = useAgentApprovals(agent, id, drawn);
+  const machineAsks = useMachineAsks(id);
+  // The machine's ask a Deny was pressed on, whose words for the agent are asked for.
+  const [denying, setDenying] = useState<string | undefined>(undefined);
   const waitingWords = approvals.waiting?.words;
   // The rows as the list draws them, the working line saying the agent waits on the member while a call does.
   const rows = useMemo(() => withWaitingLine(items, waitingWords), [items, waitingWords]);
@@ -802,6 +838,8 @@ export function AgentScreen() {
           <AgentComposerBar
             composer={composer}
             approvals={approvals}
+            machineAsks={machineAsks}
+            onDenyMachineAsk={setDenying}
             onShowWaiting={showWaiting}
             addMenu={addMenu}
             note={actions.note ?? transcriptCopy.note ?? mode?.note ?? pick.note}
@@ -852,6 +890,29 @@ export function AgentScreen() {
       {asked === undefined ? null : (
         <CardMergeAsk agentId={id} pullRequest={asked} onDone={() => setMerging(undefined)} />
       )}
+      <WordsAsk
+        title={DENY_WORDS.TITLE}
+        message={DENY_WORDS.MESSAGE}
+        placeholder={DENY_WORDS.PLACEHOLDER}
+        kind={WORDS_ASK_KIND.NAME}
+        optional
+        acts={[
+          {
+            label: DENY_WORDS.ACT,
+            onAct: (words) => {
+              if (denying !== undefined)
+                machineAsks.answer(
+                  denying,
+                  MACHINE_ASK_DECISION.DENY,
+                  words === "" ? undefined : words,
+                );
+              setDenying(undefined);
+            },
+          },
+        ]}
+        presented={denying !== undefined}
+        onDismiss={() => setDenying(undefined)}
+      />
       <RenameAsk
         title={RENAME_WORDS.TITLE}
         act={RENAME_WORDS.ACT}

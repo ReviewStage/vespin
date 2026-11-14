@@ -1,4 +1,4 @@
-# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny and Allow under it and the working line saying it waits on you, a call opened on its body, a run of calls opened, the pictures and the recording it showed, playing in place, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, its held call allowed, its options sheet opened from the page's menu, its model, Fast, permission mode, and MCP servers changed there, and its ⋯ menu's Rename, Pin, and Archive; then an agent whose transcript stands empty.
+# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny and Allow under it and the working line saying it waits on you, its Mac's ask to run a command answered over the composer, a call opened on its body, a run of calls opened, the pictures and the recording it showed, playing in place, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, its held call allowed, its options sheet opened from the page's menu, its model, Fast, permission mode, and MCP servers changed there, and its ⋯ menu's Rename, Pin, and Archive; then an agent whose transcript stands empty.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -26,6 +26,15 @@ appId: dev.vespin.ios
 - assertVisible: "Waiting for approval"
 - assertVisible: "Waiting on you · 1 approval"
 - takeScreenshot: agent-held
+# Ada's MacBook asks before it runs the agent's test command, an ask the
+# phone answers as any of her devices may: which machine asks and the time
+# left over the composer, the command, and Deny, Just this once and Always
+# allow. Just this once goes, and the ask leaves the composer.
+- assertVisible: "Ada's MacBook Pro asks"
+- assertVisible: "Run a command"
+- takeScreenshot: agent-machine-ask
+- tapOn: "Just this once"
+- assertNotVisible: "Ada's MacBook Pro asks"
 # A call opens in place on its body: a command as a terminal, its prompt over
 # what it printed.
 - tapOn: "Edited.*"

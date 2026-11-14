@@ -6,6 +6,7 @@ import {
   type AgentSummary,
 } from "@repo/features/agent-wire";
 import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
+import { machineAsksByAgent } from "@repo/features/machine-ask-live";
 import { TASK_BOUNDS, type TaskSummary } from "@repo/features/task-wire";
 import type { ToolTarget } from "@repo/features/tool-call-model";
 import { TRANSCRIPT_COPY } from "@repo/features/transcript-copy";
@@ -42,7 +43,7 @@ import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { useDraftedAgents } from "../composer-drafts.js";
 import { useLinkItems } from "../copy-link-item.js";
 import { leftMark } from "../draft-mark.js";
-import { machineAsksByAgent, useMachineAsks } from "../machine-asks.js";
+import { useMachineAsks } from "../machine-asks.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentCardReading } from "../tasks/agent-ref.js";

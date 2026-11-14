@@ -25,6 +25,7 @@ import type {
 import {
   type AgentChoices,
   agentChangeOf,
+  answeredMachineAsksAppState,
   chosenTasksView,
   type InboxReminders,
   inboxActAnswer,
@@ -75,6 +76,12 @@ const REMINDERS = new WeakMap<object, InboxReminders>();
 
 /** No reminder set yet. */
 const NO_REMINDERS: InboxReminders = new Map();
+
+/** The machines' asks each run answered, by the store the run stages, each set replaced whole as one is answered. */
+const ANSWERED_ASKS = new WeakMap<object, ReadonlySet<string>>();
+
+/** No ask answered yet. */
+const NO_ANSWERED_ASKS: ReadonlySet<string> = new Set();
 
 /** The words each run saved over the fixture's memories, by the store the run stages, each map replaced whole as one is saved. */
 const MEMORY_WORDS = new WeakMap<object, SavedMemoryWords>();
@@ -134,9 +141,12 @@ export function stageFixture(
     OLDER_ASKS.get(state) ?? 0,
   );
 
-  const reminded = savedMemoriesAppState(
-    inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS),
-    MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
+  const reminded = answeredMachineAsksAppState(
+    savedMemoriesAppState(
+      inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS),
+      MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
+    ),
+    ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS,
   );
 
   const staged = {
@@ -158,6 +168,19 @@ function keepReminder(
   // SAFETY: the payload is the kind's, which the guard above names.
   const { itemId, until } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_REMIND>;
   REMINDERS.set(state, new Map(REMINDERS.get(state) ?? NO_REMINDERS).set(itemId, until));
+  stageFixture(state);
+}
+
+/** Keeps a machine's ask the fixture answered and takes it off the document at once, as the service's read drops it (`answeredMachineAsksAppState`); nothing for any other act. */
+function keepMachineAnswer(
+  state: Pick<AppStateStore, "snapshot" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  if (kind !== ACT_KIND.MACHINE_ASK_ANSWER) return;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { id } = payload as PortActPayload<typeof ACT_KIND.MACHINE_ASK_ANSWER>;
+  ANSWERED_ASKS.set(state, new Set(ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS).add(id));
   stageFixture(state);
 }
 
@@ -302,6 +325,8 @@ export function fixtureActs(
         keepChoice(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepMemory(state, kind as PortActKind, payload);
+        // SAFETY: as above.
+        keepMachineAnswer(state, kind as PortActKind, payload);
 
         return Promise.resolve(staged.answer);
       };

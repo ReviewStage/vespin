@@ -96,6 +96,8 @@ import {
 } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { MachineAskLine } from "@repo/features/machine-ask-live";
+import type { MachineLine } from "@repo/features/machine-live";
 import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
@@ -1223,6 +1225,28 @@ const HOSTS: readonly HostLine[] = [
   },
 ];
 
+/** Ada's machines as the account's machines read names them, her MacBook first, which the ask below is held by. */
+const MACHINES: readonly MachineLine[] = HOSTS.map((host) => ({
+  id: host.id,
+  name: host.name,
+  ...(host.platform === undefined ? undefined : { platform: host.platform }),
+  host: true,
+  listening: host.away !== true,
+}));
+
+/** What the invitations agent's run on Ada's MacBook waits on her for: a command its Mac asks before it runs, about four minutes left in its window. */
+const MACHINE_ASKS: readonly MachineAskLine[] = [
+  {
+    id: "c41d7a2e-9b3f-4e15-8a6c-0d2f4b6e8a91",
+    deviceId: HOSTS[0]?.id ?? "",
+    agentId: AGENT.INVITES,
+    subject: { command: "pnpm --filter @app/members test -- invite.test.ts" },
+    askedAt: LANDED - 52_000,
+    expiresAt: LANDED + 248_000,
+    lapsed: false,
+  },
+];
+
 /** The skills a fixture run's Add skill finds in its repository, the one the paste named ticked. */
 const SOURCE_SKILLS: readonly InstalledSkillCandidate[] = [
   {
@@ -2082,6 +2106,8 @@ export function inboxAppState(
         rows: { hosts: HOSTS, installScriptUrl: "https://vespin.dev/install-host.sh" },
       },
     },
+    [LIVE_READ.MACHINES]: { [ADA.userId]: { rows: MACHINES } },
+    [LIVE_READ.MACHINE_ASKS]: { [ADA.userId]: { rows: MACHINE_ASKS } },
     [LIVE_READ.HISTORY]: { ...state[LIVE_READ.HISTORY], [TASK.INVITES]: { rows: INVITES_HISTORY } },
     [LIVE_READ.WORKSPACE_PHOTOS]: {
       ...state[LIVE_READ.WORKSPACE_PHOTOS],
@@ -2136,6 +2162,24 @@ export function inboxRemindersAppState(
 
 /** The words a fixture run saved, by the memory's id: one of its own corrected, or a new one under the id the save answered. */
 export type SavedMemoryWords = ReadonlyMap<string, string>;
+
+/** The document with the machines' asks a fixture run answered taken off, as the service's read drops an ask once answered; as it was where none was. */
+export function answeredMachineAsksAppState(
+  state: AppStateSnapshot,
+  answered: ReadonlySet<string>,
+): AppStateSnapshot {
+  const held = state[LIVE_READ.MACHINE_ASKS][ADA.userId]?.rows;
+
+  if (answered.size === 0 || held === undefined) return state;
+
+  return {
+    ...state,
+    [LIVE_READ.MACHINE_ASKS]: {
+      ...state[LIVE_READ.MACHINE_ASKS],
+      [ADA.userId]: { rows: held.filter((ask) => !answered.has(ask.id)) },
+    },
+  };
+}
 
 /**
  * The fixture workspace's memories with the words a run saved: a
@@ -2350,6 +2394,9 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
+  // Note that an ask is answered as the service answers the first answer given, which stands; the mobile fixture takes the ask off the document itself (`answeredMachineAsksAppState`).
+  [ACT_KIND.MACHINE_ASK_ANSWER]: ({ decision, note }) =>
+    note === undefined ? { decision } : { decision, note },
   // Note that a pairing is read, approved, and denied as the service would answer, though nothing here makes a machine.
   [ACT_KIND.HOSTS_PAIRING_READ]: ({ code }) => pairingAnswer(code, PENDING_PAIRING),
   [ACT_KIND.HOSTS_PAIRING_APPROVE]: ({ code }) =>
