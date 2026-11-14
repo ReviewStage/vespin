@@ -7,10 +7,9 @@ import {
 } from "@repo/features/description-history-words";
 import type { DescriptionRevisionLine } from "@repo/features/task-wire";
 import { agoText, dayAndTimeText } from "@repo/features/time-format";
-import { readingWords, showMoreWords, VERB } from "@repo/features/words";
+import { readingWords, showMoreWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
-  BUTTON_LOOK,
   BUZZ,
   EmptyState,
   GLYPH,
@@ -87,7 +86,7 @@ export function HistoryScreen() {
       <EmptyState
         title={VERSION_HISTORY_WORDS.UNREAD}
         symbol={GLYPH.FAILED}
-        action={{ label: VERB.TRY_AGAIN, look: BUTTON_LOOK.BORDERED, onPress: history.retry }}
+        retry={history.retry}
       />
     ) : history.read === HISTORY_READ.READING ? (
       <EmptyState title={readingWords("the version history")} symbol={HISTORY_SYMBOL} loading />
@@ -256,11 +255,7 @@ function Version({
     <EmptyState
       title={VERSION_HISTORY_WORDS.VERSION_UNREAD}
       symbol={GLYPH.FAILED}
-      action={{
-        label: VERB.TRY_AGAIN,
-        look: BUTTON_LOOK.BORDERED,
-        onPress: () => void version.refetch(),
-      }}
+      retry={() => void version.refetch()}
     />
   ) : (
     <RowList look={LIST_LOOK.PLAIN}>

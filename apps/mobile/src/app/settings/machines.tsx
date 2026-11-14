@@ -15,17 +15,17 @@ import {
   nextCallInLapse,
   removeMachineQuestion,
 } from "@repo/features/machines-settings-words";
-import { readFailedWords, readingWords, VERB } from "@repo/features/words";
+import { readFailedWords, readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount } from "@repo/host/app-state-reads";
 import {
-  BUTTON_LOOK,
   ConfirmAsk,
   EmptyState,
   GLYPH,
   ListSection,
   NoteRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
 } from "@repo/ui-native";
@@ -123,14 +123,11 @@ function MachinesPage({ accountId }: { readonly accountId: string }) {
         <EmptyState
           title={READ_WORDS.FAILED}
           symbol={GLYPH.FAILED}
-          action={{
-            label: VERB.TRY_AGAIN,
-            look: BUTTON_LOOK.BORDERED,
-            onPress: () =>
-              void acts[ACT_KIND.HOSTS_RETRY]().catch((cause: unknown) =>
-                console.error("Reading the machines again did not go.", cause),
-              ),
-          }}
+          retry={() =>
+            void acts[ACT_KIND.HOSTS_RETRY]().catch((cause: unknown) =>
+              console.error("Reading the machines again did not go.", cause),
+            )
+          }
         />
       ) : (
         <EmptyState title={READ_WORDS.READING} symbol={GLYPH.HOST} loading />
@@ -170,7 +167,7 @@ function MachinesPage({ accountId }: { readonly accountId: string }) {
 
   return (
     <>
-      <Screen>{body}</Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>{body}</Screen>
       <ConfirmAsk
         title={question.title}
         message={removeMessage(asked)}
