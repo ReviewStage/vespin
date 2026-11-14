@@ -206,6 +206,7 @@ import { MachineNotRunNote } from "./machine-not-run.js";
 import { fileChip, linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
 import { ReplyButtonLink } from "./reply-button-link.js";
+import { ServerCard } from "./server-card.js";
 import { SubagentMark } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
 import {
@@ -1449,6 +1450,47 @@ export function CallPlaceProvider({
   );
 }
 
+/**
+ * Where a call of an MCP server's tool ran, as its row ends: the account's
+ * chip, its provider's mark and the account's name, where the call keeps
+ * one, hanging the account's card; a server of no integration's by its name
+ * beside the server's glyph, since no mark of its own says which; and
+ * nothing for an integration's lone account, whose mark leads the row
+ * already. The chip takes no press of its own, so a press on it opens the
+ * row as a press anywhere on the line does.
+ */
+function CallServerChip({
+  provider,
+  connection,
+  account,
+  server,
+}: {
+  provider: IntegrationProvider | undefined;
+  connection: string | undefined;
+  account: string | undefined;
+  server: string | undefined;
+}): ReactNode {
+  if (provider === undefined) {
+    return server === undefined ? null : (
+      <InlineRef
+        look={INLINE_REF_LOOK.WASH}
+        glyph={<EntityGlyph kind={ENTITY_KIND.SERVER} />}
+        label={server}
+        hint={false}
+      />
+    );
+  }
+
+  return account === undefined ? null : (
+    <InlineRef
+      look={INLINE_REF_LOOK.WASH}
+      glyph={<ProviderMark provider={provider} />}
+      label={account}
+      card={<ServerCard provider={provider} connection={connection} account={account} />}
+    />
+  );
+}
+
 export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> &
   Pick<ToolHeaderProps, "state" | "subject"> & {
     kind: CallKind;
@@ -1456,8 +1498,12 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     provider?: IntegrationProvider | undefined;
     /** For a call on an app on the developer's Mac, the picture its icon was kept as, which the row wears in its kind's icon's place; a computer call with none wears the app icon's placeholder. */
     appIcon?: string | undefined;
-    /** For a call of an MCP server's tool, the server's name, which the row says it ran on beside its line. */
+    /** For a call of an MCP server's tool, the server's name, which a custom server's row says it ran on by its chip. */
     server?: string | undefined;
+    /** For a call of an integration's tool, the connection it ran on, which its account chip's card reads. */
+    connection?: string | undefined;
+    /** For a call of an integration's tool, the name of the account it ran on, kept where its owner held more than one at the provider, which its row ends in by the account's chip; none for the rest. */
+    account?: string | undefined;
     /** For a terminal command or an action on an app, the machine its answer says it went to, which the row says it ran on; none where its answer names none or it has not answered. */
     machine?: CallMachine | undefined;
     /** For a command, the plain words the model said it is for, which the row says in its verb's place; the closed row previews the command's first line after them, and the body holds it whole. */
@@ -1536,6 +1582,8 @@ export function TranscriptTool({
   provider,
   appIcon,
   server,
+  connection,
+  account,
   machine,
   subject,
   description,
@@ -1577,6 +1625,18 @@ export function TranscriptTool({
     ) : undefined;
 
   const opened = useHeldOpen(held?.waiting === true);
+  const mcp = kind === CALL_KIND.MCP_TOOL;
+
+  // Note that an MCP row ends in a chip only where it says more than the mark leading it: an account among its owner's several, or a server of no integration's.
+  const serverChip =
+    mcp && (provider === undefined ? server !== undefined : account !== undefined) ? (
+      <CallServerChip
+        provider={provider}
+        connection={connection}
+        account={account}
+        server={server}
+      />
+    ) : undefined;
 
   const row = (
     <Tool {...props} {...(held === undefined ? undefined : opened)}>
@@ -1601,7 +1661,7 @@ export function TranscriptTool({
         chip={chip}
         subjectIsCode={line.code}
         subjectInBody={(command && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject)}
-        placeChip={onMachineChip}
+        placeChip={onMachineChip ?? serverChip}
         place={
           (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
           macOwner !== undefined ? (
@@ -1610,7 +1670,7 @@ export function TranscriptTool({
               <ActorRef actor={macOwner} sentence possessive />
               {" Mac"}
             </ActorLine>
-          ) : (
+          ) : mcp ? undefined : (
             callPlace(kind, server)
           )
         }
