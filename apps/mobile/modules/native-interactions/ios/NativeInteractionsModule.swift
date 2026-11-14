@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place; and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -48,6 +48,11 @@ public final class NativeInteractionsModule: Module {
     OnDestroy {
       ModifierName.all.forEach { ViewModifierRegistry.unregister($0) }
     }
+
+    // Note that the keyboard is lowered by resigning whatever holds it, since a SwiftUI field such as a split view's search, unlike React Native's, has no focus JavaScript can reach.
+    AsyncFunction("lowerKeyboard") {
+      UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }.runOnQueue(.main)
   }
 }
 
