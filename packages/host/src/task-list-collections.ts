@@ -83,29 +83,18 @@ import { drawnAtEdges, drawnPerTick } from "./live-collection.js";
 import { confirmWrite, type SyncStanding, syncIdOf, type TxWait } from "./live-follow.js";
 import { taskListContinuations } from "./task-list-continuations.js";
 import { taskListPullRequests } from "./task-list-pull-requests.js";
+import type { AgentRow, PastGrace, PlanRow } from "./task-list-rows.js";
 import { taskListTasks } from "./task-list-tasks.js";
 import { timeOrdered } from "./time-ordered.js";
 
 /** How many times a task the follow let go while a cold read of it was out is read again before it is left undrawn. */
 const RECHECKS = 3;
 
-/** A plan's row as the list's statement answers it. */
-export type PlanRow = TaskListLiveRows["tasks"][number];
-
-/** An agent's row as the list's statement answers it. */
-export type AgentRow = TaskListLiveRows["agents"][number];
-
 /** A plan as the pool holds it, by its id. */
 export const PLAN = fieldKind((row: PlanRow) => row.id);
 
 /** An agent as the pool holds it, by its id. */
 export const AGENT = fieldKind((row: AgentRow) => row.id);
-
-/** An agent whose starting grace has ended, by its id, with its plan's, as the list holds it beside the agents' rows. */
-export interface PastGrace {
-  readonly agentId: string;
-  readonly taskId: string;
-}
 
 /** The list as the rows make it, every agent on a plan beside it, and the plans a write stands over. */
 export interface LiveTaskList {
