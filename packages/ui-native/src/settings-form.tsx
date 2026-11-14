@@ -36,6 +36,7 @@ import {
   listRowBackground,
   menuIndicator,
   menuStyle,
+  multilineTextAlignment,
   resizable,
   scrollContentBackground,
   scrollDismissesKeyboard,
@@ -871,13 +872,22 @@ export function MemberRow({ name, email, picture, role, invited, badge, acts }: 
         <Avatar name={name} picture={picture} size={faceSize} />
       )}
       <VStack alignment="leading" spacing={1}>
+        {/* Note that a row holding acts is a menu's label, which centers a wrapped line, so its lines keep to their leading edge, as Settings' subtitles do. */}
         <Text
-          modifiers={[foregroundStyle(colors.TEXT), alignmentGuide("listRowSeparatorLeading", 0)]}
+          modifiers={[
+            foregroundStyle(colors.TEXT),
+            alignmentGuide("listRowSeparatorLeading", 0),
+            multilineTextAlignment("leading"),
+          ]}
         >
           {badge === undefined ? name : `${name} · ${badge}`}
         </Text>
         <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            multilineTextAlignment("leading"),
+          ]}
         >
           {email}
         </Text>
