@@ -1,6 +1,6 @@
 /* landing.css -- the landing (`landing-page.tsx`): its insets, the bar
    that stays at the top as the page scrolls, the hero over the live app,
-   the pillars, each feature's stage, the devices, the screens the scenes lay out at the app's
+   each feature's stage, the devices, the screens the scenes lay out at the app's
    own sizes, the close, and the foot over the wordmark. The page queries its
    own width rather than the viewport's, so it is drawn the same in a frame
    as in a window; a container query cannot read a custom property, so the
@@ -39,9 +39,10 @@
   }
 
   /* A hairline across the page's whole width, between its parts. */
+  /* off-scale: the hairline at half the border's ink, barely there */
   .ui-landing-rule {
     height: 1px;
-    background: var(--ui-color-border);
+    background: color-mix(in srgb, var(--ui-color-border) 50%, transparent);
   }
 
   /* The bar: across the page at its top, then, once the page scrolls, a
@@ -123,10 +124,13 @@
     flex-direction: column;
   }
 
+  /* The words stand well down from the bar, a share of the screen's height,
+     so the hero opens on room above its line. */
   .ui-landing-hero-words {
     position: relative;
     z-index: 1;
-    padding: 160px var(--ui-landing-gutter) 0;
+    /* off-scale: the room above the words, a share of the screen */
+    padding: clamp(120px, 24svh, 240px) var(--ui-landing-gutter) 0;
   }
 
   /* The line takes the row's whole width, balanced over two lines of
@@ -137,15 +141,13 @@
     text-wrap: balance;
   }
 
-  /* The sentence at the left and the calls at the right, on one row under
-     the line, their feet level. */
+  /* The sentence under the line, and the calls on a row of their own under it. */
   .ui-landing-hero-row {
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 24px 48px;
-    margin-top: 32px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 32px;
+    margin-top: 24px;
   }
 
   .ui-landing-hero-row .ui-landing-hero-lead {
@@ -761,73 +763,27 @@
     animation: ui-landing-enter var(--ui-duration-shape) var(--ui-motion-pane) both;
   }
 
-  /* The pillars: three steps side by side under a hairline, each a line
-     drawing over its name and a sentence, parted by hairlines. */
-  .ui-landing-pillars {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    margin: 0;
-    padding: 0 var(--ui-landing-inset);
-    list-style: none;
-  }
-
-  .ui-landing-pillar {
-    display: flex;
-    flex-direction: column;
-    padding: 24px 32px 80px;
-  }
-
-  .ui-landing-pillar + .ui-landing-pillar {
-    border-left: 1px solid var(--ui-color-border);
-  }
-
-  .ui-landing-pillar-number {
-    color: var(--ui-color-text-muted);
-    font-family: var(--ui-font-mono);
-    font-size: var(--ui-type-caption-size);
-    line-height: var(--ui-type-caption-leading);
-    opacity: 0.7;
-  }
-
-  .ui-landing-figure {
-    display: block;
-    width: 100%;
-    max-width: 280px;
-    margin: 24px auto 40px;
-    fill: none;
-    stroke: var(--ui-color-text-muted);
-    stroke-width: 1;
-    opacity: 0.6;
-  }
-
-  .ui-landing-pillar-title {
-    font-size: var(--ui-type-label-size);
-    font-weight: var(--ui-type-section-weight);
-    line-height: var(--ui-type-label-leading);
-  }
-
-  .ui-landing-pillar-detail {
-    max-width: 320px;
-    margin-top: 8px;
-    color: var(--ui-color-text-muted);
-    line-height: var(--ui-display-lead-leading);
-  }
-
-  /* A feature: under a hairline, its heading at the left and its sentence,
-     larger, at the right with its link under it, over its stage. */
+  /* A feature: under a hairline, its words beside its screen, the words
+     standing in the middle of the screen's height; every other section
+     sets its screen first, so the two trade sides down the page. */
   .ui-landing-section {
     position: relative;
   }
 
   .ui-landing-section-body {
-    padding: 128px var(--ui-landing-gutter) 112px;
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: center;
+    gap: 64px;
+    padding: 112px var(--ui-landing-gutter);
   }
 
-  .ui-landing-section-head {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    align-items: start;
-    gap: 32px 64px;
+  .ui-landing-section:nth-of-type(even) .ui-landing-section-body {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  }
+
+  .ui-landing-section:nth-of-type(even) .ui-landing-section-words {
+    order: 2;
   }
 
   .ui-landing-section-title {
@@ -848,17 +804,44 @@
   }
 
   .ui-landing-section-words .ui-landing-lead {
-    max-width: 520px;
+    max-width: 440px;
     margin-top: 0;
-    color: color-mix(in srgb, var(--ui-color-text) 82%, transparent);
   }
 
-  /* A stage: the feature's whole screen on the page's ground with no panel
-     round it, its foot fading into the ground. */
+  /* A stage: the feature's whole screen standing on a field of drifting
+     copper dots, with no panel round it, lifted off the field by a deep
+     shadow. The field fades out toward every edge, so it reads as light
+     round the screen rather than a box. */
   .ui-landing-stage {
     position: relative;
-    margin-top: 72px;
-    mask-image: linear-gradient(to bottom, black 70%, transparent);
+    padding: 48px 6%;
+  }
+
+  /* off-scale: the field's fade at each edge */
+  .ui-landing-field {
+    --ui-landing-field-fade: 40px;
+
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    color: var(--ui-color-accent);
+    mask-image:
+      linear-gradient(
+        to right,
+        transparent,
+        black var(--ui-landing-field-fade),
+        black calc(100% - var(--ui-landing-field-fade)),
+        transparent
+      ),
+      linear-gradient(
+        to bottom,
+        transparent,
+        black var(--ui-landing-field-fade),
+        black calc(100% - var(--ui-landing-field-fade)),
+        transparent
+      );
+    mask-composite: intersect;
   }
 
   .ui-landing-stage .ui-landing-window {
@@ -882,19 +865,6 @@
   .ui-landing-scene {
     position: relative;
     z-index: 1;
-  }
-
-  /* A stage with an aside: the stage, and what stands beside it. */
-  .ui-landing-beside {
-    display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-    align-items: center;
-    gap: 40px;
-    margin-top: 40px;
-  }
-
-  .ui-landing-beside > .ui-landing-stage {
-    margin-top: 0;
   }
 
   .ui-landing-facts > .ui-landing-fact {
@@ -1737,31 +1707,25 @@
       font-size: var(--ui-display-feature-size-narrow);
     }
 
-    .ui-landing-stage {
-      margin-top: 28px;
-    }
-
-    /* The pillars stand one under another, parted by hairlines across. */
-    .ui-landing-pillars {
+    /* On a phone a section stacks, its words over its screen, whichever
+       side it took. */
+    .ui-landing-section-body,
+    .ui-landing-section:nth-of-type(even) .ui-landing-section-body {
       grid-template-columns: minmax(0, 1fr);
-      padding: 0;
+      gap: 28px;
     }
 
-    .ui-landing-pillar {
-      padding: 24px var(--ui-landing-gutter) 48px;
-    }
-
-    .ui-landing-pillar + .ui-landing-pillar {
-      border-top: 1px solid var(--ui-color-border);
-      border-left: 0;
-    }
-
-    .ui-landing-section-head {
-      grid-template-columns: minmax(0, 1fr);
+    .ui-landing-section:nth-of-type(even) .ui-landing-section-words {
+      order: 0;
     }
 
     .ui-landing-close {
       padding: 96px var(--ui-landing-gutter) 80px;
+    }
+
+    /* A cropped window fills its stage edge to edge, so no field shows. */
+    .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) .ui-landing-field {
+      display: none;
     }
 
     .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) {
@@ -1802,10 +1766,6 @@
       --ui-landing-crop-y: 0;
       --ui-landing-crop-w: 420;
       --ui-landing-crop-h: 345;
-    }
-
-    .ui-landing-beside {
-      grid-template-columns: minmax(0, 1fr);
     }
 
     .ui-landing-stage[data-scene="devices"] {

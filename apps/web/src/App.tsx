@@ -2,11 +2,9 @@ import { PANEL_ASSET_BASE } from "@repo/features/link-home";
 import {
   BUTTON_VARIANT,
   ButtonLink,
-  LANDING_FIGURE,
   LANDING_SCENE,
   LandingBackedBy,
   LandingPage,
-  LandingPillars,
   LandingSection,
   MARK_PROVIDER,
   ProviderMark,
@@ -35,9 +33,8 @@ const CODEX_ART = {
 const Y_COMBINATOR_PAGE = "https://www.ycombinator.com/companies/vespin";
 
 /**
- * The landing: the one line over the live app, the three steps of the
- * work, then a section for each of the product's features over the app's
- * own screens at work, and the close. A reader with an account signs in
+ * The landing: the one line over the live app, then a section for each of
+ * the product's features over the app's own screens at work, and the close. A reader with an account signs in
  * from the bar or beside the hero's download.
  */
 export function App(): React.JSX.Element {
@@ -73,29 +70,6 @@ export function App(): React.JSX.Element {
       }}
       footer={<SiteFooterLinks current={{ page: SITE_PAGE.HOME }} />}
     >
-      <LandingPillars
-        label="How it works"
-        pillars={[
-          {
-            figure: LANDING_FIGURE.PLAN,
-            title: "Plan",
-            detail:
-              "Describe the task. Its agent writes the plan and splits it into sub-tasks you can follow.",
-          },
-          {
-            figure: LANDING_FIGURE.DELEGATE,
-            title: "Delegate",
-            detail:
-              "Claude Code and Codex agents take the sub-tasks in parallel, each in its own cloud sandbox.",
-          },
-          {
-            figure: LANDING_FIGURE.SHIP,
-            title: "Ship",
-            detail:
-              "They open pull requests and fix failing checks, and come to you when they need a decision.",
-          },
-        ]}
-      />
       <LandingSection
         title="Monitor all your agents with one inbox."
         lead="Agents only post to your inbox when something needs your attention."
