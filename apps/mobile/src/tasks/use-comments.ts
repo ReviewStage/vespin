@@ -48,8 +48,8 @@ const SOMEONE = "Someone";
 /**
  * A new thread's draft kept beside its block: the words typed, the start
  * sent under them and not yet answered as posted, so the same words sent
- * again after a lost answer go under the same key, and how often the words
- * have changed, so a send answered late lets the draft go only while it
+ * again after a lost answer go under the same key, and which edit of the
+ * words it holds, so a send answered late lets the draft go only while it
  * still holds the words that send carried.
  */
 type StartDraft = {
@@ -65,6 +65,16 @@ type StartDraft = {
  * screen.
  */
 const startDrafts = new Map<string, Map<number, Map<number, StartDraft>>>();
+
+/** The last edit numbered, across every draft, so a draft let go and typed again never takes an edit's number a send still waits to compare. */
+let lastEdit = 0;
+
+/** The next edit's number, never one given before. */
+function nextEdit(): number {
+  lastEdit += 1;
+
+  return lastEdit;
+}
 
 /** The draft kept toward a new thread on one block of a task; none kept, or no block yet read. */
 function startDraftOf(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
@@ -352,7 +362,7 @@ export function useCommentStart(
         block,
         next === "" && was?.sent === undefined
           ? undefined
-          : { words: next, sent: was?.sent, revision: (was?.revision ?? 0) + 1 },
+          : { words: next, sent: was?.sent, revision: nextEdit() },
       );
     },
     [taskId, block],
