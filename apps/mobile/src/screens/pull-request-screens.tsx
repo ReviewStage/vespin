@@ -383,9 +383,24 @@ export function PullRequestPage({
   );
   const path = [...(agent?.repository == null ? [] : [agent.repository]), `#${key.number}`];
 
-  // Note that a column's bar stands the page's two acts as glyphs, as Mail stands a message's, since the panel's ⋯ holds only these two; the merge stays under the checks.
+  // Note that a column's bar stands the page's two main acts as glyphs, as Mail stands a message's, and keeps Copy GitHub link in its ⋯, as the stack's ⋯ offers it; the merge stays under the heading.
   const columnBar: ColumnBar = {
     path: { path },
+    menu:
+      url === undefined
+        ? undefined
+        : {
+            label: MENU_WORDS.MORE,
+            symbol: GLYPH.MORE,
+            choices: [],
+            actions: [
+              {
+                label: MENU_WORDS.COPY_GITHUB_LINK,
+                symbol: GLYPH.LINK,
+                onPress: () => copyLink(url),
+              },
+            ],
+          },
     acts: [
       ...(url === undefined
         ? []
