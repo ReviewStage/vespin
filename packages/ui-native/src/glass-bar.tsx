@@ -98,12 +98,17 @@ function useKeyboardHeight(moves = true): number {
       setHeight(0);
     });
 
-    // Note that the keyboard's height is also let go once it has gone, since a piece mounted while it fell read the height it fell from, which React Native holds until then.
+    // Note that the height is read again once the keyboard has stood or gone, since a piece mounted while it moved read where it stood before, which React Native holds until the move ends.
+    const stood = Keyboard.addListener("keyboardDidShow", (event) =>
+      setHeight(event.endCoordinates.height),
+    );
+
     const gone = Keyboard.addListener("keyboardDidHide", () => setHeight(0));
 
     return () => {
       rising.remove();
       falling.remove();
+      stood.remove();
       gone.remove();
     };
   }, [moves]);
