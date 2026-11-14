@@ -1,12 +1,5 @@
-Traceback (most recent call last):
-  File "/Users/deanstratakos/vespin-ipad-agent/probe9015.py", line 4, in <module>
-    root = json.load(open(sys.argv[1]))
-  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/__init__.py", line 293, in load
-    return loads(fp.read(),
-  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/__init__.py", line 346, in loads
-    return _default_decoder.decode(s)
-  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/decoder.py", line 337, in decode
-    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
-  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/decoder.py", line 355, in raw_decode
-    raise JSONDecodeError("Expecting value", s, err.value) from None
-json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+'Teammate invitations' frame (293, 645, 594, 663) depth 34 enabled true text 'Teammate invitations'
+    chain: (unnamed) (290, 628, 610, 680) < (unnamed) (290, 628, 610, 680) < (unnamed) (290, 628, 610, 680) < (unnamed) (0, 628, 610, 680) < (unnamed) (0, 0, 610, 834) < (unnamed) (0, 0, 610, 834) < (unnamed) (0, 0, 610, 834) < (unnamed) (0, 0, 610, 834) < (unnamed) (0, 0, 610, 834) < (unnamed) (0, 0, 610, 834) < (unnamed) (0, 0, 610, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < (unnamed) (0, 0, 1194, 834) < Vespin (0, 0, 1194, 834)
+'Teammate invitations' frame (334, 645, 479, 663) depth 35 enabled true text 'Teammate invitations'
+    chain: Teammate invitations (293, 645, 594, 663)
+ROWPT 406,654
