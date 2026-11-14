@@ -20,6 +20,8 @@ const styles = StyleSheet.create({
     padding: SPACE.ROW,
   },
   said: { alignItems: "center", gap: SPACE.TIGHT },
+  // Note that a failure stands as tall as its words and Try again need, at least a short well's height, rather than at the media's shape, which cut off Try again at a large text size and in a decide option's small tile.
+  grows: { aspectRatio: undefined, minHeight: 120, overflow: "visible" },
 });
 
 /**
@@ -42,13 +44,13 @@ export function MediaFailed({
   readonly heard: string;
   /** Reads the media again; none offers nothing. */
   readonly onRetry?: (() => void) | undefined;
-  /** The box it stands in, the media's own frame and well. */
+  /** The box it stands in, the media's own frame and well, whose shape gives way to the room its words need. */
   readonly style?: StyleProp<ViewStyle>;
 }) {
   const colors = useColors();
 
   return (
-    <View style={[styles.well, { backgroundColor: colors.WELL }, style]}>
+    <View style={[styles.well, { backgroundColor: colors.WELL }, style, styles.grows]}>
       <View style={styles.said} accessible accessibilityLabel={heard}>
         <SymbolView
           name={glyphSymbol(GLYPH.FAILED)}

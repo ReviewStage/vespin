@@ -29,11 +29,14 @@ export interface MediaFrame {
  * `MEDIA_BOUNDS`, so a small icon stands at its own size rather than blown
  * up and blurred, and a tall screenshot stands no taller than the bound.
  * Note that the width is the most it stands at, so a narrower column, such
- * as an ask card's, narrows it again with the shape kept; and that media of
- * no known size stands at `UNSIZED_ASPECT` as wide as the bound allows.
+ * as an ask card's, narrows it again with the shape kept (`MediaBox`); that
+ * media of no known size stands at `UNSIZED_ASPECT` as wide as the bound
+ * allows; and that a size is taken in the pixels a picture or a player
+ * reports, one pixel to a point, as the panel takes one to a CSS pixel.
  */
-export function mediaFrame(natural: MediaSize | undefined): MediaFrame {
-  if (natural === undefined || natural.width <= 0 || natural.height <= 0) {
+export function mediaFrame(natural: MediaSize | null | undefined): MediaFrame {
+  // Note that a player that could not read its track's size answers none as `null`, which stands as a size unknown.
+  if (natural == null || natural.width <= 0 || natural.height <= 0) {
     return { width: MEDIA_BOUNDS.WIDTH, aspectRatio: UNSIZED_ASPECT };
   }
 

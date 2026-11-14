@@ -41,6 +41,7 @@ import {
   type MarkdownSuggestion,
   markdownBlocks,
 } from "./markdown-model.js";
+import { MediaBox } from "./media-box.js";
 import { MediaFailed } from "./media-failed.js";
 import { type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
@@ -180,7 +181,6 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   picture: { width: "100%", borderRadius: 8 },
-  framed: { maxWidth: "100%", borderRadius: 8 },
   pending: { alignItems: "center", justifyContent: "center" },
   viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
   viewerClose: { position: "absolute", padding: SPACE.ROW },
@@ -971,57 +971,63 @@ export function Picture({ source, alt, tileAspect, onRetry }: PictureProps) {
     source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard },
   );
 
-  // Note that a tile fills its tile at the tile's shape, and any other picture stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`).
+  // Note that a tile fills its tile at the tile's shape, and any other picture stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
+  const frame = tileAspect === undefined ? mediaFrame(natural) : undefined;
+
   const well = [
-    tileAspect === undefined
-      ? [styles.framed, mediaFrame(natural)]
-      : [styles.picture, { aspectRatio: tileAspect }],
-    { backgroundColor: colors.WELL },
+    styles.picture,
+    { aspectRatio: tileAspect ?? frame?.aspectRatio, backgroundColor: colors.WELL },
   ];
 
   if (source === undefined) {
     return (
-      <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
-        <ActivityIndicator color={colors.TEXT_MUTED} />
-      </View>
+      <MediaBox frame={frame}>
+        <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
+          <ActivityIndicator color={colors.TEXT_MUTED} />
+        </View>
+      </MediaBox>
     );
   }
 
   // Note that a picture that could not be read says so in its well, as the panel's stand-in does, rather than spin as one still on its way.
   if (source === null) {
     return (
-      <MediaFailed
-        line={MEDIA_READ_WORDS.PICTURE_FAILED}
-        heard={unreadWords(alt)}
-        onRetry={onRetry}
-        style={well}
-      />
+      <MediaBox frame={frame}>
+        <MediaFailed
+          line={MEDIA_READ_WORDS.PICTURE_FAILED}
+          heard={unreadWords(alt)}
+          onRetry={onRetry}
+          style={well}
+        />
+      </MediaBox>
     );
   }
 
   return (
     <>
-      <HeldMenu acts={acts}>
-        <Press
-          onPress={() => setFull(true)}
-          accessibilityRole="imagebutton"
-          accessibilityLabel={heard}
-          accessibilityHint="Opens full screen"
-        >
-          <Image
-            source={{ uri: source }}
-            resizeMode="contain"
-            onLoad={(event) => {
-              const loaded = event.nativeEvent.source;
+      <MediaBox frame={frame}>
+        <HeldMenu acts={acts}>
+          <Press
+            onPress={() => setFull(true)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={heard}
+            accessibilityHint="Opens full screen"
+          >
+            <Image
+              source={{ uri: source }}
+              resizeMode="contain"
+              onLoad={(event) => {
+                const loaded = event.nativeEvent.source;
 
-              if (loaded.width > 0 && loaded.height > 0) {
-                setNatural({ width: loaded.width, height: loaded.height });
-              }
-            }}
-            style={well}
-          />
-        </Press>
-      </HeldMenu>
+                if (loaded.width > 0 && loaded.height > 0) {
+                  setNatural({ width: loaded.width, height: loaded.height });
+                }
+              }}
+              style={well}
+            />
+          </Press>
+        </HeldMenu>
+      </MediaBox>
       <Modal
         visible={full}
         animationType="fade"

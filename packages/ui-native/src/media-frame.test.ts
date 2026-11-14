@@ -1,3 +1,5 @@
+// media-frame.test.ts -- a picture or a recording stands at its own shape, never past its own size, held to the bound.
+
 import { describe, expect, it } from "vitest";
 import { mediaFrame } from "./media-frame.js";
 
