@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import type { AgentAttachment } from "@repo/features/agent-wire";
+import { leavingPlace } from "@repo/ui/testing/leaving-place";
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -77,7 +78,7 @@ beforeEach(() => {
       return motion;
     },
   });
-  // Note that each chip stands after the chips before it still in the row's layout.
+  // Note that each chip stands after the chips before it still in the row's layout, a leaving one where list-motion.css lays it.
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
   ) {
@@ -85,14 +86,11 @@ beforeEach(() => {
 
     if (!this.matches("li") || row === null) return new DOMRect(0, 0, 0, 0);
 
-    const laidOut = [...row.children].filter(
-      (each) => each instanceof HTMLElement && each.style.position !== "absolute",
-    );
+    const laidOut = [...row.children].filter((each) => leavingPlace(each) === undefined);
+    const place = leavingPlace(this);
 
     const left =
-      this.style.position === "absolute"
-        ? Number.parseFloat(this.style.left)
-        : laidOut.indexOf(this) * CHIP;
+      place !== undefined && place !== "gone" ? place.left : laidOut.indexOf(this) * CHIP;
 
     return new DOMRect(left, 0, CHIP, 48);
   });

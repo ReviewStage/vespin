@@ -40,8 +40,10 @@ import {
   BAR_TITLE,
   type BarAction,
   type BarMenu,
+  CallCardRow,
   type ColumnBar,
   Composer,
+  type ComposerCall,
   ComposerFoot,
   type ComposerMenu,
   ConfirmAsk,
@@ -123,6 +125,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { PageScreen } from "./page-screens.js";
 
@@ -283,6 +286,8 @@ function AgentComposerBar({
   addMenu,
   note,
   inColumn = false,
+  call,
+  otherCall,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -293,6 +298,10 @@ function AgentComposerBar({
   readonly note: string | undefined;
   /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen. */
   readonly inColumn?: boolean | undefined;
+  /** Talk, or the call's presses while a call into this agent stands; none while calls are not offered. */
+  readonly call: ComposerCall | undefined;
+  /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
+  readonly otherCall: ReturnType<typeof useStandingCallCard>;
 }) {
   const said = composer.note ?? note;
   const { banner, waiting } = approvals;
@@ -308,8 +317,12 @@ function AgentComposerBar({
     composer.paused === undefined &&
     composer.attached.length === 0 &&
     composer.skills === undefined &&
+    otherCall === undefined &&
     said === undefined ? undefined : (
       <>
+        {otherCall === undefined ? null : (
+          <CallCardRow call={otherCall.card} onOpen={otherCall.open} />
+        )}
         {composer.skills === undefined ? null : (
           <SkillSuggestions
             skills={composer.skills.skills}
@@ -340,6 +353,7 @@ function AgentComposerBar({
     onDropPictures: composer.dropPictures,
     onStop: composer.stop,
     stopping: composer.stopping,
+    call,
     head,
   };
 
@@ -821,6 +835,8 @@ export function AgentConversation({
   };
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
+  const talk = useAgentTalk(id, shown?.planId);
+  const otherCall = useStandingCallCard(id);
 
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
   const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
@@ -864,6 +880,8 @@ export function AgentConversation({
       onShowWaiting={showWaiting}
       addMenu={addMenu}
       note={actions.note ?? transcriptCopy.note ?? mode?.note ?? pick.note}
+      call={talk.call}
+      otherCall={otherCall}
       inColumn={inColumn}
     />
   );
@@ -921,6 +939,7 @@ export function AgentConversation({
         }}
         onDismiss={() => setRenaming(false)}
       />
+      <ConfirmAsk destructive {...talk.switching} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}

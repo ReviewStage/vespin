@@ -10,12 +10,27 @@
  * TanStack's custom sync (`begin`, `write`, `commit`), and only for the keys
  * the pool names as moved: those its own answer moved, took up, or let go,
  * and those a write or another read's answer drew again. Each is written as
- * the very row the pool draws, never copied, so no row is held twice.
+ * the very row the pool draws, never copied, so no row is held twice. A
+ * read takes a live query's rows as one list (`listedOf`), built again only
+ * after the query changed.
  */
 
 import { KEPT_BY_SCOPE, type RowCollection, scopedCollection } from "@repo/sync";
-import { BasicIndex, createCollection, type SyncConfig } from "@tanstack/db";
+import {
+  BasicIndex,
+  type Collection,
+  createCollection,
+  type SyncConfig,
+  type UtilsRecord,
+  type WithVirtualProps,
+} from "@tanstack/db";
 import { Effect, type Scope } from "effect";
+
+/** A live query's rows as another query joins them, each with TanStack's virtual fields. */
+export type QueryCollection<Row extends object> = Collection<
+  WithVirtualProps<Row, string | number>,
+  string | number
+>;
 
 /** What a sync config is handed to write a collection's rows with. */
 type SyncWriter<Row extends object> = Parameters<SyncConfig<Row, string>["sync"]>[0];
@@ -97,5 +112,35 @@ export function drawnRows<Row extends object>(
     };
 
     return { collection, drawn };
+  });
+}
+
+/**
+ * The values `pick` takes from each of `collection`'s rows, in the
+ * collection's order, as one list built again only once the collection
+ * changed, until the scope closes.
+ */
+export function listedOf<Row extends object, Value>(
+  collection: Collection<Row, string | number, UtilsRecord>,
+  pick: (row: Row) => Value | undefined,
+): Effect.Effect<() => readonly Value[], never, Scope.Scope> {
+  return Effect.gen(function* () {
+    let listed: readonly Value[] | undefined;
+
+    const subscription = collection.subscribeChanges(() => {
+      listed = undefined;
+    });
+
+    yield* Effect.addFinalizer(() => Effect.sync(() => subscription.unsubscribe()));
+
+    return () => {
+      listed ??= [...collection.values()].flatMap((row) => {
+        const value = pick(row);
+
+        return value === undefined ? [] : [value];
+      });
+
+      return listed;
+    };
   });
 }

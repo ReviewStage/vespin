@@ -117,6 +117,20 @@ const upsertDeviceListener = SqlSchema.void({
     ),
 });
 
+/** The account's device of the id no longer marked away from its commands, where it was; an update that finds it listening already writes nothing, so a listen wakes no read. */
+const clearCommandsAway = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, deviceId: Schema.String }),
+  execute: ({ userId, deviceId }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ commandsAwayAt: null })
+        .where(
+          and(eq(device.id, deviceId), eq(device.userId, userId), isNotNull(device.commandsAwayAt)),
+        ),
+    ),
+});
+
 const findListener = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, since: Schema.Date }),
   Result: Schema.Struct({ userId: Schema.String }),
@@ -595,6 +609,7 @@ const findCommandMachines = SqlSchema.findAll({
     userId: Schema.String,
     ownerName: Schema.String,
     commandMode: Schema.NullOr(Schema.Literals(Object.values(MACHINE_COMMAND_MODE))),
+    computerUse: Schema.NullOr(Schema.Boolean),
     seenAt: Schema.NullOr(InstantColumnSchema),
   }),
   execute: ({ userIds }) =>
@@ -606,6 +621,7 @@ const findCommandMachines = SqlSchema.findAll({
           userId: device.userId,
           ownerName: user.name,
           commandMode: device.commandMode,
+          computerUse: device.computerUse,
           seenAt: machineCommandDeviceListener.seenAt,
         })
         .from(device)
@@ -632,13 +648,19 @@ const deleteCommand = SqlSchema.void({
 /**
  * Records that a Mac of the account is listening now, for shell commands,
  * which every Mac runs, and, where it listens as a device of the account,
- * that the device is.
+ * that the device is, no longer marked away where the sweep or its join
+ * marked it (`markCommandsAwayDevices`).
  */
 export function markMachineListening(userId: string, deviceId?: string): TaskStoreEffect<void> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     Effect.andThen(
       upsertListener({ userId, now }),
-      deviceId === undefined ? Effect.void : upsertDeviceListener({ userId, deviceId, now }),
+      deviceId === undefined
+        ? Effect.void
+        : Effect.andThen(
+            upsertDeviceListener({ userId, deviceId, now }),
+            clearCommandsAway({ userId, deviceId }),
+          ),
     ),
   );
 }
@@ -696,13 +718,15 @@ export function machineRoutingOf(target: ConversationTarget): TaskStoreEffect<Ma
   );
 }
 
-/** One machine a call may be routed to: its id and name, its owner, its command mode (none for a machine whose app never joined), and when it last listened for commands as a device (none where it never did). */
+/** One machine a call may be routed to: its id and name, its owner, its command mode and apps switch (none for a machine whose app never carried it up), and when it last listened for commands as a device (none where it never did). */
 export interface CommandMachine {
   readonly id: string;
   readonly name: string;
   readonly userId: string;
   readonly ownerName: string;
   readonly commandMode: MachineCommandMode | null;
+  /** Whether agents may use its apps, none for a machine whose app never carried its switch up. */
+  readonly computerUse: boolean | null;
   readonly seenAt: Date | null;
 }
 

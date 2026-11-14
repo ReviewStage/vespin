@@ -176,6 +176,21 @@ test("Allow on a held call's row sends the answer, and the row says it was allow
   assert.ok(call.textContent?.includes("Allowed"));
 });
 
+test("a subagent's held call, which no row of the transcript holds, reads as the harness's tool of its kind", async () => {
+  const [held] = CLAUDE_AGENT.pendingApprovals ?? [];
+  assert.ok(held !== undefined);
+
+  const { container } = await drawnTab({
+    ...CLAUDE_AGENT,
+    pendingApprovals: [{ ...held, subagentId: "subagent-1" }],
+  });
+
+  const rows = [...container.querySelectorAll(`[data-call-id="${CALL}"]`)];
+  const loose = rows.at(-1) ?? assert.fail("the subagent's held call");
+  assert.ok(loose.textContent?.includes("Ran"), loose.textContent ?? "");
+  assert.ok(!loose.textContent?.includes("Used"), loose.textContent ?? "");
+});
+
 test("Always allow on a call whose harness proposed its first words names them in the press, and answers it", async () => {
   const [held] = CLAUDE_AGENT.pendingApprovals ?? [];
   assert.ok(held !== undefined);

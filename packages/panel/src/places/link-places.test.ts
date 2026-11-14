@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import type { LinkDestination } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { it } from "vitest";
@@ -95,4 +95,12 @@ it.each<[string, string, string | undefined, OnStandingTask]>([
   ],
 ])("%s", (_, href, standing, expected) => {
   assert.equal(onTasksTab(placeAt(href), standing), expected);
+});
+
+it("a person's link at one of their machines names the machine as the window's routes read it", () => {
+  assert.deepEqual(placeAt(`${APP}/person/user-sam#machine-${OTHER}`), {
+    kind: LINK_DESTINATION.PERSON,
+    userId: "user-sam",
+    machineId: OTHER,
+  });
 });

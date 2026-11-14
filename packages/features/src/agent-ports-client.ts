@@ -7,6 +7,7 @@
  */
 
 import type { CallCredential } from "./account-call.js";
+import type { AgentPortsForwarding } from "./contract/agent-ports.js";
 import { hostedCall } from "./hosted-call.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
 import { SANDBOX_TUNNEL, TUNNEL_KIND } from "./sandbox-tunnel-wire.js";
@@ -42,9 +43,12 @@ export class HostedAgentPortsClient {
     });
   }
 
-  /** The ports listened on in the agent's sandbox, and whether it runs; a stopped sandbox is never woken by it. */
-  list(agentId: string) {
-    return hostedCall(this.#hosted.agentPorts.list, { id: agentId });
+  /** The ports listened on in the agent's sandbox, and whether it runs; a stopped sandbox is never woken by it. A read that says the Mac `forwarder` names forwards them holds the running sandbox up, and one that says it stopped lets go of that hold. */
+  list(
+    agentId: string,
+    forward?: { readonly forwarding: AgentPortsForwarding; readonly forwarder: string },
+  ) {
+    return hostedCall(this.#hosted.agentPorts.list, { id: agentId, ...forward });
   }
 
   /** The port shared by a public link, replacing any shared before, answering the link; a sandbox not running is refused as stopped and never woken. */

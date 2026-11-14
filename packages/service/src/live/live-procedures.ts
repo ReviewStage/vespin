@@ -29,6 +29,21 @@
  * the task or the agent `id` names, as the task list's statements narrowed
  * to it (`taskRowsRead`), for a window that opens one the list does not
  * hold; one the account does not reach answers no rows.
+ * `GET /api/live/task-search?query=` answers the few tasks the query finds
+ * by their name or key, the latest changed first, and every agent of them,
+ * the same way (`taskSearchRead`), for a window searching tasks the list may
+ * not hold.
+ * `GET /api/live/task-page?workspaceId=` answers one page of a workspace's
+ * settled tasks and every agent of them, the newest finished first, past
+ * `beforeAt` and `beforeId` where named (`taskPageRead`), for a list that
+ * shows finished work the task list does not hold.
+ * `GET /api/live/task-relations?id=` answers the tasks related to the task
+ * `id` names, its sub-tasks, its parent, and its blocks, and every agent of
+ * them, the same way (`taskRelationsRead`), for a window drawing an open or
+ * hovered task's relations past the list it holds.
+ * `GET /api/live/person-page?workspaceId=&personId=` answers how many of a
+ * person's tasks and agents the account reads, and a page of the newest
+ * with every agent of them (`personPageRead`), for their page.
  *
  * `GET /api/live/task-record?id=` answers one task's description, pages, and calls
  * the same way, one statement a part that marks where it stands
@@ -75,6 +90,10 @@
  * script's address on the origin the request reached; woken by a host
  * enrolled, approved, renamed, removed, or moving through an update
  * (`hostsRead`).
+ * `GET /api/live/machines` answers the account's machines as one, each with
+ * its own settings for agents' commands and apps; woken by a machine
+ * joining, removed, its settings changed, or its app coming or going
+ * (`machinesRead`).
  * `GET /api/live/installed-skills?workspaceId=` answers the skills the
  * account sees there, the workspace's and its own, each with whether it may
  * manage it, on the same membership check; woken by one of them installed,
@@ -209,6 +228,7 @@ import { inboxItemsRead } from "./reads/inbox-items.js";
 import { installedSkillsRead } from "./reads/installed-skills.js";
 import { integrationStatusesRead } from "./reads/integration-statuses.js";
 import { machineCommandsRead } from "./reads/machine-commands.js";
+import { machinesRead } from "./reads/machines.js";
 import { agentPagesRead, taskPagesRead } from "./reads/pages.js";
 import { pullRequestChaptersRead } from "./reads/pull-request-chapters.js";
 import { agentInboxRead, taskInboxRead } from "./reads/scope-inbox.js";
@@ -216,7 +236,14 @@ import { sidebarRead } from "./reads/sidebar.js";
 import { taskCommentsRead } from "./reads/task-comments.js";
 import { taskHistoryRead } from "./reads/task-history.js";
 import { taskRecordRead } from "./reads/task-record.js";
-import { taskRowsRead, tasksRead } from "./reads/tasks.js";
+import {
+  personPageRead,
+  taskPageRead,
+  taskRelationsRead,
+  taskRowsRead,
+  taskSearchRead,
+  tasksRead,
+} from "./reads/tasks.js";
 import { workspaceIntegrationsRead } from "./reads/workspace-integrations.js";
 import { workspaceInvitationsRead } from "./reads/workspace-invitations.js";
 import { workspaceMembersRead } from "./reads/workspace-members.js";
@@ -909,6 +936,10 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     inboxItems: signedIn.inboxItems.effect(answerBoundRead(inboxItemsRead)),
     tasks: signedIn.tasks.effect(answerBoundRead(tasksRead)),
     taskRows: signedIn.taskRows.effect(answerBoundRead(taskRowsRead)),
+    taskSearch: signedIn.taskSearch.effect(answerBoundRead(taskSearchRead)),
+    taskPage: signedIn.taskPage.effect(answerBoundRead(taskPageRead)),
+    taskRelations: signedIn.taskRelations.effect(answerBoundRead(taskRelationsRead)),
+    personPage: signedIn.personPage.effect(answerBoundRead(personPageRead)),
     automations: signedIn.automations.effect(answerBoundRead(automationsRead)),
     automationWorkspaceRuns: signedIn.automationWorkspaceRuns.effect(
       answerBoundRead(automationWorkspaceRunsRead),
@@ -945,6 +976,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     ),
 
     hosts: signedIn.hosts.effect(answerBoundRead(hostsRead)),
+    machines: signedIn.machines.effect(answerBoundRead(machinesRead)),
     workspaceMemories: signedIn.workspaceMemories.effect(answerBoundRead(workspaceMemoriesRead)),
     installedSkills: signedIn.installedSkills.effect(answerBoundRead(installedSkillsRead)),
 
