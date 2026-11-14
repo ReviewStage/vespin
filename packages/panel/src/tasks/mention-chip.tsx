@@ -92,7 +92,12 @@ import { useNamesOf, useWordTargets } from "./use-known-names.js";
 import { useLinkStanding, useNumberedTaskId, useWordsWorkspaceId } from "./use-link-standing.js";
 import { useOpenLink } from "./use-open-link.js";
 import { useWordsDates } from "./words-dates.js";
-import { MachineChipOwner, useMachineOwnerHeard, useMachinePress } from "./workspace-machines.js";
+import {
+  MachineChipOwner,
+  useMachineNameMark,
+  useMachineOwnerHeard,
+  useMachinePress,
+} from "./workspace-machines.js";
 
 /**
  * mention-chip.tsx -- a mention drawn in words as its chip: its kind's glyph and its name, a button that opens what it names, or a link where that leaves the app, hanging a card that says what that is, struck through where what it names is gone.
@@ -658,8 +663,12 @@ function MentionChip({
   const press =
     machineId === undefined ? pressOf(mention, target, state, doors, openLink) : machinePress;
 
-  // Note that a teammate's machine is heard as theirs, since the face that says so to the eye is hidden from a screen reader.
-  const ownerHeard = useMachineOwnerHeard(machineId, machineWorkspace);
+  // Note that a teammate's machine, or an app on one, is heard as theirs, since the face that says so to the eye is hidden from a screen reader.
+  const ownerHeard = useMachineOwnerHeard(ownedMachineOf(mention), machineWorkspace);
+
+  // Note that an app's chip that names a teammate's machine ("Simulator on Theo's MacBook Pro") wears their face right before the machine's name, not the app's.
+  const appMachine = mention.kind === MENTION_KIND.MAC_APP ? mention.machine : undefined;
+  const machineMark = useMachineNameMark(appMachine, machineWorkspace, label);
 
   const card = (
     <MentionCard
@@ -690,6 +699,7 @@ function MentionChip({
       label={label}
       name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
       before={ownerOf(mention, target, doors)}
+      mark={machineMark}
       heard={ownerHeard}
       state={told ?? standing?.state}
       gone={state === MENTION_STATE.GONE}
@@ -711,6 +721,13 @@ function MentionChip({
       data-stated={standing?.state === undefined ? undefined : ""}
     />
   );
+}
+
+/** The machine a mention says is someone's: a machine's own, or the one an app on a machine is on; none for any other mention. */
+function ownedMachineOf(mention: Mention): string | undefined {
+  if (mention.kind === MENTION_KIND.MACHINE) return mention.machineId;
+
+  return mention.kind === MENTION_KIND.MAC_APP ? mention.machine : undefined;
 }
 
 /** What stands before a machine's chip's name: its owner's face, where it is a teammate's; nothing for any other mention. */
