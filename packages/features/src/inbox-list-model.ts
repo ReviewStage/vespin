@@ -1619,6 +1619,15 @@ export const INBOX_THREAD_EVENT = {
   REPLACED: "replaced",
 } as const;
 
+/** What a line of what happened to a thread says after whoever did it, the panel's and every client's words. */
+export const INBOX_EVENT_WORDS = {
+  RESOLVED: "resolved this without an answer",
+  WITHDREW: "withdrew this",
+  REPLACED_BY_QUESTION: "replaced this with a newer question",
+  REPLACED_BY_MESSAGE: "replaced this with a newer message",
+  REPLACED: "replaced this",
+} as const;
+
 /** The member who resolved the thread, by their id, and by the name the read gives them where it gives one. */
 export interface InboxCloser {
   readonly userId: string;
@@ -1855,4 +1864,89 @@ export function inboxCloseNotes(events: InboxThreadEventsAfter): ReadonlySet<str
   }
 
   return notes;
+}
+
+/** A line of what happened to a thread, as a client draws it without the panel's member directory: who did it, what they did, when, and why, where an agent withdrew an ask with a reason. */
+export interface InboxThreadEventShown {
+  readonly key: string;
+  /** Who did it: the agent, or a member by their name and, where known, their id, which their picture is found by. */
+  readonly who: {
+    readonly name: string;
+    readonly agent: boolean;
+    readonly userId?: string | undefined;
+  };
+  readonly did: string;
+  readonly at: number | undefined;
+  readonly reason?: string | undefined;
+}
+
+/** What a member who closed the thread is called without the directory: the reader as You, a member by the name the read gives them, and one it names nobody for as a former member. */
+function closerName(closer: InboxCloser | undefined, readerId: string | undefined): string {
+  if (closer === undefined) return MEMBER_WORDS.FORMER;
+
+  if (readerId !== undefined && closer.userId === readerId) return MEMBER_WORDS.YOU;
+
+  return closer.name ?? MEMBER_WORDS.FORMER;
+}
+
+/** One line as a client draws it: a member's close under their name, an agent's withdrawal or replacement under the agent's, in the panel's words. */
+function eventShown(
+  line: InboxThreadEventLine,
+  agentName: string,
+  readerId: string | undefined,
+): InboxThreadEventShown {
+  const at = line.at;
+
+  switch (line.kind) {
+    case INBOX_THREAD_EVENT.RESOLVED:
+      return {
+        key: line.key,
+        who: { name: closerName(line.closer, readerId), agent: false, userId: line.closer?.userId },
+        did: INBOX_EVENT_WORDS.RESOLVED,
+        at,
+      };
+    case INBOX_THREAD_EVENT.WITHDRAWN:
+      return {
+        key: line.key,
+        who: { name: agentName, agent: true },
+        did: INBOX_EVENT_WORDS.WITHDREW,
+        at,
+        reason: line.reason,
+      };
+    case INBOX_THREAD_EVENT.REPLACED:
+      return {
+        key: line.key,
+        who: { name: agentName, agent: true },
+        did:
+          line.by === undefined
+            ? INBOX_EVENT_WORDS.REPLACED
+            : line.by.ask === undefined
+              ? INBOX_EVENT_WORDS.REPLACED_BY_MESSAGE
+              : INBOX_EVENT_WORDS.REPLACED_BY_QUESTION,
+        at,
+      };
+  }
+}
+
+/**
+ * Every line of what happened to the thread (`inboxThreadEvents`) as a
+ * client draws it without the panel's directory, by the index of the message
+ * each follows, -1 before every message read. A close's note stays its own
+ * message, written just before the line saying who closed it.
+ */
+export function inboxThreadEventsShown(
+  item: InboxItem,
+  agentName: string,
+  readerId: string | undefined,
+): ReadonlyMap<number, readonly InboxThreadEventShown[]> {
+  const shown = new Map<number, readonly InboxThreadEventShown[]>();
+
+  for (const [after, lines] of inboxThreadEvents(item, item.thread ?? [])) {
+    shown.set(
+      after,
+      lines.map((line) => eventShown(line, agentName, readerId)),
+    );
+  }
+
+  return shown;
 }

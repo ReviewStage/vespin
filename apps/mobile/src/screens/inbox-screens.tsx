@@ -21,6 +21,7 @@ import {
   inboxMemberName,
   inboxPreview,
   inboxSettledStanding,
+  inboxThreadEventsShown,
   inboxThreadMessages,
   isDone,
   isUnread,
@@ -529,6 +530,12 @@ function ThreadDetail({
     [item, agentName, readerId],
   );
 
+  // What happened to the thread, by the message each line follows, -1 before every message read, as the panel's thread draws it.
+  const events = useMemo(
+    () => inboxThreadEventsShown(item, agentName, readerId),
+    [item, agentName, readerId],
+  );
+
   // Note that a file its words draw, or its open ask's options carry, is read beside the files drawn after them, since its bytes come the same way.
   const media = useMemo(
     () => [
@@ -653,8 +660,10 @@ function ThreadDetail({
 
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
-  const drawn: readonly ThreadMessage[] = messages.map((message) => ({
+  const drawn: readonly ThreadMessage[] = messages.map((message, index) => ({
     ...message,
+    before: index === 0 ? events.get(-1) : undefined,
+    after: events.get(index),
     writer: {
       ...message.writer,
       picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
