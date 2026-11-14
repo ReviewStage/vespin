@@ -72,7 +72,12 @@ const styles = StyleSheet.create({
   accessory: { flex: 1 },
 });
 
-/** A press's frame in a row of glyph buttons: Apple's least target, its mark centered, the whole frame taking the press. */
+/**
+ * A press's frame in a row of glyph buttons: Apple's least target, its mark
+ * centered, the whole frame taking the press. Note that it stands on the
+ * glyph, the button's label, never on the button, since a borderless or
+ * plain button takes a press only where its label is hit.
+ */
 const PRESS_FRAME = [
   frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
   SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
@@ -95,12 +100,13 @@ function CallGlyphPress({
   return (
     <SwiftUIButton
       onPress={onPress}
-      modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel(label)]}
+      modifiers={[buttonStyle("borderless"), accessibilityLabel(label)]}
     >
       <Image
         {...glyphImage(glyph)}
         size={MARK_SIZE.LEAD + 2}
         color={danger ? colors.DANGER_TEXT : colors.TEXT_MUTED}
+        modifiers={PRESS_FRAME}
       />
     </SwiftUIButton>
   );
@@ -200,7 +206,11 @@ export function CallCardRow({
           accessibilityHint(OPEN_HINT),
         ]}
       >
-        <HStack spacing={SPACE.TIGHT * 2}>
+        {/* Note that the shape stands on the label's row, the Spacer's blank run included, since a plain button takes a press only where its label is hit. */}
+        <HStack
+          spacing={SPACE.TIGHT * 2}
+          modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+        >
           <AgentTile
             name={call.agentName}
             harness={call.harness}
