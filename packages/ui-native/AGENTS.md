@@ -251,8 +251,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   system's default button, so it flashes the row's gray while held, as
   Settings' rows do; a choice among a few is `PickRows`, each a row with
   what it does under its name where it says and the picked one checked in
-  copper, the one pick look every form uses; a connection's one act is a
-  small bordered capsule at its end; what a section means is said in its
+  copper, the one pick look every form uses; a connection leads with its
+  provider's own mark, the desktop's vector (`INTEGRATION_MARK_ASSET`), and
+  its one act is a small bordered capsule at its end; what went wrong is a
+  `ProblemLine`, muted words led by the alert glyph in the attention ink,
+  never red words, wherever a refusal stands under a row or a field; what a section means is said in its
   footer, never in a line under a switch; a row that leaves the app ends in
   the arrow out; and the Account page heads with the
   account's photo, name and address centered on the ground, closing with

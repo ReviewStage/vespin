@@ -23,8 +23,7 @@ import { useBlobUrl } from "../video-player/video-player.js";
  * cut to its shape, or, `contain`ed, stands whole on the ground and never
  * past its own size, so a tall phone screenshot or a wide banner shown as
  * evidence keeps every edge, and a small icon stays sharp. It takes no class or style: its outer layout
- * is its container's. It is drawn by shadcn/ui's aspect ratio
- * (`../../shadcn/aspect-ratio.tsx`) in Tailwind utilities over the theme.
+ * is its container's.
  */
 
 /** How big a thumb is: as wide as the card it stands in, or a row's small tile. */

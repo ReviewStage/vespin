@@ -54,7 +54,7 @@ function isListed(list: Readonly<Record<string, string>>, file: string): boolean
 }
 
 /** A test or what tests share stands a fake GitHub and seeds tokens, so the rule leaves it be. */
-export function isTestFile(file: string): boolean {
+function isTestFile(file: string): boolean {
   return /\.test\.[cm]?[jt]sx?$/u.test(file) || /(?:^|\/)(?:tests|testing)\//u.test(file);
 }
 

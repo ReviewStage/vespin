@@ -155,9 +155,6 @@ export type ScheduleTrigger = typeof scheduleTriggerSchema.Type;
 /** A schedule that runs once, at its date and time. */
 export type OnceScheduleTrigger = typeof onceScheduleTriggerSchema.Type;
 
-/** A schedule that repeats on its cron. */
-export type CronScheduleTrigger = typeof cronScheduleTriggerSchema.Type;
-
 /** Whether a schedule runs once rather than on a cron. */
 export function scheduleRunsOnce(schedule: ScheduleTrigger): schedule is OnceScheduleTrigger {
   return "at" in schedule;

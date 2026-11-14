@@ -1,3 +1,4 @@
+import type { CheckoutRestoreSnapshot } from "@repo/features/checkout-restore";
 import { MESSAGE_ROLE } from "@repo/wire";
 import {
   and,
@@ -26,7 +27,7 @@ import {
   dispatchClaimStands,
   waitingOutDispatchClaim,
 } from "./dispatch-claim.js";
-import { settleKeptTurn, type TurnCheckoutSnapshot } from "./turn-state.js";
+import { settleKeptTurn } from "./turn-state.js";
 import type { ConversationTarget } from "./writer.js";
 
 /**
@@ -639,7 +640,7 @@ export function readRewoundRevision(
 export function readRewindSnapshot(
   target: ConversationTarget,
   messageId: string,
-): Effect.Effect<Option.Option<TurnCheckoutSnapshot>, StoreFailure, DatabaseServices> {
+): Effect.Effect<Option.Option<CheckoutRestoreSnapshot>, StoreFailure, DatabaseServices> {
   return Effect.map(findLineSnapshot({ ...target, messageId }), (found) =>
     Option.flatMap(found, (row) =>
       row.commit === null
