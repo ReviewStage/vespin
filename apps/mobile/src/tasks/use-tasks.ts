@@ -387,6 +387,8 @@ export interface TasksListing {
   readonly tree: TaskTree;
   /** The workspace's tasks the search finds, whatever their status; none while nothing is typed. */
   readonly found: readonly TaskSummary[];
+  /** Whether the service is still being asked for the tasks the search finds past the list held, which may add to what it found. */
+  readonly searching: boolean;
   readonly workspace: Workspace | undefined;
   readonly lookOf: (task: TaskSummary) => TaskRowLook;
   readonly setStatus: SetStatus;
@@ -452,22 +454,42 @@ function taskAgentsInOrder(
  * The host keeps only some of the account's tasks live, and draws each task
  * the service finds that the list holds not into it as a cold task, where
  * the listing's own search then finds it beside the rest, one row each.
- * Nothing is read back here: the answer arrives as the list's.
+ * Nothing is read back here: the answer arrives as the list's. Answers
+ * whether the search of what is typed now is still out, from the key that
+ * typed it through the pause and its answer or refusal, so a screen never
+ * says it found nothing before the service has looked.
  */
-function useServiceTaskSearch(search: string, listRead: boolean): void {
+function useServiceTaskSearch(search: string, listRead: boolean): boolean {
   const acts = useHostActs();
   const words = serviceTaskSearchQuery(search);
+  // Note that the words a search last came back for are kept, so the search of other words stands out until its own comes back.
+  const [answered, setAnswered] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    // Note that each search starts by forgetting the last answer, so words typed again, or a search tried again after one failed, wait on their own search rather than an earlier one's answer.
+    setAnswered(undefined);
+
     if (!listRead || words === undefined) return;
+    // Note that only the search of the words standing now records its answer, so an older one that answers late never marks newer words answered.
+    let standing = true;
 
     const pause = setTimeout(
-      () => void acts[ACT_KIND.TASKS_SEARCH]({ query: words }).catch(refused("The task search")),
+      () =>
+        void acts[ACT_KIND.TASKS_SEARCH]({ query: words })
+          .catch(refused("The task search"))
+          .finally(() => {
+            if (standing) setAnswered(words);
+          }),
       TASK_SEARCH_PAUSE_MILLIS,
     );
 
-    return () => clearTimeout(pause);
+    return () => {
+      standing = false;
+      clearTimeout(pause);
+    };
   }, [acts, listRead, words]);
+
+  return listRead && words !== undefined && answered !== words;
 }
 
 /** The listing as it is read, before the screen that draws it holds the questions its acts ask first. */
@@ -534,13 +556,24 @@ export function useTasksListing(search: string): ReadListing {
   const { rename } = useTaskWrites();
   const placing = useTaskPlacing(workspace?.id);
   const relations = useTaskRelationWrites();
-  useServiceTaskSearch(search, view?.listStatus === TASKS_READ.READY);
+  const searching = useServiceTaskSearch(search, view?.listStatus === TASKS_READ.READY);
   // Note that the last tree is kept where the new one draws the same rows, because a group's new array resets every row it holds (`RowForEach`), and every delivery to the task list built the tree anew.
   const [keepTree] = useState(answerKeeper<TaskTree>);
+  const tasks = useMemo(() => withHeld(listed, held), [listed, held]);
 
-  return useMemo(() => {
-    const tasks = withHeld(listed, held);
+  // Note that what a search finds is worked out apart from the rest, because a key typed would otherwise build the whole tree and every row's act anew.
+  const found = useMemo(
+    () =>
+      searchedTasks({
+        tasks,
+        workspaceId: workspace?.id,
+        workspaceName: workspace?.name,
+        tokens: searchTokens(search),
+      }),
+    [tasks, workspace, search],
+  );
 
+  const rest = useMemo(() => {
     const tree = keepTree(
       taskTree({
         view: { tasks, taskSections: view?.taskSections, repositoryPins: view?.repositoryPins },
@@ -550,13 +583,6 @@ export function useTasksListing(search: string): ReadListing {
         tasksHead: TASKS_HEAD_WORDS[ASSIGNED_TO.ME],
       }),
     );
-
-    const found = searchedTasks({
-      tasks,
-      workspaceId: workspace?.id,
-      workspaceName: workspace?.name,
-      tokens: searchTokens(search),
-    });
 
     const lookOf = (task: TaskSummary) =>
       taskRowLook(task, waiting.byTask.get(task.id) ?? 0, view?.taskPullRequests);
@@ -607,7 +633,6 @@ export function useTasksListing(search: string): ReadListing {
 
     return {
       tree,
-      found,
       workspace,
       lookOf,
       setStatus,
@@ -625,18 +650,18 @@ export function useTasksListing(search: string): ReadListing {
     keepTree,
     acts,
     write,
-    listed,
+    tasks,
     listedAgents,
-    held,
     view,
     workspace,
     readerId,
     waiting,
-    search,
     rename,
     placing,
     relations,
   ]);
+
+  return useMemo(() => ({ ...rest, found, searching }), [rest, found, searching]);
 }
 
 /** One agent on a task as its row draws it: the agent, how many of its threads wait on the reader, and the pull request it opened. */
