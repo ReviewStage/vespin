@@ -812,6 +812,16 @@ export function Tooltip({
     },
     [id, linger],
   );
+  // A control drawn anew as another element, as a picture's chip becomes a
+  // button once its bytes are here, takes the hint standing over the one it
+  // was with it, since the pointer is on neither as far as the window knows.
+  // Note that the hint is read again on every draw, because nothing tells
+  // the tooltip its control's element went, and one hung from an element
+  // gone from the page stands at the window's corner, where no pointer
+  // leaving it ever takes it down.
+  useLayoutEffect(() => {
+    if (shown !== undefined && !shown.anchor.isConnected) hide();
+  });
   // A control hanging a card offers it to the words inside it, once its
   // element is known.
   const offersCard = carded && label !== undefined;
@@ -1075,7 +1085,8 @@ export function Tooltip({
     <>
       {anchor}
       {described || spoken ? <HintWords id={wordsId} words={label} spoken={spoken} /> : null}
-      {!pill.mounted || drawn === undefined ? null : (
+      {/* Note that a hint whose control is gone draws no exit, which would fade out at the window's corner. */}
+      {!pill.mounted || drawn === undefined || !drawn.shown.anchor.isConnected ? null : (
         <Hint
           id={id}
           drawn={drawn}

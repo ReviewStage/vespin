@@ -22,6 +22,7 @@ import {
   GITHUB_APP_WITH_TOKENS,
   memberRepositoryJson,
   openTokenMember,
+  overNoGitHub,
   type SentToGitHub,
 } from "../testing/github-app-fake.js";
 import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
@@ -69,7 +70,7 @@ const starting = (bearers: ReadonlyMap<string, string>) =>
     );
 
     const handle = hostedFetch({
-      plans: tasksProcedures({
+      tasks: tasksProcedures({
         resolveUserId: (incoming: Request) =>
           Effect.succeed(
             Option.fromNullishOr(bearers.get(incoming.headers.get("authorization") ?? "")),
@@ -86,7 +87,7 @@ const starting = (bearers: ReadonlyMap<string, string>) =>
     return (bearer: string, body: TaskCreateRequest, idempotencyKey?: string) =>
       Effect.promise(async () => {
         const response = await handle(
-          new Request(new URL("/api/plans", ORIGIN), {
+          new Request(new URL("/api/tasks", ORIGIN), {
             method: "POST",
             headers: {
               authorization: bearer,
@@ -183,7 +184,7 @@ it.layer(getTestDB())("a plan started in a relation to another", (it) => {
           yield* readTaskBlocks(owner, blocked.body.plan.id),
           Option.some({ blockedBy: [holding], blocks: [] }),
         );
-      }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+      }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 
   it.effect(
@@ -226,7 +227,7 @@ it.layer(getTestDB())("a plan started in a relation to another", (it) => {
           [top, SIDE_REPOSITORY, [], [waiting]],
         );
         assert.equal(yield* parentOf(owner, loose), plan.id);
-      }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+      }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 
   it.effect(
@@ -271,7 +272,7 @@ it.layer(getTestDB())("a plan started in a relation to another", (it) => {
         assert.deepEqual(keyed, { status: 409, body: { error: HOSTED_API_ERROR.ALREADY_WRITTEN } });
         assert.equal(yield* parentOf(owner, below), id);
         assert.deepEqual(yield* listedIds(owner), [below, id].sort());
-      }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+      }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 
   it.effect(
@@ -309,7 +310,7 @@ it.layer(getTestDB())("a plan started in a relation to another", (it) => {
         const invalid = { status: 400, body: { error: HOSTED_API_ERROR.INVALID_REQUEST } };
         assert.deepEqual([twoParents, namedTwice, bothDoors], [invalid, invalid, invalid]);
         assert.deepEqual(yield* listedIds(owner), [one, two].sort());
-      }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+      }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 
   it.effect(
@@ -349,7 +350,7 @@ it.layer(getTestDB())("a plan started in a relation to another", (it) => {
           yield* readTaskBlocks(owner, holding),
           Option.some({ blockedBy: [], blocks: [] }),
         );
-      }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+      }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 
   it.effect(
@@ -401,7 +402,7 @@ it.layer(getTestDB())("a plan started in a relation to another", (it) => {
         assert.deepEqual([asSubTask, asParent, asParentOfTwoTrees], [locked, locked, locked]);
         assert.deepEqual(yield* listedIds(owner), [plain, side].sort());
         assert.equal(yield* parentOf(owner, side), null);
-      }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+      }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 
   it.effect(
@@ -465,6 +466,6 @@ it.layer(getTestDB())("a plan started in a relation to another", (it) => {
           yield* readTaskBlocks(owner, side),
           Option.some({ blockedBy: [], blocks: [] }),
         );
-      }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+      }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 });

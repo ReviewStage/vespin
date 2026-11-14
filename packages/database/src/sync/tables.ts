@@ -65,13 +65,16 @@ import { taskPageVersion } from "../schemas/task-page.js";
 import { taskPin } from "../schemas/task-pin.js";
 import { taskRead } from "../schemas/task-read.js";
 import { taskSection, taskSectionEntry } from "../schemas/task-section.js";
+import { voiceCallTable } from "../schemas/voice-call.js";
 import { workspaceExperiment } from "../schemas/workspace-experiment.js";
 import { workspaceFormerSlug } from "../schemas/workspace-former-slug.js";
 import { TOPIC } from "./notification.js";
 import { defineSyncTable, LOG, type SyncTable } from "./sync-table.js";
 
 /**
- * A task, on its own topic and its workspace's. Note that the plan's text
+ * A task, on its own topic and its workspace's, and naming its parent, the
+ * one it had and the one it has (`TOPIC.TASK_PARENT`), so a delta read of
+ * the task list sends the parent whose sub-task count a child moved. Note that the plan's text
  * and the agents' journal of saves are ignored, because every save rewrites
  * both and no view reads them live: a save moves `updated_at` beside them,
  * which the task list and the task's record read, so a save still notifies.
@@ -82,8 +85,9 @@ export const taskSync = defineSyncTable(task, {
   topics: [
     { kind: TOPIC.TASK, column: task.id },
     { kind: TOPIC.WORKSPACE, column: task.organizationId },
+    { kind: TOPIC.TASK_PARENT, column: task.parentTaskId },
   ],
-  ignore: [task.document, task.agentEdits, task.doneBy],
+  ignore: [task.description, task.agentEdits, task.doneBy],
   log: LOG.EVERY,
 });
 
@@ -232,6 +236,17 @@ export const agentBootSync = defineSyncTable(agentBootTable, {
   log: LOG.EVERY,
 });
 
+/**
+ * A voice call's row, on the agent's topic, so every transcript of the agent
+ * hears a call open and close. Note that its lease and the cursor of what the
+ * voice was told are written as the call goes, and no view reads them, so
+ * their change alone notifies nothing.
+ */
+export const voiceCallSync = defineSyncTable(voiceCallTable, {
+  topics: [{ kind: TOPIC.AGENT, column: voiceCallTable.agentId }],
+  ignore: [voiceCallTable.leaseEpoch, voiceCallTable.leaseUntil, voiceCallTable.toldSeq],
+});
+
 /** An account's membership of a workspace, on the workspace's topic and the account's. */
 export const memberSync = defineSyncTable(member, {
   topics: [
@@ -353,9 +368,9 @@ export const workspaceFormerSlugSync = defineSyncTable(workspaceFormerSlug, {
 
 /**
  * An experiment a workspace's admin turned on or off, on the workspace's
- * topic, so every member's panel follows the switch. Logged, because the
- * task list answers each task's followers only while its workspace has
- * Following on, and reads its tasks again past a sync id when it flips.
+ * topic, so every member's panel follows the switch. Logged, though no
+ * read past a sync id reads it now; dropping the log is a migration of its
+ * own.
  */
 export const workspaceExperimentSync = defineSyncTable(workspaceExperiment, {
   topics: [{ kind: TOPIC.WORKSPACE, column: workspaceExperiment.organizationId }],
@@ -666,7 +681,7 @@ export const automationRunSync = defineSyncTable(automationRun, {
  */
 export const descriptionRevisionSync = defineSyncTable(descriptionRevision, {
   topics: [{ kind: TOPIC.TASK, column: descriptionRevision.taskId }],
-  ignore: [descriptionRevision.document],
+  ignore: [descriptionRevision.description],
 });
 
 /**
@@ -895,6 +910,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   agentQueueSync,
   agentSandboxSync,
   agentBootSync,
+  voiceCallSync,
   deviceAgentLineSync,
   deviceAgentRequestSync,
   descriptionCommentThreadSync,

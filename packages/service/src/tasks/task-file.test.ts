@@ -38,7 +38,7 @@ const onMemberToken =
       return Response.json(memberRepositoryJson(SIDE, true));
     }
 
-    if (pathname === `/repos/${SIDE_FULL_NAME}/git/ref/heads/main`) {
+    if (pathname === `/repos/${SIDE_FULL_NAME}/git/ref/heads%2Fmain`) {
       return Response.json({ object: { type: "commit", sha: HEAD } });
     }
 
@@ -71,7 +71,7 @@ it.layer(getTestDB())("a task's file on the member's own token", (it) => {
       const contents = sent.find((one) => one.url.includes("/contents/README.md"));
       assert.ok(contents);
       assert.equal(contents.headers.get("authorization"), `Bearer ${GITHUB_FIXTURE_MEMBER.TOKEN}`);
-      assert.equal(contents.headers.get("accept"), "application/vnd.github+json");
+      assert.equal(contents.headers.get("accept"), "application/vnd.github.v3+json");
       assert.equal(contents.headers.get("x-github-api-version"), "2022-11-28");
     }),
   );

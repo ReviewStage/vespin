@@ -46,6 +46,7 @@ import type { AgentThreads } from "./threads-dock.js";
 const TASK = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
 const AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 const KEY = "d16fbf9e-8c7d-42d0-9abb-be91cf7d8076";
+const RESTING_KEY = "5a0c2f1e-7b3d-4e9a-8f21-3c6d9b0e4a72";
 
 /** When the tests press Send, by a clock they hold still. */
 const PRESSED_AT = Date.parse("2026-10-30T15:42:00Z");
@@ -291,18 +292,46 @@ test("a message sent stands in the transcript at once with its time, the box emp
   assert.equal(tab.lines("Now the dark variant.").length, 1);
 });
 
-test("a message sent to an agent at rest draws the working line at once, before the service takes it, counting from the press rather than the turn before it", async () => {
+test("a message sent to an agent at rest draws no working line until its answer names the turn it queued, whether its row landed first or not, then one counting from the press", async () => {
+  vi.spyOn(crypto, "randomUUID").mockReturnValue(RESTING_KEY);
+
+  const row: AgentTranscriptMessage = {
+    id: "row-1",
+    role: MESSAGE_ROLE.USER,
+    parts: [{ type: "text", text: "Now the dark variant." }],
+    clientId: sentLineId(RESTING_KEY),
+    sentAt: PRESSED_AT,
+  };
+
   // The summary still holds the ended turn's start, as the task list does until the line wakes it.
-  const tab = await drawnTab([], { ...AGENT_SUMMARY, runStartedAt: 2_000 });
+  const tab = await drawnTab([row], { ...AGENT_SUMMARY, runStartedAt: 2_000 });
   vi.spyOn(Date, "now").mockReturnValue(PRESSED_AT);
-  assert.equal(tab.container.querySelector("[data-working]"), null, "an agent at rest");
 
   await tab.send("Now the dark variant.");
+  assert.equal(tab.container.querySelector("[data-working]"), null, "no line before the answer");
+
+  await tab.landRow();
+  assert.equal(
+    tab.container.querySelector("[data-working]"),
+    null,
+    "nor once its row lands before the answer",
+  );
+
+  await tab.answer(0, {
+    agent: {
+      ...TAKEN.agent,
+      turn: {
+        id: "4c6e8a0b-1d3f-4a5c-9e7b-0f2d4b6c8e13",
+        queuedAt: PRESSED_AT,
+        status: TURN_STATUS.QUEUED,
+      },
+    },
+  });
 
   const working = tab.container.querySelector("[data-working]");
-  assert.ok(working, "working from the press");
+  assert.ok(working, "the answer's turn puts the tab to work");
+  assert.match(working.textContent ?? "", /^Starting…/u);
   assert.equal(working.querySelector("time")?.textContent, "0s", "counted from the press");
-  assert.equal(tab.sent.length, 1, "with the send still unanswered");
 });
 
 test("a Codex or Claude Code agent's box says nothing under it of the plan that pays", async () => {

@@ -61,12 +61,8 @@ export const SETTING_SECTION = {
   GENERAL: "general",
   /** Whether this copy of the app counts how its features are used, a group of its own on Account, under who is signed in. */
   PRIVACY: "privacy",
-  /** Whether the app opens as this Mac starts, a group of its own on This Mac, under its own rows. */
-  STARTUP: "startup",
   /** The voice a call speaks with, a card of its own on Agents under the harnesses' cards, drawn while the Voice experiment is on. */
   VOICE: "voice",
-  /** The microphone dictation listens on, a group of its own on This Mac, under the permission that lets the app listen. */
-  MICROPHONE: "microphone",
   /** How an agent's message box sends while its turn runs, and who authors its commits, a group of its own on Preferences, under General. */
   AGENTS: "agents",
   /** How a new agent's actions are approved, under the default model's rows in Settings › Agents' New agents group. */

@@ -13,9 +13,10 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
+  background,
   buttonStyle,
-  containerBackground,
   disabled,
+  frame,
   hidden,
   type ModifierConfig,
   menuIndicator,
@@ -23,14 +24,14 @@ import {
   navigationSplitViewStyle,
   navigationTitle,
   searchable,
-  searchToolbarBehavior,
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { type ReactElement, type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { BarContent } from "./bar-content.js";
-import type { Glyph } from "./glyph.js";
+import type { Scope } from "./button.js";
+import { GLYPH, type Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
@@ -127,6 +128,8 @@ export type ColumnBar = {
   readonly path?: BarPath | undefined;
   /** A page's main acts as glyphs before its ⋯, as Mail's Reply and Trash stand, sharing the bar's one glass. */
   readonly acts?: readonly BarAction[] | undefined;
+  /** A list's scopes as Mail's filter button before its ⋯, where the column is too narrow for segments. */
+  readonly filter?: BarMenu | undefined;
   readonly menu?: BarMenu | undefined;
   readonly action?: BarAction | undefined;
   readonly search?: BarSearch | undefined;
@@ -223,6 +226,31 @@ export function barActItems(acts: readonly BarAction[]): ReactElement[] {
   ));
 }
 
+/**
+ * A list's scopes as Mail's filter menu: each scope a choice, checked where
+ * it stands, with its count only where it has one worth reading, so an empty
+ * scope reads as its name alone. Note that the glyph is Mail's outline until
+ * the list stands narrowed from its own default, then fills, as Mail's does
+ * while a filter is on, since the bar keeps no other word of which scope is
+ * shown; the caller says which, because a list's default need not be its
+ * first scope, as the Inbox's Open is not.
+ */
+export function scopeMenu(label: string, scopes: readonly Scope[], narrowed: boolean): BarMenu {
+  return {
+    label,
+    symbol: narrowed ? GLYPH.FILTERED : GLYPH.FILTER,
+    choices: scopes.map((scope) => ({
+      label:
+        scope.count === undefined || scope.count === 0
+          ? scope.label
+          : `${scope.label} ${scope.count}`,
+      on: scope.selected,
+      onPress: scope.onPress,
+    })),
+    actions: [],
+  };
+}
+
 /** A menu with the acts a bar already stands as glyphs left out, so ⋯ holds only the rest. */
 export function menuWithout(menu: BarMenu, acts: readonly BarAction[]): BarMenu {
   const barred = new Set(acts.map((act) => act.label));
@@ -254,6 +282,7 @@ function barHolds(bar: ColumnBar): boolean {
     bar.leading !== undefined ||
     (bar.lead ?? []).length > 0 ||
     (bar.acts ?? []).length > 0 ||
+    bar.filter !== undefined ||
     bar.path !== undefined ||
     bar.menu !== undefined ||
     bar.action !== undefined ||
@@ -269,19 +298,24 @@ function barHolds(bar: ColumnBar): boolean {
  * half its height. The list and detail columns stand on the brand's
  * `GROUND`, as their lists do, so what isn't a list (a page, an empty state,
  * a scope picker over its list) never shows the system's own column color.
- * The sidebar paints nothing, so it stands on the system's floating glass
- * pane, as Mail's and Notes' do.
+ * The app's sidebar paints nothing, so it stands on the system's floating
+ * glass pane, as Mail's and Notes' do; a list standing first in two columns,
+ * as a portrait iPad's, paints its ground, as Mail's message list stands
+ * solid beside the message.
  */
 function Column({
   view,
   bar = {},
   sidebar = false,
+  clear = false,
   searchKey,
 }: {
   readonly view: ReactNode;
   readonly bar?: ColumnBar | undefined;
   /** Whether it is the sidebar, whose search the system stands in the sidebar's own place. */
   readonly sidebar?: boolean | undefined;
+  /** Whether it paints nothing, so it stands on the system's floating glass pane, as the app's own sidebar does. */
+  readonly clear?: boolean | undefined;
   /** Names whose search the bar holds; the field takes that one's query as it changes, and keeps what is typed otherwise. */
   readonly searchKey?: string | undefined;
 }) {
@@ -291,10 +325,16 @@ function Column({
   const stacked = (
     <ZStack
       modifiers={[
-        ...(sidebar ? [] : [containerBackground(colors.GROUND, "navigationSplitView")]),
-        // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, compose, ⋯ and the sidebar button, and a leading title folds them into an overflow.
-        ...(bar.title === undefined
+        // Note that the column paints its ground itself, filling it under its bar too, because the shots showed `containerBackground` leaving a dark column at the system's black beside the list's ground, where Mail paints its columns one ground.
+        ...(clear
           ? []
+          : [
+              frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+              background(colors.GROUND),
+            ]),
+        // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, compose, ⋯ and the sidebar button, and a leading title folds them into an overflow. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
+        ...(bar.title === undefined
+          ? [toolbarTitleDisplayMode("inline")]
           : [
               navigationTitle(bar.title),
               toolbarTitleDisplayMode(sidebar ? "inline" : "inlineLarge"),
@@ -325,6 +365,11 @@ function Column({
           </ToolbarItem>
         )}
         {barActItems(bar.acts ?? [])}
+        {bar.filter === undefined ? null : (
+          <ToolbarItem placement="topBarTrailing">
+            <BarMenuItem menu={bar.filter} />
+          </ToolbarItem>
+        )}
         {bar.action === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
             <BarActionButton action={bar.action} />
@@ -350,7 +395,8 @@ function Column({
     <Toolbar
       modifiers={[
         searchable(text, {
-          placement: sidebar ? "sidebar" : "automatic",
+          // Note that a list's field stands in its own column's bar, under its title, as Mail's list holds its search, so the detail's bar stays the page's alone and is empty while nothing is picked.
+          placement: sidebar ? "sidebar" : "navigationBarDrawer",
           prompt: bar.search.placeholder,
           onChange: bar.search.onChange,
         }),
@@ -386,10 +432,6 @@ export function SplitView({
   onDetailOnlyChange,
 }: SplitViewProps) {
   const hidden = content === undefined ? "detailOnly" : "doubleColumn";
-  // Note that with three columns the list's search stands in the window's toolbar, a button at its trailing edge, as Mail's does on iPadOS 26, rather than as a field under the list's title.
-  const windowSearch = content === undefined ? undefined : contentBar?.search;
-  const searchWords = useSearchWords(windowSearch, searchKey);
-  const listBar = contentBar === undefined ? undefined : { ...contentBar, search: undefined };
 
   return (
     <NavigationSplitView
@@ -409,19 +451,7 @@ export function SplitView({
           visibility === "all" || (content === undefined && visibility === "doubleColumn"),
         );
       }}
-      modifiers={[
-        navigationSplitViewStyle("balanced"),
-        ...(windowSearch === undefined
-          ? []
-          : [
-              searchable(searchWords, {
-                placement: "toolbar",
-                prompt: windowSearch.placeholder,
-                onChange: windowSearch.onChange,
-              }),
-              searchToolbarBehavior("minimize"),
-            ]),
-      ]}
+      modifiers={[navigationSplitViewStyle("balanced")]}
     >
       <NavigationSplitView.Sidebar>
         {/* Note that the sidebar column is drawn afresh as it changes from the app's sidebar to the list or back, so its search field starts from the list's query rather than keeping what the other held. */}
@@ -430,11 +460,12 @@ export function SplitView({
           view={sidebar}
           bar={sidebarBar}
           sidebar
+          clear={content !== undefined}
         />
       </NavigationSplitView.Sidebar>
       {content === undefined ? null : (
         <NavigationSplitView.Content>
-          <Column view={content} bar={listBar} searchKey={searchKey} />
+          <Column view={content} bar={contentBar} searchKey={searchKey} />
         </NavigationSplitView.Content>
       )}
       <NavigationSplitView.Detail>

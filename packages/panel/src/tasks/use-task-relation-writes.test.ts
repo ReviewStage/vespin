@@ -37,7 +37,7 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: null,
-  document: { body: "# Teammate invitations", assumptions: [] },
+  description: { body: "# Teammate invitations", assumptions: [] },
 };
 
 let root: Root | undefined;

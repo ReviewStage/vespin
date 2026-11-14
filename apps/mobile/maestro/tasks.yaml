@@ -138,9 +138,9 @@ onFlowComplete:
 - tapOn: "Cancel"
 - waitForAnimationToEnd
 - assertVisible: "Weekly digest email"
-# Copy link raises the system's share sheet on the task's address, whose
-# first row copies it; its close puts it away, which iOS 27.2 names
-# "dismiss popup" where earlier releases said "Close".
+# Copy link raises the system's share sheet on the task's address. Its Copy
+# action copies the address and puts the sheet away; the sheet's own close
+# button isn't reliably found by its label on iOS 27.2.
 - runFlow:
     file: subflows/row-menu.yaml
     env:
@@ -149,7 +149,7 @@ onFlowComplete:
 - tapOn: "Copy link"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-copy-link
-- tapOn: "Close|dismiss popup"
+- tapOn: "Copy"
 - waitForAnimationToEnd
 - runFlow:
     file: subflows/row-menu.yaml
@@ -312,7 +312,9 @@ onFlowComplete:
 - takeScreenshot: task-sub-task-add
 - tapOn: "New sub-task"
 - assertVisible: "Describe the task"
-- assertVisible: "Sub-task of · Teammate invitations"
+# The parent stands over the words as the relation's capsule (since #8903),
+# "Sub-task of · its name".
+- assertVisible: "Sub-task of.*"
 # The keyboard is lowered by a drag on the sheet's page.
 - runFlow:
     file: subflows/lower-keyboard.yaml

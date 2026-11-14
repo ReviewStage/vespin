@@ -7,9 +7,11 @@ import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing"
 import { CHANGES_BOUNDS, REVIEW_STATE } from "@repo/features/agent-wire";
 import { Effect, Redacted } from "effect";
 import {
+  fixtureBearer,
   GITHUB_FIXTURE,
   GITHUB_FIXTURE_BOT,
   githubReaching,
+  nextPageOf,
   type RepositoryScript,
 } from "../testing/github-app-fake.js";
 import { GITHUB_PROVIDER_ID } from "./github-app.js";
@@ -99,9 +101,9 @@ const linkedAccount = (githubId: number) =>
 
 /** Who the pull request names, read off the repository given for an agent of the workspace given. */
 const peopleOf = (organizationId: string, script: RepositoryScript) =>
-  changesPeople(TOKEN, { repository: REPOSITORY, organizationId }, NUMBER).pipe(
-    Effect.provide(githubReaching([], undefined, undefined, script).layer),
-  );
+  Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+    changesPeople(bearer, { repository: REPOSITORY, organizationId }, NUMBER),
+  ).pipe(Effect.provide(githubReaching([], undefined, undefined, script).layer));
 
 it.layer(getTestDB())("who a pull request names", (it) => {
   it.effect(
@@ -203,11 +205,9 @@ it.layer(getTestDB())("who a pull request names", (it) => {
           if (pathname === PULL) return Response.json({ user: LUKE });
 
           if (pathname === `${PULL}/reviews`) {
-            return Response.json(
-              pages(sent.url) === 1
-                ? early
-                : [review(CHARLES, "APPROVED", "Ship it.", "2026-10-15T10:00:00Z")],
-            );
+            return pages(sent.url) === 1
+              ? Response.json(early, nextPageOf(sent.url))
+              : Response.json([review(CHARLES, "APPROVED", "Ship it.", "2026-10-15T10:00:00Z")]);
           }
 
           return undefined;
@@ -250,7 +250,7 @@ it.layer(getTestDB())("who a pull request names", (it) => {
           if (page === 1)
             notes[0] = review(CHARLES, "APPROVED", "Ship it.", "2026-10-15T08:00:00Z");
 
-          return Response.json(notes);
+          return Response.json(notes, nextPageOf(sent.url));
         });
 
         assert.equal(

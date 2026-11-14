@@ -5,7 +5,8 @@
  * reader's own, a teammate's, another agent's (`message_agent`), an
  * automation's, the app's, and what GitHub, a thread, a comment, or Slack
  * steered in. The agent's own wakeups and the carry-on after a cut-off turn
- * are the agent's, not anyone's message to it, so they are none. Who sent
+ * are the agent's, not anyone's message to it, so they are none, as is a
+ * line said on a call that opened no turn. Who sent
  * a line is read as its row reads it (`messageSender`): nobody, where the
  * reader sent it. Its words are those its row draws (`sentMessageWords`),
  * as plain words on one line, as a card too short to draw markdown says them.
@@ -15,6 +16,7 @@ import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { plainWords } from "@repo/features/plain-words";
 import { sentMessageWords } from "@repo/features/transcript-copy";
 import { carryOnLineOf, isWakeupLine } from "@repo/features/transcript-lines";
+import { opensTurn, spokenLineOf } from "@repo/features/voice-call-lines";
 import type { FormerMember, WorkspaceMember } from "@repo/features/workspace-wire";
 import type { Actor } from "@repo/ui/actor-model";
 import { MESSAGE_ROLE } from "@repo/wire";
@@ -40,6 +42,9 @@ export function sentLineOf(
   if (message.role !== MESSAGE_ROLE.USER) return undefined;
 
   if (isWakeupLine(message) || carryOnLineOf(message) !== undefined) return undefined;
+
+  // Note that a line said on a call is marked only where it opened a turn, so the rail is not lined with small talk.
+  if (spokenLineOf(message) !== undefined && !opensTurn(message)) return undefined;
 
   return {
     messageId: message.id,

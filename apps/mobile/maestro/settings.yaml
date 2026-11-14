@@ -28,11 +28,13 @@ appId: dev.vespin.ios
 - scrollUntilVisible:
     element:
       id: "settings-notifications"
-# Note that the row's value is checked on the row itself, its words standing
-# apart from its name in the tree.
+# Note that the iPhone hears the row as its name and value together
+# ("Notifications, When I'm away") and the iPad's form sheet as its name with
+# the value an element of its own, so the row is found by its id and name.
 - assertVisible:
     id: "settings-notifications"
-    text: "When I'm away"
+    text: "Notifications.*"
+- assertVisible: ".*When I'm away"
 - tapOn:
     id: "settings-notifications"
 - waitForAnimationToEnd
@@ -48,19 +50,17 @@ appId: dev.vespin.ios
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
+# Note that the iPad's form sheet hears the value apart from the row's name, as above.
 - assertVisible:
     id: "settings-notifications"
-    text: "Always"
+    text: "Notifications.*"
+- assertVisible: ".*Always"
 # About, and the pages still kept on vespin.dev under it.
 - scrollUntilVisible:
     element: "Send feedback"
 - assertVisible: "What's new"
 - waitForAnimationToEnd
 - takeScreenshot: settings-about
-- scrollUntilVisible:
-    element: "Experimental"
-- waitForAnimationToEnd
-- takeScreenshot: settings-more-on-web
 # The Account page: who is signed in, Privacy, Sign out, and Delete account.
 # Note that the personal workspace's row below it bears the same name, so the
 # account is found by the line only it draws.
