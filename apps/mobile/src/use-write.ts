@@ -84,6 +84,7 @@ export const WRITE_SUBJECT = {
   TASK_PARENT: "task-parent",
   TASK_SECTION: "task-section",
   TASK_FOLLOWING: "task-following",
+  TASK_COMMENT: "task-comment",
 } as const;
 
 export type WriteSubjectKind = (typeof WRITE_SUBJECT)[keyof typeof WRITE_SUBJECT];
