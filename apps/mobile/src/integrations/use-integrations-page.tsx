@@ -38,7 +38,7 @@ import {
   type MemberRowAct,
   TRY_AGAIN_WORDS,
 } from "@repo/ui-native";
-import { useState } from "react";
+import { createContext, type ReactNode, use, useCallback, useEffect, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
 import { type IntegrationStatuses, useIntegrationStatuses } from "./use-integration-statuses.js";
@@ -46,6 +46,9 @@ import { type IntegrationToolReads, useIntegrationTools } from "./use-integratio
 
 /** The health of a server whose name this build can't read, which no tools read stands under. */
 const UNREAD_HEALTH: ConnectionHealth = { kind: CONNECTION_HEALTH.CHECKING };
+
+/** No tools read, while no screen of the integrations stands. */
+const NONE_READ: readonly string[] = [];
 
 /** No server switched off, since the page switches none for an agent. */
 const NONE_OFF: readonly string[] = [];
@@ -285,9 +288,10 @@ function useIntegrationActs(
     }
   };
 
-  const menuOf = (row: ServerRow): readonly MemberRowAct[] => {
+  /** The row's other acts; while its act is out, none on a row (`whileBusy` false), whose menu would hide its held button, and all of them on its page, which dims them instead. */
+  const menuOf = (row: ServerRow, whileBusy = false): readonly MemberRowAct[] => {
     // Note that a row whose act is out offers no menu until it answers, as its button is held; a Disconnect asked then would go nowhere.
-    if (bySignIn(row.provider) || busy.has(row.connection)) return [];
+    if (bySignIn(row.provider) || (!whileBusy && busy.has(row.connection))) return [];
 
     if (row.kind === SERVER_ROW.SIGNING_IN) {
       return [{ label: SIGN_IN_ACTION.REOPEN, onPress: () => connect(row) }];
@@ -353,24 +357,25 @@ export function disconnectAsked(asked: ServerRow | undefined) {
 }
 
 /**
- * The integrations as a page draws them: the account's servers as rows, each
- * connected one's tools read to say whether it works, and what each row
- * offers. Settings' Integrations page reads every connected server's tools;
- * one connection's own page reads only its own (`only`).
+ * The integrations as Settings draws them: the account's servers as rows,
+ * each connected one's tools read to say whether it works, and what each row
+ * offers. It follows and reads only while `active`, so the one instance
+ * Settings holds costs nothing until Integrations or a connection's page
+ * opens.
  */
-export function useIntegrationsPage(only?: string) {
-  const statuses = useIntegrationStatuses();
+function useIntegrationsPage(active: boolean) {
+  const statuses = useIntegrationStatuses(active);
   const [asked, setAsked] = useState<ServerRow | undefined>(undefined);
 
   // Note that every connected server's tools are read while the page stands, as the panel's page reads them, since a grant that stands says nothing of whether its server takes it.
   const tools = useIntegrationTools(
-    namedServers({
-      statusOf: statuses.statusOf,
-      accountsOf: statuses.accountsOf,
-      standing: (status) => status === INTEGRATION_STATUS.CONNECTED,
-    })
-      .map((server) => server.connection)
-      .filter((connection) => only === undefined || connection === only),
+    active
+      ? namedServers({
+          statusOf: statuses.statusOf,
+          accountsOf: statuses.accountsOf,
+          standing: (status) => status === INTEGRATION_STATUS.CONNECTED,
+        }).map((server) => server.connection)
+      : NONE_READ,
   );
 
   const healthOf = (server: string): ConnectionHealth => {
@@ -393,4 +398,42 @@ export function useIntegrationsPage(only?: string) {
   });
 
   return { statuses, page, rows, asked, setAsked };
+}
+
+type IntegrationsPage = ReturnType<typeof useIntegrationsPage>;
+
+/** The one instance Settings holds, and how a screen holds it open while it stands. */
+const IntegrationsContext = createContext<
+  { readonly view: IntegrationsPage; readonly hold: () => () => void } | undefined
+>(undefined);
+
+/**
+ * Holds the integrations once for all of Settings, so Integrations and a
+ * connection's page share one set of sign-ins waited on, refusals said and
+ * acts held: a sign-in begun on the page stands on the list beneath it, as
+ * on the one screen it was. It follows only while one of them stands.
+ */
+export function IntegrationsProvider({ children }: { readonly children: ReactNode }) {
+  const [holders, setHolders] = useState(0);
+  const view = useIntegrationsPage(holders > 0);
+
+  const hold = useCallback(() => {
+    setHolders((now) => now + 1);
+
+    return () => setHolders((now) => now - 1);
+  }, []);
+
+  return <IntegrationsContext value={{ view, hold }}>{children}</IntegrationsContext>;
+}
+
+/** The integrations Settings holds, held open while the screen that reads them stands. */
+export function useIntegrations(): IntegrationsPage {
+  const held = use(IntegrationsContext);
+
+  if (held === undefined) throw new Error("useIntegrations must stand under IntegrationsProvider.");
+
+  const { hold } = held;
+  useEffect(() => hold(), [hold]);
+
+  return held.view;
 }

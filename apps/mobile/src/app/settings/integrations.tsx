@@ -15,11 +15,7 @@ import {
 } from "@repo/ui-native";
 import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
-import {
-  opensPage,
-  rowLines,
-  useIntegrationsPage,
-} from "../../integrations/use-integrations-page.js";
+import { opensPage, rowLines, useIntegrations } from "../../integrations/use-integrations-page.js";
 import { SETTINGS_ROUTE } from "../../settings-button.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
@@ -32,7 +28,7 @@ const INTEGRATIONS_SYMBOL = GLYPH.PLUG;
 
 export default function IntegrationsScreen() {
   const router = useRouter();
-  const { statuses, page, rows } = useIntegrationsPage();
+  const { statuses, page, rows } = useIntegrations();
   const [query, setQuery] = useState("");
   const found = searchServers(rows, query);
 
