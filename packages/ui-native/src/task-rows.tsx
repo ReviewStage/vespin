@@ -29,6 +29,8 @@ import {
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
+import { VERSION_CHANGE_HEARD } from "@repo/features/description-history-words";
+import { VERSION_CHANGE, type VersionUnit } from "@repo/features/description-version-diff";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
 import type { LinkStanding } from "@repo/features/link-standing-model";
@@ -37,7 +39,7 @@ import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -555,7 +557,63 @@ type WordsRowProps = {
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
   /** What GitHub holds of a pull request or issue a chip in the words names, by its page, which the chip says where it stands. */
   readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
+  /** How the words stand against the version before them, where they are a version's section, which a bar at their leading edge marks; none where they are read alone. */
+  readonly change?: VersionUnit["change"] | undefined;
 };
+
+/** The bar a version's section wears by how it changed, as the panel's version page edges one: green for words written, red for words struck, which also stand dimmed. */
+const CHANGE_BAR = {
+  [VERSION_CHANGE.ADDED]: { color: "COMPLETE", dimmed: false },
+  [VERSION_CHANGE.CHANGED]: { color: "COMPLETE", dimmed: false },
+  [VERSION_CHANGE.REMOVED]: { color: "DANGER", dimmed: true },
+} as const satisfies Record<
+  keyof typeof VERSION_CHANGE_HEARD,
+  { readonly color: keyof BrandColors; readonly dimmed: boolean }
+>;
+
+/** How far a struck section's words fade, as the panel draws them in its quiet ink. */
+const STRUCK_OPACITY = 0.55;
+
+/** How wide a changed section's bar stands, in points. */
+const CHANGE_BAR_WIDTH = 3;
+
+/** A changed section's row: its bar, then its words beside it. */
+const CHANGED_STYLE = StyleSheet.create({
+  row: { flexDirection: "row", gap: SPACE.ROW },
+  bar: { width: CHANGE_BAR_WIDTH, borderRadius: CHANGE_BAR_WIDTH / 2, alignSelf: "stretch" },
+  words: { flex: 1 },
+  struck: { opacity: STRUCK_OPACITY },
+});
+
+/**
+ * A version's section at its leading edge's bar, heard before the words as
+ * how the section changed, since the bar itself says nothing to VoiceOver.
+ */
+function ChangedWords({
+  change,
+  children,
+}: {
+  readonly change: VersionUnit["change"];
+  readonly children: ReactNode;
+}) {
+  const colors = useColors();
+
+  if (change === VERSION_CHANGE.SAME) return children;
+  const bar = CHANGE_BAR[change];
+
+  return (
+    <View style={CHANGED_STYLE.row}>
+      <View
+        accessible
+        accessibilityLabel={VERSION_CHANGE_HEARD[change]}
+        style={[CHANGED_STYLE.bar, { backgroundColor: colors[bar.color] }]}
+      />
+      <View style={[CHANGED_STYLE.words, bar.dimmed ? CHANGED_STYLE.struck : undefined]}>
+        {children}
+      </View>
+    </View>
+  );
+}
 
 /** The count of a block's open comment threads at its trailing edge, as a document's margin marks them, opening them on a press. */
 function CommentCount({ comments }: { readonly comments: WordsComments }) {
@@ -611,21 +669,24 @@ export function WordsRow({
   pictureSource,
   videoAt,
   linkStanding,
+  change = VERSION_CHANGE.SAME,
 }: WordsRowProps) {
   const colors = useColors();
 
   const host = (
     <RNHostView matchContents={{ vertical: true }}>
       <View>
-        <Markdown
-          words={words}
-          repository={repository}
-          onOpenLink={onOpenLink}
-          pictureSource={pictureSource}
-          videoAt={videoAt}
-          linkStanding={linkStanding}
-          headings
-        />
+        <ChangedWords change={change}>
+          <Markdown
+            words={words}
+            repository={repository}
+            onOpenLink={onOpenLink}
+            pictureSource={pictureSource}
+            videoAt={videoAt}
+            linkStanding={linkStanding}
+            headings
+          />
+        </ChangedWords>
       </View>
     </RNHostView>
   );

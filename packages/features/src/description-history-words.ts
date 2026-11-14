@@ -6,6 +6,7 @@
  * revision line alone (`revisionWriterName`), since it draws no actor.
  */
 
+import { VERSION_CHANGE, type VersionUnit } from "./description-version-diff.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import {
   DESCRIPTION_ACTOR,
@@ -31,7 +32,16 @@ export const VERSION_HISTORY_WORDS = {
   UNREAD: "The history could not be read.",
   OLDER_UNREAD: "Could not read older versions.",
   VERSION_UNREAD: "Could not read this version.",
+  /** What a version that changed nothing from the one before it says over its words. */
+  NO_CHANGE: "This version changed nothing from the one before it.",
 } as const;
+
+/** What a section a version changed is heard as, by how it changed, since its mark is drawn and not read. */
+export const VERSION_CHANGE_HEARD = {
+  [VERSION_CHANGE.ADDED]: "Added section",
+  [VERSION_CHANGE.CHANGED]: "Changed section",
+  [VERSION_CHANGE.REMOVED]: "Removed section",
+} as const satisfies Record<Exclude<VersionUnit["change"], typeof VERSION_CHANGE.SAME>, string>;
 
 /** What a writer the history cannot name is called, as the panel's actor model names them. */
 const UNNAMED_WRITER = {

@@ -45,6 +45,12 @@ type VersionChange = (typeof VERSION_CHANGE)[keyof typeof VERSION_CHANGE];
 export interface VersionUnit {
   readonly key: string;
   readonly words: string;
+  /**
+   * The unit's words with no change in them, as the description that holds
+   * it reads them: what a client that cannot mark words inside a line, as the
+   * iPhone's Markdown cannot, draws in the marked words' place.
+   */
+  readonly plain: string;
   readonly change: VersionChange;
   readonly marks: readonly VersionMark[];
 }
@@ -139,7 +145,7 @@ function pairedUnit(base: string, shown: SectionWords): VersionUnit {
   const key = shown.heading;
 
   if (base === shown.text) {
-    return { key, words: shown.text, change: VERSION_CHANGE.SAME, marks: [] };
+    return { key, words: shown.text, plain: shown.text, change: VERSION_CHANGE.SAME, marks: [] };
   }
 
   let words = "";
@@ -156,7 +162,7 @@ function pairedUnit(base: string, shown: SectionWords): VersionUnit {
 
   const change = marks.length === 0 ? VERSION_CHANGE.SAME : VERSION_CHANGE.CHANGED;
 
-  return { key, words, change, marks };
+  return { key, words, plain: shown.text, change, marks };
 }
 
 /** A unit only one description holds, drawn whole as added or struck. */
@@ -164,7 +170,13 @@ function loneUnit(
   section: SectionWords,
   change: typeof VERSION_CHANGE.ADDED | typeof VERSION_CHANGE.REMOVED,
 ) {
-  return { key: section.heading, words: section.text, change, marks: [] } satisfies VersionUnit;
+  return {
+    key: section.heading,
+    words: section.text,
+    plain: section.text,
+    change,
+    marks: [],
+  } satisfies VersionUnit;
 }
 
 /**

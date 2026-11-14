@@ -1615,11 +1615,34 @@ const INVITES_HISTORY: DescriptionRevisionsAnswer = {
   ],
 };
 
-/** The reference journey's description as one of its versions left it: whole at the newest, its opening alone before. */
+/**
+ * Ada's draft of the reference journey's description, before its agent took
+ * it on: a goal of one line, and a question the agent's version answered and
+ * struck, so the newest version reads against it as sections written in,
+ * changed and struck.
+ */
+const INVITES_DRAFT = [
+  "## Context",
+  "",
+  "Only an admin can add someone to a workspace.",
+  "",
+  "## Open questions",
+  "",
+  "- Should an invite expire?",
+  "",
+  "## Goal",
+  "",
+  "- A member invites a teammate by email.",
+  "",
+].join("\n");
+
+/** The reference journey's description as one of its versions left it: whole at the newest, Ada's draft before it, and the draft's opening first. */
 function invitesVersionBody(seq: number): string {
   const newest = INVITES_HISTORY.revisions[0]?.seq;
 
-  return seq === newest ? INVITES_DESCRIPTION : (INVITES_DESCRIPTION.split("\n\n")[0] ?? "");
+  if (seq === newest) return INVITES_DESCRIPTION;
+
+  return seq === 1 ? (INVITES_DRAFT.split("\n\n## Open questions")[0] ?? "") : INVITES_DRAFT;
 }
 
 /** The pages the reference journey's agent showed, as its task's page lists them. */
@@ -2423,7 +2446,8 @@ const ANSWERS: StagedAnswers = {
     revision: {
       seq,
       description: { body: invitesVersionBody(seq), assumptions: [] },
-      previous: null,
+      // The version before it, which the version is drawn against; the first has none.
+      previous: seq > 1 ? { body: invitesVersionBody(seq - 1), assumptions: [] } : null,
     },
   }),
   [ACT_KIND.TASKS_RESTORE]: () => true,
