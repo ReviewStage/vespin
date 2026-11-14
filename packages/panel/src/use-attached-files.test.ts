@@ -71,8 +71,7 @@ function QueueingBox(): ReactNode {
   });
 
   const queued = () => {
-    composer.setDraft("");
-    composer.setAttachments(() => []);
+    composer.updateHeld(() => ({ text: "", attachments: [] }));
   };
 
   return createElement(AgentComposer, {
@@ -135,10 +134,13 @@ function KeptDraftBox(): ReactNode {
   useEffect(() => {
     if (seeded.current) return;
     seeded.current = true;
-    composer.setDraft("Like [Picture 1]");
-    composer.setAttachments(() => [
-      { name: "Picture 1", mediaType: AGENT_ATTACHMENT_TYPE.PNG, data: "iVBORw0KGgo=" },
-    ]);
+    composer.updateHeld((now) => ({ ...now, text: "Like [Picture 1]" }));
+    composer.updateHeld((now) => ({
+      ...now,
+      attachments: [
+        { name: "Picture 1", mediaType: AGENT_ATTACHMENT_TYPE.PNG, data: "iVBORw0KGgo=" },
+      ],
+    }));
     setKept(true);
   });
 

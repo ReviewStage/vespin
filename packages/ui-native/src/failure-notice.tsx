@@ -2,8 +2,10 @@
 
 import { Host, HStack, Image, Spacer, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
 import {
+  Animation,
   accessibilityElement,
   accessibilityIdentifier,
+  animation,
   buttonStyle,
   fixedSize,
   font,
@@ -11,6 +13,7 @@ import {
   glassEffect,
   layoutPriority,
   lineLimit,
+  offset,
   padding,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -124,12 +127,22 @@ function noticePress(
     : { label: UNDO, identifier: "failure-notice-undo", act: notice.undo };
 }
 
-/** The banner's words, its glyph, and Try again or Undo, in the system's glass. */
+/**
+ * The banner's words, its glyph, and Try again or Undo, in the system's
+ * glass, standing `ARRIVAL` above its place until it has `arrived`, and
+ * sliding between the two. Note that SwiftUI slides it, not React Native,
+ * because its accessibility frames stay where its host was laid out: a
+ * React Native transform moved what was drawn but left Undo's frame above
+ * the screen's top, so a tap aimed by it, as Maestro aims one, landed on the
+ * status bar.
+ */
 function NoticeBody({
   notice,
+  arrived,
   onPress,
 }: {
   readonly notice: ShownNotice;
+  readonly arrived: boolean;
   readonly onPress: () => void;
 }) {
   const colors = useColors();
@@ -151,6 +164,8 @@ function NoticeBody({
           // Note that the banner contains its pieces as elements of their own, because an identifier on a plain stack passes down to them and stood over Try again's own.
           accessibilityElement("contain"),
           accessibilityIdentifier("failure-notice"),
+          offset({ y: arrived ? 0 : -ARRIVAL }),
+          animation(Animation.easeInOut({ duration: SLIDE_MS / 1000 }), arrived),
         ]}
       >
         <Image {...glyphImage(NOTICE_SYMBOL[notice.kind])} size={MARK_SIZE.LEAD} color={ink} />
@@ -184,8 +199,8 @@ function NoticeBody({
 }
 
 /**
- * The banner: slides down under the status bar as a notice arrives, or
- * fades in where the reader reduces motion, stands until its time is up,
+ * The banner: fades in and slides down under the status bar as a notice
+ * arrives, or only fades in where the reader reduces motion, stands until its time is up,
  * a swipe up, or its Try again or Undo, and slides away. Note that it stands over the
  * app's root view, above the tabs, and passes every touch outside it
  * through to the screen under it; it does not stand in a window of its own
@@ -204,10 +219,13 @@ function NoticeBanner({
   const reduceMotion = useReduceMotion();
   const [place] = useState(() => new Animated.Value(0));
   const [drawn, setDrawn] = useState<ShownNotice | undefined>(notice);
+  // Whether the banner stands in its place, or above it as it arrives and leaves.
+  const [lowered, setLowered] = useState(false);
 
   const leave = useCallback(
     (serial: number) => {
       place.stopAnimation();
+      setLowered(false);
       Animated.timing(place, {
         toValue: 0,
         duration: SLIDE_MS,
@@ -222,6 +240,7 @@ function NoticeBanner({
   // A new notice arrives over whatever stood, said aloud once, and goes on its own once its time is up; one let go while it stands slides away.
   useEffect(() => {
     if (notice === undefined) {
+      setLowered(false);
       Animated.timing(place, { toValue: 0, duration: SLIDE_MS, useNativeDriver: true }).start(
         ({ finished }) => finished && setDrawn(undefined),
       );
@@ -230,6 +249,7 @@ function NoticeBanner({
     }
 
     setDrawn(notice);
+    setLowered(false);
     place.setValue(0);
     AccessibilityInfo.announceForAccessibility(notice.words);
     let live = true;
@@ -244,14 +264,14 @@ function NoticeBanner({
           ? STANDS_FOR.WORDS
           : STANDS_FOR.WITH_PRESS;
 
-      // Note that the notice's stay is a pause between its slide in and its slide out, so a swipe or a newer notice stops all three as one.
+      // Note that the notice's stay is a pause after its fade in, so a swipe, a newer notice, or a sheet taking it stops both as one, and it leaves as a swipe has it leave.
+      setLowered(true);
       stay = Animated.sequence([
         Animated.timing(place, { toValue: 1, duration: SLIDE_MS, useNativeDriver: true }),
         Animated.delay(stands),
-        Animated.timing(place, { toValue: 0, duration: SLIDE_MS, useNativeDriver: true }),
       ]);
       stay.start(({ finished }) => {
-        if (finished && live) onGone(notice.serial);
+        if (finished && live) leave(notice.serial);
       });
     };
 
@@ -263,7 +283,7 @@ function NoticeBanner({
       stay?.stop();
       place.stopAnimation();
     };
-  }, [notice, place, onGone]);
+  }, [notice, place, leave]);
 
   const swipe = useMemo(
     () =>
@@ -284,24 +304,15 @@ function NoticeBanner({
     noticePress(drawn)?.act();
   };
 
-  const arriving = reduceMotion
-    ? { opacity: place }
-    : {
-        opacity: place,
-        transform: [
-          { translateY: place.interpolate({ inputRange: [0, 1], outputRange: [-ARRIVAL, 0] }) },
-        ],
-      };
-
   return (
     <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.edge}>
       <Animated.View
-        style={[styles.lane, arriving]}
+        style={[styles.lane, { opacity: place }]}
         pointerEvents="box-none"
         accessibilityLiveRegion="polite"
         {...swipe.panHandlers}
       >
-        <NoticeBody notice={drawn} onPress={press} />
+        <NoticeBody notice={drawn} arrived={lowered || reduceMotion} onPress={press} />
       </Animated.View>
     </SafeAreaView>
   );

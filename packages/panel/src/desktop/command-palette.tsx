@@ -90,12 +90,7 @@ import {
   TASK_TREE_ENTRY,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import {
-  DOCUMENT_REGION,
-  SETTLED_STATUS,
-  settleOffered,
-  TASK_MARK,
-} from "@repo/features/tasks-model";
+import { SETTLED_STATUS, settleOffered, TASK_MARK, TASK_REGION } from "@repo/features/tasks-model";
 import type { TasksTreeAnswer } from "@repo/features/tasks-view";
 import { TERMINAL_ASK } from "@repo/features/terminal-entry";
 import { noMatchWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
@@ -229,6 +224,7 @@ import { choiceOf } from "../tasks/use-inbox-listing.js";
 import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
+import { useServiceTaskSearch } from "../tasks/use-service-task-search.js";
 import { SIDE_PANEL_TAB_KIND, type SidePanelControl } from "../tasks/use-side-panel.js";
 import { type StandingWrites, useStandingWrites } from "../tasks/use-standing-writes.js";
 import { type ReadMarks, useReadMarks } from "../tasks/use-task-looks.js";
@@ -1158,7 +1154,7 @@ function archivedAgentRows(
         />
       ),
       terms: [look.label, ...(taskName === undefined ? [] : [taskName])],
-      onChoose: () => show(() => tasks.onShowAgent(agent.planId, agent.id)),
+      onChoose: () => show(() => tasks.onShowAgent(agent.taskId, agent.id)),
     };
   });
 }
@@ -1199,9 +1195,9 @@ function automationRows(
       icon: <ActorMark actor={automationActor(automation)} size={ACTOR_SIZE.INLINE} />,
       label: automation.name,
       // Note that its task's name, which finds it too, is said after what fires it, so a row it found says why.
-      detail: automation.planName === null ? trigger : `${trigger} · ${automation.planName}`,
+      detail: automation.taskName === null ? trigger : `${trigger} · ${automation.taskName}`,
       card: <AutomationCard automation={automation} workspaceName={workspaceName} />,
-      terms: [automation.name, trigger, automation.planName].filter((term) => term !== null),
+      terms: [automation.name, trigger, automation.taskName].filter((term) => term !== null),
       onChoose: () => open(automation.id),
     };
   });
@@ -1480,7 +1476,7 @@ function panelTabRows(
   inbox: InboxStanding,
   show: (pick: () => void) => void,
 ): readonly PaletteRow[] {
-  if (tasks.region.kind !== DOCUMENT_REGION.READY || !holdsTaskPanel(tasks, inbox)) return [];
+  if (tasks.region.kind !== TASK_REGION.READY || !holdsTaskPanel(tasks, inbox)) return [];
   const plan = openPlanStanding(tasks);
   const kinds = offeredPanelKinds(SIDE_PANEL_HOLDER.TASK);
 
@@ -1511,7 +1507,7 @@ function readMarkRows(
   reads: ReadMarks,
   choose: (run: () => void) => void,
 ): readonly PaletteRow[] {
-  if (tasks.region.kind !== DOCUMENT_REGION.READY) return [];
+  if (tasks.region.kind !== TASK_REGION.READY) return [];
   const { task } = tasks.region;
 
   if (task.id !== reads.watched) return [];
@@ -2170,6 +2166,9 @@ export function CommandPalette({
   // moving ranks or lights them again but changes none of them, and an account may hold thousands.
   const tasksShown =
     open && tasks.signedIn && (filter === PALETTE_FILTER.ALL || filter === PALETTE_FILTER.TASKS);
+
+  // Note that the tasks the list holds not are asked of the service as typing pauses, and again once the list is first read, and join the list the rows below are built from.
+  useServiceTaskSearch(sought, tasksShown && tasks.listRead);
 
   const taskList = useMemo(
     () =>

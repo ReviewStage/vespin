@@ -1467,7 +1467,7 @@ test("a comment's files are drawn after its words but for a picture its words dr
 
   const place = {
     kind: LINK_DESTINATION.INBOX_ITEM,
-    planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+    taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
     itemId,
   } as const;
 
@@ -1533,7 +1533,7 @@ test("a recording an agent posted stands with a comment's pictures, never its ot
 
   const place = {
     kind: LINK_DESTINATION.INBOX_ITEM,
-    planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+    taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
     itemId,
   } as const;
 

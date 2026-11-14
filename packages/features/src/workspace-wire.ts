@@ -2,6 +2,7 @@ import { Schema as EffectSchema } from "effect";
 import { DEVICE_PLATFORM } from "./device-agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { RESERVED_WORKSPACE_SLUGS } from "./link-home.js";
+import { machineCommandModeSchema } from "./machine-command-wire.js";
 import {
   isVideoPicture,
   PICTURE_TYPE,
@@ -421,9 +422,11 @@ export const workspaceMachinesRequestSchema = EffectSchema.Struct({
  * The machines of a workspace's members, by name (GET), as any member of it
  * sees them: each one's id, which a mention and a call name it by, its name
  * and platform, whose it is, and whether it is there now, its app having
- * listened for commands lately or its host beating. Nothing else of a
- * machine is said, neither its settings nor whether agents may use it,
- * which is its owner's and the task's.
+ * listened for commands lately or its host beating; and, where the machine
+ * carried them up, its terminal commands mode and its apps switch, so a
+ * machine's card says why a call there would be refused. Nothing else of
+ * its settings is said, neither its always-allowed apps nor whether a
+ * task's agents may use it, which are its owner's and the task's.
  */
 export const workspaceMachinesAnswerSchema = EffectSchema.Struct({
   machines: EffectSchema.Array(
@@ -433,6 +436,8 @@ export const workspaceMachinesAnswerSchema = EffectSchema.Struct({
       platform: EffectSchema.Literals(Object.values(DEVICE_PLATFORM)),
       userId: EffectSchema.String,
       online: EffectSchema.Boolean,
+      commandMode: EffectSchema.optionalKey(machineCommandModeSchema),
+      computerUse: EffectSchema.optionalKey(EffectSchema.Boolean),
     }),
   ),
 });

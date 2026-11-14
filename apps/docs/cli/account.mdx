@@ -1,0 +1,81 @@
+---
+title: "Account and install"
+description: "vespin login, logout, whoami, version, and update"
+---
+
+Sign in, check who you are, and keep the CLI current. Every command also takes the global flags `--json`, `-q`, `-w`, and `--url`, described in [CLI](/cli#scripts-and-coding-agents).
+
+## vespin login
+
+Sign in to Vespin in your browser
+
+```sh
+vespin login [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--no-browser` | Print the sign-in address instead of opening a browser, and read back the address it ends on |
+
+```sh
+# Sign in through this machine's browser
+vespin login
+
+# Sign in over SSH, with a browser on another machine
+vespin login --no-browser
+```
+
+## vespin logout
+
+Sign out: revoke this machine's sign-in and forget it
+
+```sh
+vespin logout [flags]
+```
+
+```sh
+# Sign out of Vespin
+vespin logout
+```
+
+## vespin whoami
+
+Show who is signed in, and their workspaces
+
+```sh
+vespin whoami [flags]
+```
+
+```sh
+# Show the signed-in member
+vespin whoami
+
+# The same, as JSON for a script
+vespin whoami --json
+```
+
+## vespin update
+
+Update to the newest release, or print how for an npm install
+
+```sh
+vespin update [flags]
+```
+
+```sh
+# Update in place, or print the command that does
+vespin update
+```
+
+## vespin version
+
+Print the version, and how it was installed
+
+```sh
+vespin version [flags]
+```
+
+```sh
+# Print the version
+vespin version
+```

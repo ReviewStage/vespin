@@ -56,16 +56,16 @@
   --diff-removed-ground: color-mix(in srgb, var(--diff-removed-mark) 14%, transparent);
   --diff-added-word: color-mix(in srgb, var(--diff-added-mark) 34%, transparent);
   --diff-removed-word: color-mix(in srgb, var(--diff-removed-mark) 34%, transparent);
-  /* A Terminal tab's screen (`terminal/`): the side panel's well for its
-     ground, the code's ink for its words and cursor, its selection in the
+  /* A Terminal tab's screen (`terminal/`): the code ground every code
+     surface stands on for its ground, the code's ink for its words and cursor, its selection in the
      code's blue, and the sixteen ANSI colors a program prints in, from the
      same GitHub theme the code is colored with. The terminal draws on a
      canvas, which reads none of this itself, so the bundle reads the color
      each resolves to off the host and draws again when the appearance flips
      (`terminal/terminal-theme.ts`). */
-  /* The well read through its brand role, so a change of brand
+  /* The code ground read through its brand role, so a change of brand
      (`@repo/brand`'s `brand-palette.mjs`) recolors the screen with it. */
-  --terminal-ground: var(--ui-color-well);
+  --terminal-ground: var(--ui-color-code-ground);
   --terminal-text: var(--code-text);
   --terminal-cursor: var(--code-text);
   --terminal-selection: light-dark(rgba(9, 105, 218, 0.2), rgba(56, 139, 253, 0.4));
@@ -124,18 +124,6 @@
   --comment-mark-edge: light-dark(rgba(196, 132, 0, 0.55), rgba(255, 200, 87, 0.5));
   --comment-mark-active: light-dark(rgba(245, 176, 0, 0.3), rgba(255, 200, 87, 0.28));
   --comment-mark-active-edge: light-dark(rgba(176, 112, 0, 1), rgba(255, 200, 87, 0.95));
-  /* The agent's pointer over a cloud Browser tab (`tasks/cloud-browser-cursor.tsx`),
-     drawn over someone else's page rather than the window, so it follows the
-     page under it rather than the theme: the light mode's accent, the dark
-     mode's brighter one over a dark page (`brand.css`'s accent on either
-     ground), a white edge and a small shadow that hold it apart from any page,
-     and a glow of its own copper while it types. */
-  --agent-pointer: var(--ui-color-accent-on-light);
-  --agent-pointer-on-dark: var(--ui-color-accent-on-dark);
-  --agent-pointer-edge: #ffffff;
-  --agent-pointer-shadow: rgba(0, 0, 0, 0.35);
-  --agent-pointer-glow: color-mix(in srgb, var(--agent-pointer) 42%, transparent);
-  --agent-pointer-glow-on-dark: color-mix(in srgb, var(--agent-pointer-on-dark) 50%, transparent);
 }
 
 /* Pierre's diff and file tree each ask for `color-scheme: light dark` in

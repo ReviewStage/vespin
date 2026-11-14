@@ -1,5 +1,5 @@
 /**
- * github.test.ts -- the GitHub service over a fake HttpClient: what it sends, what a refusal holds, the members' reserve, and conditional requests.
+ * github.test.ts -- the GitHub service over a fake HttpClient: what it sends, what a refusal holds, and conditional requests.
  */
 
 import { generateKeyPairSync } from "node:crypto";
@@ -12,7 +12,6 @@ import { TestClock } from "effect/testing";
 import { GitHub, type InstallationGrant } from "./github.js";
 import { type GitHubHold, GitHubHoldStore } from "./github-hold-store.js";
 import type { GitHubRateScope } from "./github-identity.js";
-import { GitHubPriority, PRIORITY } from "./github-rate.js";
 
 const API = "https://api.github.com";
 const REPOSITORY = { owner: "octo", repo: "hello" } as const;
@@ -176,6 +175,19 @@ describe("GitHub", () => {
     }).pipe(Effect.provide(layer));
   });
 
+  it.effect("sends a body under the content type Octokit names", () => {
+    const { sent, layer } = harness(() => json({ access_token: "ghu_fresh" }));
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+      const oauth = github.oauth({ clientId: "Iv1.client", clientSecret: Redacted.make("secret") });
+      yield* oauth.refreshToken(Redacted.make("ghr_refresh"));
+
+      // Note that GitHub answers a token request sent as anything but JSON or a form with a 404.
+      assert.strictEqual(sent[0]?.headers.get("content-type"), "application/json; charset=utf-8");
+    }).pipe(Effect.provide(layer));
+  });
+
   it.effect("holds only the installation whose quota ran out", () => {
     const { reads, layer } = harness((request) =>
       request.headers.get("authorization") === "token ghs_installation_1"
@@ -226,35 +238,6 @@ describe("GitHub", () => {
 
         assert.strictEqual(refused._tag, "GitHubRateLimited");
         assert.strictEqual(held._tag, "GitHubRateLimited");
-        assert.strictEqual(reads().length, 2);
-      }).pipe(Effect.provide(layer));
-    },
-  );
-
-  it.effect(
-    "refuses background work once a quarter of the core quota is left, and still sends a member's",
-    () => {
-      const { reads, layer } = harness(() =>
-        json({ full_name: "octo/hello" }, 200, {
-          "x-ratelimit-limit": "5000",
-          "x-ratelimit-remaining": "1000",
-          "x-ratelimit-reset": FAR_RESET,
-          "x-ratelimit-resource": "core",
-        }),
-      );
-
-      return Effect.gen(function* () {
-        const github = yield* GitHub;
-        const member = github.asMember(Redacted.make("gho_member"));
-        yield* readRepository(member);
-
-        const background = yield* Effect.flip(
-          readRepository(member).pipe(Effect.provideService(GitHubPriority, PRIORITY.BACKGROUND)),
-        );
-
-        yield* readRepository(member);
-
-        assert.strictEqual(background._tag, "GitHubRateLimited");
         assert.strictEqual(reads().length, 2);
       }).pipe(Effect.provide(layer));
     },

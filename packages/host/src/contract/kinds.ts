@@ -226,6 +226,19 @@ export const AGENT_ACT_KIND = {
   /** The beats a window holds asked again now, as the window comes back online. */
   HOSTS_PRESENCE_REFRESH: "hosts.presenceRefresh",
   HOSTS_REMOVE: "hosts.remove",
+  /**
+   * The account's machines as Settings › Machines reads and changes them,
+   * each with its own settings for agents' commands and apps: held for the
+   * window while it holds the stream open and a while after, read again at
+   * once as Try again asks, one changed, and one removed. The hold's stream
+   * carries nothing: what it holds reaches the panel on app state
+   * (`LIVE_READ.MACHINES`), where a change is drawn over its machine, and a
+   * removal drawn gone, the moment it is asked.
+   */
+  MACHINES_FOLLOW: "machines.follow",
+  MACHINES_RETRY: "machines.retry",
+  MACHINES_CHANGE: "machines.change",
+  MACHINES_REMOVE: "machines.remove",
   /** Run agents on this Mac turned on or off, from This Mac's row in Settings › Hosts; only the desktop answers it. */
   HOSTS_THIS_MAC_SET: "hosts.thisMacSet",
   HOSTS_PAIRING_READ: "hosts.pairingRead",
@@ -266,7 +279,7 @@ export const AGENT_ACT_KIND = {
   AGENTS_CLEAR: "agents.clear",
   /** An agent's failed first launch booted again, from its Retry (`coder-host/boot.ts`). */
   AGENTS_BOOT: "agents.boot",
-  /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
+  /** An agent's chat said shown, at once and then every minute while it stays shown, which holds its sandbox and keeps it warm for the next message, or said hidden as it stops being, which lets go (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
   /** A message of the member's the service refused let go, from its Delete or its Edit, which took its words back into the box (`agent-queue-writes.ts`). */
   AGENTS_UNSEND: "agents.unsend",
@@ -583,6 +596,16 @@ export const TASKS_ACT_KIND = {
   TASKS_COLOR_CODE: "tasks.colourCode",
   /** The id of the task a link names by its workspace and its number, found on the service before the link opens; answered to the window, never on the document. */
   TASKS_FIND: "tasks.find",
+  /** The tasks a search's words find on the service, read into the task list as cold tasks where it holds them not, so the window's own search finds them; answered once asked, never on the document. */
+  TASKS_SEARCH: "tasks.search",
+  /** The tasks related to a task, its sub-tasks, its parent, and its blocks, read from the service into the task list as cold tasks where it holds them not, as its card hangs; answered once asked, never on the document. */
+  TASKS_RELATIONS_READ: "tasks.relationsRead",
+  /** The task a tab pinned in a window stands on, read into the task list as a cold task where it holds it not, so the pin draws its task; answered once asked, never on the document. */
+  TASKS_LOAD: "tasks.load",
+  /** A page of a workspace's settled tasks, the newest finished first, read from the service into the task list as cold tasks (`task-list-collections.ts`); the cursor the next page reads past is answered to the list that asked, never on the document. */
+  TASKS_SETTLED_PAGE: "tasks.settledPage",
+  /** A person's tasks and agents in a workspace, their newest read from the service into the task list as cold tasks (`task-list-collections.ts`) and how many of each the service counts answered to their page, never on the document. */
+  TASKS_PERSON_PAGE: "tasks.personPage",
   /** A page of a description's history, read from the service and answered to the view; an older page is laid on the task's held history too (`LIVE_READ.HISTORY`) where it is held. */
   TASKS_REVISIONS: "tasks.revisions",
   /** A revision of the open description beside the one before it for its version history, read from the service; answered to the view, never on the document. */
@@ -606,11 +629,11 @@ export const TASKS_ACT_KIND = {
    * One task's description held followed while the window holds the stream open
    * for the task it has open, and a while after among those let go lately:
    * what it holds reaches the panel on app state
-   * (`LIVE_READ.DESCRIPTION_DOCUMENT`), so the stream carries nothing.
+   * (`LIVE_READ.HELD_TASK`), so the stream carries nothing.
    */
-  TASKS_DOCUMENT_FOLLOW: "tasks.documentFollow",
+  TASKS_HELD_FOLLOW: "tasks.heldFollow",
   /** A held task's description, which the panel reads on app state, read again at once, as Try again asks. */
-  TASKS_DOCUMENT_RETRY: "tasks.documentRetry",
+  TASKS_HELD_RETRY: "tasks.heldRetry",
   /**
    * One task's description history held followed while the window holds the stream
    * open for its version history, and a while after among those let go
@@ -1051,6 +1074,10 @@ export const PORT_ACT_USE = {
   HOSTS_PRESENCE_FOLLOW: ACT_USE.READ,
   HOSTS_PRESENCE_REFRESH: ACT_USE.READ,
   HOSTS_REMOVE: ACT_USE.WRITE,
+  MACHINES_FOLLOW: ACT_USE.READ,
+  MACHINES_RETRY: ACT_USE.READ,
+  MACHINES_CHANGE: ACT_USE.WRITE,
+  MACHINES_REMOVE: ACT_USE.WRITE,
   HOSTS_THIS_MAC_SET: ACT_USE.WRITE,
   HOSTS_PAIRING_READ: ACT_USE.FETCH,
   HOSTS_ALLOWED_APPS: ACT_USE.FETCH,
@@ -1224,14 +1251,19 @@ export const PORT_ACT_USE = {
   TASKS_BROWSER_TABS_FOLLOW: ACT_USE.READ,
   TASKS_COLOR_CODE: ACT_USE.FETCH,
   TASKS_FIND: ACT_USE.FETCH,
+  TASKS_SEARCH: ACT_USE.FETCH,
+  TASKS_RELATIONS_READ: ACT_USE.FETCH,
+  TASKS_LOAD: ACT_USE.FETCH,
+  TASKS_SETTLED_PAGE: ACT_USE.FETCH,
+  TASKS_PERSON_PAGE: ACT_USE.FETCH,
   TASKS_REVISIONS: ACT_USE.FETCH,
   TASKS_REVISION: ACT_USE.FETCH,
   TASKS_RESTORE: ACT_USE.WRITE,
   TASKS_PAGE_SOURCE: ACT_USE.FETCH,
   TASKS_PAGE_HTML: ACT_USE.FETCH,
   TASKS_PAGES_FOLLOW: ACT_USE.READ,
-  TASKS_DOCUMENT_FOLLOW: ACT_USE.READ,
-  TASKS_DOCUMENT_RETRY: ACT_USE.READ,
+  TASKS_HELD_FOLLOW: ACT_USE.READ,
+  TASKS_HELD_RETRY: ACT_USE.READ,
   TASKS_HISTORY_FOLLOW: ACT_USE.READ,
   TASKS_HISTORY_RETRY: ACT_USE.READ,
   TASKS_PICTURE_READ: ACT_USE.FETCH,

@@ -226,6 +226,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.REVIEW_OPTIONS]: NO_KEYS_HELD,
     [LIVE_READ.DEVICE_PRESENCE]: NO_KEYS_HELD,
     [LIVE_READ.HOSTS]: NO_KEYS_HELD,
+    [LIVE_READ.MACHINES]: NO_KEYS_HELD,
     [LIVE_READ.WORKSPACE_INVITATIONS]: NO_KEYS_HELD,
     [LIVE_READ.THIS_MAC_HOST]: NO_KEYS_HELD,
     [LIVE_READ.TRANSCRIPT]: NO_TRANSCRIPTS,
@@ -241,7 +242,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.AUTOMATION_RUNS]: NO_KEYS_HELD,
     [LIVE_READ.DESCRIPTION_COMMENTS]: NO_DESCRIPTION_COMMENTS,
     [LIVE_READ.HISTORY]: NO_KEYS_HELD,
-    [LIVE_READ.DESCRIPTION_DOCUMENT]: NO_KEYS_HELD,
+    [LIVE_READ.HELD_TASK]: NO_KEYS_HELD,
     machineCommands: { asks: [] },
     notifications: { status: NOTIFICATIONS_STATUS.UNKNOWN },
     sessionReplay: { permitted: false, halted: false },
@@ -275,7 +276,7 @@ function inCaseWorkspaces(
     tasks,
     ...(patch[LIVE_READ.INBOX_ITEMS] === undefined
       ? {
-          [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: {} } },
+          [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: {} } },
         }
       : undefined),
     ...(patch[LIVE_READ.AUTOMATIONS] === undefined
