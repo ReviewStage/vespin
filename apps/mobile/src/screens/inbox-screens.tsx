@@ -1003,8 +1003,9 @@ function InboxStackList(words: InboxSearch) {
       </Stack.Toolbar>
       {choosing === undefined ? null : (
         <Stack.Toolbar placement="bottom">
-          {choosing.acts.flatMap((act, at) => [
-            ...(at === 0 ? [] : [<Stack.Toolbar.Spacer key={at} />]),
+          {/* Note that the acts stand side by side between two flexible spaces, so iOS 26 draws them in one glass capsule centered over the foot, as Files and Mail group their edit bar's acts, never a glass circle each spread across it. */}
+          <Stack.Toolbar.Spacer />
+          {choosing.acts.map((act) =>
             // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass.
             isBarMenu(act) ? (
               <Stack.Toolbar.Menu
@@ -1027,7 +1028,8 @@ function InboxStackList(words: InboxSearch) {
                 )}
               </Stack.Toolbar.Button>
             ),
-          ])}
+          )}
+          <Stack.Toolbar.Spacer />
         </Stack.Toolbar>
       )}
       <Screen>
