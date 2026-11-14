@@ -915,12 +915,12 @@
   --spacing-icon-16: var(--ui-icon-16);
   --spacing-icon-20: var(--ui-icon-20);
   --spacing-icon-40: var(--ui-icon-40);
-  /* An app's window floating over an agent's box (`app-window-stack/`): at
-     most this tall and this wide at its own shape, on a ground at least this
-     wide, and each window under it peeking out by this much. */
-  --spacing-app-window-tall: 144px; /* off-scale: a window small enough to float */
-  --spacing-app-window-wide: 240px; /* off-scale: as wide again as it is tall, and some */
-  --spacing-app-window-least: 192px; /* off-scale: a phone's window stands on a ground this wide */
+  /* The apps an agent is using, stacked over its box (`app-window-stack/`):
+     the front window's frame, one size whatever the window's shape, so
+     switching apps moves nothing, and each title behind it stepping in from
+     the edge by this much. */
+  --spacing-app-window-tall: 200px; /* off-scale: a window small enough to float */
+  --spacing-app-window-wide: 320px; /* off-scale: a title bar's name, mark, +N and Minimize, and a wide window at the frame's height */
   --spacing-app-window-peek: var(--ui-space-8);
   --spacing-app-window-peek-twice: var(--ui-space-16);
   --color-veil: var(--ui-color-veil);
@@ -1001,6 +1001,12 @@
   --spacing-settings-row-list-block: var(--ui-settings-row-list-block);
   --spacing-settings-row-indent: calc(
     var(--ui-settings-row-inline) +
+    var(--ui-settings-row-words-inset)
+  );
+  /* A row two steps in, under a row that is itself one of a marked row's things. */
+  --spacing-settings-row-indent-twice: calc(
+    var(--ui-settings-row-inline) +
+    2 *
     var(--ui-settings-row-words-inset)
   );
   --spacing-settings-row-words-inset: var(--ui-settings-row-words-inset);
@@ -1112,6 +1118,8 @@
   --spacing-conversation-empty: 280px; /* off-scale: a short line's measure */
   --spacing-conversation-empty-wide: 560px; /* off-scale: a one-line failure's measure, Continue beside it */
   --spacing-conversation-older: calc(100% - var(--ui-space-32));
+  /* The way back to the newest line stands this far above the log's foot: its own room, past whatever floats over the log's end (`--conversation-over-end`, the log's own). */
+  --spacing-conversation-scroll: calc(var(--ui-space-16) + var(--conversation-over-end, 0px));
   --shadow-floating-edge: inset 0 0 0 1px var(--ui-color-border), var(--ui-menu-shadow);
   --color-button-ground: var(--ui-button-ground);
   --color-inert-link: color-mix(in srgb, currentColor 40%, transparent);

@@ -4,6 +4,7 @@ import {
   childTaskCounts,
   createdByOnly,
   drawnTaskRows,
+  orderTasks,
   type RepositoryGroup,
   repositoryGroups,
   repositoryLabel,
@@ -58,11 +59,13 @@ const names = (groups: readonly RepositoryGroup[]) =>
   groups.map((group) => group.tasks.map((each) => each.name));
 
 test("a repository group lists its tasks newest updated first, the time each row shows", () => {
-  const groups = repositoryGroups([
-    task("old", "acme/relay", 3, 10),
-    task("touched", "acme/relay", 1, 30),
-    task("new", "acme/relay", 2, 20),
-  ]);
+  const groups = repositoryGroups(
+    orderTasks([
+      task("old", "acme/relay", 3, 10),
+      task("touched", "acme/relay", 1, 30),
+      task("new", "acme/relay", 2, 20),
+    ]),
+  );
 
   expect(names(groups)).toEqual([["touched", "new", "old"]]);
 });
@@ -111,7 +114,7 @@ test("a task whose agent ended a turn after another task's description was edite
     },
   };
 
-  const groups = repositoryGroups([edited, worked]);
+  const groups = repositoryGroups(orderTasks([edited, worked]));
   expect(names(groups)).toEqual([["Agent finished at 800", "Description edited at 500"]]);
   expect(taskTime(worked, TASK_ORDER.UPDATED)).toBe(800);
   expect(taskTime(edited, TASK_ORDER.UPDATED)).toBe(500);

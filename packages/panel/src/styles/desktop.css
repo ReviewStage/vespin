@@ -748,8 +748,8 @@ body,
   .desktop-shell
   > .desktop-main
   .desktop-task:has(> .desktop-task-main)
-  > .side-panel::before {
-  background: var(--ui-color-ground);
+  > .side-panel {
+  --side-panel-ground: var(--ui-color-ground);
 }
 
 :where(:root):not([data-ui-room="narrow"])
@@ -1484,6 +1484,18 @@ body,
   padding-inline: calc(var(--column-inset) + var(--ui-list-inset));
 }
 
+/* The panel's ground, named once (`--side-panel-ground`): the panel paints
+   it, or its sheet does where the shell stands it on one (shell.css), and
+   what stands opaque in a tab over what scrolls beneath it (a Pull request
+   tab's stuck headings, its folding header) paints it too, so they never
+   show as a strip of another ground. A page that stands the panel on
+   another ground changes this one name (`.desktop-task` beside its
+   conversation, below). */
+.side-panel {
+  --side-panel-ground: var(--ui-color-well);
+  background: var(--side-panel-ground);
+}
+
 /* Full screen, the panel covers the document as well as its own room. */
 .side-panel[data-full-screen="true"] {
   position: absolute;
@@ -1625,10 +1637,17 @@ body,
 .side-panel-content .agent-tab-foot .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
 }
-/* The apps' windows an agent is using float at the right edge of that same column. */
+/* The apps an agent is using float at the right edge of that same column,
+   and across it in a narrow foot (`tasks.css`). */
 .desktop-agent .agent-computer-float,
 .side-panel-content .agent-computer-float {
   inset-inline-end: max(var(--content-inset), var(--reading-room));
+}
+@container agent-tab-foot (width < 480px) {
+  .desktop-agent .agent-computer-float,
+  .side-panel-content .agent-computer-float {
+    inset-inline-start: max(var(--content-inset), var(--reading-room));
+  }
 }
 
 /* Tabs ------------------------------------------------------------------------ */

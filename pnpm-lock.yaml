@@ -146,6 +146,9 @@ patchedDependencies:
   '@tiptap/markdown@3.33.1':
     hash: e0f10ac4168a09ed17a4f80248b6af6abbadcf6527cb3df390233e8fb9c21306
     path: patches/@tiptap__markdown@3.33.1.patch
+  '@xterm/addon-webgl@0.19.0':
+    hash: eb7ce1d5d17dd47cd5da85b0dad13b1b392baa92ecdcc9a1be0273801fe96ebf
+    path: patches/@xterm__addon-webgl@0.19.0.patch
   drizzle-orm@1.0.0-rc.4:
     hash: 7eca027493ea68b0777e0306d382bf89cdd6217b8c3377c6d44e7911303f9f5b
     path: patches/drizzle-orm@1.0.0-rc.4.patch
@@ -501,6 +504,9 @@ importers:
       '@sentry/react-native':
         specifier: 8.28.0
         version: 8.28.0(patch_hash=36b8f59785f409f30a3092710dfe5ee36af61e2a35e82694f6ba3bbb77052a48)(@babel/core@7.29.7)(@expo/config-types@58.0.3)(@expo/config@58.0.11)(@expo/env@2.5.4)(dotenv@17.4.2)(expo-router@58.0.30)(expo@58.0.23)(metro-config@0.87.3)(metro-resolver@0.87.3)(metro@0.87.3)(open@8.4.2)(promise@8.3.0)(react-native@0.88.1)(react@19.3.0)(rollup@4.62.4)
+      '@tanstack/react-db':
+        specifier: 1.0.0-rc.1.5
+        version: 1.0.0-rc.1.5(react@19.3.0)(typescript@7.0.2)
       '@tanstack/react-query':
         specifier: 5.106.1
         version: 5.106.1(@types/react@19.3.0)(react@19.3.0)
@@ -1220,7 +1226,7 @@ importers:
         version: 0.12.0
       '@xterm/addon-webgl':
         specifier: 0.19.0
-        version: 0.19.0
+        version: 0.19.0(patch_hash=eb7ce1d5d17dd47cd5da85b0dad13b1b392baa92ecdcc9a1be0273801fe96ebf)
       '@xterm/xterm':
         specifier: 6.0.0
         version: 6.0.0
@@ -14188,6 +14194,13 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
+  '@tanstack/react-db@1.0.0-rc.1.5(react@19.3.0)(typescript@7.0.2)':
+    dependencies:
+      '@tanstack/db': 1.0.0-rc.1.5(typescript@7.0.2)
+      react: 19.3.0
+    transitivePeerDependencies:
+      - typescript
+
   '@tanstack/react-query@5.106.1(@types/react@19.2.18)(react@19.2.8)':
     dependencies:
       '@tanstack/query-core': 5.106.1
@@ -14868,7 +14881,7 @@ snapshots:
 
   '@xterm/addon-web-links@0.12.0': {}
 
-  '@xterm/addon-webgl@0.19.0': {}
+  '@xterm/addon-webgl@0.19.0(patch_hash=eb7ce1d5d17dd47cd5da85b0dad13b1b392baa92ecdcc9a1be0273801fe96ebf)': {}
 
   '@xterm/xterm@6.0.0': {}
 

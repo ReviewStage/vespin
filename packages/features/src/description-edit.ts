@@ -6,7 +6,7 @@ import { descriptionLastEditSchema, TASK_BOUNDS, taskSchema, taskTxidSchema } fr
 /**
  * description-edit.ts -- the developer's own edit of a description's text: what the window sends, what the service answers, and how the edit is taken into the text.
  *
- * A description is one Markdown text (`description-document.ts`), and the developer edits
+ * A description is one Markdown text (`description-sections.ts`), and the developer edits
  * it whole: the edit names the text the editor opened on (`base`), or the
  * developer's own last save since, and the text the developer wrote
  * (`value`). The app may write while the developer types, on a call, so the
@@ -29,7 +29,7 @@ import { descriptionLastEditSchema, TASK_BOUNDS, taskSchema, taskTxidSchema } fr
  * description's bound. A text the developer's change lays past the bound over the app's
  * is the save's to refuse as too long.
  */
-const DOCUMENT_TEXT = EffectSchema.String.check(
+const DESCRIPTION_TEXT = EffectSchema.String.check(
   EffectSchema.isMaxLength(TASK_BOUNDS.MAX_BODY_CHARS),
 );
 
@@ -40,14 +40,14 @@ const DOCUMENT_TEXT = EffectSchema.String.check(
  * from an editor that carries them (`description-comment-wire.ts`).
  */
 export const descriptionEditRequestSchema = EffectSchema.Struct({
-  document: EffectSchema.Struct({ base: DOCUMENT_TEXT, value: DOCUMENT_TEXT }),
+  description: EffectSchema.Struct({ base: DESCRIPTION_TEXT, value: DESCRIPTION_TEXT }),
   comments: EffectSchema.optionalKey(descriptionCommentAnchorsSchema),
 });
 
 export type DescriptionEditRequest = typeof descriptionEditRequestSchema.Type;
 
 /** The description's text as a conflict answers it. */
-const descriptionEditValueSchema = DOCUMENT_TEXT;
+const descriptionEditValueSchema = DESCRIPTION_TEXT;
 
 export type DescriptionEditValue = typeof descriptionEditValueSchema.Type;
 
@@ -116,7 +116,7 @@ export function applyDocumentEdit(
   current: string,
   edit: DescriptionEditRequest,
 ): DescriptionEditOutcome {
-  const { base, value } = edit.document;
+  const { base, value } = edit.description;
 
   if (current === base) return { applied: value };
   const next = value === "" ? undefined : rebased(base, value, current);

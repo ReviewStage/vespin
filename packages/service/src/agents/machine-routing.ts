@@ -2,13 +2,14 @@
  * machine-routing.ts -- which machine an agent's terminal command or action on an app goes to, and why none where it can go nowhere.
  *
  * A call may reach the machines of the people its task lets agents use:
- * where the workspace has Following on, each follower whose "Let agents
- * here use my machines" switch is on; otherwise the one member whose Mac
- * its commands have always run on (`machineOwnerOf`), the task's assignee
- * or its agent's starter. Of those machines, one is reachable for a call
+ * each follower whose "Let agents here use my machines" switch is on; for a
+ * call with no task, the one member whose Mac its commands have always run
+ * on (`machineOwnerOf`), the task's assignee or its agent's starter. Of
+ * those machines, one is reachable for a call
  * where it listened for commands lately and, for a shell command, its
- * command mode is not Never. A Mac's switch for apps stays on the Mac
- * itself, so an action on an app may go to a machine that then refuses it.
+ * command mode is not Never, or, for an action on an app, its switch for
+ * apps is not off. A Mac whose app never carried that switch up keeps it on
+ * the Mac itself, so an action on an app may go to it and be refused there.
  *
  * The machine a call goes to is the one it names by id; else the
  * agent's default machine (`agent.target_device_id`); else the machine the
@@ -40,12 +41,10 @@ import {
   type MachineUnreached,
 } from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { EXPERIMENT } from "@repo/settings";
 import { Clock, Duration, Effect, Option } from "effect";
-import { experimentOnIn } from "./workspace-experiment-on.js";
 
 /** How lately a machine must have listened to count as online: one held read, and room for the next to arrive, as `machine-command.ts` counts an account. */
-const ONLINE_WITHIN = Duration.seconds(45);
+export const ONLINE_WITHIN = Duration.seconds(45);
 
 export const MACHINE_ROUTE = {
   /** The call goes to one machine, queued for it alone. */
@@ -93,10 +92,6 @@ function peopleOf(routing: MachineRouting) {
     const { taskId, workspaceId } = routing;
 
     if (taskId === null || workspaceId === null) return [{ userId: routing.userId, lets: true }];
-
-    if (!(yield* experimentOnIn(workspaceId, EXPERIMENT.FOLLOWING))) {
-      return [{ userId: routing.userId, lets: true }];
-    }
 
     const followers = yield* listTaskFollowers(routing.userId, taskId);
 
@@ -195,6 +190,14 @@ function whyNot(
     return {
       code: MACHINE_UNREACHED.COMMANDS_NEVER,
       words: `Not run: ${machine.name} doesn't let agents run commands (its Settings › This Mac is set to Never).`,
+    };
+  }
+
+  // Note that a machine whose app never carried its switch up decides on the Mac itself, as before the switch was kept here.
+  if (kind === MACHINE_COMMAND_KIND.COMPUTER && machine.computerUse === false) {
+    return {
+      code: MACHINE_UNREACHED.APPS_OFF,
+      words: `Not run: ${machine.name} doesn't let agents use its apps (Let agents use its apps is off for it in Settings › Machines).`,
     };
   }
 
@@ -312,7 +315,7 @@ export function defaultMachinesOf(
  * The machines of a task's followers, each with whether its owner lets the
  * task's agents use it and whether it listened lately, as a follower's card
  * lists them, read for the account given; none where the account does not
- * reach the task. Note that the caller decides the workspace has Following on.
+ * reach the task.
  */
 export function followerMachinesOf(
   userId: string,

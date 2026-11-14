@@ -1,95 +1,60 @@
-import { AGENT_PART, agentParts } from "@repo/features/agent-parts";
-import { calledPicturesOf } from "@repo/features/agent-pictures-model";
+import {
+  AGENT_PART,
+  agentParts,
+  type ComputerApp,
+  computerAppsOf,
+} from "@repo/features/agent-parts";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
-import type { KeptPicture } from "@repo/features/conversation-picture-wire";
-import {
-  computerAppBundleId,
-  computerAppIcon,
-  computerAppName,
-  computerCallRefused,
-} from "@repo/features/tool-call-model";
+import { computerCallRefused } from "@repo/features/tool-call-model";
 import { ACT_KIND } from "@repo/host/acts";
-import {
-  APP_ICON_SIZE,
-  AppIcon,
-  AppWindowStack,
-  CollapseIcon,
-  ExpandIcon,
-  GAP,
-  IconButton,
-  Inline,
-  LIST_VARIANT,
-  List,
-  ListRow,
-  StopIcon,
-  WorkingMark,
-} from "@repo/ui";
-import { ArrowUpRightIcon } from "@repo/ui/icons";
-import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
+import { AppStackPill, AppWindowStack } from "@repo/ui";
+import { PICTURE_STATE } from "@repo/ui/picture-read";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pressMutation } from "../act-mutations.js";
-import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
-import { KeptAppIcon, useKeptPicture, useKeptPictureViewer } from "./agent-pictures.js";
+import { useKeptPicture, useKeptPictures, useKeptPictureViewer } from "./agent-pictures.js";
 import { useOnThatMac } from "./computer-permission-note.js";
 
 /**
- * computer-dock.tsx -- the apps an agent is using on the developer's Mac, as a dock's row over its message box with their windows floating above it, while it works in them.
+ * computer-dock.tsx -- the apps an agent is using on the developer's Mac, as a stack of their windows floating over its message box, or minimized to a pill.
  *
- * While the agent works and has used an app this turn (`computer`), a row
- * docks over the box as the pull request's and the Inbox's do: the app it
- * used last by its icon, "Using" and its name while its newest call is still
- * on that app, the working mark, how many other apps it used, a press that
- * hides or shows their windows, Show and the app's name on the Mac the
- * agent uses, which brings that app's own window to the front so the
- * developer can take over, and Stop, which stops the turn as the box's own
- * Stop does. Over the row's end float the apps' windows
- * (`AppWindowStack`): the app used last on top at its own shape, every other
- * app behind it as a card's edge; a press on the window opens the viewer,
- * which walks every app's newest window. While they float the transcript's
- * end makes room for them (`tasks.css`), so its newest lines stand clear.
- * Put away, they stay down for that agent this window's session. The row
- * goes as the turn ends, the transcript's rows being where what it did is
- * read from then on.
+ * Once the agent has used an app this turn (`computer`), the apps float over
+ * the end of what docks over its box as a stack (`AppWindowStack`): the app
+ * it used last in front, by its newest window, the others behind it, each a
+ * press that brings it forward, and the working mark on the app its newest
+ * call is on. The front's name brings that app's own window forward on the
+ * Mac the agent uses (`useOnThatMac`), and a press on its window opens the
+ * viewer, which walks every app's newest window. As the agent moves on to
+ * another app, that app comes forward.
+ *
+ * Minimize puts the stack down to its pill (`AppStackPill`), which brings it
+ * back; put down while the agent works, it stays down for that agent this
+ * window's session. Once the agent is done, the stack puts itself down, and
+ * its pill stands until the next turn opens, a press bringing the turn's
+ * windows back. What stops the turn is the box's own Stop.
+ *
+ * What floats takes room over the transcript's end, which the stack says to
+ * its owner as it comes, changes, and goes (`onRoom`), so the transcript's
+ * newest line stands clear of it and its way back to that line stands
+ * above it (`Conversation`'s `overEnd`).
  */
 
-/** What the stack says. */
-const WORDS = {
-  LABEL: "Apps in use",
-  USING: "Using",
-  SHOW: "Show the apps' windows",
-  SHOW_APP: "Show",
-  HIDE: "Hide the apps' windows",
-  STOP: "Stop",
-  STOPPING: "Stopping",
-} as const;
+/** What the stack is named to a reader. */
+const LABEL = "Apps in use";
 
-/** How many other apps the agent used this turn, in words. */
-function othersWords(count: number): string {
-  return count === 1 ? "+1 app" : `+${String(count)} apps`;
-}
-
-/** An app the agent used this turn: its name, its bundle id and icon as a call answered them, and the newest window it read of it. */
-export interface UsedApp {
-  readonly app: string;
-  readonly bundleId: string | undefined;
-  readonly icon: string | undefined;
-  readonly window: KeptPicture | undefined;
-}
-
-/** The apps an agent used this turn, the one it used last first, and whether its newest call is still on that one. */
+/** The apps an agent used this turn, the one it used last first, each as the conversation names it (`computerAppsOf`), and whether its newest call is still on that one while it works. */
 export interface AppsInUse {
-  readonly apps: readonly UsedApp[];
+  readonly apps: readonly ComputerApp[];
   readonly using: boolean;
 }
 
-/** A call's tool, input, and answer, as the stack reads them. */
+/** A call's tool, its id, and its answer, as the stack reads them. */
 interface ReadCall {
   readonly tool: string;
-  readonly input: Parameters<typeof computerAppName>[0];
-  readonly output: Parameters<typeof computerAppName>[1];
+  readonly callId: string;
+  readonly output: Parameters<typeof computerCallRefused>[0];
 }
 
 /**
@@ -128,225 +93,216 @@ function* turnCallsNewestFirst(messages: readonly AgentTranscriptMessage[]): Gen
   }
 }
 
-/** The window a computer call kept, where it read one. */
-function keptWindow(call: ReadCall): KeptPicture | undefined {
-  const [called] = calledPicturesOf(call.tool, call.input, call.output);
-
-  return called?.kept === true ? called.picture : undefined;
-}
-
-/** The app a call used, by its name: none for a call that is no computer call, names no app, as listing them does, or that the Mac refused, which used none. */
-function usedApp(call: ReadCall): string | undefined {
-  if (call.tool !== AGENT_TOOL.COMPUTER || computerCallRefused(call.output)) return undefined;
-
-  return computerAppName(call.input, call.output);
-}
-
 /**
- * The name each app came to, by the spelling a call asked for it in and by
- * the name the Mac answered, each folded to lower case, read off the calls
- * the Mac answered, so a call still running, which names its app only as
- * the agent spelled it, counts as the app it will turn out to be.
- */
-function answeredNames(calls: readonly ReadCall[]): ReadonlyMap<string, string> {
-  const names = new Map<string, string>();
-
-  for (const call of calls) {
-    const answered = computerAppName(undefined, call.output);
-
-    if (call.tool !== AGENT_TOOL.COMPUTER || answered === undefined) continue;
-    names.set(answered.toLowerCase(), answered);
-    const asked = computerAppName(call.input, undefined);
-
-    if (asked !== undefined) names.set(asked.toLowerCase(), answered);
-  }
-
-  return names;
-}
-
-/**
- * The apps the agent used this turn while it works, each once, the one it
- * used last first, each with its icon and newest window from the newest of
- * its calls that kept them; nothing while it works in none, or once it is
- * done. A call that names no app, listing them, adds none, nor does one the
- * Mac refused, such as for a grant it lacks, so a refused app never floats
- * a window it never read or says it is in use.
+ * The apps the agent used this turn, each once, the one it used last
+ * first, each with its icon and newest window as the conversation names the
+ * app (`computerAppsOf`), so a call still running, which names its app only
+ * as the agent typed it, counts as the app it turns out to be; none in use
+ * once it is done; nothing where the turn used none. A call that names no
+ * app, listing them, adds none, nor does one the Mac refused, such as for a
+ * grant it lacks, so a refused app never floats a window it never read or
+ * says it is in use.
  */
 export function appsInUse(
   messages: readonly AgentTranscriptMessage[],
   working: boolean,
 ): AppsInUse | undefined {
-  if (!working) return undefined;
+  const named = computerAppsOf(messages);
   const calls = [...turnCallsNewestFirst(messages)];
-  const names = answeredNames(calls);
 
-  const appOf = (call: ReadCall): string | undefined => {
-    const app = usedApp(call);
+  const appOf = (call: ReadCall): ComputerApp | undefined =>
+    call.tool !== AGENT_TOOL.COMPUTER || computerCallRefused(call.output)
+      ? undefined
+      : named.byCall.get(call.callId);
 
-    return app === undefined || call.output !== undefined
-      ? app
-      : (names.get(app.toLowerCase()) ?? app);
-  };
-
-  const found = new Map<string, UsedApp>();
+  const apps = [...new Set(calls.map(appOf))].filter((app) => app !== undefined);
+  const top = apps[0];
   const newest = calls[0];
 
-  for (const call of calls) {
-    const app = appOf(call);
-
-    if (app === undefined) continue;
-    const held = found.get(app);
-    found.set(app, {
-      app,
-      bundleId: held?.bundleId ?? computerAppBundleId(call.output),
-      icon: held?.icon ?? computerAppIcon(call.output),
-      window: held?.window ?? keptWindow(call),
-    });
-  }
-
-  const apps = [...found.values()];
-  const top = apps[0];
-
   if (top === undefined || newest === undefined) return undefined;
-  const using = appOf(newest) === top.app;
 
-  return { apps, using };
+  return { apps, using: working && appOf(newest) === top };
 }
 
-/** Every agent whose windows the reader put away this window's session, so its stack stays down as the tab comes back. */
-const WINDOWS_HIDDEN = new Set<string>();
+/** Every agent whose stack the reader put down while it worked, this window's session, so it stays down as the tab comes back. */
+const STACKS_DOWN = new Set<string>();
 
-/** Stops the agent's turn, answering whether the service took it; none where the reader may not stop it. */
-type StopTurn = (() => Promise<boolean>) | undefined;
+/** The app a press names, by its id, from the apps in use. */
+function appOfId(apps: readonly ComputerApp[], id: string): ComputerApp | undefined {
+  return apps.find((each) => each.id === id);
+}
 
 /**
- * The apps in use as a dock's row, their windows floating over it; nothing
- * while the agent uses no app. Note that the row is its own component, so
- * the viewer it opened goes with it as the turn ends rather than standing
- * open into the next.
+ * The apps in use as a stack floating over the box, or its pill; nothing
+ * where the agent's turn used no app. Note that the stack is drawn anew for
+ * each turn the agent works (`turn`), so the viewer it opened, and the app
+ * the reader brought forward, go with the turn rather than standing into
+ * the next.
  */
 export function ComputerDock({
   agentId,
   messages,
   working,
-  onStop,
+  onRoom,
 }: {
   agentId: string;
   messages: readonly AgentTranscriptMessage[];
   working: boolean;
-  onStop: StopTurn;
+  /** Hears the room, in pixels, what floats takes over the transcript's end; none once nothing does. */
+  onRoom: (room: number) => void;
 }): ReactNode {
   const inUse = useMemo(() => appsInUse(messages, working), [messages, working]);
   const top = inUse?.apps[0];
+  // How many turns the agent has started working while the stack stood, which keys the stack.
+  const [turn, setTurn] = useState(0);
+  const [wasWorking, setWasWorking] = useState(working);
+
+  if (wasWorking !== working) {
+    setWasWorking(working);
+
+    if (working) setTurn(turn + 1);
+  }
 
   if (inUse === undefined || top === undefined) return null;
 
-  return <AppsDock agentId={agentId} inUse={inUse} top={top} onStop={onStop} />;
+  return (
+    <AppsFloat
+      key={turn}
+      agentId={agentId}
+      inUse={inUse}
+      top={top}
+      working={working}
+      onRoom={onRoom}
+    />
+  );
 }
 
-/** The row and the windows of the apps in use this turn. */
-function AppsDock({
+/** Says to `onRoom` how much room the element takes over the transcript's end, its margin under it included, as it changes and once it goes. */
+function useRoomTaken(onRoom: (room: number) => void) {
+  const float = useRef<HTMLDivElement>(null);
+  const said = useRef(onRoom);
+  said.current = onRoom;
+
+  useLayoutEffect(() => {
+    const element = float.current;
+
+    if (element === null) return;
+
+    const measure = () => {
+      const margin = Number.parseFloat(getComputedStyle(element).marginBlockEnd);
+      said.current(element.getBoundingClientRect().height + (Number.isFinite(margin) ? margin : 0));
+    };
+
+    measure();
+    const heard = new ResizeObserver(measure);
+    heard.observe(element);
+
+    return () => {
+      heard.disconnect();
+      said.current(0);
+    };
+  }, []);
+
+  return float;
+}
+
+/** The stack, or its pill, of the apps in use this turn, floating over the box. */
+function AppsFloat({
   agentId,
   inUse,
   top,
-  onStop,
+  working,
+  onRoom,
 }: {
   agentId: string;
   inUse: AppsInUse;
-  top: UsedApp;
-  onStop: StopTurn;
+  top: ComputerApp;
+  working: boolean;
+  onRoom: (room: number) => void;
 }): ReactNode {
-  const window = useKeptPicture(top.window?.id);
+  const float = useRoomTaken(onRoom);
   const { open, viewer } = useKeptPictureViewer();
-  const stop = useAsyncAction(rejectionWords);
   const onThatMac = useOnThatMac(agentId);
   const { mutate: showApp } = useMutation(pressMutation(ACT_KIND.MAC_APP_SHOW));
-  const [hidden, setHidden] = useState(() => WINDOWS_HIDDEN.has(agentId));
+  const [putDown, setPutDown] = useState(() => STACKS_DOWN.has(agentId));
+  // Note that the stack is drawn anew as the agent works again (`ComputerDock`), so one the reader brought back once it was done stands only until then.
+  const [doneOpen, setDoneOpen] = useState(false);
+  // Note that an app the reader brought forward stays in front only until the agent moves to another app, even one it moves back from.
+  const [picked, setPicked] = useState<string>();
+  const [pickedOver, setPickedOver] = useState(top.id);
 
-  const windows = inUse.apps.flatMap((each) =>
-    each.window === undefined ? [] : [{ picture: each.window, words: each.app }],
-  );
+  if (pickedOver !== top.id) {
+    setPickedOver(top.id);
+    setPicked(undefined);
+  }
 
-  const shown = top.window;
-  const others = inUse.apps.length - 1;
+  const front = (picked === undefined ? undefined : appOfId(inUse.apps, picked)) ?? top;
+  const window = useKeptPicture(front.window?.id);
+  const icons = useKeptPictures(inUse.apps.map((each) => each.icon));
+  const down = working ? putDown : !doneOpen;
+  const using = inUse.using ? top.id : undefined;
 
-  const toggle = () => {
-    if (hidden) WINDOWS_HIDDEN.delete(agentId);
-    else WINDOWS_HIDDEN.add(agentId);
-    setHidden(!hidden);
+  const apps = inUse.apps.map((each, at) => {
+    const icon = icons[at];
+    const iconSrc = icon?.kind === PICTURE_STATE.READY ? icon.url : undefined;
+
+    return each === front && front.window !== undefined
+      ? {
+          id: each.id,
+          name: each.name,
+          iconSrc,
+          window: { state: window, width: front.window.width, height: front.window.height },
+        }
+      : { id: each.id, name: each.name, iconSrc };
+  });
+
+  const putAway = () => {
+    if (!working) return setDoneOpen(false);
+    STACKS_DOWN.add(agentId);
+    setPutDown(true);
   };
 
-  return (
-    <div className={`agent-computer-dock ${COMPOSER_DOCK_CLASS}`}>
-      {hidden ? null : (
-        <AppWindowStack
-          label={WORDS.LABEL}
-          className="agent-computer-float"
-          apps={inUse.apps.map((each, index) =>
-            index === 0 && shown !== undefined
-              ? {
-                  name: each.app,
-                  window: { state: window, width: shown.width, height: shown.height },
-                }
-              : { name: each.app },
-          )}
-          onOpen={() => {
-            // Note that an app on top whose window was never read opens the newest window another app's call kept.
-            const first = shown ?? windows[0]?.picture;
+  const bringBack = () => {
+    if (!working) return setDoneOpen(true);
+    STACKS_DOWN.delete(agentId);
+    setPutDown(false);
+  };
 
-            if (first !== undefined) open(windows, first.id);
-          }}
-        />
-      )}
-      <List label={WORDS.LABEL} variant={LIST_VARIANT.CARD} fingerTall>
-        <ListRow
-          leading={
-            top.icon === undefined ? (
-              <AppIcon size={APP_ICON_SIZE.LEAD} />
-            ) : (
-              <KeptAppIcon id={top.icon} size={APP_ICON_SIZE.LEAD} />
-            )
-          }
-          title={inUse.using ? `${WORDS.USING} ${top.app}` : top.app}
-          meta={
-            <Inline gap={GAP.TIGHT} wrap={false}>
-              {inUse.using ? <WorkingMark /> : null}
-              {others === 0 ? null : othersWords(others)}
-            </Inline>
-          }
-          actions={
-            <>
-              <IconButton
-                icon={hidden ? <ExpandIcon /> : <CollapseIcon />}
-                label={hidden ? WORDS.SHOW : WORDS.HIDE}
-                onClick={toggle}
-              />
-              {onThatMac === true && top.bundleId !== undefined ? (
-                <IconButton
-                  icon={<ArrowUpRightIcon />}
-                  label={`${WORDS.SHOW_APP} ${top.app}`}
-                  onClick={() => {
-                    if (top.bundleId !== undefined) showApp({ bundleId: top.bundleId });
-                  }}
-                />
-              ) : null}
-              {onStop === undefined ? null : (
-                <IconButton
-                  icon={<StopIcon />}
-                  label={WORDS.STOP}
-                  busy={stop.running}
-                  busyLabel={WORDS.STOPPING}
-                  onClick={() =>
-                    void stop.run(async () => {
-                      await onStop();
-                    })
+  const windows = inUse.apps.flatMap((each) =>
+    each.window === undefined ? [] : [{ picture: each.window, words: each.name }],
+  );
+
+  return (
+    <div className="agent-computer-dock">
+      <div ref={float} className="agent-computer-float">
+        {down ? (
+          <AppStackPill apps={apps} using={using} onRestore={bringBack} />
+        ) : (
+          <AppWindowStack
+            label={LABEL}
+            apps={apps}
+            shown={front.id}
+            using={using}
+            onPick={setPicked}
+            onMinimize={putAway}
+            onOpen={() => {
+              // Note that an app in front whose window was never read opens the newest window another app's call kept.
+              const first = front.window ?? windows[0]?.picture;
+
+              if (first !== undefined) open(windows, first.id);
+            }}
+            onShowApp={
+              onThatMac === true && front.bundleId !== undefined
+                ? (id) => {
+                    const bundleId = appOfId(inUse.apps, id)?.bundleId;
+
+                    if (bundleId !== undefined) showApp({ bundleId });
                   }
-                />
-              )}
-            </>
-          }
-        />
-      </List>
+                : undefined
+            }
+          />
+        )}
+      </div>
       {viewer}
     </div>
   );

@@ -79,11 +79,11 @@ export function shownSettingsPageGroups(
   })).filter(({ pages }) => pages.length > 0);
 }
 
-/** A group's heading in the Settings sidebar, the first's where no workspace is listed; the machine's own group is named for the Mac only in the app installed there. */
+/** A group's heading in the Settings sidebar, the first's where no workspace is listed; the machine's own group is named for the Mac only in the app installed there, and the unheaded group has none. */
 export function settingsGroupHeadingOf(
   group: SettingsPageGroup,
   capabilities: readonly HostCapability[],
-): string {
+): string | undefined {
   if (
     group === SETTINGS_PAGE_GROUP.THIS_MAC &&
     !capabilities.includes(HOST_CAPABILITY.DESKTOP_APP)

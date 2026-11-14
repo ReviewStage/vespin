@@ -35,7 +35,7 @@ const OTHER_TASK = "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a";
 
 const TASK = {
   ...SUMMARY,
-  document: {
+  description: {
     body: "# Teammate invitations",
     assumptions: [{ text: "Members and admins can both invite." }],
   },
@@ -79,14 +79,14 @@ it.effect(
         },
       });
 
-      const edit = { document: { base: "## Goal\n", value: "## Goal\n\n - Mine. \n" } };
+      const edit = { description: { base: "## Goal\n", value: "## Goal\n\n - Mine. \n" } };
 
       const first = yield* Effect.provide(client().edit(TASK_ID, edit), api.layer);
       const second = yield* Effect.provide(client().edit(TASK_ID, edit), api.layer);
 
       const blank = yield* Effect.provide(
         client().edit(TASK_ID, {
-          document: { base: "", value: "x".repeat(TASK_BOUNDS.MAX_BODY_CHARS + 1) },
+          description: { base: "", value: "x".repeat(TASK_BOUNDS.MAX_BODY_CHARS + 1) },
         }),
         api.layer,
       );
@@ -125,7 +125,11 @@ it.effect(
   "a start naming an agent answers the task with the agent started on it, or with why it was refused as a Start reads it; one asking for planning beside it is never sent",
   () =>
     Effect.gen(function* () {
-      const task = { ...TASK, repository: "acme/relay", document: { body: "", assumptions: [] } };
+      const task = {
+        ...TASK,
+        repository: "acme/relay",
+        description: { body: "", assumptions: [] },
+      };
 
       const agent = {
         id: "3c9e1d2a-6b7f-4e8a-9c0d-1e2f3a4b5c6d",

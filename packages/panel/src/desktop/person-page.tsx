@@ -13,6 +13,7 @@ import { ASSIGNED_TO } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { type Noun, TERM } from "@repo/features/words";
 import { WORKSPACE_ROLE, workspaceOfSlug } from "@repo/features/workspace-wire";
+import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -61,6 +62,10 @@ import {
   agentStarter,
   PERSON_TASKS_SHOWN,
   type PersonAgent,
+  type PersonCounted,
+  type PersonCounts,
+  personCounts,
+  personHeld,
   personPage,
   personPageEmpty,
   personRef,
@@ -68,9 +73,10 @@ import {
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { changesTab } from "@repo/ui/tab-strip-model";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
-import { useQueryClient } from "@tanstack/react-query";
+import { queryOptions, skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ListFilterIcon, MailIcon, UsersIcon } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+import { askAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor, YouBadge } from "../actor-ref.js";
 import { useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
@@ -81,6 +87,7 @@ import { useFindOpen } from "../find-in-tab.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { useAutomationsDoor, usePersonDoor } from "../places/routed-doors.js";
+import { QUERY_ROOT } from "../query-keys.js";
 import { useShortcutTargetsOf } from "../shortcut-target.js";
 import { stateEndMark } from "../state-glyph.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
@@ -289,11 +296,14 @@ const AGENT_ROWS_FIT = {};
 function PersonAgentsSection({
   title,
   agents,
+  count = agents.length,
   tasks,
   pullRequests,
 }: {
   title: string;
   agents: readonly PersonAgent[];
+  /** How many its head counts, those it lists and any the service counted past them (`personCounts`). */
+  count?: number;
   tasks: TasksControl;
   /** The pull request each listed agent opened, by agent. */
   pullRequests: ReadonlyMap<string, AgentPullRequest>;
@@ -321,7 +331,7 @@ function PersonAgentsSection({
     <PersonSectionFrame
       label={title}
       title={title}
-      count={agents.length}
+      count={count}
       noun={TERM.AGENT}
       fold={PERSON_SECTION_FOLD}
     >
@@ -661,12 +671,15 @@ function PersonLine({ person }: { person: Actor }): React.ReactNode {
 function PersonTasks({
   title,
   listed,
+  count,
   tasks,
   unread,
   onShowAll,
 }: {
   title: string;
   listed: readonly TaskSummary[];
+  /** How many its head counts, those it lists and any the service counted past them (`personCounts`). */
+  count: number;
   tasks: TasksControl;
   /** Whether a task is unread, as the sidebar's rows count it. */
   unread: (task: TaskSummary) => boolean;
@@ -680,18 +693,14 @@ function PersonTasks({
     <PersonSectionFrame
       label={title}
       title={title}
-      count={listed.length}
+      count={count}
       noun={TERM.TASK}
       fold={PERSON_SECTION_FOLD}
     >
       <Stack gap={GAP.TIGHT}>
         <PersonTaskRows title={title} listed={listed} tasks={tasks} unread={unread} />
         {onShowAll === undefined ? null : (
-          <ShowMoreRow
-            more={listed.length - PERSON_TASKS_SHOWN}
-            shown={false}
-            onToggle={onShowAll}
-          />
+          <ShowMoreRow more={count - PERSON_TASKS_SHOWN} shown={false} onToggle={onShowAll} />
         )}
       </Stack>
     </PersonSectionFrame>
@@ -732,6 +741,49 @@ function PersonTaskRows({
       />
     </ReplayMask>
   );
+}
+
+/**
+ * A person's tasks and agents read from the service (`TASKS_PERSON_PAGE`),
+ * which reads their newest into the task list and answers how many of each
+ * it counted, beside how many of them the list held as it asked: keyed by
+ * those, so a change to what the list holds of theirs asks again, and the
+ * last answer for the same person stands meanwhile. One the service did not
+ * answer counts nothing past what the list holds, and none is asked until
+ * the list has been read, since the host answers none before.
+ */
+function personPageQueryOptions(
+  workspaceId: string | undefined,
+  personId: string,
+  held: PersonCounts,
+  listRead: boolean,
+) {
+  return queryOptions({
+    queryKey: [
+      QUERY_ROOT.PERSON_PAGE,
+      workspaceId,
+      personId,
+      held.assigned,
+      held.created,
+      held.agents,
+    ],
+    queryFn:
+      workspaceId === undefined || !listRead
+        ? skipToken
+        : async (): Promise<PersonCounted | null> => {
+            const answer = await askAct(ACT_KIND.TASKS_PERSON_PAGE, { workspaceId, personId });
+
+            return "failure" in answer ? null : { counts: answer.counts, held };
+          },
+    // Note that only the same person's last answer stands while theirs is asked again, never another's.
+    placeholderData: (last, lastQuery) =>
+      lastQuery !== undefined &&
+      lastQuery.queryKey[1] === workspaceId &&
+      lastQuery.queryKey[2] === personId
+        ? last
+        : undefined,
+    retry: false,
+  });
 }
 
 /** What a phone's bar over the page is named by. */
@@ -777,6 +829,13 @@ function PersonColumn({
   // Note that the page keeps one identity while the list stands, because each of its lists follows its rows (`useLeaving`).
   const { liveAgents, listedPullRequests } = tasks;
   const page = useMemo(() => personPage(userId, listed, liveAgents), [userId, listed, liveAgents]);
+  // Each section counts what the list holds and what the service counted past it.
+  const held = personHeld(page);
+  const workspaceId = tasks.workspace?.id;
+
+  const counted = useQuery(personPageQueryOptions(workspaceId, userId, held, tasks.listRead));
+
+  const counts = personCounts(page, counted.data ?? undefined);
 
   // The pull request each agent the list follows opened, as a task's agents' rows chip it.
   const pullRequests = useMemo(
@@ -931,6 +990,7 @@ function PersonColumn({
           <PersonTasks
             title={you ? "Assigned to you" : "Assigned"}
             listed={page.assigned}
+            count={counts.assigned}
             tasks={tasks}
             unread={unread}
             onShowAll={shared ? showTasks : undefined}
@@ -938,6 +998,7 @@ function PersonColumn({
           <PersonTasks
             title={you ? "Created by you" : "Created"}
             listed={page.created}
+            count={counts.created}
             tasks={tasks}
             unread={unread}
           />
@@ -945,6 +1006,7 @@ function PersonColumn({
             <PersonAgentsSection
               title="Agents"
               agents={page.agents}
+              count={counts.agents}
               tasks={tasks}
               pullRequests={pullRequests}
             />

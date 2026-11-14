@@ -10,7 +10,7 @@ import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { GITHUB_DEFAULT_BRANCH, GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import { machineName } from "@repo/features/machine-name";
-import { mayNameChip } from "@repo/features/mention-link";
+import { encodeMention, MENTION_KIND, mayNameChip } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { readReplyButtonLink } from "@repo/features/reply-button-wire";
@@ -141,7 +141,6 @@ import {
 } from "@repo/ui/markdown";
 import { QUOTE_CLASS } from "@repo/ui/quote-face";
 import { UNREPORTED } from "@repo/ui/reported-failure";
-import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { Predicate } from "effect";
 import {
@@ -205,8 +204,8 @@ import {
   TRANSCRIPT_CODE_AND_TABLE_COMPONENTS,
   TranscriptMarkdownSource,
 } from "./transcript-markdown.js";
-import { useWordTargets } from "./use-known-names.js";
 import { opensAsLink, useOpenLink } from "./use-open-link.js";
+import { useKeyTarget } from "./use-task-outside.js";
 import type { CutBody } from "./whole-parts.js";
 import { WorkingTime } from "./working-time.js";
 
@@ -711,8 +710,9 @@ function MentionElement({
 
 /**
  * A task's key written in a transcript's words: its task's chip where the
- * window lists a task by it (`useWordTargets`), as a link to the task is
- * drawn (`MentionElement`), and the key as written where it lists none. It
+ * window lists a task by it, or once the service found one it lists not
+ * (`useKeyTarget`), as a link to the task is drawn (`MentionElement`), and
+ * the key as written where it lists none. It
  * is read as it is drawn, so the chip follows the tasks as they are listed
  * while the words around it stand.
  */
@@ -722,7 +722,7 @@ function TaskKeyElement({
 }: MarkdownNodeProps & { children?: ReactNode }): ReactNode {
   const doors = useMentionDoors();
   const key = String(node?.properties[TASK_KEY_ELEMENT.KEY] ?? "");
-  const target = useWordTargets().get(key);
+  const target = useKeyTarget(key);
 
   return (target === undefined ? undefined : linkChip(target, key, doors)) ?? children;
 }
@@ -1413,18 +1413,15 @@ export function useMacOwner(): Actor | undefined {
 /** The machine a terminal command or an action on an app made now would go to, as the agent's standing names it (`workspaceTools.runOnMac.machine`), which a call still unanswered names; none where it names none. */
 const RoutedMachineContext = createContext<Pick<CallMachine, "id" | "name"> | undefined>(undefined);
 
-/** Where a call ran, as its row says it: "On" the machine, by what every list of machines calls it, This Mac among them. */
-function OnMachine({ machine }: { machine: Pick<CallMachine, "id" | "name"> }): React.JSX.Element {
+/** Where a call ran, as its row ends: the machine's chip, named as every list of machines names it (This Mac among them), its card and its press the chip's own. */
+function OnMachine({ machine }: { machine: Pick<CallMachine, "id" | "name"> }): ReactNode {
   const thisMac = useThisMac();
+  const doors = useMentionDoors();
+  const words = machineName({ deviceId: machine.id, name: machine.name }, [], thisMac);
 
-  return (
-    <ActorLine>
-      {"On "}
-      <ReplayWords masked>
-        {machineName({ deviceId: machine.id, name: machine.name }, [], thisMac)}
-      </ReplayWords>
-    </ActorLine>
-  );
+  const link = encodeMention({ kind: MENTION_KIND.MACHINE, machineId: machine.id }, doors.place);
+
+  return linkChip(link, words, doors);
 }
 
 /** Names whose Mac the transcript under it ran its Mac commands on (`MacOwnerProvider`), and the machine it would send a call to now, which a call still unanswered names. */
@@ -1560,6 +1557,13 @@ export function TranscriptTool({
   const routed = useContext(RoutedMachineContext);
   const unanswered = state === TOOL_STATE.INPUT_STREAMING || state === TOOL_STATE.INPUT_AVAILABLE;
   const onMachine = machine ?? (unanswered ? routed : undefined);
+
+  const onMachineChip =
+    (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
+    onMachine !== undefined ? (
+      <OnMachine machine={onMachine} />
+    ) : undefined;
+
   const opened = useHeldOpen(held?.waiting === true);
 
   const row = (
@@ -1580,12 +1584,10 @@ export function TranscriptTool({
         chip={chip}
         subjectIsCode={line.code}
         subjectInBody={(command && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject)}
+        placeChip={onMachineChip}
         place={
           (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
-          onMachine !== undefined ? (
-            <OnMachine machine={onMachine} />
-          ) : (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
-            macOwner !== undefined ? (
+          macOwner !== undefined ? (
             <ActorLine>
               {"On "}
               <ActorRef actor={macOwner} sentence possessive />

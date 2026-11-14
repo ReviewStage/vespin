@@ -975,7 +975,7 @@
   z-index: 1;
   inset-block: 0;
   left: 0;
-  background: var(--ui-color-well);
+  background: var(--side-panel-ground);
 }
 
 /* Note that the rail hidden beside the chapter is hidden only where it can
@@ -1262,7 +1262,7 @@
 
 .pull-request-tab[data-header-fold] > .pull-request-header {
   z-index: 3;
-  background: var(--ui-color-well);
+  background: var(--side-panel-ground);
   clip-path: inset(var(--pull-request-fold, 0px) -100vmax -100vmax);
 }
 
@@ -1273,7 +1273,7 @@
   z-index: 2;
   margin-bottom: calc(-1 * var(--pull-request-fold-room, 0px));
   background: linear-gradient(var(--ui-color-fill-hover), var(--ui-color-fill-hover))
-    var(--ui-color-well);
+    var(--side-panel-ground);
 }
 
 /* The room stands at the top of what the shown view's scroller holds where
@@ -1306,7 +1306,7 @@
   inset-inline: 0;
   bottom: 0;
   padding-block: var(--ui-item-gap);
-  background: var(--ui-color-well);
+  background: var(--side-panel-ground);
   opacity: var(--pull-request-fold-title, 0);
   pointer-events: none;
 }
@@ -1344,7 +1344,7 @@
   z-index: 1;
   box-sizing: border-box;
   height: var(--ui-scroll-band);
-  background: var(--ui-color-ground);
+  background: var(--side-panel-ground);
 }
 
 .pull-request-section-fold > .ui-disclosure-summary {
@@ -1380,7 +1380,7 @@
   height: var(--ui-scroll-band);
   align-self: start;
   padding-inline-end: var(--ui-tight-gap);
-  background: var(--ui-color-ground);
+  background: var(--side-panel-ground);
 }
 
 /* A tab's page (a `DetailPage` at the tabs' inset) opens its own gap under
@@ -2926,13 +2926,15 @@ blockquote.comment-quote {
   margin-bottom: var(--ui-control-gap);
 }
 
-/* The apps' windows an agent is using float over the end of what docks
-   over its box, above every dock's row, over the transcript's foot, as a
-   picture in a picture does (`computer-dock.tsx`), and while they do the
-   transcript's end makes room for the tallest stack of them, so its newest
-   line stands clear of them. */
+/* The apps an agent is using float over the end of what docks over its
+   box, above every dock's row, over the transcript's foot, as a picture in
+   a picture does (`computer-dock.tsx`); the transcript's end makes room for
+   them as they say how much they take (`Conversation`'s `overEnd`), so its
+   newest line stands clear of them. Under 480px of the foot's room the
+   stack stands across the column rather than at its end. */
 .agent-tab-foot {
   position: relative;
+  container: agent-tab-foot / inline-size;
 }
 .agent-computer-float {
   position: absolute;
@@ -2941,12 +2943,9 @@ blockquote.comment-quote {
   inset-inline-end: var(--ui-space-16);
   margin-block-end: var(--ui-space-8);
 }
-.agent-tab:has(.agent-computer-float) .agent-log-over-composer {
-  padding-bottom: calc(
-    var(--ui-scroll-fade) +
-    var(--ui-space-4) +
-    var(--spacing-app-window-tall) +
-    var(--spacing-app-window-peek-twice) +
-    var(--ui-space-8)
-  );
+@container agent-tab-foot (width < 480px) {
+  .agent-computer-float {
+    inset-inline-start: var(--ui-space-16);
+    --ui-app-window-width: 100%;
+  }
 }

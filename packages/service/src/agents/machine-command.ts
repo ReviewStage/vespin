@@ -78,13 +78,15 @@ import {
  * default) is the one guard.
  */
 
+/** How lately a Mac must have read for a call to count it listening: one hold, and room for the next read to arrive. The scheduled sweep marks a machine away from its commands past it. */
+export const MACHINE_LISTENER_FRESH = Duration.seconds(45);
+
 const MACHINE_COMMAND_SERVICE = {
   /** How long the Mac's read is held while nothing waits for it. */
   HOLD: Duration.seconds(20),
   /** How often a held read, and a call waiting on its result, looks again where the sync hub cannot wake it. */
   POLL: Duration.millis(500),
-  /** How lately a Mac must have read for a call to count it listening: one hold, and room for the next read to arrive. */
-  LISTENER_FRESH: Duration.seconds(45),
+  LISTENER_FRESH: MACHINE_LISTENER_FRESH,
   /**
    * How long a command may wait for a Mac to take it; one not taken by then
    * is never run. A listening Mac takes one within a poll, and a command

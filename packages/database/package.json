@@ -88,6 +88,7 @@
     "./models/agent-runner-lease": "./src/models/agent-runner-lease.js",
     "./models/agent-runner-record": "./src/models/agent-runner-record.js",
     "./models/agent-wakeups": "./src/models/agent-wakeups.js",
+    "./models/agent-sandbox-holds": "./src/models/agent-sandbox-holds.js",
     "./models/agent-sandboxes": "./src/models/agent-sandboxes.js",
     "./models/conversation-rewind": "./src/models/conversation-rewind.js",
     "./models/dispatch-claim": "./src/models/dispatch-claim.js",

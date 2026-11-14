@@ -48,6 +48,7 @@ import {
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, handCapabilities, handState } from "../testing/app-state.js";
 import { withQueryClient, writeHandedAppState } from "../testing/copy-feedback.js";
+import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { DOCUMENT_NAME, DOCUMENT_TASK } from "../testing/document-task.js";
 import { restOn } from "../testing/hint-rest.js";
 import { pressInPhoneHead, readPhoneHead } from "../testing/phone-head.js";
@@ -213,7 +214,10 @@ function mount(
       ...overrides,
     });
 
-    return createElement(DesktopShell, shellProps(tasks, tab, onTabChange, sidebarPatch));
+    return overListedTasks(
+      tasks,
+      createElement(DesktopShell, shellProps(tasks, tab, onTabChange, sidebarPatch)),
+    );
   }
 
   const home =
@@ -744,7 +748,11 @@ function mountListing(listed: readonly Task[]): (open: Task | undefined) => void
     });
 
     const props = shellProps(tasks, PANEL_TAB.TASKS, ignore, { collapsed: false });
-    act(() => root?.render(withQueryClient(underRouter(createElement(DesktopShell, props)))));
+    act(() =>
+      root?.render(
+        withQueryClient(underRouter(overListedTasks(tasks, createElement(DesktopShell, props)))),
+      ),
+    );
   };
 }
 
@@ -1531,7 +1539,7 @@ test("a plan's chip in a description's version history hangs the plan's card, as
           changes: 1,
         },
         current: true,
-        read: { kind: HISTORY_READ.READY, document: { body, assumptions: [] }, previous: null },
+        read: { kind: HISTORY_READ.READY, description: { body, assumptions: [] }, previous: null },
       },
     },
   });
