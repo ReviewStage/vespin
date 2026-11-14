@@ -150,18 +150,9 @@ const readConnectionRestored = Schema.decodeUnknownOption(
 /** A move of the agent's goal the runner read where the harness's own stream says none (`claude-goals.ts`), its fields the goal notice's own. */
 const readGoal = Schema.decodeUnknownOption(GoalNoticeSchema);
 
-/**
- * The end a runner posted where it let a wait on wakeups go so its sandbox
- * could stop, read as a turn that ended, the wakeups it named dropped. A
- * host bundles its own runner, so this is read until the host version floor
- * (`HOST_VERSION.FLOOR`) reaches 0.25.0, the first release whose runner
- * holds such a wait rather than ending on it.
- */
-const LEGACY_RELEASED = "released";
-
 const readEnd = Schema.decodeUnknownOption(
   Schema.Struct({
-    reason: Schema.Literals([...Object.values(RUNNER_END), LEGACY_RELEASED]),
+    reason: Schema.Literals(Object.values(RUNNER_END)),
     detail: Schema.optionalKey(Schema.String),
   }),
 );
@@ -187,8 +178,7 @@ function endMoments(message: WireValue): readonly NativeMoment[] {
   const read = readEnd(message);
 
   if (Option.isNone(read)) return [];
-  const { detail } = read.value;
-  const reason = read.value.reason === LEGACY_RELEASED ? RUNNER_END.TURN_ENDED : read.value.reason;
+  const { reason, detail } = read.value;
   const said = detail === undefined ? reason : `${reason} ${detail}`;
 
   return [

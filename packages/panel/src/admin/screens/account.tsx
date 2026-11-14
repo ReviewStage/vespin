@@ -1,6 +1,5 @@
 import { accountPictureAt } from "@repo/features/account-picture";
 import type { AdminUserDetail } from "@repo/features/admin-answer-wire";
-import type { AdminMetricsWindow } from "@repo/features/admin-wire";
 import { formatCount } from "@repo/features/number-format";
 import { formatDate, formatDayTick, formatInstant } from "@repo/features/time-format";
 import { readFailedWords } from "@repo/features/words";
@@ -32,7 +31,11 @@ import { NOT_FOUND_THING, NotFound } from "../../not-found.js";
 import { AttachmentViewer } from "../../tasks/attachment-viewer.js";
 import { useAdminDoors } from "../admin-doors.js";
 import { adminUserQuery, useAdminSignOut } from "../admin-queries.js";
-import { adminReadView } from "../admin-read-view.js";
+import {
+  type AdminScreenShell,
+  type AdminWindowChoice,
+  adminReadView,
+} from "../admin-read-view.js";
 import { ActionsChart, ActionsChartSkeleton } from "../charts/actions-chart.js";
 import {
   ActivityCalendar,
@@ -480,17 +483,12 @@ export function AccountScreen({
   onBack,
   onOpenWorkspace,
   frame,
-}: {
-  id: string;
-  windowDays: AdminMetricsWindow;
-  onWindowDaysChange: (windowDays: AdminMetricsWindow) => void;
-  account: ViewerAccount | undefined;
-  onSignOut: () => Promise<void>;
-  onBack: () => void;
-  onOpenWorkspace: (id: string) => void;
-  /** Applied around every answer but the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
-}): React.JSX.Element {
+}: AdminScreenShell &
+  AdminWindowChoice & {
+    id: string;
+    onBack: () => void;
+    onOpenWorkspace: (id: string) => void;
+  }): React.JSX.Element {
   const { reads, gate, impersonate } = useAdminDoors();
   const query = accountReadQuery(id, windowDays);
   const read = useQuery({ ...adminUserQuery(reads, query), enabled: !gate.heldAtGate() });

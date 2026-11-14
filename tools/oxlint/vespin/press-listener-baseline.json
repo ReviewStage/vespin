@@ -1,6 +1,6 @@
 {
   "apps/catalog/src/examples/pane-pins.tsx": 1,
-  "apps/web/src/admin/chrome/sidebar.tsx": 1,
+  "packages/panel/src/admin/chrome/admin-shell.tsx": 1,
   "packages/panel/src/desktop/hover-pane.ts": 1,
   "packages/panel/src/keyboard-modality.ts": 1,
   "packages/panel/src/places/window-history.ts": 1,

@@ -714,7 +714,7 @@ export function queueAgentMessage(
  * boot record stands; none where it has none. What the send diversion and
  * the hand-off both read the one rule by (`bootHold`).
  */
-export function bootPhaseInLock(agentId: string): AgentQueueEffect<BootPhase | undefined> {
+function bootPhaseInLock(agentId: string): AgentQueueEffect<BootPhase | undefined> {
   return Effect.map(findBootPhase({ agentId }), ([row]) => row?.phase);
 }
 
