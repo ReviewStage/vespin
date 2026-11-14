@@ -409,7 +409,7 @@ export function NewTaskComposer({
 
   const starts = useAsyncAction<Failure>(rejectedFailure);
   const starting = starts.running;
-  // The refusal a refused card opened on, said until a start lets it go, as a draft agent's tab says one.
+  // The refusal a refused card opened on, said until a start or an edit lets it go.
   const [handed, setHanded] = useState<Failure | undefined>(refused?.note);
   const note = starts.refusal ?? handed;
 
@@ -729,7 +729,24 @@ export function NewTaskComposer({
 
   const composer: AgentComposerControl = {
     held: draft.draft,
-    updateHeld: heldUpdateOver(draft.update),
+    updateHeld: (next) => {
+      let edited = false;
+      // Note that the words are told against the draft as the change lands, never a render's copy, so an echo of the
+      // words it holds, as the field's of a refused card's, is no edit.
+      heldUpdateOver<Draft>((move) =>
+        draft.update((was) => {
+          const moved = move(was);
+          edited = moved.text !== was.text;
+
+          return moved;
+        }),
+      )(next);
+
+      // An edit of the words lets a refusal go.
+      if (!edited) return;
+      setHanded(undefined);
+      starts.clear();
+    },
     sending: starting,
     // Note that a read of the devices that failed is said over any note before it, and read again by its Retry.
     note: devicesFailed ? DEVICES_UNREAD : note,
