@@ -399,7 +399,7 @@ The Mac app keeps its window layout and the drafts of messages you have not
 sent. While you are signed in, it also keeps a copy of your workspaces' lists,
 changes you made offline, the words of messages to agents that were not
 delivered, with the names of their files, and **your Inbox's newest threads**,
-up to about 400 KB of them: each thread's title, who it waits on, and its
+up to about 150 KB of them: each thread's title, who it waits on, and its
 messages' words and the names of their files (never a file itself), as the
 Inbox last showed them, so it can draw your Inbox at once when it opens. All
 of it is in one file, `entities.sealed`, encrypted under a key in the macOS
