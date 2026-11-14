@@ -7,7 +7,8 @@ import {
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { entityPool } from "@repo/sync";
+import { TASK_STATUS } from "@repo/features/task-wire";
+import { type EntityPool, entityPool } from "@repo/sync";
 import { TURN_STATUS } from "@repo/wire";
 import { Deferred, Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
@@ -64,18 +65,44 @@ function documentOf(drawn: LiveTaskList, version: number): AppStateSnapshot {
   };
 }
 
+/** `pool`, counting each row a read standing on it reads of it, and each key an answer hands it as all the read holds. */
+function countedPool(pool: EntityPool) {
+  const work = { rowsRead: 0, keysHeld: 0 };
+
+  const counted: EntityPool = {
+    ...pool,
+    stand: (kind, read) =>
+      Effect.map(pool.stand(kind, read), (held) => ({
+        ...held,
+        row: (key) => {
+          work.rowsRead += 1;
+
+          return held.row(key);
+        },
+        answer: (rows, answered) => {
+          work.keysHeld += answered?.held?.length ?? 0;
+
+          return held.answer(rows, answered);
+        },
+      })),
+  };
+
+  return { pool: counted, work };
+}
+
 /** Lets the list's timer fiber run: arm its wait, or draw once that wait ends. */
 const settled = Effect.repeat(Effect.yieldNow, { times: 100 });
 
 it.effect(
-  "an agent's row that moves on an account of thousands draws its own agent and task again, and every other task and agent is the object drawn before",
+  "an agent's row that moves on an account of thousands draws its own agent and task again, reading no other row, every other task and agent the object drawn before, and the Done tasks the live set's instant passes leave with no row moving",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
         const drawings: LiveTaskList[] = [];
+        const { pool, work } = countedPool(yield* entityPool());
 
         const collections = yield* taskListCollections({
-          pool: yield* entityPool(),
+          pool,
           draw: (read) => {
             drawings.push(read);
           },
@@ -84,10 +111,15 @@ it.effect(
         });
 
         // Note that this test takes about two seconds, since its point is an account's size.
-        // An account of thousands: 1,000 tasks, 2,000 agents that each ran a turn, some pinned, some started from another.
+        // An account of thousands: 1,000 tasks, a third of them Done and each touched at its own instant past the live set's, and 2,000 agents that each ran a turn, some pinned, some started from another.
+        const liveSince = 1_000_000;
+        const done = (at: number) => at % 3 === 0;
+
         const plans = Array.from({ length: 1_000 }, (_, at) => ({
           ...planListRow(`task-${at}`, `Task ${at}`),
           createdAt: at,
+          updatedAt: liveSince + ((at * 7_919) % 1_000),
+          ...(done(at) ? { status: TASK_STATUS.DONE } : undefined),
         }));
 
         const agents = Array.from({ length: 2_000 }, (_, at) => ({
@@ -105,7 +137,7 @@ it.effect(
             : undefined),
         }));
 
-        yield* collections.answer({ plans, agents });
+        yield* collections.answer({ plans, agents }, undefined, liveSince);
         const before = drawings.at(-1);
 
         // Only one agent moved, one nothing was started from and started from none, as the follow answers past a sync id: a teammate sent it a line, so it runs again.
@@ -119,12 +151,20 @@ it.effect(
           settledAt: null,
         };
 
+        work.rowsRead = 0;
+        work.keysHeld = 0;
+
         yield* collections.answer(
           { plans: [], agents: [running] },
           { past: "1", next: "2", gone: [] },
+          liveSince,
         );
         yield* TestClock.adjust(DRAW_TICK);
         const after = drawings.at(-1);
+
+        // Taking the one row reads the pool for that agent and its task alone, and hands it no list of all the list holds.
+        assert.ok(work.rowsRead <= 4, `read ${work.rowsRead} rows`);
+        assert.equal(work.keysHeld, 0);
         assert.ok(before !== undefined && after !== undefined && after !== before);
         assert.equal(after.taskAgents.length, agents.length);
         assert.equal(after.list.plans.length, plans.length);
@@ -169,6 +209,28 @@ it.effect(
           ],
         });
         assert.equal(reads, 0);
+
+        // The service binds the live set half its stretch later and answers no row: each Done task touched before then leaves, but one pinned through an agent.
+        const pinnedThroughAgent = (at: number) => at % 7 === 0 || (at + 1_000) % 7 === 0;
+
+        const stays = plans.filter(
+          (plan, at) => !done(at) || plan.updatedAt >= liveSince + 500 || pinnedThroughAgent(at),
+        );
+
+        yield* collections.answer(
+          { plans: [], agents: [] },
+          { past: "2", next: "3", gone: [] },
+          liveSince + 500,
+        );
+        yield* TestClock.adjust(DRAW_TICK);
+
+        assert.deepEqual(
+          drawings
+            .at(-1)
+            ?.list.plans.map((plan) => plan.id)
+            .toSorted(),
+          stays.map((plan) => plan.id).toSorted(),
+        );
       }),
     ),
 );
