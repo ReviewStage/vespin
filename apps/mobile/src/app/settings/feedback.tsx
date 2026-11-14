@@ -24,6 +24,7 @@ import {
   GLYPH,
   glyphSymbol,
   ListSection,
+  SCREEN_GROUND,
   ScopePicker,
   Screen,
   SettingsForm,
@@ -242,7 +243,7 @@ export default function FeedbackScreen() {
         }}
         onDismiss={kept.stay}
       />
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <ScopePicker label={FEEDBACK_WORDS.KIND} scopes={scopes}>
           <SettingsForm>
             <ListSection footer={note}>
