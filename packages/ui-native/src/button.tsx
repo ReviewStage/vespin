@@ -4,7 +4,9 @@ import {
   HStack,
   Image,
   Menu,
+  Overlay,
   Picker,
+  Spacer,
   Button as SwiftUIButton,
   Text,
   Toggle,
@@ -14,6 +16,7 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityElement,
+  accessibilityHidden,
   accessibilityHint,
   accessibilityLabel,
   accessibilityValue,
@@ -43,7 +46,7 @@ import { actContent } from "./glyph-label.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
 import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How a button stands: filled for the one act a screen is for, outlined beside it, words alone, or Liquid Glass over content. */
@@ -71,9 +74,6 @@ const HAIRLINE = 0.5;
 
 /** A capsule's inner margins, around its words. */
 const CAPSULE_PADDING = { horizontal: 12, vertical: 6 } as const;
-
-/** How far past its top and bottom edges a pressable capsule takes a press, in points: a 28 pt capsule then answers across Apple's least target of 44. */
-const CAPSULE_REACH = 8;
 
 type ButtonProps = {
   readonly label: string;
@@ -146,19 +146,25 @@ function capsuleModifiers(colors: BrandColors, filled: boolean) {
 }
 
 /**
- * A pressable capsule's press reach: its shape padded out by
- * `CAPSULE_REACH` above and below, then the padding given back, so the
- * capsule takes a press across 44 pt while it lays out, and stands beside
- * its neighbors, at its drawn height. Note that the shape stands on the
- * label, since a borderless button or a menu answers only where its label
- * is hit.
+ * The target a pressable capsule's press is taken across: a clear frame as
+ * wide as the capsule and Apple's least height of 44 pt, which a menu or a
+ * button over the capsule takes as its label. Note that it stands in an
+ * overlay rather than around the capsule, so it lays out nothing and the
+ * capsule stands beside its neighbors at its drawn 28 pt; a shape padded past
+ * the capsule's own frame and padded back took no press past it on the Mac,
+ * since SwiftUI hit-tests a view only inside its own frame.
  */
-function capsuleReach() {
-  return [
-    padding({ vertical: CAPSULE_REACH }),
-    SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-    padding({ vertical: -CAPSULE_REACH }),
-  ];
+function CapsuleTarget() {
+  return (
+    <HStack
+      modifiers={[
+        frame({ maxWidth: Number.POSITIVE_INFINITY, minHeight: PRESS_SIZE }),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+      ]}
+    >
+      <Spacer />
+    </HStack>
+  );
 }
 
 /**
@@ -375,7 +381,7 @@ export function FieldChip(props: FieldChipProps) {
         ...capsuleModifiers(colors, false),
         ...(menu === undefined
           ? [accessibilityElement("ignore"), accessibilityLabel(props.label)]
-          : capsuleReach()),
+          : [accessibilityHidden(true)]),
       ]}
     >
       {fieldMark(props, colors, glyphSize)}
@@ -385,14 +391,29 @@ export function FieldChip(props: FieldChipProps) {
 
   if (menu === undefined) return capsule;
 
+  // Note that the menu stands over the capsule, its label the clear 44 pt target, so its press reaches past the capsule's drawn edges.
+  return (
+    <Overlay>
+      {capsule}
+      <Overlay.Content>
+        <FieldValuesMenu menu={menu} label={props.label} />
+      </Overlay.Content>
+    </Overlay>
+  );
+}
+
+/** A field chip's menu of its values over the capsule, heard as the field's name and its value. */
+function FieldValuesMenu({ menu, label }: { readonly menu: FieldMenu; readonly label: string }) {
+  const colors = useColors();
+
   return (
     <Menu
-      label={capsule}
+      label={<CapsuleTarget />}
       modifiers={[
         // Note that a borderless menu takes only its own press, since a list row holding the system's buttons hands any press on it to all of them.
         buttonStyle("borderless"),
         // Note that the field's name and its value are one label, "Status, Todo", because Maestro and Voice Control match a label and never a value.
-        accessibilityLabel(`${menu.label}, ${props.label}`),
+        accessibilityLabel(`${menu.label}, ${label}`),
       ]}
     >
       {menu.choices.map((choice, at) => (
@@ -488,19 +509,12 @@ type FollowingChipProps = {
 export function FollowingChip({ label, faces, more, hint, heard, onPress }: FollowingChipProps) {
   const colors = useColors();
 
+  // Note that the button stands over the capsule, its label the clear 44 pt target, so its press reaches past the capsule's drawn edges.
   return (
-    <SwiftUIButton
-      onPress={onPress}
-      modifiers={[
-        buttonStyle("borderless"),
-        accessibilityLabel(label),
-        accessibilityValue(heard),
-        accessibilityHint(hint),
-      ]}
-    >
+    <Overlay>
       <HStack
         spacing={SPACE.TIGHT + 2}
-        modifiers={[...capsuleModifiers(colors, false), ...capsuleReach()]}
+        modifiers={[...capsuleModifiers(colors, false), accessibilityHidden(true)]}
       >
         {faces.length === 0 ? null : (
           <HStack spacing={-FACE_OVERLAP}>
@@ -529,6 +543,19 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
         )}
         <CapsuleWords label={label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
       </HStack>
-    </SwiftUIButton>
+      <Overlay.Content>
+        <SwiftUIButton
+          onPress={onPress}
+          modifiers={[
+            buttonStyle("borderless"),
+            accessibilityLabel(label),
+            accessibilityValue(heard),
+            accessibilityHint(hint),
+          ]}
+        >
+          <CapsuleTarget />
+        </SwiftUIButton>
+      </Overlay.Content>
+    </Overlay>
   );
 }
