@@ -203,6 +203,39 @@ it.layer(getTestDB())("the machine ask store", (it) => {
       }),
   );
 
+  it.effect(
+    "an Allow once given after a window whose machine never said it closed still leaves one grant, and two leave two",
+    () =>
+      Effect.gen(function* () {
+        const { owner } = yield* openAccounts;
+        const workspace = yield* openWorkspace(owner);
+        const agent = yield* openAgentOnOwnTask(owner, workspace);
+        const laptop = yield* openDevice(owner);
+
+        const [first, second] = [
+          yield* asked(owner, laptop, SHELL, agent),
+          yield* asked(owner, laptop, SHELL, agent),
+        ];
+
+        yield* TestClock.adjust(`${300 + MACHINE_ASK_BOUNDS.LAPSE_GRACE_SECONDS + 1} seconds`);
+
+        for (const { id } of [first, second]) {
+          yield* answerMachineAsk(owner, { id, decision: MACHINE_ASK_DECISION.ALLOW_ONCE });
+        }
+
+        const retries = [
+          yield* asked(owner, laptop, SHELL, agent),
+          yield* asked(owner, laptop, SHELL, agent),
+          yield* asked(owner, laptop, SHELL, agent),
+        ];
+
+        assert.deepEqual(
+          retries.map(({ posted }) => posted.answer?.decision),
+          [MACHINE_ASK_DECISION.ALLOW_ONCE, MACHINE_ASK_DECISION.ALLOW_ONCE, undefined],
+        );
+      }),
+  );
+
   it.effect("a late Always allow goes to the machine's own settings, and the ask comes down", () =>
     Effect.gen(function* () {
       const { owner } = yield* openAccounts;
