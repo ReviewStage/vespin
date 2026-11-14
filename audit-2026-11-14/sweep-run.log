@@ -115,3 +115,20 @@ duo-folded-duo-light wrap-sign-in.yaml: fails 0 shots 4
 duo-folded-duo-dark wrap-sign-in.yaml: fails 0 shots 4 
   ax none on duo: contrast disabled transparency-key 
 duo-folded-duo-light wrap-update-needed.yaml: fails 0 shots 1 
+duo-folded-duo-dark wrap-update-needed.yaml: fails 0 shots 1 
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-task-history.yaml: fails 0 shots 3 
+duo-folded-duo-dark wrap-task-history.yaml: fails 0 shots 3 
+remote: 
+remote: GitHub found 5 vulnerabilities on ReviewStage/vespin's default branch (2 moderate, 3 low). To find out more, visit:        
+remote:      https://github.com/ReviewStage/vespin/security/dependabot        
+remote: 
+pushed duo-folded      162 files 10:41:16
+== ipad26 10:42:05
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-new-task.yaml: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+ipad26-landscape-ipad26-dark wrap-new-task.yaml: fails 2 shots 3   Hide Keyboard... FAILED
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-failure-notice.yaml: fails 2 shots 2   Assert that "The task could not be unpinned. Try again." is visible... FAILED
+ipad26-landscape-ipad26-dark wrap-failure-notice.yaml: fails 2 shots 2   Assert that "The task could not be unpinned. Try again." is visible... FAILED
+  ax none on ipad26: contrast disabled transparency-key 
