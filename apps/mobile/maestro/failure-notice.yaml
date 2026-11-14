@@ -17,10 +17,12 @@ appId: dev.vespin.ios
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd
 # Unpin from the row's long press menu is refused: the row stays pinned and
-# the notice says why, with Try again.
+# the notice says why, with Try again. Note that a notice offering Try again
+# says it as its button, not in its words (`failure-notice-model.ts`), so
+# each refusal is matched by its first sentence.
 - longPressOn: "Weekly digest email"
 - tapOn: "Unpin"
-- assertVisible: "The task could not be unpinned. Try again."
+- assertVisible: "The task could not be unpinned\\..*"
 - assertVisible:
     id: "failure-notice-retry"
 - takeScreenshot: failure-notice
@@ -28,7 +30,7 @@ appId: dev.vespin.ios
 # notice comes back in the same words.
 - tapOn:
     id: "failure-notice-retry"
-- assertVisible: "The task could not be unpinned. Try again."
+- assertVisible: "The task could not be unpinned\\..*"
 - assertVisible: "Pinned"
 # A swipe up puts the notice away before its time is up.
 - swipe:
@@ -36,7 +38,7 @@ appId: dev.vespin.ios
       id: "failure-notice"
     direction: UP
 - waitForAnimationToEnd
-- assertNotVisible: "The task could not be unpinned. Try again."
+- assertNotVisible: "The task could not be unpinned\\..*"
 # Mark done from the same menu asks first in the system's alert, since the
 # task's agent is at work and only the person can decide to stop it; once
 # confirmed, it is refused too: the task stays in the list and the notice
@@ -44,7 +46,7 @@ appId: dev.vespin.ios
 - longPressOn: "Weekly digest email"
 - tapOn: "Mark done"
 - tapOn: "Stop agents"
-- assertVisible: "The task could not be marked done. Try again."
+- assertVisible: "The task could not be marked done\\..*"
 - assertVisible: "Weekly digest email"
 - takeScreenshot: failure-notice-mark-done
 # A refusal inside a sheet draws in that sheet, over its backdrop, not
@@ -56,7 +58,7 @@ appId: dev.vespin.ios
 - tapOn: "Following"
 - tapOn: "Add a follower"
 - tapOn: "Alan Turing.*"
-- assertVisible: "Following could not be changed. Try again."
+- assertVisible: "Following could not be changed\\..*"
 - waitForAnimationToEnd
 - takeScreenshot: failure-notice-add-follower
 # Settings is a sheet with a stack of its own: a memory's Delete there is
@@ -79,6 +81,6 @@ appId: dev.vespin.ios
 - tapOn: "Delete"
 - assertVisible: "Delete this memory?"
 - tapOn: "Delete memory"
-- assertVisible: "The memory could not be deleted. Try again."
+- assertVisible: "The memory could not be deleted\\..*"
 - waitForAnimationToEnd
 - takeScreenshot: failure-notice-settings
