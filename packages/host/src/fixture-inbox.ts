@@ -1677,6 +1677,15 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
 /** The threads a fixture run started on the invites task's description, by id, so a reply or a resolve on one finds it as it does a staged thread. */
 const STARTED_THREADS = new Map<string, DescriptionCommentThread>();
 
+/** Keeps a started thread as it now stands, moved on a revision, and answers it. */
+function keepStarted(thread: DescriptionCommentThread): DescriptionCommentThread {
+  const kept = { ...thread, revision: thread.revision + 1, updatedAt: Date.now() };
+
+  STARTED_THREADS.set(kept.id, kept);
+
+  return kept;
+}
+
 /** Each held comments slice with the reference journey's description threads laid over it, one object for each. */
 const STAGED_COMMENTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS],
@@ -2546,6 +2555,17 @@ const ANSWERS: StagedAnswers = {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
     }
 
+    const started = STARTED_THREADS.has(thread.id);
+
+    // Note that a thread the run started keeps what was done to it, its replies and whether it stands resolved, so a later answer carries them; a staged thread answers as it stands.
+    if (started && action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE) {
+      return { thread: keepStarted({ ...thread, status: DESCRIPTION_COMMENT_STATUS.RESOLVED }) };
+    }
+
+    if (started && action.action === DESCRIPTION_COMMENT_ACTION.REOPEN) {
+      return { thread: keepStarted({ ...thread, status: DESCRIPTION_COMMENT_STATUS.OPEN }) };
+    }
+
     if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };
 
     const reply = {
@@ -2556,7 +2576,9 @@ const ANSWERS: StagedAnswers = {
       at: Date.now(),
     };
 
-    return { thread: { ...thread, entries: [...thread.entries, reply] } };
+    const replied = { ...thread, entries: [...thread.entries, reply] };
+
+    return { thread: started ? keepStarted(replied) : replied };
   },
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
