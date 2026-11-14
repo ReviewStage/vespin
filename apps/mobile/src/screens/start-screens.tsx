@@ -45,6 +45,7 @@ import { useMemo, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
+import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useOnTab } from "../tab-route.js";
 import {
@@ -130,7 +131,7 @@ function SheetBar({
   readonly kept: KeptWords;
 }) {
   const colors = useColors();
-  const router = useRouter();
+  const close = useCloseSheet(kept);
 
   return (
     <>
@@ -146,7 +147,7 @@ function SheetBar({
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button onPress={close}>{WORDS.CANCEL}</Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         {file === undefined ? null : (

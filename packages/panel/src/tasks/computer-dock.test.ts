@@ -77,18 +77,20 @@ test("every app used this turn stands once, the one used last first, each with i
   assert.deepEqual(appsInUse(messages, true), {
     apps: [
       {
-        id: "com.example.simulator",
+        id: "r1",
         name: "Simulator",
         bundleId: "com.example.simulator",
         icon: ICON.id,
         window: WINDOW,
+        machine: undefined,
       },
       {
-        id: "com.example.xcode",
+        id: "r2",
         name: "Xcode",
         bundleId: "com.example.xcode",
         icon: ICON.id,
         window: OTHER_WINDOW,
+        machine: undefined,
       },
     ],
     using: true,
@@ -172,7 +174,7 @@ test("the agent's pointer stands where the turn's newest call left its cursor, o
   ];
 
   assert.deepEqual(appsInUse(messages, true)?.cursor, {
-    app: "com.example.simulator",
+    app: "r1",
     x: 0.5,
     y: 0.75,
     pressed: true,
@@ -181,7 +183,7 @@ test("the agent's pointer stands where the turn's newest call left its cursor, o
 
   // Note that a read of another app that says no point leaves the pointer where it stood, over the app before it.
   const movedOn = [...messages, turn("turn-3", [read("r2", "Xcode", OTHER_WINDOW)])];
-  assert.equal(appsInUse(movedOn, true)?.cursor?.app, "com.example.simulator");
+  assert.equal(appsInUse(movedOn, true)?.cursor?.app, "r1");
 
   assert.equal(appsInUse(messages.slice(0, 2), true)?.cursor?.callId, "c0");
   assert.equal(appsInUse([asked("ask-3"), turn("turn-4", [typed])], true)?.cursor, undefined);
