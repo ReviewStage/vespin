@@ -445,6 +445,7 @@ function chosenActs(
       symbol: unread.length > 0 || none ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
       disabled: none,
       onPress: () => {
+        if (none) return;
         acts.markMany(
           marking.map((item) => item.id),
           unread.length === 0,
@@ -452,12 +453,19 @@ function chosenActs(
         stop();
       },
     },
-    { ...REMIND_ME, disabled: none, onPress: () => remind.openMany(chosen, stop) },
+    {
+      ...REMIND_ME,
+      disabled: none,
+      onPress: () => {
+        if (!none) remind.openMany(chosen, stop);
+      },
+    },
     {
       label: RESOLVE,
       symbol: GLYPH.RESOLVED,
       disabled: open.length === 0,
       onPress: () => {
+        if (open.length === 0) return;
         acts.resolveMany(open);
         stop();
       },
@@ -902,6 +910,8 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
           ? { label: SELECTION_WORDS.SELECT_NONE, onPress: () => selecting.choose([]) }
           : {
               label: SELECTION_WORDS.SELECT_ALL,
+              // Note that with nothing listed, such as under a search that finds nothing, Select all stands dimmed, so its press never lets go of the threads chosen before.
+              disabled: listing.listed.length === 0,
               onPress: () => selecting.choose(listing.listed.map(({ item }) => item.id)),
             }) satisfies BarAction,
         done: { label: SELECT_DONE, onPress: selecting.stop } satisfies BarAction,
@@ -943,7 +953,11 @@ function InboxStackList(words: InboxSearch) {
       </Stack.Screen>
       {choosing !== undefined ? (
         <Stack.Toolbar placement="left">
-          <Stack.Toolbar.Button variant="plain" onPress={choosing.all.onPress}>
+          <Stack.Toolbar.Button
+            variant="plain"
+            disabled={choosing.all.disabled === true}
+            onPress={choosing.all.onPress}
+          >
             {choosing.all.label}
           </Stack.Toolbar.Button>
         </Stack.Toolbar>
