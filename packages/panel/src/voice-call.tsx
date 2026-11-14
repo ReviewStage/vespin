@@ -38,16 +38,21 @@
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { VOICE_CALL_STAGE, type VoiceCallStage } from "@repo/features/voice-wire";
+import {
+  LIVE_EVENT,
+  type LiveClientEvent,
+  liveClientEvent,
+  liveEventType,
+  VOICE_EVENTS_CHANNEL,
+  type VoiceCallState,
+} from "@repo/features/voice-call-session";
+import { VOICE_CALL_STAGE } from "@repo/features/voice-wire";
 import { DEFAULT_LIVE_VOICE } from "@repo/features/voices";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { type CallLevel, type CallLevels, STATUS_TONE } from "@repo/ui";
 import { OPENAI_KEY_MISSING_NOTE } from "@repo/ui/microphone-access";
-import { EXCESS_KEYS, unparsedWire } from "@repo/wire";
-import { readEither } from "@repo/wire/effect";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Schema as EffectSchema, Result } from "effect";
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { sendAct } from "./act.js";
 import { useOpenAiKeyMissing, useOpenApiKeys } from "./openai-key.js";
@@ -55,21 +60,6 @@ import { frameLevel } from "./tasks/frame-level.js";
 import { MICROPHONE_REFUSAL, useOpenMicrophone } from "./tasks/use-open-microphone.js";
 import { showToast } from "./toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "./use-app-state.js";
-
-/** The call standing in this window, as a surface draws it. */
-export interface VoiceCallState {
-  readonly stage: VoiceCallStage;
-  /** The agent the call speaks to, and the task it works on. */
-  readonly agentId: string;
-  readonly taskId: string;
-  /** The call's id as the service answered it, which its transcript lines name; nothing until it answers. */
-  readonly callId: string | undefined;
-  /** When the session started, on the epoch's clock; nothing while it connects. */
-  readonly startedAt: number | undefined;
-  readonly microphoneMuted: boolean;
-  /** Whether the voice is silenced on this device alone. */
-  readonly speakerMuted: boolean;
-}
 
 /** The window's call and what a surface may do with it. */
 export interface VoiceCall {
@@ -83,18 +73,6 @@ export interface VoiceCall {
   /** How loud the caller and the voice are, frame by frame, while a call stands; nothing but silence otherwise. */
   readonly levels: CallLevels;
 }
-
-/** The channel GPT-Live's events ride on, by the name it opens it under. */
-const EVENTS_CHANNEL = "oai-events";
-
-/** The client events the session's allowlist takes from the panel, and the server events it is told. */
-const LIVE_EVENT = {
-  MUTE: "session.input_audio.mute",
-  UNMUTE: "session.input_audio.unmute",
-  CLOSE: "session.close",
-  STARTED: "session.started",
-  CLOSED: "session.closed",
-} as const;
 
 /** Why a call stopped short, in the words its toast says. */
 const VOICE_CALL_NOTE = {
@@ -152,22 +130,8 @@ function toastCallFailure(words: string, cause: unknown): void {
 }
 
 /** Sends one client event on the call's channel, where it is open to take it. */
-function tell(standing: Standing, type: string): void {
-  if (standing.channel.readyState === "open") standing.channel.send(JSON.stringify({ type }));
-}
-
-/** The one field of a server event the call reads: its type, every other key let go. */
-const readServerEvent = readEither(EffectSchema.Struct({ type: EffectSchema.String }), {
-  excess: EXCESS_KEYS.DROP,
-});
-
-/** The type a server event names; nothing for a message that is not one. */
-function eventType(text: string): string | undefined {
-  try {
-    return Result.getOrUndefined(readServerEvent(unparsedWire(JSON.parse(text))))?.type;
-  } catch {
-    return undefined;
-  }
+function tell(standing: Standing, type: LiveClientEvent): void {
+  if (standing.channel.readyState === "open") standing.channel.send(liveClientEvent(type));
 }
 
 /** The microphone's tracks silenced while the call is muted, and sounding again once it is not. */
@@ -229,7 +193,7 @@ function connect(microphone: MediaStream, context: AudioContext | undefined): St
   };
 
   for (const track of microphone.getTracks()) peer.addTrack(track, microphone);
-  const channel = peer.createDataChannel(EVENTS_CHANNEL);
+  const channel = peer.createDataChannel(VOICE_EVENTS_CHANNEL);
 
   return { peer, channel, microphone, speaker, meters };
 }
@@ -325,7 +289,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
   /** Hears the call's channel and peer: the session's start and close, the channel closing, and a peer that failed. */
   const listen = (asked: number, held: Standing) => {
     held.channel.onmessage = (message) => {
-      const type = eventType(String(message.data));
+      const type = liveEventType(String(message.data));
 
       if (type === LIVE_EVENT.CLOSED) return drop(asked);
 
