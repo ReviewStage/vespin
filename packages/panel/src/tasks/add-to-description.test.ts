@@ -80,9 +80,9 @@ beforeEach(() => {
     },
     [ACT_KIND.TASKS_EDIT]: ({ edit }) => {
       sent.push(ACT_KIND.TASKS_EDIT);
-      // The one edit this page sends is the document's whole text.
-      assert.ok("document" in edit);
-      const { base, value } = edit.document;
+      // The one edit this page sends is the description's whole text.
+      assert.ok("description" in edit);
+      const { base, value } = edit.description;
 
       if (base !== held) return Promise.resolve({ conflict: { current: held } });
       held = value;

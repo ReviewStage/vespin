@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { totalmem } from "node:os";
 
 import { ROOT_TASKS, TEST_TASK, turboInvocation, WORKSPACE_TASKS } from "./lib/turbo.mjs";
 
@@ -25,6 +26,24 @@ const CHECKS = [...ROOT_TASKS, ...WORKSPACE_TASKS, "test"];
 const WITHOUT_FLAG = "--without";
 const AFFECTED_FLAG = "--affected";
 const AFFECTED_BASE = "origin/main";
+const GIBIBYTE = 1024 ** 3;
+
+// Note that the workspace tasks run as many at once as memory holds, never
+// turbo's default of ten, because each is a TypeScript 7 `tsc` that already
+// checks on every core with threads of its own: a second beside it buys
+// little time, and the largest (`@repo/service`'s, `@repo/panel`'s) peak near
+// 4 GiB each, so on an 8 GiB machine two of them are what the kernel killed.
+// The lint and the iOS bundle running beside them are held back as headroom.
+const WORKSPACE_TASK_PEAK = 4 * GIBIBYTE;
+const BESIDE_WORKSPACE_TASKS = 2 * GIBIBYTE;
+
+// A container's limit, where one is set, is the memory there is, not the host's.
+const memory = Math.min(totalmem(), process.constrainedMemory() || Number.POSITIVE_INFINITY);
+
+const workspaceConcurrency = Math.max(
+  1,
+  Math.floor((memory - BESIDE_WORKSPACE_TASKS) / WORKSPACE_TASK_PEAK),
+);
 
 function parseArguments(argv) {
   const without = [];
@@ -133,7 +152,10 @@ if (rootTasks.length > 0) {
 }
 
 if (anyWorkspace && workspaceTasks.length > 0) {
-  runs.push({ label: workspaceTasks.join(", "), args: [...workspaceTasks, ...scope] });
+  runs.push({
+    label: workspaceTasks.join(", "),
+    args: [...workspaceTasks, `--concurrency=${workspaceConcurrency}`, ...scope],
+  });
 }
 
 if (anyWorkspace && !parsed.without.includes("test")) {

@@ -67,13 +67,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** A page these tests draw: Appearance's own rows, or This Mac's Startup, whose one row is a switch. */
+/** A page these tests draw: Appearance's own rows, or This Mac's, among them the switch that opens the app at login. */
 type DrawnPage = typeof SETTINGS_PAGE.APPEARANCE | typeof SETTINGS_PAGE.THIS_MAC;
 
 /** The section of `page` these tests draw. */
 const DRAWN_SECTION = {
   [SETTINGS_PAGE.APPEARANCE]: SETTING_SECTION.MAIN,
-  [SETTINGS_PAGE.THIS_MAC]: SETTING_SECTION.STARTUP,
+  [SETTINGS_PAGE.THIS_MAC]: SETTING_SECTION.MAIN,
 } as const satisfies Record<DrawnPage, SettingSection>;
 
 /** The rows the page draws over `settings`, beside the window's toasts. */
@@ -111,7 +111,7 @@ type MountThroughActsResult = {
   redraw: (settings: ReturnType<typeof settingsView>) => void;
 };
 
-/** This Mac's Startup, and a way to draw it again over the settings the store then holds. */
+/** This Mac's own rows, and a way to draw it again over the settings the store then holds. */
 function mountThroughActs(): MountThroughActsResult {
   const container = document.createElement("div");
   document.body.append(container);

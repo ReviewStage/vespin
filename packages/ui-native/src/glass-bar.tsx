@@ -6,6 +6,8 @@ import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
   Keyboard,
+  type KeyboardEvent,
+  LayoutAnimation,
   type LayoutChangeEvent,
   StyleSheet,
   useWindowDimensions,
@@ -21,6 +23,9 @@ const DOCK_ROOM_UNMEASURED = 72;
 
 /** The room the dock a screen's content stands in takes at its foot, above the bottom safe area, in points; none outside a dock. */
 const DockRoom = createContext(0);
+
+/** How far the system's keyboard stands over the dock a screen's content stands in, in points; none while it is down or outside a dock. */
+const DockKeyboard = createContext(0);
 
 /** Tells the dock how tall the bar inside it stands, with its gap; nothing outside a dock. */
 const DockMeasure = createContext<((room: number) => void) | undefined>(undefined);
@@ -66,15 +71,32 @@ const styles = StyleSheet.create({
   },
 });
 
+/**
+ * Moves the next layout with the keyboard, on its own duration and curve, as
+ * React Native's keyboard-avoiding view does, so what the keyboard lifts
+ * rises with it rather than snapping to where it ends.
+ */
+function moveWithKeyboard({ duration, easing }: KeyboardEvent) {
+  if (duration <= 0) return;
+  LayoutAnimation.configureNext({
+    duration,
+    update: { duration, type: LayoutAnimation.Types[easing] ?? LayoutAnimation.Types.keyboard },
+  });
+}
+
 /** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. */
 function useKeyboardHeight(): number {
   const [height, setHeight] = useState(0);
   useEffect(() => {
-    const rising = Keyboard.addListener("keyboardWillShow", ({ endCoordinates }) =>
-      setHeight(endCoordinates.height),
-    );
+    const rising = Keyboard.addListener("keyboardWillShow", (event) => {
+      moveWithKeyboard(event);
+      setHeight(event.endCoordinates.height);
+    });
 
-    const falling = Keyboard.addListener("keyboardWillHide", () => setHeight(0));
+    const falling = Keyboard.addListener("keyboardWillHide", (event) => {
+      moveWithKeyboard(event);
+      setHeight(0);
+    });
 
     return () => {
       rising.remove();
@@ -140,7 +162,8 @@ export function BarHead({ children }: { readonly children: ReactNode }) {
  * A bar of glass holding a composer's field and its buttons, floating over
  * the content it scrolls above, as the system's own bars do. Its children
  * are SwiftUI pieces, laid in a row on a host of its own, under its head
- * where it has one. It stands inside
+ * where it has one, along the row's foot, so a field grown past one line
+ * keeps its buttons beside its last line, as Messages' do. It stands inside
  * the screen's bottom safe area, which the tab bar's height is part of, so
  * the bar sits above the tab bar rather than under it. Note that where
  * Liquid Glass is unavailable, before iOS 26, or the reader turned on Reduce
@@ -164,7 +187,11 @@ export function GlassBar({
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
 
   const row = (
-    <HStack spacing={BAR_ROW_SPACING} modifiers={head === undefined ? [...modifiers] : []}>
+    <HStack
+      alignment="bottom"
+      spacing={BAR_ROW_SPACING}
+      modifiers={head === undefined ? [...modifiers] : []}
+    >
       {children}
     </HStack>
   );
@@ -233,7 +260,9 @@ export function GlassDock({
 
   return (
     <View style={styles.dock}>
-      <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
+      <DockKeyboard.Provider value={keyboard}>
+        <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
+      </DockKeyboard.Provider>
       <View style={[styles.docked, { bottom: keyboard }]}>
         <View style={[styles.column, { maxWidth: READING_WIDTH + left + right }]}>
           <DockMeasure.Provider value={setRoom}>{bar}</DockMeasure.Provider>
@@ -246,4 +275,9 @@ export function GlassDock({
 /** The room the dock a screen's content stands in takes at its foot, above the bottom safe area, which the content leaves under its last row so it scrolls clear of the bar; none outside a dock. */
 export function useDockRoom(): number {
   return useContext(DockRoom);
+}
+
+/** How far the system's keyboard stands over the dock a screen's content stands in, which the dock's bar is lifted by, so the content keeps its foot clear of it; none while it is down or outside a dock. */
+export function useDockKeyboard(): number {
+  return useContext(DockKeyboard);
 }

@@ -17,19 +17,23 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PULL_REQUEST_CHAPTERS_CALL_FAILURE } from "@repo/features/pull-request-chapters-view";
 import { PULL_REQUEST_CHAPTERS_STATE } from "@repo/features/pull-request-chapters-wire";
+import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActKind, PortActPayload } from "@repo/host/contract";
+import { taskListFollowing } from "@repo/host/task-list-following";
 import type { WireBoundaryInput } from "@repo/wire";
 import { MutationObserver } from "@tanstack/react-query";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { useDraftsOwner } from "../composer-drafts.js";
+import { TaskListCollectionsProvider } from "../task-list-collections.js";
 import { type FakeActPort, fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { handHostReads } from "../testing/app-state.js";
 import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { holdFrames, settleFrames } from "../testing/frames.js";
+import { listedAgent } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { type AgentsControl, MODELS_READ, useAgents } from "./use-agents.js";
@@ -39,7 +43,7 @@ const AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 
 const STARTED: AgentSummary = {
   id: AGENT,
-  planId: TASK,
+  taskId: TASK,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: null,
@@ -51,7 +55,31 @@ const STARTED: AgentSummary = {
 interface Standing {
   taskId: string | undefined;
   repository: string | null;
+  /** The agents the task list carries, on any task; none where it does not carry the open task. */
   listedAgents?: readonly AgentSummary[];
+}
+
+/** The task list as it stands for a test: the open task and the agents it carries, or neither where it carries none. */
+function standingView({ taskId, repository, listedAgents }: Standing): TasksView {
+  const carried = taskId !== undefined && listedAgents !== undefined;
+
+  return {
+    ...IDLE_TASKS_VIEW,
+    listStatus: TASKS_READ.READY,
+    tasks: carried
+      ? [
+          {
+            id: taskId,
+            workspaceId: "workspace",
+            name: "Task",
+            createdAt: 1,
+            updatedAt: 1,
+            repository,
+          },
+        ]
+      : [],
+    taskAgents: (listedAgents ?? []).map((agent) => listedAgent(agent)),
+  };
 }
 
 /** Any kind the hook asks. */
@@ -158,13 +186,24 @@ function mount(initial: Standing, keyPrefix = "key") {
     ) as Partial<FakeActPort>),
   });
 
+  // The task list's collections, fed as the window's follow feeds them, a version a standing.
+  const following = taskListFollowing();
+  let version = 0;
+
+  const lay = (standing: Standing) => {
+    version += 1;
+    following.write(version, standingView(standing));
+  };
+
+  lay(initial);
+
   function Probe() {
     const [held, setHeld] = useState(initial);
     restand = setHeld;
     control = useAgents({
       taskId: held.taskId,
       repository: held.repository,
-      listedAgents: held.listedAgents,
+      agentsFollowed: true,
       onOpenIntegrations: () => undefined,
       onOpenApiKeys: () => undefined,
       onStarted: (agentId) => started.push(agentId),
@@ -195,7 +234,10 @@ function mount(initial: Standing, keyPrefix = "key") {
         Fragment,
         null,
         createElement(NoOneSignedIn),
-        createElement(Probe),
+        createElement(TaskListCollectionsProvider, {
+          collections: following.collections,
+          children: createElement(Probe),
+        }),
         createElement(ToastHost),
       );
 
@@ -208,7 +250,10 @@ function mount(initial: Standing, keyPrefix = "key") {
       return control;
     },
     stand: async (next: Partial<Standing>) => {
-      act(() => restand?.({ ...initial, ...next }));
+      act(() => {
+        lay({ ...initial, ...next });
+        restand?.({ ...initial, ...next });
+      });
       await settle();
     },
   };
@@ -288,7 +333,7 @@ test("an ask of the models still out when its tab closes settles nothing, so its
 
 test("the task's agents are the followed list's alone, the archived among them, with no read of them asked", async () => {
   const OTHER_TASK = "3c2d1e0f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
-  const elsewhere = { ...STARTED, id: "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a", planId: OTHER_TASK };
+  const elsewhere = { ...STARTED, id: "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a", taskId: OTHER_TASK };
 
   const archived = {
     ...STARTED,
@@ -318,6 +363,18 @@ test("the task's agents are the followed list's alone, the archived among them, 
   assert.deepEqual(tab.asked, [], "nothing of the task's agents is read");
 });
 
+test("a delivery that moves only another task's agent leaves the control the same object", async () => {
+  const OTHER_TASK = "3c2d1e0f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
+  const elsewhere = { ...STARTED, id: "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a", taskId: OTHER_TASK };
+  const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [STARTED, elsewhere] });
+  await tab.mount();
+  const before = tab.control();
+
+  await tab.stand({ listedAgents: [STARTED, { ...elsewhere, title: "Renamed elsewhere" }] });
+
+  assert.equal(tab.control(), before);
+});
+
 test("a draft asks nothing of the service, one per plan, until its first message starts the agent on those words as its prompt under the draft's key, with the MCP servers it switched off, opening its tab", async () => {
   const OTHER_TASK = "3c2d1e0f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
   const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [] });
@@ -344,7 +401,7 @@ test("a draft asks nothing of the service, one per plan, until its first message
   const prompt = "Rename the invite email's subject.";
   const choice = { model: "openai/gpt-6.1-sol", effort: "xhigh" };
   const disabledServers = [INTEGRATION_PROVIDER.LINEAR];
-  act(() => tab.control().onDraftChange({ prompt }));
+  act(() => tab.control().onDraftHeld((now) => ({ ...now, text: prompt })));
   act(() => tab.control().onDraftChange({ choice }));
   act(() => tab.control().onDraftChange({ disabledServers }));
   await tab.stand({ taskId: OTHER_TASK });
@@ -373,7 +430,9 @@ test("a draft asks nothing of the service, one per plan, until its first message
 
   // The files attached to the words are the draft's too, and go with the prompt.
   const notes = { name: "notes.md", mediaType: "text/plain", data: "IyBOb3Rlcw==" } as const;
-  act(() => tab.control().onDraftAttachments((held) => [...held, notes]));
+  act(() =>
+    tab.control().onDraftHeld((now) => ({ ...now, attachments: [...now.attachments, notes] })),
+  );
   assert.deepEqual(tab.control().draft?.attachments, [notes]);
   await act(async () => {
     failed = await tab.control().startPrompt(draft, prompt, undefined, [notes], disabledServers);
@@ -445,11 +504,13 @@ test("a draft's words outlast a relaunch, the plan opening on its draft again un
   });
   const prompt = "Rename the invite email's subject.";
   const notes = { name: "notes.md", mediaType: "text/plain", data: "IyBOb3Rlcw==" } as const;
-  act(() => before.control().onDraftChange({ prompt }));
+  act(() => before.control().onDraftHeld((now) => ({ ...now, text: prompt })));
   act(() =>
     before.control().onDraftChange({ choice: { model: "openai/gpt-6.1-sol", effort: "xhigh" } }),
   );
-  act(() => before.control().onDraftAttachments((held) => [...held, notes]));
+  act(() =>
+    before.control().onDraftHeld((now) => ({ ...now, attachments: [...now.attachments, notes] })),
+  );
   relaunch();
 
   const after = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [] });
@@ -493,7 +554,11 @@ test("a suggestion's draft keeps its suggestion through a chip change; another s
     tab.control().onDraftChange({ choice: { model: "openai/gpt-6.1-sol", effort: "low" } }),
   );
   assert.deepEqual(tab.control().draft?.suggestion, invite, "a chip changed keeps the suggestion");
-  act(() => tab.control().onDraftChange({ prompt: "Send the invite email, and retry once." }));
+  act(() =>
+    tab
+      .control()
+      .onDraftHeld((now) => ({ ...now, text: "Send the invite email, and retry once." })),
+  );
 
   act(() => {
     tab.control().onSuggestDraft(digest, "Count invites apart.", undefined);
@@ -525,8 +590,8 @@ test("two windows' draft agents on one plan each keep their own words under thei
   act(() => {
     second.control().onNewDraft();
   });
-  act(() => second.control().onDraftChange({ prompt: "Ship now" }));
-  act(() => first.control().onDraftChange({ prompt: "Wait for review" }));
+  act(() => second.control().onDraftHeld((now) => ({ ...now, text: "Ship now" })));
+  act(() => first.control().onDraftHeld((now) => ({ ...now, text: "Wait for review" })));
 
   assert.equal(first.control().draft?.prompt, "Wait for review");
   assert.equal(first.control().draft?.id, "first-1");
@@ -550,7 +615,9 @@ test("a draft of files alone waits while another plan is open, but no relaunch b
   act(() => {
     before.control().onNewDraft();
   });
-  act(() => before.control().onDraftAttachments((held) => [...held, notes]));
+  act(() =>
+    before.control().onDraftHeld((now) => ({ ...now, attachments: [...now.attachments, notes] })),
+  );
   await before.stand({ taskId: OTHER_TASK });
   await before.stand({ taskId: TASK });
   assert.deepEqual(before.control().draft?.attachments, [notes]);
@@ -673,7 +740,7 @@ test("a fork joins the task's draft under a key of its own, its words kept and i
     draft = tab.control().onNewDraft();
   });
   const words = "Try the queue instead.";
-  act(() => tab.control().onDraftChange({ prompt: words }));
+  act(() => tab.control().onDraftHeld((now) => ({ ...now, text: words })));
   act(() =>
     tab.control().onDraftChange({ choice: { model: "openai/gpt-6.1-sol", effort: "low" } }),
   );
@@ -744,7 +811,7 @@ test("a fork's × lets the fork go and leaves an ordinary draft with its words a
     draft = tab.control().onForkDraft(fork);
   });
   assert.equal(tab.control().draft?.id, draft);
-  act(() => tab.control().onDraftChange({ prompt: "Keep going" }));
+  act(() => tab.control().onDraftHeld((now) => ({ ...now, text: "Keep going" })));
   act(() => tab.control().onDropFork());
   assert.deepEqual(tab.control().draft, {
     id: draft,
@@ -764,7 +831,7 @@ test("a fork's draft with words outlasts a relaunch still a fork, under the same
   act(() => {
     draft = before.control().onForkDraft(fork);
   });
-  act(() => before.control().onDraftChange({ prompt: "Try the queue" }));
+  act(() => before.control().onDraftHeld((now) => ({ ...now, text: "Try the queue" })));
   relaunch();
 
   const after = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [STARTED] });
@@ -778,7 +845,7 @@ test("a fork's draft with words outlasts a relaunch still a fork, under the same
     fork,
   });
   act(() => after.control().onDropFork());
-  act(() => after.control().onDraftChange({ prompt: "Try the queue, then retry" }));
+  act(() => after.control().onDraftHeld((now) => ({ ...now, text: "Try the queue, then retry" })));
   assert.deepEqual(after.control().draft, {
     id: draft,
     prompt: "Try the queue, then retry",
@@ -818,7 +885,7 @@ test("a continue opens the task's draft with the closed box's words and files af
   act(() => {
     before.control().onNewDraft();
   });
-  act(() => before.control().onDraftChange({ prompt: "Check the logs first." }));
+  act(() => before.control().onDraftHeld((now) => ({ ...now, text: "Check the logs first." })));
   let draft = "";
   act(() => {
     draft = before.control().onContinueDraft(AGENT, " Now add the dark variant. ", [notes]);

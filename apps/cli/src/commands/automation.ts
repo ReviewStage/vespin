@@ -298,7 +298,7 @@ const listCommand = Command.make(
       const { hosted } = yield* session;
 
       const query = Option.isSome(task)
-        ? { planId: yield* resolveTaskId(task.value) }
+        ? { taskId: yield* resolveTaskId(task.value) }
         : { workspaceId: (yield* resolveWorkspace).workspace.id };
 
       const { automations } = yield* askService(hosted.automations.list, query);
@@ -361,7 +361,7 @@ const createCommand = Command.make(
       const { hosted } = yield* session;
 
       const where = Option.isSome(task)
-        ? { planId: yield* resolveTaskId(task.value) }
+        ? { taskId: yield* resolveTaskId(task.value) }
         : { workspaceId: (yield* resolveWorkspace).workspace.id };
 
       const made = yield* askService(hosted.automations.create, {

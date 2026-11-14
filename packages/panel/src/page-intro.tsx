@@ -42,10 +42,12 @@ import { appStateQuery, selectAppSettingsView } from "./use-app-state.js";
 
 /**
  * What each page's intro draws: its glyph, its one sentence, and the docs
- * page Learn more opens. Note that each glyph is drawn as the card draws,
+ * page Learn more opens, where the docs have one. Note that the Overview's
+ * card offers none, because it stands only while the workspace has Task
+ * descriptions on, and the docs cover no experiment. Note that each glyph is drawn as the card draws,
  * because the tab looks import the pages that mount these cards.
  */
-const INTRO_PAGE: Record<Intro, { glyph: () => ReactNode; words: string; learnMore: string }> = {
+const INTRO_PAGE: Record<Intro, { glyph: () => ReactNode; words: string; learnMore?: string }> = {
   [INTRO.AUTOMATIONS]: {
     glyph: () => <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />,
     words:
@@ -62,7 +64,6 @@ const INTRO_PAGE: Record<Intro, { glyph: () => ReactNode; words: string; learnMo
     glyph: () => tabLook({ kind: TAB_KIND.OVERVIEW }).icon,
     words:
       "You and the task's agents keep this description current: edit it, or comment and mention an agent to steer them.",
-    learnMore: `${LINK_PAGE.DOCS}/tasks`,
   },
   [INTRO.BROWSER]: {
     glyph: () => tabLook({ kind: TAB_KIND.BROWSER, title: undefined }).icon,
@@ -79,7 +80,7 @@ function selectIntros(state: AppStateSnapshot) {
 }
 
 /** Whether `intro`'s card stands: the account's preferences answered, and the intro not yet seen; and Got it, which dismisses it for good. */
-export function useIntro(intro: Intro) {
+function useIntro(intro: Intro) {
   const intros = useQuery({ ...appStateQuery, select: selectIntros }).data;
   const { mutate: updateSetting } = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
   const [dismissed, setDismissed] = useState(false);

@@ -3,7 +3,13 @@ import { Schema as EffectSchema } from "effect";
 import { AGENT_PERMISSION_MODE, agentPendingApprovalSchema } from "./agent-approval-wire.js";
 import { WIRE_BOOT_PHASES } from "./agent-boot.js";
 import { agentSandboxSchema } from "./agent-sandbox-wire.js";
-import { agentStatusAt, type StatusTurn, statusClockEdge, turnStoppable } from "./agent-status.js";
+import {
+  agentStatusOf,
+  type StatusStart,
+  type StatusTurn,
+  startingGraceEnd,
+  turnStoppable,
+} from "./agent-status.js";
 import {
   AGENT_BRIEF,
   AGENT_MACHINE,
@@ -43,6 +49,7 @@ import { countedNumber } from "./service-wire.js";
 import { agentMarkedPullRequest, standingFailures } from "./task-agents-model.js";
 import {
   DESCRIPTION_ACTOR,
+  isTaskSettled,
   type ListedPullRequest,
   type TaskAgentPin,
   type TaskAgentsSummary,
@@ -65,13 +72,16 @@ import {
  * awaits its turn, what it last published, and the names of the members it
  * names. A third, the issues those plans linked (`issues`), answers no rows
  * now that a plan links none, and stands because a released desktop
- * requires it. Everything the held read derives from them is derived here, at
- * the instant the reader reads at, since an agent's status turns on the
- * clock (`agent-status.ts`): a drawing's `edge` is the next instant the
- * clock alone moves the list, which the reader draws it again at, and a
- * reader that draws it again and again (`taskListDrawer`) builds again only
- * what a row that moved, or that edge, reaches. Realtime keeps no order, so
- * the list is ordered here as the held read orders it.
+ * requires it. Everything the held read derives from them is derived here,
+ * from the rows and whether each agent's starting grace has ended
+ * (`GracedAgent`), the one fact of an agent's status the clock alone moves
+ * (`agent-status.ts`), which a reader following the rows holds as data
+ * beside them and writes at each agent's `agentGraceEnd`, so nothing here
+ * reads a clock. Each value is built from one row, or one plan's agents, so
+ * a reader that draws the list again and again (the host's live queries,
+ * `task-list-tasks.ts`) builds again only what a row that moved, or a grace
+ * that ended, reaches. Realtime keeps no order, so the list is ordered here
+ * as the held read orders it.
  */
 
 const plan = taskSummarySchema.fields;
@@ -120,6 +130,14 @@ const taskLiveRowSchema = EffectSchema.Struct({
   creatorAgentId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   /** The task this one is a child of; null for a task at the top. Absent from a service before child tasks. */
   parentTaskId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
+  /**
+   * How many tasks the reader reaches are this one's direct children, and
+   * how many of those are finished (done or canceled), counted by the
+   * service over every task rather than those the list holds; absent from a
+   * service before it counted them.
+   */
+  subTaskCount: EffectSchema.optionalKey(EffectSchema.Int),
+  finishedSubTaskCount: EffectSchema.optionalKey(EffectSchema.Int),
   /** How the task is worked; absent from a service before modes. */
   mode: plan.mode,
   /** Whether it waits on an open task the reader reaches; absent from a service before blocks. */
@@ -131,8 +149,9 @@ const taskLiveRowSchema = EffectSchema.Struct({
   madeByRun: EffectSchema.optionalKey(EffectSchema.Boolean),
   /**
    * The followers' account ids, the earliest to follow first, and each one's
-   * machines switch in the same order; null while the task's workspace has
-   * Following off, and absent from a service before it.
+   * machines switch in the same order; null from a service that gated them
+   * on the Following experiment while it was off, and absent from a service
+   * before it.
    */
   followerIds: EffectSchema.optionalKey(
     EffectSchema.NullOr(EffectSchema.Array(EffectSchema.String)),
@@ -155,7 +174,7 @@ const archiveLiveSchema = EffectSchema.Struct({
 /** One agent as its row delivers it: its own columns, its newest turn's, and what stands beside it, null where none does. */
 const agentLiveRowSchema = EffectSchema.Struct({
   id: EffectSchema.String,
-  planId: EffectSchema.String,
+  taskId: EffectSchema.String,
   workspaceId: EffectSchema.String,
   model: EffectSchema.String,
   effort: EffectSchema.String,
@@ -240,21 +259,53 @@ const agentLiveRowSchema = EffectSchema.Struct({
 });
 
 /**
+ * How long a Done or Canceled task stays in the account's live list after
+ * it was last touched: thirty days, the Tasks page's Past month, so its
+ * Past week and Past month windows draw from the live list alone and only
+ * All pages older tasks from the service (`TASKS_SETTLED_PAGE`).
+ */
+export const TASK_LIVE_WINDOW_MILLIS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a task stands in the account's live list as of `liveSince`, the
+ * instant the service bound its window from (`TASK_LIVE_WINDOW_MILLIS`):
+ * every one under way, every one the account pinned or pinned an agent of,
+ * and a Done or Canceled one touched at or after it. The service narrows
+ * the list to these by the same rule; a task that only ages out logs
+ * nothing, so the reader lets it go itself by this, at the `liveSince` the
+ * service answered, so the two never disagree at the window's edge.
+ */
+export function standsLive(
+  plan: Pick<TaskLiveRow, "status" | "updatedAt" | "pinnedAt">,
+  agentPinned: boolean,
+  liveSince: number,
+): boolean {
+  return (
+    !isTaskSettled(plan.status) ||
+    plan.pinnedAt !== null ||
+    agentPinned ||
+    plan.updatedAt >= liveSince
+  );
+}
+
+/**
  * The plan list as one live read declares it, by the account (`tasks`): its
  * plans and its agents, each by id, newest started first as the held read
  * orders them, and the issues plans linked, which answer no rows and stand
  * for a released desktop that follows them, and which this build keeps
- * none of. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
+ * none of; beside them, the workspaces holding any task it reaches. It holds
+ * the live tasks alone (`standsLive`), as of the instant the service binds
+ * (`liveSince`), and their agents. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
  * The service answers `unavailable` where its deployment's Realtime is
  * misconfigured.
  */
 export const TASK_LIST_READ = liveRead({
   name: "tasks",
   path: HOSTED_SERVICE_PATH.LIVE_TASKS,
-  params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER, liveSince: LIVE_PARAM.SERVED },
   mode: LIVE_MODE.DELTA,
   parts: {
-    plans: liveRows({
+    tasks: liveRows({
       row: taskLiveRowSchema,
       key: "id",
       order: [
@@ -277,9 +328,198 @@ export const TASK_LIST_READ = liveRead({
       optional: true,
     }),
   },
+  beside: {
+    /**
+     * The workspaces in which the account reaches any task, whatever the
+     * list holds of them: whether it has ever had a task there, which the
+     * first-run welcome and a workspace's "No tasks yet." read. Absent from a
+     * service before it was answered.
+     */
+    taskWorkspaces: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
+    /**
+     * The instant, as epoch milliseconds, a settled task must have been
+     * touched at or after to stand in the list (`standsLive`), as the
+     * service bound it for this answer. Absent from a service before the
+     * list was narrowed, which held every task.
+     */
+    liveSince: EffectSchema.optionalKey(countedNumber),
+  },
 });
 
 export type TaskListLiveAnswer = LiveReadAnswer<typeof TASK_LIST_READ>;
+
+/**
+ * One task outside the list a window holds, by the task or the agent `id`
+ * names, read once rather than followed: the task as the list's plans
+ * answer it, and every agent of it as the list's agents do, or the agent
+ * alone where it stands on no task. The rows are the list's own, read on
+ * the same rule of who may read them, so a task or an agent the account
+ * does not reach answers no rows.
+ */
+export const TASK_ROWS_READ = liveRead({
+  name: "taskRows",
+  path: HOSTED_SERVICE_PATH.LIVE_TASK_ROWS,
+  params: { id: LIVE_PARAM.ID, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    tasks: TASK_LIST_READ.parts.tasks,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
+export type TaskRowsLiveAnswer = LiveReadAnswer<typeof TASK_ROWS_READ>;
+
+/**
+ * The tasks related to the task `id` names, read once rather than followed,
+ * for a window drawing its relations past the list it holds: every sub-task
+ * of it, its parent, and the tasks it waits on and holds up, as the list's
+ * plans answer them, with every agent of them as the list's agents do. The
+ * rows are the list's own, read on the same rule of who may read them, so a
+ * task the account does not reach answers no rows.
+ */
+export const TASK_RELATIONS_READ = liveRead({
+  name: "taskRelations",
+  path: HOSTED_SERVICE_PATH.LIVE_TASK_RELATIONS,
+  params: { id: LIVE_PARAM.ID, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    tasks: TASK_LIST_READ.parts.tasks,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
+/** The most tasks one search answers, the latest changed first, so a query of one letter reads no account whole. */
+export const TASK_SEARCH_LIMIT = 20;
+
+/**
+ * The tasks a search's `query` finds, read once rather than followed, for
+ * a window searching tasks the list may not hold: each task whose name holds
+ * every word of the query, whatever its case, or whose number or key
+ * (`ACME-42`) the query is, the latest changed first and at most
+ * `TASK_SEARCH_LIMIT`, as the list's plans answer them, with every agent of
+ * them as the list's agents do. The rows are the list's own, read on the same
+ * rule of who may read them, so a task the account does not reach is never
+ * found.
+ */
+export const TASK_SEARCH_READ = liveRead({
+  name: "taskSearch",
+  path: HOSTED_SERVICE_PATH.LIVE_TASK_SEARCH,
+  params: { query: LIVE_PARAM.TEXT, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    tasks: TASK_LIST_READ.parts.tasks,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
+/** How many settled tasks one page of `TASK_PAGE_READ` answers at most. */
+export const SETTLED_PAGE_SIZE = 50;
+
+/**
+ * Where a page of settled tasks ends, which the next page reads past: the
+ * instant the page's last task was finished, in whole milliseconds, and its
+ * id, which breaks a tie between tasks finished at one instant.
+ */
+export interface SettledPageCursor {
+  readonly finishedAt: number;
+  readonly taskId: string;
+}
+
+/**
+ * One page of a workspace's settled tasks, Done and Canceled, read once
+ * rather than followed, for a list that shows finished work past what the
+ * list a window holds: the newest finished first, as the Tasks page's
+ * completed window measures them (`completedAt`, else the last save), each
+ * with every agent of it, as the list's plans and agents answer them and on
+ * their rule of who may read them. A page names the cursor it reads past
+ * (`beforeAt`, `beforeId`), the first page none, and holds at most
+ * `SETTLED_PAGE_SIZE` tasks; one with fewer is the last.
+ */
+export const TASK_PAGE_READ = liveRead({
+  name: "taskPage",
+  path: HOSTED_SERVICE_PATH.LIVE_TASK_PAGE,
+  params: {
+    workspaceId: LIVE_PARAM.TEXT,
+    beforeAt: LIVE_PARAM.OPTIONAL_TEXT,
+    beforeId: LIVE_PARAM.OPTIONAL_ID,
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+  },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    tasks: TASK_LIST_READ.parts.tasks,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
+/**
+ * The cursor the page after `plans` reads past: its last task's, as the
+ * service orders them; none where the page was the last, holding fewer than
+ * a page's tasks.
+ */
+export function settledPageCursorOf(
+  plans: readonly Pick<TaskLiveRow, "id" | "completedAt" | "updatedAt">[],
+): SettledPageCursor | undefined {
+  if (plans.length < SETTLED_PAGE_SIZE) return undefined;
+  let last: SettledPageCursor | undefined;
+
+  for (const plan of plans) {
+    const finishedAt = plan.completedAt ?? plan.updatedAt;
+
+    if (
+      last === undefined ||
+      finishedAt < last.finishedAt ||
+      (finishedAt === last.finishedAt && plan.id < last.taskId)
+    ) {
+      last = { finishedAt, taskId: plan.id };
+    }
+  }
+
+  return last;
+}
+
+/** How many of a person's tasks one page of `PERSON_PAGE_READ` answers of each section, Assigned and Created, the newest first. */
+export const PERSON_PAGE_TASKS = 5;
+
+/** How many of a person's agents one page of `PERSON_PAGE_READ` answers the tasks of, the newest started first. */
+export const PERSON_PAGE_AGENTS = 50;
+
+/**
+ * A person's tasks and agents in a workspace, read once rather than
+ * followed, for their page, which lists what of theirs the window holds
+ * and, past it, what only the service does: how many tasks are assigned
+ * to them, how many more they created that are assigned to someone else
+ * or no one, and how many agents they started on a task, none archived
+ * (`counts`, one row), each as the reader may read them; and a page of
+ * rows, the newest `PERSON_PAGE_TASKS` of each section by their last save
+ * and the tasks of their newest `PERSON_PAGE_AGENTS` agents, each with
+ * every agent of it, as the list's plans and agents answer them and on
+ * their rule of who may read them. A person the reader shares no task
+ * with is counted as having none.
+ */
+export const PERSON_PAGE_READ = liveRead({
+  name: "personPage",
+  path: HOSTED_SERVICE_PATH.LIVE_PERSON_PAGE,
+  params: {
+    workspaceId: LIVE_PARAM.TEXT,
+    personId: LIVE_PARAM.TEXT,
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+  },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    counts: liveRows({
+      row: EffectSchema.Struct({
+        personId: EffectSchema.String,
+        assigned: countedNumber,
+        created: countedNumber,
+        agents: countedNumber,
+      }),
+      key: "personId",
+      order: [["personId", ORDER.ASC]],
+    }),
+    tasks: TASK_LIST_READ.parts.tasks,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
 
 /** The plan list's rows as Realtime delivers them, decoded at the boundary before anything reads them. */
 export type TaskListLiveRows = typeof TASK_LIST_READ.rows.Type;
@@ -287,6 +527,16 @@ export type TaskListLiveRows = typeof TASK_LIST_READ.rows.Type;
 type TaskLiveRow = typeof taskLiveRowSchema.Type;
 
 type AgentLiveRow = typeof agentLiveRowSchema.Type;
+
+/**
+ * An agent's row with whether its starting grace has ended: the one fact of
+ * an agent's status its row does not say, held beside the rows by their
+ * reader. An agent whose reader holds no end reads as still inside its grace.
+ */
+export interface GracedAgent {
+  readonly row: AgentLiveRow;
+  readonly pastGrace: boolean;
+}
 
 /** The statuses under which an agent is at work. */
 const WORKING_STATUSES: ReadonlySet<AgentStatus> = new Set([
@@ -334,18 +584,14 @@ function agentTurnOf(row: AgentLiveRow): AgentTurn | undefined {
   };
 }
 
-/** Where the agent stands at `now`, as the status rule reads it: its Start, and whether it was started blank. */
-function standingOf(row: AgentLiveRow, now: number) {
-  return {
-    createdAt: row.createdAt,
-    now,
-    blank: row.brief === AGENT_BRIEF.BLANK,
-    boot: row.bootPhase,
-  };
+/** The agent's Start as the status rule reads it: when, whether it was started blank, and where its boot stands. */
+function startOf(row: AgentLiveRow): StatusStart {
+  return { createdAt: row.createdAt, blank: row.brief === AGENT_BRIEF.BLANK, boot: row.bootPhase };
 }
 
-function statusOf(row: AgentLiveRow, now: number): AgentStatus {
-  return agentStatusAt(turnOf(row), standingOf(row, now));
+/** Where the agent stands, from its row and whether its starting grace has ended. */
+function statusOf(row: AgentLiveRow, pastGrace: boolean): AgentStatus {
+  return agentStatusOf(turnOf(row), startOf(row), pastGrace);
 }
 
 /** When the run the status is read from began: the newest turn's start, or its queueing before a runner took it, and the agent's own before any turn. */
@@ -382,7 +628,7 @@ function markedOfRow(row: AgentLiveRow): AgentPullRequest | null {
  * each once by its page: those still open first, the newest agent's first
  * within a rank, every one of them.
  */
-function pullRequestLinesOf(rows: readonly AgentLiveRow[]): readonly TaskPullRequestLine[] {
+export function pullRequestLinesOf(rows: readonly AgentLiveRow[]): readonly TaskPullRequestLine[] {
   const pullRequests = new Map<string, TaskPullRequestLine>();
 
   for (const row of rows.filter((each) => each.archivedAt === null).toSorted(newestStarted)) {
@@ -409,38 +655,40 @@ function pullRequestLinesOf(rows: readonly AgentLiveRow[]): readonly TaskPullReq
   );
 }
 
-/** One plan's agents, in the order the rows name them, and every pull request they opened (`pullRequestLinesOf`). */
-interface AgentGroup {
-  readonly agents: readonly AgentLiveRow[];
-  readonly pullRequests: readonly TaskPullRequestLine[];
-}
-
 /**
- * One plan's agents counted, as the held read counts them: the archived
- * left out, how many are at work and how many failed with no agent
- * started since (`standingFailures`), how many pull
- * requests they opened, and the latest settled activity of every agent,
- * archived or not. The agents and pull requests themselves are the
- * drawing's `taskAgents` and `taskPullRequests`.
+ * One plan's agents counted, in any order, as the held read counts them: the
+ * archived left out, how many are at work and how many failed with no agent
+ * started since (`standingFailures`), how many pull requests they opened
+ * (`pullRequestTotal`, its lines' count, `pullRequestLinesOf`), and the
+ * latest settled activity of every agent, archived or not. The agents and
+ * pull requests themselves are the list's `taskAgents` and
+ * `taskPullRequests`.
  */
-function agentsSummaryOf(group: AgentGroup, now: number): TaskAgentsSummary {
-  const { agents: rows, pullRequests } = group;
+export function agentsSummaryOf(
+  agents: readonly GracedAgent[],
+  pullRequestTotal: number,
+): TaskAgentsSummary {
+  const rows = agents.map((agent) => agent.row);
 
-  const standing = rows
-    .filter((row) => row.archivedAt === null)
-    .map((row) => ({
-      createdAt: row.createdAt,
-      status: statusOf(row, now),
-      at: turnOf(row) === undefined ? undefined : (row.settledAt ?? undefined),
-      failure: row.turnFailure ?? undefined,
-    }));
+  const standing = agents.flatMap(({ row, pastGrace }) =>
+    row.archivedAt === null
+      ? [
+          {
+            createdAt: row.createdAt,
+            status: statusOf(row, pastGrace),
+            at: turnOf(row) === undefined ? undefined : (row.settledAt ?? undefined),
+            failure: row.turnFailure ?? undefined,
+          },
+        ]
+      : [],
+  );
 
   return {
     total: standing.length,
     working: standing.filter(({ status }) => WORKING_STATUSES.has(status)).length,
     failed: standingFailures(standing, Math.max(...rows.map((row) => row.createdAt))),
     ...(rows.length === 0 ? undefined : { activityAt: Math.max(...rows.map(activityAt)) }),
-    pullRequestTotal: pullRequests.length,
+    pullRequestTotal,
   };
 }
 
@@ -458,7 +706,7 @@ function originOf(row: TaskLiveRow): Origin {
   };
 }
 
-/** The task's followers as its row names them, each the assignee where the row's assignee is them; none while its workspace has Following off. */
+/** The task's followers as its row names them, each the assignee where the row's assignee is them; none from a service that does not answer them. */
 function followersOf(row: TaskLiveRow): Pick<TaskSummary, "followers"> | undefined {
   const ids = row.followerIds;
 
@@ -474,8 +722,18 @@ function followersOf(row: TaskLiveRow): Pick<TaskSummary, "followers"> | undefin
   };
 }
 
-/** One plan as the list's row says it, its agents in brief where it has any. */
-function taskSummaryOf(row: TaskLiveRow, agents: AgentGroup | undefined, now: number): TaskSummary {
+/** The task's sub-task count as its row says it; none for a task with no child, or from a service before it counted them. */
+function subTaskCountOf(row: TaskLiveRow): Pick<TaskSummary, "subTasks"> | undefined {
+  const total = row.subTaskCount ?? 0;
+
+  return total === 0 ? undefined : { subTasks: { total, finished: row.finishedSubTaskCount ?? 0 } };
+}
+
+/** One plan as the list's row says it, its agents in brief (`agentsSummaryOf`) where it has any. */
+export function taskSummaryOf(
+  row: TaskLiveRow,
+  agents: TaskAgentsSummary | undefined,
+): TaskSummary {
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -506,13 +764,14 @@ function taskSummaryOf(row: TaskLiveRow, agents: AgentGroup | undefined, now: nu
     ...(row.parentTaskId === undefined || row.parentTaskId === null
       ? undefined
       : { parentTaskId: row.parentTaskId }),
+    ...subTaskCountOf(row),
     ...(row.mode === undefined ? undefined : { mode: row.mode }),
     ...(row.blocked === true ? { blocked: true } : undefined),
     ...(row.blockedBy === undefined ? undefined : { blockedBy: row.blockedBy }),
     ...(row.blocks === undefined ? undefined : { blocks: row.blocks }),
     ...(row.madeByRun === true ? { madeByRun: true } : undefined),
     ...followersOf(row),
-    ...(agents === undefined ? undefined : { agents: agentsSummaryOf(agents, now) }),
+    ...(agents === undefined ? undefined : { agents }),
   };
 }
 
@@ -536,7 +795,7 @@ function archivedByOf(row: AgentLiveRow): AgentArchivedBy | undefined {
 }
 
 /** The agents started from an agent, first started first, as its summary's `continuedBy` names them. */
-type ContinuedBy = NonNullable<AgentSummary["continuedBy"]>;
+export type ContinuedBy = NonNullable<AgentSummary["continuedBy"]>;
 
 /** An agent started from another as that one's summary names it among its continues and forks, `messageId` the message a fork was made at. */
 function continuationOf(row: AgentLiveRow, messageId: string | undefined): ContinuedBy[number] {
@@ -571,10 +830,10 @@ function sandboxOf(row: AgentLiveRow): Pick<AgentSummary, "sandbox"> | undefined
   };
 }
 
-/** One agent as the tabs draw it, on a plan or with none, its status read at `now`, as the service's summary of it says it, with the agents `continuedBy` from it. */
+/** One agent as the tabs draw it, on a plan or with none, as the service's summary of it says it, with the agents `continuedBy` from it. */
 function agentSummaryOf(
   row: AgentLiveRow,
-  now: number,
+  pastGrace: boolean,
   continuedBy: ContinuedBy | undefined,
 ): AgentSummary {
   const servers = (row.disabledServers ?? []).filter(
@@ -584,7 +843,7 @@ function agentSummaryOf(
   const archivedBy = archivedByOf(row);
   const started = runStartedAt(row);
   const turn = agentTurnOf(row);
-  const status = statusOf(row, now);
+  const status = statusOf(row, pastGrace);
   const stoppable = status !== AGENT_STATUS.RUNNING || turnStoppable(turnOf(row));
   const runtime = NATIVE_AGENT_RUNTIMES.find((each) => each === row.runtime);
 
@@ -595,14 +854,14 @@ function agentSummaryOf(
   const mac = macOf(row);
 
   const owner = agentOwnerOf({
-    taskId: row.planId,
+    taskId: row.taskId,
     runId: row.runId ?? null,
     runAutomationId: row.runAutomationId ?? null,
   });
 
   return {
     id: row.id,
-    planId: row.planId,
+    taskId: row.taskId,
     model: row.model,
     effort: row.effort,
     ...(row.contextWindow === CONTEXT_WINDOW.STANDARD
@@ -645,16 +904,16 @@ function agentSummaryOf(
   };
 }
 
-/** One agent on a plan as the list carries it, its status read at `now`, with its own workspace and repository, and when its newest turn ended where one has. */
-function listedAgentOf(
+/** One agent on a plan as the list carries it, with its own workspace and repository, and when its newest turn ended where one has, its status read with whether its starting grace has ended. */
+export function listedAgentOf(
   row: AgentLiveRow,
-  now: number,
+  pastGrace: boolean,
   continuedBy: ContinuedBy | undefined,
 ): ListedAgent {
   const settledAt = turnOf(row) === undefined ? null : row.settledAt;
 
   return {
-    ...agentSummaryOf(row, now, continuedBy),
+    ...agentSummaryOf(row, pastGrace, continuedBy),
     workspaceId: row.workspaceId,
     repository: row.repository,
     ...(settledAt === null ? undefined : { settledAt }),
@@ -668,271 +927,66 @@ function firstStarted(a: AgentLiveRow, b: AgentLiveRow): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-/** The next instant past `now` the clock alone moves the agent's status (`statusClockEdge`); none where only its row moving can. */
-function clockEdgeOf(row: AgentLiveRow, now: number): number | undefined {
-  return statusClockEdge(turnOf(row), standingOf(row, now));
+/**
+ * The first instant the agent's starting grace has ended, which its reader
+ * marks it past its grace at (`GracedAgent`); none where its status
+ * waits on no grace (`startingGraceEnd`).
+ */
+export function agentGraceEnd(row: TaskListLiveRows["agents"][number]): number | undefined {
+  return startingGraceEnd(turnOf(row), startOf(row));
 }
 
-/** The earlier of two edges, none standing for never. */
-function earlierEdge(a: number | undefined, b: number | undefined): number | undefined {
-  if (a === undefined) return b;
+/** The agent's row with whether its starting grace has ended by `now`, as a reader at that one instant holds it. */
+function gracedAt(row: AgentLiveRow, now: number): GracedAgent {
+  const end = agentGraceEnd(row);
 
-  return b === undefined ? a : Math.min(a, b);
+  return { row, pastGrace: end !== undefined && now >= end };
 }
 
 /** The reader's pin of an agent; none for one unpinned or archived, since an archived agent stands in no list a pin is drawn in. */
-function agentPinOf(row: AgentLiveRow): TaskAgentPin | undefined {
-  const { planId, pinnedAt, pinPosition } = row;
+export function agentPinOf(row: AgentLiveRow): TaskAgentPin | undefined {
+  const { taskId, pinnedAt, pinPosition } = row;
 
   if (pinnedAt === null || row.archivedAt !== null) return undefined;
-  const at = { agentId: row.id, taskId: planId, pinnedAt };
+  const at = { agentId: row.id, taskId: taskId, pinnedAt };
 
   return pinPosition === null ? at : { ...at, pinPosition };
 }
 
 /** The pull request an agent's row names of every one it opened (`agentMarkedPullRequest`), as the service last read it on GitHub; none where it opened none. */
-function agentPullRequestOf(row: AgentLiveRow): ListedPullRequest | undefined {
+export function agentPullRequestOf(row: AgentLiveRow): ListedPullRequest | undefined {
   const marked = markedOfRow(row);
 
-  return marked === null ? undefined : { agentId: row.id, taskId: row.planId, pullRequest: marked };
+  return marked === null ? undefined : { agentId: row.id, taskId: row.taskId, pullRequest: marked };
 }
 
-/** Whether two lists hold the very same objects in one order. */
-function sameItems<Item>(a: readonly Item[], b: readonly Item[]): boolean {
-  return a.length === b.length && a.every((item, at) => item === b[at]);
+/** The agents started from each agent by its id (`continuedByOf`); none for an agent nothing was started from. */
+type ContinuedByOf = (agentId: string) => ContinuedBy | undefined;
+
+/** The agents started from one agent as its summary names them, from their rows first started first. */
+export function continuedByOf(rows: readonly AgentLiveRow[]): ContinuedBy {
+  return rows.map((row) => continuationOf(row, row.startedFrom?.messageId));
 }
 
-/** `next`, or `held` where it holds the very same objects, so a list nothing in moved is the list drawn before. */
-function keptItems<Item>(
-  held: readonly Item[] | undefined,
-  next: readonly Item[],
-): readonly Item[] {
-  return held !== undefined && sameItems(held, next) ? held : next;
-}
+/** The agents started from each agent of `rows`, as one reading at one instant holds them. */
+function continuedByAt(rows: TaskListLiveRows): ContinuedByOf {
+  const startedFrom = new Map<string, AgentLiveRow[]>();
 
-/** A value built from one row at an instant, as a drawing keeps it: what it was built from, and the instants it holds for. */
-interface Built<Row, Value> {
-  readonly row: Row;
-  /** What else it was built from, compared by identity: the agents started from an agent, or a plan's agents. */
-  readonly beside: unknown;
-  readonly from: number;
-  /** The first instant the clock alone moves it; none where only what it was built from moving can. */
-  readonly until: number | undefined;
-  readonly value: Value;
-}
+  for (const row of rows.agents.toSorted(firstStarted)) {
+    const source = row.startedFrom?.agentId;
 
-/** `held` where it was built from `row` and `beside` and still holds at `now`, else what `build` builds now. */
-function rebuilt<Row, Value, Beside>(
-  held: Built<Row, Value> | undefined,
-  row: Row,
-  beside: Beside,
-  now: number,
-  build: () => { readonly value: Value; readonly until: number | undefined },
-): Built<Row, Value> {
-  const holds =
-    held !== undefined &&
-    held.row === row &&
-    held.beside === beside &&
-    now >= held.from &&
-    (held.until === undefined || now < held.until);
+    if (source === undefined) continue;
+    const from = startedFrom.get(source);
 
-  return holds ? held : { row, beside, from: now, ...build() };
-}
+    if (from === undefined) startedFrom.set(source, [row]);
+    else from.push(row);
+  }
 
-/** The agents started from one agent: their rows, first started first, and the list its summary names them by. */
-interface Continued {
-  readonly rows: readonly AgentLiveRow[];
-  readonly by: ContinuedBy;
-}
+  const continued = new Map(
+    [...startedFrom].map(([source, from]) => [source, continuedByOf(from)]),
+  );
 
-/** One plan's agents as a drawing keeps them, with the plan's line of every pull request they opened where they opened any. */
-interface DrawnGroup extends AgentGroup {
-  readonly listing: TaskPullRequests | undefined;
-}
-
-/** The plan list and every part drawn beside it, as the live rows stand at one instant. */
-export interface TaskListDrawing {
-  /** The plans newest started first, each with its agents in brief. */
-  readonly list: TaskListAnswer;
-  /** Every agent on a plan, the archived among them, first started first, with the workspace and repository its own row names. */
-  readonly taskAgents: readonly ListedAgent[];
-  /** Every pull request of each plan that has one, those still open first, the newest agent's first within each. */
-  readonly taskPullRequests: readonly TaskPullRequests[];
-  /** The pull request of every agent whose row keeps one, the archived among them. */
-  readonly agentPullRequests: readonly ListedPullRequest[];
-  /** The reader's pins of agents on a plan, the archived left out. */
-  readonly taskAgentPins: readonly TaskAgentPin[];
-  /** The next instant past the one drawn at that the clock alone moves it: the first agent with no turn yet whose starting grace ends; none where none waits on one. */
-  readonly edge: number | undefined;
-}
-
-/**
- * Draws the plan list from its live rows again and again, building again
- * only what a row that moved reaches: an agent whose row, or the rows of
- * the agents started from it, are other objects, a plan whose row or whose
- * agents' rows are, and anything whose status the clock has moved since it
- * was built. Everything else is the very object drawn before, and so is
- * every list nothing in moved, so a reader comparing one drawing with the
- * last stops at `===`. Note that it leans on a row that did not move being
- * the object it was, as the sync engine's pool hands it out (`@repo/sync`):
- * a row handed out equal but new is built again, which costs time and never
- * draws anything wrong.
- */
-export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskListDrawing {
-  let continued = new Map<string, Continued>();
-  let groups = new Map<string, DrawnGroup>();
-  let listed = new Map<string, Built<AgentLiveRow, ListedAgent>>();
-  let summaries = new Map<string, Built<TaskLiveRow, TaskSummary>>();
-  let drawn: TaskListDrawing | undefined;
-
-  /** What an agent's row alone builds, its pin and its pull request, built once for as long as the row stands. */
-  const ofRow = new WeakMap<
-    AgentLiveRow,
-    { readonly pin: TaskAgentPin | undefined; readonly pullRequest: ListedPullRequest | undefined }
-  >();
-
-  const partsOf = (row: AgentLiveRow) => {
-    const held = ofRow.get(row);
-
-    if (held !== undefined) return held;
-    const parts = { pin: agentPinOf(row), pullRequest: agentPullRequestOf(row) };
-    ofRow.set(row, parts);
-
-    return parts;
-  };
-
-  return (rows, now) => {
-    // The agents started from each agent, built again only where their rows moved.
-    const startedFrom = new Map<string, AgentLiveRow[]>();
-
-    for (const row of rows.agents
-      .filter((each) => each.startedFrom !== null)
-      .toSorted(firstStarted)) {
-      const source = row.startedFrom?.agentId;
-
-      if (source === undefined) continue;
-      const from = startedFrom.get(source);
-
-      if (from === undefined) startedFrom.set(source, [row]);
-      else from.push(row);
-    }
-
-    const nextContinued = new Map<string, Continued>();
-
-    for (const [source, from] of startedFrom) {
-      const held = continued.get(source);
-      nextContinued.set(
-        source,
-        held !== undefined && sameItems(held.rows, from)
-          ? held
-          : { rows: from, by: from.map((row) => continuationOf(row, row.startedFrom?.messageId)) },
-      );
-    }
-
-    // Each plan's agents in the order the rows name them, and their pull requests, built again only where their rows moved.
-    const byTask = new Map<string, AgentLiveRow[]>();
-
-    for (const row of rows.agents) {
-      const group = byTask.get(row.planId);
-
-      if (group === undefined) byTask.set(row.planId, [row]);
-      else group.push(row);
-    }
-
-    const nextGroups = new Map<string, DrawnGroup>();
-
-    for (const [taskId, agents] of byTask) {
-      const held = groups.get(taskId);
-
-      if (held !== undefined && sameItems(held.agents, agents)) {
-        nextGroups.set(taskId, held);
-        continue;
-      }
-
-      const lines = pullRequestLinesOf(agents);
-      nextGroups.set(taskId, {
-        agents,
-        pullRequests: lines,
-        listing: lines.length === 0 ? undefined : { taskId, pullRequests: lines },
-      });
-    }
-
-    // Each agent as the tabs draw it, built again where its row or those started from it moved, or the clock moved its status.
-    const nextListed = new Map<string, Built<AgentLiveRow, ListedAgent>>();
-    let edge: number | undefined;
-
-    for (const row of rows.agents) {
-      const continuedBy = nextContinued.get(row.id)?.by;
-
-      const built = rebuilt(listed.get(row.id), row, continuedBy, now, () => ({
-        value: listedAgentOf(row, now, continuedBy),
-        until: clockEdgeOf(row, now),
-      }));
-
-      nextListed.set(row.id, built);
-      edge = earlierEdge(edge, built.until);
-    }
-
-    // Each plan as the list's row says it, built again where its row or its agents moved, or the clock moved one of their statuses.
-    const nextSummaries = new Map<string, Built<TaskLiveRow, TaskSummary>>();
-
-    const plans = rows.plans.toSorted(newestFirst).map((row) => {
-      const group = nextGroups.get(row.id);
-
-      const built = rebuilt(summaries.get(row.id), row, group, now, () => ({
-        value: taskSummaryOf(row, group, now),
-        until: (group?.agents ?? []).reduce<number | undefined>(
-          (at, agent) => earlierEdge(at, clockEdgeOf(agent, now)),
-          undefined,
-        ),
-      }));
-
-      nextSummaries.set(row.id, built);
-
-      return built.value;
-    });
-
-    const held = drawn;
-    const keptPlans = keptItems(held?.list.plans, plans);
-    continued = nextContinued;
-    groups = nextGroups;
-    listed = nextListed;
-    summaries = nextSummaries;
-    drawn = {
-      list: held !== undefined && held.list.plans === keptPlans ? held.list : { plans: keptPlans },
-      taskAgents: keptItems(
-        held?.taskAgents,
-        [...nextListed.values()]
-          .toSorted((a, b) => firstStarted(a.row, b.row))
-          .map((built) => built.value),
-      ),
-      taskPullRequests: keptItems(
-        held?.taskPullRequests,
-        [...nextGroups.values()].flatMap((group) =>
-          group.listing === undefined ? [] : [group.listing],
-        ),
-      ),
-      agentPullRequests: keptItems(
-        held?.agentPullRequests,
-        rows.agents.flatMap((row) => {
-          const { pullRequest } = partsOf(row);
-
-          return pullRequest === undefined ? [] : [pullRequest];
-        }),
-      ),
-      taskAgentPins: keptItems(
-        held?.taskAgentPins,
-        rows.agents.flatMap((row) => {
-          const { pin } = partsOf(row);
-
-          return pin === undefined ? [] : [pin];
-        }),
-      ),
-      edge,
-    };
-
-    return drawn;
-  };
+  return (agentId) => continued.get(agentId);
 }
 
 /**
@@ -944,7 +998,11 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
  * plan's agents again on a clock.
  */
 export function taskAgentsOfLiveRows(rows: TaskListLiveRows, now: number): readonly ListedAgent[] {
-  return taskListDrawer()(rows, now).taskAgents;
+  const continuedOf = continuedByAt(rows);
+
+  return rows.agents
+    .toSorted(firstStarted)
+    .map((row) => listedAgentOf(row, gracedAt(row, now).pastGrace, continuedOf(row.id)));
 }
 
 /**
@@ -969,7 +1027,7 @@ export function taskPullRequestsOfLiveRows(rows: TaskListLiveRows): readonly Tas
   const byTask = new Map<string, AgentLiveRow[]>();
 
   for (const row of rows.agents) {
-    byTask.set(row.planId, [...(byTask.get(row.planId) ?? []), row]);
+    byTask.set(row.taskId, [...(byTask.get(row.taskId) ?? []), row]);
   }
 
   return [...byTask].flatMap(([taskId, agents]) => {
@@ -998,5 +1056,29 @@ export function agentPullRequestsOfLiveRows(rows: TaskListLiveRows): readonly Li
  * first, each with its agents in brief.
  */
 export function taskListOfLiveRows(rows: TaskListLiveRows, now: number): TaskListAnswer {
-  return taskListDrawer()(rows, now).list;
+  const lines = new Map(
+    taskPullRequestsOfLiveRows(rows).map(({ taskId, pullRequests }) => [taskId, pullRequests]),
+  );
+
+  const byTask = new Map<string, GracedAgent[]>();
+
+  for (const row of rows.agents) {
+    const graced = gracedAt(row, now);
+    const group = byTask.get(row.taskId);
+
+    if (group === undefined) byTask.set(row.taskId, [graced]);
+    else group.push(graced);
+  }
+
+  return {
+    tasks: rows.tasks.toSorted(newestFirst).map((row) => {
+      const agents = byTask.get(row.id);
+      const pullRequestTotal = lines.get(row.id)?.length ?? 0;
+
+      return taskSummaryOf(
+        row,
+        agents === undefined ? undefined : agentsSummaryOf(agents, pullRequestTotal),
+      );
+    }),
+  };
 }

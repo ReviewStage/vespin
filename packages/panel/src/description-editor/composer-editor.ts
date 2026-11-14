@@ -7,7 +7,7 @@ import {
   writeInline,
 } from "@repo/features/composer-markdown";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
-import { fenceAfter } from "@repo/features/description-document";
+import { fenceAfter } from "@repo/features/description-sections";
 import { fileMarker, fileMarkers, isPictureName } from "@repo/features/file-marker";
 import {
   cutReply,

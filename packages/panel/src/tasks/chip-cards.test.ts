@@ -151,8 +151,8 @@ const DESCRIPTION_TEXT = "## Goal\n\nInvite by email.\n\n## Roll it out\n\nStore
 
 const SWEEP: AutomationSummary = {
   id: "3f0e6f5c-7d1a-4f6e-9a55-000000000001",
-  planId: null,
-  planName: null,
+  taskId: null,
+  taskName: null,
   workspaceId: ACME.id,
   name: "Nightly sweep",
   enabled: true,
@@ -191,7 +191,7 @@ const STATE: AppStateSnapshot = (() => {
       taskAgents: [
         {
           id: SWEEP_AGENT,
-          planId: TASK_ID,
+          taskId: TASK_ID,
           turnId: null,
           title: "Sweep the flaky tests",
           model: "anthropic/claude-opus-5.5",
@@ -345,7 +345,7 @@ async function drawn(
   page: TaskMentionsValue = PAGE,
   state: AppStateSnapshot = STATE,
   feed: AppHostRead<AppInboxItems> = {
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK_ID]: [WAITING, ANSWERED, SWEPT] } },
+    rows: { [INBOX_SCOPE_KIND.TASK]: { [TASK_ID]: [WAITING, ANSWERED, SWEPT] } },
   },
 ): Promise<HTMLElement> {
   fakeAppBridge({

@@ -67,6 +67,8 @@ function asked(): Record<"once" | "always" | "deny", number> {
           heard.deny += 1;
         },
         copy: () => Promise.resolve(),
+        expiresAt: Date.now() + 300_000,
+        noteMaxLength: 2000,
       }),
     ),
   );

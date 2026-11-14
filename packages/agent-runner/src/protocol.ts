@@ -9,10 +9,13 @@
  * the later lines from the service instead (`RUNNER_LINES`).
  *
  * The config says which harness the launch runs: Claude Code (P05), or Codex
- * through `codex app-server` (P20). Secrets never travel in argv or on
- * stdin: the runner's bearer and, in the cloud, the harness's credential are
- * in its environment; on a host the harnesses run on the machine's own
- * logins. Codex's ChatGPT access token is never handed in at all: in the
+ * through `codex app-server` (P20). Secrets never travel on stdin: the
+ * runner's bearer and, in the cloud, the harness's credential are in its
+ * environment; on a host the harnesses run on the machine's own logins. The
+ * one value in argv that stands for one is the bearer's placeholder in a
+ * cloud launch of Claude Code, its MCP servers' header (`runner.ts`'s
+ * `claudeCodeServers`), which only the sandbox's firewall turns into the
+ * bearer. Codex's ChatGPT access token is never handed in at all: in the
  * cloud's sandbox the runner asks the service for each over HTTPS
  * (`codex-token.ts`) as it signs app-server in, so no line carries one, on a
  * Mac's queue (`@repo/features/device-agent-wire`) or anywhere else.
@@ -161,8 +164,9 @@ const PermissionModeSchema = Schema.Literals(Object.values(PERMISSION_MODE));
  * CLI gives them: those that only read, the checkout or the web, load a
  * skill's instructions or a deferred tool, or keep the agent's own to-do
  * list. Every MCP server the launch hands the CLI, ours and each
- * integration's, runs unasked beside them by its `mcp__<server>` rule, so
- * what asks is a file edit, a shell command, and a server the checkout adds.
+ * integration's, runs unasked beside them, by its `mcp__<server>` rule or,
+ * for a server connected in the background, its hook, so what asks is a
+ * file edit, a shell command, and a server the checkout adds.
  */
 export const CLAUDE_CODE_UNASKED_TOOLS = [
   "Read",
@@ -590,13 +594,6 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   transcriptsUrl: Schema.optionalKey(Schema.String),
   /** The integrations the agent is handed, one MCP server each; none in a config written before them. */
   integrations: Schema.optionalKey(Schema.Array(IntegrationServerSchema)),
-  /**
-   * Read by no runner since Claude Code's command sandbox went: written empty
-   * for a host whose release bundles a runner from before, which refuses a
-   * config without it, and dropped once the service's host version floor
-   * (`HOST_VERSION.FLOOR`) passes that release.
-   */
-  allowedDomains: Schema.optionalKey(Schema.Array(Schema.String)),
   /** Where the member's installed skills are (`INSTALLED_SKILLS`), loaded as a local plugin where the folder holds one. */
   installedSkills: Schema.optionalKey(Schema.String),
   /** Whether the launch stays warm while no turn of it runs (`RUNNER_WARM`): from its start until a message comes, and once the agent's turn is over, posting IDLE rather than ending; it ends there where absent. */
