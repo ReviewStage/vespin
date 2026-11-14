@@ -52,7 +52,7 @@ import {
   suggestionHeard,
 } from "./suggestion-look.js";
 import { type BrandColors, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
-import { SPACE } from "./tokens/space.js";
+import { RADIUS, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
-  picture: { width: "100%", borderRadius: 8 },
+  picture: { width: "100%", borderRadius: RADIUS.MEDIA },
   pending: { alignItems: "center", justifyContent: "center" },
   viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
   viewerClose: { position: "absolute", padding: SPACE.ROW },
