@@ -78,7 +78,13 @@ type RowListProps = {
   readonly onRefresh?: (() => Promise<void>) | undefined;
   /** Its Select mode, while it stands in one; none for a list a tap opens rows in. */
   readonly choosing?: RowChoosing | undefined;
-  /** Called with the rows chosen when two fingers dragged down the list start Select mode, as in Mail; none for a list with no Select mode. */
+  /**
+   * Starts its Select mode with the rows the system ticked, where it has one:
+   * iPadOS lets a list whose selection is a set tick several rows with no
+   * edit mode of ours, by a two-finger drag, a pointer's ⌘ or Shift click,
+   * or the keyboard, and the iPhone by a two-finger drag down the list, as
+   * Mail's starts Select. None for a list with no Select mode.
+   */
   readonly onChooseStart?: ((ids: readonly string[]) => void) | undefined;
   readonly children: ReactNode;
 };
@@ -150,16 +156,18 @@ export function RowList({
               onChooseStart(selection.filter(Predicate.isString));
             },
           })}
-      onSelectionChange={(selection) => {
+      onSelectionChange={(selection, editing) => {
         if (choosing !== undefined) {
           choosing.onChoose(selection.filter(Predicate.isString));
 
           return;
         }
 
-        // Note that the rows a drag ticks arrive before the list is drawn in Select mode, so they choose rather than open.
-        if (dragged.current) {
-          onChooseStart?.(selection.filter(Predicate.isString));
+        const ids = selection.filter(Predicate.isString);
+
+        // Note that a row ticked while the system holds the list in edit mode (a two-finger drag, which may tick its first row before the edit mode's own event lands), the rows ticked after it, and several rows the system ticks at once choose rather than open, as Mail's do, rather than read as a tap on the first.
+        if (onChooseStart !== undefined && (editing || dragged.current || ids.length > 1)) {
+          onChooseStart(ids);
 
           return;
         }
