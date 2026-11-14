@@ -336,9 +336,6 @@ export type DescriptionCommentPlace = Extract<
 /** A line comment in Files changed: the agent, the file, and the side and last line it stands under. */
 export type LineCommentPlace = Extract<DraftPlace, { kind: typeof DRAFT_PLACE.LINE_COMMENT }>;
 
-/** A reply to a review thread on an agent's pull request: the agent and GitHub's id for the thread. */
-export type ReviewReplyPlace = Extract<DraftPlace, { kind: typeof DRAFT_PLACE.REVIEW_REPLY }>;
-
 /** An agent's line written again: the agent and the line. */
 export type EditPlace = Extract<DraftPlace, { kind: typeof DRAFT_PLACE.EDIT }>;
 

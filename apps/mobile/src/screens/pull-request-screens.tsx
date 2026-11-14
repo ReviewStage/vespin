@@ -1,5 +1,6 @@
 // pull-request-screens.tsx -- one agent's pull request on its own screen: where it stands, its checks and reviews held live, its merge or Remove from queue in the bar or, in a regular window, under its checks, and Open on GitHub in the bar.
 
+import { githubAvatarUrl } from "@repo/features/account-picture";
 import {
   type AgentOverviewPullRequest,
   CHECK_STATE,
@@ -46,10 +47,13 @@ import {
   ConfirmAsk,
   DetailPage,
   EmptyState,
+  FACE_KIND,
   GLYPH,
+  githubFace,
   glyphSymbol,
   LIST_LOOK,
   ListSection,
+  MARK_FACE,
   MarkRow,
   MergeActRow,
   PATH_PART,
@@ -124,6 +128,18 @@ function checkDetail(check: PullRequestCheck): string {
   }
 
   return CHECK_WORDS[check.state];
+}
+
+/** The App that runs a check, by the logo GitHub's avatar host serves for it, beside the check's mark, as the panel's check rows draw it; none where it has no such avatar. */
+function checkFace(check: PullRequestCheck) {
+  const picture = githubAvatarUrl(check.avatarUrl);
+
+  if (picture === undefined) return undefined;
+
+  return {
+    of: { name: check.app ?? check.name, picture, kind: FACE_KIND.APP },
+    stands: MARK_FACE.BESIDE,
+  };
 }
 
 /** Copies the pull request's GitHub address, with the system's tap of success, or says on the console why it could not. */
@@ -520,6 +536,15 @@ export function PullRequestPage({
               ? mergeSentence(pullRequest, action)
               : undefined
           }
+          opened={
+            pullRequest === undefined
+              ? undefined
+              : {
+                  by: pullRequest.author === undefined ? undefined : githubFace(pullRequest.author),
+                  at: pullRequest.createdAt,
+                  mergedAt: pullRequest.mergedAt,
+                }
+          }
         />
         {writes.note === undefined ? null : (
           <WriteNoteRow words={writes.note.words} said={writes.note.said} />
@@ -556,6 +581,8 @@ export function PullRequestPage({
               mark={CHECK_LOOK[check.state]}
               title={check.name}
               detail={checkDetail(check)}
+              standing={CHECK_WORDS[check.state]}
+              face={checkFace(check)}
             />
           ))
         )}
@@ -583,6 +610,7 @@ export function PullRequestPage({
             mark={REVIEW_LOOK[reviewer.state]}
             title={reviewer.by.login}
             detail={REVIEW_WORDS[reviewer.state]}
+            face={{ of: githubFace(reviewer.by), stands: MARK_FACE.LEAD }}
           />
         ))}
         <MarkRow

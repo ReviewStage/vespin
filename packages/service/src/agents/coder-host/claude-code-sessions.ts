@@ -300,8 +300,6 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         mcpUrl: options.mcpUrl,
         workerDenied: WORKER_DENIED_TOOLS,
         integrations: yield* options.integrations(agent),
-        // Note that a host's older runner, bundled before Claude Code's command sandbox was removed, refuses a config without domains.
-        allowedDomains: [],
         ...(layout.installedSkills === undefined
           ? undefined
           : { installedSkills: layout.installedSkills }),

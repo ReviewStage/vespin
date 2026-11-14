@@ -1,8 +1,9 @@
-import { ADMIN_REFUSED } from "@repo/features/admin-wire";
+import { ADMIN_REFUSED, type AdminMetricsWindow } from "@repo/features/admin-wire";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { type AdminDoors, AdminReadRefused } from "./admin-doors.js";
 import { AdminErrorState } from "./chrome/cards.js";
 import { Refreshing } from "./chrome/controls.js";
+import type { ViewerAccount } from "./chrome/page-header.js";
 
 /**
  * admin-read-view.tsx -- one admin screen drawn from where its query stands: the gate's cards, its skeleton, its failure, or its answer.
@@ -26,6 +27,26 @@ const ADMIN_READ_ERROR = {
   PROTECTED:
     "The request was redirected before it reached the dashboard. A preview deployment behind Vercel Deployment Protection intercepts the API call; disable protection for this deployment, or use a production URL.",
 } as const;
+
+/** What every screen is handed by the page that mounts it: the web dashboard's shell, or the app's Admin place. */
+export interface AdminScreenShell {
+  readonly account: ViewerAccount | undefined;
+  readonly onSignOut: () => Promise<void>;
+  /** Applied around every answer but the gate's own cards, which stand alone. */
+  readonly frame: (content: React.JSX.Element) => React.JSX.Element;
+}
+
+/** Whether a screen that lists accounts leaves the admins out, and the change of it. */
+export interface AdminRosterChoice {
+  readonly hideAdmins: boolean;
+  readonly onHideAdminsChange: (hide: boolean) => void;
+}
+
+/** How many days a screen's figures cover, and the change of it. */
+export interface AdminWindowChoice {
+  readonly windowDays: AdminMetricsWindow;
+  readonly onWindowDaysChange: (windowDays: AdminMetricsWindow) => void;
+}
 
 /** How one screen draws each place its read may stand. */
 export interface AdminReadArms<T> {
