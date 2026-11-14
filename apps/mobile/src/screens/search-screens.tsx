@@ -373,7 +373,12 @@ function useSearchDetail(
   remindMenu: (item: InboxItem) => BarMenu,
   choose: Dispatch<SetStateAction<SearchPick | undefined>>,
 ) {
-  const task = useTaskDetail(picked?.kind === SEARCH_PICK.TASK ? picked.id : undefined, listing);
+  const task = useTaskDetail(
+    picked?.kind === SEARCH_PICK.TASK ? picked.id : undefined,
+    listing,
+    undefined,
+    SIDEBAR_PLACE.SEARCH,
+  );
 
   if (picked === undefined)
     return { detail: <NoSelection title={CHOOSE_AN_ITEM_WORDS} />, asks: null };
