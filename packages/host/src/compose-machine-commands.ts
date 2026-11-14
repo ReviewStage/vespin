@@ -912,7 +912,7 @@ export function composeMachineCommands(
       <A>(wait: Effect.Effect<A>): Effect.Effect<A> =>
         wait.pipe(
           Effect.onInterrupt(() =>
-            settled(id, refusal).pipe(Effect.timeoutOption(WITHDRAWN_SETTLE), Effect.ignore),
+            settled(id, refusal).pipe(Effect.timeoutOption(WITHDRAWN_SETTLE), Effect.asVoid),
           ),
         );
 
@@ -1247,9 +1247,7 @@ export function composeMachineCommands(
           cursorHolder === undefined ? undefined : CURSOR_TAKEN_WORDS,
         );
 
-        yield* Effect.ignore(
-          computer.helper.ask({ op: COMPUTER_HELPER_OP.RELEASE_CURSOR }, RELEASE_WITHIN, free),
-        );
+        yield* computer.helper.ask({ op: COMPUTER_HELPER_OP.RELEASE_CURSOR }, RELEASE_WITHIN, free);
       });
 
     /**

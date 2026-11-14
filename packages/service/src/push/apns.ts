@@ -104,7 +104,7 @@ export const APNS_PUSH_TYPE = {
   LIVE_ACTIVITY: "liveactivity",
 } as const;
 
-export type ApnsPushType = (typeof APNS_PUSH_TYPE)[keyof typeof APNS_PUSH_TYPE];
+type ApnsPushType = (typeof APNS_PUSH_TYPE)[keyof typeof APNS_PUSH_TYPE];
 
 /** The priorities Apple takes in `apns-priority`. */
 export const APNS_PRIORITY = {
@@ -125,7 +125,7 @@ const DEFAULT_PRIORITY = {
   [APNS_PUSH_TYPE.LIVE_ACTIVITY]: APNS_PRIORITY.IMMEDIATE,
 } as const satisfies Record<ApnsPushType, ApnsPriority>;
 
-export const APNS_EXPIRATION = {
+const APNS_EXPIRATION = {
   /** Apple tries once, now, and keeps nothing for a phone that is off. */
   NOW_OR_NEVER: 0,
 } as const;
@@ -138,7 +138,7 @@ const LIVE_ACTIVITY_TOPIC_SUFFIX = ".push-type.liveactivity";
  * refuses a token older than an hour and throttles one refreshed more often
  * than every twenty minutes; fifty minutes sits inside both.
  */
-export const APNS_PROVIDER_TOKEN_LIFETIME = Duration.minutes(50);
+const APNS_PROVIDER_TOKEN_LIFETIME = Duration.minutes(50);
 
 /** The longest one send waits on Apple before it is counted failed. */
 export const APNS_REQUEST_TIMEOUT = Duration.seconds(10);
@@ -163,7 +163,7 @@ export const APNS_DELIVERY = {
 export type ApnsDelivery = (typeof APNS_DELIVERY)[keyof typeof APNS_DELIVERY];
 
 /** The phone a push is addressed to: a `push_device` row's token, gateway, and app. */
-export interface PushDeviceAddress {
+interface PushDeviceAddress {
   readonly token: string;
   readonly environment: PushEnvironment;
   readonly bundleId: string;
@@ -177,11 +177,11 @@ export const APNS_LIVE_ACTIVITY_EVENT = {
   END: "end",
 } as const;
 
-export type ApnsLiveActivityEvent =
+type ApnsLiveActivityEvent =
   (typeof APNS_LIVE_ACTIVITY_EVENT)[keyof typeof APNS_LIVE_ACTIVITY_EVENT];
 
 /** The `aps` dictionary Apple reads, as far as the service writes it; instants in seconds since the epoch, as Apple reads them. */
-export interface ApnsAps {
+interface ApnsAps {
   readonly alert?: { readonly title: string; readonly body?: string };
   readonly badge?: number;
   readonly sound?: string;
