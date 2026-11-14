@@ -153,7 +153,7 @@ test("Mark done on a task whose agent runs sends nothing until confirmed, then a
   assert.deepEqual(payloads, [], "nothing is sent before the answer");
 
   const stop = [...dialog.querySelectorAll("button")].find(
-    (button) => button.textContent === "Stop agents",
+    (button) => button.textContent === "Stop agent",
   );
 
   act(() => (stop ?? assert.fail("the act is offered")).click());
