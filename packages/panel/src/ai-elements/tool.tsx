@@ -170,11 +170,9 @@ export interface ToolHeaderProps {
  * names someone by their chip, and where it stands. Note that the chip
  * gives way before the label does, since a name cut at its end still reads,
  * and that the subject after it takes only what is left. A failure's mark,
- * or a refusal's, stands right after the label, by what failed, rather than
- * at the line's far end, where a reader scanning the verbs would miss it,
- * and the icon keeps its place, so the row still says what kind of call
- * failed; the working mark keeps the end, where it moves nothing as the call
- * settles.
+ * or a refusal's, stands at the line's end, where the working mark stood
+ * while the call ran, so the sentence stays whole and the icon keeps its
+ * place to say what kind of call failed.
  */
 export function ToolLine({
   state,
@@ -218,11 +216,6 @@ export function ToolLine({
             {trailing ? `${label} ` : label.replace(/:$/u, "")}
           </OneLine>
         )}
-        {failed ? (
-          <span className="flex flex-none self-center">
-            <ToolStateMark state={TOOL_STATE.OUTPUT_ERROR} />
-          </span>
-        ) : null}
         {chip === undefined ? null : (
           <span className="tool-chip flex min-w-0 max-w-tool-chip flex-initial whitespace-nowrap">
             {chip}
@@ -252,7 +245,7 @@ export function ToolLine({
           {status}
         </span>
       )}
-      {failed || paused ? null : <ToolStateMark state={state} />}
+      {paused ? null : <ToolStateMark state={failed ? TOOL_STATE.OUTPUT_ERROR : state} />}
     </>
   );
 }
