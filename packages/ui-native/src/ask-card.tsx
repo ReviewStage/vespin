@@ -302,8 +302,8 @@ function TypedFieldRow({
 }: {
   readonly field: AnswerField;
   readonly onChange: (value: string) => void;
-  /** Called with the field once it takes the keyboard, and with nothing once it lets it go, so the card's Done lowers the one focused. */
-  readonly onFocused: (field: TextFieldRef | null) => void;
+  /** Called with the field and whether it now holds the keyboard, so the card's Done lowers the one focused. */
+  readonly onFocused: (field: TextFieldRef | null, focused: boolean) => void;
 }) {
   const colors = useColors();
   const text = useNativeState(Predicate.isString(field.value) ? field.value : "");
@@ -322,7 +322,7 @@ function TypedFieldRow({
         text={text}
         placeholder={field.required ? FIELD_WORDS.REQUIRED : FIELD_WORDS.OPTIONAL}
         onTextChange={onChange}
-        onFocusChange={(focused) => onFocused(focused ? fieldRef.current : null)}
+        onFocusChange={(focused) => onFocused(fieldRef.current, focused)}
         modifiers={[
           textFieldStyle("plain"),
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
@@ -430,8 +430,10 @@ export function AnswerFields({
 }) {
   const focused = useRef<TextFieldRef | null>(null);
 
-  const onFocused = (field: TextFieldRef | null) => {
-    focused.current = field;
+  // Note that a field letting the keyboard go clears the hold only while it is still the one held, since the next field's focus can arrive before the last one's blur.
+  const onFocused = (field: TextFieldRef | null, now: boolean) => {
+    if (now) focused.current = field;
+    else if (focused.current === field) focused.current = null;
   };
 
   const card = (
