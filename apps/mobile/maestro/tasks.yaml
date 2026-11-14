@@ -345,3 +345,35 @@ onFlowComplete:
 - assertVisible: "Ledger rounding"
 - assertNotVisible: "Weekly digest email"
 - takeScreenshot: tasks-search
+# A resting agent's row offers Archive from its trailing swipe, which asks
+# first, as the agent page's ⋯ does. The search above leaves "Ledger
+# rounding" found, whose agent finished, so its swipe offers Archive where a
+# working agent's offers Open and Stop. Note that the swipe starts on the
+# row, one element whose center is the row's, and takes 900 ms, as the
+# leading swipe above does, since a quick one reads as a tap and opens the
+# agent. A full swipe only asks, since Archive never runs on one, so the
+# ask is what the flow waits for.
+- tapOn: "Ledger rounding"
+- extendedWaitUntil:
+    visible: "Created by .*"
+    timeout: 20000
+- scrollUntilVisible:
+    element: "Fix ledger rounding"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- swipe:
+    from:
+      text: "Fix ledger rounding"
+    direction: LEFT
+    duration: 900
+- waitForAnimationToEnd
+- takeScreenshot: task-agent-swipe-resting
+- tapOn:
+    text: "Archive"
+    optional: true
+- assertVisible: "Archive agent?"
+- takeScreenshot: task-agent-archive-ask
+- tapOn: "Cancel"
+- assertNotVisible: "Archive agent?"
+- assertVisible: "Fix ledger rounding"
