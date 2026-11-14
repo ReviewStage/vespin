@@ -74,15 +74,6 @@ published.
 
 ## 0.35.0 — 2026-11-14
 
-### Back on the service
-
-This release lets every desktop reach Vespin's service again after its move to
-hosted API 2, which turned away 0.34.1 and older with a request to update
-before any newer build was out. Install 0.35.0 and your tasks, agents, and
-Inbox load as before.
-
-[#9272](https://github.com/ReviewStage/vespin/pull/9272)
-
 ### Following
 
 Following is out of Settings › Experimental and works in every workspace:
