@@ -1,4 +1,3 @@
-import { DEVICE_STANDING } from "@repo/features/agent-wire";
 import { machineName } from "@repo/features/machine-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DefaultMachine, WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
@@ -25,7 +24,7 @@ import { workspaceToolsQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { showToast } from "../toast.js";
-import { DeviceStandingGlyph } from "./runs-on.js";
+import { MachineGlyph } from "./workspace-machines.js";
 
 /**
  * agent-machines.tsx -- the machine an agent's terminal commands and computer use go to: its Default machine row in the Cloud chip's popover, and the machine a call still unanswered names.
@@ -49,7 +48,7 @@ const DEFAULT_MACHINE_ROW = "default-machine";
 
 /** What the Default machine row and its submenu say. */
 const DEFAULT_MACHINE_WORDS = {
-  LABEL: "Default machine",
+  LABEL: "Terminal and computer use",
   HEADING: "Terminal commands and computer use go here",
   NONE: "None",
   REFUSED: "The default machine could not be changed.",
@@ -120,16 +119,6 @@ function DefaultValue({
   );
 }
 
-/** A machine's glyph wearing the dot of whether it listened lately, as its submenu row and the Default machine row draw it. */
-function MachineGlyph({ online }: { online: boolean }): React.JSX.Element {
-  return (
-    <DeviceStandingGlyph
-      device={undefined}
-      standing={online ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE}
-    />
-  );
-}
-
 /**
  * The Default machine row of the agent's place popover, as the module
  * says; none for an agent offered no `run_on_mac`, or before its tools are
@@ -165,7 +154,7 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
       chosen === undefined ? (
         <GLYPH.DESKTOP aria-hidden="true" />
       ) : (
-        <MachineGlyph online={online} />
+        <MachineGlyph machine={{ online }} />
       ),
     end: (
       <DefaultValue
@@ -183,7 +172,7 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
               (machine): MenuRow => ({
                 id: machine.id,
                 label: nameOf(machine),
-                icon: <MachineGlyph online={machine.online} />,
+                icon: <MachineGlyph machine={machine} />,
                 before: faceOf(machine.owner),
                 replayMasked: true,
               }),

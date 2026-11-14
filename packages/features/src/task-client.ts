@@ -10,8 +10,8 @@ import type * as HttpClient from "effect/http/HttpClient";
 import {
   type AccountCallEffects,
   accountCall,
-  type CallCredential,
   callAnswered,
+  type HostedServiceOptions,
   jsonOf,
 } from "./account-call.js";
 import { startRefusedAs } from "./agent-client.js";
@@ -164,14 +164,6 @@ export type TaskCallResult<Answer, Failure> =
       readonly cause?: FailureFacts;
     };
 
-export interface HostedTaskClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-  requestTimeoutMs?: number;
-}
-
 const UNANSWERED = { ok: false, failure: TASK_CALL_FAILURE.UNANSWERED } as const;
 
 /** Why a keep the service refused in band was not kept, as the editor hears it. */
@@ -207,10 +199,10 @@ const NOT_FOUND_REFUSAL = {
 } as const;
 
 /** A plan's write as the client answers it: the task as it then stands, and the transaction it was written in where it changed a row. */
-function writtenOf(changed: { readonly plan: Task; readonly txid?: string }): TaskWritten {
+function writtenOf(changed: { readonly task: Task; readonly txid?: string }): TaskWritten {
   return changed.txid === undefined
-    ? { task: changed.plan }
-    : { task: changed.plan, txid: changed.txid };
+    ? { task: changed.task }
+    : { task: changed.task, txid: changed.txid };
 }
 
 /** A follower write's answer as the window takes it: the followers, and the transaction where the write changed a row. */
@@ -337,7 +329,7 @@ export class HostedTaskClient {
   readonly #call: AccountCallEffects;
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedTaskClientOptions) {
+  constructor(options: HostedServiceOptions) {
     const { credential } = options;
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
@@ -353,7 +345,7 @@ export class HostedTaskClient {
 
   /** A thread started on the description, or one of its task's pages, with its first comment, answered as it stands, or why not; a request the service would refuse by shape travels nowhere. */
   startComment(
-    planId: string,
+    taskId: string,
     request: DescriptionCommentStart,
   ): Effect.Effect<TasksCommentAnswer, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(
@@ -364,7 +356,7 @@ export class HostedTaskClient {
 
     return Effect.map(
       hostedCall(this.#hosted.descriptionComments.start, {
-        params: { id: planId },
+        params: { id: taskId },
         body: admitted,
       }),
       (started) => ("failure" in started ? bareFailure(started) : started.body),
@@ -373,7 +365,7 @@ export class HostedTaskClient {
 
   /** One thing done to one thread of the description, answered with the thread as it stands, its deletion, or why not. */
   actOnComment(
-    planId: string,
+    taskId: string,
     threadId: string,
     request: DescriptionCommentActionRequest,
   ): Effect.Effect<TasksCommentAnswer, never, HttpClient.HttpClient> {
@@ -385,7 +377,7 @@ export class HostedTaskClient {
 
     return Effect.map(
       hostedCall(this.#hosted.descriptionComments.act, {
-        params: { id: planId, thread: threadId },
+        params: { id: taskId, thread: threadId },
         body: admitted,
       }),
       (acted) => ("failure" in acted ? bareFailure(acted) : acted),
@@ -400,7 +392,7 @@ export class HostedTaskClient {
   > {
     // Note that the query still asks for the archived, because the service reads it for the agents with no plan too, whose archive stands.
     return Effect.map(
-      hostedCall(this.#hosted.plans.list, { archived: TASK_LIST_ARCHIVED.INCLUDE }),
+      hostedCall(this.#hosted.tasks.list, { archived: TASK_LIST_ARCHIVED.INCLUDE }),
       (listed) => ("failure" in listed ? failedAs(listed, []) : succeeded(listed)),
     );
   }
@@ -411,7 +403,7 @@ export class HostedTaskClient {
     number: number,
   ): Effect.Effect<string | undefined, never, HttpClient.HttpClient> {
     return Effect.map(
-      hostedCall(this.#hosted.plans.find, { workspace, number: String(number) }),
+      hostedCall(this.#hosted.tasks.find, { workspace, number: String(number) }),
       (found) => ("failure" in found ? undefined : found.taskId),
     );
   }
@@ -420,10 +412,10 @@ export class HostedTaskClient {
   open(
     taskId: string,
   ): Effect.Effect<TaskCallResult<Task, TaskCallFailure>, never, HttpClient.HttpClient> {
-    return Effect.map(hostedCall(this.#hosted.plans.open, { id: taskId }), (opened) =>
+    return Effect.map(hostedCall(this.#hosted.tasks.open, { id: taskId }), (opened) =>
       "failure" in opened
         ? failedAs(opened, [TASK_CALL_FAILURE.NOT_FOUND])
-        : succeeded(opened.plan),
+        : succeeded(opened.task),
     );
   }
 
@@ -450,7 +442,7 @@ export class HostedTaskClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 
     return Effect.map(
-      hostedCall(this.#hosted.plans.editDescription, { params: { id: taskId }, body: admitted }),
+      hostedCall(this.#hosted.tasks.editDescription, { params: { id: taskId }, body: admitted }),
       (edited) =>
         "failure" in edited ? failedAs(edited, [TASK_CALL_FAILURE.NOT_FOUND]) : succeeded(edited),
     );
@@ -544,7 +536,7 @@ export class HostedTaskClient {
 
     return Effect.map(
       hostedCall(
-        this.#hosted.plans.block,
+        this.#hosted.tasks.block,
         { params: { id: taskId }, body: admitted },
         { as: TASK_BLOCK_RENAMES },
       ),
@@ -570,7 +562,7 @@ export class HostedTaskClient {
 
     return Effect.map(
       hostedCall(
-        this.#hosted.plans.parent,
+        this.#hosted.tasks.parent,
         { params: { id: taskId }, body: admitted },
         { as: TASK_RENAMES },
       ),
@@ -594,7 +586,7 @@ export class HostedTaskClient {
 
     return Effect.map(
       hostedCall(
-        this.#hosted.plans.relation,
+        this.#hosted.tasks.relation,
         { params: { id: taskId }, body: admitted },
         { as: TASK_BLOCK_RENAMES },
       ),
@@ -847,7 +839,7 @@ export class HostedTaskClient {
     before?: number,
   ): Effect.Effect<DescriptionRevisionsAnswer | undefined, never, HttpClient.HttpClient> {
     return Effect.map(
-      hostedCall(this.#hosted.plans.descriptionRevisions, {
+      hostedCall(this.#hosted.tasks.descriptionRevisions, {
         id: taskId,
         ...(before === undefined ? undefined : { before: String(before) }),
       }),
@@ -865,7 +857,7 @@ export class HostedTaskClient {
     HttpClient.HttpClient
   > {
     return Effect.map(
-      hostedCall(this.#hosted.plans.descriptionRevision, { id: taskId, seq: String(seq) }),
+      hostedCall(this.#hosted.tasks.descriptionRevision, { id: taskId, seq: String(seq) }),
       (answer) => ("failure" in answer ? undefined : answer.revision),
     );
   }
@@ -953,8 +945,8 @@ export class HostedTaskClient {
     HttpClient.HttpClient
   > {
     return Effect.map(
-      hostedCall(this.#hosted.plans.restoreDescription, { id: taskId, seq: String(seq) }),
-      (answer) => ("failure" in answer ? undefined : { task: answer.plan, txid: answer.txid }),
+      hostedCall(this.#hosted.tasks.restoreDescription, { id: taskId, seq: String(seq) }),
+      (answer) => ("failure" in answer ? undefined : { task: answer.task, txid: answer.txid }),
     );
   }
 
@@ -962,7 +954,7 @@ export class HostedTaskClient {
   delete(
     taskId: string,
   ): Effect.Effect<{ readonly txid?: string } | undefined, never, HttpClient.HttpClient> {
-    return Effect.map(hostedCall(this.#hosted.plans.delete, { id: taskId }), (answer) => {
+    return Effect.map(hostedCall(this.#hosted.tasks.delete, { id: taskId }), (answer) => {
       if ("failure" in answer) return undefined;
 
       return answer.txid === undefined ? {} : { txid: answer.txid };
@@ -1033,7 +1025,7 @@ export class HostedTaskClient {
   #update(taskId: string, changes: TaskUpdateRequest, key?: string) {
     return Effect.map(
       hostedCall(
-        this.#hosted.plans.update,
+        this.#hosted.tasks.update,
         { params: { id: taskId }, body: changes },
         {
           as: TASK_RENAMES,
@@ -1124,7 +1116,7 @@ export class HostedTaskClient {
       ...(key === undefined ? undefined : { idempotencyKey: key }),
     };
 
-    return Effect.map(hostedCall(this.#hosted.plans.create, admitted, reading), (started) =>
+    return Effect.map(hostedCall(this.#hosted.tasks.create, admitted, reading), (started) =>
       "failure" in started
         ? {
             ...failedAs(started, START_NAMED),
@@ -1140,12 +1132,12 @@ function taskStartedOf(started: TaskStartAnswer): TaskStarted {
   const written = started.txid === undefined ? {} : { txid: started.txid };
 
   if (started.agent !== undefined) {
-    return { task: started.plan, agent: { agent: started.agent }, ...written };
+    return { task: started.task, agent: { agent: started.agent }, ...written };
   }
 
   if (started.agentRefusal !== undefined) {
-    return { task: started.plan, agent: startRefusedAs(started.agentRefusal), ...written };
+    return { task: started.task, agent: startRefusedAs(started.agentRefusal), ...written };
   }
 
-  return { task: started.plan, ...written };
+  return { task: started.task, ...written };
 }

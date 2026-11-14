@@ -28,12 +28,12 @@ export const EXPERIMENT = {
   MERGE_QUEUE: "merge-queue",
   /** Reply buttons: a button an agent puts in its reply, beside the line it is about, that starts a new agent on a brief it wrote, or sends one to a running agent, once a member presses it. */
   REPLY_BUTTONS: "reply-buttons",
-  /** Following: the members who follow each task, who starts, is assigned, or messages its agents, and each follower's switch letting the task's agents use their machines. */
-  FOLLOWING: "following",
   /** Voice: talk to an agent out loud through GPT-Live on your own OpenAI API key: Talk in an agent's box, the call card, and Settings › Voice. */
   VOICE: "voice",
   /** Goals: `/goal` in a box written to an agent, which runs its harness's own goal (Claude Code's `/goal`, Codex's thread goal), the goal's row over the box, and its moves in the transcript. */
   GOALS: "goals",
+  /** Move agents: an agent's Move to ›, its place chip's menu of places, and Move to cloud, each continuing the agent in the cloud or on another of the member's devices. */
+  MOVE_AGENTS: "move-agents",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -105,6 +105,16 @@ export interface ExperimentEntry {
  */
 export const EXPERIMENTS = [
   {
+    key: EXPERIMENT.MOVE_AGENTS,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: true,
+    name: "Move agents",
+    detail:
+      "Move an agent between the cloud and your Macs and hosts, continuing it where you pick.",
+    owner: "Charles",
+    since: "2026-11-13",
+  },
+  {
     key: EXPERIMENT.GOALS,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
     listed: true,
@@ -120,7 +130,7 @@ export const EXPERIMENTS = [
     listed: true,
     name: "Merge queue",
     detail:
-      "See every pull request waiting in GitHub's merge queues across your workspace's repositories, with the task each belongs to.",
+      "See every pull request waiting in GitHub's merge queues across your workspace's repositories, how its checks stand, and when it should merge.",
     owner: "Charles",
     since: "2026-11-12",
   },
@@ -131,16 +141,6 @@ export const EXPERIMENTS = [
     name: "Voice",
     detail:
       "Talk to an agent out loud through GPT-Live on your own OpenAI API key, from Talk in an agent's box.",
-    owner: "Dean",
-    since: "2026-11-12",
-  },
-  {
-    key: EXPERIMENT.FOLLOWING,
-    scope: EXPERIMENT_SCOPE.WORKSPACE,
-    listed: true,
-    name: "Following",
-    detail:
-      "Follow the tasks you care about, and choose on each whether its agents may use your machines.",
     owner: "Dean",
     since: "2026-11-12",
   },

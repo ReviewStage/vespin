@@ -20,11 +20,11 @@ test("a popover stands above its anchor, from the trailing edge or the leading o
   const anchor = anchorAt(400, 400);
   assert.deepEqual(
     popoverPlace({ anchor, room: ROOM, width: 340, height: 200, align: POPOVER_ALIGN.END }),
-    { side: POPOVER_SIDE.ABOVE, inset: 0, width: 340, room: 388 },
+    { side: POPOVER_SIDE.ABOVE, inset: 0, width: 340, most: 784, room: 388 },
   );
   assert.deepEqual(
     popoverPlace({ anchor, room: ROOM, width: 340, height: 200, align: POPOVER_ALIGN.START }),
-    { side: POPOVER_SIDE.ABOVE, inset: 0, width: 340, room: 388 },
+    { side: POPOVER_SIDE.ABOVE, inset: 0, width: 340, most: 784, room: 388 },
   );
 });
 

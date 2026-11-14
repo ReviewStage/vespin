@@ -52,7 +52,7 @@ const SEEKING: FoundTask = { taskId: undefined, seeking: true };
  * host reads it again, so a passing failure never says Task not found.
  */
 function documentUnread(state: AppStateSnapshot, taskId: string): boolean {
-  return state[LIVE_READ.DESCRIPTION_DOCUMENT][taskId]?.rows === undefined;
+  return state[LIVE_READ.HELD_TASK][taskId]?.rows === undefined;
 }
 
 /** The account signed in, whose finds are held under it; none while signed out, or for an account stored with no id. */
@@ -73,7 +73,7 @@ export function useFoundTask(named: string | undefined, workspace: string | unde
   const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
 
   const number =
-    named === undefined ? undefined : taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: named });
+    named === undefined ? undefined : taskNumberOf({ kind: LINK_DESTINATION.TASK, taskId: named });
 
   const home = workspace === undefined ? undefined : workspaceOfSlug(workspaces ?? [], workspace);
 

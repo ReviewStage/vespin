@@ -1,5 +1,5 @@
 /**
- * video-signature.ts -- what a video's first bytes say it is: a WebM, an MP4 every player streams, or neither, and the size in pixels its video track states.
+ * video-signature.ts -- what a video's first bytes say it is: a WebM, an MP4 every player streams, or neither, the size in pixels its video track states, and whether it carries sound.
  *
  * An agent records what it did in its sandbox as a WebM, the one format the
  * encoder already in its sandbox writes (Playwright's `recordVideo`, or the
@@ -13,6 +13,9 @@
  * Matroska file, and its doctype says which is a WebM. The size is read off
  * the first video track's entry, which stands before the first cluster of
  * frames, so a reader can hold the video's place before its bytes arrive.
+ * Whether it carries sound is read off the same header
+ * (`recordingHasSound`): a screen recording has none, but a clip an agent
+ * made to be heard, drawn as a waveform, does.
  *
  * EBML, in short: every element is an ID and a size, each a variable-length
  * integer whose leading zero bits say how many more bytes it takes; a size
@@ -60,6 +63,7 @@ const EBML_ID = {
   SEGMENT: 0x18538067,
   TRACKS: 0x1654ae6b,
   TRACK_ENTRY: 0xae,
+  TRACK_TYPE: 0x83,
   VIDEO: 0xe0,
   PIXEL_WIDTH: 0xb0,
   PIXEL_HEIGHT: 0xba,
@@ -68,6 +72,9 @@ const EBML_ID = {
 
 /** The doctype a WebM's header names. */
 const WEBM_DOC_TYPE = "webm";
+
+/** The track type a Matroska track entry names a sound track by. */
+const WEBM_AUDIO_TRACK = 2;
 
 /** The containers walked into on the way from the segment to a video track's size. */
 const WALKED: ReadonlySet<number> = new Set([
@@ -178,16 +185,18 @@ export interface VideoDimensions {
 }
 
 /**
- * The size a WebM's first video track states; nothing where the bytes are
- * no WebM, or no video track's size stands before its first cluster.
+ * Whether `found` answers for any element of a WebM's header, walked from
+ * its segment into its tracks and their entries up to its first cluster;
+ * never for bytes that are no WebM.
  */
-export function webmDimensions(bytes: Uint8Array): VideoDimensions | undefined {
-  if (docTypeOf(bytes) !== WEBM_DOC_TYPE) return undefined;
+function someWebmHeaderElement(
+  bytes: Uint8Array,
+  found: (element: ElementHeader) => boolean,
+): boolean {
+  if (docTypeOf(bytes) !== WEBM_DOC_TYPE) return false;
   const header = readHeader(bytes, 0, bytes.length);
 
-  if (header === undefined) return undefined;
-  let width = 0;
-  let height = 0;
+  if (header === undefined) return false;
   // A stack of where each container walked into ends, so its siblings are read after it.
   const ends: number[] = [bytes.length];
   let at = header.end;
@@ -196,13 +205,9 @@ export function webmDimensions(bytes: Uint8Array): VideoDimensions | undefined {
     while (ends.length > 1 && at >= (ends.at(-1) ?? bytes.length)) ends.pop();
     const element = readHeader(bytes, at, ends.at(-1) ?? bytes.length);
 
-    if (element === undefined || element.id === EBML_ID.CLUSTER) break;
+    if (element === undefined || element.id === EBML_ID.CLUSTER) return false;
 
-    if (element.id === EBML_ID.PIXEL_WIDTH) width = readUint(bytes, element.body, element.end);
-
-    if (element.id === EBML_ID.PIXEL_HEIGHT) height = readUint(bytes, element.body, element.end);
-
-    if (width > 0 && height > 0) return { width, height };
+    if (found(element)) return true;
 
     if (WALKED.has(element.id)) {
       ends.push(element.end);
@@ -212,7 +217,26 @@ export function webmDimensions(bytes: Uint8Array): VideoDimensions | undefined {
     }
   }
 
-  return undefined;
+  return false;
+}
+
+/**
+ * The size a WebM's first video track states; nothing where the bytes are
+ * no WebM, or no video track's size stands before its first cluster.
+ */
+export function webmDimensions(bytes: Uint8Array): VideoDimensions | undefined {
+  let width = 0;
+  let height = 0;
+
+  const sized = someWebmHeaderElement(bytes, (element) => {
+    if (element.id === EBML_ID.PIXEL_WIDTH) width = readUint(bytes, element.body, element.end);
+
+    if (element.id === EBML_ID.PIXEL_HEIGHT) height = readUint(bytes, element.body, element.end);
+
+    return width > 0 && height > 0;
+  });
+
+  return sized ? { width, height } : undefined;
 }
 
 /** The four-character types of the MP4 boxes read: the file type, the movie's index, a track and its header, its media, and an H.264 sample entry. */
@@ -223,7 +247,14 @@ const MP4_BOX = {
   TKHD: "tkhd",
   MDAT: "mdat",
   AVC1: "avc1",
+  HDLR: "hdlr",
 } as const;
+
+/** The media handler an MP4 track's `hdlr` names a sound track by. */
+const MP4_SOUND_HANDLER = "soun";
+
+/** Where a handler box's type stands past its own type: its version and flags, then four bytes the format leaves zero. */
+const HDLR_TYPE_AFTER = 4 + 4 + 4;
 
 /**
  * Where a track header's width stands past its version byte and flags: its
@@ -334,4 +365,58 @@ export function mp4Dimensions(bytes: Uint8Array): VideoDimensions | undefined {
   }
 
   return undefined;
+}
+
+/**
+ * Whether an MP4's index (`moov`), standing before its media, names a track
+ * whose handler is sound, read through as much of the index as the bytes
+ * hold, so a head of the file is enough; never where its media comes first.
+ */
+function mp4IndexHoldsSound(bytes: Uint8Array): boolean {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  for (let at = 0; at + 8 <= bytes.length; ) {
+    const short = view.getUint32(at);
+    const long = short === 1 && at + 16 <= bytes.length;
+    const size = long ? Number(view.getBigUint64(at + 8)) : short;
+    const type = fourCc(bytes, at + 4);
+
+    if (type === MP4_BOX.MDAT || size < 8) return false;
+
+    if (type === MP4_BOX.MOOV) {
+      const end = Math.min(bytes.length, at + size);
+
+      for (let word = at + 8; word + HDLR_TYPE_AFTER + 4 <= end; word += 1) {
+        if (fourCc(bytes, word) !== MP4_BOX.HDLR) continue;
+
+        if (fourCc(bytes, word + HDLR_TYPE_AFTER) === MP4_SOUND_HANDLER) return true;
+      }
+
+      return false;
+    }
+
+    at += size;
+  }
+
+  return false;
+}
+
+/**
+ * Whether a recording carries a sound track, as its header states: a WebM
+ * track entry of the audio type before its first cluster, or a track of an
+ * MP4's index whose handler is sound. Only the header is read, so the head
+ * of a file is enough where its index stands first, as a recording kept
+ * does; anything else carries none.
+ */
+export function recordingHasSound(head: Uint8Array): boolean {
+  if (startsLikeWebm(head)) {
+    return someWebmHeaderElement(
+      head,
+      (element) =>
+        element.id === EBML_ID.TRACK_TYPE &&
+        readUint(head, element.body, element.end) === WEBM_AUDIO_TRACK,
+    );
+  }
+
+  return startsLikeMp4(head) && mp4IndexHoldsSound(head);
 }

@@ -49,7 +49,7 @@ type FileViewField = Extract<
 export type FileViewSettings = Pick<AppSettingsView, FileViewField>;
 
 /** How code and diffs are drawn until told otherwise, each setting's own default. */
-export const DEFAULT_SETTINGS: FileViewSettings = {
+const DEFAULT_SETTINGS: FileViewSettings = {
   lineNumbers: APP_SETTING_DEFAULTS.lineNumbers,
   wordWrap: APP_SETTING_DEFAULTS.wordWrap,
   diffLayout: APP_SETTING_DEFAULTS.diffLayout,

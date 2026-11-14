@@ -204,7 +204,7 @@ test("a pinned agent's tab of a task not open says its agent's name as the list 
 
   const followed = listedAgent({
     id: AGENT,
-    planId: TASK.id,
+    taskId: TASK.id,
     title: "Expire stale invitations",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
@@ -310,7 +310,7 @@ describe("a pinned Changes tab's card", () => {
 
   const summary: AgentSummary = {
     id: AGENT,
-    planId: TASK.id,
+    taskId: TASK.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Expiry job",

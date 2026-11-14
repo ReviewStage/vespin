@@ -44,9 +44,9 @@ import {
  * `rate_limit_event`, which the CLI posts ahead of the subagent's failure)
  * failed for that limit, so its call answers with the limit's notice
  * rather than the CLI's error. A call to our
- * own MCP server is named as our tool (`mcp__workspace__read_inbox` is
- * `read_inbox`, as is the `mcp__luke__` a transcript stored before the
- * server's rename names it by) and its answer read as the JSON that tool answers; a call
+ * own MCP server is named as our tool (`mcp__team__read_inbox` is
+ * `read_inbox`, as are the `mcp__workspace__` and `mcp__luke__` a transcript
+ * stored before the server's renames names it by) and its answer read as the JSON that tool answers; a call
  * to an integration's own server (`mcp__linear__list_issues`) is stored as
  * the retired runtime's call of that integration's tool is, so it draws with the service's
  * mark and the tool's own name; every other call keeps the CLI's own name,
@@ -492,7 +492,7 @@ function settlementOf(
       : workspaceAnswerText(content ?? []);
 
   return workspaceTool
-    ? toolAnswerSettlement({ workspaceTool: true, text }, isError)
+    ? toolAnswerSettlement({ workspaceTool: true, name: storedName, text }, isError)
     : toolAnswerSettlement({ workspaceTool: false, text, output: text }, isError);
 }
 

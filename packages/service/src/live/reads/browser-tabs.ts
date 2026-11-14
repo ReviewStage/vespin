@@ -6,10 +6,9 @@
  * it: a tab of an agent the account sees whole, its task included where it
  * is on one (`agentVisibleTo`), read through the agent's own row, never the
  * task the tab's row was written under, so a tab follows its agent. The
- * account is joined through its membership of the agent's workspace, as
- * Neon's guide authorizes a live read. It reads no clock, as Realtime
- * requires, so a takeover past its instant is delivered as it stands and
- * lapsed by the reader.
+ * account is joined through its membership of the agent's workspace. It
+ * reads no clock, as a live read must (`live-statement.ts`), so a takeover
+ * past its instant is delivered as it stands and lapsed by the reader.
  *
  * A task's tabs are woken by a tab opened, moved, pointed at, taken over,
  * or closed under the task, and by the agents on the task, all of which

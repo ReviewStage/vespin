@@ -204,6 +204,8 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
   [LIVE_READ.ALLOWED_COMMANDS]: () => askAct(ACT_KIND.ALLOWED_COMMANDS_FOLLOW),
   [LIVE_READ.DEVICE_PRESENCE]: () => askAct(ACT_KIND.HOSTS_PRESENCE_FOLLOW),
   [LIVE_READ.HOSTS]: () => askAct(ACT_KIND.HOSTS_FOLLOW),
+  [LIVE_READ.MACHINES]: () => askAct(ACT_KIND.MACHINES_FOLLOW),
+  [LIVE_READ.MACHINE_ASKS]: () => askAct(ACT_KIND.MACHINE_ASKS_FOLLOW),
   [LIVE_READ.AGENT_ORIGINS]: ([agentId = ""]) =>
     askAct(ACT_KIND.AGENTS_ORIGIN_FOLLOW, { agentId: String(agentId) }),
   [LIVE_READ.HOLDER_INBOX]: ([kind, id]) =>
@@ -220,8 +222,8 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
       ACT_KIND.TASKS_BROWSER_TABS_FOLLOW,
       kind === BROWSER_TABS_PLACE.TASK ? { taskId: String(id) } : { agentId: String(id) },
     ),
-  [LIVE_READ.DESCRIPTION_DOCUMENT]: ([taskId = ""]) =>
-    askAct(ACT_KIND.TASKS_DOCUMENT_FOLLOW, { taskId: String(taskId) }),
+  [LIVE_READ.HELD_TASK]: ([taskId = ""]) =>
+    askAct(ACT_KIND.TASKS_HELD_FOLLOW, { taskId: String(taskId) }),
   [LIVE_READ.DESCRIPTION_COMMENTS]: (_ids, meta) =>
     askAct(ACT_KIND.TASKS_COMMENTS_FOLLOW, readCommentSubject(meta?.follow)),
   [LIVE_READ.PULL_REQUEST]: pullRequestPartFollow(PULL_REQUEST_PART.PULL_REQUEST),
@@ -305,6 +307,8 @@ const LIVE_QUERY_READS = [
   LIVE_READ.ALLOWED_COMMANDS,
   LIVE_READ.DEVICE_PRESENCE,
   LIVE_READ.HOSTS,
+  LIVE_READ.MACHINES,
+  LIVE_READ.MACHINE_ASKS,
   LIVE_READ.THIS_MAC_HOST,
   LIVE_READ.AGENT_ORIGINS,
   LIVE_READ.INBOX_ITEMS,
@@ -312,7 +316,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.LINK_STANDINGS,
   LIVE_READ.PAGES,
   LIVE_READ.BROWSER_TABS,
-  LIVE_READ.DESCRIPTION_DOCUMENT,
+  LIVE_READ.HELD_TASK,
   LIVE_READ.DESCRIPTION_COMMENTS,
   LIVE_READ.PULL_REQUEST,
   LIVE_READ.PULL_REQUEST_CHECKS,
@@ -521,6 +525,14 @@ export const allowedCommandsQuery = (accountId: string | undefined) =>
 export const hostsQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.HOSTS, accountIds(accountId));
 
+/** The account's machines with their own settings for agents, by the account. */
+export const machinesQuery = (accountId: string | undefined) =>
+  liveReadQuery(LIVE_READ.MACHINES, accountIds(accountId));
+
+/** The asks the account's machines hold for its answer, by the account. */
+export const machineAsksQuery = (accountId: string | undefined) =>
+  liveReadQuery(LIVE_READ.MACHINE_ASKS, accountIds(accountId));
+
 /** This Mac's host, by the account, which the host reads on its own every few seconds and holds for the session. */
 export const thisMacHostQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.THIS_MAC_HOST, accountIds(accountId));
@@ -571,8 +583,8 @@ export const browserTabsQuery = (place: BrowserTabsPlace | undefined) =>
   );
 
 /** One task's plan, by the task, which the window's open task holds. */
-export const descriptionDocumentQuery = (taskId: string | undefined) =>
-  liveReadQuery(LIVE_READ.DESCRIPTION_DOCUMENT, taskId === undefined ? undefined : [taskId]);
+export const heldTaskQuery = (taskId: string | undefined) =>
+  liveReadQuery(LIVE_READ.HELD_TASK, taskId === undefined ? undefined : [taskId]);
 
 /** The comments a surface holds, as the acts name them, with no page key where it reads the plan's. */
 function commentsFollowOf({ taskId, pageId }: CommentSubject): CommentSubject {
@@ -716,6 +728,9 @@ export const allowedCommandsRetryMutation = () => actMutation(ACT_KIND.ALLOWED_C
 /** Try again on the hosts. */
 export const hostsRetryMutation = () => actMutation(ACT_KIND.HOSTS_RETRY);
 
+/** Try again on the account's machines. */
+export const machinesRetryMutation = () => actMutation(ACT_KIND.MACHINES_RETRY);
+
 /** Try again on the feed of every item the account reaches. */
 export const inboxItemsRetryMutation = () => actMutation(ACT_KIND.AGENTS_INBOX_ITEMS_RETRY);
 
@@ -726,7 +741,7 @@ export const holderInboxRetryMutation = () => actMutation(ACT_KIND.AGENTS_INBOX_
 export const descriptionCommentsRetryMutation = () => actMutation(ACT_KIND.TASKS_COMMENTS_RETRY);
 
 /** Try again on a task's plan. */
-export const descriptionDocumentRetryMutation = () => actMutation(ACT_KIND.TASKS_DOCUMENT_RETRY);
+export const heldTaskRetryMutation = () => actMutation(ACT_KIND.TASKS_HELD_RETRY);
 
 /** Try again on one part of a pull request, named by its part, its agent, and its number, which answers once its ask has landed, so a write's read-back can wait on it. */
 export const pullRequestPartRetryMutation = () =>

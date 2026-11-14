@@ -1,5 +1,6 @@
 import { type ReactNode, type Ref, useState } from "react";
-import { AspectRatio } from "../../shadcn/aspect-ratio.js";
+import { CARD_CORNER, CARD_ELEMENT, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
+import { EDGE_CLIP_ELEMENT, EDGE_CLIP_LAYOUT, EdgeClip } from "../edge-clip/edge-clip.js";
 import { useBlobUrl } from "../video-player/video-player.js";
 
 /**
@@ -22,8 +23,7 @@ import { useBlobUrl } from "../video-player/video-player.js";
  * cut to its shape, or, `contain`ed, stands whole on the ground and never
  * past its own size, so a tall phone screenshot or a wide banner shown as
  * evidence keeps every edge, and a small icon stays sharp. It takes no class or style: its outer layout
- * is its container's. It is drawn by shadcn/ui's aspect ratio
- * (`../../shadcn/aspect-ratio.tsx`) in Tailwind utilities over the theme.
+ * is its container's.
  */
 
 /** How big a thumb is: as wide as the card it stands in, or a row's small tile. */
@@ -48,13 +48,10 @@ const FIT_CLASS: Record<PageThumbFit, string> = {
   [PAGE_THUMB_FIT.CONTAIN]: "object-scale-down",
 };
 
-/** A thumb's shape: a window's, 16 by 10. */
-const THUMB_RATIO = 16 / 10;
-
-/** Each size's box: a block as wide as its card, or a row's tile, its glyph at its middle. */
+/** Each size's box (every thumb is a window's shape, 16 by 10): a block as wide as its card, or a row's tile; either's glyph stands at its middle (`EdgeClip`'s `FILL`). */
 const SIZE_CLASS: Record<PageThumbSize, string> = {
   [PAGE_THUMB_SIZE.CARD]: "block",
-  [PAGE_THUMB_SIZE.ROW]: "inline-flex h-page-thumb-row items-center justify-center",
+  [PAGE_THUMB_SIZE.ROW]: "inline-block h-page-thumb-row",
 };
 
 /** A page drawn small: its address, the sandbox it runs under, and the title it is named by for tooling. */
@@ -118,15 +115,14 @@ export function PageThumb({
   const [loadedFrom, setLoadedFrom] = useState<string | undefined>(undefined);
 
   return (
-    <AspectRatio
-      as="span"
-      ratio={THUMB_RATIO}
+    <Card
+      as={CARD_ELEMENT.SPAN}
+      look={CARD_LOOK.TINT}
+      corner={CARD_CORNER.CONTROL}
+      padding={CARD_PADDING.FLUSH}
       className={[
-        "ui-page-thumb group/page-thumb flex-none overflow-hidden rounded-control border border-border bg-muted text-muted-foreground",
-        // A card's glyph stands at its middle, as a row's does.
-        glyph !== undefined && size === PAGE_THUMB_SIZE.CARD
-          ? "flex items-center justify-center"
-          : SIZE_CLASS[size],
+        "ui-page-thumb group/page-thumb relative aspect-[16/10] flex-none text-muted-foreground",
+        SIZE_CLASS[size],
         glyph === undefined ? "" : "[&_svg]:size-control-icon",
       ]
         .filter((part) => part !== "")
@@ -135,31 +131,34 @@ export function PageThumb({
       data-loaded={String(frame !== undefined && loadedFrom === frame.src)}
       data-missing={glyph === undefined ? undefined : ""}
     >
-      {image === undefined ? null : (
-        <img
-          className={`ui-page-thumb-image size-full ${FIT_CLASS[fit]}`}
-          src={image}
-          alt=""
-          draggable={false}
-        />
-      )}
-      {video === undefined ? null : <VideoStill dataUrl={video} fit={fit} />}
-      {frame === undefined ? null : (
-        <iframe
-          ref={frameRef}
-          className="ui-page-thumb-frame pointer-events-none absolute top-0 left-0 h-[400%] w-[400%] origin-top-left scale-25 border-0 opacity-0 transition-opacity duration-(--ui-duration-hover) ease-motion-exit group-data-[loaded=true]/page-thumb:opacity-100"
-          title={frame.title}
-          src={frame.src}
-          sandbox={frame.sandbox}
-          allow=""
-          referrerPolicy="no-referrer"
-          loading={frame.lazy === true ? "lazy" : undefined}
-          tabIndex={-1}
-          aria-hidden="true"
-          onLoad={() => setLoadedFrom(frame.src)}
-        />
-      )}
-      {glyph}
-    </AspectRatio>
+      {/* What the thumb shows is clipped inside its edge, so a page or a video's frame drawn to its corners never covers them. */}
+      <EdgeClip as={EDGE_CLIP_ELEMENT.SPAN} layout={EDGE_CLIP_LAYOUT.FILL}>
+        {image === undefined ? null : (
+          <img
+            className={`ui-page-thumb-image size-full ${FIT_CLASS[fit]}`}
+            src={image}
+            alt=""
+            draggable={false}
+          />
+        )}
+        {video === undefined ? null : <VideoStill dataUrl={video} fit={fit} />}
+        {frame === undefined ? null : (
+          <iframe
+            ref={frameRef}
+            className="ui-page-thumb-frame pointer-events-none absolute top-0 left-0 h-[400%] w-[400%] origin-top-left scale-25 border-0 opacity-0 transition-opacity duration-(--ui-duration-hover) ease-motion-exit group-data-[loaded=true]/page-thumb:opacity-100"
+            title={frame.title}
+            src={frame.src}
+            sandbox={frame.sandbox}
+            allow=""
+            referrerPolicy="no-referrer"
+            loading={frame.lazy === true ? "lazy" : undefined}
+            tabIndex={-1}
+            aria-hidden="true"
+            onLoad={() => setLoadedFrom(frame.src)}
+          />
+        )}
+        {glyph}
+      </EdgeClip>
+    </Card>
   );
 }
