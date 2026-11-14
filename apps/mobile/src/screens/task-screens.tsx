@@ -44,6 +44,7 @@ import {
 } from "@repo/features/task-standing-words";
 import {
   foldedTaskRows,
+  NO_REPOSITORY_KEY,
   TASK_TREE_GROUP,
   type TaskTree,
   type TaskTreeGroup,
@@ -910,7 +911,7 @@ function groupHeadGlyph(group: TaskTreeGroup): Glyph | undefined {
     case TASK_TREE_GROUP.SECTION:
       return sectionGlyph(group.icon);
     case TASK_TREE_GROUP.REPOSITORY:
-      return group.key === "" ? GLYPH.NO_REPOSITORY : GLYPH.REPOSITORY;
+      return group.key === NO_REPOSITORY_KEY ? GLYPH.NO_REPOSITORY : GLYPH.REPOSITORY;
     case TASK_TREE_GROUP.PINNED:
     case TASK_TREE_GROUP.FOLLOWING:
       return undefined;
