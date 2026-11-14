@@ -208,6 +208,13 @@ export const tasksViewSchema = EffectSchema.Struct({
    */
   pendingTasks: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   listStatus: tasksReadSchema,
+  /**
+   * The workspaces in which the account reaches any task, as the list's
+   * last answer said, whatever the list holds of them: whether it has ever
+   * had a task there. Absent before an answer says, as one drawn from disk
+   * or from a service before it was answered.
+   */
+  taskWorkspaces: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   /** Whether what the host follows live is current (`HOST_LIVE`); absent before the list's follow first says, which reads as live. */
   live: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(HOST_LIVE))),
   /** The workspaces the account is a member of, its first one first, as the last list read answered; none before the first lands. */
@@ -807,6 +814,24 @@ export const tasksSettledPageAnswerSchema = EffectSchema.Union([
 export const tasksSubTasksParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
 });
+
+/** A person's tasks and agents in a workspace, as their page asks the host for them. */
+export const tasksPersonPageParamsSchema = EffectSchema.Struct({
+  workspaceId: EffectSchema.NonEmptyString,
+  personId: EffectSchema.NonEmptyString,
+});
+
+/** How many of a person's tasks and agents the service counts (`PersonCounts`), as their page hears it once their newest are read into the task list, or that the service did not answer. */
+export const tasksPersonPageAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    counts: EffectSchema.Struct({
+      assigned: EffectSchema.Finite,
+      created: EffectSchema.Finite,
+      agents: EffectSchema.Finite,
+    }),
+  }),
+  EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
+]);
 
 /** A page of a description's history, as the version history asks the host for it: the task, and the revision the page is read before where it is an older page. */
 export const tasksRevisionsParamsSchema = EffectSchema.Struct({

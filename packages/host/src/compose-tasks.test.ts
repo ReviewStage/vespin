@@ -1007,6 +1007,40 @@ it.effect("a parent's sub-tasks outside the list are drawn beside it, and each i
   }),
 );
 
+it.effect("a person's finished task outside the list is counted and read into it", () =>
+  Effect.gen(function* () {
+    const ada = { userId: "user-ada", name: "Ada Lovelace" };
+
+    const invites = {
+      ...task(INVITES, "Teammate invitations", "# Invites", 10),
+      status: TASK_STATUS.DONE,
+      assignee: ada,
+    };
+
+    const billing = { ...task(BILLING, "Billing export", "# Billing export", 20), assignee: ada };
+    const service = fakeService([billing, invites]);
+    const { call, last } = yield* subject(service);
+    // The list the host follows holds the billing task alone, as one that keeps only recent tasks live.
+    yield* call("TASKS_REFRESH", undefined);
+    const held = { ...rowOfTask(billing), assigneeId: ada.userId, assigneeName: ada.name };
+    yield* listAnswers(service, { plans: [held], agents: [], issues: [] });
+
+    assert.deepEqual(
+      yield* call("TASKS_PERSON_PAGE", { workspaceId: billing.workspaceId, personId: ada.userId }),
+      { counts: { assigned: 2, created: 0, agents: 0 } },
+    );
+
+    assert.deepEqual(
+      last()
+        ?.tasks.filter((each) => each.assignee?.userId === ada.userId)
+        .map((each) => each.id)
+        .toSorted(),
+      [BILLING, INVITES].toSorted(),
+      "the finished task outside the list is drawn as theirs beside the one in it",
+    );
+  }),
+);
+
 it.effect("a task the list takes up and then lets go is read again as it opens", () =>
   Effect.gen(function* () {
     const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);

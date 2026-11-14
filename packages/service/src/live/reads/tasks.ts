@@ -4,7 +4,11 @@ import { sandboxNamedFor } from "@repo/database/models/agent-sandboxes";
 import { PULL_REQUEST_OF_AGENT_BRANCH } from "@repo/database/models/agent-store";
 import { taskMadeByRun } from "@repo/database/models/run-tasks";
 import { taskBlockedFor, taskBlockIdsFor } from "@repo/database/models/task-block-store";
-import { agentVisibleTo, taskReachableBy } from "@repo/database/models/workspace-store";
+import {
+  agentVisibleTo,
+  taskReachableBy,
+  workspacesWithTasks,
+} from "@repo/database/models/workspace-store";
 import {
   agentPin,
   agentPullRequest,
@@ -51,6 +55,9 @@ import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-w
 import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
 import {
   NO_TASK_OWNER,
+  PERSON_PAGE_AGENTS,
+  PERSON_PAGE_READ,
+  PERSON_PAGE_TASKS,
   SETTLED_PAGE_SIZE,
   TASK_LIST_READ,
   TASK_PAGE_READ,
@@ -75,7 +82,8 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { Duration } from "effect";
+import { Duration, Effect } from "effect";
+import { hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import type { SyncMoved } from "../../sync/live-query.js";
 import { readerAndWorkspaceTopics } from "../../sync/reader-topics.js";
 import { failureWordOf, lastSettledAtIn, latestTurnOf, sessionEndedOf } from "../agent-standing.js";
@@ -559,6 +567,11 @@ const TASK_LIST_TABLES = [
  * they name, and narrow the agents to the one of that conversation the
  * reader reaches. Its plans and its agents are each part's own rows, and a
  * write to its account's membership or GitHub access answers it whole.
+ *
+ * Beside them, every answer carries the workspaces in which the account
+ * reaches any task (`workspacesWithTasks`), on the plans' own rule, so a
+ * window tells a workspace that never had a task from one whose tasks the
+ * list does not hold.
  */
 export const tasksRead = bindLiveRead(TASK_LIST_READ, {
   reads: TASK_LIST_TABLES,
@@ -578,6 +591,10 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
       issues: issuesStatement(),
     }),
   },
+  beside: ({ params }) =>
+    Effect.map(hostedStoreOrUnavailable(workspacesWithTasks(params.userId)), (taskWorkspaces) => ({
+      taskWorkspaces,
+    })),
 });
 
 /**
@@ -775,6 +792,82 @@ export const taskSubTasksRead = bindLiveRead(TASK_SUB_TASKS_READ, {
     return {
       plans: tasksStatement(userId, sql`${task.id} in (${children})`),
       agents: agentsStatement(userId, sql`${agentTable.taskId} in (${children})`),
+    };
+  },
+});
+
+/** Whether a task is assigned to the person. */
+function assignedTo(personId: string): SQL {
+  return sql`${task.assigneeId} = ${personId}`;
+}
+
+/** Whether the person created a task that is not assigned to them, as their page's Created lists it. */
+function createdOnlyBy(personId: string): SQL {
+  return sql`(${task.userId} = ${personId} and ${task.assigneeId} is distinct from ${personId})`;
+}
+
+/** Whether an agent is one the person started, not archived, on a task of the workspace the account reaches. */
+function agentOfPerson(userId: string, workspaceId: string, personId: string): SQL {
+  const reached = queryBuilder
+    .select({ id: task.id })
+    .from(task)
+    .where(and(taskReachableBy(userId), eq(task.organizationId, workspaceId)));
+
+  return sql`(${agentTable.userId} = ${personId} and ${agentTable.archivedAt} is null and ${agentTable.taskId} in (${reached}))`;
+}
+
+/** The newest `PERSON_PAGE_TASKS` of the workspace's tasks the account reaches that `which` holds, by their last save. */
+function personTasks(userId: string, workspaceId: string, which: SQL) {
+  return queryBuilder
+    .select({ id: task.id })
+    .from(task)
+    .where(and(taskReachableBy(userId), eq(task.organizationId, workspaceId), which))
+    .orderBy(desc(task.updatedAt), desc(task.id))
+    .limit(PERSON_PAGE_TASKS);
+}
+
+/** The tasks of the person's newest `PERSON_PAGE_AGENTS` agents (`agentOfPerson`). */
+function personAgentTasks(userId: string, workspaceId: string, personId: string) {
+  return queryBuilder
+    .select({ id: agentTable.taskId })
+    .from(agentTable)
+    .where(agentOfPerson(userId, workspaceId, personId))
+    .orderBy(desc(agentTable.createdAt), desc(agentTable.id))
+    .limit(PERSON_PAGE_AGENTS);
+}
+
+/**
+ * A person's tasks and agents in a workspace (`personPage`): how many the
+ * account reads of each of their page's sections, and the list's own
+ * statements narrowed to a page of their newest tasks and every agent of
+ * them, on the list's rule of who reads them, so a task the account does
+ * not reach is neither counted nor read. It is read once, as the page asks,
+ * and never followed.
+ */
+export const personPageRead = bindLiveRead(PERSON_PAGE_READ, {
+  reads: TASK_LIST_TABLES,
+  topics: ({ userId }) => readerAndWorkspaceTopics(userId),
+  statements: ({ userId, workspaceId, personId }) => {
+    const theirs = (which: SQL) =>
+      sql<number>`(select count(*)::int from ${task} where ${taskReachableBy(userId)} and ${task.organizationId} = ${workspaceId} and ${which})`;
+
+    const page = sql`(${personTasks(userId, workspaceId, assignedTo(personId))}) union (${personTasks(userId, workspaceId, createdOnlyBy(personId))}) union (${personAgentTasks(userId, workspaceId, personId)})`;
+
+    return {
+      counts: liveRowsStatement(
+        PERSON_PAGE_READ.parts.counts,
+        {
+          columns: {
+            personId: sql<string>`${personId}::text`,
+            assigned: theirs(assignedTo(personId)),
+            created: theirs(createdOnlyBy(personId)),
+            agents: sql<number>`(select count(*)::int from ${agentTable} where ${agentOfPerson(userId, workspaceId, personId)})`,
+          },
+        },
+        (selection) => queryBuilder.select(selection).from(sql`(select 1) as "one"`),
+      ),
+      plans: tasksStatement(userId, sql`${task.id} in (${page})`),
+      agents: agentsStatement(userId, sql`${agentTable.taskId} in (${page})`),
     };
   },
 });

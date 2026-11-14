@@ -89,10 +89,11 @@ export const agentSandboxTerminalTable = pgTable(
   (table) => [primaryKey({ columns: [table.sandboxName, table.terminalId] })],
 );
 
-/** What beats a hold on a sandbox: its ports forwarded to a member's Mac, or its Browser view open. */
+/** What beats a hold on a sandbox: its ports forwarded to a member's Mac, its Browser view open, or its agent's chat shown in a window or on a device. */
 export const AGENT_SANDBOX_BEAT_KIND = {
   FORWARD: "forward",
   VIEW: "view",
+  CHAT: "chat",
 } as const;
 
 export type AgentSandboxBeatKind =

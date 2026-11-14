@@ -71,6 +71,7 @@ import { PULL_REQUEST_CHAPTERS_READ } from "../pull-request-chapters-live.js";
 import { SIDEBAR_READ } from "../sidebar-live.js";
 import { TASK_HISTORY_READ } from "../task-history-live.js";
 import {
+  PERSON_PAGE_READ,
   TASK_LIST_READ,
   TASK_PAGE_READ,
   TASK_ROWS_READ,
@@ -102,6 +103,7 @@ export const liveContract = {
   [TASK_SEARCH_READ.name]: liveProcedure(TASK_SEARCH_READ),
   [TASK_PAGE_READ.name]: liveProcedure(TASK_PAGE_READ),
   [TASK_SUB_TASKS_READ.name]: liveProcedure(TASK_SUB_TASKS_READ),
+  [PERSON_PAGE_READ.name]: liveProcedure(PERSON_PAGE_READ),
   [AUTOMATIONS_READ.name]: liveProcedure(AUTOMATIONS_READ),
   [AUTOMATION_WORKSPACE_RUNS_READ.name]: liveProcedure(AUTOMATION_WORKSPACE_RUNS_READ),
   [AUTOMATION_RUNS_READ.name]: liveProcedure(AUTOMATION_RUNS_READ),

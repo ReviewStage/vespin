@@ -41,6 +41,9 @@
  * task `id` names and every agent of them the same way
  * (`taskSubTasksRead`), for a list showing finished sub-tasks it does not
  * hold.
+ * `GET /api/live/person-page?workspaceId=&personId=` answers how many of a
+ * person's tasks and agents the account reads, and a page of the newest
+ * with every agent of them (`personPageRead`), for their page.
  *
  * `GET /api/live/task-record?id=` answers one task's description, pages, and calls
  * the same way, one statement a part that marks where it stands
@@ -234,6 +237,7 @@ import { taskCommentsRead } from "./reads/task-comments.js";
 import { taskHistoryRead } from "./reads/task-history.js";
 import { taskRecordRead } from "./reads/task-record.js";
 import {
+  personPageRead,
   taskPageRead,
   taskRowsRead,
   taskSearchRead,
@@ -935,6 +939,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     taskSearch: signedIn.taskSearch.effect(answerBoundRead(taskSearchRead)),
     taskPage: signedIn.taskPage.effect(answerBoundRead(taskPageRead)),
     taskSubTasks: signedIn.taskSubTasks.effect(answerBoundRead(taskSubTasksRead)),
+    personPage: signedIn.personPage.effect(answerBoundRead(personPageRead)),
     automations: signedIn.automations.effect(answerBoundRead(automationsRead)),
     automationWorkspaceRuns: signedIn.automationWorkspaceRuns.effect(
       answerBoundRead(automationWorkspaceRunsRead),
