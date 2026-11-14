@@ -11,6 +11,7 @@ import {
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import {
   INTEGRATION_PROVIDER,
   INTEGRATION_PROVIDER_LIST,
@@ -31,7 +32,11 @@ import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { TASK_SKILL_SOURCE, TASK_TREE_ENTRY } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
-import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
+import {
+  WORKSPACE_ROLE,
+  type WorkspaceMachine,
+  type WorkspaceMember,
+} from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
@@ -159,7 +164,7 @@ function workspaceAgent(
 ): AgentSummary {
   return {
     id,
-    planId: taskId,
+    taskId: taskId,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title,
@@ -235,7 +240,7 @@ function workspaceAnswer({ words = "" }: AgentWorkspaceListParams): readonly Age
   return WORKSPACE_AGENTS.filter(
     (agent) =>
       (agent.title ?? "").toLowerCase().includes(lower) ||
-      (agent.planId === BILLING.id && BILLING.name.toLowerCase().includes(lower)),
+      (agent.taskId === BILLING.id && BILLING.name.toLowerCase().includes(lower)),
   );
 }
 
@@ -250,6 +255,24 @@ const MEMBERS: readonly WorkspaceMember[] = [
     name: "Charles Pan",
     email: "charles@example.com",
     role: WORKSPACE_ROLE.OWNER,
+  },
+];
+
+/** The workspace's machines as its members' machines read answers them: a teammate's, then the reader's, by name. */
+const MACHINES: readonly WorkspaceMachine[] = [
+  {
+    id: "m-build",
+    name: "Build box",
+    platform: DEVICE_PLATFORM.LINUX,
+    userId: DANA_ID,
+    online: true,
+  },
+  {
+    id: "m-studio",
+    name: "Studio",
+    platform: DEVICE_PLATFORM.DARWIN,
+    userId: READER_ID,
+    online: true,
   },
 ];
 
@@ -289,15 +312,19 @@ const MAC_APPS = [
   { name: "Notes", bundleId: "com.apple.Notes", running: false, allowed: true },
 ];
 
+/** The reader's two machines, by their device ids. */
+const STUDIO_ID = "00000000-0000-4000-8000-000000000001";
+const LAPTOP_ID = "00000000-0000-4000-8000-000000000002";
+
 /** The reader's own machines that always allow an app, as the service answers them: Notes on both, Slack on one, which named it. */
 const ALLOWED_MACHINES = [
   {
-    deviceId: "00000000-0000-4000-8000-000000000001",
+    deviceId: STUDIO_ID,
     name: "Studio",
     apps: ["com.apple.Notes", "com.tinyspeck.slackmacgap"],
     looks: [{ app: "com.tinyspeck.slackmacgap", name: "Slack" }],
   },
-  { deviceId: "00000000-0000-4000-8000-000000000002", name: "Laptop", apps: ["com.apple.Notes"] },
+  { deviceId: LAPTOP_ID, name: "Laptop", apps: ["com.apple.Notes"] },
 ];
 
 /** What main answers the box's acts with on the act port, every one told. */
@@ -322,6 +349,10 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
 
   if (request.kind === ACT_KIND.HOSTS_ALLOWED_APPS) {
     return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { machines: ALLOWED_MACHINES } });
+  }
+
+  if (request.kind === ACT_KIND.WORKSPACE_MACHINES_READ) {
+    return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { machines: MACHINES } });
   }
 
   if (request.kind === ACT_KIND.COMPUTER_USE_APP_ICON) {
@@ -752,7 +783,7 @@ test("off a plan's page a sent message's mention is still its chip, which opens 
   assert.deepEqual(opened, [
     {
       workspace: "",
-      place: { kind: LINK_DESTINATION.SECTION, planId: TASK_ID, anchor: "rollout" },
+      place: { kind: LINK_DESTINATION.SECTION, taskId: TASK_ID, anchor: "rollout" },
     },
   ]);
   assert.equal(carryingTarget(container), undefined);
@@ -818,7 +849,7 @@ test("an @ in the box browses the account's connected MCP servers as one kind, a
   ]);
 });
 
-test("with Computer use on, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
+test("with Computer use on, on the Mac the agent's calls go to, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
   const sent: string[] = [];
 
   const sender: MessageSender = (_agentId, { text }) => {
@@ -827,8 +858,21 @@ test("with Computer use on, an @ in the box offers the apps on this Mac, a pick 
     return new Promise<AgentAgentAnswer>(ignore);
   };
 
+  // The reader's Studio, which the agent's calls go to.
   const state = stateWith(experimentsOn(EXPERIMENT.DESCRIPTIONS, EXPERIMENT.COMPUTER_USE), {
     tasks: tasksView(),
+    machineCommands: { asks: [], deviceId: STUDIO_ID },
+    [LIVE_READ.WORKSPACE_TOOLS]: {
+      [SELF_ID]: {
+        rows: {
+          runOnMac: {
+            on: true,
+            owner: { userId: "user-ada", name: "Ada Lovelace" },
+            machine: { id: STUDIO_ID, name: "Studio" },
+          },
+        },
+      },
+    },
   });
 
   fakeActs({ act: answer, requestAppState: () => Promise.resolve(state) });
@@ -855,63 +899,92 @@ test("with Computer use on, an @ in the box offers the apps on this Mac, a pick 
   ]);
 });
 
-test("off a Mac that runs its commands, an @ in the box offers the apps the reader's machines always allow, each by the name its machine posted and saying the machines it is allowed on, a pick sent as the app's mention by its bundle id", async () => {
-  const sent: string[] = [];
+/** The window an @ list's apps are read off, where it is not the Mac the agent's calls go to. */
+const OFF_THAT_MAC = {
+  /** A window that runs no Mac commands, as the web's tab is. */
+  NO_COMMANDS: "a window that runs no Mac commands",
+  /** The reader's Studio, while the agent's calls go to their Laptop. */
+  ANOTHER_MACHINE: "a Mac of the reader's that the agent's calls do not go to",
+} as const;
 
-  const sender: MessageSender = (_agentId, { text }) => {
-    sent.push(text);
+test.each(Object.values(OFF_THAT_MAC))(
+  "off the Mac the agent's calls go to, in %s, an @ in the box offers the apps the reader's machines always allow, each by the name its machine posted and saying the machines it is allowed on, a pick sent as the app's mention by its bundle id",
+  async (window) => {
+    const sent: string[] = [];
 
-    return new Promise<AgentAgentAnswer>(ignore);
-  };
+    const sender: MessageSender = (_agentId, { text }) => {
+      sent.push(text);
 
-  const experiments = experimentsOn(EXPERIMENT.DESCRIPTIONS, EXPERIMENT.COMPUTER_USE);
-  const idle = stateWith(experiments, {});
+      return new Promise<AgentAgentAnswer>(ignore);
+    };
 
-  // A window that runs no Mac commands, as the web's tab is.
-  const state = stateWith(experiments, {
-    tasks: tasksView(),
-    run: {
-      ...idle.run,
-      capabilities: DESKTOP_CAPABILITIES.filter(
-        (capability) => capability !== HOST_CAPABILITY.MACHINE_COMMANDS,
-      ),
-    },
-  });
+    const experiments = experimentsOn(EXPERIMENT.DESCRIPTIONS, EXPERIMENT.COMPUTER_USE);
+    const idle = stateWith(experiments, {});
 
-  fakeActs({ act: answer, requestAppState: () => Promise.resolve(state) });
+    const state = stateWith(
+      experiments,
+      window === OFF_THAT_MAC.NO_COMMANDS
+        ? {
+            tasks: tasksView(),
+            run: {
+              ...idle.run,
+              capabilities: DESKTOP_CAPABILITIES.filter(
+                (capability) => capability !== HOST_CAPABILITY.MACHINE_COMMANDS,
+              ),
+            },
+          }
+        : {
+            tasks: tasksView(),
+            machineCommands: { asks: [], deviceId: STUDIO_ID },
+            [LIVE_READ.WORKSPACE_TOOLS]: {
+              [SELF_ID]: {
+                rows: {
+                  runOnMac: {
+                    on: true,
+                    owner: { userId: "user-ada", name: "Ada Lovelace" },
+                    machine: { id: LAPTOP_ID, name: "Laptop" },
+                  },
+                },
+              },
+            },
+          },
+    );
 
-  const { container } = drawing(
-    createElement(Box, { sender, skills: noSkills }),
-    planPage([]),
-    state,
-  );
+    fakeActs({ act: answer, requestAppState: () => Promise.resolve(state) });
 
-  await settle();
+    const { container } = drawing(
+      createElement(Box, { sender, skills: noSkills }),
+      planPage([]),
+      state,
+    );
 
-  typeInComposer(container, "Check @apps:");
-  await settle();
+    await settle();
 
-  const rows = [...container.querySelectorAll('.mention-menu [role="option"]')].map((row) => [
-    row.querySelector(".ui-combobox-option-label")?.textContent ?? "",
-    row.querySelector(".ui-combobox-option-detail")?.textContent ?? "",
-  ]);
+    typeInComposer(container, "Check @apps:");
+    await settle();
 
-  typeInComposer(container, "slack");
-  await settle();
-  pressInComposer(container, "Enter");
-  await settle();
-  pressInComposer(container, "Enter");
-  await settle();
+    const rows = [...container.querySelectorAll('.mention-menu [role="option"]')].map((row) => [
+      row.querySelector(".ui-combobox-option-label")?.textContent ?? "",
+      row.querySelector(".ui-combobox-option-detail")?.textContent ?? "",
+    ]);
 
-  assert.deepEqual(rows, [
-    ["Computer", ""],
-    ["Notes", "Always allowed on Studio, Laptop"],
-    ["Slack", "Always allowed on Studio"],
-  ]);
-  assert.deepEqual(sent, [
-    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.tinyspeck.slackmacgap" }, "Slack", PLACE)}`,
-  ]);
-});
+    typeInComposer(container, "slack");
+    await settle();
+    pressInComposer(container, "Enter");
+    await settle();
+    pressInComposer(container, "Enter");
+    await settle();
+
+    assert.deepEqual(rows, [
+      ["Computer", ""],
+      ["Notes", "Always allowed on Studio, Laptop"],
+      ["Slack", "Always allowed on Studio"],
+    ]);
+    assert.deepEqual(sent, [
+      `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.tinyspeck.slackmacgap" }, "Slack", PLACE)}`,
+    ]);
+  },
+);
 
 test("an @ in the box offers the repository's skills, a pick written as the /name chip the / list writes", async () => {
   const release: SkillSource = () =>
@@ -1105,7 +1178,16 @@ test("an @ in the box on a plan's page suggests the plan's other agents and then
     ["Suggested", ["Wire the desktop", "Invites by week"]],
     [
       "Browse",
-      ["Agents", "People", "Description", "Pages", "Files and folders", "Dates", "MCP servers"],
+      [
+        "Agents",
+        "People",
+        "Description",
+        "Pages",
+        "Files and folders",
+        "Dates",
+        "Machines",
+        "MCP servers",
+      ],
     ],
   ]);
   assert.equal(agentGlyph?.className, "state-glyph", "the agent's row leads with its tab's glyph");
@@ -1175,7 +1257,7 @@ test("a sent message's mention of a page or an agent is drawn as the chip that o
 
   assert.deepEqual(chips.map(chipName), [PAGE.title, STORE_AGENT.name]);
   assert.deepEqual(opened, [
-    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, planId: TASK_ID, pageId: PAGE.id } },
+    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, taskId: TASK_ID, pageId: PAGE.id } },
     {
       workspace: "acme",
       place: { kind: LINK_DESTINATION.AGENT, agentId: STORE_AGENT.id },
@@ -1732,6 +1814,7 @@ test("a bare @ browses a row for each kind the place offers, saying nothing besi
     ["Pages", ""],
     ["Files and folders", ""],
     ["Dates", ""],
+    ["Machines", ""],
     ["MCP servers", ""],
   ]);
   assert.equal(crumb(container), "Pages");
@@ -2147,6 +2230,38 @@ test("an @ among the workspace's members offers its people, the reader first as 
   assert.deepEqual(marked, ["Reyes"]);
   const card = document.querySelector('.ui-tooltip-card [data-actor-card="person"]');
   assert.equal(card?.querySelector(".ui-hover-card-name")?.textContent, "Dana Reyes");
+});
+
+test("an @ narrowed to machines offers the reader's own first, then a teammate's wearing their face before its name, and a pick is sent as the machine's link by its id alone", async () => {
+  const { container, sent } = await memberBox();
+
+  typeInComposer(container, "Run it on @machines:");
+  await settle();
+  const narrowed = crumb(container);
+
+  const rows = [...container.querySelectorAll('.mention-menu [role="option"]')].map((row) => [
+    row.querySelector(".ui-combobox-option-label")?.textContent ?? "",
+    row.querySelector(".ui-combobox-option-before .actor-mark")?.getAttribute("data-kind") ?? null,
+  ]);
+
+  typeInComposer(container, "build");
+  await settle();
+  pressInComposer(container, "Enter");
+  await settle();
+  pressInComposer(container, "Enter");
+  await settle();
+
+  assert.deepEqual(
+    [narrowed, rows],
+    [
+      "Machines",
+      [
+        ["Studio", null],
+        ["Build box", ACTOR_KIND.PERSON],
+      ],
+    ],
+  );
+  assert.deepEqual(sent, ["Run it on [@Build box](mention://machine/m-build)"]);
 });
 
 test("a person picked from the @ list is drawn as their chip and sent as their page's link, which names them by their account's id alone", async () => {

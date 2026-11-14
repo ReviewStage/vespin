@@ -1,7 +1,7 @@
 /**
  * task-delete.ts -- a task deleted, as every door deletes one: its coding agents stopped for good, their sessions retired, then the task.
  *
- * The app's delete (`plans.delete`) and a member's `delete_task` go through
+ * The app's delete (`tasks.delete`) and a member's `delete_task` go through
  * this one operation, so one rule holds for each: the task is one the
  * account reaches, every coding agent of it is stopped for good first, as a
  * Stop stops one, so none works on for a task that is gone; then the

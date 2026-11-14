@@ -1,7 +1,33 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../tsconfig.package.json",
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "references": [
+    {
+      "path": "../agent-runner"
+    },
+    {
+      "path": "../credentials"
+    },
+    {
+      "path": "../features"
+    },
+    {
+      "path": "../gateway"
+    },
+    {
+      "path": "../runtime"
+    },
+    {
+      "path": "../settings"
+    },
+    {
+      "path": "../sync"
+    },
+    {
+      "path": "../wire"
+    }
+  ]
 }

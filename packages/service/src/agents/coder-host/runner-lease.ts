@@ -18,7 +18,7 @@ import { agentLogIds } from "./agent-log.js";
 import { CODER } from "./bounds.js";
 
 /** Another call held the agent's runner lease for as long as a call waits on it. */
-class RunnerLeaseBusy extends Data.TaggedError("RunnerLeaseBusy") {}
+export class RunnerLeaseBusy extends Data.TaggedError("RunnerLeaseBusy") {}
 
 /**
  * The agent's runner lease taken, waiting behind another call's for at most

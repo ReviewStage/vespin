@@ -7,7 +7,7 @@
  * window draws the service's word rather than its own guess. Every request
  * resolves the bearer before it touches a row, and every row it touches is
  * the bearer's account's own (`task-section-store.ts`). It stands apart
- * from `/api/plans/*` because that path's rewrite reads its next segment
+ * from `/api/tasks/*` because that path's rewrite reads its next segment
  * as a plan's id.
  */
 

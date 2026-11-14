@@ -88,6 +88,8 @@ import {
   COMPLETED_WINDOW,
   LIST_COLUMN,
   type ListColumn,
+  mayHoldSettled,
+  settledRowsDrawn,
   TASK_PROPERTY,
   TASKS_GROUP,
   TASKS_GROUPING,
@@ -112,6 +114,7 @@ import {
   memo,
   type ReactNode,
   type RefObject,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -790,6 +793,7 @@ function TasksListGroup({
   drops,
   draggable,
   onShowOlder,
+  onSettledEnd,
   tasks,
   properties,
   place,
@@ -805,6 +809,8 @@ function TasksListGroup({
   draggable: boolean;
   /** Shows every settled task, as the group's "+ N older" line asks. */
   onShowOlder: () => void;
+  /** Hears the list come to its end, where the group may hold settled tasks, which reads the next page of them (`use-settled-pages.ts`). */
+  onSettledEnd: ((atEnd: boolean) => void) | undefined;
   tasks: TasksControl;
   /** The cells the rows draw, which a quick add's line stands its own on. */
   properties: readonly TaskRowCell[];
@@ -881,6 +887,7 @@ function TasksListGroup({
             handle={run}
             measurements={measured?.get(runKey)}
             onMeasurements={(rows) => measured?.set(runKey, rows)}
+            onAtEnd={onSettledEnd}
           >
             {(index, at) => {
               const entry = drawn[index];
@@ -1022,6 +1029,14 @@ export function TasksList({
         now,
       }),
   );
+
+  // Note that a view drawing no row a settled task may stand in has no run to come to its end, so it tells the paging so, which reads on until one draws or the last is read (`use-settled-pages.ts`).
+  const drawsSettled = settledRowsDrawn(groups);
+  const onDrawn = frame.settledPages?.onDrawn;
+
+  useEffect(() => {
+    onDrawn?.(drawsSettled);
+  }, [drawsSettled, groups, onDrawn]);
 
   // Note that every door a row is handed stands across draws, so a row held while what it is handed does (`memo`) holds.
   const standingDoor = useStandingDoor(tasks);
@@ -1197,6 +1212,9 @@ export function TasksList({
                     draggable={!narrow}
                     onShowOlder={() =>
                       frame.onDisplay({ ...display, completed: COMPLETED_WINDOW.ALL })
+                    }
+                    onSettledEnd={
+                      mayHoldSettled(group.head) ? frame.settledPages?.onRunEnd : undefined
                     }
                     tasks={tasks}
                     properties={properties}

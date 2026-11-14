@@ -422,7 +422,7 @@ test("a dialog over the window keeps ⌃Tab, so nothing moves behind it", async 
 function listedAgent(status: AgentStatus): ListedAgent {
   return {
     id: "0a1b2c3d-0000-4000-8000-200000000001",
-    planId: TASK,
+    taskId: TASK,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Sweep flaky tests",

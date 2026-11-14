@@ -53,9 +53,6 @@ export const PERMISSION_MODE_APPLIES = {
   NEXT_TURN: "next_turn",
 } as const;
 
-export type PermissionModeApplies =
-  (typeof PERMISSION_MODE_APPLIES)[keyof typeof PERMISSION_MODE_APPLIES];
-
 export const permissionModeAppliesSchema = EffectSchema.Literals(
   Object.values(PERMISSION_MODE_APPLIES),
 );
@@ -87,7 +84,7 @@ export const APPROVAL_STATUS = {
 
 export type ApprovalStatus = (typeof APPROVAL_STATUS)[keyof typeof APPROVAL_STATUS];
 
-export const approvalStatusSchema = EffectSchema.Literals(Object.values(APPROVAL_STATUS));
+const approvalStatusSchema = EffectSchema.Literals(Object.values(APPROVAL_STATUS));
 
 /**
  * What settled an ask: a member's answer, a message the member sent while
@@ -112,7 +109,7 @@ export const APPROVAL_ANSWER = {
 
 export type ApprovalAnswer = (typeof APPROVAL_ANSWER)[keyof typeof APPROVAL_ANSWER];
 
-export const approvalAnswerSchema = EffectSchema.Literals(Object.values(APPROVAL_ANSWER));
+const approvalAnswerSchema = EffectSchema.Literals(Object.values(APPROVAL_ANSWER));
 
 /** Where an ask stands once an answer settles it. */
 export const APPROVAL_STATUS_OF_ANSWER = {

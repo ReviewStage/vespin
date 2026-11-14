@@ -87,9 +87,10 @@ export const GLYPH = {
   ISSUE_OPEN: lucide(LUCIDE_SYMBOL.CIRCLE_DOT),
   ISSUE_CLOSED: lucide(LUCIDE_SYMBOL.CIRCLE_CHECK),
   ISSUE_NOT_PLANNED: lucide(LUCIDE_SYMBOL.CIRCLE_SLASH),
-  COMPUTER: lucide(LUCIDE_SYMBOL.MONITOR),
+  COMPUTER_USE: lucide(LUCIDE_SYMBOL.MOUSE_POINTER_CLICK),
   PLUG: lucide(LUCIDE_SYMBOL.PLUG),
   GLOBE: lucide(LUCIDE_SYMBOL.GLOBE),
+  BROWSER: lucide(LUCIDE_SYMBOL.APP_WINDOW_MAC),
   DATE: lucide(LUCIDE_SYMBOL.CALENDAR),
   PERSON: lucide(LUCIDE_SYMBOL.USER),
   PEOPLE: lucide(LUCIDE_SYMBOL.USERS),
@@ -123,6 +124,13 @@ export const GLYPH = {
   MORE: lucide(LUCIDE_SYMBOL.ELLIPSIS),
   SEND: lucide(LUCIDE_SYMBOL.ARROW_UP),
   DICTATE: lucide(LUCIDE_SYMBOL.MIC),
+  // A voice call's presses, as the panel's call controls draw them.
+  TALK: lucide(LUCIDE_SYMBOL.AUDIO_LINES),
+  MICROPHONE: lucide(LUCIDE_SYMBOL.MIC),
+  MICROPHONE_MUTED: lucide(LUCIDE_SYMBOL.MIC_OFF),
+  SPEAKER: lucide(LUCIDE_SYMBOL.VOLUME_2),
+  SPEAKER_MUTED: lucide(LUCIDE_SYMBOL.VOLUME_OFF),
+  END_CALL: lucide(LUCIDE_SYMBOL.PHONE_OFF),
   ATTACH: lucide(LUCIDE_SYMBOL.PAPERCLIP),
   OPTIONS: lucide(LUCIDE_SYMBOL.SLIDERS_HORIZONTAL),
   REMOVE: lucide(LUCIDE_SYMBOL.X),
@@ -179,8 +187,15 @@ export const GLYPH = {
   JUMP_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   FOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_RIGHT),
   UNFOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
-  // iOS's own: Share is the system's act, and the composer's Stop is the panel's filled square.
+  // iOS's own: Share is the system's act, a Settings row's chevron is the one iOS draws at a row that goes on, and the composer's Stop is the panel's filled square.
   SHARE: system("square.and.arrow.up"),
+  // A split view's expand, which stands the page alone across the window and back, is the system's own, as Mail draws it.
+  EXPAND: system("arrow.up.left.and.arrow.down.right"),
+  COLLAPSE: system("arrow.down.right.and.arrow.up.left"),
+  // A list's filter, Mail's own button over its list, filled while the list stands narrowed from its default.
+  FILTER: system("line.3.horizontal.decrease.circle"),
+  FILTERED: system("line.3.horizontal.decrease.circle.fill"),
+  DISCLOSURE: system("chevron.forward"),
   STOP_TURN: system("stop.fill"),
   // A task's status ring, the panel's own mark.
   STATUS_BACKLOG: statusMark(TASK_STATUS_SYMBOL.BACKLOG),
@@ -188,14 +203,13 @@ export const GLYPH = {
   STATUS_IN_PROGRESS: statusMark(TASK_STATUS_SYMBOL.IN_PROGRESS),
   STATUS_DONE: statusMark(TASK_STATUS_SYMBOL.DONE),
   STATUS_CANCELED: statusMark(TASK_STATUS_SYMBOL.CANCELED),
-  // The panel's own marks, which no Lucide glyph draws: a check box and a radio, a check still running, a face and the app's,
+  // The panel's own marks, which no Lucide glyph draws: a check box and a round one, a check still running, a face and the app's,
   // an MCP server and its tool, the apps that reach the service over MCP (the
   // panel's product mark), and an unassigned task.
   BOX: system("square"),
   BOX_TICKED: system("checkmark.square.fill"),
   ROUND_BOX: system("circle"),
   ROUND_BOX_TICKED: system("checkmark.circle.fill"),
-  RADIO_PICKED: system("smallcircle.filled.circle.fill"),
   CHECK_RUNNING: system("circle.dotted"),
   FACE: system("person.crop.circle"),
   UNASSIGNED: system("person.crop.circle.dashed"),

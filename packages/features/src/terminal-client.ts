@@ -1,4 +1,4 @@
-import type { CallCredential } from "./account-call.js";
+import type { HostedServiceOptions } from "./account-call.js";
 import { hostedCall } from "./hosted-call.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
 import { TERMINAL_RENAMES } from "./terminal-view.js";
@@ -17,14 +17,6 @@ import { TERMINAL_RELAY } from "./terminal-wire.js";
  * travels here: these calls carry ids and names, and the bytes travel on the
  * relay socket alone.
  */
-
-export interface HostedTerminalClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-  requestTimeoutMs?: number;
-}
 
 /** What one shell's relay socket asks for: the agent, the shell, and the terminal's size. */
 export interface TerminalRelayAsk {
@@ -53,7 +45,7 @@ export function terminalRelayAddress(socketOrigin: string, ask: TerminalRelayAsk
 export class HostedTerminalClient {
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedTerminalClientOptions) {
+  constructor(options: HostedServiceOptions) {
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
       credential: options.credential,

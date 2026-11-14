@@ -15,7 +15,7 @@
   --ui-color-chip: light-dark(#ffffff, #1a1a1a);
   --ui-color-chip-hover: light-dark(#f2f2f2, #1f1f1f);
   --ui-color-chip-selected: light-dark(#ebebeb, #292929);
-  --ui-color-chip-edge: light-dark(#ebebeb, #2e2e2e);
+  --ui-color-chip-edge: light-dark(#ebebeb, #292929);
   --ui-color-chip-edge-strong: light-dark(#c9c9c9, #454545);
   --ui-color-fill-strong: light-dark(#00000014, #ffffff17);
   --ui-color-ink: light-dark(#000000, #ffffff);
@@ -90,7 +90,7 @@
   --ui-color-chip: #1a1a1a;
   --ui-color-chip-hover: #1f1f1f;
   --ui-color-chip-selected: #292929;
-  --ui-color-chip-edge: #2e2e2e;
+  --ui-color-chip-edge: #292929;
   --ui-color-chip-edge-strong: #454545;
   --ui-color-fill-strong: #ffffff17;
   --ui-color-ink: #ffffff;

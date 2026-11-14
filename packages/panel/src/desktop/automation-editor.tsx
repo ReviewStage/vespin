@@ -2919,7 +2919,7 @@ export function AutomationEditor({
   const starting = useAsyncAction(rejectionWords);
   // The webhook secret a write just minted, shown once on this page and gone when it is left.
   const [shownSecret, setShownSecret] = useState<string | undefined>(undefined);
-  const taskBacked = automation !== undefined && automation.planId !== null;
+  const taskBacked = automation !== undefined && automation.taskId !== null;
   const change = automation === undefined ? undefined : changeOf(draft, automation, defaults);
   const saved = automation === undefined ? undefined : automationDraft(automation, defaults);
   // Note that a draft is unsaved wherever it differs from the automation, even where what differs

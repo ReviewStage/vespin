@@ -35,11 +35,11 @@ type ItemPlaceBeside = (place: LinkDestination, workspace: string, here: InboxIt
 
 /** Whether an agent a link names is one of what holds the item: by the task an older link names it under, else by the agent itself, among the agents given. */
 function holdsAgent(
-  at: { readonly planId?: string | undefined; readonly agentId: string },
+  at: { readonly taskId?: string | undefined; readonly agentId: string },
   taskId: string | undefined,
   agentIds: readonly string[] | undefined,
 ): boolean {
-  return at.planId === undefined ? agentIds?.includes(at.agentId) === true : at.planId === taskId;
+  return at.taskId === undefined ? agentIds?.includes(at.agentId) === true : at.taskId === taskId;
 }
 
 /**
@@ -54,9 +54,9 @@ const ITEM_BESIDE: Readonly<Partial<Record<LinkDestinationName, ItemPlaceBeside>
 
     // A page of the item's own task opens beside the item; another task's opens there too, read on its own place,
     // so the reader stays on the item. An older link's page an agent showed on itself is the window's, which finds its task.
-    if (!("planId" in at)) return NOTHING;
-    const own = at.planId === here.taskId;
-    const place: PagePlace = { taskId: at.planId };
+    if (!("taskId" in at)) return NOTHING;
+    const own = at.taskId === here.taskId;
+    const place: PagePlace = { taskId: at.taskId };
 
     return beside(
       own
@@ -82,8 +82,8 @@ const ITEM_BESIDE: Readonly<Partial<Record<LinkDestinationName, ItemPlaceBeside>
     if (at.kind !== LINK_DESTINATION.INBOX_ITEM) return NOTHING;
     const { itemId } = at;
 
-    if ("planId" in at) {
-      return beside({ kind: THING.INBOX_ITEM, itemId, taskId: at.planId, agentId: undefined });
+    if ("taskId" in at) {
+      return beside({ kind: THING.INBOX_ITEM, itemId, taskId: at.taskId, agentId: undefined });
     }
 
     // An item named by its id alone is the window's to find, by asking the service whose it is.
@@ -105,7 +105,7 @@ const ITEM_BESIDE: Readonly<Partial<Record<LinkDestinationName, ItemPlaceBeside>
 
     return go({
       workspace,
-      place: { kind: LINK_DESTINATION.AGENT, planId: here.taskId, agentId: at.agentId },
+      place: { kind: LINK_DESTINATION.AGENT, taskId: here.taskId, agentId: at.agentId },
     });
   },
 };
