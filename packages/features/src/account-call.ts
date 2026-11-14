@@ -86,6 +86,19 @@ export interface CallCredential {
   resolve?: (() => Effect.Effect<CallCredential>) | undefined;
 }
 
+/** What a hosted client calls with: the signed-in account's credential and the service's origin. */
+export interface HostedServiceTarget {
+  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
+  credential: CallCredential;
+  /** The hosted service origin, without a trailing slash. */
+  serviceBaseUrl: string;
+}
+
+/** A hosted client's options where the client may be handed a deadline of its own. */
+export interface HostedServiceOptions extends HostedServiceTarget {
+  requestTimeoutMs?: number;
+}
+
 /** The ends a call reaches before any status is read. */
 export const CALL_FAULT = {
   NO_CREDENTIAL: "no-credential",

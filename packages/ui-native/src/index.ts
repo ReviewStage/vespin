@@ -28,6 +28,7 @@ export {
   Chip,
   FieldChip,
   FollowingChip,
+  LabelChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -66,7 +67,7 @@ export {
   SkillSuggestions,
 } from "./composer-head.js";
 
-export { EmptyState, NoSelection } from "./empty-state.js";
+export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
 export {
   FailureNoticeProvider,
@@ -103,6 +104,8 @@ export { type Keeping, KeepingProvider } from "./held-menu.js";
 
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 
+export { INTEGRATION_MARK_ASSET, type IntegrationMarkAsset } from "./integration-marks.js";
+
 export {
   type HeldPicture,
   heldPicture,
@@ -112,6 +115,16 @@ export {
   type Kept,
   type KeptKind,
 } from "./keep-model.js";
+
+export {
+  NO_WRITES,
+  newestValue,
+  takesRowBack,
+  type WriteSent,
+  type WritesBook,
+  writeSent,
+  writeSettled,
+} from "./latest-writes-model.js";
 
 export {
   ListRow,
@@ -135,7 +148,9 @@ export { MarkdownPage } from "./markdown-page.js";
 export {
   AgentTile,
   Avatar,
+  FACE_KIND,
   type Face,
+  type FaceKind,
   FailedMark,
   NeedsYouDot,
   TaskStatusMark,
@@ -151,6 +166,8 @@ export { monogramOf } from "./monogram.js";
 export { RenameAsk, SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
+
+export { ProblemLine } from "./problem-line.js";
 
 export {
   PROVIDER_MARK_ASSET,
@@ -168,6 +185,9 @@ export {
 
 export {
   ConfirmAsk,
+  githubFace,
+  MARK_FACE,
+  type MarkFace,
   MarkRow,
   MergeActRow,
   type MergeMethodChoice,
@@ -179,7 +199,7 @@ export {
   WriteNoteRow,
 } from "./pull-request-page.js";
 
-export { RemindSheet } from "./remind-sheet.js";
+export { RemindPickSheet } from "./remind-sheet.js";
 
 export {
   LIST_LOOK,
@@ -194,7 +214,7 @@ export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./r
 
 export { latestStep, type PreviewMessage, previewMessages } from "./row-preview-model.js";
 
-export { Screen, Spacer } from "./screen.js";
+export { SCREEN_GROUND, Screen, type ScreenGround, Spacer } from "./screen.js";
 
 export { ScreenFailure } from "./screen-failure.js";
 
@@ -208,6 +228,7 @@ export {
   type ConnectionLine,
   ConnectionRow,
   FollowerRow,
+  LoadingRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,
@@ -230,10 +251,12 @@ export {
 
 export {
   type BarAction,
+  type BarFootItem,
   type BarMenu,
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  isBarMenu,
   KeptColumns,
   type KeptView,
   menuWithout,

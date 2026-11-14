@@ -6,7 +6,7 @@
  * 2,000 list markers, and a list nested 400 deep takes over a second, since
  * its cost grows with the square of its depth; no one writes past a dozen.
  */
-export const MARKDOWN_NESTING_LIMIT = 64;
+const MARKDOWN_NESTING_LIMIT = 64;
 
 /**
  * How much more emphasis a fenced block's lines may leave open, since code

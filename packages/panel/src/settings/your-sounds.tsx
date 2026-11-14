@@ -38,7 +38,7 @@ import { ACTION_RESULT_STATUS } from "@repo/wire";
 import {
   COMPLETION_SOUND_GROUP_LABEL,
   COMPLETION_SOUND_GROUP_OF,
-  type CompletionSound,
+  type CompletionSoundGroup,
 } from "@repo/wire/app-settings";
 import { useMutation } from "@tanstack/react-query";
 import { useRef, useState } from "react";
@@ -142,10 +142,14 @@ function slotOf(field: AppSettingField): SoundClipSlot | undefined {
   return undefined;
 }
 
+/** `COMPLETION_SOUND_GROUP_OF` by any token, which reads no group for one that names no sound. */
+const GROUP_OF_TOKEN: ReadonlyMap<string, CompletionSoundGroup> = new Map(
+  Object.entries(COMPLETION_SOUND_GROUP_OF),
+);
+
 /** The heading a sound is listed under in its menu: Yours, Simple, or Playful. */
 function sectionOf(token: string): string | undefined {
-  // SAFETY: a token that names no sound reads undefined, which the line below answers.
-  const group = COMPLETION_SOUND_GROUP_OF[token as CompletionSound];
+  const group = GROUP_OF_TOKEN.get(token);
 
   return group === undefined ? undefined : COMPLETION_SOUND_GROUP_LABEL[group];
 }
