@@ -376,7 +376,6 @@ const mentionSchema = EffectSchema.Union([
     kind: EffectSchema.Literal(MENTION_KIND.APP),
     taskId: taskIdSchema,
   }),
-  // Note that routing's R3 adds the Mac here, a `machine` beside the app, once a command can name the Mac it runs on.
   EffectSchema.Struct({
     kind: EffectSchema.Literal(MENTION_KIND.MAC_APP),
     /** The app by its bundle id, or by its name where it has none. */
@@ -384,6 +383,8 @@ const mentionSchema = EffectSchema.Union([
       EffectSchema.isNonEmpty(),
       EffectSchema.isMaxLength(MENTION_BOUNDS.MAX_APP_CHARS),
     ),
+    /** The machine the app is on, by its device id, where the `@` list knew it; absent from a link written before machines were named, which still reads. */
+    machine: EffectSchema.optionalKey(thingIdSchema),
   }),
   // Note that routing's R3 adds the Mac here too, a `machine`, once a command can name the Mac it runs on.
   EffectSchema.Struct({ kind: EffectSchema.Literal(MENTION_KIND.COMPUTER) }),
@@ -520,12 +521,14 @@ function schemeFields({ host, steps, hash, search }: SchemeLink) {
       return end === undefined ? moments : { ...moments, end: decodedStep(end) };
     }
 
+    // An app is its bundle id or its name, then the machine it is on where the link names one.
     case SCHEME_LINK_HOST.MAC_APP: {
-      const [app, ...rest] = steps;
+      const [app, machine, ...rest] = steps;
 
       if (rest.length > 0 || hash !== "" || search !== "") return undefined;
+      const named = { kind: MENTION_KIND.MAC_APP, app: decodedStep(app ?? "") };
 
-      return { kind: MENTION_KIND.MAC_APP, app: decodedStep(app ?? "") };
+      return machine === undefined ? named : { ...named, machine: decodedStep(machine) };
     }
 
     case SCHEME_LINK_HOST.COMPUTER:
@@ -947,7 +950,12 @@ export function encodeMention(mention: Mention, place: MentionPlace): string {
       return `${linkOf({ kind: LINK_DESTINATION.TASK, taskId: mention.taskId }, workspace)}/${APP_STEP}`;
     // An app on a Mac has no page of its own, so it keeps the app's own form.
     case MENTION_KIND.MAC_APP:
-      return schemeLinkOf(SCHEME_LINK_HOST.MAC_APP, encodedStep(mention.app));
+      return schemeLinkOf(
+        SCHEME_LINK_HOST.MAC_APP,
+        mention.machine === undefined
+          ? encodedStep(mention.app)
+          : `${encodedStep(mention.app)}/${encodedStep(mention.machine)}`,
+      );
     case MENTION_KIND.COMPUTER:
       return schemeLinkOf(SCHEME_LINK_HOST.COMPUTER, "");
     // A machine has no page of its own, so it keeps the app's own form, named by its id.

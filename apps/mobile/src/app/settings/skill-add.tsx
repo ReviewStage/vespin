@@ -26,7 +26,6 @@ import {
   textFill,
 } from "@repo/features/skill-install-model";
 import { failureLine, SKILLS_LINE } from "@repo/features/skills-settings-words";
-import { VERB } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
@@ -35,10 +34,12 @@ import {
   BUZZ,
   ConfirmAsk,
   ListSection,
+  SCREEN_GROUND,
   ScopePicker,
   Screen,
   SettingsForm,
   ToggleRow,
+  TRY_AGAIN_WORDS,
   useColors,
   WordsField,
 } from "@repo/ui-native";
@@ -292,7 +293,7 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
           verbatim
         />
         {failed !== undefined && previewRetries(failed) ? (
-          <ActionRow label={VERB.RETRY} onPress={() => void previewed.refetch()} />
+          <ActionRow label={TRY_AGAIN_WORDS} onPress={() => void previewed.refetch()} />
         ) : null}
       </ListSection>
       {line === undefined ? textFields : null}
@@ -354,7 +355,7 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
         }}
         onDismiss={kept.stay}
       />
-      <Screen>{body}</Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>{body}</Screen>
     </>
   );
 }
