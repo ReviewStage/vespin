@@ -269,11 +269,19 @@ function named<Named extends { id: string; name: string }>(task: Named, renames:
   return name === undefined ? task : { ...task, name };
 }
 
+/** `tasks` with each name given drawn in place of the one it replaces, the same list where none is given. */
+export function renamedTasks<Named extends { id: string; name: string }>(
+  tasks: readonly Named[],
+  renames: TaskNames,
+): readonly Named[] {
+  return renames.size === 0 ? tasks : tasks.map((task) => named(task, renames));
+}
+
 /** The view with each name given drawn in place of the one it replaces in the list. */
 export function renamedView(view: TasksView, renames: TaskNames): TasksView {
   if (renames.size === 0) return view;
 
-  return { ...view, tasks: view.tasks.map((task) => named(task, renames)) };
+  return { ...view, tasks: renamedTasks(view.tasks, renames) };
 }
 
 /** The region with the name given for its task drawn in place of the one it replaces, as the list draws it. */

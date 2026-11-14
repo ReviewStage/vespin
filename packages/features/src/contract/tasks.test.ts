@@ -3,7 +3,7 @@ import { test } from "vitest";
 import { hostedContract } from "./index.js";
 
 test("a released desktop's task start whose agent names repositories beside the task's is taken", async () => {
-  const [input] = hostedContract.plans.create["~orpc"].inputSchemas ?? [];
+  const [input] = hostedContract.tasks.create["~orpc"].inputSchemas ?? [];
   assert.ok(input !== undefined);
 
   const read = await input["~standard"].validate({

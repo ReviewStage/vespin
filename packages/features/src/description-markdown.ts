@@ -22,8 +22,8 @@ const TITLE_OVERHEAD = "# ".length + TASK_BOUNDS.MAX_NAME_CHARS + "\n\n".length;
 export const DESCRIPTION_MARKDOWN_MAX_CHARS = TITLE_OVERHEAD + TASK_BOUNDS.MAX_BODY_CHARS + 1;
 
 /** The description as Markdown: its name as a title over its text. */
-export function descriptionMarkdown(task: Pick<Task, "name" | "document">): string {
-  const body = task.document.body.trimEnd();
+export function descriptionMarkdown(task: Pick<Task, "name" | "description">): string {
+  const body = task.description.body.trimEnd();
   const title = `# ${task.name.replace(WHITESPACE_RUN, " ").trim()}`;
 
   return body.length === 0 ? `${title}\n` : `${title}\n\n${body}\n`;

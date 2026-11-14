@@ -28,7 +28,7 @@ type PageHeaderProps = {
   readonly priority?: string | undefined;
   /** Who a task is assigned to, drawn as a chip with their face, or the words for no one beside an empty face. */
   readonly assignee?: (Face & { readonly nobody: boolean }) | undefined;
-  /** Who follows a task, drawn as a chip under its fields that opens them; none while its workspace has Following off. */
+  /** Who follows a task, drawn as a chip under its fields that opens them; none where it carries no followers. */
   readonly following?: PageFollowing | undefined;
   /** What a press on each of a task's chips offers, where the reader may change that field; a chip with none only says. */
   readonly menus?: StandingMenus | undefined;

@@ -18,6 +18,7 @@ import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useMemo } from "react";
 import { linkStandingQuery } from "../live-reads.js";
 import { appStateIn, appStateQuery } from "../use-app-state.js";
+import { useTaskFound } from "./use-task-outside.js";
 
 /**
  * use-link-standing.ts -- a GitHub pull request or issue a link in the app's words names, as its chip says it: its key, its title, where it stands, who opened it, and a pull request's lines added and removed, read through the workspace's own GitHub App.
@@ -123,11 +124,12 @@ function wordsWorkspace(
 }
 
 /**
- * The id of the task a link names by its number, `…/task/42`, among the
- * tasks the window lists: the one of that number in the workspace the
- * link's first step names among the reader's own (`workspaceOfSlug`); none
- * where it names no number, or the window lists no such task, as one moved
- * out of the workspace since, which only the service still finds.
+ * The id of the task a link names by its number, `…/task/42`: the one of
+ * that number in the workspace the link's first step names among the
+ * reader's own (`workspaceOfSlug`), among the tasks the window lists, else
+ * as the service finds it (`useTaskFound`), which reads it into the list;
+ * none where it names no number, while the service is asked, or where it
+ * finds none.
  */
 export function useNumberedTaskId(
   workspace: string,
@@ -135,7 +137,14 @@ export function useNumberedTaskId(
 ): string | undefined {
   const planning = useWorkspacePlaces();
 
-  return number === undefined ? undefined : numberedTaskIdIn(planning, { workspace, number });
+  const listed =
+    number === undefined ? undefined : numberedTaskIdIn(planning, { workspace, number });
+
+  // Note that the service is asked only once the window's list stands and lists no such task, so nothing is asked while every task is live.
+  const asked = planning !== undefined && listed === undefined && number !== undefined;
+  const found = useTaskFound(asked ? { workspace, number } : undefined);
+
+  return listed ?? found;
 }
 
 /** The id of the task a link names by its number among the tasks `planning` lists (`useNumberedTaskId`); none where it lists none. */

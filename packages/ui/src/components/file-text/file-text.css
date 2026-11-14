@@ -1,7 +1,8 @@
 /* file-text.css -- a file's words as written: mono, wrapped line for line, on
    the code's ground in a control's corner; a peek clipped to its head and
    faded at its foot, the whole scrolling inside a reading height, a brief one
-   inside a peek's. */
+   inside a peek's. Its edge, ground, and corner are a code `Card`'s
+   (`file-text.tsx`). */
 
 @layer components {
   .ui-file-text {
@@ -10,10 +11,6 @@
 
     box-sizing: border-box;
     min-width: 0;
-    padding: var(--ui-row-inset) var(--ui-list-inset);
-    border: 1px solid var(--ui-color-border);
-    border-radius: var(--ui-control-radius);
-    background: var(--ui-color-code-ground);
   }
 
   /* Note that a code card's own edge holds the text it is handed as its body, so the text draws none of its own. */

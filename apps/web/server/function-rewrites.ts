@@ -65,8 +65,8 @@ const AUTH_ROUTE = "auth/[...all]";
 const SEGMENT_REWRITES: readonly SegmentRewrite[] = [
   { src: "/api/auth/(.*)", route: AUTH_ROUTE, query: `${DISPATCH_QUERY.PATH}=auth/$1` },
   {
-    src: "/api/plans/([^/]+)/attachments/([^/]+)",
-    route: "plans/attachment",
+    src: "/api/tasks/([^/]+)/attachments/([^/]+)",
+    route: "tasks/attachment",
     query: "id=$1&attachment=$2",
   },
   {

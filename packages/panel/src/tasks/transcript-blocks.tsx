@@ -9,7 +9,8 @@ import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { GITHUB_DEFAULT_BRANCH, GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
-import { mayNameChip } from "@repo/features/mention-link";
+import { machineName } from "@repo/features/machine-name";
+import { encodeMention, MENTION_KIND, mayNameChip } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { readReplyButtonLink } from "@repo/features/reply-button-wire";
@@ -20,7 +21,13 @@ import {
   type ToolBlock,
   type ToolState,
 } from "@repo/features/tool-call-block";
-import { type SentWords, todosCount } from "@repo/features/tool-call-model";
+import {
+  type CallMachine,
+  type MachineNotRun,
+  machineNotRunLabel,
+  type SentWords,
+  todosCount,
+} from "@repo/features/tool-call-model";
 import {
   agentCallLine,
   CALL_KIND,
@@ -181,6 +188,7 @@ import {
 import { useDrawnDark } from "../drawn-dark.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { FIND_DETAIL, FindDetailFolds } from "../find-in-tab.js";
+import { useThisMac } from "../machine-name.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
@@ -193,6 +201,7 @@ import {
   inlineCodeTarget,
 } from "./inline-code-target.js";
 import { LoneLinkCard } from "./lone-link-card.js";
+import { MachineNotRunNote } from "./machine-not-run.js";
 import { fileChip, linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
 import { ReplyButtonLink } from "./reply-button-link.js";
@@ -202,8 +211,8 @@ import {
   TRANSCRIPT_CODE_AND_TABLE_COMPONENTS,
   TranscriptMarkdownSource,
 } from "./transcript-markdown.js";
-import { useWordTargets } from "./use-known-names.js";
 import { opensAsLink, useOpenLink } from "./use-open-link.js";
+import { useKeyTarget } from "./use-task-outside.js";
 import type { CutBody } from "./whole-parts.js";
 import { WorkingTime } from "./working-time.js";
 
@@ -708,8 +717,9 @@ function MentionElement({
 
 /**
  * A task's key written in a transcript's words: its task's chip where the
- * window lists a task by it (`useWordTargets`), as a link to the task is
- * drawn (`MentionElement`), and the key as written where it lists none. It
+ * window lists a task by it, or once the service found one it lists not
+ * (`useKeyTarget`), as a link to the task is drawn (`MentionElement`), and
+ * the key as written where it lists none. It
  * is read as it is drawn, so the chip follows the tasks as they are listed
  * while the words around it stand.
  */
@@ -719,7 +729,7 @@ function TaskKeyElement({
 }: MarkdownNodeProps & { children?: ReactNode }): ReactNode {
   const doors = useMentionDoors();
   const key = String(node?.properties[TASK_KEY_ELEMENT.KEY] ?? "");
-  const target = useWordTargets().get(key);
+  const target = useKeyTarget(key);
 
   return (target === undefined ? undefined : linkChip(target, key, doors)) ?? children;
 }
@@ -1407,6 +1417,37 @@ export function useMacOwner(): Actor | undefined {
   return useContext(MacOwnerContext);
 }
 
+/** The machine a terminal command or an action on an app made now would go to, as the agent's standing names it (`workspaceTools.runOnMac.machine`), which a call still unanswered names; none where it names none. */
+const RoutedMachineContext = createContext<Pick<CallMachine, "id" | "name"> | undefined>(undefined);
+
+/** Where a call ran, as its row ends: the machine's chip, named as every list of machines names it (This Mac among them), its card and its press the chip's own. */
+function OnMachine({ machine }: { machine: Pick<CallMachine, "id" | "name"> }): ReactNode {
+  const thisMac = useThisMac();
+  const doors = useMentionDoors();
+  const words = machineName({ deviceId: machine.id, name: machine.name }, [], thisMac);
+
+  const link = encodeMention({ kind: MENTION_KIND.MACHINE, machineId: machine.id }, doors.place);
+
+  return linkChip(link, words, doors);
+}
+
+/** Names whose Mac the transcript under it ran its Mac commands on (`MacOwnerProvider`), and the machine it would send a call to now, which a call still unanswered names. */
+export function CallPlaceProvider({
+  owner,
+  machine,
+  children,
+}: {
+  owner: Actor | undefined;
+  machine: Pick<CallMachine, "id" | "name"> | undefined;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <MacOwnerContext.Provider value={owner}>
+      <RoutedMachineContext.Provider value={machine}>{children}</RoutedMachineContext.Provider>
+    </MacOwnerContext.Provider>
+  );
+}
+
 export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> &
   Pick<ToolHeaderProps, "state" | "subject"> & {
     kind: CallKind;
@@ -1416,6 +1457,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     appIcon?: string | undefined;
     /** For a call of an MCP server's tool, the server's name, which the row says it ran on beside its line. */
     server?: string | undefined;
+    /** For a terminal command or an action on an app, the machine its answer says it went to, which the row says it ran on; none where its answer names none or it has not answered. */
+    machine?: CallMachine | undefined;
     /** For a command, the plain words the model said it is for, which the row says in its verb's place; the closed row previews the command's first line after them, and the body holds it whole. */
     description?: string | undefined;
     /** For a call about one coding agent, the agent, whose chip the row names it by in the place of "the coding agent"; none where the agent is not known. */
@@ -1438,6 +1481,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     held?: HeldCall | undefined;
     /** What the body holds under the call's answer, seen once the row is opened, such as the window a computer call read. */
     answered?: ReactNode;
+    /** For a terminal command or an action on an app that ran nothing on its machine, how, which the row says quietly at its line's end and its body in the answer's place; none for the rest. */
+    notRun?: MachineNotRun | undefined;
   };
 
 /** A call held for an answer, as its row draws it (`TranscriptTool`'s `held`). */
@@ -1489,6 +1534,7 @@ export function TranscriptTool({
   provider,
   appIcon,
   server,
+  machine,
   subject,
   description,
   agent,
@@ -1502,6 +1548,7 @@ export function TranscriptTool({
   cut,
   held,
   answered,
+  notRun,
   ...props
 }: TranscriptToolProps): ReactNode {
   const Icon = CALL_ICON[kind];
@@ -1516,6 +1563,17 @@ export function TranscriptTool({
 
   const command = isCommandKind(kind);
   const macOwner = useContext(MacOwnerContext);
+  // Note that a call names the machine its answer names, and one still unanswered the machine the agent's calls go to now, so a row never names the starter's Mac for a call routed elsewhere.
+  const routed = useContext(RoutedMachineContext);
+  const unanswered = state === TOOL_STATE.INPUT_STREAMING || state === TOOL_STATE.INPUT_AVAILABLE;
+  const onMachine = machine ?? (unanswered ? routed : undefined);
+
+  const onMachineChip =
+    (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
+    onMachine !== undefined ? (
+      <OnMachine machine={onMachine} />
+    ) : undefined;
+
   const opened = useHeldOpen(held?.waiting === true);
 
   const row = (
@@ -1536,6 +1594,7 @@ export function TranscriptTool({
         chip={chip}
         subjectIsCode={line.code}
         subjectInBody={(command && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject)}
+        placeChip={onMachineChip}
         place={
           (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
           macOwner !== undefined ? (
@@ -1548,14 +1607,23 @@ export function TranscriptTool({
             callPlace(kind, server)
           )
         }
-        status={held?.status}
+        status={held?.status ?? (notRun === undefined ? undefined : machineNotRunLabel(notRun))}
         paused={held?.waiting}
       />
       <ToolContent bare>
         {held?.about === undefined ? null : (
           <NoteLine look={NOTE_LINE_LOOK.INSET}>{held.about}</NoteLine>
         )}
-        {input.kind === TOOL_BLOCK.COMMAND ? (
+        {notRun !== undefined ? (
+          <>
+            {input.kind === TOOL_BLOCK.COMMAND ? (
+              <ToolTerminal input={input} block={undefined} errorText={undefined} />
+            ) : (
+              <ToolInput block={input} markdown={toolMarkdown} />
+            )}
+            <MachineNotRunNote notRun={notRun} machine={machine} />
+          </>
+        ) : input.kind === TOOL_BLOCK.COMMAND ? (
           cut === undefined ? (
             <ToolTerminal input={input} block={output} errorText={errorText} />
           ) : (

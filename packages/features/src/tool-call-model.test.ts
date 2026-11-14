@@ -190,6 +190,32 @@ test("a command run on the Mac is the command it ran, described as a command is,
   });
 });
 
+test("a command or an action on an app names the machine its answer says it went to, and none where its answer names none", () => {
+  const machine = { id: "studio", name: "Ben's Mac Studio", owner: { userId: "ben", name: "Ben" } };
+
+  const ran = toolCallView({
+    tool: "run_on_mac",
+    input: { command: "uname" },
+    output: { status: "ran", exitCode: 0, stdout: "Darwin\n", stderr: "", machine },
+  });
+
+  const looked = toolCallView({
+    tool: "computer",
+    input: { action: "get_app_state", app: "Notes" },
+    output: { status: "not-run", reason: "Not run: Studio is offline.", machine },
+  });
+
+  const older = toolCallView({
+    tool: "run_on_mac",
+    input: { command: "uname" },
+    output: { status: "ran", exitCode: 0, stdout: "Darwin\n", stderr: "" },
+  });
+
+  assert.deepEqual(ran.machine, machine);
+  assert.deepEqual(looked.machine, machine);
+  assert.equal(older.machine, undefined);
+});
+
 test("a file read and a search say the path and the pattern, and answer with the words under them", () => {
   const read = toolCallView({
     tool: "read_file",

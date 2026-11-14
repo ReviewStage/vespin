@@ -226,6 +226,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.REVIEW_OPTIONS]: NO_KEYS_HELD,
     [LIVE_READ.DEVICE_PRESENCE]: NO_KEYS_HELD,
     [LIVE_READ.HOSTS]: NO_KEYS_HELD,
+    [LIVE_READ.MACHINES]: NO_KEYS_HELD,
     [LIVE_READ.WORKSPACE_INVITATIONS]: NO_KEYS_HELD,
     [LIVE_READ.THIS_MAC_HOST]: NO_KEYS_HELD,
     [LIVE_READ.TRANSCRIPT]: NO_TRANSCRIPTS,
@@ -247,6 +248,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     sessionReplay: { permitted: false, halted: false },
     portForwarding: null,
     mirrors: {},
+    voiceCall: null,
     network: { online: true, reachable: true },
     window: { fullScreen: false },
   };

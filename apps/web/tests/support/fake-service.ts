@@ -237,7 +237,7 @@ export function fakeService(options: FakeServiceOptions): FakeService {
       return json(polledTaskList(unchanged));
     }
 
-    if (pathname === "/api/plans" && method === "GET") {
+    if (pathname === "/api/tasks" && method === "GET") {
       return signedIn ? json({ plans: [LISTED_TASK] }) : json({ error: "unauthorized" }, 401);
     }
 

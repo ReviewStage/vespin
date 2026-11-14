@@ -62,7 +62,7 @@ import { SqlClient } from "effect/sql";
  */
 
 const ORIGIN = "https://app.test";
-const ATTACHMENT = "/api/plans/attachment";
+const ATTACHMENT = "/api/tasks/attachment";
 
 /** A PNG's signature and a few bytes more: all the service reads of a picture. */
 const PNG_BYTES = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7, 7]);
@@ -137,7 +137,7 @@ function upload(
   body: string,
   headers: Readonly<Record<string, string>> = {},
 ): Request {
-  return new Request(new URL(`/api/plans/${taskId}/attachments`, ORIGIN), {
+  return new Request(new URL(`/api/tasks/${taskId}/attachments`, ORIGIN), {
     method: "POST",
     headers: {
       "content-type": "application/json",

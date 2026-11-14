@@ -466,8 +466,9 @@ const LIST_CSS = `
   :host {
     box-sizing: border-box;
     overflow: clip;
-    border: 1px solid var(--ui-color-border);
+    border: 1px solid var(--ui-color-card-edge);
     border-radius: var(--ui-control-radius);
+    box-shadow: var(--ui-shadow-card);
     --diffs-bg-separator-override: var(--ui-color-fill-hover);
   }
   [data-separator="line-info-basic"] {

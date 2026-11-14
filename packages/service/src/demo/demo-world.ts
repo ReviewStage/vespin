@@ -144,8 +144,8 @@ export const DEMO_WORKSPACE_NAME = "acme";
 /* ----- The host ----- */
 
 /**
- * The host `run.sh --demo` starts on this Mac for the length of a run, as
- * Dean's own, on which every agent he starts runs. Its name stands only
+ * The host a run may start beside the local server, as Dean's own, on
+ * which every agent he starts runs. Its name stands only
  * until the host's first register renames it for the Mac's Computer Name.
  */
 export const DEMO_HOST = {
