@@ -482,6 +482,7 @@ const STUDIO: MachineLine = {
   platform: DEVICE_PLATFORM.DARWIN,
   host: true,
   listening: true,
+  isDefault: true,
   settings: {
     commandMode: MACHINE_COMMAND_MODE.ASK,
     computerUse: true,
@@ -496,6 +497,7 @@ const LAPTOP: MachineLine = {
   platform: DEVICE_PLATFORM.DARWIN,
   host: false,
   listening: false,
+  isDefault: false,
   settings: { commandMode: MACHINE_COMMAND_MODE.NEVER, computerUse: false, alwaysAllowedApps: [] },
 };
 
@@ -577,6 +579,33 @@ test("a machine's apps switch and an app's Remove are sent for that machine alon
     { id: STUDIO.id, removeApp: "com.apple.Notes" },
     { id: LAPTOP.id, computerUse: true },
   ]);
+});
+
+test("the default machine stands atop the list, and picking another sends it as the member's default", async () => {
+  const sent = await machinesWithSettings();
+
+  const row =
+    [...document.querySelectorAll<HTMLElement>(".ui-settings-row")].find(
+      (each) => each.textContent?.includes("Default machine") ?? false,
+    ) ?? assert.fail("the default machine's row is drawn");
+
+  const chip =
+    [...row.querySelectorAll<HTMLButtonElement>("button")].find(
+      (each) => each.textContent?.includes("Studio") ?? false,
+    ) ?? assert.fail("the row names the Studio, the default");
+
+  await act(async () => chip.click());
+  await settle();
+
+  const laptop =
+    [...document.querySelectorAll<HTMLElement>('[role="option"], [role^="menuitem"]')].find(
+      (each) => each.textContent?.includes("Laptop") ?? false,
+    ) ?? assert.fail("the laptop is offered");
+
+  await act(async () => laptop.click());
+  await settle();
+
+  assert.deepEqual(sent, [{ id: LAPTOP.id, makeDefault: true }]);
 });
 
 test("a Mac that only runs the app stands after the hosts, and its Remove removes that machine", async () => {

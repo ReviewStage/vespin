@@ -650,8 +650,10 @@ export const MACHINE_UNREACHED = {
   DEFAULT_GONE: "default-gone",
   /** The call named a machine this task's agents may not use. */
   UNKNOWN_MACHINE: "unknown-machine",
-  /** No default was set and none of the owner's machines could take it. */
+  /** The call named no machine, its agent picked none, and its owner has no default machine. */
   NO_MACHINE: "no-machine",
+  /** A terminal command for the machine a local agent runs on itself, whose own shell runs there already. */
+  OWN_SHELL: "own-shell",
 } as const;
 
 export type MachineUnreached = (typeof MACHINE_UNREACHED)[keyof typeof MACHINE_UNREACHED];

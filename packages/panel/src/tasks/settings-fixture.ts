@@ -1180,9 +1180,9 @@ const STAGED_LAPTOP = "7d3c2a10-0000-4000-8000-0000000000a1";
 /**
  * The account's staged machines with their own settings for agents, as the
  * host holds them for Settings › Machines: the Mac that runs its agents,
- * online, asking before each command and always allowing two apps, and a
- * laptop that only runs the app, offline, running no commands and using no
- * apps.
+ * online, asking before each command and always allowing two apps, the
+ * default machine, and a laptop that only runs the app, offline, running
+ * no commands and using no apps.
  */
 const STAGED_MACHINES: AppMachines = {
   [ACCOUNT_ID]: {
@@ -1193,6 +1193,7 @@ const STAGED_MACHINES: AppMachines = {
         platform: DEVICE_PLATFORM.DARWIN,
         host: true,
         listening: true,
+        isDefault: true,
         settings: {
           commandMode: MACHINE_COMMAND_MODE.ASK,
           computerUse: true,
@@ -1205,6 +1206,7 @@ const STAGED_MACHINES: AppMachines = {
         platform: DEVICE_PLATFORM.DARWIN,
         host: false,
         listening: false,
+        isDefault: false,
         settings: {
           commandMode: MACHINE_COMMAND_MODE.NEVER,
           computerUse: false,

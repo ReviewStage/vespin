@@ -46,6 +46,11 @@ export const MACHINE_SETTINGS_WORDS = {
   /** A machine's apps as its folded row counts them where some are always allowed. */
   appsAllowed: (count: number) => `${count} ${count === 1 ? "app" : "apps"} always allowed`,
   CHANGE_FAILED: "Could not change this machine. Try again.",
+  /** The row that picks the member's default machine, atop the list. */
+  DEFAULT: "Default machine",
+  DEFAULT_DETAIL:
+    "Where agents' terminal commands and computer use go, unless an agent picks its own machine.",
+  DEFAULT_FAILED: "Could not change your default machine. Try again.",
 } as const;
 
 /** What a machine's Remove asks of the machine called `label` that runs no agents: it stops taking commands, and stands again where the app still runs there. */

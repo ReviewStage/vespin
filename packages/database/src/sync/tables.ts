@@ -281,7 +281,8 @@ export const userSync = defineSyncTable(user, {
  * name the local agents on it, and a host's platform, machine, model,
  * update, setup, first register (its home folder), and its going away or
  * coming back reach every surface that reads the hosts (`hostsRead`), as do
- * its enrolling, which writes its version, and its removal. Note that every other column is
+ * its enrolling, which writes its version, its removal, and its being
+ * picked as its account's default machine (`machinesRead`). Note that every other column is
  * ignored, because the device beats and registers again often, rewriting
  * when it was last seen and what it runs, and no view the capture wakes
  * reads them: a window judges a device by its own presence read. Its
