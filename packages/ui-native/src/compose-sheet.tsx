@@ -29,6 +29,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode } from "react";
+import { useAnnounced } from "./accessibility.js";
 import { AddPress, type ComposerMenu } from "./composer.js";
 import {
   type AttachedPicture,
@@ -184,6 +185,24 @@ type ComposeSheetProps = {
   readonly chips: ReactNode;
 };
 
+/**
+ * What a start, the picker, or a read said, in the muted line under the
+ * words, as the panel's composer says it. Note that VoiceOver is told it at
+ * once, since it stands because something did not go, such as a refused
+ * start, and the reader pressed Start in the sheet's bar, far from where it
+ * appears.
+ */
+function ComposeNote({ words }: { readonly words: string }) {
+  const colors = useColors();
+  useAnnounced(words, true);
+
+  return (
+    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}>
+      {words}
+    </Text>
+  );
+}
+
 /** The sheet's page: the line over the words, what heads them, the words, the skills a `/` offers, the pictures attached, and the notes, clear of the bar at its foot, taking a drop of pictures. */
 function ComposePage(props: ComposeSheetProps) {
   const colors = useColors();
@@ -219,9 +238,7 @@ function ComposePage(props: ComposeSheetProps) {
           )}
           <AttachedPictures pictures={pictures} onDetach={onDetach} />
           {notes.map((note) => (
-            <Text key={note} modifiers={muted}>
-              {note}
-            </Text>
+            <ComposeNote key={note} words={note} />
           ))}
         </VStack>
       </ScrollView>
