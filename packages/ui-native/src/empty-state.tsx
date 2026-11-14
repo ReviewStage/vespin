@@ -1,11 +1,21 @@
 // empty-state.tsx -- what a screen or a column says when it has nothing to show, in the system's own ContentUnavailableView, or the system's spinner over its words while what it shows is still read.
 
-import { ContentUnavailableView, ProgressView, Text } from "@expo/ui/swift-ui";
-import { font, foregroundStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
+import { ContentUnavailableView, ProgressView, Text, VStack } from "@expo/ui/swift-ui";
+import {
+  font,
+  foregroundStyle,
+  frame,
+  multilineTextAlignment,
+  padding,
+  tint,
+} from "@expo/ui/swift-ui/modifiers";
 import { BUTTON_LOOK, Button, type ButtonLook } from "./button.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+
+/** The room around a column's words while it waits for a pick, in points. */
+const EMPTY_SPACING = 12;
 
 export type EmptyStateProps = {
   readonly title: string;
