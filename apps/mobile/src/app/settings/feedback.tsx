@@ -21,6 +21,7 @@ import {
   BUZZ,
   buzz,
   ConfirmAsk,
+  FOOTER_TONE,
   GLYPH,
   glyphSymbol,
   ListSection,
@@ -245,7 +246,7 @@ export default function FeedbackScreen() {
       <Screen>
         <ScopePicker label={FEEDBACK_WORDS.KIND} scopes={scopes}>
           <SettingsForm>
-            <ListSection footer={note}>
+            <ListSection footer={note} footerTone={FOOTER_TONE.FAILURE}>
               {/* Note that each kind's field stands apart, so a change of kind shows that kind's own words, and is drawn afresh once its words were sent. */}
               <Fragment key={sends}>
                 <WordsField
