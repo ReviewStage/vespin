@@ -140,3 +140,11 @@ ipad26-landscape-ipad26-dark wrap-tasks.yaml: fails 2 shots 3   Assert that "Lau
   ax none on ipad26: contrast disabled transparency-key 
 ipad26-landscape-ipad26-light wrap-accessibility.yaml: fails 2 shots 3   Assert that ".*walked the invite flow.*" is visible... FAILED
 ipad26-landscape-ipad26-dark wrap-accessibility.yaml: fails 2 shots 3   Assert that ".*walked the invite flow.*" is visible... FAILED
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-workspace.yaml: fails 2 shots 6 (rig 1)
+  RIG ERROR: Exception in thread "Thread-5" java.lang.IllegalStateException:    Assert that "Recorded the invite flow" is visible... FAILED
+ipad26-landscape-ipad26-dark wrap-workspace.yaml: fails 2 shots 6   Assert that "Recorded the invite flow" is visible... FAILED
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-search.yaml: fails 0 shots 4 
+ipad26-landscape-ipad26-dark wrap-search.yaml: fails 0 shots 4 
+  ax none on ipad26: contrast disabled transparency-key 
