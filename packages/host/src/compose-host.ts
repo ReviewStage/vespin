@@ -931,6 +931,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         yield* Effect.forkScoped(account.session.refreshOnce());
       }),
       drain,
+      taskListMoves: tasks.taskListMoves,
     };
 
     return assembly;
