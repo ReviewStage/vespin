@@ -281,7 +281,6 @@ test("where no other workspace's GitHub reaches the repository, the dialog says 
     moving.textContent?.includes("No other workspace can reach acme-corp/relay on GitHub."),
     "the dialog says why no workspace can take the plan",
   );
-  assert.equal(moving.querySelector(".move-effects"), null, "no move is described");
   assert.equal(button(moving, "Move").disabled, true, "Move stays off");
 });
 

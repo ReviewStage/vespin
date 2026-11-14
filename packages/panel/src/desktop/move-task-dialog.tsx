@@ -196,7 +196,7 @@ function MoveTaskCard({
             first={first}
             onChoose={onChoose}
           />
-          {/* Note that where no workspace can take the task the dialog says why, rather than leave its disabled rows and its disabled Move to explain themselves; the repository's name is masked, as each row's is. */}
+          {/* Note that where no workspace can take the task the dialog says why, rather than leave its disabled rows and its disabled Move to explain themselves; the line is masked whole, as each row's detail is. */}
           {chosen === undefined ? (
             task.repository === null ? null : (
               <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
