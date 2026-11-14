@@ -4708,7 +4708,7 @@ test("a task with no agent opens on a new agent's draft, which closes once left 
   assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW], "the draft left for Settings is let go");
 
   const written = openDraft(tab);
-  act(() => tab.control().agents.onDraftChange({ prompt: "Fix login." }));
+  act(() => tab.control().agents.onDraftHeld((now) => ({ ...now, text: "Fix login." })));
   act(() => column().onChoose(MAIN_TAB.OVERVIEW));
   await settle();
   assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, draftTab(written.id)], "words keep it");
@@ -4722,8 +4722,12 @@ test("closing a draft holding words lets it go at once, and its toast's Undo ope
   const prompt = "Rename the invite email's subject.";
   const notes = { name: "notes.md", mediaType: "text/plain", data: "IyBOb3Rlcw==" } as const;
   const choice = { model: "openai/gpt-6.1-sol", effort: "xhigh" } as const;
-  act(() => tab.control().agents.onDraftChange({ prompt, choice }));
-  act(() => tab.control().agents.onDraftAttachments((held) => [...held, notes]));
+  act(() => tab.control().agents.onDraftChange({ choice }));
+  act(() =>
+    tab
+      .control()
+      .agents.onDraftHeld((now) => ({ text: prompt, attachments: [...now.attachments, notes] })),
+  );
 
   act(() => {
     tab.control().mainTabs.onClose(draftTab(draft.id));
@@ -4750,7 +4754,7 @@ test("a draft closed with words whose place a fork has taken since is laid into 
   const tab = mount({ shown: true, tasks: withAgents([]) });
   await settle();
   const closed = openDraft(tab);
-  act(() => tab.control().agents.onDraftChange({ prompt: "Fix login." }));
+  act(() => tab.control().agents.onDraftHeld((now) => ({ ...now, text: "Fix login." })));
   act(() => {
     tab.control().mainTabs.onClose(draftTab(closed.id));
     tab.control().agents.onDiscardDraft(closed.id);
@@ -4760,7 +4764,7 @@ test("a draft closed with words whose place a fork has taken since is laid into 
   act(() => {
     tab.control().agents.onForkDraft(fork);
   });
-  act(() => tab.control().agents.onDraftChange({ prompt: "Keep its tests." }));
+  act(() => tab.control().agents.onDraftHeld((now) => ({ ...now, text: "Keep its tests." })));
 
   act(() => _undoButton().click());
   await settle();
@@ -4774,7 +4778,7 @@ test("a closed draft's Undo is withdrawn as its task is left", async () => {
   const tab = mount({ shown: true, tasks: withAgents([]) });
   await settle();
   const closed = openDraft(tab);
-  act(() => tab.control().agents.onDraftChange({ prompt: "Fix login." }));
+  act(() => tab.control().agents.onDraftHeld((now) => ({ ...now, text: "Fix login." })));
   act(() => tab.control().agents.onDiscardDraft(closed.id));
   await settle();
   assert.equal(newestToastSays(), "Draft closedUndo");

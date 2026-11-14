@@ -190,7 +190,9 @@ const REWOUND: AgentAgentAnswer = {
 test("an edit's send takes the agent back to just before the line, then sends the new words, leaving the box as it was and rewinding while its line is on its way", async () => {
   const { calls, composer } = await box(REWOUND);
 
-  await act(async () => composer().setDraft("Also update the tests."));
+  await act(async () =>
+    composer().updateHeld((now) => ({ ...now, text: "Also update the tests." })),
+  );
   await act(async () => composer().edit("second-line"));
   await act(async () => composer().sendEdit("second-line", "second line, again", []));
   const meanwhile = composer().rewinding;
@@ -201,7 +203,7 @@ test("an edit's send takes the agent back to just before the line, then sends th
   assert.ok(pressedAt !== undefined && Date.now() - pressedAt < 5_000, "it counts from the press");
   assert.deepEqual(calls, ["rewind:second-line", "send:second line, again"]);
   assert.equal(composer().editing, undefined);
-  assert.equal(composer().draft, "Also update the tests.");
+  assert.equal(composer().held.text, "Also update the tests.");
 });
 
 test("a rewind that did not go sends nothing, and keeps the edit's line marked as not sent, its Retry rewinding again", async () => {
@@ -216,7 +218,7 @@ test("a rewind that did not go sends nothing, and keeps the edit's line marked a
 
   assert.deepEqual(calls, ["rewind:second-line", "rewind:second-line"]);
   assert.equal(line?.text, "second line, again");
-  assert.equal(composer().draft, "");
+  assert.equal(composer().held.text, "");
   assert.equal(composer().cut, undefined);
   assert.equal(composer().rewindOut, false);
 });
@@ -240,17 +242,19 @@ test("an edit whose rewind went and whose words did not keeps them on its line, 
     ["second line, again"],
     "the Retry that did not go either keeps the words on the line",
   );
-  assert.equal(composer().draft, "");
+  assert.equal(composer().held.text, "");
 });
 
 test("an edit let go sends nothing and leaves the box as it was", async () => {
   const { calls, composer } = await box(REWOUND);
 
-  await act(async () => composer().setDraft("Also update the tests."));
+  await act(async () =>
+    composer().updateHeld((now) => ({ ...now, text: "Also update the tests." })),
+  );
   await act(async () => composer().edit("second-line"));
   await act(async () => composer().dropEdit());
 
-  assert.equal(composer().draft, "Also update the tests.");
+  assert.equal(composer().held.text, "Also update the tests.");
   assert.equal(composer().editing, undefined);
   assert.deepEqual(calls, []);
 });
