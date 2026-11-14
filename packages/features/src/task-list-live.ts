@@ -128,6 +128,14 @@ const taskLiveRowSchema = EffectSchema.Struct({
   creatorAgentId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   /** The task this one is a child of; null for a task at the top. Absent from a service before child tasks. */
   parentTaskId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
+  /**
+   * How many tasks the reader reaches are this one's direct children, and
+   * how many of those are finished (done or canceled), counted by the
+   * service over every task rather than those the list holds; absent from a
+   * service before it counted them.
+   */
+  subTaskCount: EffectSchema.optionalKey(EffectSchema.Int),
+  finishedSubTaskCount: EffectSchema.optionalKey(EffectSchema.Int),
   /** How the task is worked; absent from a service before modes. */
   mode: plan.mode,
   /** Whether it waits on an open task the reader reaches; absent from a service before blocks. */
@@ -670,6 +678,13 @@ function followersOf(row: TaskLiveRow): Pick<TaskSummary, "followers"> | undefin
   };
 }
 
+/** The task's sub-task count as its row says it; none for a task with no child, or from a service before it counted them. */
+function subTaskCountOf(row: TaskLiveRow): Pick<TaskSummary, "subTasks"> | undefined {
+  const total = row.subTaskCount ?? 0;
+
+  return total === 0 ? undefined : { subTasks: { total, finished: row.finishedSubTaskCount ?? 0 } };
+}
+
 /** One plan as the list's row says it, its agents in brief where it has any. */
 function taskSummaryOf(
   row: TaskLiveRow,
@@ -706,6 +721,7 @@ function taskSummaryOf(
     ...(row.parentTaskId === undefined || row.parentTaskId === null
       ? undefined
       : { parentTaskId: row.parentTaskId }),
+    ...subTaskCountOf(row),
     ...(row.mode === undefined ? undefined : { mode: row.mode }),
     ...(row.blocked === true ? { blocked: true } : undefined),
     ...(row.blockedBy === undefined ? undefined : { blockedBy: row.blockedBy }),

@@ -36,6 +36,8 @@ import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { TOPIC } from "@repo/database/sync/notification";
+import { taskSync } from "@repo/database/sync/tables";
 import {
   DEVICE_LAYOUT,
   getTestDB,
@@ -100,6 +102,7 @@ import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/code
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
 import { withTaskAgents } from "../../agents/task-agents.js";
 import { TURN_FAILURE } from "../../core.js";
+import type { SyncMoved } from "../../sync/live-query.js";
 import {
   personPageRead,
   taskPageRead,
@@ -405,16 +408,35 @@ function countedOf(plan: HeldTaskSummary): TaskSummary {
   return { ...rest, agents: counts };
 }
 
-/** The held list with each plan's followers as the store reads them, which the held read leaves to the live one. */
+/** Each listed task's direct children among `tasks`, the finished ones apart, by the parent's id, as the live row counts them over the tasks its reader reaches. */
+function subTasksAmong(
+  tasks: readonly { readonly parentTaskId?: string; readonly status?: string }[],
+): ReadonlyMap<string, { readonly finished: number; readonly total: number }> {
+  const counts = new Map<string, { finished: number; total: number }>();
+
+  for (const { parentTaskId, status } of tasks) {
+    if (parentTaskId === undefined) continue;
+    const count = counts.get(parentTaskId) ?? { finished: 0, total: 0 };
+    count.total += 1;
+    count.finished += status === TASK_STATUS.DONE || status === TASK_STATUS.CANCELED ? 1 : 0;
+    counts.set(parentTaskId, count);
+  }
+
+  return counts;
+}
+
+/** The held list with each plan's followers as the store reads them, which the held read leaves to the live one, and its sub-tasks counted over the held list itself, which the held read carries no count of. */
 const heldList = (userId: string) =>
   Effect.gen(function* () {
     const tasks = yield* listTasks(userId);
     const ids = tasks.map((each) => each.id);
     const followers = yield* listTasksFollowersNamed(userId, ids);
+    const subTasks = subTasksAmong(tasks);
 
     return {
       plans: (yield* withTaskAgents(userId, tasks)).map((plan) => ({
         ...countedOf(plan),
+        ...(subTasks.has(plan.id) ? { subTasks: subTasks.get(plan.id) } : undefined),
         followers: (followers.get(plan.id) ?? []).map(({ userId, assignee, machines }) => ({
           userId,
           assignee,
@@ -1254,6 +1276,88 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         const none = { plans: [], names: [], agents: [], next: undefined };
         assert.deepEqual(yield* settledPageOf(outsider, workspaceId), none);
         assert.deepEqual(yield* settledPageOf(outsider, workspaceId, page.next), none);
+      }),
+  );
+  it.effect(
+    "count a task's direct children the reader reaches, the finished apart, and send both parents of a child moved between them past a sync id to a member and no one else",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const parent = yield* startTask(owner, { name: "Teammate invitations" });
+        const other = yield* startTask(owner, { name: "Billing export" });
+        yield* joinWorkspace(parent.workspaceId, teammate);
+        const shipped = yield* startTask(owner, { name: "Invitation emails" });
+        const working = yield* startTask(owner, { name: "Invitation links" });
+        const hidden = yield* startTask(owner, { name: "Invitation audit" });
+        const grandchild = yield* startTask(owner, { name: "Link expiry" });
+        const db = yield* Database;
+
+        for (const child of [shipped, working, hidden]) {
+          yield* db.update(task).set({ parentTaskId: parent.id }).where(eq(task.id, child.id));
+        }
+
+        yield* db.update(task).set({ parentTaskId: working.id }).where(eq(task.id, grandchild.id));
+        yield* updateTask(owner, shipped.id, { status: TASK_STATUS.DONE });
+        // A child on its owner's own token, which the teammate does not reach, and so does not count.
+        yield* db
+          .update(task)
+          .set({ githubAccess: GITHUB_ACCESS.TOKEN, repository: "acme/side" })
+          .where(eq(task.id, hidden.id));
+
+        const countsOf = (reader: string) =>
+          Effect.map(liveListOf(reader, NOW), (list) =>
+            [parent, working, other].map(
+              ({ id }) => list.plans.find((plan) => plan.id === id)?.subTasks,
+            ),
+          );
+
+        assert.deepEqual(yield* countsOf(owner), [
+          { finished: 1, total: 3 },
+          { finished: 0, total: 1 },
+          undefined,
+        ]);
+        assert.deepEqual(yield* countsOf(teammate), [
+          { finished: 1, total: 2 },
+          { finished: 0, total: 1 },
+          undefined,
+        ]);
+        assert.deepEqual(yield* countsOf(outsider), [undefined, undefined, undefined]);
+
+        // The finished child moves to the other parent, which the log names as both of its parents (`TOPIC.TASK_PARENT`).
+        yield* db.update(task).set({ parentTaskId: other.id }).where(eq(task.id, shipped.id));
+
+        const moved: SyncMoved = {
+          keys: (table) => (table === taskSync ? [shipped.id] : []),
+          topics: (table, kind) =>
+            table === taskSync && kind === TOPIC.TASK_PARENT ? [parent.id, other.id] : [],
+        };
+
+        const { delta } = tasksRead;
+        assert.ok(delta !== undefined, "the list answers deltas");
+        const statements = Option.getOrThrow(delta.statements({ userId: teammate }, moved));
+
+        const rows = yield* Schema.decodeUnknownEffect(
+          Schema.Array(TASK_LIST_READ.parts.plans.row),
+        )(yield* runLive(statements.plans));
+
+        assert.deepEqual(
+          rows
+            .map(({ id, subTaskCount, finishedSubTaskCount }) => ({
+              id,
+              subTaskCount,
+              finishedSubTaskCount,
+            }))
+            .toSorted((a, b) => a.id.localeCompare(b.id)),
+          [
+            { id: parent.id, subTaskCount: 1, finishedSubTaskCount: 0 },
+            { id: other.id, subTaskCount: 1, finishedSubTaskCount: 1 },
+            { id: shipped.id, subTaskCount: 0, finishedSubTaskCount: 0 },
+          ].toSorted((a, b) => a.id.localeCompare(b.id)),
+          "the child and both its parents are sent, each counted anew",
+        );
       }),
   );
 
