@@ -42,6 +42,7 @@ import { childTitlesOf } from "@repo/database/models/child-titles";
 import { readRewoundRevision } from "@repo/database/models/conversation-rewind";
 import { childConversationId } from "@repo/database/models/ids";
 import { listProviderKeyRows } from "@repo/database/models/provider-key-store";
+import { listStandingVoiceCalls } from "@repo/database/models/voice-calls";
 import {
   type ConversationTarget,
   STORE_WRITE_REFUSAL,
@@ -277,6 +278,25 @@ function transcriptAnswer(
   };
 }
 
+/**
+ * The voice calls standing on the agent as its own page names them, read for
+ * the member reading it, after the page, so a call that opened while a held
+ * read waited is named on the page that ends the hold; nothing while none
+ * stands.
+ */
+const standingCallsOf = (userId: string, agentId: string) =>
+  Effect.map(hostedStoreOrUnavailable(listStandingVoiceCalls(userId, agentId)), (rows) =>
+    rows.length === 0
+      ? undefined
+      : {
+          calls: rows.map((row) => ({
+            callId: row.id,
+            callerId: row.callerId,
+            startedAt: row.startedAt.getTime(),
+          })),
+        },
+  );
+
 /** A transcript's newest page as the wire answers it, with where the page before it is read below. */
 function newestAnswer(
   newest: TranscriptNewest,
@@ -371,6 +391,7 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
 
       // The title is read after the page, since it lands after a turn ends, which a held read may span.
       const titled = yield* hostedStoreOrUnavailable(readAgent(context.userId, agent.id));
+      const calls = yield* standingCallsOf(context.userId, agent.id);
 
       return {
         ...transcriptAnswer(
@@ -383,6 +404,7 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
           holds,
           wakeIn,
         ),
+        ...calls,
         ...(rewound === undefined ? undefined : { rewound }),
       };
     }),
@@ -571,6 +593,7 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
 
       // The title is read after the page, as the forward read's is, so one that landed while the page was read is told rather than lost to a follow that starts after it.
       const titled = yield* hostedStoreOrUnavailable(readAgent(context.userId, agent.id));
+      const calls = yield* standingCallsOf(context.userId, agent.id);
 
       return {
         ...newestAnswer(
@@ -578,6 +601,7 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
           Option.match(titled, { onNone: () => agent.title, onSome: (now) => now.title }),
           readsCut(input.parts),
         ),
+        ...calls,
         ...(rewound === undefined ? undefined : { rewound }),
       };
     }),

@@ -50,7 +50,7 @@ export function useStartingAgent(
   const actor = {
     ...agentActor(agent, agentName(agent, models)),
     agentId: agent.id,
-    taskId: agent.planId,
+    taskId: agent.taskId,
   };
 
   const onOpen =
@@ -59,7 +59,7 @@ export function useStartingAgent(
       : () =>
           openPlace({
             kind: LINK_DESTINATION.AGENT,
-            planId: agent.planId,
+            taskId: agent.taskId,
             agentId: agent.id,
           });
 

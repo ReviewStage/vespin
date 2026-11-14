@@ -461,9 +461,14 @@ async function fakeCoderSessions(
   const github = githubReaching([installation], undefined, undefined, async (request) => {
     const { pathname } = new URL(request.url);
     // The repository holds the branches given, each at a commit; any other is GitHub's not found.
-    const ref = pathname.slice(`/repos/${RELAY_FULL_NAME}/git/ref/heads/`.length);
+    // Note that the ref is one path segment, its slashes encoded, as Octokit sends it.
+    const ref = decodeURIComponent(pathname.slice(`/repos/${RELAY_FULL_NAME}/git/ref/`.length));
+    const branch = ref.slice("heads/".length);
 
-    if (pathname.startsWith(`/repos/${RELAY_FULL_NAME}/git/ref/heads/`) && branches.includes(ref)) {
+    if (
+      pathname.startsWith(`/repos/${RELAY_FULL_NAME}/git/ref/heads%2F`) &&
+      branches.includes(branch)
+    ) {
       return Response.json({ object: { type: "commit", sha: BRANCH_COMMIT } });
     }
 

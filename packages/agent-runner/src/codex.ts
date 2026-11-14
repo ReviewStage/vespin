@@ -199,6 +199,7 @@ import {
   runsOnHost,
   toolEnvOf,
 } from "./launch.js";
+import { MCP_STARTUP, type McpServer, mcpServersOf } from "./mcp-servers.js";
 import { codexMemoryWatch } from "./out-of-memory.js";
 import {
   APPROVAL_BY,
@@ -255,28 +256,6 @@ const CHATGPT_PROVIDER = {
  * machine's own login probes when a turn could not reach its provider.
  */
 const CHATGPT_BACKEND_BASE_URL = "https://chatgpt.com/backend-api/codex";
-
-/** The name our MCP server is registered under in Codex's config (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
-const MCP_SERVER = "workspace";
-
-/**
- * How long Codex waits on one of our tool calls, in seconds: our MCP
- * function's own duration (`workspace-mcp/app.ts`'s `WORKSPACE_MCP_FUNCTION`, the
- * longest `run_on_mac` and two minutes around it), so Codex never gives up
- * on a call the service is still running. Note that Codex's default is 60 s, past
- * which it fails the call while the service carries it out, and the agent retries a
- * call that already ran.
- */
-const MCP_TOOL_TIMEOUT_SECONDS = 600;
-
-/**
- * How long Codex waits on an integration's server to start, in seconds:
- * past the bound the service lists a provider's tools within
- * (`connection-door.ts`'s `LIST_TIMEOUT`, ten seconds), so a slow provider's
- * server answers no tools rather than being failed by Codex at its default
- * of ten (https://learn.chatgpt.com/docs/extend/mcp, `startup_timeout_sec`).
- */
-const INTEGRATION_STARTUP_TIMEOUT_SECONDS = 20;
 
 /**
  * Who the runner tells app-server it is. OpenAI asks that the name match the
@@ -699,6 +678,33 @@ function permissionsOf(mode: PermissionMode | undefined): CodexPermissions {
 }
 
 /**
+ * The launch's MCP servers (`mcp-servers.ts`) as Codex's `mcp_servers.*`
+ * overrides: each on the bearer its variable holds, its tools approved up
+ * front and bounded as the list says. Note that a cached catalog satisfies a
+ * background server's startup (`startup_readiness`) while it connects, so a
+ * known integration holds no first turn, and one with none waits no longer
+ * than its startup bound.
+ */
+function mcpServers(servers: readonly McpServer[]): (readonly [string, string])[] {
+  return servers.flatMap((server): (readonly [string, string])[] => {
+    const key = `mcp_servers.${server.name}`;
+
+    return [
+      [`${key}.url`, toml(server.url)],
+      [`${key}.bearer_token_env_var`, toml(server.bearerVariable)],
+      [`${key}.default_tools_approval_mode`, toml("approve")],
+      ...(server.startupTimeoutSeconds === undefined
+        ? []
+        : ([[`${key}.startup_timeout_sec`, server.startupTimeoutSeconds.toFixed(1)]] as const)),
+      ...(server.startup === MCP_STARTUP.BACKGROUND
+        ? ([[`${key}.startup_readiness`, toml("catalog")]] as const)
+        : []),
+      [`${key}.tool_timeout_sec`, server.toolTimeoutSeconds.toFixed(1)],
+    ];
+  });
+}
+
+/**
  * App-server's argv: our provider and its credential where the launch
  * runs on one of ours (`providerOverrides`), our MCP
  * server and each integration's beside it with the bearer read from the environment and their tools approved up
@@ -719,26 +725,6 @@ function appServerArgs(
   permissions: CodexPermissions,
   toolEnv: Readonly<Record<string, string>>,
 ): string[] {
-  const mcp = `mcp_servers.${MCP_SERVER}`;
-
-  // Each integration the agent is handed is a server of its own on the same bearer, its tools approved and bounded as ours are.
-  // Note that a cached catalog satisfies an integration's startup (`startup_readiness`) while it connects, so a
-  // known integration holds no first turn; an integration with none waits no longer than Codex's grace for optional servers.
-  const integrations = (config.integrations ?? [])
-    .filter((integration) => integration.name !== MCP_SERVER)
-    .flatMap((integration): (readonly [string, string])[] => {
-      const server = `mcp_servers.${integration.name}`;
-
-      return [
-        [`${server}.url`, toml(integration.url)],
-        [`${server}.bearer_token_env_var`, toml(RUNNER_ENV.BEARER)],
-        [`${server}.default_tools_approval_mode`, toml("approve")],
-        [`${server}.startup_timeout_sec`, INTEGRATION_STARTUP_TIMEOUT_SECONDS.toFixed(1)],
-        [`${server}.startup_readiness`, toml("catalog")],
-        [`${server}.tool_timeout_sec`, MCP_TOOL_TIMEOUT_SECONDS.toFixed(1)],
-      ];
-    });
-
   const excluded = [
     RUNNER_ENV.BEARER,
     ...(auth.kind === CODEX_AUTH.API_KEY ? [RUNNER_ENV.OPENAI_API_KEY] : []),
@@ -747,11 +733,7 @@ function appServerArgs(
   const overrides: (readonly [string, string])[] = [
     ...providerOverrides(auth),
     ...featureOverrides(auth),
-    [`${mcp}.url`, toml(config.mcpUrl)],
-    [`${mcp}.bearer_token_env_var`, toml(RUNNER_ENV.BEARER)],
-    [`${mcp}.default_tools_approval_mode`, toml("approve")],
-    [`${mcp}.tool_timeout_sec`, MCP_TOOL_TIMEOUT_SECONDS.toFixed(1)],
-    ...integrations,
+    ...mcpServers(mcpServersOf(config)),
     ...permissions.overrides,
     ["shell_environment_policy.inherit", toml("all")],
     ["shell_environment_policy.ignore_default_excludes", "true"],

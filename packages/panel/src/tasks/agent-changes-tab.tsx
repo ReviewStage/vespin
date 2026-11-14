@@ -153,7 +153,6 @@ import type { PullRequestSource } from "./pull-request-source.js";
 import { PullRequestWriteNote, type ReadAgain } from "./pull-request-writes.js";
 import { refusedAnswer, taskFileQueryOptions } from "./repository-reads.js";
 import { landable, type ThreadLanding, ThreadLandingProvider } from "./thread-reveal.js";
-import { type TurnFileReveal, useTurnFileReveal } from "./turn-file-reveal.js";
 import { useViewSettingsSheet, VIEW_SETTINGS_SCOPE, ViewSettingsButton } from "./view-settings.js";
 import { useViewedFiles, type ViewedFiles } from "./viewed-files.js";
 
@@ -2198,7 +2197,6 @@ export function TurnChangesTab({
   messageId,
   shown,
   tree,
-  fileReveal,
 }: {
   agentId: string;
   /** The developer's line that opened the turn. */
@@ -2207,8 +2205,6 @@ export function TurnChangesTab({
   shown: boolean;
   /** Whether the tree beside File and Changes tabs is open, and its toggle. */
   tree: TreeShown;
-  /** A file to bring into view, once per ask, among those drawn. */
-  fileReveal?: TurnFileReveal | undefined;
 }): React.JSX.Element {
   const changes = useQuery({ ...agentTurnChangesQueryOptions(agentId, messageId), enabled: shown });
 
@@ -2236,7 +2232,7 @@ export function TurnChangesTab({
 
   const list = useChangesList(files, undefined, minimize, room.toggle);
   const marks = useMemo(() => changeMarks(files, { viewed: list.viewed }), [files, list.viewed]);
-  const { hideKeys, go, expand } = list;
+  const { hideKeys, go } = list;
   useEffect(() => {
     if (!shown) hideKeys();
   }, [shown, hideKeys]);
@@ -2252,16 +2248,6 @@ export function TurnChangesTab({
     [closeOver, go, openTab],
   );
 
-  // The file a press asked for is opened and stood on, each ask once, as the pull request's reveal is.
-  const latestReveal = useRef({ fileReveal, expand, go });
-  latestReveal.current = { fileReveal, expand, go };
-  useEffect(() => {
-    const { fileReveal, expand, go } = latestReveal.current;
-
-    if (fileReveal === undefined) return;
-    expand(fileReveal.path);
-    go(fileReveal.path);
-  }, [fileReveal?.ask]);
   const texts = useFileTexts(null, null, null, files);
   const settings = useViewSettingsSheet({ kind: VIEW_SETTINGS_SCOPE.DIFF, roomy });
   const phone = usePhoneRoom();
@@ -2370,30 +2356,5 @@ export function TurnChangesTab({
       </Fill>
       <FilesChangedKeysSheet open={shown && list.keysShown} onDismiss={hideKeys} />
     </Fill>
-  );
-}
-
-/** A turn's Changes tab as the side panel mounts it, standing on the file a press on the turn's files row asked for (`turn-file-reveal.ts`). */
-export function TurnChangesPane({
-  agentId,
-  messageId,
-  shown,
-  tree,
-}: {
-  agentId: string;
-  messageId: string;
-  shown: boolean;
-  tree: TreeShown;
-}): React.JSX.Element {
-  const fileReveal = useTurnFileReveal(agentId, messageId);
-
-  return (
-    <TurnChangesTab
-      agentId={agentId}
-      messageId={messageId}
-      shown={shown}
-      tree={tree}
-      fileReveal={fileReveal}
-    />
   );
 }

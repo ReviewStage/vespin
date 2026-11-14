@@ -54,8 +54,6 @@ let asked = 0;
 /** What the stand-in diff bundle was handed, mount first, each draw after it. */
 let drawn: DiffListProps[] = [];
 
-/** The files the list was told to stand on, in order. */
-let revealed: string[] = [];
 let root: Root | undefined;
 
 const diffStandIn: DiffViewModule = {
@@ -71,7 +69,7 @@ const diffStandIn: DiffViewModule = {
 
     return {
       update: (next) => drawn.push(next),
-      reveal: (path) => revealed.push(path),
+      reveal: () => undefined,
       revealLine: () => undefined,
       revealLines: () => undefined,
       unmount: () => undefined,
@@ -109,7 +107,6 @@ beforeAll(async () => {
 
 beforeEach(() => {
   drawn = [];
-  revealed = [];
   asked = 0;
   answer = { files: [TILE], truncated: false };
   fakeAppBridge({});
@@ -142,10 +139,7 @@ async function flush(): Promise<void> {
 }
 
 /** Draws the turn's tab, its read landed, and answers the words it shows. */
-async function drawnTab(
-  fileReveal?: { path: string; ask: number },
-  messageId = LINE,
-): Promise<HTMLElement> {
+async function drawnTab(messageId = LINE): Promise<HTMLElement> {
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   await act(async () =>
@@ -158,7 +152,6 @@ async function drawnTab(
             messageId,
             shown: true,
             tree: { open: false, onToggle: () => undefined },
-            fileReveal,
           }),
         ),
       ),
@@ -174,15 +167,14 @@ async function drawnTab(
   return container;
 }
 
-test("the turn's files are handed to the diff list, each with its patch, and the file a press asked for is stood on", async () => {
-  await drawnTab({ path: TILE.path, ask: 1 });
+test("the turn's files are handed to the diff list, each with its patch", async () => {
+  await drawnTab();
 
   const list = drawn.at(-1) ?? assert.fail("the files are drawn");
   assert.deepEqual(
     list.files.map((file) => [file.path, file.patch.includes("+  color: blue;")]),
     [["src/tile.css", true]],
   );
-  assert.deepEqual(revealed, ["src/tile.css"]);
 });
 
 test("a turn whose snapshot is gone says its changes are no longer available, and one on a Mac away says so by the Mac's name with Retry", async () => {
@@ -203,7 +195,7 @@ test("a turn whose snapshot is gone says its changes are no longer available, an
   };
   // Another turn's tab, since the first's answer stands in the query's cache.
   asked = 0;
-  const away = await drawnTab(undefined, OTHER_LINE);
+  const away = await drawnTab(OTHER_LINE);
   assert.ok(away.textContent?.includes("Studio is offline"), away.textContent ?? "");
 
   const retry = [...away.querySelectorAll("button")].find((each) =>

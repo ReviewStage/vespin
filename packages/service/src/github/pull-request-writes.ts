@@ -6,14 +6,15 @@
  * (`agents/pull-request-write.ts`), never on an installation token, so what
  * the member may do on GitHub bounds what they do through the service. A write is
  * one call of GitHub's GraphQL API (`githubWrite`), or, for its requested
- * reviewers and its labels, of its REST API (`githubRestWrite`), composed
- * over the App module's own kit (`githubPost`, `githubSendRequest`, `send`), so a token leaves
- * this module no more than it leaves that one. What GitHub answers is told apart three
- * ways: a token GitHub will not take (401), which the member mends by
- * signing in with GitHub again; a change GitHub refused, in its own words,
- * whether as GraphQL errors on a 200 or as a refusal status with a message
- * (a missing permission, a branch protection, a rate limit); and a GitHub
- * that could not be reached or answered in no shape the call reads.
+ * reviewers and its labels, of its REST API (`githubRestWrite`), sent on the
+ * member's `@repo/github` client, so a token leaves this module no more than
+ * it leaves that one. What GitHub answers is told apart, by the tag of the
+ * module's failure, three ways: a token GitHub will not take
+ * (`GitHubUnauthorized`), which the member mends by signing in with GitHub
+ * again; a change GitHub refused, in its own words, whether as GraphQL
+ * errors or as a refusal with a message (a missing permission, a branch
+ * protection, a rate limit); and a GitHub that could not be reached or
+ * answered in no shape the call reads.
  * Nothing of the token, the request, or GitHub's body reaches a log line.
  * Which files the member marked viewed is read through the same call, on
  * the same token, since GitHub keeps that mark for each account alone.
@@ -36,23 +37,15 @@ import {
   type ReviewCommentSide,
   type ReviewEvent,
 } from "@repo/features/pull-request-write-wire";
-import { Data, Effect, type Redacted, Schema } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import {
-  GITHUB_FAILURE,
-  GITHUB_HTTP_STATUS,
+import type {
+  GitHubFailure,
   GitHubUnavailable,
-  githubPost,
-  githubSendRequest,
-  repositoryPath,
-  send,
-  unreadable,
-} from "./github-app.js";
+  GitHubUnreadable,
+  GraphqlVariable,
+} from "@repo/github";
+import { Data, Effect, Match, Schema } from "effect";
+import { type GitHubBearer, repositoryParts } from "./github-app.js";
 import { TASK_TICK, tickTaskItem } from "./task-items.js";
-
-/** GitHub's GraphQL endpoint, under the API's origin. */
-const GRAPHQL_PATH = "/graphql";
 
 /** GitHub would not take the member's token: expired, revoked, or never one of the App's. */
 class GitHubTokenRefused extends Data.TaggedError("GitHubTokenRefused") {
@@ -71,16 +64,14 @@ class GitHubWriteRefused extends Data.TaggedError("GitHubWriteRefused")<{
   }
 }
 
-export type GitHubWriteFailure = GitHubTokenRefused | GitHubWriteRefused | GitHubUnavailable;
+export type GitHubWriteFailure =
+  | GitHubTokenRefused
+  | GitHubWriteRefused
+  | GitHubUnavailable
+  | GitHubUnreadable;
 
-/** A GraphQL answer's frame: its data, which the caller's schema reads, and its errors, each with its words. */
-const GraphqlAnswerSchema = Schema.Struct({
-  data: Schema.optional(Schema.Unknown),
-  errors: Schema.optional(Schema.Array(Schema.Struct({ message: Schema.String }))),
-});
-
-/** A refusal status's body, as far as its words. */
-const RefusalSchema = Schema.Struct({ message: Schema.String });
+/** What the member is told where GitHub held the change back for its rate limit, which says no words of its own. */
+const RATE_LIMITED = "GitHub is limiting how often this can be done; try again in a few minutes.";
 
 /** Words GitHub said, joined and cut to the bound. */
 function refusalOf(messages: readonly string[]): GitHubWriteRefused {
@@ -90,72 +81,32 @@ function refusalOf(messages: readonly string[]): GitHubWriteRefused {
 }
 
 /**
- * A status that is not OK read for what it said: a 401 is the token
- * refused, and any other a refusal in GitHub's words where it gave some.
+ * A failure of a write read for what GitHub said: a token it will not take
+ * is the token refused, a GitHub that did not answer, or answered off its
+ * shape, is left as it is, and anything else is a refusal in GitHub's words.
  */
-const refusedStatus = /* @__PURE__ */ Effect.fnUntraced(function* (
-  response: HttpClientResponse.HttpClientResponse,
-): Effect.fn.Return<never, GitHubWriteFailure> {
-  if (response.status === GITHUB_HTTP_STATUS.UNAUTHORIZED) {
-    return yield* new GitHubTokenRefused();
-  }
-
-  const refusal = yield* HttpClientResponse.schemaBodyJson(RefusalSchema)(response).pipe(
-    Effect.mapError(
-      () => new GitHubUnavailable({ reason: GITHUB_FAILURE.STATUS, status: response.status }),
-    ),
+function writeFailureOf(failure: GitHubFailure): GitHubWriteFailure {
+  return Match.value(failure).pipe(
+    Match.tag("GitHubUnauthorized", (): GitHubWriteFailure => new GitHubTokenRefused()),
+    Match.tag("GitHubUnavailable", "GitHubUnreadable", (left): GitHubWriteFailure => left),
+    Match.tag("GitHubRateLimited", (): GitHubWriteFailure => refusalOf([RATE_LIMITED])),
+    Match.orElse((refused): GitHubWriteFailure => refusalOf([refused.message])),
   );
-
-  return yield* refusalOf([refusal.message]);
-});
-
-/** Whether a status is one of GitHub's OK answers. */
-function succeeded(response: HttpClientResponse.HttpClientResponse): boolean {
-  return response.status >= 200 && response.status < 300;
 }
 
 /**
- * The answer to a GraphQL call read for what it said: a status that is not
- * OK as `refusedStatus` reads it, and an OK answer carrying errors a
- * refusal in GitHub's words.
- */
-const readWrite = /* @__PURE__ */ Effect.fnUntraced(function* <A>(
-  response: HttpClientResponse.HttpClientResponse,
-  data: Schema.Codec<A, unknown>,
-): Effect.fn.Return<A, GitHubWriteFailure> {
-  if (!succeeded(response)) return yield* refusedStatus(response);
-
-  const answer = yield* HttpClientResponse.schemaBodyJson(GraphqlAnswerSchema)(response).pipe(
-    Effect.mapError(() => unreadable(response.status)),
-  );
-
-  const errors = answer.errors ?? [];
-
-  if (errors.length > 0) return yield* refusalOf(errors.map((error) => error.message));
-
-  return yield* Schema.decodeUnknownEffect(data)(answer.data).pipe(
-    Effect.mapError(() => unreadable(response.status)),
-  );
-});
-
-/**
- * One call of GitHub's GraphQL API on the member's token: the document and
+ * One call of GitHub's GraphQL API on the member's client: the document and
  * its variables, its data read under the schema given. Every GraphQL call
  * on a pull request goes through here, so every one tells GitHub's refusals
  * apart the same way.
  */
 const githubWrite = <A>(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   document: string,
-  variables: Readonly<Record<string, string | number | boolean | null>>,
-  data: Schema.Codec<A, unknown>,
-): Effect.Effect<A, GitHubWriteFailure, HttpClient.HttpClient> =>
-  Effect.scoped(
-    Effect.flatMap(
-      send(githubPost(GRAPHQL_PATH, token, { query: document, variables })),
-      (answer) => readWrite(answer, data),
-    ),
-  );
+  variables: Readonly<Record<string, GraphqlVariable>>,
+  data: Schema.Decoder<A>,
+): Effect.Effect<A, GitHubWriteFailure> =>
+  Effect.mapError(bearer.client.graphql(document, variables, data), writeFailureOf);
 
 const NODE_ID_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) { pullRequest(number: $number) { id } }
@@ -177,12 +128,12 @@ const NOT_RESOLVED = "Could not resolve to a pull request your GitHub account ca
  * GitHub's refusal in its own words before anything is changed.
  */
 export const pullRequestNodeId = /* @__PURE__ */ Effect.fn("web/pullRequestNodeId")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
-): Effect.fn.Return<string, GitHubWriteFailure, HttpClient.HttpClient> {
+): Effect.fn.Return<string, GitHubWriteFailure> {
   const [owner = "", name = ""] = fullName.split("/");
-  const read = yield* githubWrite(token, NODE_ID_QUERY, { owner, name, number }, NodeIdSchema);
+  const read = yield* githubWrite(bearer, NODE_ID_QUERY, { owner, name, number }, NodeIdSchema);
   const id = read.repository?.pullRequest?.id;
 
   if (id === undefined) return yield* refusalOf([NOT_RESOLVED]);
@@ -200,12 +151,12 @@ const CONVERT_TO_DRAFT_MUTATION = `mutation($id: ID!) {
 
 /** A pull request marked ready for review, or turned back into a draft where `draft` asks, on the member's token. */
 export const setPullRequestDraft = /* @__PURE__ */ Effect.fn("web/setPullRequestDraft")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   draft: boolean,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
+): Effect.fn.Return<void, GitHubWriteFailure> {
   yield* githubWrite(
-    token,
+    bearer,
     draft ? CONVERT_TO_DRAFT_MUTATION : READY_FOR_REVIEW_MUTATION,
     { id: pullRequestId },
     Schema.Unknown,
@@ -257,9 +208,9 @@ const ADD_REVIEW_MUTATION = `mutation($id: ID!, $event: PullRequestReviewEvent!,
 }`;
 
 /** The member's own pending review on the pull request, by its GraphQL id; none where they hold none. GitHub shows a member only theirs, and `viewerDidAuthor` says so whatever it shows. */
-const ownPendingReview = (token: Redacted.Redacted, pullRequestId: string) =>
+const ownPendingReview = (bearer: GitHubBearer, pullRequestId: string) =>
   Effect.map(
-    githubWrite(token, PENDING_REVIEW_QUERY, { id: pullRequestId }, PendingReviewsSchema),
+    githubWrite(bearer, PENDING_REVIEW_QUERY, { id: pullRequestId }, PendingReviewsSchema),
     (pending) => pending.node.reviews.nodes.find((node) => node.viewerDidAuthor),
   );
 
@@ -273,15 +224,15 @@ const ownPendingReview = (token: Redacted.Redacted, pullRequestId: string) =>
  */
 export const submitPullRequestReview = /* @__PURE__ */ Effect.fn("web/submitPullRequestReview")(
   function* (
-    token: Redacted.Redacted,
+    bearer: GitHubBearer,
     pullRequestId: string,
     review: { readonly event: ReviewEvent; readonly body: string },
-  ): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
-    const own = yield* ownPendingReview(token, pullRequestId);
+  ): Effect.fn.Return<void, GitHubWriteFailure> {
+    const own = yield* ownPendingReview(bearer, pullRequestId);
     const event = GRAPHQL_REVIEW_EVENT[review.event];
     const body = review.body.trim() === "" ? {} : { body: review.body };
     yield* githubWrite(
-      token,
+      bearer,
       own === undefined ? ADD_REVIEW_MUTATION : SUBMIT_PENDING_REVIEW_MUTATION,
       { id: own?.id ?? pullRequestId, event, ...body },
       Schema.Unknown,
@@ -289,75 +240,70 @@ export const submitPullRequestReview = /* @__PURE__ */ Effect.fn("web/submitPull
   },
 );
 
-/** The REST methods a write on a pull request's people or labels uses. */
-const REST_METHOD = { POST: "POST", DELETE: "DELETE" } as const;
-
-type RestMethod = (typeof REST_METHOD)[keyof typeof REST_METHOD];
-
-/** What a REST write on a pull request's people or labels sends: the users or teams it names, or the labels. */
-type RestWriteBody =
-  | { readonly reviewers: readonly string[] }
-  | { readonly team_reviewers: readonly string[] }
-  | { readonly labels: readonly string[] };
-
-/** A path segment as GitHub takes it, so a label's name with a slash or a space stays one segment. */
-function segment(value: string): string {
-  return encodeURIComponent(value);
-}
-
 /**
- * One call of GitHub's REST API on the member's token, its JSON body where
- * one is given, its answer read only for whether GitHub took it, as a
+ * One call of GitHub's REST API on the member's client, its answer read
+ * only for whether GitHub took it, as a
  * GraphQL write's refusals are told apart. Note that a requested reviewer
  * is taken off only through REST, GraphQL offering no such mutation, so
  * the people and labels writes are REST alike.
  */
 const githubRestWrite = (
-  token: Redacted.Redacted,
-  method: RestMethod,
-  path: string,
-  body?: RestWriteBody,
-): Effect.Effect<void, GitHubWriteFailure, HttpClient.HttpClient> => {
-  return Effect.scoped(
-    Effect.flatMap(send(githubSendRequest(method, path, token, body)), (response) =>
-      succeeded(response) ? Effect.void : refusedStatus(response),
-    ),
-  );
-};
+  request: Effect.Effect<unknown, GitHubFailure>,
+): Effect.Effect<void, GitHubWriteFailure> =>
+  request.pipe(Effect.asVoid, Effect.mapError(writeFailureOf));
 
 /** A user or a team asked for a review on the pull request, or asked no longer where `requested` says not, on the member's token. */
 export const setReviewRequested = /* @__PURE__ */ Effect.fn("web/setReviewRequested")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
   reviewer: PullRequestReviewerRef,
   requested: boolean,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
-  const body: RestWriteBody =
-    reviewer.kind === REVIEWER_KIND.TEAM
+): Effect.fn.Return<void, GitHubWriteFailure> {
+  const asked = {
+    ...repositoryParts(fullName),
+    pull_number: number,
+    ...(reviewer.kind === REVIEWER_KIND.TEAM
       ? { team_reviewers: [reviewer.name] }
-      : { reviewers: [reviewer.name] };
+      : { reviewers: [reviewer.name] }),
+  };
 
   yield* githubRestWrite(
-    token,
-    requested ? REST_METHOD.POST : REST_METHOD.DELETE,
-    `${repositoryPath(fullName)}/pulls/${number}/requested_reviewers`,
-    body,
+    requested
+      ? bearer.client.request(
+          "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers",
+          asked,
+        )
+      : bearer.client.request(
+          "DELETE /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers",
+          {
+            ...asked,
+            reviewers: "reviewers" in asked ? asked.reviewers : [],
+          },
+        ),
   );
 });
 
 /** One of the repository's labels put on the pull request, or taken off where `labeled` says not, on the member's token. */
 export const setLabeled = /* @__PURE__ */ Effect.fn("web/setLabeled")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
   label: string,
   labeled: boolean,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
-  const labels = `${repositoryPath(fullName)}/issues/${number}/labels`;
-  yield* labeled
-    ? githubRestWrite(token, REST_METHOD.POST, labels, { labels: [label] })
-    : githubRestWrite(token, REST_METHOD.DELETE, `${labels}/${segment(label)}`);
+): Effect.fn.Return<void, GitHubWriteFailure> {
+  const issue = { ...repositoryParts(fullName), issue_number: number };
+  yield* githubRestWrite(
+    labeled
+      ? bearer.client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", {
+          ...issue,
+          labels: [label],
+        })
+      : bearer.client.request("DELETE /repos/{owner}/{repo}/issues/{issue_number}/labels/{name}", {
+          ...issue,
+          name: label,
+        }),
+  );
 });
 
 const THREAD_PULL_REQUEST_QUERY = `query($id: ID!) {
@@ -381,12 +327,12 @@ const NOT_THIS_THREAD = "Could not resolve to a review thread on this pull reque
  * through this one's tab; a thread out of their sight is refused alike.
  */
 const threadOnPullRequest = /* @__PURE__ */ Effect.fnUntraced(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   threadId: string,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
+): Effect.fn.Return<void, GitHubWriteFailure> {
   const read = yield* githubWrite(
-    token,
+    bearer,
     THREAD_PULL_REQUEST_QUERY,
     { id: threadId },
     ThreadPullRequestSchema,
@@ -411,13 +357,13 @@ const UNRESOLVE_MUTATION = `mutation($id: ID!) {
 
 /** A reply on one of the pull request's review threads, on the member's token, published at once. */
 export const replyToReviewThread = /* @__PURE__ */ Effect.fn("web/replyToReviewThread")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   reply: { readonly threadId: string; readonly body: string },
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
-  yield* threadOnPullRequest(token, pullRequestId, reply.threadId);
+): Effect.fn.Return<void, GitHubWriteFailure> {
+  yield* threadOnPullRequest(bearer, pullRequestId, reply.threadId);
   yield* githubWrite(
-    token,
+    bearer,
     REPLY_MUTATION,
     { id: reply.threadId, body: reply.body },
     Schema.Unknown,
@@ -427,14 +373,14 @@ export const replyToReviewThread = /* @__PURE__ */ Effect.fn("web/replyToReviewT
 /** One of the pull request's review threads marked resolved, or opened again where `resolved` is false, on the member's token. */
 export const setReviewThreadResolved = /* @__PURE__ */ Effect.fn("web/setReviewThreadResolved")(
   function* (
-    token: Redacted.Redacted,
+    bearer: GitHubBearer,
     pullRequestId: string,
     threadId: string,
     resolved: boolean,
-  ): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
-    yield* threadOnPullRequest(token, pullRequestId, threadId);
+  ): Effect.fn.Return<void, GitHubWriteFailure> {
+    yield* threadOnPullRequest(bearer, pullRequestId, threadId);
     yield* githubWrite(
-      token,
+      bearer,
       resolved ? RESOLVE_MUTATION : UNRESOLVE_MUTATION,
       { id: threadId },
       Schema.Unknown,
@@ -449,8 +395,8 @@ const GRAPHQL_MERGE_METHOD = {
   [MERGE_METHOD.REBASE]: "REBASE",
 } as const satisfies Record<MergeMethod, string>;
 
-const MERGE_MUTATION = `mutation($id: ID!, $method: PullRequestMergeMethod!, $head: GitObjectID!) {
-  mergePullRequest(input: { pullRequestId: $id, mergeMethod: $method, expectedHeadOid: $head }) {
+const MERGE_MUTATION = `mutation($id: ID!, $mergeMethod: PullRequestMergeMethod!, $head: GitObjectID!) {
+  mergePullRequest(input: { pullRequestId: $id, mergeMethod: $mergeMethod, expectedHeadOid: $head }) {
     pullRequest { merged }
   }
 }`;
@@ -461,21 +407,21 @@ const MERGE_MUTATION = `mutation($id: ID!, $method: PullRequestMergeMethod!, $he
  * since, the method is not allowed, or a rule still stands in the way.
  */
 export const mergePullRequest = /* @__PURE__ */ Effect.fn("web/mergePullRequest")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   method: MergeMethod,
   headSha: string,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
+): Effect.fn.Return<void, GitHubWriteFailure> {
   yield* githubWrite(
-    token,
+    bearer,
     MERGE_MUTATION,
-    { id: pullRequestId, method: GRAPHQL_MERGE_METHOD[method], head: headSha },
+    { id: pullRequestId, mergeMethod: GRAPHQL_MERGE_METHOD[method], head: headSha },
     Schema.Unknown,
   );
 });
 
-const ENABLE_AUTO_MERGE_MUTATION = `mutation($id: ID!, $method: PullRequestMergeMethod, $head: GitObjectID!) {
-  enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: $method, expectedHeadOid: $head }) {
+const ENABLE_AUTO_MERGE_MUTATION = `mutation($id: ID!, $mergeMethod: PullRequestMergeMethod, $head: GitObjectID!) {
+  enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: $mergeMethod, expectedHeadOid: $head }) {
     clientMutationId
   }
 }`;
@@ -497,25 +443,25 @@ interface AutoMerge {
  * ready, as `gh pr merge --auto` adds one, the queue's method standing.
  */
 export const setAutoMerge = /* @__PURE__ */ Effect.fn("web/setAutoMerge")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   autoMerge: AutoMerge | undefined,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
+): Effect.fn.Return<void, GitHubWriteFailure> {
   if (autoMerge === undefined) {
-    yield* githubWrite(token, DISABLE_AUTO_MERGE_MUTATION, { id: pullRequestId }, Schema.Unknown);
+    yield* githubWrite(bearer, DISABLE_AUTO_MERGE_MUTATION, { id: pullRequestId }, Schema.Unknown);
 
     return;
   }
 
   yield* githubWrite(
-    token,
+    bearer,
     ENABLE_AUTO_MERGE_MUTATION,
     {
       id: pullRequestId,
       head: autoMerge.headSha,
       ...(autoMerge.method === undefined
         ? undefined
-        : { method: GRAPHQL_MERGE_METHOD[autoMerge.method] }),
+        : { mergeMethod: GRAPHQL_MERGE_METHOD[autoMerge.method] }),
     },
     Schema.Unknown,
   );
@@ -527,10 +473,10 @@ const DEQUEUE_MUTATION = `mutation($id: ID!) {
 
 /** The pull request taken out of its base's merge queue, on the member's token. */
 export const takeOutOfMergeQueue = /* @__PURE__ */ Effect.fn("web/takeOutOfMergeQueue")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
-  yield* githubWrite(token, DEQUEUE_MUTATION, { id: pullRequestId }, Schema.Unknown);
+): Effect.fn.Return<void, GitHubWriteFailure> {
+  yield* githubWrite(bearer, DEQUEUE_MUTATION, { id: pullRequestId }, Schema.Unknown);
 });
 
 const COMMENT_MUTATION = `mutation($id: ID!, $body: String!) {
@@ -540,11 +486,11 @@ const COMMENT_MUTATION = `mutation($id: ID!, $body: String!) {
 /** A comment on the pull request itself, at the foot of its conversation, on the member's token. */
 export const commentOnPullRequest = /* @__PURE__ */ Effect.fn("web/commentOnPullRequest")(
   function* (
-    token: Redacted.Redacted,
+    bearer: GitHubBearer,
     pullRequestId: string,
     body: string,
-  ): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
-    yield* githubWrite(token, COMMENT_MUTATION, { id: pullRequestId, body }, Schema.Unknown);
+  ): Effect.fn.Return<void, GitHubWriteFailure> {
+    yield* githubWrite(bearer, COMMENT_MUTATION, { id: pullRequestId, body }, Schema.Unknown);
   },
 );
 
@@ -621,15 +567,15 @@ const PENDING_ON_OTHER_COMMIT =
  * its words.
  */
 export const addLineComment = /* @__PURE__ */ Effect.fn("web/addLineComment")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   comment: LineComment,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
+): Effect.fn.Return<void, GitHubWriteFailure> {
   const thread = threadVariables(comment);
 
   if (comment.mode === REVIEW_COMMENT_MODE.SINGLE) {
     yield* githubWrite(
-      token,
+      bearer,
       SINGLE_COMMENT_MUTATION,
       { id: pullRequestId, commit: comment.headSha, ...thread },
       Schema.Unknown,
@@ -638,11 +584,11 @@ export const addLineComment = /* @__PURE__ */ Effect.fn("web/addLineComment")(fu
     return;
   }
 
-  const own = yield* ownPendingReview(token, pullRequestId);
+  const own = yield* ownPendingReview(bearer, pullRequestId);
 
   if (own === undefined) {
     yield* githubWrite(
-      token,
+      bearer,
       START_REVIEW_MUTATION,
       { id: pullRequestId, commit: comment.headSha, ...thread },
       Schema.Unknown,
@@ -657,7 +603,7 @@ export const addLineComment = /* @__PURE__ */ Effect.fn("web/addLineComment")(fu
     return yield* refusalOf([PENDING_ON_OTHER_COMMIT]);
   }
 
-  yield* githubWrite(token, REVIEW_THREAD_MUTATION, { review: own.id, ...thread }, Schema.Unknown);
+  yield* githubWrite(bearer, REVIEW_THREAD_MUTATION, { review: own.id, ...thread }, Schema.Unknown);
 });
 
 const DISCARD_REVIEW_MUTATION = `mutation($id: ID!) {
@@ -674,13 +620,13 @@ const NO_PENDING_REVIEW = "You have no pending review on this pull request.";
  */
 export const discardPendingReview = /* @__PURE__ */ Effect.fn("web/discardPendingReview")(
   function* (
-    token: Redacted.Redacted,
+    bearer: GitHubBearer,
     pullRequestId: string,
-  ): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
-    const own = yield* ownPendingReview(token, pullRequestId);
+  ): Effect.fn.Return<void, GitHubWriteFailure> {
+    const own = yield* ownPendingReview(bearer, pullRequestId);
 
     if (own === undefined) return yield* refusalOf([NO_PENDING_REVIEW]);
-    yield* githubWrite(token, DISCARD_REVIEW_MUTATION, { id: own.id }, Schema.Unknown);
+    yield* githubWrite(bearer, DISCARD_REVIEW_MUTATION, { id: own.id }, Schema.Unknown);
   },
 );
 
@@ -711,12 +657,12 @@ const NOT_OWN_PENDING_COMMENT =
  * one on another pull request.
  */
 const ownPendingComment = /* @__PURE__ */ Effect.fn("web/ownPendingComment")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   commentId: string,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
+): Effect.fn.Return<void, GitHubWriteFailure> {
   const read = yield* githubWrite(
-    token,
+    bearer,
     REVIEW_COMMENT_QUERY,
     { id: commentId },
     ReviewCommentSchema,
@@ -744,13 +690,13 @@ const DELETE_REVIEW_COMMENT_MUTATION = `mutation($id: ID!) {
 
 /** A comment of the member's own pending review on the pull request given new words, on their token, once it is held to being theirs (`ownPendingComment`). */
 export const editPendingComment = /* @__PURE__ */ Effect.fn("web/editPendingComment")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   comment: { readonly commentId: string; readonly body: string },
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
-  yield* ownPendingComment(token, pullRequestId, comment.commentId);
+): Effect.fn.Return<void, GitHubWriteFailure> {
+  yield* ownPendingComment(bearer, pullRequestId, comment.commentId);
   yield* githubWrite(
-    token,
+    bearer,
     EDIT_REVIEW_COMMENT_MUTATION,
     { id: comment.commentId, body: comment.body },
     Schema.Unknown,
@@ -760,12 +706,12 @@ export const editPendingComment = /* @__PURE__ */ Effect.fn("web/editPendingComm
 /** A comment of the member's own pending review on the pull request taken out of it, on their token, once it is held to being theirs (`ownPendingComment`). */
 export const deletePendingComment = /* @__PURE__ */ Effect.fn("web/deletePendingComment")(
   function* (
-    token: Redacted.Redacted,
+    bearer: GitHubBearer,
     pullRequestId: string,
     commentId: string,
-  ): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
-    yield* ownPendingComment(token, pullRequestId, commentId);
-    yield* githubWrite(token, DELETE_REVIEW_COMMENT_MUTATION, { id: commentId }, Schema.Unknown);
+  ): Effect.fn.Return<void, GitHubWriteFailure> {
+    yield* ownPendingComment(bearer, pullRequestId, commentId);
+    yield* githubWrite(bearer, DELETE_REVIEW_COMMENT_MUTATION, { id: commentId }, Schema.Unknown);
   },
 );
 
@@ -779,12 +725,12 @@ const REOPEN_MUTATION = `mutation($id: ID!) {
 
 /** The pull request closed without merging, or opened again where `open` asks, on the member's token. */
 export const setPullRequestOpen = /* @__PURE__ */ Effect.fn("web/setPullRequestOpen")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   open: boolean,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
+): Effect.fn.Return<void, GitHubWriteFailure> {
   yield* githubWrite(
-    token,
+    bearer,
     open ? REOPEN_MUTATION : CLOSE_MUTATION,
     { id: pullRequestId },
     Schema.Unknown,
@@ -797,11 +743,11 @@ const TITLE_MUTATION = `mutation($id: ID!, $title: String!) {
 
 /** The pull request's title changed to the one given, on the member's token. */
 export const setPullRequestTitle = /* @__PURE__ */ Effect.fn("web/setPullRequestTitle")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   title: string,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
-  yield* githubWrite(token, TITLE_MUTATION, { id: pullRequestId, title }, Schema.Unknown);
+): Effect.fn.Return<void, GitHubWriteFailure> {
+  yield* githubWrite(bearer, TITLE_MUTATION, { id: pullRequestId, title }, Schema.Unknown);
 });
 
 const DESCRIPTION_QUERY = `query($id: ID!) {
@@ -842,12 +788,12 @@ export interface DescriptionEdit {
  */
 export const setPullRequestDescription = /* @__PURE__ */ Effect.fn("web/setPullRequestDescription")(
   function* (
-    token: Redacted.Redacted,
+    bearer: GitHubBearer,
     pullRequestId: string,
     edit: DescriptionEdit,
-  ): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
+  ): Effect.fn.Return<void, GitHubWriteFailure> {
     const read = yield* githubWrite(
-      token,
+      bearer,
       DESCRIPTION_QUERY,
       { id: pullRequestId },
       DescriptionSchema,
@@ -863,7 +809,7 @@ export const setPullRequestDescription = /* @__PURE__ */ Effect.fn("web/setPullR
     }
 
     yield* githubWrite(
-      token,
+      bearer,
       DESCRIPTION_MUTATION,
       { id: pullRequestId, body: edit.body },
       Schema.Unknown,
@@ -912,14 +858,14 @@ const REMOVE_REACTION_MUTATION = `mutation($id: ID!, $content: ReactionContent!)
  * reaction in GitHub's GraphQL words (`ReactionContent`).
  */
 export const reactOnPullRequest = /* @__PURE__ */ Effect.fn("web/reactOnPullRequest")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   reaction: { readonly subject: string; readonly content: string; readonly add: boolean },
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
+): Effect.fn.Return<void, GitHubWriteFailure> {
   const { subject, content, add } = reaction;
 
   const read = yield* githubWrite(
-    token,
+    bearer,
     SUBJECT_PULL_REQUEST_QUERY,
     { id: subject },
     SubjectPullRequestSchema,
@@ -931,7 +877,7 @@ export const reactOnPullRequest = /* @__PURE__ */ Effect.fn("web/reactOnPullRequ
 
   if (on !== pullRequestId) return yield* refusalOf([NOT_THIS_SUBJECT]);
   yield* githubWrite(
-    token,
+    bearer,
     add ? ADD_REACTION_MUTATION : REMOVE_REACTION_MUTATION,
     { id: subject, content },
     Schema.Unknown,
@@ -1015,12 +961,12 @@ export interface TaskTickRequest {
  * on GitHub's own page.
  */
 export const tickTask = /* @__PURE__ */ Effect.fn("web/tickTask")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   tick: TaskTickRequest,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
+): Effect.fn.Return<void, GitHubWriteFailure> {
   const read = yield* githubWrite(
-    token,
+    bearer,
     TICK_SUBJECT_QUERY,
     { id: tick.subject },
     TickSubjectSchema,
@@ -1039,7 +985,7 @@ export const tickTask = /* @__PURE__ */ Effect.fn("web/tickTask")(function* (
   if (ticked.kind === TASK_TICK.CHANGED) return yield* refusalOf([TASK_GONE]);
 
   if (ticked.kind === TASK_TICK.ALREADY) return;
-  yield* githubWrite(token, mutation, { id: tick.subject, body: ticked.body }, Schema.Unknown);
+  yield* githubWrite(bearer, mutation, { id: tick.subject, body: ticked.body }, Schema.Unknown);
 });
 
 const MARK_VIEWED_MUTATION = `mutation($id: ID!, $path: String!) {
@@ -1052,13 +998,13 @@ const UNMARK_VIEWED_MUTATION = `mutation($id: ID!, $path: String!) {
 
 /** One of the pull request's files marked viewed, or unmarked where `viewed` is false, for the member alone, on their token. */
 export const setFileViewed = /* @__PURE__ */ Effect.fn("web/setFileViewed")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   pullRequestId: string,
   path: string,
   viewed: boolean,
-): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
+): Effect.fn.Return<void, GitHubWriteFailure> {
   yield* githubWrite(
-    token,
+    bearer,
     viewed ? MARK_VIEWED_MUTATION : UNMARK_VIEWED_MUTATION,
     { id: pullRequestId, path },
     Schema.Unknown,
@@ -1131,17 +1077,17 @@ export interface FileViewed {
  */
 export const pullRequestViewedStates = /* @__PURE__ */ Effect.fn("web/pullRequestViewedStates")(
   function* (
-    token: Redacted.Redacted,
+    bearer: GitHubBearer,
     fullName: string,
     number: number,
-  ): Effect.fn.Return<readonly FileViewed[], GitHubWriteFailure, HttpClient.HttpClient> {
+  ): Effect.fn.Return<readonly FileViewed[], GitHubWriteFailure> {
     const [owner = "", name = ""] = fullName.split("/");
     const files: FileViewed[] = [];
     let after: string | null = null;
 
     while (files.length < PULL_REQUEST_WRITE_BOUNDS.MAX_VIEWED_FILES) {
       const page: typeof ViewedPageSchema.Type = yield* githubWrite(
-        token,
+        bearer,
         VIEWED_QUERY,
         { owner, name, number, after },
         ViewedPageSchema,

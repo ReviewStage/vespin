@@ -31,15 +31,21 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import type { GitHubPullRequestSummary } from "@repo/features";
 import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
-import { Cache, Context, Data, Duration, Effect, Exit, Layer, Option } from "effect";
-import type { HttpClient } from "effect/http";
 import {
-  GITHUB_HTTP_STATUS,
-  GitHubApp,
-  GitHubUnavailable,
-  type GitHubWorkspaceReadFailure,
-  markRefusedToken,
-} from "./github-app.js";
+  Cache,
+  Clock,
+  Context,
+  Data,
+  Duration,
+  Effect,
+  Exit,
+  Layer,
+  Option,
+  Predicate,
+  Result,
+} from "effect";
+import type { HttpClient } from "effect/http";
+import { GitHubApp, type GitHubWorkspaceReadFailure, markRefusedToken } from "./github-app.js";
 import { logWorkspaceReadFailure } from "./github-refusal.js";
 import { pullRequestQueued } from "./pull-request-merging.js";
 import { pullRequestByNumber } from "./pull-requests.js";
@@ -63,20 +69,40 @@ export class PullRequestLinkKey extends Data.Class<{
   readonly number: number;
 }> {}
 
-/** How long a read's outcome is kept: an answer a minute, GitHub's refusal as long as it asked, anything else not at all. */
-function keptFor(exit: Exit.Exit<unknown, GitHubWorkspaceReadFailure>): Duration.Duration {
-  if (Exit.isSuccess(exit)) return KEPT_LINK.ANSWER_TTL;
-  const failure = Option.getOrUndefined(Exit.findErrorOption(exit));
+/** A link's read as kept: how it went, and how long it is kept from when it was read. */
+interface KeptRead {
+  readonly read: Result.Result<GitHubPullRequestSummary | null, GitHubWorkspaceReadFailure>;
+  readonly keptFor: Duration.Duration;
+}
 
-  if (!(failure instanceof GitHubUnavailable)) return Duration.zero;
+/**
+ * How long a read's outcome is kept, from `now`: an answer a minute,
+ * GitHub's refusal (`GitHubForbidden`, or `GitHubRateLimited` until when
+ * GitHub said it may be asked again, within the bound), anything else not
+ * at all.
+ */
+function keptFor(
+  read: Result.Result<unknown, GitHubWorkspaceReadFailure>,
+  now: number,
+): Duration.Duration {
+  if (Result.isSuccess(read)) return KEPT_LINK.ANSWER_TTL;
+  const failure = read.failure;
 
-  const refused =
-    failure.status === GITHUB_HTTP_STATUS.FORBIDDEN ||
-    failure.status === GITHUB_HTTP_STATUS.TOO_MANY_REQUESTS;
+  if (Predicate.isTagged(failure, "GitHubForbidden")) return KEPT_LINK.REFUSAL_HOLD;
 
-  if (!refused) return Duration.zero;
+  if (!Predicate.isTagged(failure, "GitHubRateLimited")) return Duration.zero;
+  const resetsAt = failure.resetsAt?.getTime();
 
-  return Duration.min(failure.retryAfter ?? KEPT_LINK.REFUSAL_HOLD, KEPT_LINK.REFUSAL_HOLD_MAX);
+  if (resetsAt === undefined) return KEPT_LINK.REFUSAL_HOLD;
+
+  return Duration.min(Duration.millis(Math.max(resetsAt - now, 0)), KEPT_LINK.REFUSAL_HOLD_MAX);
+}
+
+/** A kept read answered as it went. */
+function answered(kept: KeptRead) {
+  return Result.isSuccess(kept.read)
+    ? Effect.succeed(kept.read.success)
+    : Effect.fail(kept.read.failure);
 }
 
 /**
@@ -98,7 +124,7 @@ const pullRequestOfLink = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   if (Option.isNone(reached)) return null;
 
-  const found = yield* pullRequestByNumber(reached.value.token, key.repository, key.number).pipe(
+  const found = yield* pullRequestByNumber(reached.value.bearer, key.repository, key.number).pipe(
     markRefusedToken(reached.value.access),
   );
 
@@ -108,7 +134,7 @@ const pullRequestOfLink = /* @__PURE__ */ Effect.fnUntraced(function* (
   // Note that a queue read GitHub could not answer draws the link as open rather than failing it.
   const queued =
     pull.state === PULL_REQUEST_STATE.OPEN &&
-    (yield* pullRequestQueued(reached.value.token, key.repository, key.number).pipe(
+    (yield* pullRequestQueued(reached.value.bearer, key.repository, key.number).pipe(
       Effect.catch(() => Effect.succeed(false)),
     ));
 
@@ -150,17 +176,36 @@ export class PullRequestLinks extends Context.Service<
 export const pullRequestLinksLayer: Layer.Layer<PullRequestLinks> = Layer.effect(
   PullRequestLinks,
   Effect.gen(function* () {
+    // Note that a read's outcome is kept as a value, so how long it is kept is read on the clock as it lands.
     const kept = yield* Cache.makeWith(
       (key: PullRequestLinkKey) =>
-        pullRequestOfLink(key).pipe(Effect.tapError(logWorkspaceReadFailure)),
-      { capacity: KEPT_LINK.CAPACITY, requireServicesAt: "lookup", timeToLive: keptFor },
+        pullRequestOfLink(key).pipe(
+          Effect.tapError(logWorkspaceReadFailure),
+          Effect.result,
+          Effect.flatMap((read) =>
+            Effect.map(
+              Clock.currentTimeMillis,
+              (now): KeptRead => ({ read, keptFor: keptFor(read, now) }),
+            ),
+          ),
+        ),
+      {
+        capacity: KEPT_LINK.CAPACITY,
+        requireServicesAt: "lookup",
+        timeToLive: (exit) => (Exit.isSuccess(exit) ? exit.value.keptFor : Duration.zero),
+      },
     );
 
     return {
       read: (key) =>
         Effect.gen(function* () {
           // Note that a held refusal is answered before the reach is read, because a hold may outlast the reach `GitHubApp` keeps, and a refusal shows nothing of the pull request.
-          yield* Cache.getOption(kept, key);
+          const held = yield* Cache.getOption(kept, key);
+
+          if (Option.isSome(held) && Result.isFailure(held.value.read)) {
+            return yield* answered(held.value);
+          }
+
           const app = yield* GitHubApp;
 
           const reached = yield* app
@@ -169,7 +214,7 @@ export const pullRequestLinksLayer: Layer.Layer<PullRequestLinks> = Layer.effect
 
           if (Option.isNone(reached)) return null;
 
-          return yield* Cache.get(kept, key);
+          return yield* Effect.flatMap(Cache.get(kept, key), answered);
         }),
     };
   }),

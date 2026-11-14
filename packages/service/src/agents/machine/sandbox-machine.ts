@@ -261,7 +261,6 @@ const SANDBOX_LAYOUT: MachineLayout = {
   codexExecutable: CODEX_PIN.LINK,
   codexHome: CODEX_PIN.HOME,
   linesRead: true,
-  transcriptsKept: true,
   diskSessions: false,
   permissionModes: true,
 };
@@ -1295,7 +1294,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       const [, plan] = yield* Effect.all(
         [
           holds.exitCode === 0 ? Effect.void : cloneAgentRepository(agent, sandbox, read),
-          agentCheckoutPlan(target, agent, repositoryCredentialOf(read)).pipe(
+          agentCheckoutPlan(target, agent, read).pipe(
             Effect.mapError((failure) =>
               failure instanceof CheckoutRefused
                 ? failure
@@ -1341,7 +1340,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
               ? Effect.flatMap(ask.repositoryToken, (read) =>
                   read === undefined
                     ? Effect.die(new Error("an agent with a repository read none"))
-                    : agentCheckoutPlan(ask.target, agent, repositoryCredentialOf(read)),
+                    : agentCheckoutPlan(ask.target, agent, read),
                 )
               : Effect.succeed(undefined),
           ),

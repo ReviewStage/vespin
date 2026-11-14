@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { temporaryDirectory } from "@repo/runtime/testing";
 import { test } from "vitest";
 import {
   attachTerminal,
@@ -114,10 +118,20 @@ test("a run action's command is its pane's own process, handed to its shell as a
   assert.deepEqual(signaled.args.slice(-2), [`=terminal-${SHELL_A}:`, RUN_ACTION_SIGNAL.TERM]);
 });
 
-test("every command runs on a tmux server of its own, and none installs tmux or reaches for sudo", () => {
+test("every command runs on a tmux server of its own, even where it execs tmux, and none installs tmux or reaches for sudo", async (t) => {
+  // A stand-in tmux first on the path, which writes down how each call named it and holds no session.
+  const bin = await temporaryDirectory(t, "tmux-socket-");
+  const calls = path.join(bin, "calls");
+  writeFileSync(calls, "");
+  writeFileSync(path.join(bin, "tmux"), `#!/bin/sh\nprintf '%s\\n' "$*" >> "${calls}"\n`);
+  chmodSync(path.join(bin, "tmux"), 0o755);
+  const run = { actionId: SHELL_A, label: "Dev", command: "pnpm dev", environment: {} };
+
   const asks = [
     listTerminals(),
     startTerminal(SHELL_A, "dev server"),
+    startRunAction(SHELL_A, run),
+    rerunAction(SHELL_A, run),
     attachTerminal(SHELL_A),
     holdsTerminal(SHELL_A),
     signalRunAction(SHELL_A, RUN_ACTION_SIGNAL.KILL),
@@ -128,8 +142,17 @@ test("every command runs on a tmux server of its own, and none installs tmux or 
   for (const ask of asks) {
     assert.deepEqual(ask.args.slice(0, 1), ["-c"]);
     assert.doesNotMatch(scriptOf(ask) ?? "", /\b(sudo|apt-get|dnf)\b/);
-    assert.match(scriptOf(ask) ?? "", /tmux -L terminal "\$@"/);
+    // Note that a script may exit nonzero against a tmux holding no session; only how it called tmux is read.
+    spawnSync(ask.command, [...ask.args], {
+      env: { PATH: `${bin}:/usr/bin:/bin` },
+      stdio: "ignore",
+    });
   }
+
+  const named = readFileSync(calls, "utf8").trim().split("\n");
+  assert.ok(named.length >= asks.length);
+
+  for (const call of named) assert.match(call, /^-L terminal /);
 });
 
 test("a list reads back a tab's shells oldest first, named and marked running as they stand, and nothing else tmux holds", () => {

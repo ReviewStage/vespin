@@ -248,7 +248,7 @@ interface AttachedFilesHolder {
 }
 
 /** Where a box puts its files' markers: a place marked as files are handed, which puts in the files named and answers whether it did, nothing where the words take none now; and the markers of files that did not come taken back out. */
-export interface AttachedInWords {
+interface AttachedInWords {
   readonly place: () => ((names: readonly string[]) => boolean) | undefined;
   readonly remove: (names: readonly string[]) => void;
 }

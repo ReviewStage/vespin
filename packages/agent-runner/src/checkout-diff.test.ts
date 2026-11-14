@@ -104,7 +104,7 @@ function turnAcrossAMerge(upstreamAdds?: string) {
   return turnDiff(cwd, from);
 }
 
-/** The script's counts from the snapshot `from` to the working tree, read into the turn's summary, by path and lines added. */
+/** The script's counts from the snapshot `from` to the working tree, each file by its path and lines added, as git prints them a file to a field. */
 function turnDiff(cwd: string, from: string) {
   const format: CheckoutDiffFormat = CHECKOUT_DIFF_FORMAT.NUMSTAT;
 
@@ -114,9 +114,14 @@ function turnDiff(cwd: string, from: string) {
     env: { ...GIT_ENV, ...checkoutDiffEnv({ from, to: null }, format) },
   });
 
-  return (turnFilesSummary(output)?.files ?? []).map(
-    (file) => [file.path, file.additions] as const,
-  );
+  return output
+    .split("\0")
+    .filter((field) => field !== "")
+    .map((field) => {
+      const [added, , ...path] = field.split("\t");
+
+      return [path.join("\t"), Number(added)] as const;
+    });
 }
 
 test("the script's variables carry the two commits, the second empty for the working tree, and the patch unless the counts are asked", () => {
@@ -132,7 +137,7 @@ test("the script's variables carry the two commits, the second empty for the wor
   });
 });
 
-test("a turn's counts name each file where it stands, a tab in its name kept, a rename where it moved to and a binary file counting no lines, and total every file past the bound", () => {
+test("a turn's counts total its files, a rename counted once and a binary file counting no lines, and the lines added and removed over all of them", () => {
   const counts = [
     "3\t1\tsrc/kept.ts",
     "2\t0\tdocs/a\tb.md",
@@ -144,18 +149,7 @@ test("a turn's counts name each file where it stands, a tab in its name kept, a 
     "",
   ].join("\0");
 
-  const summary = turnFilesSummary(counts);
-
-  assert.deepEqual(summary?.files.slice(0, 4), [
-    { path: "src/kept.ts", additions: 3, deletions: 1 },
-    { path: "docs/a\tb.md", additions: 2, deletions: 0 },
-    { path: "src/new.ts", additions: 0, deletions: 0 },
-    { path: "logo.png", additions: 0, deletions: 0 },
-  ]);
-  assert.deepEqual(
-    [summary?.files.length, summary?.total, summary?.additions, summary?.deletions],
-    [50, 64, 65, 1],
-  );
+  assert.deepEqual(turnFilesSummary(counts), { total: 64, additions: 65, deletions: 1 });
   assert.equal(turnFilesSummary(""), undefined);
 });
 

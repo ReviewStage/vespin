@@ -156,6 +156,10 @@ const REFUSAL_ROWS: Readonly<Record<keyof typeof WORKSPACE_ACTS, RefusalRow>> = 
     refusal: "Could not read that workspace's merge queues on this system.",
     payload: WORKSPACE,
   },
+  WORKSPACE_MACHINES_READ: {
+    refusal: "Could not read that workspace's machines on this system.",
+    payload: WORKSPACE,
+  },
   WORKSPACE_INSTALL_SCRIPT_PUT: {
     refusal: "Could not save that install script on this system.",
     payload: { ...WORKSPACE, script: "sudo apt-get install -y redis-server" },

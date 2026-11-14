@@ -106,7 +106,7 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
-      pullRequest: 127
+      pullRequest: "127"
 - extendedWaitUntil:
     visible: "Expire an invite after seven days.*"
     timeout: 30000
@@ -120,7 +120,7 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
-      pullRequest: 126
+      pullRequest: "126"
 - extendedWaitUntil:
     visible: "Queued #2"
     timeout: 30000

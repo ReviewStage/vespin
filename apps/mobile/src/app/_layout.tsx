@@ -3,11 +3,9 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
+import { BAR_TITLE, FailureNoticeProvider, KeepingProvider, useColors } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
-import { hide as hideSplash } from "expo-splash-screen";
-import { useEffect } from "react";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -19,12 +17,17 @@ import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
+import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
+import { VoiceCallProvider } from "../voice-call.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
+
+// The splash stands until the host's first screen has drawn (`HostProvider`), rather than going with expo-router's own hide over a blank screen.
+holdSplash();
 
 /** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
 const SHORT_SHEET_DETENTS = [0.5, 1];
@@ -79,6 +82,7 @@ function GuardedScreens() {
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  const colors = useColors();
   const sheetPresentation = regular ? "formSheet" : "modal";
 
   // Note that a short sheet, a list to pick from or a few rows, opens at half height with its grabber in a compact window, and pulls up to full, as Maps' and Mail's short sheets do; a regular window's form sheet keeps its own size.
@@ -93,7 +97,15 @@ function GuardedScreens() {
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
-      <Stack screenOptions={{ headerShown: false }}>
+      {/* Note that every sheet's bar takes the ink here as its default, so a sheet that sets no ink of its own never stands its title in the system's black on the dark ground; a sheet's own options still win, key by key. */}
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          headerTintColor: colors.TEXT,
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+          headerShadowVisible: false,
+        }}
+      >
         <Stack.Protected guard={signedIn && !updateNeeded}>
           <Stack.Screen name="index" />
           <Stack.Screen name="(tabs)" />
@@ -110,7 +122,11 @@ function GuardedScreens() {
             name="start-agent"
             options={{ presentation: sheetPresentation, title: "New agent" }}
           />
-          <Stack.Screen name="agent-model" options={{ ...shortSheet, title: "Options" }} />
+          {/* Note that Options opens whole rather than as a short sheet, since its rows run past half the screen and half height cut Ask for approval mid-row. */}
+          <Stack.Screen
+            name="agent-model"
+            options={{ presentation: sheetPresentation, title: "Options" }}
+          />
           <Stack.Screen name="agent-ports" options={{ ...shortSheet, title: "Ports" }} />
           <Stack.Screen
             name="task-relation"
@@ -147,21 +163,14 @@ function KeptScreens() {
   );
 }
 
-/**
- * The root, with the splash taken down once it first draws. Note that
- * expo-router takes the splash down once a launch, a frame after its
- * navigation is ready, and that one try can be lost (its frame canceled, or
- * the native splash not standing yet), which leaves the splash over every
- * screen for the whole launch while the app answers under it. So the root
- * takes it down as well; a hide with no splash standing does nothing.
- */
+/** The root: the host, the one notice of a write that did not go, the voice call, which outlives every screen, and the screens under them. */
 export default function RootLayout() {
-  useEffect(() => hideSplash(), []);
-
   return (
     <HostProvider>
       <FailureNoticeProvider>
-        <KeptScreens />
+        <VoiceCallProvider>
+          <KeptScreens />
+        </VoiceCallProvider>
       </FailureNoticeProvider>
     </HostProvider>
   );

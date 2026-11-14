@@ -5,11 +5,7 @@ import { wordsWithoutMarkers } from "@repo/features/file-marker";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import {
-  TASK_CREATE_RELATION_KIND,
-  type TaskCreateRelation,
-  type TaskCreateRelationKind,
-} from "@repo/features/task-wire";
+import { TASK_CREATE_RELATION_KIND, type TaskCreateRelationKind } from "@repo/features/task-wire";
 import { workspaceReaches } from "@repo/features/tasks-model";
 import { TERM } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
@@ -30,6 +26,7 @@ import { useAgentDefault } from "../account-choices.js";
 import { appPlatform } from "../app-platform.js";
 import {
   DRAFT_PLACE,
+  type Draft,
   type DraftPlace,
   EMPTY_DRAFT,
   useDraft,
@@ -58,7 +55,7 @@ import {
   treeRelationOf,
 } from "./new-task-relation.js";
 import { NoRepositoriesBanner } from "./no-repositories-banner.js";
-import { putBackRefused } from "./refused-send.js";
+import { heldUpdateOver, putBackRefused } from "./refused-send.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
 import { keptSkills } from "./repository-skills.js";
 import { NewTaskRunsOnChip, newTaskRunsOn, useNewTaskRunsOn } from "./runs-on.js";
@@ -67,7 +64,7 @@ import type { SkillWithFile } from "./skill-ref.js";
 import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
 import { MODELS_READ } from "./use-agents.js";
-import type { NewTaskAgent, NewTaskRefusal, NewTaskStart } from "./use-new-task.js";
+import type { AgentAsk, NewTaskPress, NewTaskRefusal, NewTaskStart } from "./use-new-task.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /**
@@ -251,23 +248,6 @@ const NO_DEVICES: readonly MacOffer[] = [];
  * because a second time would lay its words in again ahead of themselves.
  */
 const PUT_BACK = new WeakSet<NewTaskRefusal>();
-
-/** What one Agent-mode press asked beside its key: the task's repository and workspace, and where its agents run, and the agent's words, files, and the model picked, none for the account's default. */
-interface AgentAsk {
-  readonly repository: string | null;
-  readonly workspaceId: string | undefined;
-  /** The device the task's agents run on, by its id; none for the cloud. */
-  readonly deviceId?: string | undefined;
-  /** The relations the task starts in, in the order they were picked. */
-  readonly relations: readonly TaskCreateRelation[];
-  readonly agent: Omit<NewTaskAgent, "idempotencyKey">;
-}
-
-/** One Agent-mode press: what it asked, and the key it carried. */
-export interface NewTaskPress {
-  readonly ask: AgentAsk;
-  readonly key: string;
-}
 
 /** Whether two presses ask the same: the same task, device, relations in the same order, words, files in the same order, model, servers switched off, and permission mode. */
 function sameAsk(a: AgentAsk, b: AgentAsk): boolean {
@@ -453,12 +433,9 @@ export function NewTaskComposer({
     putBackRefused({
       went: { text: kept, attachments: press.ask.agent.attachments },
       most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
-      update: (next) =>
-        writer.update(newTaskPlace(workspaceNow.current, purpose), (now) => {
-          const joined = next(now);
-
-          return joined === undefined ? now : { ...now, ...joined };
-        }),
+      update: heldUpdateOver<Draft>((next) =>
+        writer.update(newTaskPlace(workspaceNow.current, purpose), next),
+      ),
     });
   }, []);
   // The last agent press's key and what it asked, until a start lands.
@@ -730,17 +707,25 @@ export function NewTaskComposer({
   );
 
   const composer: AgentComposerControl = {
-    draft: words,
-    // Note that the words handed back as they stand, as the field echoes the words a refused card opens on, take no note down.
-    setDraft: (text) => {
-      if (text === words) return;
-      draft.update((was) => ({ ...was, text }));
+    held: draft.draft,
+    updateHeld: (next) => {
+      let edited = false;
+      // Note that the words are told against the draft as the change lands, never a render's copy, so an echo of the
+      // words it holds, as the field's of a refused card's, is no edit.
+      heldUpdateOver<Draft>((move) =>
+        draft.update((was) => {
+          const moved = move(was);
+          edited = moved.text !== was.text;
+
+          return moved;
+        }),
+      )(next);
+
+      // An edit of the words lets a refusal go.
+      if (!edited) return;
       setHanded(undefined);
       starts.clear();
     },
-    attachments,
-    setAttachments: (next) =>
-      draft.update((was) => ({ ...was, attachments: next(was.attachments) })),
     sending: starting,
     // Note that a read of the devices that failed is said over any note before it, and read again by its Retry.
     note: devicesFailed ? DEVICES_UNREAD : note,

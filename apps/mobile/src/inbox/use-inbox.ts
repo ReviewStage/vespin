@@ -43,6 +43,7 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
+  answerKeeper,
   INBOX_FEED,
   type InboxFeed,
   inboxFeedHolds,
@@ -176,6 +177,8 @@ export function useInboxListing(view: {
   });
 
   const { show, search, chosen } = view;
+  // Note that the last listing is kept where the new one lists the same rows, because a new array resets every row its list holds (`RowForEach`), as a pick in a split view's list would on each press.
+  const [keep] = useState(answerKeeper<InboxListing>);
 
   return useMemo(() => {
     const standing = inboxAtNow(groups, Date.now());
@@ -190,8 +193,8 @@ export function useInboxListing(view: {
 
     const unread = listed.filter(({ item }) => isUnread(item)).map(({ item }) => item.id);
 
-    return { listed, feed, counts: inboxCounts(standing, readerId, MINE), unread, readerId };
-  }, [groups, readerId, feed, show, search, chosen]);
+    return keep({ listed, feed, counts: inboxCounts(standing, readerId, MINE), unread, readerId });
+  }, [keep, groups, readerId, feed, show, search, chosen]);
 }
 
 /**
@@ -272,7 +275,7 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
 
   const { home, again } = useItemHome(id, lookedFor);
   const found = home === undefined || Predicate.isString(home) ? undefined : home;
-  const homed = useHomeGroups(found?.planId);
+  const homed = useHomeGroups(found?.taskId);
   const outside = useSendsDrawn(homed.groups);
   const listed = inFeed ?? (lookedFor ? listedIn(outside, id) : undefined);
 
@@ -404,14 +407,14 @@ const NO_HOME_GROUPS: readonly InboxGroup[] = [];
 function useHomeGroups(taskId: string | undefined): HomeGroups {
   const acts = useHostActs();
   useLiveFollow(taskId, (id) =>
-    acts[ACT_KIND.AGENTS_INBOX_FOLLOW]({ kind: INBOX_SCOPE_KIND.PLAN, id }),
+    acts[ACT_KIND.AGENTS_INBOX_FOLLOW]({ kind: INBOX_SCOPE_KIND.TASK, id }),
   );
 
   const heldRead = useCallback(
     (state: AppStateSnapshot) =>
       taskId === undefined
         ? undefined
-        : state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.PLAN][taskId],
+        : state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.TASK][taskId],
     [taskId],
   );
 
@@ -445,7 +448,7 @@ function useHomeGroups(taskId: string | undefined): HomeGroups {
     read: stands,
     again: () => {
       if (taskId === undefined) return;
-      acts[ACT_KIND.AGENTS_INBOX_RETRY]({ kind: INBOX_SCOPE_KIND.PLAN, id: taskId }).catch(
+      acts[ACT_KIND.AGENTS_INBOX_RETRY]({ kind: INBOX_SCOPE_KIND.TASK, id: taskId }).catch(
         refused("Reading the thread's task inbox again"),
       );
     },

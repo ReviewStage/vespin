@@ -1,4 +1,6 @@
+import { signedInAccountId } from "@repo/credentials/snapshot";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
+import { machineLetsAgents } from "@repo/features/machine-live";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   FOLLOWING_FACES,
@@ -11,7 +13,6 @@ import {
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_CALL_FAILURE, type TasksFollowersAnswer } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
 import {
   ChipPopover,
   type FootRow,
@@ -19,7 +20,9 @@ import {
   HoverCardList,
   HoverCardNote,
   HoverCardRow,
+  MENU_ROW_WHY,
   type MenuRow,
+  POPOVER_WIDTH,
   STATUS_TONE,
   TEXT_ELEMENT,
   TEXT_TONE,
@@ -29,38 +32,46 @@ import {
 } from "@repo/ui";
 import { type Actor, actorName, personActor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
+import { ReplayWords } from "@repo/ui/session-replay-marks";
 import type { TaskFollowerWire } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { type Unreached, unreachedAs } from "../act.js";
+import { useState } from "react";
+import { askAct, type Unreached, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorHead, ActorMark, ActorStack } from "../actor-ref.js";
-import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
+import { machinesQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { memberRows } from "../member-rows.js";
+import { QUERY_ROOT } from "../query-keys.js";
 import { useToast } from "../toast.js";
-import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
-import { useWorkspaceExperiment } from "../workspace-experiments.js";
+import { appStateQuery, selectAccount, selectFixtureStaged } from "../use-app-state.js";
 import { DeviceStandingGlyph, STANDING_WORDS } from "./runs-on.js";
 
 /**
  * following-chip.tsx -- the task page's Following chip: the faces of the task's followers, and the popover listing them, where the reader follows or stops and lets the task's agents use their machines or not.
  *
- * The chip stands after the assignee's while the task's workspace has
- * Following on, its faces the app's face pile (`ActorStack`), four and then
+ * The chip stands after the assignee's, its faces the app's face pile (`ActorStack`), four and then
  * a count whose card names the rest, its words Following while the reader
- * follows the task and Follow while they do not. Its popover is one list
- * with no title, the reader first as You: each row a face, a name, a muted
- * Assignee on the assignee, and a laptop at its end where the task's agents
- * may use that person's machines, nothing where they may not. A press on a
- * row changes nothing; each hangs the person's card: who they are, Assignee
- * or Following, the reader's own machines each with the Runs on menu's dot
- * and its words for where the machine stands, and what the task's agents may do on their
- * machines. Pinned under the list stand the reader's own switch and
- * Unfollow, which the assignee may not press, or Follow alone where the
- * reader does not follow. A write is drawn on the task at once
- * (`compose-tasks.ts`), and a refusal said in a toast.
- *
- * Note that a teammate's machines are not listed on their card, since the
- * window reads only the reader's own; machine routing reads them later.
+ * follows the task and Follow while they do not. Its popover is the
+ * followers' checklist, as the reviewer picker is a pull request's: a
+ * search field, then one list with no title, the reader first as You, each
+ * follower checked, with a face, a name, a muted Assignee on the assignee,
+ * and a laptop at its end where the task's agents may use that person's
+ * machines. A press on a row adds or removes that person, the reader
+ * themself among them, and the popover stays; the assignee stands checked
+ * and dimmed, since they follow while assigned. Anyone the visit unchecked
+ * stays listed, unchecked, in their place until the popover closes, so a
+ * slip is one more press away from undone. Every other member of the
+ * workspace is listed only once something is searched, by name or email,
+ * so the list says who follows until the reader looks for someone to add.
+ * Each row hangs the person's card: a follower's says Assignee or
+ * Following, their machines each with the Runs on menu's dot and words for
+ * whether it listened for commands lately, read of the service as a card
+ * shows (`TASKS_FOLLOWER_MACHINES`), and what the task's agents may do on
+ * their machines. Pinned under the list stands the reader's own switch,
+ * or Follow alone where they do not follow. A write is drawn on the task at
+ * once (`compose-tasks.ts`), and a refusal said in a toast. Where the task
+ * takes no change, the popover lists the followers alone.
  */
 
 /** A follower write's answer as the window hears it: the host's, or one that never arrived. */
@@ -75,8 +86,8 @@ const MACHINES_ON_HEARD = "Agents here may use their machines";
 /** What the chip names someone the members read does not, while it is unread or failed. */
 const UNNAMED = "Someone";
 
-/** The reader's follower writes on one task, each refusal said in a toast; a fixture run's go nowhere. */
-function useFollowerWrites(taskId: string) {
+/** The reader's follower writes on one task, each refusal said in a toast; a fixture run's go nowhere. The task's menu follows and unfollows through it too. */
+export function useFollowerWrites(taskId: string) {
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const toast = useToast();
   const { mutateAsync: sendFollow } = useMutation(actMutation(ACT_KIND.TASKS_FOLLOW));
@@ -85,6 +96,9 @@ function useFollowerWrites(taskId: string) {
   const { mutateAsync: sendMachines } = useMutation(
     actMutation(ACT_KIND.TASKS_SET_FOLLOWER_MACHINES),
   );
+
+  const { mutateAsync: sendAdd } = useMutation(actMutation(ACT_KIND.TASKS_ADD_FOLLOWER));
+  const { mutateAsync: sendRemove } = useMutation(actMutation(ACT_KIND.TASKS_REMOVE_FOLLOWER));
 
   const asked = (sent: () => Promise<TasksFollowersAnswer>) => {
     if (staged) return;
@@ -105,6 +119,8 @@ function useFollowerWrites(taskId: string) {
     follow: () => asked(() => sendFollow({ taskId })),
     unfollow: () => asked(() => sendUnfollow({ taskId })),
     setMachines: (machines: boolean) => asked(() => sendMachines({ taskId, machines })),
+    add: (userId: string) => asked(() => sendAdd({ taskId, userId })),
+    remove: (userId: string) => asked(() => sendRemove({ taskId, userId })),
   };
 }
 
@@ -124,19 +140,37 @@ function useFollowerActors(
   });
 }
 
-/** A follower's card: who they are and Assignee or Following, the reader's own machines with where each stands, and what the task's agents may do on their machines. */
+/** How long a follower's machines read stands before a card shown again asks anew, since where each stands moves by the minute. */
+const MACHINES_FRESH_MS = 15_000;
+
+/** The task's followers' machines, read as a card shows and again once stale; none before they land, or where the read failed. */
+function useFollowerMachines(taskId: string) {
+  const answer = useQuery({
+    queryKey: [QUERY_ROOT.FOLLOWER_MACHINES, taskId],
+    queryFn: () => askAct(ACT_KIND.TASKS_FOLLOWER_MACHINES, { taskId }),
+    staleTime: MACHINES_FRESH_MS,
+    retry: false,
+  }).data;
+
+  return answer === undefined || "failure" in answer ? undefined : answer.machines;
+}
+
+/** A follower's card: who they are and Assignee or Following, their machines with whether each listened for commands lately, and what the task's agents may do on their machines. */
 function FollowerCard({
+  taskId,
   follower,
   actor,
   you,
-  book,
 }: {
+  taskId: string;
   follower: TaskFollowerWire;
   actor: Actor;
   you: boolean;
-  book: PresenceBook;
 }): React.JSX.Element {
-  const machines = you ? [...book.hosts.values()] : [];
+  const machines = (useFollowerMachines(taskId) ?? []).filter(
+    (machine) => machine.owner.userId === follower.userId,
+  );
+
   const whose = you ? "your" : actorName(actor, { possessive: true });
 
   return (
@@ -144,15 +178,17 @@ function FollowerCard({
       <ActorHead actor={actor} sub={followerRoleWords(follower)} />
       {machines.length === 0 ? null : (
         <HoverCardList label="Machines">
-          {machines.map((host) => {
+          {machines.map((machine) => {
             // Note that the card names a machine's standing as the Runs on menu does, its words matching its dot.
-            const standing = presenceStanding(book, host.id) ?? DEVICE_STANDING.CHECKING;
+            const standing = machine.online ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE;
 
             return (
-              <li key={host.id}>
+              <li key={machine.id}>
                 <HoverCardRow
-                  glyph={<DeviceStandingGlyph device={host} standing={standing} hinted={false} />}
-                  label={host.name}
+                  glyph={
+                    <DeviceStandingGlyph device={undefined} standing={standing} hinted={false} />
+                  }
+                  label={<ReplayWords masked>{machine.name}</ReplayWords>}
                   end={STANDING_WORDS[standing]}
                 />
               </li>
@@ -184,10 +220,11 @@ function RowEnd({ follower }: { follower: TaskFollowerWire }): React.JSX.Element
   );
 }
 
-/** The pinned rows: the reader's switch and Unfollow, the assignee's dimmed, or Follow alone where they do not follow. */
+/** The pinned row: the reader's own switch while they follow, or Follow where they do not. */
 function footRows(
   reader: TaskFollowerWire | undefined,
   writes: ReturnType<typeof useFollowerWrites>,
+  noneSetUp: boolean,
 ): readonly FootRow[] {
   if (reader === undefined) {
     return [
@@ -205,21 +242,28 @@ function footRows(
       id: "machines",
       label: FOLLOWING_WORDS.MACHINES,
       icon: <GLYPH.DESKTOP aria-hidden="true" />,
+      // Note that the switch lets agents reach only machines that themselves allow them, so where none does it says so.
+      ...(noneSetUp ? { detail: FOLLOWING_WORDS.NONE_SET_UP } : undefined),
       toggle: { on: reader.machines, onToggle: () => writes.setMachines(!reader.machines) },
-    },
-    {
-      id: "unfollow",
-      label: FOLLOWING_WORDS.UNFOLLOW,
-      icon: <GLYPH.HIDE aria-hidden="true" />,
-      disabled: reader.assignee ? FOLLOWING_WORDS.ASSIGNEE_STAYS : undefined,
-      onPress: writes.unfollow,
     },
   ];
 }
 
 /**
- * The Following chip for a task, while its workspace has Following on and
- * the task carries its followers; nothing otherwise. Where the task takes no
+ * The people the list holds this visit, by account id: the followers, the
+ * reader first, until a press, and from the first press on the list as it
+ * then stood, each follower added since after it, so a press moves no row
+ * and someone unchecked keeps their place.
+ */
+function listedIds(followers: readonly string[], visit: readonly string[] | undefined): string[] {
+  if (visit === undefined) return [...followers];
+
+  return [...visit, ...followers.filter((id) => !visit.includes(id))];
+}
+
+/**
+ * The Following chip for a task, while the task carries its followers;
+ * nothing otherwise. Where the task takes no
  * change (`editable` false) its popover lists the followers alone.
  */
 export function FollowingChip({
@@ -229,13 +273,13 @@ export function FollowingChip({
   task: Pick<TaskSummary, "id" | "workspaceId" | "assignee" | "followers">;
   editable: boolean;
 }): React.JSX.Element | null {
-  // Note that a task carries no followers while its workspace has Following off, so nothing is read for one.
+  // Note that a task read before its followers carries none, so nothing is read for one.
   if (task.followers === undefined) return null;
 
   return <FollowingShown task={task} followers={task.followers} editable={editable} />;
 }
 
-/** The chip for a task that carries its followers, while the workspace has Following on. */
+/** The chip for a task that carries its followers. */
 function FollowingShown({
   task,
   followers,
@@ -245,28 +289,98 @@ function FollowingShown({
   followers: readonly TaskFollowerWire[];
   editable: boolean;
 }): React.JSX.Element | null {
-  const on = useWorkspaceExperiment(task.workspaceId, EXPERIMENT.FOLLOWING);
-  const { readerId } = useMemberDirectory();
+  const { members, readerId } = useMemberDirectory();
   const view = followersView(followers, readerId);
   const actors = useFollowerActors(view.followers, task.assignee);
-  const book = useDevicePresence(on && view.reader !== undefined);
+  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const machines = useQuery(machinesQuery(view.reader !== undefined ? accountId : undefined));
+  // Note that nothing is said until the machines are read, so a switch never flashes None set up.
+  const noneSetUp = machines.data !== undefined && !machines.data.some(machineLetsAgents);
   const writes = useFollowerWrites(task.id);
+  // The list as the visit's first press found it, which holds its rows in place until the popover closes.
+  const [visit, setVisit] = useState<readonly string[] | undefined>(undefined);
 
-  if (!on) return null;
+  const followerRows = new Map<string, MenuRow>(
+    view.followers.map((follower, index) => {
+      const actor = actors[index] ?? personActor(undefined, undefined, undefined);
+      const you = follower === view.reader;
 
-  const rows: readonly MenuRow[] = view.followers.map((follower, index) => {
-    const actor = actors[index] ?? personActor(undefined, undefined, undefined);
-    const you = follower === view.reader;
+      return [
+        follower.userId,
+        {
+          id: follower.userId,
+          label: you ? FOLLOWING_WORDS.YOU : actorName(actor),
+          icon: <ActorMark actor={actor} size={ACTOR_SIZE.INLINE} />,
+          end: <RowEnd follower={follower} />,
+          card: <FollowerCard taskId={task.id} follower={follower} actor={actor} you={you} />,
+          // Note that the assignee's row says why by its own Assignee mark, so the dimmed row prints no second one.
+          ...(follower.assignee && editable
+            ? { disabled: FOLLOWING_WORDS.ASSIGNEE_STAYS, why: MENU_ROW_WHY.MARK }
+            : undefined),
+          replayMasked: !you,
+        },
+      ];
+    }),
+  );
 
-    return {
-      id: follower.userId,
-      label: you ? FOLLOWING_WORDS.YOU : actorName(actor),
-      icon: <ActorMark actor={actor} size={ACTOR_SIZE.INLINE} />,
-      end: <RowEnd follower={follower} />,
-      card: <FollowerCard follower={follower} actor={actor} you={you} book={book} />,
-      replayMasked: !you,
-    };
-  });
+  const memberRowsById = new Map<string, MenuRow>(
+    memberRows(members, readerId).map((row) => [
+      row.member.userId,
+      {
+        id: row.member.userId,
+        label: row.actor.you ? FOLLOWING_WORDS.YOU : row.label,
+        icon: row.icon,
+        terms: row.terms,
+        card: row.card,
+        replayMasked: !row.actor.you,
+      },
+    ]),
+  );
+
+  const listed = editable
+    ? listedIds(
+        view.followers.map((follower) => follower.userId),
+        visit,
+      )
+    : view.followers.map((follower) => follower.userId);
+
+  const rows: readonly MenuRow[] = [
+    ...listed.flatMap((id) => {
+      const row = followerRows.get(id) ?? memberRowsById.get(id);
+
+      return row === undefined ? [] : [row];
+    }),
+    // Note that everyone else is found by a search alone, so the list says who follows until the reader looks for someone.
+    ...(editable
+      ? [...memberRowsById.values()].flatMap((row) =>
+          listed.includes(row.id) ? [] : [{ ...row, searchOnly: true }],
+        )
+      : []),
+  ];
+
+  const following = new Set(view.followers.map((follower) => follower.userId));
+
+  const toggle = (userId: string) => {
+    setVisit(listed.includes(userId) ? listed : [...listed, userId]);
+
+    if (userId === readerId) return following.has(userId) ? writes.unfollow() : writes.follow();
+
+    return following.has(userId) ? writes.remove(userId) : writes.add(userId);
+  };
+
+  const menu = editable
+    ? {
+        rows,
+        checked: following,
+        placeholder: FOLLOWING_WORDS.SEARCH,
+        noMatch: FOLLOWING_WORDS.NO_MATCH,
+        onPick: toggle,
+        onClosed: () => setVisit(undefined),
+        foot: footRows(view.reader, writes, noneSetUp),
+        // Note that the switch's words and None set up together need more room than the names above them.
+        ...(noneSetUp ? { width: POPOVER_WIDTH.WIDE } : undefined),
+      }
+    : { rows, noMatch: FOLLOWING_WORDS.NO_FOLLOWERS };
 
   return (
     <ChipPopover
@@ -284,11 +398,7 @@ function FollowingShown({
         )
       }
       words={view.chipWords}
-      menu={{
-        rows,
-        noMatch: "No followers",
-        foot: editable ? footRows(view.reader, writes) : undefined,
-      }}
+      menu={menu}
     />
   );
 }

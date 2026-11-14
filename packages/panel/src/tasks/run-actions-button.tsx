@@ -15,7 +15,7 @@ import {
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
+import { HOST_CAPABILITY } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { Badge, PlayIcon, SplitButton, STATUS_TONE, useMenu } from "@repo/ui";
@@ -37,7 +37,6 @@ import {
 } from "../shortcut-target.js";
 import { showToast } from "../toast.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
-import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { localRunsQuery, runActionGlyph, shellsQuery } from "./run-action-shells.js";
 import type { HeldAction } from "./terminal-held.js";
 import { TERMINAL_KIND } from "./terminal-session.js";
@@ -46,8 +45,7 @@ import { listedAgentIn } from "./use-workspace-agents.js";
 /**
  * run-actions-button.tsx -- an agent's run actions: its repository's commands, kept in Settings › Cloud environment, each run when pressed, in a Terminal tab of a cloud agent's sandbox or a Local tab on the Mac a local agent runs on.
  *
- * Offered only where the agent's workspace has the Run actions experiment
- * on, its repository has run actions that may run where the agent does
+ * Offered only where the agent's repository has run actions that may run where the agent does
  * (`runActionsIn`), and the panel can reach where it runs: any panel for a
  * cloud agent, and for a local agent only the desktop app on the Mac it
  * runs on, whose host runs the action in the agent's worktree, as the
@@ -92,15 +90,14 @@ function sandboxSetupQuery(workspaceId: string, enabled: boolean) {
 
 /**
  * The run actions of the agent's repository, as the workspace keeps them,
- * where the experiment is on and `reached` says the panel reaches where the
+ * where `reached` says the panel reaches where the
  * agent runs; none otherwise, and while they are read, which `read` says
  * has ended.
  */
 function useRepositoryRunActions(agentId: string, reached: boolean) {
   const place = useRunPlace(agentId);
-  const on = useWorkspaceExperiment(place?.workspaceId, EXPERIMENT.RUN_ACTIONS);
   const repository = place?.repository ?? null;
-  const asks = on && reached && repository !== null && place !== undefined;
+  const asks = reached && repository !== null && place !== undefined;
   const setup = useQuery(sandboxSetupQuery(place?.workspaceId ?? "", asks)).data;
 
   const actions = asks ? repositoryRunActions(setup?.runActions, repository) : [];

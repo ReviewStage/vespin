@@ -1,5 +1,6 @@
 import { AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
 import { agentLastMovedAt } from "@repo/features/task-agents-model";
+import { PERSON_PAGE_TASKS } from "@repo/features/task-list-live";
 import { createdByOnly, TASK_ORDER, taskTime } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 
@@ -21,10 +22,29 @@ import type { TaskSummary } from "@repo/features/task-wire";
  * by the same agents (`agentStarter`), every agent of the task. Nothing here
  * is read of another workspace, nor of anyone's personal one, since the list
  * is the listed workspace's.
+ *
+ * The list may not hold every task of theirs, nor every agent, so each
+ * section counts what it holds and, past that, what the service counted
+ * beyond what the list held as it asked (`personCounts`): a section counts
+ * what it lists alone until the service answers, and whenever the service
+ * counted no more than the list held.
  */
 
 /** The most tasks the page lists before the rest are left to the sidebar's filter. */
-export const PERSON_TASKS_SHOWN = 5;
+export const PERSON_TASKS_SHOWN = PERSON_PAGE_TASKS;
+
+/** How many of a person's tasks are assigned to them, how many more they created, and how many agents they started, none archived. */
+export interface PersonCounts {
+  readonly assigned: number;
+  readonly created: number;
+  readonly agents: number;
+}
+
+/** How many of a person's tasks and agents the service counted, beside how many of them the list held as it asked (`personHeld`). */
+export interface PersonCounted {
+  readonly counts: PersonCounts;
+  readonly held: PersonCounts;
+}
 
 /** One of a person's agents, with the task it works on and when it last moved. */
 export interface PersonAgent {
@@ -63,7 +83,7 @@ function agentsOf(
   const byId = new Map(tasks.map((task) => [task.id, task]));
 
   return agents.flatMap((agent) => {
-    const task = byId.get(agent.planId);
+    const task = byId.get(agent.taskId);
 
     if (task === undefined || agent.archivedAt !== undefined) return [];
 
@@ -121,7 +141,7 @@ export function personRef(
 
   const listed = new Set(tasks.map((task) => task.id));
 
-  return agents?.find((agent) => listed.has(agent.planId) && agent.startedBy?.userId === userId)
+  return agents?.find((agent) => listed.has(agent.taskId) && agent.startedBy?.userId === userId)
     ?.startedBy;
 }
 
@@ -131,6 +151,31 @@ export function agentStarter(
   agentId: string,
 ): string | undefined {
   return agents?.find((agent) => agent.id === agentId)?.startedBy?.userId;
+}
+
+/** How many of each the page lists: its sections' tasks, and every agent of theirs, at work or not. */
+export function personHeld(page: PersonPage): PersonCounts {
+  return {
+    assigned: page.assigned.length,
+    created: page.created.length,
+    agents: page.working.length + page.agents.length,
+  };
+}
+
+/**
+ * How many each section counts: its own rows, Agents its agents not at
+ * work, and as many more as the service counted past what the list held as
+ * it asked, none while it has not answered.
+ */
+export function personCounts(page: PersonPage, counted: PersonCounted | undefined): PersonCounts {
+  const past = (key: keyof PersonCounts) =>
+    counted === undefined ? 0 : Math.max(0, counted.counts[key] - counted.held[key]);
+
+  return {
+    assigned: page.assigned.length + past("assigned"),
+    created: page.created.length + past("created"),
+    agents: page.agents.length + past("agents"),
+  };
 }
 
 /** Whether the page has nothing of the person's to list. */

@@ -21,7 +21,7 @@ import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/in
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { agentName, providerOf } from "@repo/features/model-label";
-import type { ModelChoice, ModelProvider, ModelsAnswer } from "@repo/features/models-wire";
+import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { HOST_LIVE } from "@repo/features/tasks-view";
 import { formatInstant } from "@repo/features/time-format";
@@ -214,11 +214,17 @@ export const selectPullRequestPublished = (state: AppStateSnapshot) =>
   state[LIVE_READ.PULL_REQUEST_PUBLISHED];
 
 export const selectMachineCommands = (state: AppStateSnapshot) => state.machineCommands;
+
+/** The device this Mac claims commands as for the account signed in; none before it joined for it, or where the platform runs no commands. */
+export const selectMachineCommandDevice = (state: AppStateSnapshot) =>
+  state.machineCommands.deviceId;
+
 export const selectNotifications = (state: AppStateSnapshot) => state.notifications;
 export const selectNetwork = (state: AppStateSnapshot) => state.network;
 export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionReplay;
 export const selectPortForwarding = (state: AppStateSnapshot) => state.portForwarding;
 export const selectMirrors = (state: AppStateSnapshot) => state.mirrors;
+export const selectVoiceCall = (state: AppStateSnapshot) => state.voiceCall;
 
 /** What a window shows may be behind for: this machine offline, the service not answering, or live updates catching up, the machine's own network first, since nothing else can be read without it. */
 export const LIVE_MARK = {
@@ -397,6 +403,27 @@ export function memoizedSelect<Inputs extends unknown[], A>(
 /** How deep `shareAppState` compares before it takes the new value whole, as Query's own `replaceEqualDeep` stops. */
 const SHARE_DEPTH = 500;
 
+/** The id an array's item goes by, where it is a plain object carrying one as a string. */
+function itemId<T>(item: T): string | undefined {
+  if (!isPlainObject(item)) return undefined;
+  const id = item["id"];
+
+  return Predicate.isString(id) ? id : undefined;
+}
+
+/** The items of `held` that go by an id, by it, so an item is laid over its own and not over whichever stood in its place. */
+function heldById<T>(held: readonly T[]): ReadonlyMap<string, T> {
+  const byId = new Map<string, T>();
+
+  for (const item of held) {
+    const id = itemId(item);
+
+    if (id !== undefined && !byId.has(id)) byId.set(id, item);
+  }
+
+  return byId;
+}
+
 /** Whether `value` is an array with no holes and no keys of its own beside its items. */
 function isPlainArray<T>(value: T): value is T & readonly unknown[] {
   return Array.isArray(value) && value.length === Object.keys(value).length;
@@ -431,6 +458,10 @@ function isPlainObject<T>(value: T): value is T & ReadonlyRecord<string, unknown
  * there). Answering `next`'s node keeps the next comparison
  * stopping at the first identical object. A node with any part kept from
  * `held` is still a copy, so a write's unchanged parts keep their identity.
+ * An array's items that carry an `id` are laid over the held item of the
+ * same id, so a thread landing at the Inbox's head, or a workspace's list
+ * standing in for another's, shares by identity rather than walking each
+ * row into its neighbor.
  */
 export function shareAppState<T>(held: T, next: T, depth = 0): T {
   if (held === next) return next;
@@ -448,14 +479,26 @@ export function shareAppState<T>(held: T, next: T, depth = 0): T {
   const nextKeys = array ? undefined : Object.keys(after);
   // SAFETY: `nextKeys` is absent only where `array` holds, so `next` is a plain array.
   const nextSize = nextKeys?.length ?? (next as readonly unknown[]).length;
+  let partners: ReadonlyMap<string, unknown> | undefined;
   const parts: unknown[] = [];
   let keptHeld = 0;
   let keptNext = 0;
 
   for (let at = 0; at < nextSize; at++) {
     const key = nextKeys?.[at] ?? at;
-    const heldItem = before[key];
     const nextItem = after[key];
+    const placed = before[key];
+    const id = !array || placed === nextItem ? undefined : itemId(nextItem);
+    // Note that the item at the same place is its partner wherever it goes by the same id, so a row edited in place builds no map, and a held row whose id repeats an earlier one's keeps its own partner.
+    const moved = id !== undefined && itemId(placed) !== id;
+
+    // Note that an item with an id is laid over the held item of that id, never the one that stood at its place, because a list a row joined or left at its head would otherwise lay every row over its neighbor and hold copies of all of them.
+    if (moved) {
+      // SAFETY: `id` is found only where `array` holds, so `held` is a plain array.
+      partners ??= heldById(held as readonly unknown[]);
+    }
+
+    const heldItem = moved ? partners?.get(id) : placed;
 
     // Note that a part that is the same, or no object on either side, needs no walk of its own.
     const shared =
@@ -465,7 +508,7 @@ export function shareAppState<T>(held: T, next: T, depth = 0): T {
 
     parts.push(shared);
 
-    if (shared === heldItem && (array ? at < heldSize : Object.hasOwn(before, key))) keptHeld++;
+    if (shared === placed && (array ? at < heldSize : Object.hasOwn(before, key))) keptHeld++;
 
     if (shared === nextItem) keptNext++;
   }
@@ -483,6 +526,24 @@ export function shareAppState<T>(held: T, next: T, depth = 0): T {
   ) as T;
 }
 
+/**
+ * A keeper of one reader's last answer: each answer laid over the one
+ * before it (`shareAppState`), so an answer equal to the last is the last
+ * itself, as a list handed the same array keeps its rows. Note that it holds
+ * its answer in its own closure, for a hook to keep in state, rather than in
+ * a ref written during render.
+ */
+export function answerKeeper<T>(): (next: T) => T {
+  let held: { readonly answer: T } | undefined;
+
+  return (next) => {
+    const answer = held === undefined ? next : shareAppState(held.answer, next);
+    held = { answer };
+
+    return answer;
+  };
+}
+
 /** No task's feed read: the feed before it first answers. */
 const NO_INBOX_READS: InboxReads = new Map();
 
@@ -490,7 +551,7 @@ const NO_INBOX_READS: InboxReads = new Map();
 function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxReads {
   const rows = feed.rows;
 
-  return rows === undefined ? NO_INBOX_READS : new Map(Object.entries(rows[INBOX_SCOPE_KIND.PLAN]));
+  return rows === undefined ? NO_INBOX_READS : new Map(Object.entries(rows[INBOX_SCOPE_KIND.TASK]));
 }
 
 /** Each workspace's select of its Inbox's holders as last made (`selectInboxGroupsIn`), by the workspace's id. */
@@ -539,24 +600,56 @@ export function selectInboxReader(state: AppStateSnapshot): string | undefined {
   return state.account.status === ACCOUNT_STATUS.SIGNED_IN ? state.account.id : undefined;
 }
 
-/** Every agent's name the task list holds, by the agent's id, as a `select`: the agents on its tasks, each named as the panel names it (`agentName`). Made anew only as the list moves. */
-export const selectAgentNames = memoizedSelect(
-  (state: AppStateSnapshot) => [state.tasks],
-  (tasks): ReadonlyMap<string, string> =>
-    new Map((tasks.taskAgents ?? []).map((agent) => [agent.id, agentName(agent)] as const)),
+/** Whether two maps hold the same values under the same keys. */
+function sameEntries<K, V>(held: ReadonlyMap<K, V>, next: ReadonlyMap<K, V>): boolean {
+  if (held.size !== next.size) return false;
+
+  for (const [key, value] of next) {
+    if (held.get(key) !== value || !held.has(key)) return false;
+  }
+
+  return true;
+}
+
+/**
+ * A `select` answering a map read off the task list's agents, made anew
+ * only as they move, and kept as the map it last answered while every
+ * entry stays the same. Note that it is kept, because Query hands a map on
+ * as it is (`shareAppState` shares plain objects alone), so a new map equal
+ * to the last re-renders every reader, each Inbox row among them, on every
+ * change of an agent's status.
+ */
+function agentMapSelect<V>(
+  entries: (
+    agents: NonNullable<AppStateSnapshot["tasks"]["taskAgents"]>,
+  ) => Iterable<readonly [string, V]>,
+): (state: AppStateSnapshot) => ReadonlyMap<string, V> {
+  let answered: ReadonlyMap<string, V> | undefined;
+
+  return memoizedSelect(
+    (state: AppStateSnapshot) => [state.tasks.taskAgents],
+    (agents): ReadonlyMap<string, V> => {
+      const next = new Map(entries(agents ?? []));
+
+      if (answered === undefined || !sameEntries(answered, next)) answered = next;
+
+      return answered;
+    },
+  );
+}
+
+/** Every agent's name the task list holds, by the agent's id, as a `select`: the agents on its tasks, each named as the panel names it (`agentName`). Made anew only as a name moves. */
+export const selectAgentNames = agentMapSelect((agents) =>
+  agents.map((agent) => [agent.id, agentName(agent)] as const),
 );
 
-/** The provider whose harness each agent on the task list runs in, by the agent's id, as a `select`: read off its model's catalog id, an agent on a provider we run no agent on left out. Made anew only as the list moves. */
-export const selectAgentHarnesses = memoizedSelect(
-  (state: AppStateSnapshot) => [state.tasks],
-  (tasks): ReadonlyMap<string, ModelProvider> =>
-    new Map(
-      (tasks.taskAgents ?? []).flatMap(({ id, model }) => {
-        const harness = providerOf(model);
+/** The provider whose harness each agent on the task list runs in, by the agent's id, as a `select`: read off its model's catalog id, an agent on a provider we run no agent on left out. Made anew only as a harness moves. */
+export const selectAgentHarnesses = agentMapSelect((agents) =>
+  agents.flatMap(({ id, model }) => {
+    const harness = providerOf(model);
 
-        return harness === undefined ? [] : [[id, harness] as const];
-      }),
-    ),
+    return harness === undefined ? [] : [[id, harness] as const];
+  }),
 );
 
 /** Where the account's feed of Inbox threads stands: still on its first read, refused, or answered. */
@@ -592,7 +685,7 @@ export function inboxFeedHolds(state: AppStateSnapshot, itemId: string | undefin
 
   if (rows === undefined || itemId === undefined) return false;
 
-  return Object.values(rows[INBOX_SCOPE_KIND.PLAN]).some((items) =>
+  return Object.values(rows[INBOX_SCOPE_KIND.TASK]).some((items) =>
     items.some((item) => item.id === itemId),
   );
 }

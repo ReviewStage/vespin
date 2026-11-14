@@ -6,7 +6,9 @@
  * (`useTasksListing`, every task of the workspace whatever its status), the
  * Inbox's under All (`useInboxListing`), and the agents the task list holds.
  * Each is then ranked by what its row says (`@repo/features/search-found-model`),
- * as ⌘K ranks its rows; no act and no read of the service is added.
+ * as ⌘K ranks its rows. The Tasks listing also asks the service for the
+ * tasks the query finds past the list the host holds, which the host draws
+ * into that list, so a finished or older task is found here too.
  */
 
 import { INBOX_SHOW, type InboxListed } from "@repo/features/inbox-list-model";
@@ -64,7 +66,7 @@ export function useSearchFound(query: string): SearchFound {
       // Note that a blank query ranks nothing, so the Inbox's every item, which it lists with nothing typed, stays out.
       inbox: rankedBySearch(inbox.listed, query, inboxSearchSubject),
       agents: rankedBySearch(agents, query, (agent) =>
-        agentSearchSubject(agent, names.get(agent.planId)),
+        agentSearchSubject(agent, names.get(agent.taskId)),
       ).map((agent) => agentLine(agent, waiting.byAgent, view)),
       listing,
       readerId: inbox.readerId,

@@ -220,7 +220,7 @@ const insertTask = (organizationId: string, userId: string, createdAt: Date) =>
       userId,
       number: taskNumbers,
       name: "Secret launch plan",
-      document: "Confidential description text.",
+      description: "Confidential description text.",
       createdAt,
       updatedAt: createdAt,
     });
@@ -235,7 +235,7 @@ const insertRevision = (taskId: string, userId: string, at: Date) =>
       seq: 1,
       actor: DESCRIPTION_ACTOR.DEVELOPER,
       userId,
-      document: "Confidential description text, revised.",
+      description: "Confidential description text, revised.",
       changes: 1,
       startedAt: at,
       at,

@@ -15,7 +15,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { Stack, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 import { useFollowerOffer } from "../tasks/use-follower-offer.js";
 import { useTaskOverview } from "../tasks/use-tasks.js";
 
@@ -47,41 +47,24 @@ export function useAddFollowerDoor(): (taskId: string) => void {
  * but the reader, whose Follow stands on the task's page, each with their
  * face and address, one who already follows dimmed and saying so. A press
  * adds the member, their machines off, as the panel's offer adds a person
- * mentioned, and closes the sheet; where the service refused, the sheet
- * stays and the app's failure notice says why. Where the members could not
- * be read, Try again reads them again.
+ * mentioned, and closes the sheet at once; where the service refuses, the
+ * app's failure notice says why, with Try again. Where the members could
+ * not be read, Try again reads them again.
  */
 export function AddFollowerScreen({ taskId }: { readonly taskId: string }) {
   const router = useRouter();
   const colors = useColors();
   const task = useTaskOverview(taskId)?.task;
   const offer = useFollowerOffer(task);
-  const [adding, setAdding] = useState(false);
+  // Note that a second tap can land before the sheet has gone, so a press is read off a ref.
+  const sent = useRef(false);
 
-  // Note that a press is read off a ref, since a second tap can land before the render that dims the rows, and the sheet's standing too, since an answer may land once it is gone.
-  const sending = useRef(false);
-  const standing = useRef(true);
-  useEffect(() => {
-    standing.current = true;
-
-    return () => {
-      standing.current = false;
-    };
-  }, []);
-
+  // Note that the add is a declared write, drawn on the task at once, so the sheet closes as it goes, and a refusal is said by the app's failure notice with its Try again.
   const add = (userId: string) => {
-    if (sending.current) return;
-    sending.current = true;
-    setAdding(true);
-
-    void offer.add(userId).then((added) => {
-      sending.current = false;
-
-      if (!standing.current) return;
-      setAdding(false);
-
-      if (added) router.back();
-    });
+    if (sent.current) return;
+    sent.current = true;
+    void offer.add(userId);
+    router.back();
   };
 
   const bar = (
@@ -94,15 +77,12 @@ export function AddFollowerScreen({ taskId }: { readonly taskId: string }) {
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.GROUPED },
-          // Note that the sheet stays while an add is out, as Move to workspace's does, so its answer can never close the page under it.
-          gestureEnabled: !adding,
         }}
       />
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.CLOSE)}
           accessibilityLabel={WORDS.CANCEL}
-          disabled={adding}
           onPress={() => router.back()}
         />
       </Stack.Toolbar>
@@ -127,13 +107,7 @@ export function AddFollowerScreen({ taskId }: { readonly taskId: string }) {
     ) : (
       <SettingsForm>
         <ListSection title={WORDS.MEMBERS}>
-          <PersonPickRows
-            options={people.map((person) => ({
-              ...person,
-              disabled: person.disabled || adding,
-            }))}
-            onPick={add}
-          />
+          <PersonPickRows options={people} onPick={add} />
         </ListSection>
       </SettingsForm>
     );
