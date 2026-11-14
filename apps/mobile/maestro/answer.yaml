@@ -117,7 +117,16 @@ appId: dev.vespin.ios
     text: "Send"
     enabled: true
 - tapOn: "Send"
-- assertVisible: "Write a number in Invites a member may send a day."
+# Note that at accessibility sizes the refusal stands under the tall card, below the keyboard, so it is scrolled to, and the field back to, which a person at that size does too; at the default size both already show.
+- scrollUntilVisible:
+    element: "Write a number in Invites a member may send a day."
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "answer-field-Invites a member may send a day"
+    direction: UP
+- tapOn:
+    id: "answer-field-Invites a member may send a day"
 - eraseText: 1
 - inputText: "20"
 - runFlow:
