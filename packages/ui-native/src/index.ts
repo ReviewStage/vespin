@@ -44,6 +44,16 @@ export {
   type StandingCallCard,
 } from "./call.js";
 
+export { ChipMarkProvider } from "./chip-mark.js";
+
+export {
+  CHIP_MARK,
+  type ChipMark,
+  type ChipMarkOf,
+  type ChipMarksHeld,
+  chipMarkOf,
+} from "./chip-mark-model.js";
+
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";

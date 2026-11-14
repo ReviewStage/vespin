@@ -43,6 +43,7 @@ describe("markdownBlocks", () => {
             heard: "pull request #42 Fix the refresh",
             target: { kind: LINK_TARGET.WEB, href: "https://github.com/acme/app/pull/42" },
             github: "https://github.com/acme/app/pull/42",
+            of: { kind: "pull-request", url: "https://github.com/acme/app/pull/42" },
           },
         },
         words(" on "),
