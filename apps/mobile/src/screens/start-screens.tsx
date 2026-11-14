@@ -383,8 +383,9 @@ function offered(skills: SkillsOffered | undefined) {
 }
 
 /**
- * New agent on a task, as the panel's draft tab starts one: what to ask of
- * it and the pictures that go with it, the model and effort it runs on, the
+ * New agent on a task, as the panel's draft tab starts one: the task it
+ * starts on, named over the words, what to ask of it and the pictures that
+ * go with it, the model and effort it runs on, the
  * account's default until another is picked, and where it runs. Opened on a
  * suggestion (`opened`), it starts filled in with the suggestion's brief and
  * model under a line naming who suggested it, offers no Runs on, and its
@@ -408,6 +409,8 @@ export function NewAgentScreen({
   // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
   const suggestedTask = suggester?.taskId;
   const placed = opened === undefined || suggestedTask !== undefined;
+  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const startsOn = view?.tasks.find((task) => task.id === (suggestedTask ?? taskId));
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
@@ -462,6 +465,7 @@ export function NewAgentScreen({
                 opened.suggestion.label,
               )
         }
+        head={startsOn === undefined ? undefined : <StartsOnChip task={startsOn} />}
         words={{
           placeholder: WORDS.AGENT_PLACEHOLDER,
           words: prompt,
@@ -486,6 +490,17 @@ export function NewAgentScreen({
       />
     </>
   );
+}
+
+/**
+ * The task New agent starts on, over its words as a capsule with the task's
+ * ring and name. Note that the panel starts an agent from a draft tab on the
+ * task's own page, which names the task, while this sheet covers that page,
+ * so it says which task the agent works on; it takes no press, since an agent
+ * starts only on the task it was opened from.
+ */
+function StartsOnChip({ task }: { readonly task: TaskSummary }) {
+  return <FieldChip label={task.name} status={task.status ?? TASK_STATUS.TODO} />;
 }
 
 /** What New task opens on in place of an empty sheet: a draft the share sheet kept. */
