@@ -171,7 +171,6 @@ const OPTIONS_WORDS = {
   EFFORT: "Effort",
   FAST: "Fast",
   DONE: "Done",
-  APPLIES: "Takes effect from the agent's next step.",
   READING_SERVERS: "Reading your MCP servers",
   NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
   MORE_SERVERS: "Connect another in Settings.",
@@ -747,7 +746,7 @@ export function AgentScreen() {
                     <Stack.Toolbar.MenuAction
                       key={offered.action.id}
                       icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
-                      subtitle={offered.action.command}
+                      subtitle={offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command}
                       onPress={offered.onPress}
                     >
                       {runActionMenuLabel(offered.action, offered.runs)}
@@ -970,7 +969,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection footer={pick.note ?? OPTIONS_WORDS.APPLIES}>
+          <ListSection footer={pick.note}>
             <MenuPickRow
               label={OPTIONS_WORDS.MODEL}
               options={pick.models}
