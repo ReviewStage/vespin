@@ -19,6 +19,7 @@ import { useThisMac } from "../machine-name.js";
 import { useKeptPicture, useKeptPictures, useKeptPictureViewer } from "./agent-pictures.js";
 import { useOnThatMac } from "./computer-permission-note.js";
 import { MacAppChipCard } from "./mac-app-card.js";
+import { MachineOwnerFace } from "./workspace-machines.js";
 
 /**
  * computer-dock.tsx -- the apps an agent is using on the developer's Mac, as a stack of their windows floating over its message box, or minimized to a pill.
@@ -306,6 +307,12 @@ function AppsFloat({
     const iconSrc = icon?.kind === PICTURE_STATE.READY ? icon.url : undefined;
     const name = titleOf(each, inUse.apps, thisMac);
 
+    // Note that a title naming a teammate's machine wears their face before the name, as the machine's own chip does.
+    const before =
+      name === each.name || each.machine === undefined ? undefined : (
+        <MachineOwnerFace userId={each.machine.owner.userId} />
+      );
+
     const card = (
       <MacAppChipCard
         name={each.name}
@@ -322,6 +329,7 @@ function AppsFloat({
           name,
           iconSrc,
           card,
+          before,
           window: {
             state: window,
             width: front.window.width,
@@ -329,7 +337,7 @@ function AppsFloat({
             pointer: cursor?.app === each.id ? pointer : undefined,
           },
         }
-      : { id: each.id, name, iconSrc, card };
+      : { id: each.id, name, iconSrc, card, before };
   });
 
   const putAway = () => {

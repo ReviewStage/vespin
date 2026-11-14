@@ -101,6 +101,8 @@ export interface StackedApp {
     | undefined;
   /** The card its name's chip hangs (`MacAppCard`); none where the caller has none. */
   readonly card?: ReactNode;
+  /** What stands before its name in its title, as a teammate's face stands before a machine's name where its title names their machine; none for the rest. */
+  readonly before?: ReactNode;
 }
 
 /** Apps as a pile of their icons, at most four, each overlapping the one before it, the first on top. */
@@ -175,6 +177,7 @@ function AppName({
   const face = (
     <>
       <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />
+      {app.before}
       <ChipName>{app.name}</ChipName>
     </>
   );
@@ -241,6 +244,7 @@ function BehindTitle({
       <CardPress label={WORDS.FORWARD(app.name)} onPress={() => onPick(app.id)}>
         <span className="flex min-w-0 items-center gap-ui-6 pt-ui-4 pb-ui-12 ps-ui-8 pe-ui-8">
           <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />
+          {app.before}
           <Text
             variant={TEXT_VARIANT.LABEL}
             tone={using ? TEXT_TONE.DEFAULT : TEXT_TONE.MUTED}
