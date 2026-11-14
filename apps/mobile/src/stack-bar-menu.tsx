@@ -11,6 +11,7 @@ function groupItems(group: BarMenuGroup): ReactElement[] {
       <Stack.Toolbar.MenuAction
         key={action.label}
         {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
+        {...(action.detail === undefined ? {} : { subtitle: action.detail })}
         disabled={action.disabled === true}
         destructive={action.destructive === true}
         onPress={action.onPress}
