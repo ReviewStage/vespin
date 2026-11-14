@@ -38,6 +38,7 @@ import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { ToneGlyph } from "./marks.js";
+import { GoesMark, type PushRowGoes } from "./settings-form.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -160,6 +161,8 @@ type MarkRowProps = {
   readonly title: string;
   /** What ends its line, muted: where it stands in words, or how long it ran. */
   readonly detail?: string | undefined;
+  /** Where a press on it goes, marked at its end, such as out to GitHub; none where it takes no press. */
+  readonly goes?: PushRowGoes | undefined;
 };
 
 /**
@@ -168,7 +171,7 @@ type MarkRowProps = {
  * muted, standing as every list row does, plain and edge to edge with a
  * hairline under the words.
  */
-export function MarkRow({ id, mark, title, detail }: MarkRowProps) {
+export function MarkRow({ id, mark, title, detail, goes }: MarkRowProps) {
   const colors = useColors();
 
   const row: ReactElement = (
@@ -179,17 +182,22 @@ export function MarkRow({ id, mark, title, detail }: MarkRowProps) {
       title={title}
       ink={colors.TEXT_BODY}
       end={
-        detail === undefined ? null : (
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.TIME }),
-              monospacedDigit(),
-              foregroundStyle(colors.TEXT_MUTED),
-              lineLimit(1),
-            ]}
-          >
-            {detail}
-          </Text>
+        detail === undefined && goes === undefined ? null : (
+          <HStack spacing={SPACE.TIGHT}>
+            {detail === undefined ? null : (
+              <Text
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.TIME }),
+                  monospacedDigit(),
+                  foregroundStyle(colors.TEXT_MUTED),
+                  lineLimit(1),
+                ]}
+              >
+                {detail}
+              </Text>
+            )}
+            {goes === undefined ? null : <GoesMark goes={goes} />}
+          </HStack>
         )
       }
     />

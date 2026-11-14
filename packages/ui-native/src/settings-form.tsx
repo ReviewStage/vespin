@@ -74,7 +74,7 @@ const LEAD_GLYPH_SIZE = 17;
  * semibold at the row's small line, as iOS draws its chevron, so it grows
  * with the reader's text size.
  */
-function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
+export function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
   const colors = useColors();
 
   return (

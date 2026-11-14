@@ -306,11 +306,14 @@ function mergeWords(merge: MergeState, base: string): string {
  * GitHub's whole sentence for the merge: what it waits on, or where the
  * queue or auto-merge has it, then the mergeability beside it where that
  * says something else; where its reviews hold it up and no press is
- * offered (`action`), that it can't be merged yet.
+ * offered (`action`), that it can't be merged yet. Where a chip beside it
+ * already names the queue's place (`queueShown`), as the iPhone's head does,
+ * the sentence leaves it out rather than say "Queued #2" twice.
  */
 export function mergeSentence(
   pullRequest: AgentOverviewPullRequest,
   action: MergeAction | undefined,
+  queueShown = false,
 ): string {
   const { merge, merging } = pullRequest;
   const line = mergeWords(merge, pullRequest.base);
@@ -321,7 +324,9 @@ export function mergeSentence(
 
   const lead =
     queued !== null
-      ? queuedLabel(queued.position)
+      ? queueShown
+        ? undefined
+        : queuedLabel(queued.position)
       : autoMerge !== null
         ? MERGE_WORDS.autoMerge(autoMerge.method)
         : undefined;
