@@ -35,10 +35,7 @@ export const COMPLETION_SOUND = {
 export type CompletionSound = (typeof COMPLETION_SOUND)[keyof typeof COMPLETION_SOUND];
 
 /** The sounds that are the account's own clips, one for each of its two sounds, rather than a recipe. */
-export const CUSTOM_COMPLETION_SOUNDS = [
-  COMPLETION_SOUND.CUSTOM,
-  COMPLETION_SOUND.CUSTOM_ASK,
-] as const;
+const CUSTOM_COMPLETION_SOUNDS = [COMPLETION_SOUND.CUSTOM, COMPLETION_SOUND.CUSTOM_ASK] as const;
 
 export type CustomCompletionSound = (typeof CUSTOM_COMPLETION_SOUNDS)[number];
 

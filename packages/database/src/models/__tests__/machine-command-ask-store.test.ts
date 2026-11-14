@@ -184,6 +184,12 @@ it.layer(getTestDB())("the machine ask store", (it) => {
           decision: MACHINE_ASK_DECISION.ALLOW_ONCE,
         });
 
+        assert.equal(
+          yield* lapseMachineAsk(owner, id),
+          undefined,
+          "a close said again keeps the grant",
+        );
+
         const otherAgents = yield* asked(owner, laptop, SHELL, otherAgent);
         const otherMachines = yield* asked(owner, studio, SHELL, agent);
         const otherCommands = yield* asked(owner, laptop, { command: "rm -rf build" }, agent);

@@ -239,6 +239,15 @@ export const AGENT_ACT_KIND = {
   MACHINES_RETRY: "machines.retry",
   MACHINES_CHANGE: "machines.change",
   MACHINES_REMOVE: "machines.remove",
+  /**
+   * The asks the account's machines hold for its answer: held for the
+   * window while it holds the stream open and a while after, read again at
+   * once as Try again asks, and one answered from this device. What it
+   * holds reaches the panel on app state (`LIVE_READ.MACHINE_ASKS`).
+   */
+  MACHINE_ASKS_FOLLOW: "machineAsks.follow",
+  MACHINE_ASKS_RETRY: "machineAsks.retry",
+  MACHINE_ASK_ANSWER: "machineAsks.answer",
   /** Run agents on this Mac turned on or off, from This Mac's row in Settings › Hosts; only the desktop answers it. */
   HOSTS_THIS_MAC_SET: "hosts.thisMacSet",
   HOSTS_PAIRING_READ: "hosts.pairingRead",
@@ -1078,6 +1087,9 @@ export const PORT_ACT_USE = {
   MACHINES_RETRY: ACT_USE.READ,
   MACHINES_CHANGE: ACT_USE.WRITE,
   MACHINES_REMOVE: ACT_USE.WRITE,
+  MACHINE_ASKS_FOLLOW: ACT_USE.READ,
+  MACHINE_ASKS_RETRY: ACT_USE.READ,
+  MACHINE_ASK_ANSWER: ACT_USE.WRITE,
   HOSTS_THIS_MAC_SET: ACT_USE.WRITE,
   HOSTS_PAIRING_READ: ACT_USE.FETCH,
   HOSTS_ALLOWED_APPS: ACT_USE.FETCH,

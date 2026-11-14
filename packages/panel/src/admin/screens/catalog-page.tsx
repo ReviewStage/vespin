@@ -24,8 +24,8 @@ import { useState } from "react";
 import { copyThroughShell } from "../../copy-feedback.js";
 import { useAdminDoors } from "../admin-doors.js";
 import { adminCatalogQuery, useAdminSignOut } from "../admin-queries.js";
-import { adminReadView } from "../admin-read-view.js";
-import { AdminPage, type ViewerAccount } from "../chrome/page-header.js";
+import { type AdminScreenShell, adminReadView } from "../admin-read-view.js";
+import { AdminPage } from "../chrome/page-header.js";
 import { PageSkeleton } from "../chrome/page-skeleton.js";
 
 /** What the page says it covers beside its title: this deploy, whatever window the others hold. */
@@ -39,12 +39,8 @@ export function CatalogPage({
   onSignOut,
   frame,
   sections,
-}: {
+}: AdminScreenShell & {
   title: string;
-  account: ViewerAccount | undefined;
-  onSignOut: () => Promise<void>;
-  /** Applied around every answer but the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
   /** The page's sections, from the catalog once it is read and as their skeletons until then. */
   sections: (catalog: AdminCatalog | undefined) => React.JSX.Element;
 }): React.JSX.Element {
@@ -81,7 +77,7 @@ export function CatalogPage({
 }
 
 /** One block of a detail's text: what it is, and its words. */
-export interface CatalogDetailBlock {
+interface CatalogDetailBlock {
   title: string;
   code: string;
 }

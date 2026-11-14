@@ -48,7 +48,6 @@ export { declaredActProcedures } from "./declared-acts.js";
 export { feedbackProcedures } from "./feedback-procedures.js";
 
 export {
-  MAC_SHELL_SIGNAL,
   type MacShell,
   type MacShellSignal,
   macShellProcedures,

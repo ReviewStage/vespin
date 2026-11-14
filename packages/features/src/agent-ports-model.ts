@@ -34,7 +34,7 @@ export const AGENT_PORTS_WORDS = {
 export const PORTS_LOOK_EVERY_MS = 3_000;
 
 /** One port the sandbox listens on, and what serves it where that was read. */
-export interface ListedPort {
+interface ListedPort {
   readonly port: number;
   readonly label: string | undefined;
 }
