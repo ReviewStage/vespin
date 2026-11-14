@@ -70,3 +70,12 @@ duo-folded-duo-light wrap-failure-notice.yaml: fails 2 shots 2   Assert that "Th
 duo-folded-duo-dark wrap-failure-notice.yaml: fails 2 shots 2   Assert that "The task could not be unpinned. Try again." is visible... FAILED
   ax none on duo: contrast disabled transparency-key 
 duo-folded-duo-light wrap-agent.yaml: fails 2 shots 6   Assert that "Invites sent in the staging workspace.*" is visible... FAILED
+duo-folded-duo-dark wrap-agent.yaml: fails 2 shots 6   Assert that "Invites sent in the staging workspace.*" is visible... FAILED
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-tasks.yaml: fails 2 shots 6   Assert that "Permanently delete" is visible... FAILED
+duo-folded-duo-dark wrap-tasks.yaml: fails 2 shots 6   Assert that "Permanently delete" is visible... FAILED
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-accessibility.yaml: fails 2 shots 3   Assert that ".*walked the invite flow.*" is visible... FAILED
+duo-folded-duo-dark wrap-accessibility.yaml: fails 2 shots 3   Assert that ".*walked the invite flow.*" is visible... FAILED
+  ax none on duo: contrast disabled transparency-key 
+duo-folded-duo-light wrap-workspace.yaml: fails 0 shots 4 
