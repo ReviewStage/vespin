@@ -9,8 +9,6 @@ import {
   LandingSection,
   MARK_PROVIDER,
   ProviderMark,
-  TEXT_LINK_HEIGHT,
-  TextLink,
 } from "@repo/ui";
 import {
   DOCS_URL,
@@ -36,7 +34,7 @@ const Y_COMBINATOR_PAGE = "https://www.ycombinator.com/companies/vespin";
 /**
  * The landing: the one line over the live app, then a section for each of
  * the product's features over the app's own screens at work, and the close. A reader with an account signs in
- * from the bar or beside the hero's download.
+ * from the bar, or continues on the web beside the hero's download.
  */
 export function App(): React.JSX.Element {
   return (
@@ -45,13 +43,13 @@ export function App(): React.JSX.Element {
       barCall={<SiteBarDownload />}
       badge={<LandingBackedBy href={Y_COMBINATOR_PAGE} />}
       title="The unified workspace for engineering teams and agents."
-      lead="Designed for how you and your team ship."
+      lead="Designed to keep every task moving, day and night."
       actions={
         <>
           <SiteDownload />
-          <TextLink href={WEB_APP_URL} height={TEXT_LINK_HEIGHT.CONTROL}>
-            or sign in on the web
-          </TextLink>
+          <ButtonLink variant={BUTTON_VARIANT.OUTLINE} href={WEB_APP_URL}>
+            Continue on web
+          </ButtonLink>
         </>
       }
       close={{

@@ -219,12 +219,19 @@
     line-height: var(--ui-display-lead-leading);
   }
 
+  /* An outlined call is edged in the page's hairline, as the dividers are,
+     and filled as the app's composer is, so it stands solid on the page. */
   .ui-landing-actions {
+    --ui-color-border-strong: var(--ui-landing-hairline);
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 12px;
     margin-top: 40px;
+  }
+
+  .ui-landing-actions .ui-button[data-variant="outline"]:not(:hover) {
+    --ui-button-fill: var(--ui-color-field);
   }
 
   /* The live app stands in the hero itself, right under the words and on
@@ -878,6 +885,83 @@
     mask-composite: intersect;
   }
 
+  /* The Inbox and a task are close-ups: the columns their story happens in,
+     each a card drawn as the app draws a column (its bar on the frame over
+     its sheet) at the Mac app's own sizes, the one beside the story behind
+     the other and lower, so the two overlap as windows on a desk do. */
+  .ui-landing-closeup {
+    --ui-toolbar-height: 50px;
+    color: var(--ui-color-text);
+    font-family: var(--ui-font-sans);
+  }
+
+  .ui-landing-closeup-cards {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .ui-landing-card {
+    display: grid;
+    grid-template-rows: 50px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    grid-row: 1;
+    min-width: 0;
+    padding: 0 8px 8px;
+    border-radius: var(--ui-display-window-radius);
+    background: var(--ui-color-sidebar);
+    box-shadow:
+      0 0 0 1px var(--ui-color-border),
+      0 40px 120px -20px var(--ui-color-shadow-deep);
+  }
+
+  .ui-landing-card-sheet {
+    position: relative;
+    min-height: 0;
+    border-radius: var(--ui-radius-14);
+    background: var(--ui-color-ground);
+    box-shadow:
+      0 0 0 1px var(--ui-color-border),
+      0 1px 2px var(--ui-color-shadow-soft);
+  }
+
+  /* The Inbox: its list behind at the left, the thread in front, lower;
+     the stage keeps the thread's tallest step, so nothing under it moves. */
+  .ui-landing-stage[data-scene="inbox"] .ui-landing-closeup-cards {
+    min-height: 720px;
+  }
+
+  .ui-landing-stage[data-scene="inbox"] .ui-landing-card[data-aside="true"] {
+    grid-column: 1 / span 5;
+  }
+
+  .ui-landing-stage[data-scene="inbox"] .ui-landing-card[data-aside="false"] {
+    z-index: 1;
+    grid-column: 4 / -1;
+    margin-top: 72px;
+  }
+
+  /* A task: its log, and the plan's sub-tasks over its foot's corner,
+     standing past its edge. */
+  .ui-landing-stage[data-scene="agents"] .ui-landing-card {
+    grid-column: 1 / span 10;
+    height: 460px;
+  }
+
+  .ui-landing-satellite {
+    z-index: 1;
+    grid-row: 1;
+    grid-column: 6 / -1;
+    margin-top: 380px;
+    box-shadow:
+      0 0 0 1px var(--ui-color-border),
+      0 24px 64px -16px var(--ui-color-shadow-deep);
+  }
+
+  .ui-landing-card .ui-landing-log-sheet {
+    height: 100%;
+  }
+
   .ui-landing-stage .ui-landing-window {
     box-shadow:
       0 0 0 1px color-mix(in srgb, var(--ui-color-text-muted) 10%, transparent),
@@ -1303,9 +1387,7 @@
   /* A column of the page: its bar on the frame, then its share of the sheet. */
   .ui-landing-inbox-list,
   .ui-landing-inbox-thread,
-  .ui-landing-agent-log,
-  .ui-landing-automation,
-  .ui-landing-side {
+  .ui-landing-automation {
     position: relative;
     display: grid;
     grid-template-rows: 50px minmax(0, 1fr);
@@ -1318,31 +1400,10 @@
     grid-template-columns: 320px minmax(0, 1fr);
   }
 
-  .ui-landing-task {
-    grid-template-columns: minmax(0, 1fr) 400px;
-    gap: 8px;
-  }
-
   /* The sheet the columns' content stands on, under their bars; the side
      panel's is the well. */
   .ui-landing-inbox::before,
-  .ui-landing-agent-log::before,
   .ui-landing-automation::before,
-  .ui-landing-side::before {
-    content: "";
-    position: absolute;
-    inset: 50px 0 0;
-    border-radius: var(--ui-radius-14);
-    background: var(--ui-color-ground);
-    box-shadow:
-      0 0 0 1px var(--ui-color-border),
-      0 1px 2px var(--ui-color-shadow-soft);
-  }
-
-  .ui-landing-side::before {
-    background: var(--ui-color-well);
-  }
-
   .ui-landing-sheet-start,
   .ui-landing-sheet-end {
     position: relative;
@@ -1527,18 +1588,6 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .ui-landing-agent-foot {
-    flex: none;
-  }
-
-  .ui-landing-dock {
-    padding: 0 16px var(--ui-row-inset);
-  }
-
-  .ui-landing-composer {
-    padding: 0 16px var(--ui-list-inset);
-  }
-
   .ui-landing-pull-request {
     display: inline-flex;
     color: var(--ui-color-complete);
@@ -1546,12 +1595,6 @@
 
   .ui-landing-effort {
     color: var(--ui-color-text-muted);
-  }
-
-  .ui-landing-side-bar {
-    display: flex;
-    align-items: center;
-    min-width: 0;
   }
 
   .ui-landing-side-sheet {
@@ -1673,24 +1716,28 @@
     background: var(--ui-color-ground);
   }
 
+  /* The keys: the composer's model menu open at its own width over the
+     model chip it hangs from, the chip at the menu's trailing edge. */
   .ui-landing-keys {
-    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--ui-tight-gap);
+    width: min(100%, 340px);
     margin: 0 auto;
     background: transparent;
   }
 
+  .ui-landing-keys-menu {
+    width: 100%;
+    border: 1px solid var(--ui-color-border);
+    border-radius: var(--ui-radius-14);
+    background: var(--ui-color-float-solid);
+    box-shadow: 0 24px 64px -16px var(--ui-color-shadow-deep);
+  }
+
   /* Under 640px of room the page keeps to one column: the live app under the
-     words, and each stage under its heading. A
-     window scaled to the column draws its words too small to read, so a
-     stage that holds one alone shows the one moment that sells it instead:
-     the desktop app as it is, laid out at 1280 by 800, cut to that moment's
-     box and scaled so the box spans the stage, about three quarters of the
-     app's size on a phone, ruled round as a window is, its top corner the
-     window's own; the stage is as tall as the box. A window names its box
-     in its own pixels: where it starts
-     (`--ui-landing-crop-x`, `--ui-landing-crop-y`) and how wide and tall it
-     is (`--ui-landing-crop-w`, `--ui-landing-crop-h`); a margin's percentage
-     is of the stage's width, so each offset is a share of the box's. */
+     words, and each stage under its heading. */
   /* off-scale: 640px, a phone's landing */
   @container (width < 640px) {
     .ui-landing-lost {
@@ -1757,49 +1804,20 @@
       padding: 96px var(--ui-landing-gutter) 80px;
     }
 
-    /* A cropped window fills its stage edge to edge, so no field shows. */
-    .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) .ui-landing-field {
+    /* On a phone a close-up keeps its story's card alone, across the stage. */
+    .ui-landing-card[data-aside="true"],
+    .ui-landing-satellite {
       display: none;
     }
 
-    .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) {
-      padding: 0;
-      overflow: hidden;
-      border-right: 1px solid var(--ui-color-border);
-      border-bottom: 1px solid var(--ui-color-border);
-      border-radius: var(--ui-display-window-radius);
-      aspect-ratio: var(--ui-landing-crop-w) / var(--ui-landing-crop-h);
+    .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"])
+      .ui-landing-card[data-aside="false"] {
+      grid-column: 1 / -1;
+      margin-top: 0;
     }
 
-    .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) .ui-landing-scene {
-      overflow: clip;
-      border-top: 1px solid var(--ui-color-border);
-      border-left: 1px solid var(--ui-color-border);
-      border-top-left-radius: var(--ui-display-window-radius);
-    }
-
-    .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) .ui-landing-window {
-      width: calc(100% * 1280 / var(--ui-landing-crop-w));
-      margin: calc(-100% * var(--ui-landing-crop-y) / var(--ui-landing-crop-w)) 0 0
-        calc(-100% * var(--ui-landing-crop-x) / var(--ui-landing-crop-w));
-    }
-
-    /* The Inbox's moment is the ask: the question over its options, the
-       pick, the note, and the send. */
-    .ui-landing-stage[data-scene="inbox"] {
-      --ui-landing-crop-x: 592;
-      --ui-landing-crop-y: 56;
-      --ui-landing-crop-w: 420;
-      --ui-landing-crop-h: 440;
-    }
-
-    /* The task's moment is the hand-off: the agent started and messaged,
-       and its answer, the next one rising from the foot. */
-    .ui-landing-stage[data-scene="agents"] {
-      --ui-landing-crop-x: 268;
-      --ui-landing-crop-y: 0;
-      --ui-landing-crop-w: 420;
-      --ui-landing-crop-h: 345;
+    .ui-landing-stage[data-scene="inbox"] .ui-landing-closeup-cards {
+      min-height: 0;
     }
 
     .ui-landing-stage[data-scene="devices"] {
