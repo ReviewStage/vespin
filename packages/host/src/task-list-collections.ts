@@ -102,7 +102,7 @@ export const AGENT = fieldKind((row: AgentRow) => row.id);
 /** An agent whose starting grace has ended, by its id, with its plan's, as the list holds it beside the agents' rows. */
 export interface PastGrace {
   readonly agentId: string;
-  readonly planId: string;
+  readonly taskId: string;
 }
 
 /** The list as the rows make it, every agent on a plan beside it, and the plans a write stands over. */
@@ -213,9 +213,9 @@ function agedOut(
     agentIds.flatMap((id) => {
       const agent = agentOf(id);
 
-      return agent === undefined || agent.pinnedAt === null || agent.planId === null
+      return agent === undefined || agent.pinnedAt === null || agent.taskId === null
         ? []
-        : [agent.planId];
+        : [agent.taskId];
     }),
   );
 
@@ -347,7 +347,7 @@ export function taskListCollections(
             .fn.where(({ agent }) => agentGraceEnd(agent) !== undefined)
             .fn.select(({ agent }) => ({
               agentId: agent.id,
-              planId: agent.planId,
+              taskId: agent.taskId,
               end: agentGraceEnd(agent),
             })),
         gcTime: KEPT_BY_SCOPE,
@@ -377,12 +377,12 @@ export function taskListCollections(
       const ended: PastGrace[] = [];
       let next: number | undefined;
 
-      for (const { agentId, planId, end } of waiting.values()) {
+      for (const { agentId, taskId, end } of waiting.values()) {
         if (end === undefined) continue;
         waits.add(agentId);
 
         if (at < end) next = next === undefined ? end : Math.min(next, end);
-        else if (pastGrace.get(agentId)?.planId !== planId) ended.push({ agentId, planId });
+        else if (pastGrace.get(agentId)?.taskId !== taskId) ended.push({ agentId, taskId });
       }
 
       // Note that an agent moved to another plan is marked again under it, so it is let go first.
@@ -460,9 +460,9 @@ export function taskListCollections(
               (row) =>
                 !agents.holds(row.id) &&
                 !drawnLater(row.id) &&
-                (letGoSince(row.id) || (row.planId !== null && letGoSince(row.planId))),
+                (letGoSince(row.id) || (row.taskId !== null && letGoSince(row.taskId))),
             )
-            .map((row) => row.planId ?? row.id),
+            .map((row) => row.taskId ?? row.id),
         ]);
 
         if (tries < RECHECKS) {
@@ -476,7 +476,7 @@ export function taskListCollections(
           (row) =>
             !agents.holds(row.id) &&
             standing(row) &&
-            (row.planId === null || standing({ id: row.planId })),
+            (row.taskId === null || standing({ id: row.taskId })),
         );
 
         if (planRows.length + agentRows.length === 0) return;
@@ -487,7 +487,7 @@ export function taskListCollections(
         const inSnapshot = new Set(rows.agents.map((row) => row.id));
 
         const omitted = coldAgentKeys.filter(
-          (id) => !inSnapshot.has(id) && tasksDrawn.has(coldAgents.row(id)?.planId ?? ""),
+          (id) => !inSnapshot.has(id) && tasksDrawn.has(coldAgents.row(id)?.taskId ?? ""),
         );
 
         for (const id of [...tasksDrawn, ...answered, ...omitted]) {
@@ -526,7 +526,7 @@ export function taskListCollections(
                 );
 
           const standsHere = (row: { readonly id: string }) => !left.has(row.id);
-          const ofStanding = (row: AgentRow) => row.planId === null || !left.has(row.planId);
+          const ofStanding = (row: AgentRow) => row.taskId === null || !left.has(row.taskId);
           const nextPlans = joinedPlans.filter((id) => !left.has(id));
 
           const nextAgents = joinedAgents.filter((id) => {

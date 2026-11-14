@@ -33,9 +33,24 @@ import {
   type MachineDeviceSettings,
   machineCommandModeSchema,
 } from "@repo/features/machine-command-wire";
-import { and, asc, desc, eq, exists, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  type SQL,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { member } from "../schemas/auth.js";
@@ -507,6 +522,57 @@ const changeSettings = SqlSchema.findAll({
     ),
 });
 
+/** The account's machines read beside the one asked after, to find which of them is the default. */
+const accountMachine = alias(device, "account_machine");
+
+/**
+ * Whether the machine is its account's default machine, where an agent's
+ * call goes that names no machine and whose agent has no pick of its own:
+ * the one the member picked, else the one of theirs whose app joined
+ * first, so a member with one machine has it as their default and keeps it
+ * as they add another, until they pick. Note that a removed machine and
+ * one whose app never joined, such as a Linux box that only runs agents,
+ * take no call, so neither is ever the default. The one statement every
+ * reader of the default asks, the routing and Settings › Machines alike;
+ * false for every machine of an account none of whose apps joined.
+ */
+export const isDefaultMachine: SQL<boolean> = sql<boolean>`coalesce(${device.id} = (${queryBuilder
+  .select({ id: accountMachine.id })
+  .from(accountMachine)
+  .where(
+    and(
+      eq(accountMachine.userId, device.userId),
+      isNull(accountMachine.removedAt),
+      isNotNull(accountMachine.commandMode),
+    ),
+  )
+  .orderBy(desc(accountMachine.isDefault), asc(accountMachine.createdAt), asc(accountMachine.id))
+  .limit(1)}), false)`;
+
+/** Every other machine of the account no longer its default, so the one picked next can be. */
+const clearDefault = SqlSchema.void({
+  Request: DeviceKeySchema,
+  execute: ({ userId, id }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ isDefault: false })
+        .where(and(eq(device.userId, userId), eq(device.isDefault, true), ne(device.id, id))),
+    ),
+});
+
+/** The account's machine of the id picked as its default. */
+const markDefault = SqlSchema.void({
+  Request: DeviceKeySchema,
+  execute: ({ userId, id }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ isDefault: true })
+        .where(and(eq(device.id, id), eq(device.userId, userId))),
+    ),
+});
+
 /** The account's machine of the id stamped removed and its secret cleared, answering the transaction it was removed in; none where the account holds no such machine standing. */
 const stampMachineRemoved = SqlSchema.findAll({
   Request: Schema.Struct({ ...DeviceKeySchema.fields, now: Schema.Date }),
@@ -854,6 +920,8 @@ export interface MachineChange {
   readonly commandMode?: MachineCommandMode | undefined;
   readonly computerUse?: boolean | undefined;
   readonly removeApp?: string | undefined;
+  /** Whether the machine becomes the member's default machine (`isDefaultMachine`). */
+  readonly makeDefault?: true | undefined;
 }
 
 /**
@@ -861,23 +929,33 @@ export interface MachineChange {
  * devices, answering the transaction it was written in; none where the
  * account holds no such machine standing, or one whose app never joined,
  * which holds no settings yet. The machine follows the change live, or
- * takes it as it next joins.
+ * takes it as it next joins; a machine made the default is the account's
+ * one default from then on, every other it held no longer.
  */
 export function changeMachine(
   userId: string,
   id: string,
   change: MachineChange,
 ): DeviceEffect<string | undefined> {
-  return Effect.map(
-    changeSettings({
+  const write = Effect.gen(function* () {
+    const [changed] = yield* changeSettings({
       userId,
       id,
       commandMode: change.commandMode,
       computerUse: change.computerUse,
       removeApp: change.removeApp,
-    }),
-    ([changed]) => changed?.txid,
-  );
+    });
+
+    // Note that the default moves only once the machine is known to stand, so a pick of one gone leaves the default where it was.
+    if (changed !== undefined && change.makeDefault === true) {
+      yield* clearDefault({ userId, id });
+      yield* markDefault({ userId, id });
+    }
+
+    return changed?.txid;
+  });
+
+  return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(write));
 }
 
 /**

@@ -46,7 +46,7 @@ const TASK: Task = {
 /** An agent of the task, whose tab the column shows on the Agents view. */
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Invite expiry job",

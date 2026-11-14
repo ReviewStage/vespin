@@ -77,7 +77,7 @@ const BILLING: TaskSummary = {
 function agentOf(id: string, overrides: Partial<AgentSummary>): AgentSummary {
   return {
     id,
-    planId: BILLING.id,
+    taskId: BILLING.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Prorate seat changes",

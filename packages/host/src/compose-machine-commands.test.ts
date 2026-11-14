@@ -239,6 +239,7 @@ function scriptedService(
                 commandMode: settings.commandMode,
                 computerUse: settings.computerUse ?? null,
                 alwaysAllowedApps: settings.alwaysAllowedApps,
+                isDefault: false,
               })),
             }
           : undefined),

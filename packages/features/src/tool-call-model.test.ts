@@ -54,7 +54,7 @@ test("a command the model described carries its description on one line for the 
   }
 });
 
-test("a browser call says what it did and in which tab, by the title its answer gives, with where it ran beside it; while it runs it names the page it went to, and a call that ran nothing says why", () => {
+test("a browser call says what it did and in which tab, by the title its answer gives, or in the browser where it names no tab; while it runs it names the page it went to, and a call that ran nothing says why", () => {
   const input = {
     actions: [
       { action: "click", tab: "tab-1", ref: "e12" },
@@ -76,7 +76,6 @@ test("a browser call says what it did and in which tab, by the title its answer 
 
   const line = callLine(done.kind, done.subject, done.description);
   assert.deepEqual(line, { verb: "Clicked, typed in", subject: "Sign in · Acme", code: false });
-  assert.equal(callPlace(done.kind), "Browser");
 
   const running = toolCallView({
     tool: "browser",
@@ -99,7 +98,7 @@ test("a browser call says what it did and in which tab, by the title its answer 
   });
 
   assert.deepEqual(callLine(refused.kind, refused.subject, refused.description), {
-    verb: "Listed the tabs",
+    verb: "Listed the tabs in the browser",
     subject: "",
     code: false,
   });
@@ -1273,14 +1272,32 @@ test("a post to the inbox opens the Inbox on the item it posted, by the thread i
   assert.deepEqual(target("read_inbox", {}), { kind: TOOL_TARGET.INBOX });
   assert.deepEqual(target("list_threads", {}), { kind: TOOL_TARGET.INBOX });
 
-  const read = toolCallView({
+  const readCall = {
     tool: "read_thread",
+    callId: "call-read",
     input: { threadId: "item-1" },
-    output: { status: "accepted", thread: { id: "item-1", title: "Invite expiry" } },
-  });
+    output: {
+      status: "accepted",
+      thread: { id: "item-1", key: "invite-ttl", title: "Invite expiry" },
+    },
+  };
+
+  const read = toolCallView(readCall);
 
   assert.equal(read.kind, CALL_KIND.INBOX_THREAD_READ);
   assert.equal(read.subject, "Invite expiry");
+  assert.deepEqual(toolTarget(readCall), {
+    kind: TOOL_TARGET.INBOX,
+    key: "invite-ttl",
+    item: "item-1",
+  });
+  assert.deepEqual(
+    toolTarget({
+      ...readCall,
+      output: { thread: { id: "item-2", key: "theirs", agentId: "agent-2" } },
+    }),
+    { kind: TOOL_TARGET.INBOX },
+  );
 });
 
 test("withdraw_ask is a row naming the thread's key and saying why, opening the Inbox on its item, and the retired reply_inbox and close_inbox_item still draw as they did", () => {

@@ -121,7 +121,7 @@ export const WHOSE_KEY = "app.inboxWhose";
 
 export const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: TASK_ID,
+  taskId: TASK_ID,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Alerts",

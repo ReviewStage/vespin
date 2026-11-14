@@ -9,7 +9,7 @@ import { followSwipes } from "./swipe-navigation";
 import { windowPushes } from "./window-pushes";
 
 /** An app link to a task, as the system hands one to the app. */
-const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, planId: "task-1" } };
+const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, taskId: "task-1" } };
 
 /**
  * A panel window's swipes as its page meets them: the swipe Logi Options+

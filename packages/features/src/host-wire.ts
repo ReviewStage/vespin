@@ -407,15 +407,17 @@ export const hostDoneAnswerSchema = EffectSchema.Struct({
 /**
  * One of the account's machines changed from any of the member's devices,
  * the web included (POST): how agents' terminal commands run there, whether
- * agents may use its apps, and one app it always allows taken back, each
- * only where named. The machine follows the change live (its own row of
- * `MACHINES_READ`), and one that is offline takes it as it next joins.
+ * agents may use its apps, one app it always allows taken back, and whether
+ * it becomes the member's default machine, each only where named. The
+ * machine follows the change live (its own row of `MACHINES_READ`), and one
+ * that is offline takes it as it next joins.
  */
 export const machineChangeRequestSchema = EffectSchema.Struct({
   id: wireUuidSchema,
   commandMode: EffectSchema.optionalKey(machineCommandModeSchema),
   computerUse: EffectSchema.optionalKey(EffectSchema.Boolean),
   removeApp: EffectSchema.optionalKey(appName),
+  makeDefault: EffectSchema.optionalKey(EffectSchema.Literal(true)),
 });
 
 export type MachineChangeRequest = typeof machineChangeRequestSchema.Type;
