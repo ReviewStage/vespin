@@ -213,6 +213,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   words. An Inbox thread stands roomier, as Mail's message rows do
   (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
   its lines), while a task's row keeps the list's tighter inset.
+- **A list with nothing to show** still stands, its `EmptyState` over it
+  (`RowList`'s `empty`), as iOS sets its content-unavailable view over a
+  list: a pull still reads it again, and the state's own press, such as Try
+  again, still takes a tap. A screen never swaps its list for the state.
 - **Select mode** (`RowList`'s `choosing`) is SwiftUI's own edit mode, as
   Mail's Select: a round check leads each row, a tap ticks it, two fingers
   dragged down tick a run, and the swipes step aside. Its screen names the

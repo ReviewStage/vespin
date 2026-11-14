@@ -28,7 +28,7 @@ import {
   UNDER_SPLIT_SCREEN,
 } from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useHandColumns } from "../place-columns.js";
@@ -97,6 +97,7 @@ function FoundList({
   onOpen,
   onRemind,
   onArchiveAgent,
+  empty,
 }: {
   readonly found: SearchFound;
   readonly scope: SearchScope;
@@ -107,6 +108,8 @@ function FoundList({
   readonly onRemind: (item: InboxItem) => void;
   /** Asks to archive an agent found, once it rests, as a task's Agents do. */
   readonly onArchiveAgent: (agentId: string) => void;
+  /** What stands over the list while the scope found nothing. */
+  readonly empty?: ReactNode | undefined;
 }) {
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const pictureOf = useMemberPictures();
@@ -121,6 +124,7 @@ function FoundList({
       onRefresh={async () => {
         await Promise.all([refresh(), refreshTasks()]);
       }}
+      empty={empty}
     >
       {shown.tasks.length === 0 ? null : (
         <ListSection
@@ -197,18 +201,18 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
       <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
     ) : (
       <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-        {none ? (
-          <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
-        ) : (
-          <FoundList
-            found={found}
-            scope={scope}
-            listing={listing}
-            onOpen={open}
-            onRemind={remind.open}
-            onArchiveAgent={archiveAsk.archive}
-          />
-        )}
+        {/* Note that the list stands even where the scope found nothing, its words over it, so a pull still reads the workspace again. */}
+        <FoundList
+          found={found}
+          scope={scope}
+          listing={listing}
+          onOpen={open}
+          onRemind={remind.open}
+          onArchiveAgent={archiveAsk.archive}
+          empty={
+            none ? <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} /> : undefined
+          }
+        />
       </ScopePicker>
     );
 

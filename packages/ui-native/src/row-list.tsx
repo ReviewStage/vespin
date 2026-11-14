@@ -1,6 +1,16 @@
 // row-list.tsx -- a list of rows and its sections, as SwiftUI's own List draws them, each section under a small muted header that folds.
 
-import { Button, HStack, Image, List, Menu, Section, Spacer, Text } from "@expo/ui/swift-ui";
+import {
+  Button,
+  HStack,
+  Image,
+  List,
+  Menu,
+  Section,
+  Spacer,
+  Text,
+  ZStack,
+} from "@expo/ui/swift-ui";
 import type { ModifierConfig } from "@expo/ui/swift-ui/modifiers";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
@@ -78,6 +88,8 @@ type RowListProps = {
   readonly onRefresh?: (() => Promise<void>) | undefined;
   /** Its Select mode, while it stands in one; none for a list a tap opens rows in. */
   readonly choosing?: RowChoosing | undefined;
+  /** What stands over the list while it holds no rows, such as an `EmptyState` saying why; none while it holds rows. */
+  readonly empty?: ReactNode | undefined;
   readonly children: ReactNode;
 };
 
@@ -106,15 +118,26 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
  * still scrolls from either edge. In Select mode the list stands in
  * SwiftUI's own edit mode, as Mail's Select does: a round check leads each
  * row, a tap ticks it rather than opening it, two fingers dragged down tick
- * a run, and the rows' swipes step aside, as the system's do.
+ * a run, and the rows' swipes step aside, as the system's do. A list with
+ * nothing to show still stands, its empty state over it, as iOS sets its
+ * content-unavailable view over a list, so a pull still reads it again and
+ * the state's own press, such as Try again, still takes a tap.
  */
-export function RowList({ look, selected, onSelect, onRefresh, choosing, children }: RowListProps) {
+export function RowList({
+  look,
+  selected,
+  onSelect,
+  onRefresh,
+  choosing,
+  empty,
+  children,
+}: RowListProps) {
   const colors = useColors();
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
 
   // Note that a list in Select mode draws no row as the open one and reads nothing on a pull, since its checks say what is chosen and a pull there would read the rows from under them.
-  return (
+  const list = (
     <List
       selection={
         choosing !== undefined ? [...choosing.chosen] : selected === undefined ? [] : [selected]
@@ -149,6 +172,16 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
         </RowSelectedContext>
       </RowOpenContext>
     </List>
+  );
+
+  // Note that the empty state stands over the list rather than in its place, and takes a touch only where it draws, so a pull on the space around it still scrolls the list.
+  return empty === undefined ? (
+    list
+  ) : (
+    <ZStack>
+      {list}
+      {empty}
+    </ZStack>
   );
 }
 
