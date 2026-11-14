@@ -4,11 +4,13 @@ import { Button, HStack, Image, List, Menu, Section, Spacer, Text } from "@expo/
 import type { ModifierConfig } from "@expo/ui/swift-ui/modifiers";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  Animation,
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHint,
   accessibilityLabel,
   accessibilityValue,
+  animation,
   background,
   buttonStyle,
   environment,
@@ -26,6 +28,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useState } from "react";
+import { useReduceMotion } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
@@ -37,6 +40,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** Whether a foldable section stands open, in VoiceOver's own words for a disclosure. */
 const FOLD_HEARD = { OPEN: "Expanded", SHUT: "Collapsed" } as const;
+
+/** FNV-1a's 32-bit offset and prime, and the character `orderOf` puts between two ids so `ab`,`c` and `a`,`bc` differ. */
+const FNV = { OFFSET: 0x811c9dc5, PRIME: 0x01000193, SEPARATOR: 0x1f } as const;
 
 /** What a press on a foldable section's header is heard to do. */
 const FOLD_HINT = "Shows or hides the rows it holds";
@@ -80,6 +86,27 @@ type RowListProps = {
   readonly choosing?: RowChoosing | undefined;
   readonly children: ReactNode;
 };
+
+/**
+ * A number standing for the rows' ids in their order, FNV-1a over each id's
+ * characters with a separator between ids, so it changes when a row comes,
+ * goes, or moves, and holds while the same rows only redraw.
+ */
+function orderOf<Item>(data: readonly Item[], keyOf: (item: Item) => string): number {
+  let hash: number = FNV.OFFSET;
+
+  for (const item of data) {
+    const key = keyOf(item);
+
+    for (let index = 0; index < key.length; index++) {
+      hash = Math.imul(hash ^ key.charCodeAt(index), FNV.PRIME);
+    }
+
+    hash = Math.imul(hash ^ FNV.SEPARATOR, FNV.PRIME);
+  }
+
+  return hash;
+}
 
 /** The one row a SwiftUI `List` selection names, where it names one. */
 function selectedId(selection: readonly (string | number)[]): string | undefined {
@@ -172,8 +199,15 @@ type RowForEachProps<Item> = {
  * row drawn here holds no state of its own; its caller holds it by id.
  */
 export function RowForEach<Item>({ data, keyOf, children }: RowForEachProps<Item>) {
+  const reduceMotion = useReduceMotion();
+
+  // Note that a row that comes, goes, or moves slides the rows around it into place, as Mail's list does when a message is archived, rather than the list redrawing in its new order at once; with Reduce Motion on the rows stand in their new places at once, as the system's own lists do.
   return (
-    <List.ForEach data={data} keyExtractor={keyOf}>
+    <List.ForEach
+      data={data}
+      keyExtractor={keyOf}
+      modifiers={reduceMotion ? [] : [animation(Animation.default, orderOf(data, keyOf))]}
+    >
       {({ item }) => children(item)}
     </List.ForEach>
   );
