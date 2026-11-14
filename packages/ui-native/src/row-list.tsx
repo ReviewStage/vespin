@@ -23,6 +23,7 @@ import {
   listStyle,
   monospacedDigit,
   onGeometryChange,
+  padding,
   refreshable,
   scrollContentBackground,
   scrollDismissesKeyboard,
@@ -329,6 +330,7 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
   if (only === undefined) return null;
 
   // Note that the target's frame and shape stand on the glyph, the button's label, since a borderless button or a menu answers only where its label is hit.
+  // Note that the target then gives back its height past the glyph's, so the 44 pt press reaches over the header's own margins rather than standing the header 44 pt tall, which parted a section with a + further from its neighbors than one without.
   const glyph = (
     <Image
       {...glyphImage(GLYPH.ADD)}
@@ -337,6 +339,7 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
       modifiers={[
         frame({ minWidth: ADD_TARGET.WIDTH, minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),
         SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        padding({ vertical: -Math.max(0, ADD_TARGET.HEIGHT - size) / 2 }),
       ]}
     />
   );
