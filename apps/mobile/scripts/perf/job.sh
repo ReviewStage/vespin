@@ -8,12 +8,12 @@ W=${W:-$HOME/vespin-ipad-agent}; BASE=${BASE:-$W/Vmain.app}
 IPH=${IPH:-CE9E34B9-693F-475C-8AC7-308952029222}; IPAD=${IPAD:-ABD9B3FE-4859-40A8-85F9-63B98B47142F}
 P=$HOME/vespin-perf; R=${R:-$W/repo}; O=$P/$T; mkdir -p $P; rm -rf $O; mkdir -p $O; L=$O/job.log
 WT=${WT:-$W/perf-wt}
-git -C $R fetch -q origin main "+refs/heads/chore/probe-tap-timing:refs/remotes/origin/chore/probe-tap-timing" && for ref in "$@"; do git -C $R fetch -q origin "+refs/heads/$ref:refs/remotes/origin/$ref" 2>/dev/null; done
+git -C $R fetch -q origin main "+refs/heads/chore/probe-tap-timing:refs/remotes/origin/chore/probe-tap-timing" && for ref in "$@"; do git -C $R fetch -q origin "+refs/heads/${ref}:refs/remotes/origin/${ref}" >> $L 2>&1 || echo "FETCH FAILED ${ref}" >> $L; done
 git -C $R worktree remove --force $WT 2>/dev/null; rm -rf $WT; git -C $R worktree prune
 git -C $R worktree add -q --detach $WT origin/chore/probe-tap-timing || { echo "WORKTREE FAILED" >> $L; exit 1; }
 trap 'cd $HOME; git -C $R worktree remove --force $WT 2>/dev/null; rm -rf $WT; git -C $R worktree prune' EXIT
 cd $WT
-for ref in "$@"; do git -c user.name=perf -c user.email=perf@localhost merge -q --no-edit origin/$ref >> $L 2>&1 || { git merge --abort 2>/dev/null; echo "MERGE FAILED $ref" >> $L; exit 1; }; done
+for ref in "$@"; do git -c user.name=perf -c user.email=perf@localhost merge -q --no-edit origin/${ref} >> $L 2>&1 || { git merge --abort 2>/dev/null; echo "MERGE FAILED ${ref}" >> $L; exit 1; }; done
 echo "built $(git rev-parse --short HEAD) = probe + $* (PROFILE=${PROFILE:-1})" >> $L
 pnpm install --frozen-lockfile --prefer-offline > $O/install.log 2>&1; echo "install $?" >> $L
 cd apps/mobile && rm -rf dist && env -u LC_ALL LANG=en_US.UTF-8 EXPO_NO_TELEMETRY=1 PERF_PROFILE=${PROFILE:-1} pnpm exec expo export --platform ios $([[ ${PROFILE:-1} == 1 ]] && echo --no-minify) --output-dir dist > $O/export.log 2>&1; echo "export $?" >> $L
