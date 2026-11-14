@@ -292,7 +292,7 @@ export const DesktopInbox = memo(function DesktopInbox({
         const taskId =
           (chosen?.item.id === item.id ? chosen.holder.task.id : undefined) ??
           standing.find(({ items }) => items.some((each) => each.id === item.id))?.holder.task.id ??
-          tasks.liveAgents?.find((agent) => agent.id === item.agentId)?.planId;
+          tasks.liveAgents?.find((agent) => agent.id === item.agentId)?.taskId;
 
         inbox.choose(
           taskId === undefined
@@ -341,8 +341,8 @@ export const DesktopInbox = memo(function DesktopInbox({
     if (routed.kind === ROUTE.GO) {
       const { place: at } = routed.link;
 
-      if (at.kind !== LINK_DESTINATION.AGENT || at.planId === undefined) return false;
-      tasks.onShowAgent(at.planId, at.agentId);
+      if (at.kind !== LINK_DESTINATION.AGENT || at.taskId === undefined) return false;
+      tasks.onShowAgent(at.taskId, at.agentId);
 
       return true;
     }
@@ -880,7 +880,7 @@ function InboxSidePanel({
 
         if (taskId === undefined) return;
 
-        return openPlace({ kind: LINK_DESTINATION.AGENT, planId: taskId, agentId: agent }, () =>
+        return openPlace({ kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId: agent }, () =>
           tasks.onShowAgent(taskId, agent),
         );
       }
@@ -888,7 +888,7 @@ function InboxSidePanel({
       case TOOL_TARGET.DESCRIPTION:
         if (taskId === undefined) return;
 
-        return openPlace({ kind: LINK_DESTINATION.TASK, planId: taskId }, () =>
+        return openPlace({ kind: LINK_DESTINATION.TASK, taskId: taskId }, () =>
           tasks.onShowTask(taskId),
         );
       case TOOL_TARGET.INBOX:
@@ -1009,13 +1009,13 @@ export function paneDoors(
   // An agent the item or its task's card names reads beside it, as a link to it does.
   // Note that an archived agent's tab is not drawn beside the item, so the window opens it on its task.
   const openAgent = (taskId: string, agentId: string) =>
-    seams.openPlace({ kind: LINK_DESTINATION.AGENT, planId: taskId, agentId }, () =>
+    seams.openPlace({ kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId }, () =>
       tasks.onShowAgent(taskId, agentId),
     );
 
   // A task the card names, its parent or a sub-task, opens as a link to it does.
   const openTask = (taskId: string) =>
-    seams.openPlace({ kind: LINK_DESTINATION.TASK, planId: taskId }, () => tasks.onSelect(taskId));
+    seams.openPlace({ kind: LINK_DESTINATION.TASK, taskId: taskId }, () => tasks.onSelect(taskId));
 
   return {
     tasks,

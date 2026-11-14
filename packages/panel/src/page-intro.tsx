@@ -80,7 +80,7 @@ function selectIntros(state: AppStateSnapshot) {
 }
 
 /** Whether `intro`'s card stands: the account's preferences answered, and the intro not yet seen; and Got it, which dismisses it for good. */
-export function useIntro(intro: Intro) {
+function useIntro(intro: Intro) {
   const intros = useQuery({ ...appStateQuery, select: selectIntros }).data;
   const { mutate: updateSetting } = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
   const [dismissed, setDismissed] = useState(false);

@@ -156,6 +156,7 @@ export const FAILURE_SURFACE = {
   PALETTE_READ: "palette.read",
   PERSON_AUTOMATIONS_READ: "person_automations.read",
   PERSON_INBOX_READ: "person_inbox.read",
+  PERSON_MACHINES_READ: "person_machines.read",
   PERSON_READ: "person.read",
   PERSON_TASKS_READ: "person_tasks.read",
   PICTURE_KEEP: "picture.keep",

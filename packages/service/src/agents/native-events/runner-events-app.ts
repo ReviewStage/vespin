@@ -87,6 +87,7 @@ import {
 import { providerModelOf } from "../../providers/model-catalog.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
+import { turnAccountNames } from "../agent-runtime/servers.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
 import { roomAfterLimit, soonestResetBeside } from "../coder-host/agent-runtime-choice.js";
 import { carriedOn } from "../coder-host/carry-on.js";
@@ -118,6 +119,8 @@ import {
   type NativeWrite,
   projectMoments,
   turnProgressed,
+  withCallAccounts,
+  withTurnAccounts,
   withTurnServers,
 } from "./native-projection.js";
 import { isApprovalEvent, landApprovalEvent } from "./runner-approvals.js";
@@ -860,7 +863,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         planLimited: state.rateLimit !== undefined,
       };
 
-      const moments = applying.read(message, held);
+      const moments = withCallAccounts(state, applying.read(message, held));
 
       if (afterLimit === undefined && endsOnLimit(state, moments)) {
         afterLimit = yield* roomAfterLimitOf(applying);
@@ -905,6 +908,13 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         );
 
         state = withTurnServers(state, write.turnId, taken);
+
+        // Note that a read of the names that fails stamps none, so the turn's calls keep the names their ids give, and the turn goes on.
+        const accounts = yield* turnAccountNames(applying.target.userId).pipe(
+          Effect.orElseSucceed(() => ({})),
+        );
+
+        state = withTurnAccounts(state, write.turnId, accounts);
       }
     }
 
