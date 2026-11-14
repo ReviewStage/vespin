@@ -50,6 +50,7 @@ import { installedSkill } from "../schemas/installed-skill.js";
 import { integrationConnection } from "../schemas/integration.js";
 import { integrationInstallation } from "../schemas/integration-installation.js";
 import { machineCommand } from "../schemas/machine-command.js";
+import { machineCommandAsk } from "../schemas/machine-command-ask.js";
 import { memory, memoryRecall } from "../schemas/memory.js";
 import { personalWorkspace } from "../schemas/personal-workspace.js";
 import { accountPreference } from "../schemas/preferences.js";
@@ -441,11 +442,21 @@ export const taskReadSync = defineSyncTable(taskRead, {
  * `machine_command_device_listener`), which every such read rewrites, are not
  * captured: no read waits on them. A stopped recording's video is ignored
  * too, since its call reads it only once the result it comes before
- * notifies, and an update comparing it would weigh its bytes.
+ * notifies, and an update comparing it would weigh its bytes, and so is the
+ * agent the command is for, which is written with it and never moves.
  */
 export const machineCommandSync = defineSyncTable(machineCommand, {
   topics: [{ kind: TOPIC.ACCOUNT, column: machineCommand.userId }],
-  ignore: [machineCommand.recording],
+  ignore: [machineCommand.recording, machineCommand.agentId],
+});
+
+/**
+ * An ask a machine holds for its owner's answer, on the owner's topic,
+ * which the owner's read of its machines' asks is woken on: an ask posted,
+ * answered, or taken down.
+ */
+export const machineCommandAskSync = defineSyncTable(machineCommandAsk, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: machineCommandAsk.userId }],
 });
 
 /**
@@ -903,6 +914,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   agentPinSync,
   taskReadSync,
   machineCommandSync,
+  machineCommandAskSync,
   accountPreferenceSync,
   accountSoundSync,
   accountSoundChoiceSync,

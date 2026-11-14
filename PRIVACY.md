@@ -178,6 +178,15 @@ your Mac and never leaves it; only an app you pick is sent, by its name and
 bundle id, as part of your message, which the agent and anyone who can open
 the task can read.
 
+When one of your Macs asks you whether to run an agent's command or let it
+use an app, we also keep the ask on our servers so you can answer it from the
+web app, the iOS app, or another of your machines: the command's text, or the
+app's name, bundle id, and icon, with which agent asked, and your answer. Only
+you can see or answer it, never a teammate, though a note you give with a Deny
+is handed to the agent and stays in its transcript as its other results do. We
+delete the ask once that Mac takes your answer, or about an hour after it was
+asked.
+
 The apps you always allow on a Mac are kept with that Mac's settings on our
 servers, by bundle id, with each app's name and icon as the Mac shows them,
 so that `@` in the web app, or on another of your machines, can list them.
