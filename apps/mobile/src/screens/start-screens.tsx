@@ -9,7 +9,11 @@ import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
 import { REMOVE_RELATION, TASK_RELATION_MENU } from "@repo/features/task-relation-model";
-import { TASK_CREATE_RELATION_WORDS, TASK_STATUS_TONE } from "@repo/features/task-standing-words";
+import {
+  TASK_CREATE_RELATION_WORDS,
+  TASK_STATUS_TONE,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
 import {
   isTaskSettled,
   TASK_CREATE_RELATION_KIND,
@@ -68,6 +72,8 @@ import { useWrite } from "../use-write.js";
 /** The panel's words for the sheets, their capsules, their menus, and their acts. */
 const WORDS = {
   NEW_AGENT: "New agent",
+  /** What VoiceOver hears for the task New agent starts on, which the capsule says with its ring and name alone. */
+  STARTS_ON: (task: string, status: string) => `Starts on ${task}, ${status}`,
   NEW_TASK: "New task",
   AGENT_PLACEHOLDER: "Ask to make changes",
   TASK_PLACEHOLDER: "Describe the task",
@@ -500,7 +506,15 @@ export function NewAgentScreen({
  * starts only on the task it was opened from.
  */
 function StartsOnChip({ task }: { readonly task: TaskSummary }) {
-  return <FieldChip label={task.name} status={task.status ?? TASK_STATUS.TODO} />;
+  const status = task.status ?? TASK_STATUS.TODO;
+
+  return (
+    <FieldChip
+      label={task.name}
+      status={status}
+      heard={WORDS.STARTS_ON(task.name, TASK_STATUS_WORDS[status])}
+    />
+  );
 }
 
 /** What New task opens on in place of an empty sheet: a draft the share sheet kept. */
