@@ -92,7 +92,7 @@ it.layer(getTestDB())("the device store", (it) => {
   );
 
   it.effect(
-    "a machine that runs no agents reads online only while its app listened since the instant asked",
+    "a machine that runs no agents carries its commands mode and apps switch, and reads online only while its app listened since the instant asked",
     () =>
       Effect.gen(function* () {
         const { owner } = yield* openAccounts;
@@ -104,8 +104,19 @@ it.layer(getTestDB())("the device store", (it) => {
           name: "Laptop",
           platform: DEVICE_PLATFORM.DARWIN,
           arch: DEVICE_ARCH.ARM64,
-          settings: { commandMode: MACHINE_COMMAND_MODE.ASK, alwaysAllowedApps: [] },
+          settings: {
+            commandMode: MACHINE_COMMAND_MODE.ASK,
+            alwaysAllowedApps: ["com.apple.Notes"],
+            computerUse: false,
+          },
         });
+        const [read] = yield* workspaceMachinesOf(owner, shared, new Date(0));
+
+        assert.deepEqual(
+          [read?.commandMode, read?.computerUse, read !== undefined && "alwaysAllowedApps" in read],
+          [MACHINE_COMMAND_MODE.ASK, false, false],
+          "its commands mode and apps switch, never its always-allowed apps",
+        );
 
         const online = (since: number) =>
           Effect.map(workspaceMachinesOf(owner, shared, new Date(since)), (machines) =>
