@@ -1,4 +1,4 @@
-// KeyboardDockModule.swift -- a screen that lifts the bar at its foot with the system's keyboard, read frame by frame from UIKit's keyboard layout guide, and tells JavaScript how far the keyboard stands over it.
+// KeyboardDockModule.swift -- a screen that lifts the bar at its foot with the system's keyboard, read frame by frame from UIKit's keyboard layout guide, stands it as its content's bottom scroll edge, and tells JavaScript how far the keyboard stands over it.
 //
 // `@repo/ui-native`'s `GlassDock` stands its content and its bar inside this
 // view (`keyboard-dock.ts`), the bar as its last child. React Native hears the
@@ -14,6 +14,11 @@
 // link holds this view while it runs, so it stops as the view leaves its
 // window, which it does before it goes. JavaScript
 // hears the same overlap, so the content under the bar leaves room for it.
+//
+// The bar also stands as the content's bottom edge element, so iOS 26 draws
+// its soft scroll edge under the bar, as it does under its own bars: words
+// scrolling under the composer's glass fade rather than standing sharp behind
+// its placeholder and its +.
 //
 // Note that the overlap is read against this view, which stands still, and
 // never against the bar it moves, which would chase its own lift. A keyboard
@@ -37,6 +42,9 @@ public final class KeyboardDockModule: Module {
 /// The least change in the keyboard's overlap, in points, that is told to JavaScript, so a layout pass that moves nothing sends nothing.
 private let overlapStep: CGFloat = 0.5
 
+/// How deep under the dock's content its scroll view is looked for, so a screen still reading, with no list yet, costs a layout pass little.
+private let scrollViewDepth = 8
+
 final class KeyboardDockView: ExpoView {
   let onOverlap = EventDispatcher()
 
@@ -45,6 +53,9 @@ final class KeyboardDockView: ExpoView {
 
   /// The view the dock last lifted, so a view that stops being the bar, as a page goes Back with the keyboard up, is set down before Fabric draws it anew elsewhere.
   private weak var lifted: UIView?
+
+  /// The bar's standing as the content's bottom edge element, which draws the scroll edge under it.
+  private let edge = UIScrollEdgeElementContainerInteraction()
 
   /// Follows the keyboard each frame while it stands, since a drag that pulls it down moves the layout guide without asking this view for a layout pass.
   private var frames: CADisplayLink?
@@ -118,6 +129,7 @@ final class KeyboardDockView: ExpoView {
   override func willRemoveSubview(_ subview: UIView) {
     super.willRemoveSubview(subview)
     if subview === lifted { setDown() }
+    if subview === edge.view { subview.removeInteraction(edge) }
   }
 
   /// Sets the lifted view back where its layout stands it.
@@ -129,6 +141,22 @@ final class KeyboardDockView: ExpoView {
   override func layoutSubviews() {
     super.layoutSubviews()
     follow()
+    standAsEdge()
+  }
+
+  /// Stands the bar as the bottom edge element of the first scroll view the content holds, as soon as both are mounted, and again once the content's scroll view is another.
+  private func standAsEdge() {
+    guard let bar = subviews.last, subviews.count > 1 else { return }
+    let content = subviews.dropLast()
+
+    if let held = edge.scrollView, content.contains(where: { held.isDescendant(of: $0) }), edge.view === bar { return }
+    guard let scroller = content.lazy.compactMap({ firstScrollView(in: $0) }).first else { return }
+
+    edge.view?.removeInteraction(edge)
+    edge.edge = .bottom
+    edge.scrollView = scroller
+    scroller.bottomEdgeEffect.style = .soft
+    bar.addInteraction(edge)
   }
 
   /// Lifts the bar by how far the keyboard stands over this view's foot, less the bottom safe area the bar already stands clear of, and tells JavaScript the overlap.
@@ -147,4 +175,14 @@ final class KeyboardDockView: ExpoView {
     told = overlap
     onOverlap(["overlap": overlap])
   }
+}
+
+/// The first scroll view at or under a view, the shallowest first, so a list's own scroller is found before any it holds in its rows.
+private func firstScrollView(in root: UIView) -> UIScrollView? {
+  var level: [UIView] = [root]
+  for _ in 0..<scrollViewDepth where !level.isEmpty {
+    if let found = level.lazy.compactMap({ $0 as? UIScrollView }).first { return found }
+    level = level.flatMap(\.subviews)
+  }
+  return nil
 }
