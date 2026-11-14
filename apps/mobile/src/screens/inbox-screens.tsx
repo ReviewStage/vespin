@@ -874,7 +874,8 @@ type InboxSearch = { readonly search: string; readonly setSearch: (search: strin
 function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
-  useAppReadyCount(listing.listed.length > 0);
+  // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
+  useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
   const remind = useRemindSheet();
