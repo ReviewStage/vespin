@@ -196,7 +196,7 @@ export function matchingSkills(
 }
 
 /** One skill a `/` being typed offers: its name, the word a pick writes, and what it is for. */
-export interface OfferedSkill {
+interface OfferedSkill {
   readonly name: string;
   readonly word: string;
   readonly detail: string;
