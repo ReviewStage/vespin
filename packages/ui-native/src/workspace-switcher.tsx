@@ -87,12 +87,12 @@ export type SwitcherAccount = {
   readonly name: string;
   /** The account's sign-in picture, which its row leads with; its letters where it has none. */
   readonly picture?: string | undefined;
-  /** The account's email address, which its row is named by where it has one, as Mail and Notes name an account, so it never reads as a personal workspace of the same name and face. */
+  /** The account's email address, which its row says under Settings where it has one, as Mail and Notes name an account, so it never reads as a personal workspace of the same name and face. */
   readonly address?: string | undefined;
   readonly onPress: () => void;
 };
 
-/** What the account's row says under its name: where it goes. */
+/** What the account's row is named: where it goes, ahead of whose it is, so it never reads as a third workspace. */
 const SETTINGS = "Settings";
 
 /** A workspace's tile, and the account's photo, at the head of their rows. */
@@ -238,9 +238,10 @@ function SwitcherRow({
  * tile or photo, its name, and who shares it, the chosen one checked in
  * copper; then the acts, such as New workspace, and Workspace settings, in
  * the panel's two groups and its words (`workspaceMenuGroups`); and last,
- * where a caller hands one, the account by its photo and address, opening
- * Settings. Each row closes the list and says what it does through
- * `closed`, which runs it once the list has gone.
+ * where a caller hands one, the row into Settings, led by the account's
+ * photo with its address, or its name, under it. Each row closes the list
+ * and says what it does through `closed`, which runs it once the list has
+ * gone.
  */
 function SwitcherList({
   props,
@@ -292,8 +293,8 @@ function SwitcherList({
         <Section>
           <SwitcherRow
             mark={<Avatar name={account.name} picture={account.picture} size={markSize} />}
-            name={account.address || account.name}
-            line={SETTINGS}
+            name={SETTINGS}
+            line={account.address || account.name}
             onPress={() => closed(account.onPress)}
           />
         </Section>
