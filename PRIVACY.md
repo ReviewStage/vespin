@@ -226,7 +226,9 @@ The Vespin iOS app sends the same kind of counts while you are signed in:
 when it opens, each day you use it, sign-ins and sign-outs, and the kind of
 screen you open (the Inbox, a thread, a task, an agent, a page, a pull
 request, or Settings) and whether the window showed one column or two, never
-which thread, task, or agent it was. They go through the Service, as the Mac
+which thread, task, or agent it was, and, once each time it opens, how long
+it took to show your Inbox, rounded down to a step (under a second, then 1,
+2, 3, 5, 8, 13, or 20 seconds or more), never how many threads it held. They go through the Service, as the Mac
 app's do, and the app holds no PostHog key of its own.
 
 While you are signed in, the Mac app and the web app record how you use
