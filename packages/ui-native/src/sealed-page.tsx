@@ -7,8 +7,16 @@ import {
   type PageThemeVariable,
 } from "@repo/features/page-theme";
 import { sealedPageDocument } from "@repo/features/sealed-page";
-import { useMemo } from "react";
-import { Linking, StyleSheet, useColorScheme, useWindowDimensions } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Linking,
+  StyleSheet,
+  useColorScheme,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { WebView, type WebViewNavigation } from "react-native-webview";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -31,7 +39,13 @@ const FONT = {
 /** The room a page stands in from the screen's edges, as the panel keeps it in a narrow tab. */
 const PAGE_INSET = "16px";
 
-const styles = StyleSheet.create({ page: { flex: 1 } });
+/** How long the loading ground takes to give way to the page once it has loaded, as a cross-fade. */
+const REVEAL_MS = 200;
+
+const styles = StyleSheet.create({
+  page: { flex: 1 },
+  loading: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
+});
 
 /** The theme a page reads, in the brand's colors for the window's scheme, as the panel hands a page its own. */
 function themeOf(colors: BrandColors, dark: boolean): PageTheme {
@@ -118,17 +132,46 @@ type SealedPageProps = {
 };
 
 /**
- * A page drawn whole in a web view of its own, the app's one: its HTML
- * handed in with the policy that seals it (`@repo/features/sealed-page`),
- * so it fetches, frames, and loads nothing, and stays where it was handed
- * in; its scripts run, so a chart draws and a table sorts. It reads the
- * brand's theme in the window's scheme at the reader's text size, and is
- * drawn anew as either changes.
+ * The system's spinner on the brand's ground over a page until its web view
+ * has loaded, then fading to the page, as Safari's own views stand while
+ * they load, rather than a blank body while WebKit starts cold. It is heard
+ * as nothing, since the page's own words stand under it the whole while.
  */
-export function SealedPage({ html, title }: SealedPageProps) {
+function PageLoading({ loaded }: { readonly loaded: boolean }) {
+  const colors = useColors();
+  const [shown] = useState(() => new Animated.Value(1));
+  const [gone, setGone] = useState(false);
+
+  // Note that the fade runs once, the first time the page loads, since a later load of the same view redraws a page already standing.
+  useEffect(() => {
+    if (!loaded) return;
+
+    Animated.timing(shown, { toValue: 0, duration: REVEAL_MS, useNativeDriver: true }).start(() =>
+      setGone(true),
+    );
+  }, [loaded, shown]);
+
+  return gone ? null : (
+    <Animated.View
+      pointerEvents="none"
+      importantForAccessibility="no-hide-descendants"
+      accessibilityElementsHidden
+      style={[styles.loading, { backgroundColor: colors.GROUND, opacity: shown }]}
+    >
+      <ActivityIndicator color={colors.TEXT_MUTED} />
+    </Animated.View>
+  );
+}
+
+/** The page at one text size, with its loading ground until it first loads. */
+function SealedPageAt({
+  html,
+  title,
+  fontScale,
+}: SealedPageProps & { readonly fontScale: number }) {
   const colors = useColors();
   const dark = useColorScheme() === "dark";
-  const { fontScale } = useWindowDimensions();
+  const [loaded, setLoaded] = useState(false);
 
   const document = useMemo(
     () => sealedPageDocument(html, themeOf(colors, dark)),
@@ -136,24 +179,42 @@ export function SealedPage({ html, title }: SealedPageProps) {
   );
 
   return (
-    <WebView
-      // Note that the page is drawn anew at a new text size, since its script runs once, before the page.
-      key={fontScale}
-      source={{ html: document }}
-      injectedJavaScriptBeforeContentLoaded={textScaleScript(fontScale)}
-      originWhitelist={EVERY_ADDRESS}
-      onShouldStartLoadWithRequest={staysSealed}
-      javaScriptEnabled
-      domStorageEnabled={false}
-      cacheEnabled={false}
-      incognito
-      allowsLinkPreview={false}
-      allowFileAccess={false}
-      allowsInlineMediaPlayback
-      setSupportMultipleWindows={false}
-      contentInsetAdjustmentBehavior="automatic"
-      style={[styles.page, { backgroundColor: colors.GROUND }]}
-      accessibilityLabel={title}
-    />
+    <View style={styles.page}>
+      <WebView
+        source={{ html: document }}
+        injectedJavaScriptBeforeContentLoaded={textScaleScript(fontScale)}
+        originWhitelist={EVERY_ADDRESS}
+        onShouldStartLoadWithRequest={staysSealed}
+        onLoadEnd={() => setLoaded(true)}
+        javaScriptEnabled
+        domStorageEnabled={false}
+        cacheEnabled={false}
+        incognito
+        allowsLinkPreview={false}
+        allowFileAccess={false}
+        allowsInlineMediaPlayback
+        setSupportMultipleWindows={false}
+        contentInsetAdjustmentBehavior="automatic"
+        style={[styles.page, { backgroundColor: colors.GROUND }]}
+        accessibilityLabel={title}
+      />
+      <PageLoading loaded={loaded} />
+    </View>
   );
+}
+
+/**
+ * A page drawn whole in a web view of its own, the app's one: its HTML
+ * handed in with the policy that seals it (`@repo/features/sealed-page`),
+ * so it fetches, frames, and loads nothing, and stays where it was handed
+ * in; its scripts run, so a chart draws and a table sorts. It reads the
+ * brand's theme in the window's scheme at the reader's text size, and is
+ * drawn anew as either changes. Until it first loads, the system's spinner
+ * stands over it (`PageLoading`).
+ */
+export function SealedPage({ html, title }: SealedPageProps) {
+  const { fontScale } = useWindowDimensions();
+
+  // Note that the page is drawn anew at a new text size, since its script runs once, before the page, and so waits on its load again.
+  return <SealedPageAt key={fontScale} html={html} title={title} fontScale={fontScale} />;
 }

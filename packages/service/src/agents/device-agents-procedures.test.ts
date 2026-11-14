@@ -406,7 +406,10 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         const host = yield* pairedHost(owner);
         const otherHost = yield* pairedHost(other);
 
-        const ownBeat = yield* answerOf(hostBeat(host.secret, host.deviceId));
+        const ownBeat = yield* answerOf(
+          hostBeat(host.secret, host.deviceId, publishedRelease().VERSION),
+        );
+
         const otherDeviceBeat = yield* statusOf(hostBeat(host.secret, otherHost.deviceId));
 
         const followedByOther = yield* statusOf(
