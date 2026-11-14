@@ -401,7 +401,7 @@ function InboxEmpty({
   );
 }
 
-/** The Inbox's scopes as its pills, the one shown filled, Questions and Open with their counts while they hold anything, as the sidebar's places leave out a 0. */
+/** The Inbox's scopes as its pills, the one shown filled, Questions and Open with their counts. */
 function scopePills(
   show: InboxShow,
   choose: (show: InboxShow) => void,
@@ -409,7 +409,7 @@ function scopePills(
 ): readonly Scope[] {
   return INBOX_SCOPES.map((scope) => ({
     label: INBOX_SHOW_LABEL[scope],
-    count: COUNTED_SCOPES.has(scope) && counts[scope] > 0 ? counts[scope] : undefined,
+    count: COUNTED_SCOPES.has(scope) ? counts[scope] : undefined,
     selected: scope === show,
     onPress: () => choose(scope),
   }));
