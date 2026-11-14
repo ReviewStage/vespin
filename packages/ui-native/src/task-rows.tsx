@@ -249,7 +249,14 @@ function PullRequestLink({
         accessibilityHint(OPENS_PULL_REQUEST),
       ]}
     >
-      <HStack spacing={SPACE.TIGHT}>
+      {/* Note that the link stands in Apple's least target, as a block's comment count does, the shape on that frame rather than on the button, since a borderless button takes a press only where its label is hit. */}
+      <HStack
+        spacing={SPACE.TIGHT}
+        modifiers={[
+          frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
+      >
         <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_LINE} hidden />
         <Text
           modifiers={[
