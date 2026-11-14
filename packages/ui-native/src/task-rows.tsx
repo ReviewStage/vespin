@@ -231,14 +231,26 @@ type AgentRowProps = {
   readonly preview?: ReactElement | undefined;
 };
 
+/** How far past its words an agent row's pull request link takes a press, in points: out to either side short of the line's gap to its neighbors, up only to the gap under the line above, and down to the row's foot, or only to the gap under it where a fact stands below it at an accessibility size; so the row stays its height and its other words keep the row's own press. */
+const LINK_REACH = {
+  ACROSS: SPACE.TIGHT,
+  UP: 2,
+  DOWN: ROW_INSET.VERTICAL,
+  DOWN_TO_FACT: 2,
+} as const;
+
 /** An agent's pull request in its line: its state's glyph and its number, pressed to open it. */
 function PullRequestLink({
   pullRequest,
+  factBelow,
 }: {
   readonly pullRequest: NonNullable<AgentRowProps["pullRequest"]>;
+  /** Whether a fact stands on its own line under the link, as the needs-you count does at an accessibility size. */
+  readonly factBelow: boolean;
 }) {
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[pullRequestMarkState(pullRequest)];
+  const down = factBelow ? LINK_REACH.DOWN_TO_FACT : LINK_REACH.DOWN;
 
   return (
     <SwiftUIButton
@@ -249,7 +261,19 @@ function PullRequestLink({
         accessibilityHint(OPENS_PULL_REQUEST),
       ]}
     >
-      <HStack spacing={SPACE.TIGHT}>
+      {/* Note that the link takes a press past its words, down to the row's foot or the fact under it and out to either side, through a shape padded out and then taken back so the line lays out no taller; it stops short of the title above, which opens the agent. The shape stands on the label, since a borderless button takes a press only where its label is hit. */}
+      <HStack
+        spacing={SPACE.TIGHT}
+        modifiers={[
+          padding({ horizontal: LINK_REACH.ACROSS, top: LINK_REACH.UP, bottom: down }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          padding({
+            horizontal: -LINK_REACH.ACROSS,
+            top: -LINK_REACH.UP,
+            bottom: -down,
+          }),
+        ]}
+      >
         <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_LINE} hidden />
         <Text
           modifiers={[
@@ -312,7 +336,9 @@ export function AgentRow(props: AgentRowProps) {
       {!told && waiting === 0 ? null : (
         <RowLine>
           {resting ? null : <AgentStateWords working={state === AGENT_ROW_STATE.WORKING} />}
-          {pullRequest === undefined ? null : <PullRequestLink pullRequest={pullRequest} />}
+          {pullRequest === undefined ? null : (
+            <PullRequestLink pullRequest={pullRequest} factBelow={stacked && waiting > 0} />
+          )}
           {waiting === 0 ? null : (
             <Text
               modifiers={[
