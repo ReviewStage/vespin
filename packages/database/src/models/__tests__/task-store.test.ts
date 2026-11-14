@@ -20,7 +20,14 @@ import { user } from "../../schemas/auth.js";
 import { conversations } from "../../schemas/storage.js";
 import { task } from "../../schemas/task.js";
 import { taskPin } from "../../schemas/task-pin.js";
-import { getTestDB, joinWorkspace, openTaskAgent, openWorkspace } from "../../testing/index.js";
+import { TOPIC } from "../../sync/notification.js";
+import {
+  expectTopicsFire,
+  getTestDB,
+  joinWorkspace,
+  openTaskAgent,
+  openWorkspace,
+} from "../../testing/index.js";
 import { archiveAgent, readAgent } from "../agent-store.js";
 import {
   archiveAgentOfDoneTask,
@@ -619,6 +626,29 @@ const parentOf = (userId: string, taskId: string) =>
   );
 
 it.layer(getTestDB())("a task's parent", (it) => {
+  it.effect(
+    "a child moved to another parent names both parents, the one it left and the one it joined, and its own task and workspace",
+    () =>
+      Effect.gen(function* () {
+        const { dean, taskId: left, workspace } = yield* openSharedTask;
+
+        const { id: joined } = yield* createTask(dean, {
+          name: "Billing",
+          organizationId: workspace,
+        });
+
+        const { id: child } = yield* createTask(dean, { name: "Child", organizationId: workspace });
+        yield* setTaskParent(dean, child, left);
+
+        yield* expectTopicsFire(setTaskParent(dean, child, joined), [
+          [TOPIC.TASK, child],
+          [TOPIC.TASK_PARENT, left],
+          [TOPIC.TASK_PARENT, joined],
+          [TOPIC.WORKSPACE, workspace],
+        ]);
+      }),
+  );
+
   it.effect(
     "is set after creation by any member, stands as set, and is cleared with null, each answered with the task as it then stands",
     () =>

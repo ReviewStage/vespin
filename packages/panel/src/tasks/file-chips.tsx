@@ -37,7 +37,7 @@ function namedBy(file: FileChip, name: string): boolean {
 }
 
 /** A file's pill: a picture's thumbnail, or any other file's type, and its open where its bytes are here; without `onOpen`, an inert pill hanging nothing, as a row's line draws it. */
-export function WordFileChip({
+function WordFileChip({
   name,
   file,
   onOpen,
@@ -91,7 +91,7 @@ type UseWordFileViewerResult = {
 };
 
 /** The viewer a message's files open in: open one by its name, walking `files` from it, and the viewer while one is open. */
-export function useWordFileViewer(files: readonly FileChip[]): UseWordFileViewerResult {
+function useWordFileViewer(files: readonly FileChip[]): UseWordFileViewerResult {
   // The file open, by its name, so a file taken off meanwhile closes it rather than opening its neighbor.
   const [viewing, setViewing] = useState<string | undefined>(undefined);
   const at = viewing === undefined ? -1 : files.findIndex((file) => file.name === viewing);

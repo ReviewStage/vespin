@@ -57,7 +57,7 @@ import { cn } from "../cn.js";
 import { FileText } from "../components/file-text/file-text.js";
 import { INLINE_REF_FIT, InlineRefFitScope } from "../components/inline-ref/inline-ref-fit.js";
 import { QUOTE_CLASS } from "../quote-face.js";
-import { ALERT_KIND, alertKindOf, alertQuotes, MarkdownAlert } from "./markdown-alerts.js";
+import { alertKindOf, alertQuotes, MarkdownAlert } from "./markdown-alerts.js";
 import { MARKDOWN_CLASS, markdownClass } from "./markdown-class.js";
 import {
   type MarkdownTaskBox,
@@ -70,8 +70,6 @@ import {
   taskInput,
 } from "./markdown-tasks.js";
 
-export type { AlertKind } from "./markdown-alerts.js";
-
 export type {
   MarkdownTaskBox,
   MarkdownTaskTick,
@@ -80,8 +78,6 @@ export type {
 } from "./markdown-tasks.js";
 
 export { TaskBox } from "./markdown-tasks.js";
-
-export { ALERT_KIND };
 
 /** How a place's words are drawn: as a note, a transcript, or a site's document. */
 export const MARKDOWN_LOOK = {

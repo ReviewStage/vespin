@@ -124,7 +124,7 @@ const ENTITY_CARD: EntityCards = {
     />
   ),
   [ENTITY_KIND.VERSION]: (version, at) => (
-    <VersionChipCard taskId={version.planId} revision={version.revision} fallback={at.own} />
+    <VersionChipCard taskId={version.taskId} revision={version.revision} fallback={at.own} />
   ),
   [ENTITY_KIND.COMMENT]: OWN_CARD,
   // Note that an older link's page an agent showed on itself names no task to read it through, so it hangs the card of a page not read.
@@ -147,7 +147,7 @@ const ENTITY_CARD: EntityCards = {
   [ENTITY_KIND.CHANGES]: (changes, at) => (
     <AgentPullRequestChipCard
       agentId={changes.agentId}
-      taskId={changes.planId}
+      taskId={changes.taskId}
       reading={reading(at)}
       fallback={at.own}
     />

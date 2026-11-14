@@ -135,7 +135,7 @@ function useContinueStart(
 
   const letGo = () => {
     if (carry === undefined) return;
-    writer.update({ kind: DRAFT_PLACE.AGENT, planId: carry.taskId, agentId }, (now) =>
+    writer.update({ kind: DRAFT_PLACE.AGENT, taskId: carry.taskId, agentId }, (now) =>
       holdsCarried(now, carry) ? EMPTY_DRAFT : now,
     );
   };

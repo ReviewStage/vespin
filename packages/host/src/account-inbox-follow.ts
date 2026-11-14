@@ -145,8 +145,8 @@ function counted(entry: Entry, readerId: string): boolean {
   return (entry.waitsOn ?? entry.startedBy ?? readerId) === readerId;
 }
 
-/** The parts of the read a write changes. Note that `planless`, which the read still carries for a released desktop, holds nothing a write could change. */
-type Changeable = Pick<AccountInboxLiveRows, "items" | "plans">;
+/** The parts of the read a write changes. Note that `taskless`, which the read still carries for a released desktop, holds nothing a write could change. */
+type Changeable = Pick<AccountInboxLiveRows, "items" | "tasks">;
 
 /**
  * The rows a change leaves of the read: each open item it settles gone and
@@ -170,21 +170,21 @@ function rowsChanged(
     if (changed !== "gone") return [changed];
 
     if (counted(entry, readerId)) {
-      answered.set(entry.planId, (answered.get(entry.planId) ?? 0) + 1);
+      answered.set(entry.taskId, (answered.get(entry.taskId) ?? 0) + 1);
     }
 
     return [];
   });
 
-  const plans = rows.plans.map((plan) => {
-    const fewer = answered.get(plan.planId) ?? 0;
+  const tasks = rows.tasks.map((task) => {
+    const fewer = answered.get(task.taskId) ?? 0;
 
-    return fewer === 0 || plan.toDo === undefined
-      ? plan
-      : { ...plan, toDo: Math.max(0, plan.toDo - fewer) };
+    return fewer === 0 || task.toDo === undefined
+      ? task
+      : { ...task, toDo: Math.max(0, task.toDo - fewer) };
   });
 
-  return moved ? { items, plans } : undefined;
+  return moved ? { items, tasks } : undefined;
 }
 
 /** The map a composer holds for as long as it stands. */
@@ -201,8 +201,8 @@ export function accountInboxes(
         const inbox = yield* SubscriptionRef.make<AccountInboxState>({ kind: LIVE_STATE.WAITING });
         const items = yield* answeredCollection({ getKey: (row: Entry) => row.id });
 
-        const plans = yield* answeredCollection({
-          getKey: (row: AccountInboxLiveRows["plans"][number]) => row.planId,
+        const tasks = yield* answeredCollection({
+          getKey: (row: AccountInboxLiveRows["tasks"][number]) => row.taskId,
         });
 
         let wait: TxWait | undefined;
@@ -212,7 +212,7 @@ export function accountInboxes(
         /** Takes rows as the read's own, every part's. */
         const taken = (rows: AccountInboxLiveRows) => {
           items.answer(rows.items);
-          plans.answer(rows.plans);
+          tasks.answer(rows.tasks);
           answered = rows;
         };
 
@@ -221,7 +221,7 @@ export function accountInboxes(
           const held: Changeable = {
             // SAFETY: each collection holds only the rows of its own part, which the read answered.
             items: rowsOf(items.collection) as AccountInboxLiveRows["items"],
-            plans: rowsOf(plans.collection),
+            tasks: rowsOf(tasks.collection),
           };
 
           return writes
