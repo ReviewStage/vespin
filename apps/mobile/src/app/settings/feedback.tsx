@@ -205,11 +205,7 @@ export default function FeedbackScreen() {
 
       if (!went) return;
       // Note that only what was sent is taken off: words changed while it was out, a picture added or still being read meanwhile, and the other kind's note all stay, and keep the page.
-      const now = held.current;
-      const other = kind === FEEDBACK_KIND.FEEDBACK ? FEEDBACK_KIND.PROMPT : FEEDBACK_KIND.FEEDBACK;
-      const edited = now.words[kind] !== message;
-      const added = now[kind].some((picture) => !sent.has(picture.id));
-      const otherHeld = now.words[other].trim() !== "" || now[other].length > 0;
+      const edited = held.current.words[kind] !== message;
 
       for (const id of sent) detach(id);
       // Note that a note that went says so under the field, told to VoiceOver, and the page stays to say it, since the app's notice stands under the Settings sheet this page is drawn in, and a buzz alone is never heard with haptics off or by VoiceOver.
@@ -219,10 +215,7 @@ export default function FeedbackScreen() {
         setWords((current) => ({ ...current, [kind]: "" }));
         setSends((count) => count + 1);
       }
-
-      // Note that once nothing is left on the page, Back leaves it without asking; a picture dropped while the send was out and still being read, or the other kind's note, keeps the ask.
-      if (!standing.current || edited || added || otherHeld || now.reading) return;
-      kept.release();
+      // Note that the page is never let go here: with nothing left on it, nothing is drafted and Back leaves without asking, while a second note written after keeps the ask.
     });
   };
 
