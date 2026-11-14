@@ -201,6 +201,7 @@
     "./description-comment-live": "./src/description-comment-live.js",
     "./description-comment-wire": "./src/description-comment-wire.js",
     "./description-sections": "./src/description-sections.js",
+    "./description-version-diff": "./src/description-version-diff.js",
     "./description-edit": "./src/description-edit.js",
     "./description-history-words": "./src/description-history-words.js",
     "./description-markdown": "./src/description-markdown.js",
