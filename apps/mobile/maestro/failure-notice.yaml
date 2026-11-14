@@ -1,11 +1,12 @@
-# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice rising at the window's foot with the refusal's words and Try again, Try again refused once more, and the notice swiped away.
+# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice rising at the window's foot with the refusal's words and Try again, Try again refused once more, the notice swiped away, and a refusal inside Add a follower's sheet and inside Settings standing in that sheet.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
 ---
 # Launched on the host's Inbox fixture with `-refuseWrites true`, so the
-# fixture refuses a task's status and its pin as the service would
+# fixture refuses a task's status, its pin, a follower added and a memory
+# deleted as the service would
 # (`src/host/fixture-host.ts`), and no server is reached.
 - launchApp:
     clearState: true
@@ -62,3 +63,38 @@ appId: dev.vespin.ios
 - assertVisible: "The task could not be marked done\\..*"
 - assertVisible: "Weekly digest email"
 - takeScreenshot: failure-notice-mark-done
+# A refusal inside a sheet draws in that sheet, over its backdrop, not
+# behind it: Add a follower stands over Billing export's Followers sheet,
+# and the fixture leaves the add unanswered, so the sheet stays and the
+# notice rises at the sheet's own foot.
+- tapOn: "Tasks"
+- tapOn: "Billing export"
+- tapOn: "Following"
+- tapOn: "Add a follower"
+- tapOn: "Alan Turing.*"
+- assertVisible: "Following could not be changed\\..*"
+- waitForAnimationToEnd
+- takeScreenshot: failure-notice-add-follower
+# Settings is a sheet with a stack of its own: a memory's Delete there is
+# refused, and the notice says so in Settings rather than under it.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      refuseWrites: "true"
+- assertVisible: "Recorded the invite flow"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Memory"
+- tapOn: "Memory"
+- waitForAnimationToEnd
+- longPressOn: "The staging database is reset every Sunday night."
+- tapOn: "Delete"
+- assertVisible: "Delete this memory?"
+- tapOn: "Delete memory"
+- assertVisible: "The memory could not be deleted\\..*"
+- waitForAnimationToEnd
+- takeScreenshot: failure-notice-settings
