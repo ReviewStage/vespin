@@ -854,6 +854,8 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
     const reports: string[] = [];
     // Whether another payer has room, or when a limit resets, read once and only for a batch that ends a turn on the plan's limit.
     let afterLimit: AfterLimit | undefined;
+    // The owner's account names, read once for a batch that may open a turn, before its calls are written (`withCallAccounts`).
+    let opening: Readonly<Record<string, string>> | undefined;
 
     for (const { sequence, message } of events) {
       const held: NativeHeld = {
@@ -863,7 +865,17 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         planLimited: state.rateLimit !== undefined,
       };
 
-      const moments = withCallAccounts(state, applying.read(message, held));
+      // An event read with no turn under way may open one, so its calls are named by the names read for it.
+      // Note that a read of the names that fails stamps none, so the turn's calls keep the names their ids give, and the turn goes on.
+      if (state.turn === undefined && opening === undefined) {
+        opening = yield* turnAccountNames(applying.target.userId).pipe(
+          Effect.orElseSucceed(() => ({})),
+        );
+      }
+
+      const accounts = state.turn === undefined ? (opening ?? {}) : (state.turn.accounts ?? {});
+
+      const moments = withCallAccounts(state, applying.read(message, held), accounts);
 
       if (afterLimit === undefined && endsOnLimit(state, moments)) {
         afterLimit = yield* roomAfterLimitOf(applying);
@@ -908,13 +920,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         );
 
         state = withTurnServers(state, write.turnId, taken);
-
-        // Note that a read of the names that fails stamps none, so the turn's calls keep the names their ids give, and the turn goes on.
-        const accounts = yield* turnAccountNames(applying.target.userId).pipe(
-          Effect.orElseSucceed(() => ({})),
-        );
-
-        state = withTurnAccounts(state, write.turnId, accounts);
+        state = withTurnAccounts(state, write.turnId, opening ?? {});
       }
     }
 

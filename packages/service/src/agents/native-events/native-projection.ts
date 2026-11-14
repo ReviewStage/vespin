@@ -237,18 +237,27 @@ function stampedInput(
 
 /**
  * The moments with each call of an integration's tool naming the account it
- * ran on, as the turn under way recorded the agent's owner calling it
- * (`withTurnAccounts`), so every reader of the call names the account it ran
- * on, never one of their own. A call the turn names no account for, or one
- * read before the turn recorded them, is left as it was.
+ * ran on, by `accounts`: the names the turn under way recorded the agent's
+ * owner calling each account (`withTurnAccounts`), or, for an event that
+ * opens a turn, the names read for it (`turnAccountNames`), so every reader
+ * of the call names the account it ran on, never one of their own. A call
+ * settled with a new input is named by the call it settles, started in the
+ * same event or held by the turn. A call on an account no name stands for is
+ * left as it was.
  */
 export function withCallAccounts(
   state: NativeProjection,
   moments: readonly NativeMoment[],
+  accounts: Readonly<Record<string, string>>,
 ): readonly NativeMoment[] {
-  const accounts = state.turn?.accounts;
+  if (Object.keys(accounts).length === 0) return moments;
 
-  if (accounts === undefined) return moments;
+  // Note that a call may start and settle in one event, as Codex tells a call it answered at once, before the turn holds its name.
+  const started = new Map(
+    moments.flatMap((moment) =>
+      moment.kind === NATIVE_MOMENT.TOOL_STARTED ? [[moment.callId, moment.name] as const] : [],
+    ),
+  );
 
   return moments.map((moment) => {
     if (moment.kind === NATIVE_MOMENT.TOOL_STARTED) {
@@ -256,7 +265,7 @@ export function withCallAccounts(
     }
 
     if (moment.kind === NATIVE_MOMENT.TOOL_SETTLED && moment.input !== undefined) {
-      const name = state.turn?.calls[moment.callId];
+      const name = started.get(moment.callId) ?? state.turn?.calls[moment.callId];
 
       return { ...moment, input: stampedInput(name, moment.input, accounts) };
     }
