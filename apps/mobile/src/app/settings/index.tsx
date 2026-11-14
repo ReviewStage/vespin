@@ -26,6 +26,7 @@ import {
   ListSection,
   PUSH_ROW_GOES,
   PushRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   useColors,
@@ -113,7 +114,7 @@ export default function SettingsScreen() {
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button onPress={() => router.back()}>Done</Stack.Toolbar.Button>
       </Stack.Toolbar>
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <SettingsForm>
           {account?.status === ACCOUNT_STATUS.SIGNED_IN ? (
             <ListSection>

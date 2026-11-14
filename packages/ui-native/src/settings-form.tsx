@@ -7,6 +7,7 @@ import {
   Image,
   LabeledContent,
   Menu,
+  ProgressView,
   Spacer,
   Button as SwiftUIButton,
   SwipeActions,
@@ -464,6 +465,22 @@ export function ToggleRow({ label, detail, on, disabled: off = false, onChange }
         </Text>
       )}
     </Toggle>
+  );
+}
+
+/**
+ * A group's rows while they are read: the system's small spinner beside the
+ * read's words in the muted ink, as Settings stands one in a group still
+ * filling, so a header never stands over nothing.
+ */
+export function LoadingRow({ words }: { readonly words: string }) {
+  const colors = useColors();
+
+  return (
+    <HStack spacing={SPACE.ROW} modifiers={[listRowBackground(colors.RAISED)]}>
+      <ProgressView modifiers={[tint(colors.TEXT_MUTED)]} />
+      <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{words}</Text>
+    </HStack>
   );
 }
 

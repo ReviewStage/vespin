@@ -3,9 +3,8 @@
 import type { InstalledSkillContent } from "@repo/features/installed-skill-route-wire";
 import { formatBytes } from "@repo/features/number-format";
 import { fencedSkillFile, SKILLS_LINE } from "@repo/features/skills-settings-words";
-import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
-import { EmptyState, GLYPH, MarkdownPage, Screen } from "@repo/ui-native";
+import { EmptyState, GLYPH, MarkdownPage, SCREEN_GROUND, Screen } from "@repo/ui-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { useHostActs } from "../../host/host-provider.js";
@@ -65,19 +64,16 @@ export default function SkillScreen() {
   return (
     <>
       <Stack.Screen options={{ title: name }} />
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         {read.kind === SKILL_READ.READ ? (
           <MarkdownPage title={name} words={skillWords(read.content)} onOpenLink={openLink} />
         ) : read.kind === SKILL_READ.FAILED ? (
           <EmptyState
             title={SKILLS_LINE.VIEW_FAILED}
             symbol={GLYPH.FAILED}
-            action={{
-              label: VERB.RETRY,
-              onPress: () => {
-                setRead({ kind: SKILL_READ.READING });
-                setRound((each) => each + 1);
-              },
+            retry={() => {
+              setRead({ kind: SKILL_READ.READING });
+              setRound((each) => each + 1);
             }}
           />
         ) : (

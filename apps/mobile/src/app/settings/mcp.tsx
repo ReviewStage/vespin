@@ -12,7 +12,7 @@ import {
   mcpClientRevokeRefused,
 } from "@repo/features/mcp-clients-words";
 import { agoText, provenanceText } from "@repo/features/time-format";
-import { readingWords, VERB } from "@repo/features/words";
+import { readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount } from "@repo/host/app-state-reads";
@@ -22,6 +22,7 @@ import {
   EmptyState,
   GLYPH,
   ListSection,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
 } from "@repo/ui-native";
@@ -121,22 +122,25 @@ function McpPage({ accountId }: { readonly accountId: string }) {
         <EmptyState
           title={MCP_CLIENTS_WORDS.READ_FAILED}
           symbol={GLYPH.FAILED}
-          action={{
-            label: VERB.RETRY,
-            onPress: () =>
-              void acts[ACT_KIND.MCP_CLIENTS_RETRY]().catch((cause: unknown) =>
-                console.error("Reading the connected apps again did not go.", cause),
-              ),
-          }}
+          retry={() =>
+            void acts[ACT_KIND.MCP_CLIENTS_RETRY]().catch((cause: unknown) =>
+              console.error("Reading the connected apps again did not go.", cause),
+            )
+          }
         />
       ) : (
         <EmptyState title={READING} symbol={MCP_SYMBOL} loading />
       )
+    ) : shown.length === 0 ? (
+      // Note that no app connected stands as the page's own empty state with what the page is for, rather than one footer line on an empty form.
+      <EmptyState
+        title={MCP_CLIENTS_WORDS.NONE}
+        description={MCP_CLIENTS_WORDS.CAPTION}
+        symbol={MCP_SYMBOL}
+      />
     ) : (
       <SettingsForm>
-        <ListSection
-          footer={shown.length === 0 ? MCP_CLIENTS_WORDS.NONE : MCP_CLIENTS_WORDS.CAPTION}
-        >
+        <ListSection footer={MCP_CLIENTS_WORDS.CAPTION}>
           {shown.map((client) =>
             standing.has(client.clientId) ? (
               <ConnectionRow
@@ -167,7 +171,7 @@ function McpPage({ accountId }: { readonly accountId: string }) {
 
   return (
     <>
-      <Screen>{body}</Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>{body}</Screen>
       <ConfirmAsk
         title={question.title}
         message={question.body}

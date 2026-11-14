@@ -3,7 +3,7 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { SOCIAL_PROVIDER_LABEL } from "@repo/features/sign-in-provider";
 import { TASKS_READ } from "@repo/features/tasks-view";
-import { ACT_UNREACHED_WORDS, IRREVERSIBLE_WORDS, VERB } from "@repo/features/words";
+import { ACT_UNREACHED_WORDS, IRREVERSIBLE_WORDS, readingWords, VERB } from "@repo/features/words";
 import { ACT_KIND, accountDeleteRefusalWords, accountDeleteWorkspacesWords } from "@repo/host/acts";
 import {
   selectAccount,
@@ -17,6 +17,8 @@ import {
   ActionRow,
   ConfirmAsk,
   ListSection,
+  LoadingRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   ToggleRow,
@@ -92,7 +94,7 @@ export default function AccountScreen() {
 
   return (
     <>
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <SettingsForm>
           <ListSection>
             <AccountHead
@@ -108,7 +110,9 @@ export default function AccountScreen() {
               usage.refusal ?? supportPress.refusal ?? (supportShown ? support?.words : undefined)
             }
           >
-            {settings === undefined ? null : (
+            {settings === undefined ? (
+              <LoadingRow words={readingWords("your settings")} />
+            ) : (
               <ToggleRow
                 key={usageRound}
                 label="Share usage data"
