@@ -893,8 +893,9 @@ export function DesktopShell({
   // Note that setup standing before the app holds the places' chords too, so none lands behind it, as New workspace's cards do.
   const newWorkspace = useNewWorkspace(tasks.placeLeave);
   const founding = !gated && !updateNeeded && newWorkspace.open;
+  // Note that setup the update screen stands in place of holds no chords, so Settings stays a key away.
   usePlaceCommands(
-    !gated && setup === SETUP_GATE.NONE && !founding,
+    !gated && (updateNeeded || setup === SETUP_GATE.NONE) && !founding,
     tab,
     onTabChange,
     tasks,
