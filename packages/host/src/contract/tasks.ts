@@ -67,7 +67,6 @@ import {
   tasksPictureParamsSchema,
   tasksPinParamsSchema,
   tasksPinRepositoryParamsSchema,
-  tasksReadOutsideParamsSchema,
   tasksRemoveFollowerParamsSchema,
   tasksRenameParamsSchema,
   tasksRepositoriesParamsSchema,
@@ -413,8 +412,8 @@ export const TASKS_ACTS = declaredActs({
     door: ACT.READ,
     unanswered: undefined,
   }),
-  TASKS_READ_OUTSIDE: hostAct({
-    input: tasksReadOutsideParamsSchema,
+  TASKS_LOAD: hostAct({
+    input: taskIdParamsSchema,
     output: EffectSchema.Void,
     refusal: "Could not read that task on this system.",
     panelOnly: true,

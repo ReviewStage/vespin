@@ -310,8 +310,8 @@ test("on a plan, a Done task the window lists not is asked of the service as the
 
       return Promise.resolve();
     },
-    [ACT_KIND.TASKS_READ_OUTSIDE]: (payload) => {
-      told.push({ kind: ACT_KIND.TASKS_READ_OUTSIDE, payload });
+    [ACT_KIND.TASKS_LOAD]: (payload) => {
+      told.push({ kind: ACT_KIND.TASKS_LOAD, payload });
 
       return Promise.resolve();
     },
@@ -364,7 +364,7 @@ test("on a plan, a Done task the window lists not is asked of the service as the
   );
   await vi.waitFor(() =>
     assert.deepEqual(told.at(-1), {
-      kind: ACT_KIND.TASKS_READ_OUTSIDE,
+      kind: ACT_KIND.TASKS_LOAD,
       payload: { taskId: "plan-8" },
     }),
   );

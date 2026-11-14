@@ -77,7 +77,7 @@ const selectWorkspaces = (state: AppStateSnapshot): readonly Workspace[] => stat
 
 /**
  * Reads the task `taskId` names into the window's list where it holds it
- * not (`TASKS_READ_OUTSIDE`), so a chip naming it wears its name and its
+ * not (`TASKS_LOAD`), so a chip naming it wears its name and its
  * status once it lands; none, or a task the list holds, asks nothing.
  */
 export function useTaskReadIn(taskId: string | undefined): void {
@@ -85,7 +85,7 @@ export function useTaskReadIn(taskId: string | undefined): void {
   const outside = row === undefined ? taskId : undefined;
 
   useEffect(() => {
-    if (outside !== undefined) tellAct(ACT_KIND.TASKS_READ_OUTSIDE, { taskId: outside });
+    if (outside !== undefined) tellAct(ACT_KIND.TASKS_LOAD, { taskId: outside });
   }, [outside]);
 }
 

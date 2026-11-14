@@ -2127,7 +2127,7 @@ export function useMentionPicker({
     for (const outside of threadTasksOutside) {
       if (threadTasksAsked.current.has(outside)) continue;
       threadTasksAsked.current.add(outside);
-      tellAct(ACT_KIND.TASKS_READ_OUTSIDE, { taskId: outside });
+      tellAct(ACT_KIND.TASKS_LOAD, { taskId: outside });
     }
   });
 
