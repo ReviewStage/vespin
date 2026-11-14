@@ -110,7 +110,10 @@ builds a control of its own.
   screen and a list stand on the brand's `GROUND` and `SIDEBAR`, never the
   system's grays, and so do a split view's list and detail columns
   themselves (`containerBackground`) and a sheet or popover to its edge
-  (`presentationBackground`); a split view's sidebar paints nothing, so it
+  (`presentationBackground`), but for a short route sheet at half height in
+  a compact window, which iOS floats as Liquid Glass and which stands on
+  that glass alone (see Grouped forms) unless the reader reduces
+  transparency; a split view's sidebar paints nothing, so it
   stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
   inset cards; and the tint is the brand's copper, never the system's blue.
   Only a control's states and a label's hierarchy are the system's.

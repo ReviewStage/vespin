@@ -19,15 +19,13 @@ import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
+import { SHORT_SHEET_DETENTS } from "../sheet-stack.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
-
-/** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
-const SHORT_SHEET_DETENTS = [0.5, 1];
 
 /**
  * The screens, each behind the account's standing: the tabs, Settings, and
