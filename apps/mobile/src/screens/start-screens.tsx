@@ -133,19 +133,23 @@ function SheetBar({
   const colors = useColors();
   const router = useRouter();
 
+  // Note that the options are made once for their title and colors, because the stack sets a screen's options again whenever a new object comes, which a key typed would make.
+  const options = useMemo(
+    () => ({
+      headerShown: true,
+      title,
+      headerTintColor: colors.TEXT,
+      headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+      headerShadowVisible: false,
+      contentStyle: { backgroundColor: colors.GROUPED },
+    }),
+    [title, colors],
+  );
+
   return (
     <>
       {/* Note that the bar has no ground of its own, so the system draws its buttons in glass over the sheet's. */}
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title,
-          headerTintColor: colors.TEXT,
-          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
-          headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
-        }}
-      />
+      <Stack.Screen options={options} />
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
       </Stack.Toolbar>
@@ -555,6 +559,9 @@ interface RelationPick {
   readonly clear: () => void;
 }
 
+/** What a menu of tasks to relate to reads of the pick: the tasks it may name, the one named, and how to name one. */
+type RelationChoices = Pick<RelationPick, "tasks" | "relation" | "pick">;
+
 /**
  * The relation New task starts its task in: none until one is picked from
  * the +, its kind and its task together, or Sub-task of `parent` where a
@@ -592,9 +599,13 @@ function useRelationPick(
 }
 
 /** The tasks a kind may name, as a menu's choices, the one named checked. */
-function taskChoices(pick: RelationPick, kind: TaskCreateRelationKind): ChipMenuGroup["choices"] {
+function taskChoices(
+  pick: RelationChoices,
+  kind: TaskCreateRelationKind,
+): ChipMenuGroup["choices"] {
   return pick.tasks.map((task) => ({
     label: task.name,
+    id: task.id,
     symbol: STATUS_MARK_SYMBOL[task.status ?? TASK_STATUS.TODO],
     tone: TASK_STATUS_TONE[task.status ?? TASK_STATUS.TODO],
     on: pick.relation?.kind === kind && pick.relation.taskId === task.id,
@@ -603,7 +614,7 @@ function taskChoices(pick: RelationPick, kind: TaskCreateRelationKind): ChipMenu
 }
 
 /** The + menu's Task relation, as the panel's + offers it: each kind, then the task it names; none while no task may be named. */
-function relationMenu(pick: RelationPick): BarMenu | undefined {
+function relationMenu(pick: RelationChoices): BarMenu | undefined {
   if (pick.tasks.length === 0) return undefined;
 
   return {
@@ -736,7 +747,11 @@ export function NewTaskScreen({
       : (repository.failed ??
         (repository.read && repository.options.length === 0 ? WORDS.NO_REPOSITORIES : undefined));
 
-  const related = relationMenu(relation);
+  // Note that the relation menu, a choice for each open task under each kind, is made again only as the tasks or the pick change, never on a key typed.
+  const related = useMemo(
+    () => relationMenu({ tasks: relation.tasks, relation: relation.relation, pick: relation.pick }),
+    [relation.tasks, relation.relation, relation.pick],
+  );
 
   const start = () => {
     if (!drafted) return;

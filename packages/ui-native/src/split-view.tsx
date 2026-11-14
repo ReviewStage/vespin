@@ -27,7 +27,7 @@ import {
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { type ReactNode, useEffect } from "react";
+import { memo, type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { BarContent } from "./bar-content.js";
 import type { Glyph } from "./glyph.js";
@@ -145,8 +145,13 @@ type SplitViewProps = {
   readonly onSidebarShownChange: (shown: boolean) => void;
 };
 
-/** A bar's menu as SwiftUI's: each choice a toggle the system checks, then a rule, then each act. */
-export function BarMenuButton({
+/**
+ * A bar's menu as SwiftUI's: each choice a toggle the system checks, then a
+ * rule, then each act. Note that it is drawn again only for a menu changed,
+ * because a menu of many choices, such as one listing every open task, would
+ * otherwise build each of them anew on every key typed beside it.
+ */
+export const BarMenuButton = memo(function BarMenuButton({
   menu,
   modifiers = [],
 }: {
@@ -160,7 +165,7 @@ export function BarMenuButton({
     <Menu label={menuLabel(menu.label, menu.symbol)} modifiers={[...modifiers]}>
       {menu.choices.map((choice) => (
         <Toggle
-          key={choice.label}
+          key={choice.id ?? choice.label}
           {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
@@ -181,7 +186,7 @@ export function BarMenuButton({
       ))}
     </Menu>
   );
-}
+});
 
 /** A bar's menu standing in its bar, such as a column's ⋯, its glyph alone in the bar's glass. */
 export function BarMenuItem({ menu }: { readonly menu: BarMenu }) {

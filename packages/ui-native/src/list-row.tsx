@@ -129,6 +129,8 @@ export type RowAction = {
 /** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark, in its tone where it has one. */
 export type MenuChoice = {
   readonly label: string;
+  /** What tells the choice apart where two may share a label, such as two tasks of one name; the label where none is given. */
+  readonly id?: string | undefined;
   readonly symbol?: Glyph | undefined;
   /** The tone the glyph is drawn in, as a status's mark is in the panel's menu; the menu's own ink where none is given. */
   readonly tone?: StatusTone | undefined;
