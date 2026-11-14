@@ -15,24 +15,36 @@ import {
   ChipPopover,
   type ChipPopoverFact,
   type ChipPopoverMenu,
+  GAP,
   HoverCard,
   HoverCardHead,
   HoverCardNote,
+  Inline,
   type MenuRow,
   POPOVER_ALIGN,
   POPOVER_WIDTH,
   STATUS_TONE,
   StaticChip,
+  SUBMENU_WIDTH,
+  TEXT_ELEMENT,
+  TEXT_TONE,
+  TEXT_VARIANT,
+  Text,
   Tooltip,
   useSecond,
   VisuallyHidden,
 } from "@repo/ui";
+import { actorName } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
+import { ReplayWords } from "@repo/ui/session-replay-marks";
 import type { ReactNode } from "react";
+import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { presenceStanding, useDevicePresence } from "../device-presence.js";
 import { useThisMac } from "../machine-name.js";
+import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { Picker } from "../settings/picker-row.js";
+import { useDefaultMachineRow } from "./agent-machines.js";
 import type { PlaceMove } from "./move-agent.js";
 import { CLOUD_ROW, DeviceGlyph, DeviceStandingGlyph, rowRequest, runsOnRows } from "./runs-on.js";
 import {
@@ -51,9 +63,10 @@ import {
  * them, so an agent reads alike before and after it starts.
  *
  * An agent in a sandbox says "Cloud" alone beside the cloud glyph, which
- * wears a dot for where its sandbox stands, and a press opens its popover:
- * the sandbox's status and size, and where a move is offered
- * (`move-agent.tsx`'s `useMovePlace`), the places to move it to (`CloudChip`).
+ * wears a dot for where its sandbox stands, and a press opens its popover,
+ * "Where this agent works": where it runs, with the places to move it to
+ * where a move is offered (`move-agent.tsx`'s `useMovePlace`), and its
+ * default machine (`CloudChip`).
  *
  * An agent on a device is the move control where a move is offered, ending
  * in its chevron and dropping the places to move it to (`PlaceMenuChip`),
@@ -100,16 +113,20 @@ function macWords(name: string, standing: DeviceStanding | undefined): string {
 }
 
 /** What the card says under its head of an agent on a device. */
-const DEVICE_NOTE = "This agent runs on this device. Set when it was started.";
+const DEVICE_NOTE = "This agent runs on this machine. Set when it was started.";
 
-/** What a Cloud chip's popover says: its title, its facts' labels, and its menu's heading. */
+/** What a Cloud chip's popover says: its title, its facts' labels, its rows' labels, and the move's heading. */
 const CLOUD_WORDS = {
-  TITLE: "Cloud sandbox",
+  TITLE: "Where this agent works",
   STATUS: "Status",
   CPU: "CPU",
   MEMORY: "Memory",
-  MOVE_TO: "Move to",
+  RUNS_IN: "Agent runs in",
+  MOVE_TO: "Move this agent to",
 } as const;
+
+/** The Agent runs in row's id, which no place's id is. */
+const RUNS_IN_ROW = "runs-in";
 
 /** A cloud agent's facts: its sandbox's state, and where the service says it, its size. */
 function cloudFacts(
@@ -136,21 +153,81 @@ function cloudFacts(
 }
 
 /**
+ * The Agent runs in row, drawn as each place in its submenu is: the cloud
+ * glyph wearing the sandbox's dot, and Cloud at its end; and where a move
+ * is offered, the places to move the agent to beside it under "Move this
+ * agent to", as the move control lists them (`useMoveMenu`): its own Cloud
+ * row checked, wearing the same dot and its sandbox's state, each device
+ * with its standing's dot, one offline listed but not picked. What a move
+ * does, where it says anything, is said once under the places, since a row
+ * is too narrow to say it.
+ */
+function useRunsInRow(
+  state: ReturnType<typeof useSandboxState>,
+  move: PlaceMove | undefined,
+): MenuRow {
+  const menu = useMoveMenu(CLOUD_ROW, move);
+
+  const row: MenuRow = {
+    id: RUNS_IN_ROW,
+    label: CLOUD_WORDS.RUNS_IN,
+    icon: <SandboxStateGlyph state={state} />,
+    end: (
+      <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+        {RUNS_ON_WORDS.CLOUD}
+      </Text>
+    ),
+  };
+
+  if (menu === undefined) return row;
+
+  const rows = menu.rows.map((place): MenuRow => {
+    if (place.id === CLOUD_ROW) {
+      return {
+        ...place,
+        icon: <SandboxStateGlyph state={state} />,
+        detail: SANDBOX_STATE_WORDS[state],
+      };
+    }
+
+    return place.detail === move?.detail ? { ...place, detail: undefined } : place;
+  });
+
+  return {
+    ...row,
+    submenu: {
+      label: CLOUD_WORDS.MOVE_TO,
+      heading: CLOUD_WORDS.MOVE_TO,
+      rows,
+      value: menu.value,
+      note: move?.detail,
+      width: SUBMENU_WIDTH.WIDE,
+      onPick: (id) => menu.onPick?.(id),
+    },
+  };
+}
+
+/**
  * A cloud agent's chip: the cloud glyph wearing its sandbox's dot, neutral
  * while off, starting while it boots, and complete while it runs
  * (`sandbox-place.tsx`), beside "Cloud" alone, the state said to a reader
  * and in the popover, never in a hint on the chip. A press opens its
- * popover (`@repo/ui`'s `ChipPopover`), headed "Cloud sandbox": the sandbox's Status, CPU, and Memory, and where a
- * move is offered, the places to move the agent to under "Move to", as the
- * move control lists them (`useMoveMenu`), its own Cloud row wearing the
- * chip's dot as each device's row wears its own.
+ * popover (`@repo/ui`'s `ChipPopover`), headed "Where this agent works":
+ * the sandbox's Status, CPU, and Memory, then two rows, each drawn as the
+ * place it names is drawn in its submenu, its glyph wearing its dot and its
+ * name at the row's end, and a chevron where it opens a submenu: Agent runs in, where the agent itself runs and
+ * the places to move it to (`useRunsInRow`), and Default machine, where its
+ * terminal commands and computer use go when a call names none
+ * (`agent-machines.tsx`), for an agent offered them.
  */
 function CloudChip({
+  agentId,
   sandbox,
   vcpus,
   move,
   narrow,
 }: {
+  agentId: string;
   sandbox: AgentSummary["sandbox"];
   /** The vCPUs its sandbox opens with, which the popover names with their memory; none from a service older than it. */
   vcpus: number | undefined;
@@ -158,29 +235,22 @@ function CloudChip({
   narrow: boolean;
 }): React.JSX.Element {
   const state = useSandboxState(sandbox);
-  const menu = useMoveMenu(CLOUD_ROW, move);
-  const stateWords = SANDBOX_STATE_WORDS[state];
-  const glyph = <SandboxStateGlyph state={state} />;
-
-  const moveMenu =
-    menu === undefined
-      ? undefined
-      : {
-          heading: CLOUD_WORDS.MOVE_TO,
-          ...menu,
-          rows: menu.rows.map((row) => (row.id === CLOUD_ROW ? { ...row, icon: glyph } : row)),
-        };
+  const runsIn = useRunsInRow(state, move);
+  const defaultMachine = useDefaultMachineRow(agentId);
 
   return (
     <ChipPopover
       label={RUNS_ON_WORDS.LABEL}
-      glyph={glyph}
+      glyph={<SandboxStateGlyph state={state} />}
       words={RUNS_ON_WORDS.CLOUD}
-      said={stateWords}
+      said={SANDBOX_STATE_WORDS[state]}
       iconOnly={narrow}
       title={CLOUD_WORDS.TITLE}
       facts={cloudFacts(state, vcpus)}
-      menu={moveMenu}
+      menu={{
+        rows: defaultMachine === undefined ? [runsIn] : [runsIn, defaultMachine],
+        noMatch: RUNS_ON_WORDS.NO_MATCH,
+      }}
     />
   );
 }
@@ -190,7 +260,7 @@ export function AgentPlace({
   move,
   narrow = false,
 }: {
-  agent: Pick<AgentSummary, "id" | "mac" | "machine" | "sandbox" | "sandboxVcpus">;
+  agent: Pick<AgentSummary, "id" | "mac" | "machine" | "sandbox" | "sandboxVcpus" | "startedBy">;
   /** The move the chip offers, which drops its menu of places (`move-agent.tsx`'s `useMovePlace`); none where it takes no press. */
   move?: PlaceMove | undefined;
   /** Whether the box is too narrow for the chip's words, so it draws its glyph alone. */
@@ -198,20 +268,26 @@ export function AgentPlace({
 }): React.JSX.Element | null {
   if (agent.machine !== AGENT_MACHINE.DEVICE) {
     return (
-      <CloudChip sandbox={agent.sandbox} vcpus={agent.sandboxVcpus} move={move} narrow={narrow} />
+      <CloudChip
+        agentId={agent.id}
+        sandbox={agent.sandbox}
+        vcpus={agent.sandboxVcpus}
+        move={move}
+        narrow={narrow}
+      />
     );
   }
 
   if (agent.mac === undefined) return null;
 
-  return <MacChip mac={agent.mac} move={move} narrow={narrow} />;
+  return <MacChip mac={agent.mac} owner={agent.startedBy} move={move} narrow={narrow} />;
 }
 
 /** The id of the row that opens Settings › Machines, which no place's id is. */
 const SET_UP_ROW = "set-up-a-host";
 
 /** What the row says that sends a member with no device to add one. */
-const SET_UP_WORDS = { LABEL: "Set up a Mac", DETAIL: "Settings › Machines" } as const;
+const SET_UP_WORDS = { LABEL: "Add a machine", DETAIL: "Settings › Machines" } as const;
 
 /**
  * The places a move offers, as a start's Runs on lists them
@@ -313,6 +389,7 @@ function PlaceMenuChip({
 function PlaceChip({
   here,
   glyph,
+  face,
   words,
   sub,
   note,
@@ -322,8 +399,11 @@ function PlaceChip({
 }: {
   here: string | undefined;
   glyph: ReactNode;
+  /** A teammate's face beside the chip's glyph, where the machine is theirs; none on the card, whose head names the machine alone. */
+  face?: ReactNode;
   words: string;
-  sub: string | undefined;
+  /** The card's line under its head: whose machine it is where it is a teammate's, else whether it is online. */
+  sub: ReactNode;
   note: string;
   quiet?: boolean;
   move: PlaceMove | undefined;
@@ -336,11 +416,22 @@ function PlaceChip({
     </HoverCard>
   );
 
+  // Note that the face stands beside the glyph as a sibling, so the chip sizes the glyph as it sizes every other.
+  const chipGlyph =
+    face === undefined ? (
+      glyph
+    ) : (
+      <>
+        {glyph}
+        {face}
+      </>
+    );
+
   if (move !== undefined) {
     return (
       <PlaceMenuChip
         here={here}
-        glyph={glyph}
+        glyph={chipGlyph}
         words={words}
         card={card}
         move={move}
@@ -352,7 +443,7 @@ function PlaceChip({
   return (
     <Tooltip label={`${RUNS_ON}${words}`} card={card}>
       <StaticChip tone={quiet ? undefined : STATUS_TONE.ATTENTION} iconOnly={narrow}>
-        {glyph}
+        {chipGlyph}
         <VisuallyHidden>{RUNS_ON}</VisuallyHidden>
         <ChipName>{words}</ChipName>
       </StaticChip>
@@ -363,14 +454,19 @@ function PlaceChip({
 /** The chip of an agent on a device, held against the window's clock, so a Mac that goes quiet reads offline without another read. */
 function MacChip({
   mac,
+  owner,
   move,
   narrow,
 }: {
   mac: NonNullable<AgentSummary["mac"]>;
+  /** Whose machine it is: the agent's starter, since an agent runs on its starter's own machine. */
+  owner: AgentSummary["startedBy"];
   move: PlaceMove | undefined;
   narrow: boolean;
 }): React.JSX.Element {
   const presence = useDevicePresence(true);
+  const { readerId } = useMemberDirectory();
+  const ownerActor = usePerson(owner);
   const thisMac = useThisMac();
   // Note that the clock only redraws the label as a beat ages, since the standing is read off the book's own monotonic clock.
   useSecond();
@@ -385,19 +481,33 @@ function MacChip({
   // Note that the platform is read off the move's list, because the agent's own record names none.
   const listed = move?.devices.find((device) => device.deviceId === mac.deviceId);
 
+  const glyph =
+    standing === undefined ? (
+      <DeviceGlyph device={listed} />
+    ) : (
+      <DeviceStandingGlyph device={listed} standing={standing} hinted={false} />
+    );
+
+  // Note that a teammate's machine wears its owner's face beside its glyph, as a machine of theirs does in the Default machine list; the reader's own needs no saying whose it is.
+  const teammate = owner !== undefined && readerId !== undefined && owner.userId !== readerId;
+
   return (
     <PlaceChip
       here={mac.deviceId}
       move={move}
-      glyph={
-        standing === undefined ? (
-          <DeviceGlyph device={listed} />
-        ) : (
-          <DeviceStandingGlyph device={listed} standing={standing} hinted={false} />
-        )
-      }
+      glyph={glyph}
+      face={teammate ? <ActorMark actor={ownerActor} size={ACTOR_SIZE.INLINE} /> : undefined}
       words={macWords(name, standing)}
-      sub={standing === DEVICE_STANDING.ONLINE ? RUNS_ON_WORDS.ONLINE : undefined}
+      sub={
+        teammate ? (
+          <Inline gap={GAP.ICON} wrap={false}>
+            <ActorMark actor={ownerActor} size={ACTOR_SIZE.MARK} />
+            <ReplayWords masked>{actorName(ownerActor)}</ReplayWords>
+          </Inline>
+        ) : standing === DEVICE_STANDING.ONLINE ? (
+          RUNS_ON_WORDS.ONLINE
+        ) : undefined
+      }
       note={DEVICE_NOTE}
       quiet={quiet}
       narrow={narrow}

@@ -8,8 +8,9 @@ import { PICTURE_STATE } from "../../picture-read.js";
 import { AppWindowStack } from "./app-window-stack.js";
 
 /**
- * app-window-stack.test.ts -- the window on top opens when pressed, named
- * for its app, and a stack of no apps draws nothing.
+ * app-window-stack.test.ts -- the window in front opens when pressed, named
+ * for its app, a title behind it brings its app forward, and a stack of no
+ * apps draws nothing.
  */
 
 const roots: Root[] = [];
@@ -32,12 +33,23 @@ function draw(props: Parameters<typeof AppWindowStack>[0]): void {
   act(() => root.render(createElement(AppWindowStack, props)));
 }
 
-test("the window on top opens when pressed, named for its app", () => {
+/** What every stack drawn here hears, but where a test listens. */
+const QUIET = { onPick: () => undefined, onOpen: () => undefined, onMinimize: () => undefined };
+
+/** The button a reader knows by this name. */
+function press(name: string): HTMLButtonElement | undefined {
+  return [...document.querySelectorAll("button")].find(
+    (each) => each.getAttribute("aria-label") === name,
+  );
+}
+
+test("the window in front opens when pressed, named for its app", () => {
   const opened: string[] = [];
   draw({
     label: "Apps in use",
     apps: [
       {
+        id: "com.apple.iphonesimulator",
         name: "Simulator",
         window: {
           state: { kind: PICTURE_STATE.READY, url: "data:image/png;base64,AA==" },
@@ -45,21 +57,34 @@ test("the window on top opens when pressed, named for its app", () => {
           height: 2556,
         },
       },
-      { name: "Xcode" },
+      { id: "com.apple.dt.Xcode", name: "Xcode" },
     ],
+    ...QUIET,
     onOpen: () => opened.push("open"),
   });
 
-  const press = [...document.querySelectorAll("button")].find(
-    (each) => each.getAttribute("aria-label") === "Enlarge Simulator",
-  );
-
-  act(() => press?.click());
+  act(() => press("Enlarge Simulator")?.click());
   assert.deepEqual(opened, ["open"]);
 });
 
+test("a title behind the window in front brings its own app forward, though another app shares its name", () => {
+  const picked: string[] = [];
+  draw({
+    label: "Apps in use",
+    apps: [
+      { id: "com.apple.dt.Xcode", name: "Xcode" },
+      { id: "com.apple.dt.Xcode.beta", name: "Xcode" },
+    ],
+    ...QUIET,
+    onPick: (id) => picked.push(id),
+  });
+
+  act(() => press("Bring Xcode forward")?.click());
+  assert.deepEqual(picked, ["com.apple.dt.Xcode.beta"]);
+});
+
 test("a stack of no apps draws nothing", () => {
-  draw({ label: "Apps in use", apps: [], onOpen: () => undefined });
+  draw({ label: "Apps in use", apps: [], ...QUIET });
 
   assert.equal(document.querySelector('section[aria-label="Apps in use"]'), null);
 });

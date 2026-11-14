@@ -15,7 +15,6 @@ import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { type PinMove, TASK_MARK, type TaskMark } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -437,11 +436,7 @@ test("a filter by person leaves out a section's task it would leave out of the l
 });
 
 test("a teammate's task the reader follows stands under Following, which it leaves once unfollowed", async () => {
-  const shared: Workspace = {
-    ...WORKSPACE,
-    memberCount: 2,
-    experiments: [{ experiment: EXPERIMENT.FOLLOWING, on: true, changedBy: null, changedAt: 0 }],
-  };
+  const shared: Workspace = { ...WORKSPACE, memberCount: 2 };
 
   writeListedTasks({ workspaces: [shared] });
   const grace = { userId: "user-grace", name: "Grace Hopper" };

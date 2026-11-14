@@ -2,7 +2,8 @@
 
    A leaving row is laid over the place it held, from the list it stands in,
    which is positioned so the row is placed from it and scrolls with it, and
-   takes no pointer while it slides out. The root holds the height the motion
+   takes no pointer while it slides out; one leaving out of sight is gone at
+   once. The root holds the height the motion
    gives it while a row leaves near the scroller's end, so what stays in sight
    is not scrolled back; a root with a minimum of its own folds the held one
    into it. */
@@ -19,4 +20,22 @@
   [data-motion-rows] > [data-leaving] {
     pointer-events: none;
   }
+
+  /* Note that the place outranks the row's own inline one while it leaves,
+     and the row's own stands again untouched once the mark goes, because a
+     row a run places (`VirtualRows`) wears its place inline as its owner
+     wrote it. */
+  /* biome-ignore-start lint/complexity/noImportantStyles: only `!important` outranks the inline place a row's owner wrote, which the motion must never write itself. */
+  [data-motion-rows] > [data-leaving="placed"] {
+    position: absolute !important;
+    top: var(--ui-leaving-top) !important;
+    left: var(--ui-leaving-left) !important;
+    width: var(--ui-leaving-width) !important;
+    margin: 0 !important;
+  }
+
+  [data-motion-rows] > [data-leaving="gone"] {
+    display: none !important;
+  }
+  /* biome-ignore-end lint/complexity/noImportantStyles: the leaving rows' places end here. */
 }

@@ -35,7 +35,7 @@ const OTHER_TASK = "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a";
 
 const TASK = {
   ...SUMMARY,
-  document: {
+  description: {
     body: "# Teammate invitations",
     assumptions: [{ text: "Members and admins can both invite." }],
   },
@@ -53,7 +53,7 @@ function client(): HostedTaskClient {
 
 it.effect("opens one plan with its saved document", () =>
   Effect.gen(function* () {
-    const api = fakeCloudApi({ [`GET /api/plans/${TASK_ID}`]: { answer: () => ({ plan: TASK }) } });
+    const api = fakeCloudApi({ [`GET /api/tasks/${TASK_ID}`]: { answer: () => ({ task: TASK }) } });
 
     const opened = yield* Effect.provide(client().open(TASK_ID), api.layer);
 
@@ -70,28 +70,28 @@ it.effect(
       let sent = 0;
 
       const api = fakeCloudApi({
-        [`POST /api/plans/${TASK_ID}/description`]: {
+        [`POST /api/tasks/${TASK_ID}/description`]: {
           answer: () => {
             sent += 1;
 
-            return sent === 1 ? { plan: saved } : conflict;
+            return sent === 1 ? { task: saved } : conflict;
           },
         },
       });
 
-      const edit = { document: { base: "## Goal\n", value: "## Goal\n\n - Mine. \n" } };
+      const edit = { description: { base: "## Goal\n", value: "## Goal\n\n - Mine. \n" } };
 
       const first = yield* Effect.provide(client().edit(TASK_ID, edit), api.layer);
       const second = yield* Effect.provide(client().edit(TASK_ID, edit), api.layer);
 
       const blank = yield* Effect.provide(
         client().edit(TASK_ID, {
-          document: { base: "", value: "x".repeat(TASK_BOUNDS.MAX_BODY_CHARS + 1) },
+          description: { base: "", value: "x".repeat(TASK_BOUNDS.MAX_BODY_CHARS + 1) },
         }),
         api.layer,
       );
 
-      assert.deepEqual(first, { ok: true, answer: { plan: saved } });
+      assert.deepEqual(first, { ok: true, answer: { task: saved } });
       assert.deepEqual(second, { ok: true, answer: conflict });
       assert.deepEqual(blank, { ok: false, failure: TASK_CALL_FAILURE.UNANSWERED });
       assert.deepEqual(
@@ -125,11 +125,15 @@ it.effect(
   "a start naming an agent answers the task with the agent started on it, or with why it was refused as a Start reads it; one asking for planning beside it is never sent",
   () =>
     Effect.gen(function* () {
-      const task = { ...TASK, repository: "acme/relay", document: { body: "", assumptions: [] } };
+      const task = {
+        ...TASK,
+        repository: "acme/relay",
+        description: { body: "", assumptions: [] },
+      };
 
       const agent = {
         id: "3c9e1d2a-6b7f-4e8a-9c0d-1e2f3a4b5c6d",
-        planId: TASK_ID,
+        taskId: TASK_ID,
         model: "anthropic/claude-opus-5.5",
         effort: "high",
         title: null,
@@ -142,16 +146,16 @@ it.effect(
       let sent = 0;
 
       const api = fakeCloudApi({
-        "POST /api/plans": {
+        "POST /api/tasks": {
           answer: () => {
             sent += 1;
 
-            if (sent === 1) return { plan: task, agent };
+            if (sent === 1) return { task, agent };
 
             return sent === 2
-              ? { plan: task, agentRefusal: { error: HOSTED_API_ERROR.INVALID_REQUEST } }
+              ? { task, agentRefusal: { error: HOSTED_API_ERROR.INVALID_REQUEST } }
               : {
-                  plan: task,
+                  task,
                   agentRefusal: { error: HOSTED_API_ERROR.AGENT_PLAN_LIMIT_REACHED, resetsAt },
                 };
           },
@@ -209,7 +213,7 @@ it.effect(
 it.effect("a start the service never answers carries what failed beneath it, by its kind", () =>
   Effect.gen(function* () {
     const api = fakeCloudApi({
-      "POST /api/plans": {
+      "POST /api/tasks": {
         answer: () => {
           throw new TypeError("Load failed");
         },
@@ -245,10 +249,10 @@ it.effect(
       const thread = "0f9b5f6e-6a8e-4c51-9a0e-2c1f2f0b7a11";
 
       const api = fakeCloudApi({
-        [`POST /api/plans/${TASK_ID}/comments/${thread}`]: {
+        [`POST /api/tasks/${TASK_ID}/comments/${thread}`]: {
           answer: () => ({ refused: "not-yours" }),
         },
-        [`POST /api/plans/${OTHER_TASK}/comments/${thread}`]: {
+        [`POST /api/tasks/${OTHER_TASK}/comments/${thread}`]: {
           status: 404,
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
         },
@@ -283,12 +287,12 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const api = fakeCloudApi({
-        [`PATCH /api/plans/${TASK_ID}`]: { status: 503, answer: () => ({}) },
-        [`PATCH /api/plans/${OTHER_TASK}`]: {
+        [`PATCH /api/tasks/${TASK_ID}`]: { status: 503, answer: () => ({}) },
+        [`PATCH /api/tasks/${OTHER_TASK}`]: {
           status: 409,
           answer: () => ({ error: HOSTED_API_ERROR.ALREADY_WRITTEN }),
         },
-        "POST /api/plans": { status: 503, answer: () => ({}) },
+        "POST /api/tasks": { status: 503, answer: () => ({}) },
       });
 
       const unanswered = yield* Effect.provide(
@@ -334,15 +338,15 @@ it.effect(
       };
 
       const api = fakeCloudApi({
-        [`PATCH /api/plans/${TASK_ID}`]: {
+        [`PATCH /api/tasks/${TASK_ID}`]: {
           status: 403,
           answer: () => ({ error: HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE, unreached }),
         },
-        [`PATCH /api/plans/${OTHER_TASK}`]: {
+        [`PATCH /api/tasks/${OTHER_TASK}`]: {
           status: 404,
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
         },
-        [`DELETE /api/plans/${OTHER_TASK}`]: {
+        [`DELETE /api/tasks/${OTHER_TASK}`]: {
           status: 404,
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
         },
@@ -386,8 +390,8 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const api = fakeCloudApi({
-        "GET /api/plans": { answer: () => ({ plans: [{ ...SUMMARY, archivedAt: 5 }] }) },
-        [`GET /api/plans/${TASK_ID}/description/revisions/3`]: {
+        "GET /api/tasks": { answer: () => ({ tasks: [{ ...SUMMARY, archivedAt: 5 }] }) },
+        [`GET /api/tasks/${TASK_ID}/description/revisions/3`]: {
           status: 404,
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
         },
@@ -396,11 +400,11 @@ it.effect(
       const listed = yield* Effect.provide(client().list(), api.layer);
       const revision = yield* Effect.provide(client().readRevision(TASK_ID, 3), api.layer);
 
-      assert.deepEqual(listed, { ok: true, answer: { plans: [SUMMARY] } });
+      assert.deepEqual(listed, { ok: true, answer: { tasks: [SUMMARY] } });
       assert.equal(revision, undefined);
       assert.deepEqual(recordedRoutes(api.requests()), [
-        "GET /api/plans?archived=include",
-        `GET /api/plans/${TASK_ID}/description/revisions/3`,
+        "GET /api/tasks?archived=include",
+        `GET /api/tasks/${TASK_ID}/description/revisions/3`,
       ]);
     }),
 );
@@ -421,8 +425,8 @@ it.effect(
       };
 
       const api = fakeCloudApi({
-        [`GET /api/plans/${TASK_ID}/file`]: { answer: () => file },
-        [`GET /api/plans/${TASK_ID}/tree`]: {
+        [`GET /api/tasks/${TASK_ID}/file`]: { answer: () => file },
+        [`GET /api/tasks/${TASK_ID}/tree`]: {
           answer: () => ({ refusal: TASK_FILE_REFUSAL.NO_REPOSITORY }),
         },
       });
@@ -461,10 +465,10 @@ it.effect(
       assert.deepEqual(folder, { refusal: TASK_FILE_REFUSAL.NO_REPOSITORY });
       assert.equal(failed, undefined);
       assert.deepEqual(recordedRoutes(api.requests()), [
-        `GET /api/plans/${TASK_ID}/file?first=2&last=3&path=src/a b+c.ts`,
-        `GET /api/plans/${TASK_ID}/file?first=1&last=1&path=src/a b+c.ts&raw=1&ref=${sha}`,
-        `GET /api/plans/${TASK_ID}/tree?recursive=1`,
-        `GET /api/plans/${TASK_ID}/file?first=2&last=3&path=src/a b+c.ts`,
+        `GET /api/tasks/${TASK_ID}/file?first=2&last=3&path=src/a b+c.ts`,
+        `GET /api/tasks/${TASK_ID}/file?first=1&last=1&path=src/a b+c.ts&raw=1&ref=${sha}`,
+        `GET /api/tasks/${TASK_ID}/tree?recursive=1`,
+        `GET /api/tasks/${TASK_ID}/file?first=2&last=3&path=src/a b+c.ts`,
       ]);
     }),
 );
@@ -479,11 +483,11 @@ it.effect(
       const keep = (status: number, answer: () => JsonValue) =>
         Effect.provide(
           client().keepPicture(TASK_ID, picture),
-          fakeCloudApi({ [`POST /api/plans/${TASK_ID}/attachments`]: { answer, status } }).layer,
+          fakeCloudApi({ [`POST /api/tasks/${TASK_ID}/attachments`]: { answer, status } }).layer,
         );
 
       const api = fakeCloudApi({
-        [`POST /api/plans/${TASK_ID}/attachments`]: { answer: () => ({ id: keptId }), status: 201 },
+        [`POST /api/tasks/${TASK_ID}/attachments`]: { answer: () => ({ id: keptId }), status: 201 },
       });
 
       assert.deepEqual(yield* Effect.provide(client().keepPicture(TASK_ID, picture), api.layer), {

@@ -32,7 +32,7 @@ import {
   type DescriptionCommentThreadAnswer,
   descriptionCommentActorSchema,
 } from "@repo/features/description-comment-wire";
-import { sectionAt } from "@repo/features/description-document";
+import { sectionAt } from "@repo/features/description-sections";
 import { and, asc, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Result, Schema } from "effect";
 import { Base64 } from "effect/encoding";
@@ -209,7 +209,7 @@ const lockOpenDescriptionText = SqlSchema.findOneOption({
   execute: ({ userId, taskId }) =>
     Database.use((db) =>
       db
-        .select({ text: task.document, organizationId: task.organizationId })
+        .select({ text: task.description, organizationId: task.organizationId })
         .from(task)
         .where(reachableTask(userId, taskId))
         .for("update"),

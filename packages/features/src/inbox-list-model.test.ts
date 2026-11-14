@@ -26,7 +26,7 @@ const PLAN_PDF = "61c48f70-92a3-44b5-8a51-7c8d9eafb0c6";
 /** One of the item's files' addresses, as an agent's post names it in its words. */
 function address(attachmentId: string): string {
   return inboxAttachmentAddress(
-    { kind: LINK_DESTINATION.INBOX_ITEM, planId: PLAN, itemId: ITEM },
+    { kind: LINK_DESTINATION.INBOX_ITEM, taskId: PLAN, itemId: ITEM },
     attachmentId,
     "acme",
   );

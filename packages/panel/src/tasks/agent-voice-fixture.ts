@@ -46,6 +46,9 @@ const CALL = {
   TEAMMATE_AT_ONCE: "7d5e1a6c-9f3b-4cad-8e4a-6b8d0f2c4e5a",
 } as const;
 
+/** The member on the live profile's call: the fixture run's own account, so the call reads as theirs. */
+const MEMBER_ID = "user-ada";
+
 /** The teammate who called the agent too. */
 const GRACE = { userId: "8b2d4f6a-0c3e-4a5b-9d1f-2a4c6e8b0d3f", name: "Grace Hopper" } as const;
 
@@ -230,7 +233,7 @@ function settledCalls(at: number): readonly AgentTranscriptMessage[] {
   ]);
 
   return [
-    // A plain exchange: the ask handed on, the turn it opened, folded since the voice retells it.
+    // A plain exchange: the ask handed on, and the turn it opened.
     own(
       "voice-ask-expiry",
       0,
@@ -464,6 +467,8 @@ export function voiceLiveTranscript(base: AppTranscript, at: number): AppTranscr
       runStartedAt: at + 6 * SECOND,
       title: base.word?.title ?? "Add teammate invitations",
       caughtUp: true,
+      // The call's row, which stands while the call does, so its end is drawn nowhere yet.
+      calls: [{ callId: CALL.LIVE, callerId: MEMBER_ID, startedAt: at }],
     },
   };
 

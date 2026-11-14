@@ -3,7 +3,7 @@
 import { MOTION_DELAY_MS } from "@repo/brand";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import { act, createElement } from "react";
@@ -89,9 +89,9 @@ function drawn(
   const base = tasksControl();
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: DOCUMENT_TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: { ...DOCUMENT_TASK, workspaceId: ACME.id } },
+    region: { kind: TASK_REGION.READY, task: { ...DOCUMENT_TASK, workspaceId: ACME.id } },
     workspaces: [ACME],
     workspace: ACME,
     history: {
