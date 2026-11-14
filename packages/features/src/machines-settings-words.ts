@@ -49,7 +49,7 @@ export const MACHINE_SETTINGS_WORDS = {
   /** The row that picks the member's default machine, atop the list. */
   DEFAULT: "Default machine",
   DEFAULT_DETAIL:
-    "Where agents' terminal commands and computer use go, unless an agent picks its own machine.",
+    "Where agents' terminal commands and computer use go, unless you set another machine on an agent.",
   DEFAULT_FAILED: "Could not change your default machine. Try again.",
 } as const;
 
