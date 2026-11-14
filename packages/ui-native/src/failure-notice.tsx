@@ -1,6 +1,7 @@
 // failure-notice.tsx -- the app's one notice: a banner of Liquid Glass that rises at the window's foot, over its bars, with a refusal's words and a Try again, a write that went with its Undo, or says once that the phone is offline, read aloud by VoiceOver and let go on its own.
 
 import { Host, HStack, Image, Spacer, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   Animation,
   accessibilityElement,
@@ -10,6 +11,7 @@ import {
   fixedSize,
   font,
   foregroundStyle,
+  frame,
   glassEffect,
   layoutPriority,
   lineLimit,
@@ -55,7 +57,7 @@ import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";
 import { LiftBarsProvider, type NoticeLift, useLiftBars } from "./notice-lift.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What the banner's one button says, as the panel's refusals and its Undo toast offer it. */
@@ -74,6 +76,9 @@ const ARRIVAL = 120;
 
 /** How long it takes to slide in or out, in milliseconds, as the system's own banners do. */
 const SLIDE_MS = 280;
+
+/** The banner's own room above and below its line, in points, which its press's 44 pt target reaches into. */
+const BANNER_INSET = SPACE.ROW + 2;
 
 /** How far a swipe down must carry the banner before it lets it go, in points. */
 const SWIPE_AWAY = 24;
@@ -156,7 +161,9 @@ function NoticeBody({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
-  const ink = notice.kind === NOTICE_KIND.REFUSED ? colors.DANGER : colors.TEXT_MUTED;
+  // Note that a refusal draws as a problem line does, the attention glyph over the muted ink, rather than danger's red: it asks for a second try, not alarm.
+  const refused = notice.kind === NOTICE_KIND.REFUSED;
+  const ink = refused ? colors.ATTENTION : colors.TEXT_MUTED;
   const press = noticePress(notice);
 
   return (
@@ -164,7 +171,7 @@ function NoticeBody({
       <HStack
         spacing={SPACE.ROW}
         modifiers={[
-          padding({ leading: SPACE.EDGE, trailing: SPACE.ROW, vertical: SPACE.ROW + 2 }),
+          padding({ leading: SPACE.EDGE, trailing: SPACE.ROW, vertical: BANNER_INSET }),
           glassEffect({
             glass: { variant: "regular" },
             // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
@@ -182,7 +189,7 @@ function NoticeBody({
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-            foregroundStyle(colors.TEXT),
+            foregroundStyle(refused ? colors.TEXT_MUTED : colors.TEXT),
             lineLimit(3),
             layoutPriority(1),
           ]}
@@ -191,17 +198,28 @@ function NoticeBody({
         </Text>
         <Spacer />
         {press === undefined ? null : (
+          // Note that the press takes its target's 44 pt on its label, not the button, since only a label's frame and shape answer a press; the word alone stood about 20 pt tall. The button then gives back the banner's own vertical padding, so the target reaches into it rather than growing the banner.
           <SwiftUIButton
-            label={press.label}
             onPress={onPress}
             modifiers={[
               buttonStyle("borderless"),
               tint(colors.TEXT),
-              font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
               fixedSize(),
+              padding({ vertical: -BANNER_INSET }),
               accessibilityIdentifier(press.identifier),
             ]}
-          />
+          >
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
+                foregroundStyle(colors.TEXT),
+                frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+                SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+              ]}
+            >
+              {press.label}
+            </Text>
+          </SwiftUIButton>
         )}
       </HStack>
     </Host>
