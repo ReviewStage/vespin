@@ -34,6 +34,8 @@ appId: dev.vespin.ios
     visible: "Ready to merge"
     timeout: 30000
 - assertVisible: "grace"
+# Its description, as its agent wrote it, under the heading.
+- assertVisible: "Adds Invite by email.*"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-ready
 # Merging is the press under the heading, in every window, and it asks
