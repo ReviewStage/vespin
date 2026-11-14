@@ -132,3 +132,11 @@ ipad26-landscape-ipad26-dark wrap-new-task.yaml: fails 2 shots 3   Hide Keyboard
 ipad26-landscape-ipad26-light wrap-failure-notice.yaml: fails 2 shots 2   Assert that "The task could not be unpinned. Try again." is visible... FAILED
 ipad26-landscape-ipad26-dark wrap-failure-notice.yaml: fails 2 shots 2   Assert that "The task could not be unpinned. Try again." is visible... FAILED
   ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-agent.yaml: fails 2 shots 15   Assert that "Pin" is visible... FAILED
+ipad26-landscape-ipad26-dark wrap-agent.yaml: fails 0 shots 13 
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-tasks.yaml: fails 2 shots 3   Assert that "Launch checklist" is not visible... FAILED
+ipad26-landscape-ipad26-dark wrap-tasks.yaml: fails 2 shots 3   Assert that "Launch checklist" is not visible... FAILED
+  ax none on ipad26: contrast disabled transparency-key 
+ipad26-landscape-ipad26-light wrap-accessibility.yaml: fails 2 shots 3   Assert that ".*walked the invite flow.*" is visible... FAILED
+ipad26-landscape-ipad26-dark wrap-accessibility.yaml: fails 2 shots 3   Assert that ".*walked the invite flow.*" is visible... FAILED
