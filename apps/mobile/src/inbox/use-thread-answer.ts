@@ -485,15 +485,19 @@ export function useThreadAnswer(
 
   // Got it nods at the revision drawn, so an agent's change since is never settled unseen; one settled first by someone else is passed over quietly, with no Undo, since what was asked already stands.
   const acknowledge = () => {
-    if (held.get(itemId)?.nodded === item.revision) return;
+    const revision = item.revision;
+
+    if (held.get(itemId)?.nodded === revision) return;
     const key = randomUUID();
     let taken = false;
-    hold(itemId, (was) => ({ ...was, note: undefined, nodded: item.revision }));
+    // Note that a Got it's refusal and its letting go touch the box only while the press held is still this one, so a Got it at a later revision, pressed while this one was out, keeps its own.
+    const ours = () => held.get(itemId)?.nodded === revision;
+    hold(itemId, (was) => ({ ...was, note: undefined, nodded: revision }));
     void write(
       () =>
         acts[ACT_KIND.AGENTS_INBOX_ANSWER]({
           itemId,
-          revision: item.revision,
+          revision,
           reply: INBOX_REPLY.ACKNOWLEDGED,
           clientKey: key,
         }).then((answer) => {
@@ -509,12 +513,14 @@ export function useThreadAnswer(
               ? undefined
               : NOT_ACKNOWLEDGED,
         unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
-        inPlace: (words) => hold(itemId, (was) => ({ ...was, note: words })),
+        inPlace: (words) => {
+          if (ours()) hold(itemId, (was) => ({ ...was, note: words }));
+        },
         went: BUZZ.SUCCESS,
       },
     ).then((went) => {
       // Note that a Got it that went keeps the chip off, since nothing else held marks the thread settled before a read carries it; one that did not go brings it back beside its refusal.
-      if (!went) hold(itemId, (was) => ({ ...was, nodded: undefined }));
+      if (!went && ours()) hold(itemId, (was) => ({ ...was, nodded: undefined }));
 
       if (went && taken) settled([{ item, key }], SETTLE.ACKNOWLEDGE);
     });
