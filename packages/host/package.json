@@ -34,7 +34,8 @@
     "./task-code-remote": "./src/task-code-remote.js",
     "./task-code-worker": "./src/task-code-worker.js",
     "./follow-stream": "./src/follow-stream.js",
-    "./task-list-following": "./src/task-list-following.js"
+    "./task-list-following": "./src/task-list-following.js",
+    "./xchacha-cipher": "./src/xchacha-cipher.js"
   },
   "types": "./src/index.ts",
   "scripts": {
@@ -43,6 +44,7 @@
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
+    "@noble/ciphers": "2.3.0",
     "@repo/agent-runner": "workspace:*",
     "@repo/credentials": "workspace:*",
     "@repo/features": "workspace:*",
