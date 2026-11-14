@@ -301,7 +301,7 @@ export {
 
 export { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 
-export { MARK_SIZE, SPACE } from "./tokens/space.js";
+export { MARK_SIZE, SPACE, TAB_BAR_ROOM } from "./tokens/space.js";
 
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 

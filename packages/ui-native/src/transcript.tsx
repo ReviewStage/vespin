@@ -41,7 +41,7 @@ import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, RADIUS, READING_WIDTH, SPACE, TAB_BAR_ROOM } from "./tokens/space.js";
 import { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
@@ -62,14 +62,6 @@ const LATEST_REACH = 240;
 
 /** How near its newest row the list stands to keep it in view as rows land, in points. */
 const ANCHOR_REACH = 48;
-
-/**
- * The room the system's tab bar floats over at the screen's foot, past the
- * safe area, which the newest row and Jump to latest stand clear of. Note
- * that the list keeps it at its own end, because a scroll to the end reaches
- * the end of the rows alone and not the room the system keeps for the bar.
- */
-const TAB_BAR_ROOM = 64;
 
 /** How wide the round control that brings the newest row into view stands, in points: the system's least target. */
 const JUMP_SIZE = 44;
@@ -974,6 +966,7 @@ export function AgentTranscript({
   const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
+  // Note that the list keeps the tab bar's room at its own end, because a scroll to the end reaches the end of the rows alone and not the room the system keeps for the bar.
   const foot = bottom + TAB_BAR_ROOM + useDockRoom();
 
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.

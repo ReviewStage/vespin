@@ -296,14 +296,14 @@ export function ThreadComposer({
   item,
   answer,
   agentName,
-  inColumn = false,
+  inColumn,
 }: {
   readonly item: InboxItem;
   readonly answer: ThreadAnswer;
   /** The thread's agent's name, which the new thread's switch names. */
   readonly agentName: string;
-  /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen. */
-  readonly inColumn?: boolean;
+  /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen, and whether that column stands in front, which the app's notice stands over its composer only while it does. */
+  readonly inColumn?: { readonly shown: boolean } | undefined;
 }) {
   const { draft, onDraft, answerReady, send, asNew, setAsNew, start } = answer;
 
@@ -332,7 +332,11 @@ export function ThreadComposer({
     },
   };
 
-  return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
+  return inColumn === undefined ? (
+    <Composer {...props} />
+  ) : (
+    <ComposerFoot {...props} shown={inColumn.shown} />
+  );
 }
 
 /** What the thread's ⋯ menu acts through: its read mark, Remind me's times, and its link copied. */

@@ -8,6 +8,7 @@ import {
   FailureNoticeLayer,
   FailureNoticeProvider,
   KeepingProvider,
+  TAB_BAR_ROOM,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -224,9 +225,12 @@ function KeptScreens() {
 
 /** The root: the host, the one notice of a write that did not go, the voice call, which outlives every screen, and the screens under them. */
 export default function RootLayout() {
+  // Note that a compact window's tab bar floats at its foot, which the notice stands over; a regular window's tabs stand at its top or its side.
+  const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
+
   return (
     <HostProvider>
-      <FailureNoticeProvider>
+      <FailureNoticeProvider footRoom={compact ? TAB_BAR_ROOM : 0}>
         <VoiceCallProvider>
           <KeptScreens />
         </VoiceCallProvider>

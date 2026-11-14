@@ -39,7 +39,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useIsFocused, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
@@ -398,6 +398,8 @@ export function NewAgentScreen({
   readonly taskId: string;
   readonly opened?: OpenedSuggestion | undefined;
 }) {
+  // Whether the sheet is the screen in front, which its bar of capsules tells the app's notice.
+  const focused = useIsFocused();
   const action = opened?.view.action;
   const brief = action?.kind === REPLY_BUTTON_ACTION.START ? action.prompt : "";
   const [prompt, setPrompt] = useState(brief);
@@ -455,6 +457,7 @@ export function NewAgentScreen({
         kept={kept}
       />
       <ComposeSheet
+        shown={focused}
         title={
           opened === undefined
             ? undefined
@@ -667,6 +670,8 @@ export function NewTaskScreen({
   readonly parent?: string | undefined;
   readonly draft?: NewTaskDraft | undefined;
 }) {
+  // Whether the sheet is the screen in front, which its bar of capsules tells the app's notice.
+  const focused = useIsFocused();
   const [prompt, setPrompt] = useState(draft?.prompt ?? "");
   const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
@@ -744,6 +749,7 @@ export function NewTaskScreen({
         kept={kept}
       />
       <ComposeSheet
+        shown={focused}
         head={<RelationChip pick={relation} />}
         words={{
           placeholder: WORDS.TASK_PLACEHOLDER,

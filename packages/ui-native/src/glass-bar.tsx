@@ -3,8 +3,17 @@
 import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import { frame, type ModifierConfig, onGeometryChange, padding } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  type HostInstance,
   Keyboard,
   type KeyboardEvent,
   LayoutAnimation,
@@ -15,6 +24,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceTransparency } from "./accessibility.js";
+import { useNoticeLift } from "./notice-lift.js";
 import { useColors } from "./tokens/colors.js";
 import { READING_WIDTH, SPACE } from "./tokens/space.js";
 
@@ -24,8 +34,8 @@ const DOCK_ROOM_UNMEASURED = 72;
 /** The room the dock a screen's content stands in takes at its foot, above the bottom safe area, in points; none outside a dock. */
 const DockRoom = createContext(0);
 
-/** Tells the dock how tall the bar inside it stands, with its gap; nothing outside a dock. */
-const DockMeasure = createContext<((room: number) => void) | undefined>(undefined);
+/** Tells the dock how tall the bar inside it stands, with its gap, and where its top stands in the window; nothing outside a dock. */
+const DockMeasure = createContext<((room: number, top: number) => void) | undefined>(undefined);
 
 /** How round the bar stands: a rounded field, as a composer's is. */
 export const BAR_RADIUS = 24;
@@ -82,7 +92,7 @@ function moveWithKeyboard({ duration, easing }: KeyboardEvent) {
 }
 
 /** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. */
-function useKeyboardHeight(): number {
+export function useKeyboardHeight(): number {
   const [height, setHeight] = useState(0);
   useEffect(() => {
     const rising = Keyboard.addListener("keyboardWillShow", (event) => {
@@ -181,6 +191,7 @@ export function GlassBar({
 }) {
   const keyboard = useKeyboardHeight() > 0;
   const measure = useContext(DockMeasure);
+  const placed = useRef<HostInstance>(null);
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
 
   const row = (
@@ -214,11 +225,14 @@ export function GlassBar({
     </GlassView>
   );
 
-  // Note that a docked bar tells its dock how tall it stands, its gap with it, as its head grows and shrinks, so the content under it scrolls clear of all of it.
+  // Note that a docked bar tells its dock how tall it stands, its gap with it, as its head grows and shrinks, so the content under it scrolls clear of all of it, and where it stands in the window, which the app's notice stands over.
   const onLayout =
     measure === undefined
       ? undefined
-      : (event: LayoutChangeEvent) => measure(event.nativeEvent.layout.height + SPACE.ROW);
+      : (event: LayoutChangeEvent) => {
+          const room = event.nativeEvent.layout.height + SPACE.ROW;
+          placed.current?.measureInWindow((_x, top) => measure(room, top));
+        };
 
   // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one.
   return (
@@ -226,7 +240,9 @@ export function GlassBar({
       edges={keyboard ? ["left", "right"] : ["bottom", "left", "right"]}
       style={styles.gap}
     >
-      <View onLayout={onLayout}>{bar}</View>
+      <View ref={placed} onLayout={onLayout}>
+        {bar}
+      </View>
     </SafeAreaView>
   );
 }
@@ -240,18 +256,36 @@ export function GlassBar({
  * and the queue, grows it well past a bare field. In a wide window the bar
  * stands in the content's own centered column, at the reading width, as
  * Messages' field stands under its conversation, rather than across the
- * whole window.
+ * whole window. While its screen is the one in front (`shown`), the app's
+ * notice stands over the bar, where the bar stands in the window.
  */
 export function GlassDock({
   children,
   bar,
+  shown,
 }: {
   readonly children: ReactNode;
   readonly bar: ReactNode;
+  /** Whether the dock's screen is the one in front, rather than one a page was pushed over, a tab not shown, or a sheet on top: the notice stands over the bar only then. */
+  readonly shown: boolean;
 }) {
   // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
   const keyboard = useKeyboardHeight();
   const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
+  const [foot, setFoot] = useState<number | undefined>(undefined);
+  const { height: windowHeight } = useWindowDimensions();
+
+  // Note that where the bar stands is kept only as measured with the keyboard down, since the bar rides the keyboard by its height alone, and it counts a tab bar under it, which its height does not.
+  const measure = useCallback(
+    (next: number, top: number) => {
+      setRoom(next);
+
+      if (keyboard === 0) setFoot(windowHeight - top + SPACE.ROW);
+    },
+    [keyboard, windowHeight],
+  );
+
+  useNoticeLift({ room, foot }, shown);
   // Note that the column holds the window's side safe areas too, which the bar's own safe area view pads inside it, so its glass spans the reading width.
   const { left, right } = useSafeAreaInsets();
 
@@ -260,7 +294,7 @@ export function GlassDock({
       <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
       <View style={[styles.docked, { bottom: keyboard }]}>
         <View style={[styles.column, { maxWidth: READING_WIDTH + left + right }]}>
-          <DockMeasure.Provider value={setRoom}>{bar}</DockMeasure.Provider>
+          <DockMeasure.Provider value={measure}>{bar}</DockMeasure.Provider>
         </View>
       </View>
     </View>

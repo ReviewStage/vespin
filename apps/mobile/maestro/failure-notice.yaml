@@ -1,4 +1,4 @@
-# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice sliding down with the refusal's words and Try again, Try again refused once more, the notice swiped away, and a refusal inside Add a follower's sheet and inside Settings standing over that sheet.
+# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice rising at the window's foot with the refusal's words and Try again, Try again refused once more, the notice swiped away, and a refusal inside Add a follower's sheet and inside Settings standing in that sheet.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -20,7 +20,7 @@ appId: dev.vespin.ios
 # the notice says why, with Try again.
 - longPressOn: "Weekly digest email"
 - tapOn: "Unpin"
-- assertVisible: "The task could not be unpinned. Try again."
+- assertVisible: "The task could not be unpinned\\..*"
 - assertVisible:
     id: "failure-notice-retry"
 - takeScreenshot: failure-notice
@@ -28,15 +28,31 @@ appId: dev.vespin.ios
 # notice comes back in the same words.
 - tapOn:
     id: "failure-notice-retry"
-- assertVisible: "The task could not be unpinned. Try again."
+- assertVisible: "The task could not be unpinned\\..*"
 - assertVisible: "Pinned"
-# A swipe up puts the notice away before its time is up.
-- swipe:
-    from:
-      id: "failure-notice"
-    direction: UP
-- waitForAnimationToEnd
-- assertNotVisible: "The task could not be unpinned. Try again."
+# A swipe down puts the notice away well before its six seconds are up.
+# Note that a swipe Maestro starts from an element ends at 90% of the
+# screen's height, which a regular window's notice, standing at the foot with
+# no tab bar under it, already stands past; so there it is swiped from its
+# own place, 95% down, to the screen's foot.
+- runFlow:
+    when:
+      notVisible: "Select a task"
+    commands:
+      - swipe:
+          from:
+            id: "failure-notice"
+          direction: DOWN
+- runFlow:
+    when:
+      visible: "Select a task"
+    commands:
+      - swipe:
+          start: "50%, 95%"
+          end: "50%, 99%"
+- extendedWaitUntil:
+    notVisible: "The task could not be unpinned\\..*"
+    timeout: 3000
 # Mark done from the same menu asks first in the system's alert, since the
 # task's agent is at work and only the person can decide to stop it; once
 # confirmed, it is refused too: the task stays in the list and the notice
@@ -44,23 +60,23 @@ appId: dev.vespin.ios
 - longPressOn: "Weekly digest email"
 - tapOn: "Mark done"
 - tapOn: "Stop agents"
-- assertVisible: "The task could not be marked done. Try again."
+- assertVisible: "The task could not be marked done\\..*"
 - assertVisible: "Weekly digest email"
 - takeScreenshot: failure-notice-mark-done
 # A refusal inside a sheet draws in that sheet, over its backdrop, not
 # behind it: Add a follower stands over Billing export's Followers sheet,
 # and the fixture leaves the add unanswered, so the sheet stays and the
-# notice stands at its top edge.
+# notice rises at the sheet's own foot.
 - tapOn: "Tasks"
 - tapOn: "Billing export"
 - tapOn: "Following"
 - tapOn: "Add a follower"
 - tapOn: "Alan Turing.*"
-- assertVisible: "Following could not be changed. Try again."
+- assertVisible: "Following could not be changed\\..*"
 - waitForAnimationToEnd
 - takeScreenshot: failure-notice-add-follower
 # Settings is a sheet with a stack of its own: a memory's Delete there is
-# refused, and the notice says so over Settings rather than under it.
+# refused, and the notice says so in Settings rather than under it.
 - launchApp:
     clearState: true
     arguments:
@@ -79,6 +95,6 @@ appId: dev.vespin.ios
 - tapOn: "Delete"
 - assertVisible: "Delete this memory?"
 - tapOn: "Delete memory"
-- assertVisible: "The memory could not be deleted. Try again."
+- assertVisible: "The memory could not be deleted\\..*"
 - waitForAnimationToEnd
 - takeScreenshot: failure-notice-settings
