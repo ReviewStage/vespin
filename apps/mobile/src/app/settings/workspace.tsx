@@ -317,6 +317,9 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                 symbol={GLYPH.ADD}
                 onPress={() => setAsking({ kind: ASKING.INVITE })}
               />
+              {invitations === undefined && held?.invitations?.failed !== true ? (
+                <LoadingRow words={readingWords("the invitations")} />
+              ) : null}
               {(invitations ?? []).map((invitation) => (
                 <MemberRow
                   key={invitation.id}

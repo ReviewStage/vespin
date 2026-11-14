@@ -114,8 +114,14 @@ function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
     />
   );
 
+  // Note that a group with no skill while the other holds some says so in its footer, rather than standing as a header over nothing.
   const group = (title: string, rows: readonly SkillRow[]) => (
-    <ListSection key={title} title={title} count={rows.length}>
+    <ListSection
+      key={title}
+      title={title}
+      count={rows.length}
+      footer={rows.length === 0 ? SKILLS_LINE.NONE : undefined}
+    >
       {rows.map(rowOf)}
     </ListSection>
   );
