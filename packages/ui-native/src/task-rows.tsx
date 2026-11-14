@@ -18,6 +18,7 @@ import {
   accessibilityValue,
   buttonStyle,
   disabled,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -63,7 +64,7 @@ import {
 } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What parts the pieces of an agent's line. */
@@ -129,7 +130,9 @@ function LeadGlyph({
 function RowLine({ children }: { readonly children: ReactNode }) {
   const stacked = useAccessibilitySize();
   const lead = useScaledSize(MARK_SIZE.LEAD);
-  const inset = padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING + lead - MARK_SIZE.LEAD });
+  // Note that the line starts where the title's words do: past the unread dot and the lead's column, each as it grows with the reader's text.
+  const dot = useScaledSize(MARK_SIZE.UNREAD);
+  const inset = padding({ leading: dot + SPACE.TIGHT + lead + SPACE.ROW });
 
   if (stacked) {
     return (
@@ -487,51 +490,37 @@ type GroupRowProps = {
 export function GroupRow({ id, title, symbol, count: held, testId, onDropLink }: GroupRowProps) {
   const colors = useColors();
   const count = held === 0 ? undefined : held;
-  const stacked = useAccessibilitySize();
   const leadWidth = useScaledSize(MARK_SIZE.SIDEBAR_LEAD);
 
-  const name = (
-    <Text
-      modifiers={[
-        font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE }),
-        foregroundStyle(colors.TEXT),
-        lineLimit(stacked ? 2 : 1),
-      ]}
-    >
-      {title}
-    </Text>
-  );
-
-  const counted =
-    count === undefined ? null : (
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.SIDEBAR_COUNT }),
-          monospacedDigit(),
-          foregroundStyle(colors.TEXT_MUTED),
-          lineLimit(1),
-        ]}
-      >
-        {String(count)}
-      </Text>
-    );
-
-  // Note that at an accessibility size the count stands under the name rather than beside it, as the list's rows stack their end, so a long name keeps the row's width.
+  // Note that the name keeps one line at every text size and is cut short, and the count holds the line's end at its own width, as Mail's mailboxes stand, so a large size never breaks a name mid-word or drops the count under it.
   const row: ReactElement = (
-    <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
+    <HStack spacing={SPACE.ROW} alignment="center">
       <HStack modifiers={[frame({ width: leadWidth })]}>
         <LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.SIDEBAR_GLYPH} />
       </HStack>
-      {stacked ? (
-        <VStack alignment="leading" spacing={2}>
-          {name}
-          {counted}
-        </VStack>
-      ) : (
-        name
-      )}
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE }),
+          foregroundStyle(colors.TEXT),
+          lineLimit(1),
+        ]}
+      >
+        {title}
+      </Text>
       <Spacer />
-      {stacked ? null : counted}
+      {count === undefined ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.SIDEBAR_COUNT }),
+            monospacedDigit(),
+            foregroundStyle(colors.TEXT_MUTED),
+            lineLimit(1),
+            fixedSize(),
+          ]}
+        >
+          {String(count)}
+        </Text>
+      )}
     </HStack>
   );
 
