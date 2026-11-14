@@ -10,24 +10,32 @@ import { MARK_SIZE } from "./tokens/space.js";
 type GlyphTextStyle = "body" | "callout" | "subheadline" | "footnote" | "caption";
 
 /**
- * A glyph on its own, sized by a text style as a symbol beside words is,
- * and drawn in `color` where one is given. Note that the color is drawn into
- * the symbol's own image (`originalColor`, from the app's `@expo/ui` patch),
- * because a system menu draws an icon tinted any other way in its own ink.
+ * A glyph on its own, sized by a text style as a symbol beside words is. In
+ * a view it stands in `color`, its foreground, where one is given; in a
+ * system menu, which draws an icon tinted any other way in its own ink, it
+ * stands in `menuColor`, drawn into the symbol's own image (`originalColor`,
+ * from the app's `@expo/ui` patch). Note that the two never meet, because
+ * outside a menu SwiftUI draws that image's custom symbol in its template's
+ * own black, past any foreground.
  */
 export function GlyphImage({
   glyph,
   textStyle = "body",
   color,
+  menuColor,
 }: {
   readonly glyph: Glyph;
   readonly textStyle?: GlyphTextStyle | undefined;
+  /** Its ink in a view, such as a problem line's attention ink. */
   readonly color?: string | undefined;
+  /** Its ink in a system menu, such as a status's tone. */
+  readonly menuColor?: string | undefined;
 }) {
   return (
     <Image
       {...glyphImage(glyph)}
-      {...(color === undefined ? {} : { originalColor: color })}
+      {...(menuColor === undefined ? {} : { originalColor: menuColor })}
+      {...(color === undefined ? {} : { color })}
       modifiers={[font({ textStyle })]}
     />
   );
@@ -60,7 +68,10 @@ export function GlyphLabel({
   readonly color?: string | undefined;
 }) {
   return (
-    <Label title={title} icon={<GlyphImage glyph={glyph} textStyle={textStyle} color={color} />} />
+    <Label
+      title={title}
+      icon={<GlyphImage glyph={glyph} textStyle={textStyle} menuColor={color} />}
+    />
   );
 }
 
@@ -104,7 +115,7 @@ export function menuActContent(
       <>
         <Text>{label}</Text>
         <Text>{detail}</Text>
-        {glyph === undefined ? null : <GlyphImage glyph={glyph} color={color} />}
+        {glyph === undefined ? null : <GlyphImage glyph={glyph} menuColor={color} />}
       </>
     ),
   };
