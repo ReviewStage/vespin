@@ -37,7 +37,7 @@ appId: dev.vespin.ios
 - takeScreenshot: inbox-account
 - tapOn:
     id: "workspace-switcher"
-- tapOn: ".*, Settings"
+- tapOn: "Settings, .*"
 - assertVisible: "Ada Lovelace"
 # The workspace the app works in stands under the account, the signed-in
 # account's own one first; the switcher in the bar chooses among the others.
