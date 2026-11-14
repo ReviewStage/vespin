@@ -75,6 +75,7 @@ export const WRITE_SUBJECT = {
   THREAD_READ: "thread-read",
   THREAD_REMINDER: "thread-reminder",
   TASK_STATUS: "task-status",
+  TASK_DESCRIPTION: "task-description",
   TASK_PRIORITY: "task-priority",
   TASK_ASSIGNEE: "task-assignee",
   TASK_PIN: "task-pin",
@@ -84,7 +85,6 @@ export const WRITE_SUBJECT = {
   TASK_PARENT: "task-parent",
   TASK_SECTION: "task-section",
   TASK_FOLLOWING: "task-following",
-  TASK_DESCRIPTION: "task-description",
 } as const;
 
 export type WriteSubjectKind = (typeof WRITE_SUBJECT)[keyof typeof WRITE_SUBJECT];

@@ -13,7 +13,6 @@
  * the host wrote it, and a document already staged is handed nothing new.
  */
 
-import { MEMORY_SAVE_FAILURE } from "@repo/features/agent-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { type AppStateSnapshot, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import type { AppStateStore } from "@repo/host/client";
@@ -32,6 +31,7 @@ import {
   inboxAppState,
   inboxRemindersAppState,
   inboxTasksView,
+  MEMORY_SAVE_REFUSED,
   NEW_MEMORY_ID,
   olderPageAnswer,
   olderPageAppState,
@@ -232,17 +232,17 @@ function olderRead(
  * The writes `-refuseWrites true` refuses, each answered as the host
  * answers once the service has refused it: a task's status and its pin
  * not kept, so the screens put the row back and say why, as they would
- * of a live refusal, and a memory's save and a version's restore refused,
- * so their notices and Try again show.
+ * of a live refusal.
  */
 const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>> = new Map<
   PortActKind,
   () => PortActResult<PortActKind>
 >([
+  // Note that a memory's save and a version's restore are refused too, so their notices and Try again show.
+  [ACT_KIND.MEMORIES_SAVE, () => MEMORY_SAVE_REFUSED],
+  [ACT_KIND.TASKS_RESTORE, () => false],
   [ACT_KIND.TASKS_SET_STANDING, () => false],
   [ACT_KIND.TASKS_PIN, () => false],
-  [ACT_KIND.MEMORIES_SAVE, () => ({ failure: MEMORY_SAVE_FAILURE.MEMORY_FULL })],
-  [ACT_KIND.TASKS_RESTORE, () => false],
 ]);
 
 /** A member of `members` by a key known only at run time, as the fixture reads each one of the port before it answers or forwards it. */
