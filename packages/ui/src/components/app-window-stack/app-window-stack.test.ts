@@ -49,6 +49,7 @@ test("the window in front opens when pressed, named for its app", () => {
     label: "Apps in use",
     apps: [
       {
+        id: "com.apple.iphonesimulator",
         name: "Simulator",
         window: {
           state: { kind: PICTURE_STATE.READY, url: "data:image/png;base64,AA==" },
@@ -56,7 +57,7 @@ test("the window in front opens when pressed, named for its app", () => {
           height: 2556,
         },
       },
-      { name: "Xcode" },
+      { id: "com.apple.dt.Xcode", name: "Xcode" },
     ],
     ...QUIET,
     onOpen: () => opened.push("open"),
@@ -66,17 +67,20 @@ test("the window in front opens when pressed, named for its app", () => {
   assert.deepEqual(opened, ["open"]);
 });
 
-test("a title behind the window in front brings its app forward", () => {
+test("a title behind the window in front brings its own app forward, though another app shares its name", () => {
   const picked: string[] = [];
   draw({
     label: "Apps in use",
-    apps: [{ name: "Simulator" }, { name: "Xcode" }],
+    apps: [
+      { id: "com.apple.dt.Xcode", name: "Xcode" },
+      { id: "com.apple.dt.Xcode.beta", name: "Xcode" },
+    ],
     ...QUIET,
-    onPick: (name) => picked.push(name),
+    onPick: (id) => picked.push(id),
   });
 
   act(() => press("Bring Xcode forward")?.click());
-  assert.deepEqual(picked, ["Xcode"]);
+  assert.deepEqual(picked, ["com.apple.dt.Xcode.beta"]);
 });
 
 test("a stack of no apps draws nothing", () => {

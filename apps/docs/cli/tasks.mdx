@@ -1,0 +1,360 @@
+---
+title: "Tasks"
+description: "vespin task, section, page, and comment"
+---
+
+List, create, change, and delete tasks and sidebar sections, read their pages and page comments, and read their repository's files. Every command also takes the global flags `--json`, `-q`, `-w`, and `--url`, described in [CLI](/cli#scripts-and-coding-agents).
+
+## vespin task list
+
+List the workspace's tasks, newest first
+
+```sh
+vespin task list [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--mine` | Only the tasks assigned to you |
+| `--status choice` | Only the tasks that stand here (choices: backlog, todo, in-progress, done, canceled) |
+
+```sh
+# Every task of the workspace
+vespin task list
+
+# Your tasks under way
+vespin task list --mine --status in-progress
+```
+
+## vespin task view
+
+Show a task: where it stands, its agents, pull requests, and open asks
+
+```sh
+vespin task view [flags] <task>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+
+```sh
+# One task, by its key
+vespin task view ACME-42
+
+# The same, by its number, as JSON
+vespin task view 42 --json
+```
+
+## vespin task create
+
+Create a task in this folder's repository, and with --prompt start an agent on it
+
+```sh
+vespin task create [flags] <title>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `title string` | The task's name |
+| `--repo, -R string` | The GitHub repository, owner/name (default: this folder's origin) |
+| `--prompt string` | Start an agent on the new task with this prompt, from a file or - for stdin |
+
+```sh
+# A new task, no agent
+vespin task create "Fix the login redirect"
+
+
+# A task and an agent on a prompt from stdin
+echo "Fix the flaky test in auth.test.ts" | vespin task create "Flaky test" --prompt -
+```
+
+## vespin task update
+
+Change a task's status, priority, assignee, name, parent, blocks, or sidebar section
+
+```sh
+vespin task update [flags] <task>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+| `--status choice` | Where it stands; done marks it done (choices: backlog, todo, in-progress, done, canceled) |
+| `--priority choice` | How much it matters (choices: urgent, high, medium, low, none) |
+| `--assignee string` | A member by email, name, or id; me for you, none for nobody |
+| `--name string` | Its new name |
+| `--parent string` | The task to put it under, by id, number, or key; none for the top |
+| `--blocked-by string` | A task it waits on, added; again for each |
+| `--blocks string` | A task that waits on it, added; again for each |
+| `--remove-blocked-by string` | A task it waits on, taken away |
+| `--remove-blocks string` | A task that waits on it, taken away |
+| `--section string` | Your sidebar section to keep it in, by id or title; none for none |
+
+```sh
+# Mark a task done
+vespin task update ACME-42 --status done
+
+# Take a task, and raise it
+vespin task update ACME-42 --assignee me --priority high
+
+# Make it wait on another, under a parent
+vespin task update ACME-42 --blocked-by ACME-41 --parent ACME-40
+
+# Keep it in one of your sidebar sections
+vespin task update ACME-42 --section "This week"
+```
+
+## vespin task relate
+
+Move a relation between two tasks to another kind in one step, or add it where none stood
+
+```sh
+vespin task relate [flags] <task>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+| `--blocked-by string` | The other task, made to block it |
+| `--blocks string` | The other task, made to wait on it |
+| `--sub-task string` | The other task, made its sub-task |
+| `--parent string` | The other task, made its parent |
+| `--from choice` | How the other task stands to it now; the other side of the new kind where left out (choices: blocked-by, blocks, sub-task, parent) |
+
+```sh
+# Make the task blocking ACME-42 its sub-task instead
+vespin task relate ACME-42 --sub-task ACME-43 --from blocked-by
+
+# Turn a block around: ACME-43 blocks ACME-42, where ACME-42 blocked it
+vespin task relate ACME-42 --blocked-by ACME-43
+```
+
+## vespin task delete
+
+Delete a task for good: its agents are stopped first, then it goes with its transcripts
+
+```sh
+vespin task delete [flags] <task>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+| `--yes, -y` | Delete without asking; required where stdin is no terminal |
+
+```sh
+# Delete a task, after you confirm
+vespin task delete ACME-42
+
+# The same, from a script
+vespin task delete ACME-42 --yes
+```
+
+## vespin task cat
+
+Print a file of a task's repository as GitHub holds it, at the default branch's head or a commit
+
+```sh
+vespin task cat [flags] <task> <path>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+| `path string` | The file's path from the repository's root |
+| `--commit string` | Read at this commit, by its full SHA, rather than the default branch's head |
+
+```sh
+# The file as the default branch holds it
+vespin task cat ACME-42 README.md
+
+# The file at a commit
+vespin task cat ACME-42 src/index.ts --commit <sha>
+```
+
+## vespin task ls
+
+List a folder of a task's repository as GitHub holds it at the default branch's head
+
+```sh
+vespin task ls [flags] <task> [<path>]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+| `path string` | The folder's path from the repository's root; the root where left out (optional) |
+| `--recursive, -r` | List everything under the folder, each by its path from it |
+
+```sh
+# The repository's root
+vespin task ls ACME-42
+
+# Everything under src
+vespin task ls ACME-42 src -r
+```
+
+## vespin section list
+
+List your sidebar sections in the workspace, with the tasks in each
+
+```sh
+vespin section list [flags]
+```
+
+```sh
+# Your sections
+vespin section list
+```
+
+## vespin section create
+
+Make a section in your sidebar of the workspace, to keep tasks in
+
+```sh
+vespin section create [flags] <title>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `title string` | The section's title |
+| `--emoji string` | One emoji to draw beside its title |
+
+```sh
+# A new section
+vespin section create "This week" --emoji 🔥
+
+# Then move a task into it
+vespin task update ACME-42 --section "This week"
+```
+
+## vespin section delete
+
+Delete one of your sections; its tasks go back under Tasks
+
+```sh
+vespin section delete [flags] <section>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `section string` | The section, by its id or its title |
+
+```sh
+# Delete a section by title
+vespin section delete "This week"
+```
+
+## vespin comment list
+
+Print the comment threads on one of a task's pages
+
+```sh
+vespin comment list [flags] <task>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+| `--page string` | One of the task's pages, by its id, to read its threads instead |
+| `--status choice` | Which threads: open (default), resolved, or all (choices: open, resolved, all) |
+
+```sh
+# Every thread on a page
+vespin comment list ACME-42 --page <page-id> --status all
+```
+
+## vespin comment reply
+
+Reply in a comment thread; every agent in it is sent the reply
+
+```sh
+vespin comment reply [flags] <task> <thread>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+| `thread string` | The thread's id, as comment list prints it |
+| `--file, -F string` | The comment, from a file or - for stdin |
+
+```sh
+# Reply from stdin
+echo "Done, take another look" | vespin comment reply ACME-42 <thread> -F -
+```
+
+## vespin comment resolve
+
+Resolve a comment thread once what it asked is settled
+
+```sh
+vespin comment resolve [flags] <task> <thread>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+| `thread string` | The thread's id, as comment list prints it |
+
+```sh
+# Resolve a thread
+vespin comment resolve ACME-42 <thread>
+```
+
+## vespin comment reopen
+
+Reopen a resolved comment thread
+
+```sh
+vespin comment reopen [flags] <task> <thread>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+| `thread string` | The thread's id, as comment list prints it |
+
+```sh
+# Reopen a thread
+vespin comment reopen ACME-42 <thread>
+```
+
+## vespin page list
+
+List the pages agents showed on a task
+
+```sh
+vespin page list [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--task string` | The task the page stands on, by its id, its number, or its key |
+
+```sh
+# A task's pages
+vespin page list --task ACME-42
+```
+
+## vespin page show
+
+Print one version of a page as its HTML
+
+```sh
+vespin page show [flags] <page>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `page string` | The page's id, as page list prints it |
+| `--task string` | The task the page stands on, by its id, its number, or its key |
+| `--version integer` | The version to read (default: the newest) |
+
+```sh
+# Save a page's newest version
+vespin page show <page-id> --task ACME-42 > page.html
+
+# Its first version, with its title
+vespin page show <page-id> --task ACME-42 --version 1 --json
+```

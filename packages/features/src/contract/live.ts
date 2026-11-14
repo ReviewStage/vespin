@@ -27,7 +27,8 @@
  * each with its keeper's name and whether the reader may forget it; and the
  * skills the account sees there, named the same way, each with whether it
  * may manage it; and the account's hosts, with the install script's address
- * on the service's own origin; and one workspace's Sentry installations and
+ * on the service's own origin; and the account's machines, with their own
+ * settings for agents' commands and apps; and one workspace's Sentry installations and
  * Slack bot, named by `?workspaceId=`, with whether this deployment holds
  * each integration; and the account's preferences row, its default agent,
  * chapters model, and Slack notifications as stored. Each
@@ -64,11 +65,19 @@ import { INSTALLED_SKILLS_READ } from "../installed-skill-live.js";
 import { INTEGRATION_STATUSES_READ } from "../integration-live.js";
 import { liveProcedure } from "../live-read.js";
 import { MACHINE_COMMANDS_READ } from "../machine-command-live.js";
+import { MACHINES_READ } from "../machine-live.js";
 import { WORKSPACE_MEMORIES_READ } from "../memory-live.js";
 import { PULL_REQUEST_CHAPTERS_READ } from "../pull-request-chapters-live.js";
 import { SIDEBAR_READ } from "../sidebar-live.js";
 import { TASK_HISTORY_READ } from "../task-history-live.js";
-import { TASK_LIST_READ, TASK_ROWS_READ } from "../task-list-live.js";
+import {
+  PERSON_PAGE_READ,
+  TASK_LIST_READ,
+  TASK_PAGE_READ,
+  TASK_RELATIONS_READ,
+  TASK_ROWS_READ,
+  TASK_SEARCH_READ,
+} from "../task-list-live.js";
 import { AGENT_PAGES_READ, TASK_PAGES_READ } from "../task-pages-live.js";
 import { TASK_RECORD_READ } from "../task-record-live.js";
 import { WORKSPACE_INTEGRATIONS_READ } from "../workspace-integrations-live.js";
@@ -91,6 +100,10 @@ export const liveContract = {
   [AGENT_BROWSER_TABS_READ.name]: liveProcedure(AGENT_BROWSER_TABS_READ),
   [TASK_LIST_READ.name]: liveProcedure(TASK_LIST_READ),
   [TASK_ROWS_READ.name]: liveProcedure(TASK_ROWS_READ),
+  [TASK_SEARCH_READ.name]: liveProcedure(TASK_SEARCH_READ),
+  [TASK_PAGE_READ.name]: liveProcedure(TASK_PAGE_READ),
+  [TASK_RELATIONS_READ.name]: liveProcedure(TASK_RELATIONS_READ),
+  [PERSON_PAGE_READ.name]: liveProcedure(PERSON_PAGE_READ),
   [AUTOMATIONS_READ.name]: liveProcedure(AUTOMATIONS_READ),
   [AUTOMATION_WORKSPACE_RUNS_READ.name]: liveProcedure(AUTOMATION_WORKSPACE_RUNS_READ),
   [AUTOMATION_RUNS_READ.name]: liveProcedure(AUTOMATION_RUNS_READ),
@@ -103,6 +116,7 @@ export const liveContract = {
   [WORKSPACE_MEMBERS_READ.name]: liveProcedure(WORKSPACE_MEMBERS_READ),
   [WORKSPACE_INVITATIONS_READ.name]: liveProcedure(WORKSPACE_INVITATIONS_READ),
   [HOSTS_READ.name]: liveProcedure(HOSTS_READ),
+  [MACHINES_READ.name]: liveProcedure(MACHINES_READ),
   [WORKSPACE_MEMORIES_READ.name]: liveProcedure(WORKSPACE_MEMORIES_READ),
   [INSTALLED_SKILLS_READ.name]: liveProcedure(INSTALLED_SKILLS_READ),
   [WORKSPACE_INTEGRATIONS_READ.name]: liveProcedure(WORKSPACE_INTEGRATIONS_READ),

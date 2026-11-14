@@ -21,13 +21,14 @@ import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/task
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActKind, PortActPayload } from "@repo/host/contract";
+import { taskListFollowing } from "@repo/host/task-list-following";
 import type { WireBoundaryInput } from "@repo/wire";
 import { MutationObserver } from "@tanstack/react-query";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { useDraftsOwner } from "../composer-drafts.js";
-import { TaskListCollectionsProvider, taskListFollowing } from "../task-list-collections.js";
+import { TaskListCollectionsProvider } from "../task-list-collections.js";
 import { type FakeActPort, fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { handHostReads } from "../testing/app-state.js";
 import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";

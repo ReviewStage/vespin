@@ -370,7 +370,7 @@ export function PlanRelations({
     relationMenu(TASK_RELATION_KIND.SUB_TASK, doorsOf(subTask, TASK_RELATION_KIND.SUB_TASK)),
   );
 
-  const count = subTaskCount(subTasksOf(tasks.tasks, task.id));
+  const count = subTaskCount(task, subTasksOf(tasks.tasks, task.id));
   const byId = new Map(tasks.tasks.map((each) => [each.id, each]));
 
   const sides = [

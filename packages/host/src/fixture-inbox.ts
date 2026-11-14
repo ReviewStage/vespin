@@ -180,6 +180,7 @@ const DAY = 24 * HOUR;
 /** The profiles this fixture stages. */
 const STAGED_PROFILES: ReadonlySet<string> = new Set<string>([
   RUN_PROFILE.INBOX,
+  RUN_PROFILE.INBOX_LARGE,
   RUN_PROFILE.PERSON,
 ]);
 
@@ -710,6 +711,53 @@ const INBOXES: ReadonlyMap<string, readonly InboxItem[]> = new Map([
   [TASK.DIGEST, DIGEST_ITEMS],
   [TASK.ROUNDING, ROUNDING_ITEMS],
 ]);
+
+/** How many threads the large Inbox adds beside the staged ones, about as many as a busy real account holds (639 on the one that was timed). */
+const LARGE_THREADS = 600;
+
+/** The staged tasks the large Inbox's threads are spread over, each with its agent, so every thread stands on a plan the feed holds. */
+const LARGE_HOLDERS = [
+  { taskId: TASK.INVITES, agentId: AGENT.INVITES },
+  { taskId: TASK.DIGEST, agentId: AGENT.DIGEST },
+  { taskId: TASK.ROUNDING, agentId: AGENT.ROUNDING },
+] as const;
+
+/** A paragraph of a thread's words, as long as a real agent's post runs, with the Markdown a preview turns into plain words. */
+const LARGE_WORDS =
+  "I read through `src/billing/invoice.ts` and the **rounding** rules the description settles. Two of the cases disagree with what the tests expect, so I'd like a decision before I change either: should a partial cent round half up, as the invoice does today, or to even, as the ledger does? Either way I'll add a test for each case and note it in the description.";
+
+/** The `n`th thread of the large Inbox: an agent's ask and the account's reply, then the agent's next ask, `n` hours back so they stand in order, every third answered. */
+function largeThread(n: number): InboxItem {
+  const holder = LARGE_HOLDERS[n % LARGE_HOLDERS.length] ?? LARGE_HOLDERS[0];
+  const ago = (n + 1) * HOUR;
+  const at = 10_000 + n * 4;
+
+  return item(
+    1000 + n,
+    holder.agentId,
+    `bulk-${n}`,
+    `Thread ${n + 1}: decide how a partial cent rounds`,
+    [
+      agentSaid(at, ago, LARGE_WORDS),
+      adaSaid(at + 1, ago - 10 * MINUTE, "Round to even, as the ledger does. Say why in the PR."),
+      agentSaid(at + 2, ago - 20 * MINUTE, LARGE_WORDS, { type: INBOX_ASK.ANSWER, ...OPEN }),
+    ],
+    n % 3 === 0 ? { status: INBOX_STATUS.ANSWERED } : {},
+  );
+}
+
+/** The staged items with the large Inbox's threads laid beside them, by the task each stands on. */
+const LARGE_INBOXES: ReadonlyMap<string, readonly InboxItem[]> = new Map(
+  [...INBOXES].map(([taskId, items]) => [
+    taskId,
+    [
+      ...items,
+      ...Array.from({ length: LARGE_THREADS }, (_, n) => n)
+        .filter((n) => LARGE_HOLDERS[n % LARGE_HOLDERS.length]?.taskId === taskId)
+        .map(largeThread),
+    ],
+  ]),
+);
 
 /** When an inbox last changed: its newest item's change. */
 function newest(items: readonly InboxItem[]): number {
@@ -1998,7 +2046,8 @@ export function inboxAppState(
 ): AppStateSnapshot {
   if (!STAGED_PROFILES.has(state.run.profile)) return state;
   // Note that the account's feed of every item, which the window's Inbox draws from, holds each staged task's items whole.
-  const fed = Object.fromEntries([...INBOXES].filter(([, items]) => items.length > 0));
+  const inboxes = state.run.profile === RUN_PROFILE.INBOX_LARGE ? LARGE_INBOXES : INBOXES;
+  const fed = Object.fromEntries([...inboxes].filter(([, items]) => items.length > 0));
 
   return {
     ...state,

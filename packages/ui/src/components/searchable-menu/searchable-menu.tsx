@@ -809,6 +809,8 @@ export function SearchableMenu(
     noMatch: string;
     /** Present, the owner answers the search: it hears each query as typed, and the rows it hands are listed as they are, unfiltered. */
     onSearch?: ((query: string) => void) | undefined;
+    /** Hears each query as typed while the menu still filters its rows, as an owner that reads more rows past those it holds as the typing pauses does. */
+    onQuery?: ((query: string) => void) | undefined;
     onPick: (id: string) => void;
     /** Escape was pressed: the owner closes the menu and hands focus back to its trigger. */
     onClose: () => void;
@@ -1236,6 +1238,7 @@ export function SearchableMenu(
       onChange={(typed) => {
         setQuery(typed);
         props.onSearch?.(typed);
+        props.onQuery?.(typed);
         // The first match that may be picked takes the highlight; with
         // none, nothing does, so Enter picks nothing. The owner's own
         // answer is not in yet, so its first row takes it as it comes.

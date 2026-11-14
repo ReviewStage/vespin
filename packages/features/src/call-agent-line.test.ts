@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
-import {
-  AGENT_STATUS,
-  type AgentStatus,
-  type AgentTranscriptMessage,
-} from "@repo/features/agent-wire";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { describe, it } from "vitest";
+import { AGENT_STATUS, type AgentStatus, type AgentTranscriptMessage } from "./agent-wire.js";
 import { type CallAgentLine, callAgentLine } from "./call-agent-line.js";
 
 /** The agent's newest reply, its one call to a command in the state given. */

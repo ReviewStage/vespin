@@ -41,6 +41,7 @@ import {
 } from "drizzle-orm";
 import { DateTime, Duration, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
+import type { SqlError } from "effect/sql/SqlError";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
 import { type RunnerLineFile, runnerLine } from "../schemas/runner-line.js";
@@ -175,6 +176,18 @@ function awaitsOpenTurn() {
   );
 }
 
+/** That the agent's row still records the bearer of this digest, which a stop or a newer launch retires. */
+function bearerStands(runnerTokenHash: string) {
+  return exists(
+    queryBuilder
+      .select({ id: agentTable.id })
+      .from(agentTable)
+      .where(
+        and(eq(agentTable.id, runnerLine.agentId), eq(agentTable.runnerTokenHash, runnerTokenHash)),
+      ),
+  );
+}
+
 const findLinesPast = SqlSchema.findAll({
   Request: Schema.Struct({
     userId: Schema.String,
@@ -182,9 +195,10 @@ const findLinesPast = SqlSchema.findAll({
     launch: Schema.Number,
     after: Schema.Number,
     limit: Schema.Number,
+    runnerTokenHash: Schema.optionalKey(Schema.String),
   }),
   Result: RunnerLineSchema,
-  execute: ({ userId, agentId, launch, after, limit }) =>
+  execute: ({ userId, agentId, launch, after, limit, runnerTokenHash }) =>
     Database.use((db) =>
       db
         .select({ seq: runnerLine.seq, text: runnerLine.text })
@@ -193,6 +207,9 @@ const findLinesPast = SqlSchema.findAll({
           and(
             eq(runnerLine.userId, userId),
             eq(runnerLine.agentId, agentId),
+            // Note that the bearer is read in the same statement as the lines, so a line queued
+            // after its retire committed is never handed to the runner the retire ended.
+            runnerTokenHash === undefined ? undefined : bearerStands(runnerTokenHash),
             gt(runnerLine.seq, after),
             // Note that a message line a launch took is never handed again, whichever launch it was written for.
             or(isNull(runnerLine.lineId), isNull(runnerLine.acceptedAt)),
@@ -360,6 +377,24 @@ const findPendingHanded = SqlSchema.findOneOption({
 });
 
 /**
+ * The effect run in one transaction that holds the agent's advisory lock
+ * from its start until it commits, as every line queued for the agent is
+ * (`queueRunnerLine`): no line of the agent's commits while it runs, so what
+ * it reads of the agent's lines and turns stands until what it writes is
+ * committed.
+ */
+export function holdingAgentLines<A, E, R>(
+  agentId: string,
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | SqlError, R | SqlClient.SqlClient> {
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.andThen(client`select pg_advisory_xact_lock(hashtextextended(${agentId}, 0))`, effect),
+    ),
+  );
+}
+
+/**
  * Queues one line for the account's agent's runner, written for the launch
  * named by its first event number, under the agent's advisory lock, and
  * drops the agent's lines past their expiry; answers the line's
@@ -380,29 +415,27 @@ export function queueRunnerLine(
     readonly handed?: WireValue;
   },
 ): RunnerLineEffect<Option.Option<number>> {
-  return Effect.flatMap(SqlClient.SqlClient, (client) =>
-    client.withTransaction(
-      Effect.gen(function* () {
-        // Note that the lock is taken before the insert draws its place, so the agent's next line draws a later one.
-        yield* client`select pg_advisory_xact_lock(hashtextextended(${line.agentId}, 0))`;
-        const now = yield* DateTime.nowAsDate;
-        const before = new Date(now.getTime() - Duration.toMillis(RUNNER_LINE_EXPIRY));
-        yield* deleteExpired({ userId, agentId: line.agentId, before });
+  // Note that the lock is taken before the insert draws its place, so the agent's next line draws a later one.
+  return holdingAgentLines(
+    line.agentId,
+    Effect.gen(function* () {
+      const now = yield* DateTime.nowAsDate;
+      const before = new Date(now.getTime() - Duration.toMillis(RUNNER_LINE_EXPIRY));
+      yield* deleteExpired({ userId, agentId: line.agentId, before });
 
-        const rows = yield* insertLine({
-          userId,
-          agentId: line.agentId,
-          launch: line.launch,
-          text: line.text,
-          lineId: line.lineId ?? null,
-          files: line.files === undefined || line.files.length === 0 ? null : line.files,
-          handed: line.handed ?? null,
-          now,
-        });
+      const rows = yield* insertLine({
+        userId,
+        agentId: line.agentId,
+        launch: line.launch,
+        text: line.text,
+        lineId: line.lineId ?? null,
+        files: line.files === undefined || line.files.length === 0 ? null : line.files,
+        handed: line.handed ?? null,
+        now,
+      });
 
-        return Option.map(Option.fromNullishOr(rows[0]), (row) => row.seq);
-      }),
-    ),
+      return Option.map(Option.fromNullishOr(rows[0]), (row) => row.seq);
+    }),
   );
 }
 
@@ -415,7 +448,13 @@ export function queueRunnerLine(
 export function runnerLinesPast(
   userId: string,
   agentId: string,
-  read: { readonly launch: number; readonly after: number; readonly limit: number },
+  read: {
+    readonly launch: number;
+    readonly after: number;
+    readonly limit: number;
+    /** The digest of the reading runner's bearer, where a runner reads: nothing is handed once the agent's row no longer records it. */
+    readonly runnerTokenHash?: string;
+  },
 ): RunnerLineEffect<readonly RunnerLine[]> {
   return findLinesPast({ userId, agentId, ...read });
 }
