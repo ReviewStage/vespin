@@ -61,6 +61,8 @@ import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { agentsOfTask, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import {
   agentPullRequestsOfLiveRows,
+  PERSON_PAGE_READ,
+  PERSON_PAGE_TASKS,
   SETTLED_PAGE_SIZE,
   type SettledPageCursor,
   settledPageCursorOf,
@@ -97,7 +99,7 @@ import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/code
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
 import { withTaskAgents } from "../../agents/task-agents.js";
 import { TURN_FAILURE } from "../../core.js";
-import { taskPageRead, taskRowsRead, taskSearchRead, tasksRead } from "./tasks.js";
+import { personPageRead, taskPageRead, taskRowsRead, taskSearchRead, tasksRead } from "./tasks.js";
 
 /**
  * The plan list's live statements against the held read it stands in for:
@@ -282,6 +284,26 @@ const settledPageOf = (userId: string, workspaceId: string, before?: SettledPage
       names: plans.map((plan) => plan.name),
       agents: rows.agents.map((agent) => agent.id).toSorted(),
       next: settledPageCursorOf(rows.plans),
+    };
+  });
+
+/** A person's page in the workspace as the account reads it, decoded as the desktop decodes it: the counts, then the page's tasks and agents by id. */
+const personPageOf = (userId: string, workspaceId: string, personId: string) =>
+  Effect.gen(function* () {
+    const statements = Option.getOrThrow(
+      personPageRead.statements({ userId, workspaceId, personId }),
+    );
+
+    const rows = yield* Schema.decodeUnknownEffect(PERSON_PAGE_READ.rows)({
+      counts: yield* runLive(statements.counts),
+      plans: yield* runLive(statements.plans),
+      agents: yield* runLive(statements.agents),
+    });
+
+    return {
+      counts: rows.counts.map(({ assigned, created, agents }) => ({ assigned, created, agents })),
+      plans: rows.plans.map((plan) => plan.id).toSorted(),
+      agents: rows.agents.map((agent) => agent.id).toSorted(),
     };
   });
 
@@ -1177,6 +1199,91 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         const none = { plans: [], names: [], agents: [], next: undefined };
         assert.deepEqual(yield* settledPageOf(outsider, workspaceId), none);
         assert.deepEqual(yield* settledPageOf(outsider, workspaceId, page.next), none);
+      }),
+  );
+
+  it.effect(
+    "count a person's tasks and agents and page the newest of them, to a member and to no one else",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const owner = yield* openUser;
+        const person = yield* openUser;
+        const reader = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const unrelated = yield* startTask(owner, { name: "Teammate invitations" });
+        const { workspaceId } = unrelated;
+        yield* joinWorkspace(workspaceId, person);
+        yield* joinWorkspace(workspaceId, reader);
+
+        /** A task of the workspace, saved `minutes` before the list is read. */
+        const row = (
+          name: string,
+          minutes: number,
+          made: { readonly by: string; readonly to: string | null },
+        ) => ({
+          id: randomUUID(),
+          organizationId: workspaceId,
+          userId: made.by,
+          assigneeId: made.to,
+          name,
+          number: 2000 + minutes,
+          description: "",
+          status: TASK_STATUS.TODO,
+          updatedAt: new Date(NOW - minutes * 60_000),
+        });
+
+        // Two more tasks assigned to them than a page holds, the oldest of them Done; one of them they created themselves, which counts as assigned alone.
+        const assigned = Array.from({ length: PERSON_PAGE_TASKS + 2 }, (_, index) =>
+          row(`Assigned ${index}`, index + 1, { by: owner, to: person }),
+        );
+
+        const own = row("Their own", 30, { by: person, to: person });
+
+        const created = [
+          row("Handed over", 40, { by: person, to: owner }),
+          row("Unassigned", 50, { by: person, to: null }),
+        ];
+
+        const oldest = assigned.at(-1);
+
+        yield* db
+          .insert(task)
+          .values([
+            ...assigned.map((each) =>
+              each === oldest
+                ? { ...each, status: TASK_STATUS.DONE, completedAt: each.updatedAt }
+                : each,
+            ),
+            own,
+            ...created,
+          ]);
+
+        // Their agent on the oldest assigned task, past the page's tasks, their archived one, and the owner's beside it.
+        const theirs = yield* openAgent(person, { taskId: oldest?.id ?? "" }, 60_000);
+        const archived = yield* openAgent(person, { taskId: own.id }, 90_000);
+        yield* db
+          .update(agentTable)
+          .set({ archivedAt: new Date(NOW) })
+          .where(eq(agentTable.id, archived.id));
+        const owners = yield* openAgent(owner, { taskId: oldest?.id ?? "" }, 30_000);
+
+        assert.deepEqual(yield* personPageOf(reader, workspaceId, person), {
+          counts: [{ assigned: PERSON_PAGE_TASKS + 3, created: 2, agents: 1 }],
+          plans: [
+            ...assigned.slice(0, PERSON_PAGE_TASKS).map(({ id }) => id),
+            ...created.map(({ id }) => id),
+            oldest?.id ?? "",
+          ].toSorted(),
+          agents: [theirs.id, owners.id].toSorted(),
+        });
+
+        assert.deepEqual(yield* personPageOf(outsider, workspaceId, person), {
+          counts: [{ assigned: 0, created: 0, agents: 0 }],
+          plans: [],
+          agents: [],
+        });
       }),
   );
 });

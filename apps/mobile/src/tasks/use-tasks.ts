@@ -63,7 +63,6 @@ import {
   serviceTaskSearchQuery,
   TASK_SEARCH_PAUSE_MILLIS,
   TASKS_READ,
-  type TasksView,
 } from "@repo/features/tasks-view";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -76,11 +75,12 @@ import {
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
 import { BUZZ } from "@repo/ui-native";
+import { caseWhen, coalesce, gt, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { type TaskRelationWrites, useTaskRelationWrites } from "./use-relations.js";
@@ -138,12 +138,10 @@ type SetStatus = (taskId: string, status: TaskStatus, stopAgents?: true) => void
 
 /** Whether any of a task's agents is starting or running, read off the agents the list follows, else its row's count of them, as the panel reads it. */
 function agentsWorkingIn(
-  view: TasksView | undefined,
+  listed: readonly ListedAgent[] | undefined,
   tasks: readonly TaskSummary[],
 ): (taskId: string) => boolean {
   return (taskId) => {
-    const listed = view?.taskAgents;
-
     if (listed !== undefined) {
       return agentsOfTask(listed, taskId).some((agent) => agentStillWriting(agent.status));
     }
@@ -419,10 +417,12 @@ export interface TaskGlance {
 }
 
 /** The agents not archived, by the task they work on, read once for every row. */
-function agentsByTask(view: TasksView | undefined): ReadonlyMap<string, readonly ListedAgent[]> {
+function agentsByTask(
+  listed: readonly ListedAgent[] | undefined,
+): ReadonlyMap<string, readonly ListedAgent[]> {
   const byTask = new Map<string, ListedAgent[]>();
 
-  for (const agent of view?.taskAgents ?? []) {
+  for (const agent of listed ?? []) {
     if (agent.archivedAt !== undefined) continue;
     const onTask = byTask.get(agent.planId);
 
@@ -473,19 +473,63 @@ function useServiceTaskSearch(search: string, listRead: boolean): void {
 /** The listing as it is read, before the screen that draws it holds the questions its acts ask first. */
 export type ReadListing = Omit<TasksListing, "askDelete">;
 
+/** The task list's parts the listing reads off the document rather than its collections: how its read stands, its sections, its pinned repositories, the tasks' pull requests, and whether it carries its agents. */
+function selectListingParts(state: AppStateSnapshot) {
+  return {
+    listStatus: state.tasks.listStatus,
+    taskSections: state.tasks.taskSections,
+    repositoryPins: state.tasks.repositoryPins,
+    taskPullRequests: state.tasks.taskPullRequests,
+    agentsListed: state.tasks.taskAgents !== undefined,
+  };
+}
+
+/** The task list's rows as the listing reads them off its collections. */
+interface ListedRows {
+  readonly tasks: readonly TaskSummary[];
+  readonly agents: readonly ListedAgent[];
+}
+
+/**
+ * The task list's tasks newest active first, and its agents not archived,
+ * each as one live query over its collection (`useTaskListCollections`), as
+ * the panel's sidebar orders its tasks (`taskTime` under Updated: the later
+ * of a task's own update and its agents' last settled activity), so a
+ * delivery that moves neither is not read again.
+ */
+function useListedRows(): ListedRows {
+  const collections = useTaskListCollections();
+
+  const tasks = useLiveQuery((q) =>
+    q.from({ task: collections.tasks }).orderBy(({ task }) => {
+      const agentsAt = coalesce(task.agents?.activityAt, 0);
+
+      return caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
+    }, "desc"),
+  ).data;
+
+  const agents = useLiveQuery((q) =>
+    q.from({ agent: collections.agents }).where(({ agent }) => isUndefined(agent.archivedAt)),
+  ).data;
+
+  return { tasks, agents };
+}
+
 /**
  * The chosen workspace's tasks as the panel's phone Tasks lists them, under
  * `search` where one is typed, with each status a press set drawn at once;
- * every workspace's before the account's workspaces are read.
+ * every workspace's before the account's workspaces are read. Its tasks and
+ * agents are read through live queries (`useListedRows`), so a delivery to
+ * another part of the document draws nothing again.
  */
 export function useTasksListing(search: string): ReadListing {
   const acts = useHostActs();
   const write = useWrite();
   const workspace = useTasksWorkspace();
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const { data: view } = useQuery({ ...appStateQuery, select: selectListingParts });
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const waiting = useWaiting(workspace?.id);
-  const listed = view?.tasks ?? NO_TASKS;
+  const { tasks: listed, agents: listedAgents } = useListedRows();
   const { held, setStatus } = useStatusWrites(listed);
   const { rename } = useTaskWrites();
   const placing = useTaskPlacing(workspace?.id);
@@ -552,9 +596,9 @@ export function useTasksListing(search: string): ReadListing {
         },
       );
 
-    const agentsWorking = agentsWorkingIn(view, tasks);
+    const agentsWorking = agentsWorkingIn(view?.agentsListed ? listedAgents : undefined, tasks);
     // Note that the agents are grouped by task once, since every row's preview reads its own.
-    const byTask = agentsByTask(view);
+    const byTask = agentsByTask(listedAgents);
 
     const glanceOf = (taskId: string): TaskGlance => ({
       waiting: waiting.byTask.get(taskId) ?? 0,
@@ -582,6 +626,7 @@ export function useTasksListing(search: string): ReadListing {
     acts,
     write,
     listed,
+    listedAgents,
     held,
     view,
     workspace,
@@ -729,8 +774,8 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   return useMemo(() => {
     if (task === undefined) return undefined;
 
-    const agents = taskAgentsInOrder(agentsByTask(view), task.id, waiting.byAgent).map((agent) =>
-      agentLine(agent, waiting.byAgent, view),
+    const agents = taskAgentsInOrder(agentsByTask(view?.taskAgents), task.id, waiting.byAgent).map(
+      (agent) => agentLine(agent, waiting.byAgent, view),
     );
 
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
@@ -754,7 +799,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       waitingElsewhere: Math.max(0, (waiting.byTask.get(task.id) ?? 0) - listedWaiting),
       tasks: listed,
       setStatus,
-      agentsWorking: agentsWorkingIn(view, listed),
+      agentsWorking: agentsWorkingIn(view?.taskAgents, listed),
       rename,
       setPriority,
       setAssignee,

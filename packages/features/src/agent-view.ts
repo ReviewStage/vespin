@@ -13,6 +13,7 @@ import {
   agentArchiveRequestSchema,
   agentBeforeSchema,
   agentCallIdSchema,
+  agentChatHoldSchema,
   agentMessageRequestSchema,
   agentMessagesAnswerSchema,
   agentPinRequestSchema,
@@ -1011,6 +1012,13 @@ export type AgentPinParams = typeof agentPinParamsSchema.Type;
 /** One agent, as the window names it to stop or to delete. */
 export const agentStopParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
+});
+
+/** An agent's chat said shown or hidden by the window or device showing it (`agentChatHoldSchema`), or a bare warm as a build older than the hold asks. */
+export const agentWarmParamsSchema = EffectSchema.Struct({
+  ...agentStopParamsSchema.fields,
+  chat: EffectSchema.optionalKey(agentChatHoldSchema.fields.chat),
+  holder: EffectSchema.optionalKey(agentChatHoldSchema.fields.holder),
 });
 
 /** One agent taken back to just before one of the developer's lines, as the window names the line by its message id. */

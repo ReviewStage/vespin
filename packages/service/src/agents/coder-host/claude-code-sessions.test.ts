@@ -81,7 +81,13 @@ import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-voc
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { BOOT_PHASE } from "@repo/features/agent-boot";
-import { AGENT_FAILURE, AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
+import {
+  AGENT_CHAT,
+  AGENT_FAILURE,
+  AGENT_MACHINE,
+  AGENT_PAYER,
+  type AgentChat,
+} from "@repo/features/agent-wire";
 import {
   DEVICE_AGENT_LINE_KIND,
   DEVICE_CAPABILITY,
@@ -161,6 +167,7 @@ import {
   runnerTook,
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
+import { warmedAgent } from "../agent-lifecycle.js";
 import {
   AGENT_TAG,
   agentSandboxName,
@@ -2375,6 +2382,49 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       assert.equal(sandboxOfAgent(api, agent)?.status, "running");
       assert.equal(api.commands.length, 2);
     }),
+  );
+
+  it.effect(
+    "a shown chat holds its sandbox up past its turn's end, and hiding it stops the sandbox",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const target = { userId, conversationId: agent.conversationId };
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* runnerTook(agent.id);
+        yield* settleRunnerLostTurns(writer, agent.conversationId, yield* Clock.currentTimeMillis);
+
+        const chat = (shown: AgentChat) =>
+          warmedAgent(userId, agent.id, { chat: shown, holder: "window-1" }).pipe(
+            Effect.provide(api.layer),
+          );
+
+        yield* chat(AGENT_CHAT.SHOWN);
+
+        const idled = yield* runnerIdled({
+          target,
+          sessionId: opened.sessionId,
+          sequence: 41,
+        }).pipe(Effect.provide(api.layer));
+
+        assert.equal(idled, false);
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+        yield* chat(AGENT_CHAT.HIDDEN);
+        assert.equal(sandboxOfAgent(api, agent)?.status, "stopped");
+      }),
   );
 
   it.effect(

@@ -1164,7 +1164,13 @@ function composed(
     AGENTS_REWIND: declaredWrite(dependencies.pool, rewound),
     AGENTS_CLEAR: ({ agentId }) => asked(client.clear(agentId)),
     AGENTS_BOOT: ({ agentId }) => asked(client.boot(agentId)),
-    AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
+    AGENTS_WARM: ({ agentId, chat, holder }) =>
+      asked(
+        client.warm(
+          agentId,
+          chat === undefined || holder === undefined ? undefined : { chat, holder },
+        ),
+      ),
     AGENTS_UNSEND: (params) => queues.unsend(params),
     // Note that a button in a reply is asked of the service on each act and held nowhere here, since its press is the service's to keep.
     AGENTS_REPLY_BUTTON: (params) => asked(client.replyButton(params)),
