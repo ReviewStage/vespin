@@ -1,7 +1,16 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
 import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
-import { frame, type ModifierConfig, onGeometryChange, padding } from "@expo/ui/swift-ui/modifiers";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
+import {
+  background,
+  frame,
+  glassEffect,
+  type ModifierConfig,
+  onGeometryChange,
+  padding,
+  strokeBorder,
+} from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
@@ -125,6 +134,42 @@ function SolidBar({ children }: { readonly children: ReactNode }) {
       {children}
     </View>
   );
+}
+
+/**
+ * The glass a SwiftUI piece floating over the screen stands in, rounded as a
+ * bar is, such as the failure notice and a split view's composer: the
+ * system's glass, or, where Liquid Glass is unavailable or the reader turned
+ * on Reduce Transparency, the same solid stand-in a `GlassBar` draws, the
+ * surface's ground inside the quiet ink's hairline, rather than whatever the
+ * system makes of glass the reader asked not to see through.
+ */
+export function useBarGlass(): readonly ModifierConfig[] {
+  const colors = useColors();
+  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
+
+  return solid
+    ? [
+        background(
+          colors.SURFACE,
+          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: BAR_RADIUS }),
+        ),
+        strokeBorder({
+          content: colors.TEXT_MUTED,
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+          shape: "roundedRectangle",
+          cornerRadius: BAR_RADIUS,
+          style: { lineWidth: StyleSheet.hairlineWidth },
+        }),
+      ]
+    : [
+        glassEffect({
+          glass: { variant: "regular" },
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+          shape: "roundedRectangle",
+          cornerRadius: BAR_RADIUS,
+        }),
+      ];
 }
 
 /**
