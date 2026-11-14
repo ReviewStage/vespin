@@ -1,0 +1,147 @@
+== bundle P base cd0c322ec38
+  merged #probepage 16bbdc47eb2
+Auto-merging packages/ui-native/src/index.ts
+  merged #9388 9ffe1ceaa7e
+  merged #9390 f5353ffbfc8
+  built e9786e6b0ab
+  install 0
+  export 0
+  signed 0
+== bundle U base 4a211c6e66f
+  merged #8974 88b39790e16
+Auto-merging packages/ui-native/src/transcript.tsx
+  merged #9323 00bb5483468
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+  merged #9327 d6ce767f123
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+Auto-merging packages/ui-native/src/transcript.tsx
+  merged #9334 297b0623414
+  merged #9341 97c7cdf3d77
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/agent-screens.tsx
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/settings-form.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/settings-form.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9345 7aa366c54b7 conflict: apps/mobile/src/screens/agent-screens.tsx packages/ui-native/src/settings-form.tsx 
+Auto-merging apps/mobile/src/use-write.ts
+Auto-merging packages/ui-native/src/index.ts
+  merged #9143 28a37c21535
+Auto-merging apps/mobile/src/use-write.ts
+Auto-merging packages/ui-native/src/index.ts
+  merged #9186 b17d4b9a0ce
+Auto-merging apps/mobile/src/tasks/use-comments.ts
+  merged #9139 8c896433529
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging packages/ui-native/src/row-list.tsx
+  merged #9021 d801c11cced
+Auto-merging packages/ui-native/src/settings-form.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/settings-form.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #8986 2d602bfcead conflict: packages/ui-native/src/settings-form.tsx 
+Auto-merging apps/mobile/src/app/_layout.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/app/_layout.tsx
+Auto-merging apps/mobile/src/screens/inbox-remind.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/inbox-remind.tsx
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/remind-sheet.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/remind-sheet.tsx
+Auto-merging packages/ui-native/src/workspace-switcher.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #8992 b160d51ae98 conflict: apps/mobile/src/app/_layout.tsx apps/mobile/src/screens/inbox-remind.tsx packages/ui-native/src/remind-sheet.tsx 
+Auto-merging apps/mobile/src/screens/comment-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/comment-screens.tsx
+Auto-merging apps/mobile/src/tasks/use-comments.ts
+Auto-merging packages/host/src/fixture-inbox.ts
+CONFLICT (content): Merge conflict in packages/host/src/fixture-inbox.ts
+Auto-merging packages/ui-native/src/composer.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9145 8de0f0869ce conflict: apps/mobile/src/screens/comment-screens.tsx packages/host/src/fixture-inbox.ts 
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging packages/features/src/inbox-list-model.ts
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9225 4d2650700ba conflict: apps/mobile/src/screens/inbox-screens.tsx 
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/list-row.tsx
+Auto-merging packages/ui-native/src/marks.tsx
+  merged #9230 324b8a3fc7a
+fatal: remote error: upload-pack: not our ref 94d9cce07f87eb7175f17bd2fa10016220b00dc5
+fatal: could not fetch e1c5f2e4a5bae5dac2a8f1d62d9c0cd11b2b5b9b from promisor remote
+  SKIPPED #9239 544b6c1e159 conflict: 
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/inbox-screens.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9244 16a85dbdf93 conflict: apps/mobile/src/screens/inbox-screens.tsx 
+Auto-merging packages/features/src/inbox-list-model.test.ts
+Auto-merging packages/features/src/inbox-list-model.ts
+Auto-merging packages/ui-native/src/thread-page.tsx
+  merged #9249 397b88f7453
+Auto-merging apps/mobile/src/screens/search-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/search-screens.tsx
+Auto-merging apps/mobile/src/search/use-search.ts
+Auto-merging apps/mobile/src/tasks/use-tasks.ts
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9229 8647a1fa726 conflict: apps/mobile/src/screens/search-screens.tsx 
+Auto-merging apps/mobile/src/screens/search-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/search-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging apps/mobile/src/search/use-search.ts
+CONFLICT (content): Merge conflict in apps/mobile/src/search/use-search.ts
+Auto-merging apps/mobile/src/tasks/use-tasks.ts
+Auto-merging packages/ui-native/src/task-rows.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9286 bc7d0dc4ca3 conflict: apps/mobile/src/screens/search-screens.tsx apps/mobile/src/search/use-search.ts 
+  merged #9245 46642d444b1
+Auto-merging apps/mobile/src/screens/pull-request-screens.tsx
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/pull-request-page.tsx
+  merged #9216 d1ac5728f38
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/thread-page.tsx
+  merged #9217 8a5bfa56d2c
+fatal: remote error: upload-pack: not our ref 075e00d28c57722567aa840c795ce3637674bf08
+fatal: could not fetch 555c31fc3eea62a13230558085f64c0298c97d0f from promisor remote
+  SKIPPED #9260 941e76a93fa conflict: 
+fatal: remote error: upload-pack: not our ref d51690f5cb4e66e378c338f85289fad8db7f5b5a
+fatal: could not fetch 74ad7cf2392d08a4f9b4c741c0e677e1b08c0115 from promisor remote
+  SKIPPED #9262 c7a997a63a8 conflict: 
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/agent-screens.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9226 59bdb2e37ff conflict: apps/mobile/src/screens/agent-screens.tsx 
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging packages/features/src/inbox-list-model.test.ts
+Auto-merging packages/features/src/inbox-list-model.ts
+Auto-merging packages/ui-native/src/thread-page.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/thread-page.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9255 a4661e6ad5c conflict: packages/ui-native/src/thread-page.tsx 
+Auto-merging apps/mobile/maestro/failure-notice.yaml
+CONFLICT (content): Merge conflict in apps/mobile/maestro/failure-notice.yaml
+Auto-merging apps/mobile/src/host/fixture-host.ts
+CONFLICT (content): Merge conflict in apps/mobile/src/host/fixture-host.ts
+Auto-merging apps/mobile/src/screens/start-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging apps/mobile/src/tasks/use-start.ts
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9148 bf071bdd7d4 conflict: apps/mobile/maestro/failure-notice.yaml apps/mobile/src/host/fixture-host.ts 
+Auto-merging apps/mobile/maestro/failure-notice.yaml
+CONFLICT (content): Merge conflict in apps/mobile/maestro/failure-notice.yaml
+Auto-merging apps/mobile/src/host/fixture-host.ts
+CONFLICT (content): Merge conflict in apps/mobile/src/host/fixture-host.ts
+Auto-merging apps/mobile/src/screens/start-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9147 ff697fb944c conflict: apps/mobile/maestro/failure-notice.yaml apps/mobile/src/host/fixture-host.ts 
+  merged #9271 fc0fc15fdc5
+  merged #9273 ce004254b06
+fatal: remote error: upload-pack: not our ref 26961b0b329e9b657ef85852f8f25ca0a52062ac
+fatal: could not fetch 555c31fc3eea62a13230558085f64c0298c97d0f from promisor remote
+  SKIPPED #9314 19ea53b787d conflict: 
+  built bed83a3a5ed
+  install 0
+  export 0
+  signed 0
