@@ -17,10 +17,13 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
+# Note that this row stands near the Open list's end, which can't scroll it to the middle, so it is scrolled to without centering, then lifted clear of the floating tab bar, which would take the tap.
 - scrollUntilVisible:
     element: "acceptInvite can add a member twice"
     direction: DOWN
-    centerElement: true
+- swipe:
+    start: 50%, 70%
+    end: 50%, 40%
 - waitForAnimationToEnd
 - tapOn: "acceptInvite can add a member twice"
 - assertVisible: "Got it"
