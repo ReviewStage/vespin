@@ -23,7 +23,7 @@ const computerPermissionsSchema = EffectSchema.Struct({
 });
 
 /** Computer use on this Mac as Settings shows it: its grants, and each app allowed without asking by its bundle id, its name, and its icon as a 64px PNG. */
-export const computerUseStatusSchema = EffectSchema.Struct({
+const computerUseStatusSchema = EffectSchema.Struct({
   permissions: computerPermissionsSchema,
   apps: EffectSchema.Array(
     EffectSchema.Struct({
@@ -52,7 +52,7 @@ const macAppSchema = EffectSchema.Struct({
 export type MacApp = typeof macAppSchema.Type;
 
 /** The apps agents may be pointed at on this Mac: those running first, then those installed, none they are never offered. */
-export const macAppsSchema = EffectSchema.Struct({ apps: EffectSchema.Array(macAppSchema) });
+const macAppsSchema = EffectSchema.Struct({ apps: EffectSchema.Array(macAppSchema) });
 
 /** The Mac commands' acts, answered by the Mac commands composer. */
 export const MACHINE_COMMAND_ACTS = declaredActs({

@@ -393,7 +393,7 @@ interface StartLanding {
  * the workspace's installation, or refused: as not found where GitHub names
  * no commit for it, and as GitHub unanswered where it could not be asked.
  */
-export const confirmedBranch = Effect.fnUntraced(function* (
+const confirmedBranch = Effect.fnUntraced(function* (
   workspaceId: string,
   repository: string,
   member: string | undefined,

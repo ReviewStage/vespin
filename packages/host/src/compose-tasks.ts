@@ -178,8 +178,9 @@ import {
 import { type OfflineRefused, TASK_QUEUED_WRITE, untaken } from "./queued-writes.js";
 import type { RunMode } from "./run-mode.js";
 import { sidebarCollections, sidebarWrites } from "./sidebar-collections.js";
-import { PLAN, type PlanRow, taskListCollections } from "./task-list-collections.js";
+import { PLAN, taskListCollections } from "./task-list-collections.js";
 import { followTaskList } from "./task-list-follow.js";
+import type { PlanRow } from "./task-list-rows.js";
 import type { WindowFocus } from "./window-focus.js";
 import { followSidebarRows } from "./workspaces-follow.js";
 

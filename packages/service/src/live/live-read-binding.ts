@@ -259,13 +259,13 @@ interface LiveCursorBinding<Read extends AnyLiveRead> {
 type OwnSource = SyncTable | { readonly table: SyncTable; readonly column: PgColumn };
 
 /** A table whose moved rows name a part's own rows, with the column of its log rows that names them. */
-export interface OwnKeyed {
+interface OwnKeyed {
   readonly table: SyncTable;
   readonly column: string;
 }
 
 /** A part's own rows as a delta read answers them gone: the key its rows are named by, and the tables whose moved rows name them. */
-export interface OwnPart {
+interface OwnPart {
   readonly key: string;
   readonly sources: readonly OwnKeyed[];
 }

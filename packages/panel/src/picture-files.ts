@@ -48,7 +48,7 @@ export function isPdfUpload(file: { readonly type: string; readonly name: string
 }
 
 /** Whether a description keeps a file: a picture or a PDF. */
-export function isDescriptionFile(file: { readonly type: string; readonly name: string }): boolean {
+function isDescriptionFile(file: { readonly type: string; readonly name: string }): boolean {
   return isPictureFile(file) || isPdfUpload(file);
 }
 

@@ -35,7 +35,7 @@ export const SKILL_LINE_TONE = {
   ATTENTION: "attention",
 } as const;
 
-export type SkillLineTone = (typeof SKILL_LINE_TONE)[keyof typeof SKILL_LINE_TONE];
+type SkillLineTone = (typeof SKILL_LINE_TONE)[keyof typeof SKILL_LINE_TONE];
 
 /** The line under the box. */
 export interface DetectedLine {
