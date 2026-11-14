@@ -276,7 +276,8 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_LINE }),
-          foregroundStyle(working ? colors.TEXT_MUTED : colors.DANGER_TEXT),
+          // Note that Failed stands muted beside the failed mark, which already carries the red, as the panel marks a failed agent by its glyph alone.
+          foregroundStyle(colors.TEXT_MUTED),
         ]}
       >
         {working ? GLYPH_STATE_WORDS[GLYPH_STATE.WORKING] : GLYPH_STATE_WORDS[GLYPH_STATE.FAILED]}
@@ -451,11 +452,11 @@ type FailedReadRowProps = {
 };
 
 /**
- * A row saying a part of a page could not be read, in the muted ink with its
- * glyph, and its one act at the line's end as the system's small bordered
- * capsule, as Mail says a message could not be loaded. Note that a failed
- * read is no copper matter: it asks nothing of the reader but the press, so
- * only the capsule takes one.
+ * A row saying a part of a page could not be read: the failed glyph in the
+ * attention ink, the words muted, and its one act at the line's end as the
+ * system's small bordered capsule in the ink, as Mail says a message could
+ * not be loaded. Note that only the capsule takes a press, so the row reads
+ * as a line that says, with the act beside it.
  */
 export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
   const colors = useColors();
@@ -465,7 +466,7 @@ export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
       <RowHead
         unread={false}
         faded={false}
-        lead={<LeadGlyph symbol={GLYPH.FAILED} ink={colors.TEXT_MUTED} />}
+        lead={<LeadGlyph symbol={GLYPH.FAILED} ink={colors.ATTENTION} />}
         title={label}
         ink={colors.TEXT_MUTED}
         end={
