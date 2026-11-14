@@ -5,14 +5,16 @@ import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import {
   BAR_TITLE,
+  type BrandColors,
   FailureNoticeLayer,
   FailureNoticeProvider,
   KeepingProvider,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack } from "expo-router";
-import { type ReactNode, useEffect, useState } from "react";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useColorScheme } from "react-native";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -35,6 +37,29 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
 // The splash stands until the host's first screen has drawn (`HostProvider`), rather than going with expo-router's own hide over a blank screen.
 holdSplash();
+
+/**
+ * The navigators' theme: react-navigation's own for the color scheme, its
+ * `dark` flag following the system's and its colors the brand's, so a screen
+ * or a bar that sets no ground, title or tint of its own stands on the
+ * brand's ground in its ink, never a white body or the system's blue.
+ */
+function navigationTheme(colors: BrandColors, dark: boolean) {
+  const base = dark ? DarkTheme : DefaultTheme;
+
+  return {
+    ...base,
+    dark,
+    colors: {
+      primary: colors.TEXT,
+      background: colors.GROUND,
+      card: colors.GROUND,
+      text: colors.TEXT,
+      border: colors.CHIP_EDGE,
+      notification: colors.ACCENT,
+    },
+  };
+}
 
 /** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
 const SHORT_SHEET_DETENTS = [0.5, 1];
@@ -226,15 +251,29 @@ function KeptScreens() {
   );
 }
 
-/** The root: the host, the one notice of a write that did not go, the voice call, which outlives every screen, and the screens under them. */
+/**
+ * The root: the host, the one notice of a write that did not go, the voice
+ * call, which outlives every screen, and the screens under them, in the
+ * navigators' theme. Note that the theme's `dark` flag follows the system's
+ * color scheme, because expo-router's stack sets every navigation bar's
+ * style from it, and with no theme given it read the light default, so in
+ * dark every bar's buttons, its search field and the keyboard it raised
+ * drew light beside the dark tab bar.
+ */
 export default function RootLayout() {
+  const dark = useColorScheme() === "dark";
+  const colors = useColors();
+  const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
+
   return (
-    <HostProvider>
-      <FailureNoticeProvider>
-        <VoiceCallProvider>
-          <KeptScreens />
-        </VoiceCallProvider>
-      </FailureNoticeProvider>
-    </HostProvider>
+    <ThemeProvider value={theme}>
+      <HostProvider>
+        <FailureNoticeProvider>
+          <VoiceCallProvider>
+            <KeptScreens />
+          </VoiceCallProvider>
+        </FailureNoticeProvider>
+      </HostProvider>
+    </ThemeProvider>
   );
 }
