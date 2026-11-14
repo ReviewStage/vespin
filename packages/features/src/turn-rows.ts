@@ -232,9 +232,6 @@ export const CALL_WORDS = {
 /** What a row of a call that ran on the developer's own Mac says of where it ran, beside its line. */
 const ON_YOUR_MAC = "On your Mac";
 
-/** What a row of a call in the agent's own browser says of where it ran, beside its line. */
-const IN_THE_BROWSER = "Browser";
-
 /** What each of the browser's actions says it did, on a browser call's line. */
 const BROWSER_ACTION_WORDS: ReadonlyMap<string, string> = new Map([
   ["list", "listed the tabs"],
@@ -315,8 +312,9 @@ export function computerNotRunWords(action: string | undefined): string {
 /**
  * What a browser call's line says it did, in place of its kind's verb: each
  * action it named once, in the order first named, and "in" where the tab it
- * acted on follows as the subject; nothing where it named no action this
- * build knows, so the kind's own verb stands.
+ * acted on follows as the subject, or "in the browser" where it names none;
+ * nothing where it named no action this build knows, so the kind's own verb
+ * stands.
  */
 export function browserCallWords(
   actions: readonly string[],
@@ -329,7 +327,8 @@ export function browserCallWords(
   if (said === "") return undefined;
   const line = `${said.charAt(0).toUpperCase()}${said.slice(1)}`;
 
-  return tabNamed ? `${line} in` : line;
+  // Note that a call naming no tab names the browser itself, since its row wears no tag of where it ran.
+  return tabNamed ? `${line} in` : `${line} in the browser`;
 }
 
 /**
@@ -410,14 +409,15 @@ export function isCommandKind(kind: CallKind): boolean {
  * Where a call ran, as its row says beside its line, or nothing for a call
  * that ran where its tab says. A command on a Mac ran on the Mac of the
  * agent's starter, whom a row that knows them draws in these words' place;
- * a call of an MCP server's tool ran on the server it names.
+ * a call of an MCP server's tool ran on the server it names. A browser call
+ * says none, since its icon and its words already say the browser.
  */
 export function callPlace(kind: CallKind, server?: string): string | undefined {
   if (kind === CALL_KIND.MCP_TOOL || kind === CALL_KIND.SEARCH_TOOLS) return server;
 
-  if (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) return ON_YOUR_MAC;
-
-  return kind === CALL_KIND.BROWSER ? IN_THE_BROWSER : undefined;
+  return kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER
+    ? ON_YOUR_MAC
+    : undefined;
 }
 
 /** What a call's line says: the verb, or a described command's purpose, then the subject, and whether the subject is code. */

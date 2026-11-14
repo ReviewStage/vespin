@@ -54,7 +54,7 @@ test("a command the model described carries its description on one line for the 
   }
 });
 
-test("a browser call says what it did and in which tab, by the title its answer gives, with where it ran beside it; while it runs it names the page it went to, and a call that ran nothing says why", () => {
+test("a browser call says what it did and in which tab, by the title its answer gives, or in the browser where it names no tab; while it runs it names the page it went to, and a call that ran nothing says why", () => {
   const input = {
     actions: [
       { action: "click", tab: "tab-1", ref: "e12" },
@@ -76,7 +76,6 @@ test("a browser call says what it did and in which tab, by the title its answer 
 
   const line = callLine(done.kind, done.subject, done.description);
   assert.deepEqual(line, { verb: "Clicked, typed in", subject: "Sign in · Acme", code: false });
-  assert.equal(callPlace(done.kind), "Browser");
 
   const running = toolCallView({
     tool: "browser",
@@ -99,7 +98,7 @@ test("a browser call says what it did and in which tab, by the title its answer 
   });
 
   assert.deepEqual(callLine(refused.kind, refused.subject, refused.description), {
-    verb: "Listed the tabs",
+    verb: "Listed the tabs in the browser",
     subject: "",
     code: false,
   });
