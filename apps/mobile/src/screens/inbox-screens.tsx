@@ -1131,8 +1131,6 @@ export function InboxThreadScreen() {
   const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
 
-  if (handed) return null;
-
   return (
     <>
       <Stack.Screen
