@@ -8,19 +8,23 @@
  * credential leaves the host and no vespin.dev picture is fetched by its
  * address: one still on its way stands as its well, and one that could not
  * be read, or a vespin.dev address that names no description's picture,
- * says so in its place.
+ * says so in its place. A PDF a description keeps as it keeps a picture is
+ * written under the app's caches and drawn as its file's chip, as the
+ * panel's description draws it.
  */
 
+import { sizeLabel } from "@repo/features/attachment-model";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
+import { DESCRIPTION_FILE_TYPE } from "@repo/features/description-attachment-wire";
 import { drawnPictureAddresses } from "@repo/features/drawn-pictures";
 import { isLinkHome } from "@repo/features/link-home";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
-import type { MarkdownVideo } from "@repo/ui-native";
+import type { MarkdownFile, MarkdownVideo } from "@repo/ui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cachedVideo } from "../cached-media.js";
+import { cachedFile, cachedVideo } from "../cached-media.js";
 import { useHostActs } from "../host/host-provider.js";
 import { openInSafari } from "../open-link.js";
 
@@ -30,16 +34,20 @@ const DESCRIPTION_MEDIA_PREFIX = "description";
 /** What a video in a description is called where the player stands. */
 const VIDEO_LABEL = "Video";
 
+/** The name a description's PDF is written under in the app's caches, in a folder of its own, which the share sheet saves it as. */
+const PDF_NAME = "Attachment.pdf";
+
 /** The media types a description's picture is drawn by. */
 const PICTURE_TYPES: ReadonlySet<string> = new Set(Object.values(PICTURE_TYPE));
 
 /** The media types a description's picture is played by. */
 const VIDEO_TYPES: ReadonlySet<string> = new Set(Object.values(PLAYABLE_VIDEO_TYPE));
 
-/** How a picture's read stands: drawn from its `data:` address, played from its file, or unread for good. */
+/** How a picture's read stands: drawn from its `data:` address, played from its file, opened from its file as a chip, or unread for good. */
 const PICTURE_READ = {
   PICTURE: "picture",
   VIDEO: "video",
+  FILE: "file",
   UNREAD: "unread",
 } as const;
 
@@ -49,6 +57,7 @@ type PictureRead =
       readonly kind: typeof PICTURE_READ.PICTURE | typeof PICTURE_READ.VIDEO;
       readonly source: string;
     }
+  | { readonly kind: typeof PICTURE_READ.FILE; readonly source: string; readonly size: string }
   | { readonly kind: typeof PICTURE_READ.UNREAD };
 
 /** The pictures read, by the description that owns each, then by its id. */
@@ -60,6 +69,8 @@ export interface DescriptionPictures {
   readonly pictureSource: (written: string) => string | null | undefined;
   /** The video a description's picture is, once read; none for a picture or any other address. */
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
+  /** The file a description's picture is, such as a PDF, once read; none for a picture or any other address. */
+  readonly fileAt: (written: string) => MarkdownFile | undefined;
 }
 
 /** Nothing read yet. */
@@ -86,8 +97,14 @@ function withRead(
   return new Map(read).set(owner, ofOwner);
 }
 
-/** What a picture's bytes are drawn as, by its type; unread for a type neither drawn nor played, such as a PDF. */
+/** What a picture's bytes are drawn as, by its type: a picture, a video, a PDF as its file, and unread for any other type. */
 async function readOf(id: string, contentType: string, base64: string): Promise<PictureRead> {
+  if (contentType === DESCRIPTION_FILE_TYPE.PDF) {
+    const source = await cachedFile(DESCRIPTION_MEDIA_PREFIX, id, PDF_NAME, contentType, base64);
+
+    return { kind: PICTURE_READ.FILE, source, size: sizeLabel(base64) };
+  }
+
   if (VIDEO_TYPES.has(contentType)) {
     const source = await cachedVideo(DESCRIPTION_MEDIA_PREFIX, id, contentType, base64);
 
@@ -195,6 +212,13 @@ export function useDescriptionPictures(body: string | undefined): DescriptionPic
               label: VIDEO_LABEL,
               onOpenElsewhere: () => openInSafari(written),
             }
+          : undefined;
+      },
+      fileAt: (written) => {
+        const picture = readAt(written)?.picture;
+
+        return picture?.kind === PICTURE_READ.FILE
+          ? { source: picture.source, mediaType: DESCRIPTION_FILE_TYPE.PDF, size: picture.size }
           : undefined;
       },
     };

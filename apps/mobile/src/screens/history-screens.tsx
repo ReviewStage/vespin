@@ -216,7 +216,7 @@ function Version({
   }, []);
   const answer = version.data;
   const read = answer === undefined || "failure" in answer ? undefined : answer.revision;
-  const { pictureSource, videoAt } = useDescriptionPictures(read?.description.body);
+  const { pictureSource, videoAt, fileAt } = useDescriptionPictures(read?.description.body);
 
   const restore = () => {
     if (restoring) return;
@@ -265,6 +265,7 @@ function Version({
           onOpenLink={openLink}
           pictureSource={pictureSource}
           videoAt={videoAt}
+          fileAt={fileAt}
         />
       </ListSection>
     </RowList>

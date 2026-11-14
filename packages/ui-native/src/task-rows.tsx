@@ -52,7 +52,7 @@ import {
   type RowSwipe,
   rowPlacement,
 } from "./list-row.js";
-import { Markdown, type MarkdownVideo } from "./markdown.js";
+import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import {
   AgentTile,
   type Face,
@@ -553,6 +553,8 @@ type WordsRowProps = {
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** The video a picture's address names, played in its place; none where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** The file a picture's address names, such as a description's PDF, drawn as its chip in its place. */
+  readonly fileAt?: ((written: string) => MarkdownFile | undefined) | undefined;
   /** What GitHub holds of a pull request or issue a chip in the words names, by its page, which the chip says where it stands. */
   readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
 };
@@ -610,6 +612,7 @@ export function WordsRow({
   last = true,
   pictureSource,
   videoAt,
+  fileAt,
   linkStanding,
 }: WordsRowProps) {
   const colors = useColors();
@@ -623,6 +626,7 @@ export function WordsRow({
           onOpenLink={onOpenLink}
           pictureSource={pictureSource}
           videoAt={videoAt}
+          fileAt={fileAt}
           linkStanding={linkStanding}
           headings
         />

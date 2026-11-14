@@ -22,6 +22,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DraftCard } from "./draft-card.js";
+import { FileChip } from "./file-chip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
 import { ISSUE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -194,6 +195,8 @@ interface Drawing {
   readonly pictureSource: (written: string) => string | null | undefined;
   /** The video a picture's address names, played in its place; none where the address names a picture. */
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
+  /** The file a picture's address names, such as a PDF a description keeps as it keeps a picture, drawn as its chip in its place; none where the address names a picture. */
+  readonly fileAt: (written: string) => MarkdownFile | undefined;
   /** Whether a heading is heard as one, on a page of words alone, where VoiceOver's Headings rotor walks its sections. */
   readonly headings: boolean;
   /** What GitHub holds of the pull request or issue a chip's page names, as the host read it; none while unread or unanswered. */
@@ -1058,7 +1061,10 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
   );
 }
 
-/** A picture's block: the video its address names, played in its place, or the picture. */
+/** What a file's chip is named where its words gave it no name. */
+const UNNAMED_FILE = "Attachment";
+
+/** A picture's block: the file its address names, as its chip, the video, played in its place, or the picture. */
 function PictureBlock({
   source,
   alt,
@@ -1068,6 +1074,20 @@ function PictureBlock({
   readonly alt: string;
   readonly drawing: Drawing;
 }) {
+  const file = drawing.fileAt(source);
+
+  // Note that a file is named by the words naming it, as the panel's chip is, since its address names no file.
+  if (file !== undefined) {
+    return (
+      <FileChip
+        name={alt.trim() === "" ? UNNAMED_FILE : alt.trim()}
+        mediaType={file.mediaType}
+        source={file.source}
+        size={file.size}
+      />
+    );
+  }
+
   const video = drawing.videoAt(source);
 
   if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
@@ -1177,6 +1197,8 @@ type MarkdownProps = {
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** The file a picture's address names, such as a PDF a description keeps, drawn as its chip in its place; every address names a picture where none is given. */
+  readonly fileAt?: ((written: string) => MarkdownFile | undefined) | undefined;
   /** Whether its headings are heard as headings, on a page of words alone; a message's are styled alone. */
   readonly headings?: boolean | undefined;
   /** What GitHub holds of a pull request or issue a chip names, by its page (`markdownGithubPages`), which the chip says where it stands; every chip says what its link says where none is given. */
@@ -1192,6 +1214,13 @@ export interface MarkdownVideo {
   readonly source: string | undefined;
   readonly label: string;
   readonly onOpenElsewhere?: (() => void) | undefined;
+}
+
+/** A file the words name as a picture, drawn as its chip in its place: the file of the app's caches it opens from, its type, and its size in words. One that could not be read stands as a picture that could not be. */
+export interface MarkdownFile {
+  readonly source: string;
+  readonly mediaType: string;
+  readonly size: string | undefined;
 }
 
 /** Each picture drawn from the address its words name it by. */
@@ -1214,6 +1243,11 @@ function noVideo(): undefined {
   return undefined;
 }
 
+/** No address naming a file. */
+function noFile(): undefined {
+  return undefined;
+}
+
 /**
  * Words drawn as the Markdown they were written in, as the panel draws a
  * message: the panel's parse (`@repo/features/markdown-tree`), read into
@@ -1228,6 +1262,7 @@ export function Markdown({
   typed,
   pictureSource = namedSource,
   videoAt = noVideo,
+  fileAt = noFile,
   headings = false,
   linkStanding = noStanding,
   suggestion = noSuggestion,
@@ -1247,6 +1282,7 @@ export function Markdown({
     openLink: onOpenLink,
     pictureSource,
     videoAt,
+    fileAt,
     headings,
     linkStanding,
     suggestion,
