@@ -1,0 +1,9 @@
+getpwuid_r did not find a match for uid 501
+Timestamp               Ty Process[PID:TID]
+2026-11-14 13:33:49.179 E  Vespin[69608:df365a] [com.facebook.react.log:javascript] [kept-bench] 0.15 MB 93 items: parse 0 ms, decode 8 ms (with parse), stringify 0 ms, cut 0 ms
+2026-11-14 13:33:49.304 E  Vespin[69608:df365a] [com.facebook.react.log:javascript] [kept-bench] 0.50 MB 310 items: parse 1 ms, decode 27 ms (with parse), stringify 1 ms, cut 1 ms
+2026-11-14 13:33:49.569 E  Vespin[69608:df365a] [com.facebook.react.log:javascript] [kept-bench] 1.00 MB 620 items: parse 2 ms, decode 59 ms (with parse), stringify 2 ms, cut 3 ms
+2026-11-14 13:33:50.085 E  Vespin[69608:df365a] [com.facebook.react.log:javascript] [kept-bench] 2.00 MB 1240 items: parse 6 ms, decode 110 ms (with parse), stringify 4 ms, cut 5 ms
+2026-11-14 13:33:51.309 E  Vespin[69608:df365a] [com.facebook.react.log:javascript] [kept-bench] 4.80 MB 2975 items: parse 11 ms, decode 265 ms (with parse), stringify 11 ms, cut 13 ms
+2026-11-14 13:33:51.309 E  Vespin[69608:df365a] [com.facebook.react.log:javascript] [kept-bench] DONE
+2026-11-14 13:34:23.000 Df log[70866:0] [com.apple.log:] log run noninteractively, parent: 68190 (launchd_sim), args: 'log' 'show' '--last' '3m' '--style' 'compact' '--predicate' 'eventMessage CONTAINS "[kept-bench]"'
