@@ -1275,12 +1275,14 @@ test("a post to the inbox opens the Inbox on the item it posted, by the thread i
 
   const readCall = {
     tool: "read_thread",
+    callId: "call-read",
     input: { threadId: "item-1" },
     output: {
       status: "accepted",
       thread: { id: "item-1", key: "invite-ttl", title: "Invite expiry" },
     },
   };
+
   const read = toolCallView(readCall);
 
   assert.equal(read.kind, CALL_KIND.INBOX_THREAD_READ);
