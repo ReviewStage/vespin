@@ -152,10 +152,6 @@ interface VoiceCallLeasesService {
   ) => Effect.Effect<void, VoiceCallLeaseNotPublished, VoiceCallLeaseServices>;
 }
 
-/** An observer that does nothing with what it hears: the call is held, handed over, and ended, and nothing more. */
-export const observeNothing: VoiceCallObserver<never> = () =>
-  Effect.succeed({ observe: () => Effect.void, beside: Effect.never });
-
 /**
  * The call's row deleted, and, where this delete is the one that took it,
  * its seconds kept on the caller's day and the call counted once, by its

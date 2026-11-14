@@ -63,7 +63,7 @@ import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { touchAgentSandbox } from "../sandbox-use.js";
 import { AgentSandbox } from "../terminal/agent-sandbox.js";
 
-export const CHECKOUT_RESTORE = {
+const CHECKOUT_RESTORE = {
   /** The most a rewind waits on the restore, the sandbox woken included. */
   TIMEOUT: Duration.seconds(60),
   /** How many characters of a failed restore's stderr are logged, from its end. */
