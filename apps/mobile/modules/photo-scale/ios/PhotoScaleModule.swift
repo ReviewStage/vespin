@@ -1,4 +1,4 @@
-// PhotoScaleModule.swift -- a picked photo drawn as a workspace's photo on the phone: its center square, upright, at a side of pixels the JavaScript names, written as a JPEG within the service's bound, as the share extension scales a shared picture through ImageIO (`share-extension/SharedItems.swift`).
+// PhotoScaleModule.swift -- a picked photo drawn as a workspace's photo on the phone, its center square at a side of pixels the JavaScript names, or fitted whole under the bound a message's picture keeps; upright, written as a JPEG, as the share extension scales a shared picture through ImageIO (`share-extension/SharedItems.swift`).
 //
 // The photo picker hands back a file of whatever kind the library holds,
 // HEIC among them, at full size; ImageIO decodes it at the size asked rather
@@ -15,6 +15,8 @@ import UniformTypeIdentifiers
 public final class PhotoScaleModule: Module {
   /// The JPEG qualities tried in turn, the first that fits the bound kept.
   private static let qualities: [Double] = [0.85, 0.7, 0.55, 0.4]
+  /// Each try at a whole picture that fits: its longest side in pixels and its quality, the first that fits kept, as the share extension tries them.
+  private static let fittings: [(side: Int, quality: Double)] = [(2048, 0.7), (1600, 0.6), (1200, 0.5)]
 
   public func definition() -> ModuleDefinition {
     Name("PhotoScale")
@@ -33,6 +35,31 @@ public final class PhotoScaleModule: Module {
       }
       return nil
     }
+
+    // The picture at `uri` whole, upright, as a JPEG in base64, its longest side and quality stepped down until it is at most `maxBytes` long, as Messages and Mail scale a photo rather than refuse it; the smallest try where none fits, which the JavaScript's bound then says is too large; none where it cannot be read.
+    AsyncFunction("fitJpeg") { (uri: String, maxBytes: Int) -> String? in
+      let url = uri.hasPrefix("file:") ? URL(string: uri) : URL(fileURLWithPath: uri)
+      guard let url, let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+      var smallest: Data?
+      for fitting in Self.fittings {
+        guard let image = Self.scaled(source, side: fitting.side),
+          let jpeg = Self.jpeg(image, quality: fitting.quality)
+        else { return nil }
+        if jpeg.count <= maxBytes { return jpeg.base64EncodedString() }
+        smallest = jpeg
+      }
+      return smallest?.base64EncodedString()
+    }
+  }
+
+  /// `source`'s image, upright, at most `side` pixels on its longest side and never larger than it is, decoded at that size.
+  private static func scaled(_ source: CGImageSource, side: Int) -> CGImage? {
+    let options: [CFString: Any] = [
+      kCGImageSourceCreateThumbnailFromImageAlways: true,
+      kCGImageSourceCreateThumbnailWithTransform: true,
+      kCGImageSourceThumbnailMaxPixelSize: side,
+    ]
+    return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
   }
 
   /// `source`'s image, upright, its shorter side drawn at `edge` pixels, cut to its center square.
