@@ -1,4 +1,4 @@
-import type { AgentStatus } from "@repo/features/agent-wire";
+import type { AgentStatus, ListedAgent } from "@repo/features/agent-wire";
 import type { Entity, KnownNames } from "@repo/features/entity-kind";
 import type { LinkDestination } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -6,28 +6,37 @@ import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
-import type { TaskStatus } from "@repo/features/task-wire";
+import type { TaskStatus, TaskSummary } from "@repo/features/task-wire";
+import type { TasksView } from "@repo/features/tasks-view";
 import { taskKey } from "@repo/features/workspace-key";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { and, eq, isUndefined, not, useLiveQuery } from "@tanstack/react-db";
+import {
+  and,
+  type ChangeMessage,
+  type Collection,
+  eq,
+  isUndefined,
+  not,
+  useLiveQuery,
+} from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { useAutomation } from "../automation-directory.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
-import { appStateQuery, memoizedSelect } from "../use-app-state.js";
+import { appStateQuery, memoizedSelect, selectWorkspaces } from "../use-app-state.js";
 import { useMentionedPlace } from "./mentioned-place.js";
 
 /**
  * use-known-names.ts -- the names the window already holds for places in the app, by id, for a chip to call an app link by.
  *
- * Read from main's document, which every window holds: every task's title,
- * the agents each task's row names, as their tabs name them
- * (`agentName`, so an untitled agent goes by its model), the models they
- * run on, and the automations that started them, the active task's
- * pages as the window holds them (`LIVE_READ.PAGES`), each task's key, the
- * Inbox items waiting, and the agents an automation started with no task;
- * from the directories standing around
+ * Read from the task list's collections (`task-list-collections.tsx`): every
+ * task's title, every listed agent, as its tab names it (`agentName`, so an
+ * untitled agent goes by its model), the model it runs on, and the
+ * automation that started it, and each task's key; from main's document,
+ * which every window holds, the active task's pages as the window holds
+ * them (`LIVE_READ.PAGES`), the Inbox items waiting, and the workspaces a
+ * key is spelled with; from the directories standing around
  * the caller, the members and the automation asked for, and the catalog an
  * untitled agent's model is named by, as its tab and row name it
  * (`mentioned-place.ts`). Nothing is fetched,
@@ -35,11 +44,12 @@ import { useMentionedPlace } from "./mentioned-place.js";
  * from the account signing in (`compose-tasks.ts`), which brings each task's
  * name as the service gives it.
  *
- * The document's names are built once per delivery in a memoized select
- * every chip shares (`memoizedSelect`), rather than once per chip, so a
- * transcript of a hundred chips builds them once; and not at all for a
- * delivery that moved neither the tasks, the Inbox, nor the active task's
- * pages.
+ * The account-wide names and keys are each one derivation of a collection
+ * every reader shares (`derivationOf`), rather than one per message, so a
+ * transcript of a hundred messages builds them once; and a delivery is
+ * looked at only for the rows it moved, so one that moves no name or key,
+ * as an agent's status or a task's time does, leaves them the same object
+ * and draws none of their readers again.
  *
  * A chip names one subject, so it reads the names of that subject alone
  * (`useNamesOf`): its task and its agent by id from the task list's
@@ -91,55 +101,253 @@ function activePagesOf(state: AppStateSnapshot | undefined): readonly PageLine[]
   return taskId === undefined ? undefined : state?.[LIVE_READ.PAGES][PAGE_OWNER.TASK][taskId]?.rows;
 }
 
-/** The names the document holds, no people among them, from the tasks, the Inbox, and the active task's pages. */
-function heldNamesOf(
-  planning: AppStateSnapshot["tasks"] | undefined,
-  inbox: AppStateSnapshot["inbox"] | undefined,
-  activePages: readonly PageLine[] | undefined,
-): KnownNames {
-  const tasks = new Map(planning?.tasks.map((task) => [task.id, task.name]));
-  const agents = new Map<string, string>();
-  const agentModels = new Map<string, string>();
-  const automations = new Map<string, string>();
+/** The names of the open task's pages and of the Inbox items waiting, none of the task list's rows among them. */
+interface PlaceNames {
+  readonly pages: ReadonlyMap<string, string>;
+  readonly pagesTaskId: string | undefined;
+  readonly inboxItems: ReadonlyMap<string, string>;
+}
 
-  for (const agent of planning?.taskAgents ?? []) {
-    agents.set(agent.id, agentName(agent));
-    agentModels.set(agent.id, agent.model);
+/** No names: what a subject the window holds none of is named from. */
+const NO_NAMES: ReadonlyMap<string, string> = new Map();
 
-    if (agent.automationId !== undefined && agent.automationName !== undefined) {
-      automations.set(agent.automationId, agent.automationName);
-    }
-  }
+/** The pages and Inbox items' names, built once per delivery that moved the open task, its pages, or the Inbox, and never for one that moved only the task list's rows. */
+const selectPlaceNames = memoizedSelect(
+  (state) => [state.tasks.activeTaskId, state.inbox, activePagesOf(state)],
+  (pagesTaskId, inbox, activePages): PlaceNames => ({
+    pages: new Map(activePages?.map((page) => [page.id, page.title])),
+    pagesTaskId,
+    inboxItems: new Map(
+      inbox.waiting.flatMap((task) => task.items).map((item) => [item.id, item.title]),
+    ),
+  }),
+);
 
-  const pages = new Map(activePages?.map((page) => [page.id, page.title]));
+/** The names of a window before the first document arrives. */
+const NO_PLACE_NAMES: PlaceNames = {
+  pages: NO_NAMES,
+  pagesTaskId: undefined,
+  inboxItems: NO_NAMES,
+};
 
-  const inboxItems = new Map(
-    (inbox?.waiting ?? []).flatMap((task) => task.items).map((item) => [item.id, item.title]),
-  );
+/** One value derived from every row of a collection, which its readers listen to and read. */
+interface Derivation<Value> {
+  readonly listen: (heard: () => void) => () => void;
+  readonly read: () => Value;
+}
+
+/**
+ * The one `derive` of `collection`'s rows that every reader shares. It
+ * listens from its first read, so the readers drawn in one frame derive it
+ * once, until its last listener goes; a change it hears is looked at for
+ * the rows it moved alone (`moves`), and only one that moves the value
+ * derives it again, so it stays the same object across a delivery that
+ * moves nothing it holds.
+ */
+function derivationOf<Row extends object, Value extends object>(
+  collection: Collection<Row, string>,
+  derive: (rows: Iterable<Row>) => Value,
+  moves: (held: Value, change: ChangeMessage<Row, string>) => boolean,
+): Derivation<Value> {
+  let held: Value | undefined;
+  let stop: (() => void) | undefined;
+  const listeners = new Set<() => void>();
+
+  const follow = (): void => {
+    if (stop !== undefined) return;
+
+    const subscription = collection.subscribeChanges((changes) => {
+      const was = held;
+
+      // Note that no reader holds a value not yet derived again, so a change heard before the next read tells no one.
+      if (was === undefined || !changes.some((change) => moves(was, change))) return;
+      held = undefined;
+
+      for (const hear of listeners) hear();
+    });
+
+    stop = () => subscription.unsubscribe();
+  };
 
   return {
-    tasks,
-    agents,
-    agentModels,
-    pages,
-    pagesTaskId: planning?.activeTaskId,
-    inboxItems,
-    people: NO_PEOPLE,
-    automations,
+    listen: (heard) => {
+      follow();
+      listeners.add(heard);
+
+      return () => {
+        listeners.delete(heard);
+
+        if (listeners.size > 0) return;
+        stop?.();
+        stop = undefined;
+        held = undefined;
+      };
+    },
+    read: () => {
+      follow();
+      held ??= derive(collection.values());
+
+      return held;
+    },
   };
 }
 
-/** The names of a window before the first document arrives. */
-const NO_HELD_NAMES = heldNamesOf(undefined, undefined, undefined);
+/** The derivation `make` builds of `collection`, made once for it and kept while it stands. */
+function sharedOf<Key extends object, Value>(
+  made: WeakMap<Key, Value>,
+  key: Key,
+  make: (key: Key) => Value,
+): Value {
+  const held = made.get(key) ?? make(key);
+  made.set(key, held);
 
-/** The names the document holds, the one value every reader of this window shares, made again only for a delivery that moved the tasks, the Inbox, or the active task's pages. */
-const selectHeldNames = memoizedSelect(
-  (state) => [state.tasks, state.inbox, activePagesOf(state)],
-  heldNamesOf,
-);
+  return held;
+}
+
+/** The value `derivation` holds, drawn again only when a change moves it. */
+function useDerived<Value>(derivation: Derivation<Value>): Value {
+  // Note that a render to markup reads the value as it stands, as a window's first frame does.
+  return useSyncExternalStore(derivation.listen, derivation.read, derivation.read);
+}
+
+/** The names of the listed agents, the models they run on, and the automations that started them. */
+interface AgentNames {
+  readonly agents: ReadonlyMap<string, string>;
+  readonly agentModels: ReadonlyMap<string, string>;
+  readonly automations: ReadonlyMap<string, string>;
+}
+
+/** Where a numbered task's key is spelled from: its workspace and its number. */
+interface TaskNumber {
+  readonly workspaceId: string;
+  readonly number: number;
+}
+
+/** Every task's name, by task id. */
+const taskNames = new WeakMap<
+  Collection<TaskSummary, string>,
+  Derivation<ReadonlyMap<string, string>>
+>();
+
+/** Every listed agent's names, by agent id. */
+const agentNames = new WeakMap<Collection<ListedAgent, string>, Derivation<AgentNames>>();
+
+/** Every numbered task's workspace and number, by task id. */
+const taskNumbers = new WeakMap<
+  Collection<TaskSummary, string>,
+  Derivation<ReadonlyMap<string, TaskNumber>>
+>();
+
+/** Every task's name, moved only by a task added, gone, or renamed. */
+function taskNamesOf(tasks: Collection<TaskSummary, string>) {
+  return sharedOf(taskNames, tasks, (collection) =>
+    derivationOf(
+      collection,
+      (rows) => new Map(Array.from(rows, (task) => [task.id, task.name])),
+      (held, change) => change.type !== "update" || held.get(change.key) !== change.value.name,
+    ),
+  );
+}
+
+/** Every listed agent's names, moved only by an agent added, gone, or named anew, or one an automation not yet named started. */
+function agentNamesOf(agents: Collection<ListedAgent, string>) {
+  return sharedOf(agentNames, agents, (collection) =>
+    derivationOf(
+      collection,
+      (rows): AgentNames => {
+        const named = new Map<string, string>();
+        const agentModels = new Map<string, string>();
+        const automations = new Map<string, string>();
+
+        for (const agent of rows) {
+          named.set(agent.id, agentName(agent));
+          agentModels.set(agent.id, agent.model);
+
+          if (agent.automationId !== undefined && agent.automationName !== undefined) {
+            automations.set(agent.automationId, agent.automationName);
+          }
+        }
+
+        return { agents: named, agentModels, automations };
+      },
+      (held, change) => {
+        const agent = change.value;
+
+        return (
+          change.type !== "update" ||
+          held.agents.get(change.key) !== agentName(agent) ||
+          held.agentModels.get(change.key) !== agent.model ||
+          (agent.automationId !== undefined &&
+            agent.automationName !== undefined &&
+            !held.automations.has(agent.automationId))
+        );
+      },
+    ),
+  );
+}
+
+/** Every numbered task's workspace and number, moved only by a numbered task added or gone, or a task numbered or moved anew. */
+function taskNumbersOf(tasks: Collection<TaskSummary, string>) {
+  return sharedOf(taskNumbers, tasks, (collection) =>
+    derivationOf(
+      collection,
+      (rows) => {
+        const numbers = new Map<string, TaskNumber>();
+
+        for (const task of rows) {
+          if (task.number !== undefined) {
+            numbers.set(task.id, { workspaceId: task.workspaceId, number: task.number });
+          }
+        }
+
+        return numbers;
+      },
+      (held, change) => {
+        const was = held.get(change.key);
+
+        if (change.type === "delete") return was !== undefined;
+
+        return (
+          was?.number !== change.value.number ||
+          (was !== undefined && was.workspaceId !== change.value.workspaceId)
+        );
+      },
+    ),
+  );
+}
+
+/** Names handed to the readers, and the parts they were made of. */
+interface HeldNames {
+  readonly tasks: ReadonlyMap<string, string>;
+  readonly agents: AgentNames;
+  readonly place: PlaceNames;
+  readonly names: KnownNames;
+}
+
+/** The names last handed to the readers, so every reader of one delivery shares one value. */
+let heldNames: HeldNames | undefined;
+
+/** The names the window holds, no people among them, the same object while none of its parts moves. */
+function heldNamesOf(
+  tasks: ReadonlyMap<string, string>,
+  agents: AgentNames,
+  place: PlaceNames,
+): KnownNames {
+  if (heldNames?.tasks === tasks && heldNames.agents === agents && heldNames.place === place) {
+    return heldNames.names;
+  }
+
+  const names = { ...place, ...agents, tasks, people: NO_PEOPLE };
+  heldNames = { tasks, agents, place, names };
+
+  return names;
+}
 
 /** No keys: what a window listing no numbered task holds, one object for every reader. */
 const NO_KEY_TARGETS: ReadonlyMap<string, string> = new Map();
+
+/** No workspaces: what a window holds before the first document arrives. */
+const NO_WORKSPACES: TasksView["workspaces"] = [];
 
 /** Whether two sets of keys name the same tasks by the same links, which a delivery that moved no task's key keeps. */
 function sameTargets(
@@ -154,24 +362,27 @@ function sameTargets(
 }
 
 /**
- * Each listed task's key (`ACME-42`), the link its mention is written with.
+ * Each numbered task's key (`ACME-42`), the link its mention is written with.
  * A key two tasks share, as two workspaces whose names begin alike give
  * theirs, names neither, so words never chip the wrong task.
  */
-function keyTargetsOf(planning: AppStateSnapshot["tasks"]): ReadonlyMap<string, string> {
-  const workspaces = new Map(planning.workspaces.map((workspace) => [workspace.id, workspace]));
+function keyTargetsOf(
+  numbers: ReadonlyMap<string, TaskNumber>,
+  listed: TasksView["workspaces"],
+): ReadonlyMap<string, string> {
+  const workspaces = new Map(listed.map((workspace) => [workspace.id, workspace]));
   const targets = new Map<string, string>();
   const shared = new Set<string>();
 
-  for (const task of planning.tasks) {
-    const workspace = workspaces.get(task.workspaceId);
+  for (const [taskId, { workspaceId, number }] of numbers) {
+    const workspace = workspaces.get(workspaceId);
 
-    if (workspace === undefined || task.number === undefined) continue;
-    const key = taskKey(workspace.name, task.number);
+    if (workspace === undefined) continue;
+    const key = taskKey(workspace.name, number);
 
     if (targets.has(key)) shared.add(key);
     const place = { workspace: workspace.slug ?? "", repository: null };
-    targets.set(key, encodeMention({ kind: MENTION_KIND.TASK, taskId: task.id }, place));
+    targets.set(key, encodeMention({ kind: MENTION_KIND.TASK, taskId }, place));
   }
 
   for (const key of shared) targets.delete(key);
@@ -179,28 +390,40 @@ function keyTargetsOf(planning: AppStateSnapshot["tasks"]): ReadonlyMap<string, 
   return targets.size === 0 ? NO_KEY_TARGETS : targets;
 }
 
-/** The keys last handed to the readers, kept while a delivery names the same keys by the same links. */
-let heldKeyTargets: ReadonlyMap<string, string> = NO_KEY_TARGETS;
+/** Keys handed to the readers, and the numbers and workspaces they were spelled from. */
+interface HeldKeyTargets {
+  readonly numbers: ReadonlyMap<string, TaskNumber> | undefined;
+  readonly workspaces: TasksView["workspaces"] | undefined;
+  readonly targets: ReadonlyMap<string, string>;
+}
+
+/** The keys last handed to the readers. */
+let heldKeyTargets: HeldKeyTargets = {
+  numbers: undefined,
+  workspaces: undefined,
+  targets: NO_KEY_TARGETS,
+};
 
 /**
- * The keys, built once per delivery that moved the task list, as the names
- * are. It tells its readers only when a key or its link changed, which a
- * task's other moves never do, so the words drawn with it are read again
- * only then. Note that the last answer is kept here by hand, because a
- * `structuralSharing` function on one reader's `useQuery` becomes the
- * shared app-state query's own (`QueryObserver.setOptions`), which would
- * then compare whole documents with it.
+ * The keys, spelled again only when the tasks' numbers or the workspaces
+ * moved, and handed on as the same object while they name the same tasks
+ * by the same links, so the words drawn with them are read again only when
+ * a key or its link changed.
  */
-const selectKeyTargets = memoizedSelect(
-  (state) => [state.tasks],
-  (planning) => {
-    const next = keyTargetsOf(planning);
+function keyTargetsFor(
+  numbers: ReadonlyMap<string, TaskNumber>,
+  workspaces: TasksView["workspaces"],
+): ReadonlyMap<string, string> {
+  if (heldKeyTargets.numbers === numbers && heldKeyTargets.workspaces === workspaces) {
+    return heldKeyTargets.targets;
+  }
 
-    if (!sameTargets(heldKeyTargets, next)) heldKeyTargets = next;
+  const next = keyTargetsOf(numbers, workspaces);
+  const targets = sameTargets(heldKeyTargets.targets, next) ? heldKeyTargets.targets : next;
+  heldKeyTargets = { numbers, workspaces, targets };
 
-    return heldKeyTargets;
-  },
-);
+  return targets;
+}
 
 /** The members and former members of the directory around the caller, by user id; none outside one. */
 function usePeople(): ReadonlyMap<string, string> {
@@ -235,7 +458,10 @@ function useAutomationsNamed(
  * (`keyTargetsOf`). The same object until a key or a link changes.
  */
 export function useWordTargets(): ReadonlyMap<string, string> {
-  return useQuery({ ...appStateQuery, select: selectKeyTargets }).data ?? NO_KEY_TARGETS;
+  const numbers = useDerived(taskNumbersOf(useTaskListCollections().tasks));
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
+
+  return keyTargetsFor(numbers, workspaces);
 }
 
 /**
@@ -256,11 +482,15 @@ export function useAgentStatus(agentId: string): AgentStatus | undefined {
  * The names the window holds, the automation `automationId` names among them
  * where the directory around the caller lists it. Outside a member directory
  * and with no automation asked for, every caller is handed the one shared
- * value, which stays the same object until the tasks or the Inbox move; with
+ * value, which stays the same object until a name, the Inbox, or the pages move; with
  * the catalog read, every caller shares the one map of agents' names it named.
  */
 export function useKnownNames(automationId?: string): KnownNames {
-  const held = useQuery({ ...appStateQuery, select: selectHeldNames }).data ?? NO_HELD_NAMES;
+  const collections = useTaskListCollections();
+  const tasks = useDerived(taskNamesOf(collections.tasks));
+  const listed = useDerived(agentNamesOf(collections.agents));
+  const place = useQuery({ ...appStateQuery, select: selectPlaceNames }).data ?? NO_PLACE_NAMES;
+  const held = heldNamesOf(tasks, listed, place);
   const agents = agentsNamedBy(held.agents, held.agentModels, useMentionedPlace().models);
   const people = usePeople();
   const automations = useAutomationsNamed(held.automations, automationId);
@@ -289,35 +519,6 @@ function namedIdsOf(named: Entity | LinkDestination): NamedIds {
     automationId: "automationId" in named ? named.automationId : undefined,
   };
 }
-
-/** The names of the open task's pages and of the Inbox items waiting, none of the task list's rows among them. */
-interface PlaceNames {
-  readonly pages: ReadonlyMap<string, string>;
-  readonly pagesTaskId: string | undefined;
-  readonly inboxItems: ReadonlyMap<string, string>;
-}
-
-/** No names: what a subject the window holds none of is named from. */
-const NO_NAMES: ReadonlyMap<string, string> = new Map();
-
-/** The pages and Inbox items' names, built once per delivery that moved the open task, its pages, or the Inbox, and never for one that moved only the task list's rows. */
-const selectPlaceNames = memoizedSelect(
-  (state) => [state.tasks.activeTaskId, state.inbox, activePagesOf(state)],
-  (pagesTaskId, inbox, activePages): PlaceNames => ({
-    pages: new Map(activePages?.map((page) => [page.id, page.title])),
-    pagesTaskId,
-    inboxItems: new Map(
-      inbox.waiting.flatMap((task) => task.items).map((item) => [item.id, item.title]),
-    ),
-  }),
-);
-
-/** The names of a window before the first document arrives. */
-const NO_PLACE_NAMES: PlaceNames = {
-  pages: NO_NAMES,
-  pagesTaskId: undefined,
-  inboxItems: NO_NAMES,
-};
 
 /**
  * The name the agents of the task list keep for the automation `automationId`
