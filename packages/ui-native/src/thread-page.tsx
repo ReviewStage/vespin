@@ -33,7 +33,7 @@ import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
-import { StyleSheet, View } from "react-native";
+import { Dimensions, StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { BarContent } from "./bar-content.js";
 import { FileChip } from "./file-chip.js";
@@ -356,8 +356,23 @@ function MessageView({
           <Spacer />
         </HStack>
         {message.stamp === undefined ? null : <AnswerStamp stamp={message.stamp} />}
-        <RNHostView matchContents={{ vertical: true }}>
-          <View style={styles.words}>
+        <RNHostView
+          matchContents={{ vertical: true }}
+          onLayout={(event) => {
+            const window = Dimensions.get("window");
+            console.log(
+              `[probe-thread-width] host message=${message.id} x=${event.nativeEvent.layout.x} width=${event.nativeEvent.layout.width} height=${event.nativeEvent.layout.height} window=${window.width}x${window.height} at=${Date.now()}`,
+            );
+          }}
+        >
+          <View
+            style={styles.words}
+            onLayout={(event) => {
+              console.log(
+                `[probe-thread-width] words message=${message.id} width=${event.nativeEvent.layout.width} at=${Date.now()}`,
+              );
+            }}
+          >
             {message.words.trim() === "" ? null : (
               <Markdown
                 words={message.words}
