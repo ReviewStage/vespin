@@ -748,7 +748,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
 }
 
 /** Where the host's read of the task list stands: not yet asked, reading, read, or failed. */
-export function useTasksReadStatus(): TasksView["listStatus"] {
+export function useTasksReadStatus() {
   const { data: status = TASKS_READ.IDLE } = useQuery({
     ...appStateQuery,
     select: (state) => state.tasks.listStatus,
