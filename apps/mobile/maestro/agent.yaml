@@ -226,7 +226,7 @@ appId: dev.vespin.ios
 # to go back to, so the page stays.
 - tapOn: "More"
 - tapOn: "Archive"
-- tapOn: "Stop agents"
+- tapOn: "Stop agent"
 - assertNotVisible: "Archive agent?"
 - assertNotVisible:
     id: "ask-note"

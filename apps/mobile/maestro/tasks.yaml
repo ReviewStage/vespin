@@ -144,7 +144,7 @@ onFlowComplete:
 - longPressOn: "Weekly digest email"
 - tapOn: "Mark done"
 - assertVisible: "Mark as Done?"
-- assertVisible: "Stop agents"
+- assertVisible: "Stop agent"
 - takeScreenshot: tasks-mark-done-ask
 - tapOn: "Cancel"
 - waitForAnimationToEnd
