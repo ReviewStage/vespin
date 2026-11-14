@@ -95,7 +95,12 @@ appId: dev.vespin.ios
 # The number comes last, since the decimal pad has no key that puts it away:
 # the composer rides above it, so Send is pressed with the pad still up.
 # Words that read as no number hold the answer back, rather than send it
-# without them.
+# without them. At accessibility sizes the card runs taller than the screen and
+# stands scrolled to its foot after the toggle, so the field is scrolled back to first.
+- scrollUntilVisible:
+    element:
+      id: "answer-field-Invites a member may send a day"
+    direction: UP
 - tapOn:
     id: "answer-field-Invites a member may send a day"
 - waitForAnimationToEnd

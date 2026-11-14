@@ -19,7 +19,6 @@ import {
   accessibilityLabel,
   background,
   buttonStyle,
-  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -36,7 +35,7 @@ import {
 import { FIELD_WORDS, SELECTION_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode } from "react";
-import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
+import { useAnnounced } from "./accessibility.js";
 import { Chip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
@@ -314,12 +313,11 @@ function TypedFieldRow({
 }
 
 /**
- * A select: its label and the system's menu picker on one row, the label
- * leading and the picker's value at its end, as a Form's picker row stands;
- * it reads "None" until an option is picked, as Settings' pickers do, the
- * recommended option said as such. Past the accessibility sizes the picker stands under its label at
- * the leading edge, as a typed field stands under its name, since a long
- * value beside the label ran past the row.
+ * A select: its label over the system's menu picker at the leading edge, as
+ * a text field stands under its name in the same card, so a long value such
+ * as "Every member (recommended)" has the row's width rather than squeezing
+ * its label into a column beside it; it reads "None" until an option is
+ * picked, as Settings' pickers do, the recommended option said as such.
  */
 function SelectRow({
   field,
@@ -331,50 +329,29 @@ function SelectRow({
   readonly onChange: (value: string) => void;
 }) {
   const colors = useColors();
-  const large = useAccessibilitySize();
 
-  const words = (
-    <FieldWords
-      label={field.label}
-      required={field.required}
-      textStyle={TYPE_ROLE.ROW_TITLE}
-      ink={colors.TEXT}
-    />
-  );
-
-  const picker = (
-    <Picker<string>
-      label={field.label}
-      selection={Predicate.isString(field.value) ? field.value : ""}
-      onSelectionChange={onChange}
-      // Note that beside its label the picker holds its value whole on one line, so a long one such as "Every member (recommended)" wraps the field's name beside it rather than leaving its last word alone on a second line, as a Settings row wraps its label before its value; under its label it has the row's width and wraps as it must.
-      modifiers={[
-        pickerStyle("menu"),
-        labelsHidden(),
-        tint(colors.TEXT),
-        ...(large ? [] : [fixedSize()]),
-      ]}
-    >
-      <Text modifiers={[tag("")]}>{SELECTION_WORDS.NONE}</Text>
-      {(field.options ?? []).map((option) => (
-        <Text key={option} modifiers={[tag(option)]}>
-          {option === field.recommended ? `${option} (${recommendedWord})` : option}
-        </Text>
-      ))}
-    </Picker>
-  );
-
-  return large ? (
+  return (
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
-      {words}
-      {picker}
+      <FieldWords
+        label={field.label}
+        required={field.required}
+        textStyle={TYPE_ROLE.ROW_LINE}
+        ink={colors.TEXT_MUTED}
+      />
+      <Picker<string>
+        label={field.label}
+        selection={Predicate.isString(field.value) ? field.value : ""}
+        onSelectionChange={onChange}
+        modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.TEXT)]}
+      >
+        <Text modifiers={[tag("")]}>{SELECTION_WORDS.NONE}</Text>
+        {(field.options ?? []).map((option) => (
+          <Text key={option} modifiers={[tag(option)]}>
+            {option === field.recommended ? `${option} (${recommendedWord})` : option}
+          </Text>
+        ))}
+      </Picker>
     </VStack>
-  ) : (
-    <HStack spacing={SPACE.ROW} modifiers={[padding(ROW_PADDING)]}>
-      {words}
-      <Spacer />
-      {picker}
-    </HStack>
   );
 }
 
