@@ -17,8 +17,8 @@
 
 import { type ClaudeCodeConfig, type CodexConfig, RUNNER_ENV } from "./protocol.js";
 
-/** The name our MCP server is registered under, so its tools reach the model as `mcp__workspace__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
-export const MCP_SERVER = "workspace";
+/** The name our MCP server is registered under, so its tools reach the model as `mcp__team__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
+export const MCP_SERVER = "team";
 
 /**
  * How long a harness waits on one of our tool calls, in seconds: our MCP
