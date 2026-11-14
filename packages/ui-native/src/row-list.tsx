@@ -35,7 +35,7 @@ import { useReduceMotion, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
-import { ToneGlyph } from "./marks.js";
+import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { RowOpenContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
@@ -208,6 +208,8 @@ type ListSectionProps = {
   readonly mark?: MarkLook | undefined;
   /** What the group is, before its title in the muted ink, as the panel's sidebar leads a section with its icon and a repository with its own mark; none where the words say it alone. */
   readonly glyph?: Glyph | undefined;
+  /** The repository, `owner/name`, whose owner's picture stands in the glyph's place, as the panel's sidebar leads a repository's group; the glyph stands in until it draws. */
+  readonly repository?: string | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
   readonly foldable?: boolean | undefined;
   /** A line under the section, in the system's footnote. */
@@ -250,6 +252,7 @@ function GroupHeader({
   progress,
   mark,
   glyph,
+  repository,
   folded,
 }: {
   readonly title: string;
@@ -257,6 +260,7 @@ function GroupHeader({
   readonly progress: SectionProgress | undefined;
   readonly mark: MarkLook | undefined;
   readonly glyph: Glyph | undefined;
+  readonly repository: string | undefined;
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
@@ -282,7 +286,9 @@ function GroupHeader({
           modifiers={[frame({ width: chevron + 2 })]}
         />
       )}
-      {glyph === undefined ? null : (
+      {repository !== undefined ? (
+        <RepositoryPicture repository={repository} size={glyphSize} />
+      ) : glyph === undefined ? null : (
         <Image
           {...glyphImage(glyph)}
           size={glyphSize}
@@ -393,6 +399,7 @@ export function ListSection({
   progress,
   mark,
   glyph,
+  repository,
   foldable = false,
   footer,
   onDropLink,
@@ -413,6 +420,7 @@ export function ListSection({
         progress={progress}
         mark={mark}
         glyph={glyph}
+        repository={repository}
         folded={foldable ? folded : undefined}
       />
     );
