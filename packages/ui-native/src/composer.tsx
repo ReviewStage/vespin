@@ -66,7 +66,10 @@ function roundMark(round: number) {
  * in the ground, inside the composer's press frame. Note that a disabled
  * circle drops the tint for the system's faint fill, which in light mode
  * matched the composer's own ground, so a Send with nothing to send vanished:
- * it stands on a hairline-gray disc of ours instead, its mark muted.
+ * it stands on a hairline-gray disc of ours instead, its mark muted. The disc
+ * is the selected fill, the hairline's gray that Increase Contrast leaves as
+ * it is, since that setting turns the hairline itself to the muted ink and
+ * the mark stood at about 2:1 on it.
  */
 function roundModifiers(colors: ReturnType<typeof useColors>, enabled = true) {
   return [
@@ -74,7 +77,7 @@ function roundModifiers(colors: ReturnType<typeof useColors>, enabled = true) {
     SwiftModifiers.buttonBorderShape("circle"),
     tint(colors.TEXT),
     foregroundStyle(enabled ? colors.GROUND : colors.TEXT_MUTED),
-    ...(enabled ? [] : [background(colors.CHIP_EDGE, SwiftModifiers.shapes.circle())]),
+    ...(enabled ? [] : [background(colors.SELECTED, SwiftModifiers.shapes.circle())]),
     ...PRESS_FRAME,
   ];
 }
