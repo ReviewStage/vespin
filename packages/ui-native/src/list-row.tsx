@@ -181,7 +181,7 @@ type ListRowProps = RowActs & {
   readonly line?: InboxLineKind | undefined;
   /** The thread's last line: an ask's options or steps, or the last message's words. */
   readonly summary?: string | undefined;
-  /** Whether the thread is unread, which carries the dot and sets its title in medium. */
+  /** Whether the thread is unread, which carries the dot and sets its title in semibold. */
   readonly unread?: boolean | undefined;
   /** Whether the thread is done, which mutes its words. */
   readonly done?: boolean | undefined;
@@ -202,7 +202,7 @@ type TaskRowProps = RowActs & {
   readonly id: string;
   readonly name: string;
   readonly status: TaskStatus;
-  /** Whether the task has news unread, which carries the dot and sets its name in medium. */
+  /** Whether the task has news unread, which carries the dot and sets its name in semibold. */
   readonly unread?: boolean | undefined;
   /** Whether the task is done or canceled, which mutes its name, as a search finds one. */
   readonly finished?: boolean | undefined;

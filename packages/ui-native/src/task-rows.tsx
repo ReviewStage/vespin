@@ -63,7 +63,7 @@ import {
 } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What parts the pieces of an agent's line. */
@@ -129,7 +129,9 @@ function LeadGlyph({
 function RowLine({ children }: { readonly children: ReactNode }) {
   const stacked = useAccessibilitySize();
   const lead = useScaledSize(MARK_SIZE.LEAD);
-  const inset = padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING + lead - MARK_SIZE.LEAD });
+  // Note that the line starts where the title's words do: past the unread dot and the lead's column, each as it grows with the reader's text.
+  const dot = useScaledSize(MARK_SIZE.UNREAD);
+  const inset = padding({ leading: dot + SPACE.TIGHT + lead + SPACE.ROW });
 
   if (stacked) {
     return (
