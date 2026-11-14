@@ -268,7 +268,12 @@ export interface MergeMethodChoice {
  * it is a split button, as the panel's merge box is: a tap merges the way
  * chosen, and a long press or its chevron opens the ways, the chosen one
  * checked. It is dimmed while a change is out, its words then saying what
- * is under way.
+ * is under way. Note that a single press is the same menu with no ways and
+ * no chevron, rather than a bordered button, because a list takes a row
+ * holding the system's button as one row-wide button, and a `RowList`
+ * always keeps a selection, so on a regular width a press on the row went
+ * to selecting it, untagged, and did nothing; a menu takes its own press
+ * there, in the system's same bordered look.
  */
 export function MergeActRow({
   label,
@@ -312,18 +317,16 @@ export function MergeActRow({
     }),
   ];
 
-  // Note that a single way to merge leaves nothing to choose, so the press stands as a plain button with no chevron.
-  if (methods.length < 2) {
-    return (
-      <SwiftUIButton onPress={onPress} modifiers={look}>
-        {words}
-      </SwiftUIButton>
-    );
-  }
+  // Note that a single way to merge leaves nothing to choose, so the press stands with no chevron and nothing behind it.
+  const chooses = methods.length > 1;
 
   return (
-    <Menu label={words} onPrimaryAction={onPress} modifiers={[...look, menuIndicator("visible")]}>
-      {methods.map((method) => (
+    <Menu
+      label={words}
+      onPrimaryAction={onPress}
+      modifiers={[...look, menuIndicator(chooses ? "visible" : "hidden")]}
+    >
+      {(chooses ? methods : []).map((method) => (
         <Toggle
           key={method.label}
           label={method.label}
