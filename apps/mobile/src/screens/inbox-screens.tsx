@@ -622,7 +622,7 @@ function ThreadDetail({
 
   const navigation = useNavigation();
   const inFront = useInFront();
-  // Whether the thread's screen is the one in front of its stack, which its docked composer tells the app's notice.
+  // Whether the thread's screen is the one in front of its stack, which its docked composer tells the app's notice, beside its column standing in front: a two-column split provides no `InFront`, so that alone stays true behind another tab or a pushed page.
   const focused = useIsFocused();
 
   // Whether this thread stands in front now, read when a start answers rather than when it was sent, since the reader may have switched tabs meanwhile.
@@ -799,7 +799,7 @@ function ThreadDetail({
                 item={item}
                 answer={answer}
                 agentName={agentName}
-                inColumn={{ shown: inFront }}
+                inColumn={{ shown: inFront && focused }}
               />
             ),
           })}
