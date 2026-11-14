@@ -110,7 +110,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { createContext, type ReactElement, useContext, useMemo, useState } from "react";
+import { type ReactElement, useMemo, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -706,16 +706,15 @@ type TreeHold = {
   readonly setFolded: (group: string, folded: boolean) => void;
 };
 
-/** The tree's hold, from the Tasks tab's root screen, above its two layouts. */
-const TreeHoldContext = createContext<TreeHold | undefined>(undefined);
-
 /**
  * The tree's hold: which parents stand open and which groups stand folded.
  * Note that it is held above the rows, since a recycled row draws another
  * task once scrolled past and a folded section drops its rows, and above the
  * Tasks tab's two layouts, since a fold or an unfold of the iPhone Duo, or a
  * rotation across the split's cutoff, swaps one layout for the other and
- * would lose what the reader opened.
+ * would lose what the reader opened. It is handed to the tree as a prop,
+ * never a context, because a three-column window draws the tree in the
+ * tabs' one split view, above this root screen.
  */
 function useTreeHoldState(): TreeHold {
   const [opened, setOpened] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
@@ -741,13 +740,6 @@ function useTreeHoldState(): TreeHold {
     });
 
   return { opened, toggleParent, folded, setFolded };
-}
-
-/** The tree's hold where the root screen hands one down, else one of the tree's own, as a search's results draw it. */
-function useTreeHold(): TreeHold {
-  const own = useTreeHoldState();
-
-  return useContext(TreeHoldContext) ?? own;
 }
 
 /** One group's opened parents out of the tree's hold. */
@@ -799,12 +791,12 @@ function FoldedRows({
 function CollectionRows({
   collection,
   listing,
+  hold,
 }: {
   readonly collection: TaskTreeGroup;
   readonly listing: TasksListing;
+  readonly hold: TreeHold;
 }) {
-  const hold = useTreeHold();
-
   return (
     <ListSection>
       <FoldedRows
@@ -825,12 +817,12 @@ function CollectionRows({
 function GroupSection({
   group,
   listing,
+  hold,
 }: {
   readonly group: TaskTreeGroup;
   readonly listing: TasksListing;
+  readonly hold: TreeHold;
 }) {
-  const hold = useTreeHold();
-
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
@@ -864,6 +856,8 @@ function treeEmpty(tree: TaskTree): boolean {
 
 type TasksTreeProps = {
   readonly listing: TasksListing;
+  /** The parents opened and groups folded, held by the Tasks tab's root screen. */
+  readonly hold: TreeHold;
   readonly look: ListLook;
   readonly search: string;
   /** The collection the app sidebar picked, Pinned, Following, or a section, whose rows alone the list draws; every group where none is. */
@@ -884,6 +878,7 @@ type TasksTreeProps = {
  */
 function TasksTree({
   listing,
+  hold,
   look,
   search,
   collection,
@@ -918,7 +913,7 @@ function TasksTree({
 
     return (
       <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
-        <CollectionRows collection={collection} listing={listing} />
+        <CollectionRows collection={collection} listing={listing} hold={hold} />
       </RowList>
     );
   }
@@ -928,15 +923,17 @@ function TasksTree({
 
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
-      {tree.pinned === undefined ? null : <GroupSection group={tree.pinned} listing={listing} />}
+      {tree.pinned === undefined ? null : (
+        <GroupSection group={tree.pinned} listing={listing} hold={hold} />
+      )}
       {tree.following === undefined ? null : (
-        <GroupSection group={tree.following} listing={listing} />
+        <GroupSection group={tree.following} listing={listing} hold={hold} />
       )}
       {tree.sections.map((group) => (
-        <GroupSection key={group.key} group={group} listing={listing} />
+        <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
       ))}
       {tree.tasks.map((group) => (
-        <GroupSection key={group.key} group={group} listing={listing} />
+        <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
       ))}
     </RowList>
   );
@@ -1834,7 +1831,13 @@ type TasksScreenState = ReturnType<typeof useTasksScreen>;
 // A compact window: the tree, the account's photo opening Settings and the
 // workspace switcher beside it at the bar's leading edge and its search a round glass button at its trailing one, each
 // row pushing its task as the Stack's next screen.
-function TasksStackList({ screen }: { readonly screen: TasksScreenState }) {
+function TasksStackList({
+  screen,
+  hold,
+}: {
+  readonly screen: TasksScreenState;
+  readonly hold: TreeHold;
+}) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
@@ -1857,6 +1860,7 @@ function TasksStackList({ screen }: { readonly screen: TasksScreenState }) {
       <Screen>
         <TasksTree
           listing={listing}
+          hold={hold}
           look={LIST_LOOK.PLAIN}
           search={search}
           onSelect={(id) =>
@@ -1880,10 +1884,12 @@ function TasksSplitScreen({
   selected,
   select,
   screen,
+  hold,
 }: {
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
   readonly screen: TasksScreenState;
+  readonly hold: TreeHold;
 }) {
   const { search, setSearch, listing, refreshTasks } = screen;
   const newSubTask = useNewSubTask();
@@ -1909,6 +1915,7 @@ function TasksSplitScreen({
     view: (
       <TasksTree
         listing={listing}
+        hold={hold}
         look={LIST_LOOK.PLAIN}
         search={search}
         collection={collection}
@@ -1996,15 +2003,15 @@ export function TasksListScreen() {
   const hold = useTreeHoldState();
 
   return (
-    <TreeHoldContext.Provider value={hold}>
+    <>
       {sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-        <TasksSplitScreen selected={selected} select={select} screen={screen} />
+        <TasksSplitScreen selected={selected} select={select} screen={screen} hold={hold} />
       ) : (
-        <TasksStackList screen={screen} />
+        <TasksStackList screen={screen} hold={hold} />
       )}
       <StatusQuestionAsk question={screen.status} />
       <StatusQuestionAsk question={screen.deletion} />
-    </TreeHoldContext.Provider>
+    </>
   );
 }
 
