@@ -259,9 +259,9 @@ export interface MergeMethodChoice {
 }
 
 /**
- * The merge's one press as a row of the page, where a regular window's bar
- * folds its acts out of sight, as GitHub's own app stands Merge under a
- * pull request's checks: the system's large button, as wide as its words,
+ * The merge's one press as a row of the page, under its heading in every
+ * window, as the panel's head stands Merge under the title, so the bar
+ * keeps its path: the system's large button, as wide as its words,
  * filled in the accent with its words in the brand's ink where it is the
  * page's one act, such as Squash and merge, and outlined in it otherwise,
  * such as Remove from queue. Where the repository merges more than one way
