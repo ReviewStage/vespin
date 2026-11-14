@@ -31,6 +31,7 @@ import {
   NO_WRITES,
   NOTICE_KIND,
   newestValue,
+  takesRowBack,
   useFailureNotices,
   type WritesBook,
   writeSent,
@@ -288,11 +289,13 @@ export function refusalOf<Answer>(
 export interface LatestWrites<Refusal, Value> {
   /** Why each row's newest write was refused, by the row it changes, until that row's next write is sent. */
   readonly refusals: ReadonlyMap<string, Refusal>;
-  /** The refusals said, in the order they were said, for a group's one footer. */
+  /** The refusals said, in the order they were said and each once, for a group's one footer. */
   readonly said: readonly Refusal[];
   /**
    * Sends `act` at once for the row `row` names, such as a member's id or a
-   * setting's field, even while an earlier one is out, and answers whether it went.
+   * setting's field, even while an earlier one is out, and answers false only
+   * where its refusal takes the row back: refused, and still the row's newest
+   * write, so the caller redraws the row from what is stored.
    */
   readonly run: (
     row: string,
@@ -311,8 +314,8 @@ export interface LatestWrites<Refusal, Value> {
  * a model, or one member's role right after another's) is a write of its own,
  * which the lock dropped unseen. Writes to one row follow each other, so an
  * earlier one's refusal landing after a later one began is not said, as an
- * agent's model picks keep only the latest's (`use-agent-model.ts`), though
- * its caller still hears it refused. Writes to two rows are each their own, so
+ * agent's model picks keep only the latest's (`use-agent-model.ts`), and its
+ * caller hears it as nothing to take back, since the later pick stands. Writes to two rows are each their own, so
  * a refused one is said whatever another row's write did. A row's pick is
  * compared with `newest`, the value its write still out carries, so a pick
  * back to the drawn value before that write is drawn still goes.
@@ -334,11 +337,13 @@ export function useLatestWrites<Refusal, Value = undefined>(
       book.current = sent.book;
       setRefusals(sent.book.refusals);
 
+      // Note that it answers false only for a refusal that takes the row back, so a caller redraws a row from what is stored only then, never over a later pick still out.
       const settle = (said: Refusal | undefined): boolean => {
+        const back = takesRowBack(book.current, row, sent.write, said);
         book.current = writeSettled(book.current, row, sent.write, said);
         setRefusals(book.current.refusals);
 
-        return said === undefined;
+        return !back;
       };
 
       let started: PromiseLike<Refusal | undefined>;
@@ -364,7 +369,8 @@ export function useLatestWrites<Refusal, Value = undefined>(
   );
 
   return useMemo(
-    () => ({ refusals, said: [...refusals.values()], run, newest }),
+    // Note that a footer says each refusal once, though two rows' writes were refused in the same words.
+    () => ({ refusals, said: [...new Set(refusals.values())], run, newest }),
     [refusals, run, newest],
   );
 }
