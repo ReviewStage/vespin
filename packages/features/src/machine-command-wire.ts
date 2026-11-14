@@ -473,16 +473,38 @@ export function computerPermissionsNamed(permissions: readonly ComputerPermissio
 }
 
 /**
+ * How a call that ran nothing came to run nothing, as data beside the
+ * words the model reads, so the transcript names each case in its own
+ * words: the developer's answer to an ask, no answer to it in time, or no
+ * word back from the machine at all. A refusal of another kind names none.
+ */
+export const MACHINE_REFUSAL = {
+  /** The developer denied the ask. */
+  DECLINED: "declined",
+  /** No one answered the ask before it closed. */
+  UNANSWERED: "unanswered",
+  /** The machine never said what the command came to, so it may or may not have run. */
+  NO_ANSWER: "no-answer",
+} as const;
+
+export type MachineRefusal = (typeof MACHINE_REFUSAL)[keyof typeof MACHINE_REFUSAL];
+
+export const machineRefusalSchema = EffectSchema.Literals(Object.values(MACHINE_REFUSAL));
+
+/**
  * A command the Mac would not run, such as one of a kind it cannot run, and
  * why, in words the agent can act on; for an action refused because the Mac
  * lacks a grant it needs, those grants too, so the transcript can offer the
- * place they are turned on.
+ * place they are turned on; and for an ask that was declined or went
+ * unanswered, which (`outcome`). Note that a service older than `outcome`
+ * refuses the key, which the service, deployed first, never is.
  */
 const machineCommandRefusalSchema = EffectSchema.Struct({
   refused: EffectSchema.String.check(
     EffectSchema.isMinLength(1),
     EffectSchema.isMaxLength(MACHINE_COMMAND_BOUNDS.MAX_OUTPUT_CHARS),
   ),
+  outcome: EffectSchema.optionalKey(machineRefusalSchema),
   missingPermissions: EffectSchema.optionalKey(
     EffectSchema.Array(EffectSchema.Literals(Object.values(COMPUTER_PERMISSION))).check(
       EffectSchema.isMinLength(1),
