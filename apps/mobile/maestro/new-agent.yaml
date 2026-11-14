@@ -1,4 +1,4 @@
-# new-agent.yaml -- New agent on a task: its compose sheet opened from the task's Agents, the words typed, the model picked from its capsule over the keyboard, and the agent started, its page opened.
+# new-agent.yaml -- New agent on a task: its compose sheet opened from the task page, the words typed, the model picked from its capsule over the keyboard, and the agent started, its page opened.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.

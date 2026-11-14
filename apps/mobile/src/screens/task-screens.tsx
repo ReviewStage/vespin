@@ -2023,12 +2023,6 @@ export function TaskScreen() {
       />
       {menu === undefined || overview === undefined ? null : (
         <Stack.Toolbar placement="right">
-          {/* Note that New agent stands as a glyph before ⋯, as a split view's detail bar stands a page's main act, since starting work is what a task's page is opened for. */}
-          <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.AGENT)}
-            accessibilityLabel={WORDS.NEW_AGENT}
-            onPress={() => newAgent(overview.task)}
-          />
           <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
             {(menu.submenus ?? []).map((submenu) => (
               <Stack.Toolbar.Menu
@@ -2069,6 +2063,12 @@ export function TaskScreen() {
               </Stack.Toolbar.MenuAction>
             ))}
           </Stack.Toolbar.Menu>
+          {/* Note that New agent stands as a glyph before ⋯, as a split view's detail bar stands a page's main act; it is written after ⋯ because a right bar's first item stands at its edge. */}
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.AGENT)}
+            accessibilityLabel={WORDS.NEW_AGENT}
+            onPress={() => newAgent(overview.task)}
+          />
         </Stack.Toolbar>
       )}
       <Screen>
