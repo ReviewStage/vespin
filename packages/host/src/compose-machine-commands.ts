@@ -719,8 +719,12 @@ export function composeMachineCommands(
       (id: string, refusal: MachineCommandRefusal) =>
       <A>(wait: Effect.Effect<A>): Effect.Effect<A> =>
         wait.pipe(
+          // Note that the post is made interruptible, because a finalizer runs uninterruptibly and its bound could stop nothing.
           Effect.onInterrupt(() =>
-            settled(id, refusal).pipe(Effect.timeoutOption(WITHDRAWN_SETTLE), Effect.ignore),
+            Effect.interruptible(settled(id, refusal)).pipe(
+              Effect.timeoutOption(WITHDRAWN_SETTLE),
+              Effect.ignore,
+            ),
           ),
         );
 
