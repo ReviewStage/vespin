@@ -219,8 +219,9 @@ export function MarkRow({ id, mark, said, title, detail, goes }: MarkRowProps) {
 
 /**
  * What a change GitHub did not make leaves to say, as a list's row: our
- * sentence by a warning in the danger ink, and GitHub's own words quoted
- * under it where it said some.
+ * sentence in the muted ink by a warning in the attention ink, as the
+ * failure notice and the panel's problem line draw a refusal, and GitHub's
+ * own words quoted under it where it said some.
  */
 export function WriteNoteRow({
   words,
@@ -247,12 +248,14 @@ export function WriteNoteRow({
     >
       <ToneGlyph
         glyph={GLYPH.FAILED}
-        tone={STATUS_TONE.DANGER}
+        tone={STATUS_TONE.ATTENTION}
         textStyle={TYPE_ROLE.ROW_LINE}
         hidden
       />
       <VStack alignment="leading" spacing={2}>
-        <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT)]}>
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
           {words}
         </Text>
         {said === undefined ? null : (
