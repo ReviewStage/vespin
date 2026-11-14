@@ -1,6 +1,13 @@
 // app.config.ts -- the iOS app's whole native configuration: Expo generates `ios/` from it on every build, and none is committed.
 
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
@@ -101,6 +108,16 @@ const IMAGE_SETS = [
     TEMPLATE: false,
   },
 ] as const;
+
+// Where each integration's mark is kept, as the desktop draws it, by its
+// provider: `<provider>.svg`, and `<provider>-dark.svg` beside it for a brand
+// that names one ink per ground; a mark with no dark file drawn in
+// `currentColor` is a template, drawn in the ink of the row it leads. Each is
+// written under the catalog's `IntegrationMarks` folder, which names its
+// images, so `@repo/ui-native`'s `INTEGRATION_MARK_ASSET` reads
+// `IntegrationMarks/<provider>`.
+const INTEGRATION_MARKS = "../../packages/ui-native/assets/provider-marks";
+const INTEGRATION_MARKS_FOLDER = "IntegrationMarks";
 
 // The pictures `AgentTile` draws that have no vector: Codex's, OpenAI's own
 // picture in its own colors, from the files the panel serves, at one, two,
@@ -739,6 +756,55 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
           properties: {
             "preserves-vector-representation": true,
             "template-rendering-intent": set.TEMPLATE ? "template" : "original",
+          },
+        };
+
+        writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
+      }
+
+      const marksFolder = join(catalog, INTEGRATION_MARKS_FOLDER);
+      mkdirSync(marksFolder, { recursive: true });
+
+      writeFileSync(
+        join(marksFolder, "Contents.json"),
+        `${JSON.stringify({ info: { author: "xcode", version: 1 }, properties: { "provides-namespace": true } }, null, 2)}\n`,
+      );
+
+      const marks = join(projectRoot, INTEGRATION_MARKS);
+
+      const providers = readdirSync(marks)
+        .filter((file) => file.endsWith(".svg") && !file.endsWith("-dark.svg"))
+        .map((file) => basename(file, ".svg"));
+
+      for (const name of providers) {
+        const imageSet = join(marksFolder, `${name}.imageset`);
+        mkdirSync(imageSet, { recursive: true });
+        const light = readFileSync(join(marks, `${name}.svg`), "utf8");
+        const darkFile = join(marks, `${name}-dark.svg`);
+        const dark = existsSync(darkFile) ? readFileSync(darkFile, "utf8") : undefined;
+
+        writeFileSync(join(imageSet, `${name}.svg`), light);
+
+        if (dark !== undefined) writeFileSync(join(imageSet, `${name}-dark.svg`), dark);
+
+        const contents = {
+          images: [
+            { filename: `${name}.svg`, idiom: "universal" },
+            ...(dark === undefined
+              ? []
+              : [
+                  {
+                    appearances: [{ appearance: "luminosity", value: "dark" }],
+                    filename: `${name}-dark.svg`,
+                    idiom: "universal",
+                  },
+                ]),
+          ],
+          info: { author: "xcode", version: 1 },
+          properties: {
+            "preserves-vector-representation": true,
+            "template-rendering-intent":
+              dark === undefined && light.includes("currentColor") ? "template" : "original",
           },
         };
 

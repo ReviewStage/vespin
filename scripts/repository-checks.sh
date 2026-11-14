@@ -169,6 +169,10 @@ node "$APP_REPO_ROOT/scripts/tsconfig-references.mjs" --check
 # motion tokens beside them; --check fails if a copy no longer matches.
 node "$APP_REPO_ROOT/packages/brand/scripts/generate-surface-shared.mjs" --check
 
+# The iOS app's integration marks are the desktop's, rendered from @repo/ui's
+# ProviderMark into @repo/ui-native's assets; --check fails if one drifted.
+pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/native-provider-marks.ts --check
+
 # The constants clients build /api/ URLs from are the other half of that
 # table: a path constant can outlive its route and nothing fails until
 # production answers 404. Every /api/ literal and path builder under

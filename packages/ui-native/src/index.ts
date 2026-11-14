@@ -94,6 +94,8 @@ export { type Keeping, KeepingProvider } from "./held-menu.js";
 
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 
+export { INTEGRATION_MARK_ASSET, type IntegrationMarkAsset } from "./integration-marks.js";
+
 export {
   type HeldPicture,
   heldPicture,
@@ -138,8 +140,8 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 export { monogramOf } from "./monogram.js";
 
 export { RenameAsk, SwitchRow } from "./option-rows.js";
-
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
+export { ProblemLine } from "./problem-line.js";
 
 export {
   PROVIDER_MARK_ASSET,
