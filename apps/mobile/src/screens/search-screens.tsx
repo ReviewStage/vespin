@@ -299,7 +299,10 @@ function useSearchScreen(
 }
 
 /** What a typed query finds under the Stack's bar, with the questions and sheets its rows' acts raise beside it. */
-function SearchStackFound({ leave, ...words }: SearchWords & { readonly leave: () => void }) {
+function SearchStackFound({
+  leave,
+  ...words
+}: SearchWords & { readonly leave: (() => void) | undefined }) {
   const { results, status, deletion, remind, archiveAsk } = useSearchScreen(
     words,
     undefined,
@@ -367,7 +370,11 @@ function SearchStackScreen(words: SearchWords) {
       {query.trim() === "" ? (
         <Screen>{SEARCH_IDLE}</Screen>
       ) : (
-        <SearchStackFound {...words} leave={() => field.current?.cancelSearch()} />
+        <SearchStackFound
+          {...words}
+          // Note that only a regular window ends the search, since it opens the pick on another tab, while a compact one pushes it on Search's own stack, whose results Back returns to.
+          leave={regular ? () => field.current?.cancelSearch() : undefined}
+        />
       )}
     </>
   );
