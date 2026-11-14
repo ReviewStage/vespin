@@ -30,7 +30,7 @@ import {
 } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
-import { useDockRoom } from "./glass-bar.js";
+import { useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
@@ -457,7 +457,7 @@ function OriginBody({ body }: { readonly body: string }) {
         style={styles.callLine}
       >
         <SymbolView
-          name={open ? "chevron.down" : "chevron.right"}
+          name={glyphSymbol(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
           size={MARK_SIZE.GLYPH - 3}
           tintColor={colors.TEXT_MUTED}
           style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
@@ -965,9 +965,10 @@ export function AgentTranscript({
   const [width, setWidth] = useState(0);
   const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
-  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
+  const keyboard = useDockKeyboard();
+  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript. While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the tab bar and the bar stands right on it.
   // Note that the list keeps the tab bar's room at its own end, because a scroll to the end reaches the end of the rows alone and not the room the system keeps for the bar.
-  const foot = bottom + TAB_BAR_ROOM + useDockRoom();
+  const foot = (keyboard > 0 ? 0 : bottom + TAB_BAR_ROOM) + useDockRoom();
 
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
@@ -1031,6 +1032,12 @@ export function AgentTranscript({
     [],
   );
 
+  // Note that the keyboard rising under a reader at the newest row brings the row up with it, as Messages' does, rather than leaving it behind the keyboard; the list's inset has already grown for it, so its end is the row clear of the bar.
+  useEffect(() => {
+    if (keyboard > 0 && anchored.current)
+      list.current?.getScrollResponder()?.scrollToEnd({ animated: !reduceMotion });
+  }, [keyboard, reduceMotion]);
+
   // Note that a row landing, or a fold opened, at the newest row keeps it in view, while one landing as the reader reads back leaves their place.
   const onContentSizeChange = useCallback(() => {
     // Note that the scroller itself is asked, since the list's own end is an estimate until every row has been measured.
@@ -1071,8 +1078,10 @@ export function AgentTranscript({
         contentInsetAdjustmentBehavior="automatic"
         // Note that rows laid before the oldest, as an older page lands, leave the row the reader reads where it stood.
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-        // Note that a drag down into the keyboard lowers it, as Messages' transcript does, since the composer docked over the list holds no key that does.
-        keyboardDismissMode="interactive"
+        // Note that the list stands its end clear of the keyboard with the system's own inset, moved on the keyboard's own curve, so the newest rows never sit behind it.
+        automaticallyAdjustKeyboardInsets
+        // Note that a drag lowers the keyboard, since the composer docked over the list holds no key that does. It lowers it at once rather than under the finger, because the docked composer follows the keyboard's announced moves alone, and so stood still while an interactive drag pulled the keyboard away, then jumped.
+        keyboardDismissMode="on-drag"
         onContentSizeChange={onContentSizeChange}
         onScrollToIndexFailed={onScrollToIndexFailed}
         onScroll={onScroll}
@@ -1086,7 +1095,7 @@ export function AgentTranscript({
       />
       {away ? (
         <JumpToLatest
-          bottom={foot}
+          bottom={foot + keyboard}
           onPress={() => {
             anchored.current = true;
             // Note that the jump scrolls at once where the reader asked for less motion.
