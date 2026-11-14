@@ -125,7 +125,7 @@ export const VOICE_OUTPUT = {
 } as const;
 
 /** A client event for GPT-Live's data channel, sent as its JSON. */
-export interface LiveAppend {
+interface LiveAppend {
   readonly type: (typeof LIVE_CLIENT_EVENT)[keyof typeof LIVE_CLIENT_EVENT];
   /** The delegation it answers, or null for the session's general context. */
   readonly delegation_id: string | null;

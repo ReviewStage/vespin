@@ -19,7 +19,7 @@ import { workspaceIdSchema } from "./task-wire.js";
  * refused as an upstream error, never answered as no queue.
  */
 
-export const MERGE_QUEUE_QUERY = { WORKSPACE_ID: "workspaceId" } as const;
+const MERGE_QUEUE_QUERY = { WORKSPACE_ID: "workspaceId" } as const;
 
 export const MERGE_QUEUE_BOUNDS = {
   /** The most repositories one read asks GitHub about: those the workspace's tasks changed most recently. */
@@ -54,8 +54,6 @@ export const mergeQueueRequestSchema = EffectSchema.Struct({
   [MERGE_QUEUE_QUERY.WORKSPACE_ID]: workspaceIdSchema,
 });
 
-export type MergeQueueRequest = typeof mergeQueueRequestSchema.Type;
-
 /** The task an entry's pull request belongs to: the task of an agent that opened it. */
 const mergeQueueTaskSchema = EffectSchema.Struct({
   id: wireUuidSchema,
@@ -81,7 +79,7 @@ const mergeQueueAuthorSchema = EffectSchema.Struct({
 });
 
 /** One pull request in a queue. */
-export const mergeQueueEntrySchema = EffectSchema.Struct({
+const mergeQueueEntrySchema = EffectSchema.Struct({
   /** Where it stands, counted from one at the front. */
   position: countedNumber,
   /** A state a later GitHub adds reads as queued. */
@@ -107,7 +105,7 @@ export const mergeQueueEntrySchema = EffectSchema.Struct({
 export type MergeQueueEntry = typeof mergeQueueEntrySchema.Type;
 
 /** One repository's queue: the repository as GitHub spells it, GitHub's own page of the queue, and its entries, front first. */
-export const mergeQueueRepositorySchema = EffectSchema.Struct({
+const mergeQueueRepositorySchema = EffectSchema.Struct({
   repository: githubRepositoryFullNameSchema,
   url: EffectSchema.String,
   entries: EffectSchema.Array(mergeQueueEntrySchema),

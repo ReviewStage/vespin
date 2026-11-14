@@ -14,7 +14,7 @@ import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/feature
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
-import { agentName, modelLabel } from "@repo/features/model-label";
+import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -171,7 +171,6 @@ const OPTIONS_WORDS = {
   EFFORT: "Effort",
   FAST: "Fast",
   DONE: "Done",
-  APPLIES: "Takes effect from the agent's next step.",
   READING_SERVERS: "Reading your MCP servers",
   NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
   MORE_SERVERS: "Connect another in Settings.",
@@ -819,6 +818,7 @@ export function AgentScreen() {
           head={
             <AgentHead
               model={agent === undefined ? undefined : modelLabel(agent.model)}
+              harness={agent === undefined ? undefined : providerOf(agent.model)}
               status={status}
               onModel={openOptions}
             />
@@ -972,7 +972,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection footer={pick.note ?? OPTIONS_WORDS.APPLIES}>
+          <ListSection footer={pick.note}>
             <MenuPickRow
               label={OPTIONS_WORDS.MODEL}
               options={pick.models}

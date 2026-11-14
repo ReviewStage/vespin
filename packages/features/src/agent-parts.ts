@@ -89,7 +89,7 @@ export const AGENT_PART = {
 /** How the SDK spells a tool part's type: the tool's name behind this prefix. */
 const TOOL_PART_TYPE_PREFIX = "tool-";
 
-const TOOL_STATES: ReadonlySet<string> = new Set(Object.values(TOOL_STATE));
+const isToolState = Schema.is(Schema.Literals(Object.values(TOOL_STATE)));
 
 /** A part its page carried cut (`cutParts`): its two ends and its whole size, and the message and index it is fetched whole by. */
 export type AgentPartCut = Omit<PartCut, "field"> & { readonly messageId: string };
@@ -151,10 +151,7 @@ export type AgentPart =
   | { readonly kind: typeof AGENT_PART.ARRIVED; readonly line: AgentTranscriptMessage };
 
 function toolState(value: WireValue | undefined): ToolState {
-  // SAFETY: membership in the set built from TOOL_STATE's values is what the union names.
-  return isWireString(value) && TOOL_STATES.has(value)
-    ? (value as ToolState)
-    : TOOL_STATE.INPUT_AVAILABLE;
+  return isToolState(value) ? value : TOOL_STATE.INPUT_AVAILABLE;
 }
 
 /**
