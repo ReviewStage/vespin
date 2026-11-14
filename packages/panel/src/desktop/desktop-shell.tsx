@@ -854,7 +854,11 @@ export function DesktopShell({
 }): React.JSX.Element {
   const { account } = settings;
   const shell = useRef<HTMLDivElement>(null);
-  const gated = gates.accountRequired && account.status !== ACCOUNT_STATUS.SIGNED_IN;
+  // While the service refuses this build, the sign-in and setup give way to the update screen in the work's place
+  // (`ShellPlaces`), since every call either would make is refused until the build is updated.
+  const updateNeeded = useUpdateNeeded();
+  const gated =
+    !updateNeeded && gates.accountRequired && account.status !== ACCOUNT_STATUS.SIGNED_IN;
   // A new account is set up once, in the window before the app, until it finishes on any machine.
   const signedInId = account.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined;
   const [finishedHere, setFinishedHere] = useState<string>();
@@ -1011,7 +1015,7 @@ export function DesktopShell({
   // Note that the onboarding column's drag strip stands over its top rather
   // than in flow, because the AuthPage beneath is already a whole window tall
   // and a strip above it would overflow the window by the strip's height.
-  if (setup !== SETUP_GATE.NONE && signedInId !== undefined) {
+  if (!updateNeeded && setup !== SETUP_GATE.NONE && signedInId !== undefined) {
     // While a new account's agent is still read, the window waits on setup's own ground rather than glimpsing the app.
     return (
       <ScrollArea>
