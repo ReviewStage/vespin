@@ -11,6 +11,7 @@ import {
   frame,
   lineLimit,
 } from "@expo/ui/swift-ui/modifiers";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { Chip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
@@ -192,6 +193,9 @@ export function SkillSuggestions({
   readonly onPick: (name: string) => void;
 }) {
   const colors = useColors();
+  const large = useAccessibilitySize();
+  // Note that the scroller shows the same number of rows at every text size, so a row grown with Dynamic Type isn't cut to half a row.
+  const rowHeight = useScaledSize(SUGGESTION_HEIGHT);
 
   if (skills.length === 0) {
     if (empty === undefined) return null;
@@ -243,7 +247,7 @@ export function SkillSuggestions({
                   modifiers={[
                     font({ textStyle: TYPE_ROLE.ROW_LINE }),
                     foregroundStyle(colors.TEXT_MUTED),
-                    lineLimit(1),
+                    lineLimit(large ? 3 : 1),
                   ]}
                 >
                   {skill.detail}
@@ -259,8 +263,6 @@ export function SkillSuggestions({
   if (skills.length <= SUGGESTIONS_SHOWN) return rows;
 
   return (
-    <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>
-      {rows}
-    </ScrollView>
+    <ScrollView modifiers={[frame({ height: rowHeight * SUGGESTIONS_SHOWN })]}>{rows}</ScrollView>
   );
 }
