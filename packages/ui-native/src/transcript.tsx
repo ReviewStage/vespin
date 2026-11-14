@@ -28,6 +28,7 @@ import {
 } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
+import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
@@ -47,6 +48,7 @@ import {
   CALL_STANDING,
   type CallStanding,
   type OriginPart,
+  type SaidFile,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptPlace,
@@ -536,6 +538,10 @@ interface RowDrawing {
   readonly mediaSource: (id: string) => string | null | undefined;
   /** Reads a picture or a recording whose bytes could not be read again, by its id. */
   readonly onRetryMedia?: ((id: string) => void) | undefined;
+  /** Where a file a sent line carried was written for its chip to open, by the line's message and the file's place on it; none while it is written, and `null` where it could not be. A file the line kept no bytes of is drawn by its name and kind alone. */
+  readonly fileSource?: ((message: string, key: string) => string | null | undefined) | undefined;
+  /** Writes a sent line's file again where it could not be written, by the line's message and the file's place on it. */
+  readonly onRetryFile?: ((message: string, key: string) => void) | undefined;
   /** Opens a recording the system's player cannot play where it plays. */
   readonly onOpenElsewhere?: (() => void) | undefined;
   /** Opens a web address in Safari, such as a pull request's page on GitHub. */
@@ -558,6 +564,26 @@ type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PU
 /** What a picture a sent line kept by its id is drawn from, read as the agent's shown ones are; `null` for one the line names no way to, which stands as could not be read. */
 function saidSource(drawing: RowDrawing, pictureId: string | undefined): string | null | undefined {
   return pictureId === undefined ? null : drawing.mediaSource(pictureId);
+}
+
+/** Where a sent line's file is opened from: the file the app wrote of its bytes, none while it is written, or `null` where it could not be or the list writes none, which the chip says it could not read. */
+function sentFileSource(
+  drawing: RowDrawing,
+  message: string,
+  file: SaidFile,
+): string | null | undefined {
+  return drawing.fileSource === undefined ? null : drawing.fileSource(message, file.key);
+}
+
+/** What writes a sent line's file again, where the transcript offers it. */
+function sentFileRetry(
+  drawing: RowDrawing,
+  message: string,
+  file: SaidFile,
+): (() => void) | undefined {
+  const retry = drawing.onRetryFile;
+
+  return retry === undefined ? undefined : () => retry(message, file.key);
 }
 
 /** What reads a picture or a recording again, by its id, where the transcript offers it. */
@@ -601,8 +627,22 @@ function TranscriptRow({
                 picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
             }))}
           />
-          {/* Note that a line of pictures alone draws no empty bubble under them, while a line of other files alone, which the phone leaves to the panel, keeps its bubble so the line still stands. */}
-          {item.words.trim() === "" && (item.pictures ?? []).length > 0 ? null : (
+          {/* Note that the other files a line carried, such as a PDF, stand under its pictures as their chips, as the panel stands a message's files over its bubble. */}
+          {(item.files ?? []).map((file) => (
+            <FileChip
+              key={file.key}
+              atEnd
+              held={file.base64 !== undefined}
+              name={file.name}
+              mediaType={file.mediaType}
+              source={sentFileSource(drawing, item.place.message, file)}
+              size={file.size}
+              onRetry={sentFileRetry(drawing, item.place.message, file)}
+            />
+          ))}
+          {/* Note that a line of files alone draws no empty bubble under them. */}
+          {item.words.trim() === "" &&
+          (item.pictures ?? []).length + (item.files ?? []).length > 0 ? null : (
             <CopyWordsMenu words={item.words}>
               <View style={styles.saidHeld}>
                 <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>

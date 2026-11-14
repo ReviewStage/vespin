@@ -82,7 +82,9 @@ export async function cachedVideo(
  * Where a file's bytes were written for its viewer and the share sheet: a
  * file of the app's caches under the name it was attached with, in a folder
  * of its own named `<prefix>-<id>`, so two files of one name stand apart and
- * the share sheet saves it under its own name. Written once, and answered
+ * the share sheet saves it under its own name; where one id holds several
+ * files, such as a sent line's, each stands in a folder of its own place
+ * under it (`place`). Written once, and answered
  * only once its bytes are all on disk, as a video is (`cachedVideo`). Note
  * that a name that would part a path, or stands as none, is made safe, and
  * that a PDF always ends in `.pdf`, because the web view that draws it reads
@@ -95,8 +97,10 @@ export async function cachedFile(
   name: string,
   mediaType: string,
   base64: string,
+  place?: string,
 ): Promise<string> {
-  const folder = new Directory(Paths.cache, `${prefix}-${id}`);
+  const owner = new Directory(Paths.cache, `${prefix}-${id}`);
+  const folder = place === undefined ? owner : new Directory(owner, place);
   folder.create({ intermediates: true, idempotent: true });
   const trimmed = name.replace(PATH_PARTS, "_").trim();
   const safe = DOTS_ALONE.test(trimmed) ? UNNAMED : trimmed;
