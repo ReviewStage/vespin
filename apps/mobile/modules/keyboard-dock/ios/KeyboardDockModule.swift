@@ -43,6 +43,9 @@ final class KeyboardDockView: ExpoView {
   /// The overlap last told to JavaScript; none yet.
   private var told: CGFloat?
 
+  /// Whether the dock is following a frame drawn, when it moves the bar without telling JavaScript.
+  private var framing = false
+
   /// The view the dock last lifted, so a view that stops being the bar, as a page goes Back with the keyboard up, is set down before Fabric draws it anew elsewhere.
   private weak var lifted: UIView?
 
@@ -96,10 +99,12 @@ final class KeyboardDockView: ExpoView {
     follow()
   }
 
-  /// Reads the keyboard on each frame drawn. Note that the view is laid out first, so the guide's frame is the keyboard's of this frame rather than the last layout pass's.
+  /// Reads the keyboard on each frame drawn, moving the bar alone. Note that the view is laid out first, so the guide's frame is the keyboard's of this frame rather than the last layout pass's, and that JavaScript is not told each frame's overlap, since every frame of a drag drew the whole transcript anew; it hears the overlap where the keyboard settles.
   @objc private func frameDrawn() {
+    framing = true
     layoutIfNeeded()
     follow()
+    framing = false
   }
 
   /// Follows the keyboard again as the dock comes back into a window with the keyboard already standing, as a page does when the one over it goes back; stops following as it leaves.
@@ -131,7 +136,7 @@ final class KeyboardDockView: ExpoView {
     follow()
   }
 
-  /// Lifts the bar by how far the keyboard stands over this view's foot, less the bottom safe area the bar already stands clear of, and tells JavaScript the overlap.
+  /// Lifts the bar by how far the keyboard stands over this view's foot, less the bottom safe area the bar already stands clear of, and tells JavaScript the overlap where the keyboard has settled or is announced to move, never on a frame drawn.
   private func follow() {
     guard window != nil else { return }
     let overlap = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY)
@@ -142,6 +147,8 @@ final class KeyboardDockView: ExpoView {
       bar.transform = lift > 0 ? CGAffineTransform(translationX: 0, y: -lift) : .identity
       lifted = bar
     }
+
+    guard !framing else { return }
 
     // Note that a step to or from no overlap is always told, however small, so the content never keeps room for a keyboard that has gone.
     if let was = told, abs(was - overlap) < overlapStep, (was == 0) == (overlap == 0) { return }
