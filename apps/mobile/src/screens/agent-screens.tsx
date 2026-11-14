@@ -676,10 +676,12 @@ export function AgentScreen() {
 
   return (
     <>
+      {/* Note that the transcript fades under the bar, as Messages' does, where the automatic edge cut it with a hard line through a row of words. */}
       <Stack.Screen
         options={{
           title,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+          scrollEdgeEffects: { top: "soft" },
         }}
       />
       <Stack.Toolbar placement="right">
