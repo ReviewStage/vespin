@@ -69,7 +69,7 @@ export interface LiveEvent {
 }
 
 /** One attached connection to a session: its events in order, ending once the connection closes, and a send. */
-export interface LiveSideband {
+interface LiveSideband {
   readonly events: Stream.Stream<LiveEvent>;
   readonly send: (event: { readonly type: string }) => Effect.Effect<void>;
 }
