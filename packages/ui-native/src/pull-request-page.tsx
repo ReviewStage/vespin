@@ -5,7 +5,6 @@ import {
   Host,
   HStack,
   Menu,
-  Spacer,
   Button as SwiftUIButton,
   Text,
   TextField,
@@ -298,14 +297,11 @@ export function MergeActRow({
     </Text>
   );
 
-  const button = [
+  const look = [
     buttonStyle(prominent ? "borderedProminent" : "bordered"),
     controlSize("large"),
     tint(prominent ? colors.ACCENT : colors.TEXT),
     disabled(dimmed),
-  ];
-
-  const row = [
     listRowBackground("clear"),
     listRowSeparator("hidden"),
     listRowInsets({
@@ -316,24 +312,17 @@ export function MergeActRow({
     }),
   ];
 
-  // Note that a single way to merge leaves nothing to choose, so the press stands as a plain button with no chevron. It stands beside a spacer, because a button that is a list row's whole content is heard as the row, across its width, while only its capsule takes a press, so VoiceOver's press and a test's tap at the row's middle went nowhere.
+  // Note that a single way to merge leaves nothing to choose, so the press stands as a plain button with no chevron.
   if (methods.length < 2) {
     return (
-      <HStack modifiers={row}>
-        <SwiftUIButton onPress={onPress} modifiers={button}>
-          {words}
-        </SwiftUIButton>
-        <Spacer />
-      </HStack>
+      <SwiftUIButton onPress={onPress} modifiers={look}>
+        {words}
+      </SwiftUIButton>
     );
   }
 
   return (
-    <Menu
-      label={words}
-      onPrimaryAction={onPress}
-      modifiers={[...button, ...row, menuIndicator("visible")]}
-    >
+    <Menu label={words} onPrimaryAction={onPress} modifiers={[...look, menuIndicator("visible")]}>
       {methods.map((method) => (
         <Toggle
           key={method.label}
