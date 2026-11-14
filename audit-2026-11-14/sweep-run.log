@@ -195,3 +195,5 @@ ipad27-landscape-ipad27-light wrap-new-task.yaml: fails TIMEOUT (watchdog; steps
 ipad27-landscape-ipad27-light wrap-failure-notice.yaml: fails 0 shots 2 (rig 2)
   RIG ERROR: The operation couldn’t be completed. No such file or directory 
   ax none on ipad27: contrast disabled transparency-key 
+ipad27-landscape-ipad27-light wrap-agent.yaml: fails TIMEOUT (watchdog; steps 1, shots 2) 
+  ax none on ipad27: contrast disabled transparency-key 
