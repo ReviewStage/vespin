@@ -111,6 +111,10 @@
     "packages/brand": {
       "project": ["src/**", "scripts/**"]
     },
+    "packages/ui": {
+      "entry": ["scripts/*.ts"],
+      "project": ["src/**", "scripts/**"]
+    },
     "packages/settings": {
       "entry": ["scripts/*.ts"],
       "project": ["src/**", "scripts/**"]
