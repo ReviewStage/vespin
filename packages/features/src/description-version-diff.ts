@@ -268,3 +268,21 @@ export function changedSections(diff: VersionDiff, first: boolean): readonly Cha
     return [{ unit: at, heading: unit.key, change }];
   });
 }
+
+/**
+ * A unit's words as the version reads them, its struck stretches left out:
+ * what a client that cannot draw a mark inside its words, as the iPhone's
+ * Markdown cannot, draws for a unit that changed.
+ */
+export function writtenWords(unit: VersionUnit): string {
+  let words = "";
+  let at = 0;
+
+  for (const mark of unit.marks) {
+    if (mark.kind !== VERSION_MARK.DELETED) continue;
+    words += unit.words.slice(at, mark.from);
+    at = mark.to;
+  }
+
+  return words + unit.words.slice(at);
+}

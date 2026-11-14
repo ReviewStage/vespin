@@ -4,6 +4,7 @@ import {
   changedSections,
   VERSION_CHANGE,
   versionDiff,
+  writtenWords,
 } from "@repo/features/description-version-diff";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
@@ -218,6 +219,7 @@ test("a version against the one before it marks the words written in and struck 
   assert.deepEqual(marked(diff, MARKDOWN_MARK.DELETED), ["Only admins"]);
   assert.deepEqual(marked(diff, MARKDOWN_MARK.INSERTED), ["Any member"]);
   assert.equal(diff.units[0]?.words, "## Goal\n\nOnly adminsAny member can invite.");
+  assert.equal(diff.units[0] && writtenWords(diff.units[0]), "## Goal\n\nAny member can invite.");
 });
 
 test("a picture replaced in a version reads as the old one struck and the new one written in, each whole", () => {
