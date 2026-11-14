@@ -34,10 +34,10 @@ import {
   checkoutDiffEnv,
 } from "@repo/agent-runner/checkout-diff";
 import type { DatabaseServices } from "@repo/database/core/query";
-import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import {
   CHECKOUT_RESTORE_EXIT,
   CHECKOUT_RESTORE_SCRIPT,
+  type CheckoutRestoreSnapshot,
   checkoutRestoreEnv,
 } from "@repo/features/checkout-restore";
 import { redactCredentials } from "@repo/features/credential-redaction";
@@ -74,7 +74,7 @@ export const CHECKOUT_RESTORE = {
 export interface RestoreAsk {
   /** The session the agent's sandbox is tagged with. */
   readonly sessionId: string;
-  readonly snapshot: TurnCheckoutSnapshot;
+  readonly snapshot: CheckoutRestoreSnapshot;
 }
 
 /** The run a running sandbox is up in; none for one not running. */
