@@ -16,6 +16,7 @@ import {
 } from "@repo/features/search-found-model";
 import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
 import {
+  type BarMenu,
   EmptyState,
   GLYPH,
   glyphSymbol,
@@ -23,6 +24,7 @@ import {
   ListSection,
   NoSelection,
   RowList,
+  type RowSubmenu,
   ScopePicker,
   Screen,
   UNDER_SPLIT_SCREEN,
@@ -50,7 +52,7 @@ import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { AgentConversation } from "./agent-screens.js";
 import { SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
-import { useRemindSheet } from "./inbox-remind.js";
+import { useRemind } from "./inbox-remind.js";
 import { InboxItemRows, ThreadColumn } from "./inbox-screens.js";
 import {
   StatusQuestionAsk,
@@ -149,7 +151,7 @@ function FoundList({
   listing,
   selected,
   onOpen,
-  onRemind,
+  remindMenu,
   onArchiveAgent,
 }: {
   readonly found: SearchFound;
@@ -159,8 +161,8 @@ function FoundList({
   /** The row drawn selected, whose page stands beside the results; none in a compact window. */
   readonly selected?: string | undefined;
   readonly onOpen: (id: string) => void;
-  /** Opens Remind me on a thread found, as the Inbox's row does. */
-  readonly onRemind: (item: InboxItem) => void;
+  /** Remind me's times on a thread found, as the Inbox's row offers them. */
+  readonly remindMenu: (item: InboxItem) => RowSubmenu;
   /** Asks to archive an agent found, once it rests, as a task's Agents do. */
   readonly onArchiveAgent: (agentId: string) => void;
 }) {
@@ -197,7 +199,7 @@ function FoundList({
             readerId={found.readerId}
             pictureOf={pictureOf}
             onMark={mark}
-            onRemind={onRemind}
+            remindMenu={remindMenu}
             onResolve={resolve}
           />
         </ListSection>
@@ -231,7 +233,7 @@ function useSearchScreen(
   const found = useSearchFound(query);
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
   const { listing, status, deletion } = useListingAsks(found.listing);
-  const remind = useRemindSheet();
+  const remind = useRemind();
   const archiveAsk = useAgentArchiveAsk();
   const routes = foundRoutes(found);
   const onTab = useOnTab();
@@ -274,7 +276,7 @@ function useSearchScreen(
             listing={listing}
             selected={pick?.picked?.id}
             onOpen={open}
-            onRemind={remind.open}
+            remindMenu={(item) => remind.menu([item])}
             onArchiveAgent={archiveAsk.archive}
           />
         )}
@@ -361,7 +363,7 @@ function SearchStackScreen(words: SearchWords) {
 function useSearchDetail(
   picked: SearchPick | undefined,
   listing: TasksListing,
-  onRemind: (item: InboxItem) => void,
+  remindMenu: (item: InboxItem) => BarMenu,
   choose: Dispatch<SetStateAction<SearchPick | undefined>>,
 ) {
   const task = useTaskDetail(picked?.kind === SEARCH_PICK.TASK ? picked.id : undefined, listing);
@@ -378,7 +380,7 @@ function useSearchDetail(
           <ThreadColumn
             key={picked.id}
             id={picked.id}
-            onRemind={onRemind}
+            remindMenu={remindMenu}
             onOpen={(id) => choose({ kind: SEARCH_PICK.THREAD, id, route: undefined })}
           />
         ),
@@ -424,7 +426,7 @@ function SearchSplitScreen({
   const { detail, detailBar, asks } = useSearchDetail(
     picking.picked,
     listing,
-    remind.open,
+    (item) => remind.menu([item]),
     picking.choose,
   );
 
