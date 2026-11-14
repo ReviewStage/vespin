@@ -914,12 +914,12 @@ export function pressLocal<Doors, Change>(
 
 /**
  * The rows a task's write reads: the tasks drawn, and the plans the host
- * holds for the window (`LIVE_READ.DESCRIPTION_DOCUMENT`), none before the
+ * holds for the window (`LIVE_READ.HELD_TASK`), none before the
  * document is read, as the caller's Query client holds them.
  */
 export interface TaskRows {
   readonly tasks: TasksView;
-  readonly held: AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT] | undefined;
+  readonly held: AppStateSnapshot[typeof LIVE_READ.HELD_TASK] | undefined;
 }
 
 /** A task as the host holds its plan for the window, with what the list leaves out, its blocks among it; none where it holds none. */

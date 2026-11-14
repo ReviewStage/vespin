@@ -34,12 +34,33 @@ export const MACHINE_COMMAND_BOUNDS = {
   /** The most characters of stdout or stderr a result carries; the Mac cuts each to this. */
   MAX_OUTPUT_CHARS: 20_000,
   /**
+   * How long an ask stands from the moment the Mac shows it, before the
+   * call is answered as not answered. The command's own time to run starts
+   * once it is allowed, so a late Allow takes none of it.
+   */
+  ASK_SECONDS: 300,
+  /**
+   * The most an ask and the run after it may take together: the workspace
+   * MCP function's duration (`WORKSPACE_MCP_FUNCTION`) less the service's
+   * grace for the claim and the answer, and room for the store. A command
+   * that may run long is asked for that much less (`machineAskSeconds`).
+   */
+  ASK_AND_RUN_SECONDS: 720,
+  /**
    * The most bytes of one result's posted body: an app's window read at
    * every bound (`COMPUTER_BOUNDS`), under the 4.5 MB a function takes. A
    * Mac answers a result past it as not run rather than post it.
    */
   MAX_RESULT_BYTES: 4_000_000,
 } as const;
+
+/** How long the Mac's ask for a command that may run `timeoutSeconds` stands: `ASK_SECONDS`, less where the run would leave no room for it. */
+export function machineAskSeconds(timeoutSeconds: number): number {
+  return Math.min(
+    MACHINE_COMMAND_BOUNDS.ASK_SECONDS,
+    MACHINE_COMMAND_BOUNDS.ASK_AND_RUN_SECONDS - timeoutSeconds,
+  );
+}
 
 /**
  * What a command asks the Mac to do. Every Mac that reads runs `shell`, an
@@ -556,6 +577,21 @@ const computerRecordedSchema = EffectSchema.Struct({
   ),
 });
 
+/** A share of a window's width or height from its top left: 0 at its left or top edge, 1 at its right or bottom. */
+const windowShare = EffectSchema.Finite.check(EffectSchema.isBetween({ minimum: 0, maximum: 1 }));
+
+/**
+ * Where the agent's cursor stands on the Mac once an action lands, or as a
+ * read leaves it, as a share of the window the app's last read captured, so
+ * it lands on the same spot of that read's picture at any size it is drawn.
+ */
+const computerCursorSchema = EffectSchema.Struct({
+  xFraction: windowShare,
+  yFraction: windowShare,
+});
+
+export type ComputerCursor = typeof computerCursorSchema.Type;
+
 /** What an action came to: the apps listed, an app's window read, the action done on its app, or a recording stopped, or why it came to no video. */
 const computerOutcomeSchema = EffectSchema.Union([
   EffectSchema.Struct({
@@ -579,9 +615,14 @@ const computerOutcomeSchema = EffectSchema.Union([
     shots: EffectSchema.Array(computerShotSchema).check(
       EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_SHOTS),
     ),
+    cursor: EffectSchema.optionalKey(computerCursorSchema),
   }),
   // Note that an action names the app it acted on, as the Mac described it before asking, so its row wears the app's icon.
-  EffectSchema.Struct({ done: keyName, app: EffectSchema.optionalKey(computerAppSchema) }),
+  EffectSchema.Struct({
+    done: keyName,
+    app: EffectSchema.optionalKey(computerAppSchema),
+    cursor: EffectSchema.optionalKey(computerCursorSchema),
+  }),
   EffectSchema.Struct({ recorded: computerRecordedSchema }),
   EffectSchema.Struct({ unrecorded: EffectSchema.Literals(Object.values(RECORDING_FAILURE)) }),
 ]);
@@ -672,8 +713,10 @@ export const MACHINE_UNREACHED = {
   DEFAULT_GONE: "default-gone",
   /** The call named a machine this task's agents may not use. */
   UNKNOWN_MACHINE: "unknown-machine",
-  /** No default was set and none of the owner's machines could take it. */
+  /** The call named no machine, its agent picked none, and its owner has no default machine. */
   NO_MACHINE: "no-machine",
+  /** A terminal command for the machine a local agent runs on itself, whose own shell runs there already. */
+  OWN_SHELL: "own-shell",
 } as const;
 
 export type MachineUnreached = (typeof MACHINE_UNREACHED)[keyof typeof MACHINE_UNREACHED];

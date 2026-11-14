@@ -28,12 +28,22 @@ export {
   Chip,
   FieldChip,
   FollowingChip,
+  LabelChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
   ScopePicker,
   StatusChip,
 } from "./button.js";
+
+export {
+  CallAccessory,
+  CallCardRow,
+  type CallPresses,
+  COMPOSER_CALL,
+  type ComposerCall,
+  type StandingCallCard,
+} from "./call.js";
 
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
@@ -107,6 +117,16 @@ export {
 } from "./keep-model.js";
 
 export {
+  NO_WRITES,
+  newestValue,
+  takesRowBack,
+  type WriteSent,
+  type WritesBook,
+  writeSent,
+  writeSettled,
+} from "./latest-writes-model.js";
+
+export {
   ListRow,
   ROW_ACTION_TONE,
   type RowAction,
@@ -126,7 +146,9 @@ export { MarkdownPage } from "./markdown-page.js";
 export {
   AgentTile,
   Avatar,
+  FACE_KIND,
   type Face,
+  type FaceKind,
   FailedMark,
   NeedsYouDot,
   TaskStatusMark,
@@ -161,6 +183,9 @@ export {
 
 export {
   ConfirmAsk,
+  githubFace,
+  MARK_FACE,
+  type MarkFace,
   MarkRow,
   MergeActRow,
   type MergeMethodChoice,
@@ -172,7 +197,7 @@ export {
   WriteNoteRow,
 } from "./pull-request-page.js";
 
-export { RemindSheet } from "./remind-sheet.js";
+export { RemindPickSheet } from "./remind-sheet.js";
 
 export {
   LIST_LOOK,
@@ -224,10 +249,12 @@ export {
 
 export {
   type BarAction,
+  type BarFootItem,
   type BarMenu,
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  isBarMenu,
   KeptColumns,
   type KeptView,
   menuWithout,

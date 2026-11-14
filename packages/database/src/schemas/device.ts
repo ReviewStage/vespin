@@ -127,6 +127,14 @@ export const device = pgTable(
      */
     computerUse: boolean("computer_use"),
     /**
+     * Whether the member picked this machine as their default, where an
+     * agent's call goes that names no machine and whose agent has no pick of
+     * its own (`isDefaultMachine`); at most one machine of the
+     * account's holds it. False for every machine until the member picks
+     * one, while the default is the machine of theirs whose app joined first.
+     */
+    isDefault: boolean("is_default").notNull().default(false),
+    /**
      * When the scheduled sweep found the machine's app no longer listening
      * for its commands (`machine_command_device_listener`), or when it last
      * joined, before it first listens again; null while it listens. Unlike
@@ -168,5 +176,7 @@ export const device = pgTable(
     uniqueIndex("device_secret_hash")
       .on(table.secretHash)
       .where(sql`${table.secretHash} is not null`),
+    // An account has one default machine at most.
+    uniqueIndex("device_user_default").on(table.userId).where(sql`${table.isDefault}`),
   ],
 );

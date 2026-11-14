@@ -116,23 +116,25 @@ appId: dev.vespin.ios
 - tapOn:
     id: "file-viewer-done"
 - waitForAnimationToEnd
-# The thread's ⋯ menu opens Remind me too: a compact window's bar holds the
-# menu, and a regular window's detail column its own, the last "More" on
-# screen beside the sidebar's. The sheet stands over the whole thread, and a
-# split view's thread fills its column's height beneath it. A tap off the
-# sheet closes it unchanged, so the row's Remind me below still finds the
-# thread under Open.
-- tapOn:
-    text: "More"
-    index: -1
+# Remind me's times stand in a menu: a compact window's ⋯ holds it as a
+# submenu, and a regular window's detail bar stands it as its own clock, ⋯
+# no longer repeating it, so ⋯ is opened only where Remind me is not on
+# screen already. Each time says when it comes due, and Pick a date and
+# time… stands last. A tap off the menu closes it unchanged, so the row's
+# Remind me below still finds the thread under Open.
+- runFlow:
+    when:
+      notVisible: "Remind me"
+    commands:
+      - tapOn:
+          text: "More"
+          index: -1
 - tapOn: "Remind me"
 - assertVisible: "Pick a date and time…"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-thread-remind
-- swipe:
-    start: "50%, 48%"
-    end: "50%, 98%"
-    duration: 400
+- tapOn:
+    point: "50%, 90%"
 - waitForAnimationToEnd
 - assertNotVisible: "Pick a date and time…"
 # Back on the list, from the thread.
@@ -200,7 +202,7 @@ appId: dev.vespin.ios
           element: "Who can withdraw an invite\\?"
           direction: UP
 # Remind me, which a row's trailing swipe and its long press both open, offers
-# the panel's times in a sheet, each saying when it comes due; In 1 hour puts
+# the panel's times in a submenu, each saying when it comes due; In 1 hour puts
 # the thread away, out of Open and under Reminders, its time in the row's
 # time's place. The long press is used, since a regular window's sidebar
 # stands its rows elsewhere. Open is chosen again for the search below.

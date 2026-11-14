@@ -158,6 +158,7 @@ pnpm --dir "$APP_REPO_ROOT/apps/web" exec tsx scripts/function-rewrites.ts --che
 # table, as the Mac app's own Keyboard shortcuts page lists it; --check fails
 # if a shortcut changed without the page.
 pnpm --dir "$APP_REPO_ROOT/packages/settings" exec tsx scripts/shortcuts-docs.ts --check
+node "$APP_REPO_ROOT/apps/docs/scripts/style-check.mjs"
 
 # Each workspace's TypeScript project references are written from the
 # workspaces its package.json names; --check fails where one no longer
@@ -591,5 +592,45 @@ if [[ -n "$provider_shaped_literals" ]]; then
         "$provider_shaped_literals" >&2
     exit 1
 fi
+
+# The service deploys from `main` on merge, while a client ships only when its
+# tag is pushed, so a `HOSTED_API_FLOOR` above what a released client sends
+# refuses that client before any build it could update to exists. So the floor
+# may not pass the `HOSTED_API_VERSION` the newest `v*`, `host-v*`, `cli-v*`,
+# or `ios-v*` tag was built with. A build from before `client-identity.ts`
+# sends no version and is served at every floor, so a tag without the file is
+# passed over; one whose version can no longer be read fails. Note that the
+# tags and files are read from GitHub rather than the checkout, which CI clones
+# shallow and without tags, and which a shallow fetch here would cut the
+# history of; and that a TestFlight build dispatched with no tag is not seen.
+api_floor=$(sed -n 's/^const HOSTED_API_FLOOR = \([0-9][0-9]*\);$/\1/p' \
+    "$APP_REPO_ROOT/packages/service/src/orpc/handler.ts")
+if [[ -z "$api_floor" ]]; then
+    printf 'error: HOSTED_API_FLOOR is no longer a literal in packages/service/src/orpc/handler.ts\n' >&2
+    exit 1
+fi
+released_tags=$(git ls-remote --tags --refs https://github.com/ReviewStage/vespin.git | sed -n 's|^.*refs/tags/||p')
+for client_prefix in v host-v cli-v ios-v; do
+    newest_tag=$(grep -E "^${client_prefix}[0-9]+\.[0-9]+\.[0-9]+$" <<<"$released_tags" | sort -V | tail -n 1 || true)
+    [[ -z "$newest_tag" ]] && continue
+    identity_response=$(curl -sS -w '\n%{http_code}' \
+        "https://raw.githubusercontent.com/ReviewStage/vespin/$newest_tag/packages/features/src/client-identity.ts")
+    identity_status=${identity_response##*$'\n'}
+    [[ "$identity_status" == 404 ]] && continue
+    if [[ "$identity_status" != 200 ]]; then
+        printf 'error: could not read client-identity.ts at %s (HTTP %s)\n' "$newest_tag" "$identity_status" >&2
+        exit 1
+    fi
+    released_version=$(sed -n 's/^export const HOSTED_API_VERSION = \([0-9][0-9]*\)[^0-9].*$/\1/p' <<<"${identity_response%$'\n'*}")
+    if [[ -z "$released_version" ]]; then
+        printf 'error: HOSTED_API_VERSION can no longer be read from client-identity.ts at %s\n' "$newest_tag" >&2
+        exit 1
+    fi
+    if ((api_floor > released_version)); then
+        printf 'error: HOSTED_API_FLOOR is %s, but %s, the newest release of its client, sends hosted API %s; release every client at %s before raising the floor (AGENTS.md, "Breaking the hosted wire")\n' \
+            "$api_floor" "$newest_tag" "$released_version" "$api_floor" >&2
+        exit 1
+    fi
+done
 
 printf 'Repository contract checks passed.\n'

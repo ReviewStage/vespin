@@ -14,6 +14,7 @@
  * and a link the app draws no screen for opens in Safari.
  */
 
+import type { InboxGroup } from "@repo/features/inbox-list-model";
 import {
   type ContinuedActivity,
   type IosActivity,
@@ -23,6 +24,7 @@ import {
   spotlightItems,
 } from "@repo/features/ios-system-activity";
 import { OPENABLE_LINK, openableLinkOf } from "@repo/features/link-grammar";
+import type { TaskSummary } from "@repo/features/task-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
   selectInboxGroupsIn,
@@ -32,7 +34,7 @@ import {
 } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari } from "../open-link.js";
 import { useInFront } from "../place-columns.js";
@@ -84,8 +86,46 @@ export function useScreenActivity(
   );
 }
 
+/** What the chosen workspace's Spotlight items are built from, as the document last answered it. */
+interface SpotlightReads {
+  readonly workspace: Workspace | undefined;
+  readonly tasks: readonly TaskSummary[];
+  readonly groups: readonly InboxGroup[];
+  readonly readerId: string | undefined;
+}
+
+/**
+ * How long the Spotlight index waits after the lists first move before it is
+ * built, and so how often at most. Note that it is built off the render and
+ * after a pause, because a build reads every task and every thread's words
+ * (639 threads on a real account), which at launch or on a workspace switch
+ * would stand on the JS thread beside the first taps; Spotlight a second or
+ * two behind costs no one.
+ */
+const SPOTLIGHT_SETTLE_MS = 2000;
+
 /** The chosen workspace's tasks and Inbox threads as Spotlight finds them; none before the workspace is read. */
-function useSpotlightItems(): readonly SpotlightItem[] {
+function spotlightItemsOf(read: SpotlightReads): readonly SpotlightItem[] {
+  const { workspace, tasks, groups, readerId } = read;
+
+  if (workspace === undefined) return NONE;
+  const threads = groups.flatMap(({ holder, items }) => items.map((item) => ({ holder, item })));
+
+  return spotlightItems({ workspace, tasks, threads, readerId });
+}
+
+/** The keeper of the app's Spotlight index for this launch, or none in a build without the module. */
+const spotlightIndex =
+  systemActivityModule === null
+    ? null
+    : spotlightIndexKeeper(systemActivityModule, refused("The Spotlight index"));
+
+/**
+ * Holds the app's Spotlight index to the chosen workspace's lists while an
+ * account is signed in, built at most once each `SPOTLIGHT_SETTLE_MS` from
+ * the lists as they then stand, and empties it at once when none is.
+ */
+function useSpotlightIndex(signedIn: boolean): void {
   const workspace = useTasksWorkspace();
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const tasks = view?.tasks ?? NONE;
@@ -96,27 +136,29 @@ function useSpotlightItems(): readonly SpotlightItem[] {
   });
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-
-  return useMemo(() => {
-    if (workspace === undefined) return NONE;
-    const threads = groups.flatMap(({ holder, items }) => items.map((item) => ({ holder, item })));
-
-    return spotlightItems({ workspace, tasks, threads, readerId });
-  }, [workspace, tasks, groups, readerId]);
-}
-
-/** The keeper of the app's Spotlight index for this launch, or none in a build without the module. */
-const spotlightIndex =
-  systemActivityModule === null
-    ? null
-    : spotlightIndexKeeper(systemActivityModule, refused("The Spotlight index"));
-
-/** Holds the app's Spotlight index to the chosen workspace's lists while an account is signed in, and empties it once none is. */
-function useSpotlightIndex(signedIn: boolean): void {
-  const items = useSpotlightItems();
+  const latest = useRef<SpotlightReads | undefined>(undefined);
+  const settling = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
-    spotlightIndex?.(signedIn, items);
-  }, [signedIn, items]);
+    latest.current = { workspace, tasks, groups, readerId };
+
+    if (!signedIn) {
+      clearTimeout(settling.current);
+      settling.current = undefined;
+      spotlightIndex?.(false, NONE);
+
+      return;
+    }
+
+    // Note that a build already waiting takes these lists when it runs, so lists moving every second still build once each pause.
+    if (settling.current !== undefined) return;
+    settling.current = setTimeout(() => {
+      settling.current = undefined;
+      const read = latest.current;
+
+      if (read !== undefined) spotlightIndex?.(true, spotlightItemsOf(read));
+    }, SPOTLIGHT_SETTLE_MS);
+  }, [signedIn, workspace, tasks, groups, readerId]);
+  useEffect(() => () => clearTimeout(settling.current), []);
 }
 
 /** Opens each continued activity or tapped item on its screen once an account is signed in, or in Safari where the app draws none. */

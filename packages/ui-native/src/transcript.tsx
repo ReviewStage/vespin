@@ -2,6 +2,7 @@
 
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
+import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -11,6 +12,7 @@ import {
   type AccessibilityActionEvent,
   ActivityIndicator,
   FlatList,
+  Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   ScrollView,
@@ -28,12 +30,13 @@ import {
 } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
-import { useDockRoom } from "./glass-bar.js";
+import { useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
+import { HARNESS_MARK_ASSET } from "./marks.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
@@ -62,7 +65,7 @@ const ANCHOR_REACH = 48;
 
 /**
  * The room the system's tab bar floats over at the screen's foot, past the
- * safe area, which the newest row and Jump to latest stand clear of. Note
+ * safe area, which the newest row stands clear of. Note
  * that the list keeps it at its own end, because a scroll to the end reaches
  * the end of the rows alone and not the room the system keeps for the bar.
  */
@@ -165,8 +168,10 @@ const styles = StyleSheet.create({
   },
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
   headModel: { flexDirection: "row", alignItems: "center", gap: 3 },
+  // Note that the mark leads the model's name at the size of its line's glyphs, from the asset catalog the app's config writes.
+  headMark: { width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH, marginRight: 1 },
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
-  jump: { position: "absolute", alignSelf: "center" },
+  jump: { position: "absolute" },
   jumpFace: {
     width: JUMP_SIZE,
     height: JUMP_SIZE,
@@ -460,7 +465,7 @@ function OriginBody({ body }: { readonly body: string }) {
         style={styles.callLine}
       >
         <SymbolView
-          name={open ? "chevron.down" : "chevron.right"}
+          name={glyphSymbol(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
           size={MARK_SIZE.GLYPH - 3}
           tintColor={colors.TEXT_MUTED}
           style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
@@ -739,6 +744,8 @@ function TranscriptRow({
 type AgentHeadProps = {
   /** The model the agent runs on, as the panel's chip names it. */
   readonly model: string | undefined;
+  /** The harness the model runs in, whose mark leads the model's name, as the panel's chip leads with it; none where it is not known. */
+  readonly harness?: ModelProvider | undefined;
   readonly status: AgentStatus | undefined;
   /** Opens the picker that changes the model, as a press on the panel's chip does; none where the reader may not change it. */
   readonly onModel?: (() => void) | undefined;
@@ -754,7 +761,7 @@ const CHANGE_MODEL = "Change model";
  * Where the model may be changed, its name is a press with a chevron after
  * it, as the panel's chip draws one, opening the picker.
  */
-export function AgentHead({ model, status, onModel }: AgentHeadProps) {
+export function AgentHead({ model, harness, status, onModel }: AgentHeadProps) {
   const colors = useColors();
   const state = status === undefined ? undefined : agentGlyphState(status);
   const words = status === undefined ? undefined : agentStateWords(status);
@@ -794,6 +801,13 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
           testID="agent-model"
           style={styles.headModel}
         >
+          {harness === undefined ? null : (
+            <Image
+              source={{ uri: HARNESS_MARK_ASSET[harness] }}
+              style={styles.headMark}
+              accessibilityElementsHidden
+            />
+          )}
           <Text style={ink}>{model}</Text>
           <SymbolView
             name={glyphSymbol(GLYPH.UNFOLDED)}
@@ -809,18 +823,22 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
 }
 
 /**
- * The control that brings the newest row into view, as Messages and the
- * chat apps draw it: a round button of Liquid Glass holding a down arrow,
- * centered over the list's foot, standing only once the reader has scrolled
- * back. Note that where Liquid Glass is unavailable, before iOS 26, or the
+ * The control that brings the newest row into view: a round button of
+ * Liquid Glass holding a down arrow, standing only once the reader has
+ * scrolled back, over the list's foot at the end of the rows' words, as the
+ * panel's way back stands in its log's corner, so it covers at most a
+ * line's end rather than the middle of the words. Note that where Liquid Glass is unavailable, before iOS 26, or the
  * reader turned on Reduce Transparency, it is drawn solid on the surface's
  * ground inside the quiet ink rather than a hand-drawn copy of glass.
  */
 function JumpToLatest({
   bottom,
+  end,
   onPress,
 }: {
   readonly bottom: number;
+  /** How far in from the list's trailing edge it stands: where the rows' words end. */
+  readonly end: number;
   readonly onPress: () => void;
 }) {
   const colors = useColors();
@@ -842,7 +860,7 @@ function JumpToLatest({
       accessibilityRole="button"
       accessibilityLabel={JUMP_TO_LATEST}
       hitSlop={SPACE.TIGHT}
-      style={[styles.jump, { bottom }]}
+      style={[styles.jump, { bottom, right: end }]}
     >
       {solid ? (
         <View
@@ -959,8 +977,12 @@ export function AgentTranscript({
   const [width, setWidth] = useState(0);
   const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
-  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
-  const foot = bottom + TAB_BAR_ROOM + useDockRoom();
+  const keyboard = useDockKeyboard();
+  const dock = useDockRoom();
+  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript. While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the tab bar and the bar stands right on it.
+  const foot = (keyboard > 0 ? 0 : bottom + TAB_BAR_ROOM) + dock;
+  // Note that Jump to latest stands just over the composer, on the keyboard while it stands, rather than over the tab bar's room, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`).
+  const jumpFoot = (keyboard > 0 ? 0 : bottom) + keyboard + dock + SPACE.ROW;
 
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
@@ -1024,6 +1046,12 @@ export function AgentTranscript({
     [],
   );
 
+  // Note that the keyboard rising under a reader at the newest row brings the row up with it, as Messages' does, rather than leaving it behind the keyboard; the list's inset has already grown for it, so its end is the row clear of the bar.
+  useEffect(() => {
+    if (keyboard > 0 && anchored.current)
+      list.current?.getScrollResponder()?.scrollToEnd({ animated: !reduceMotion });
+  }, [keyboard, reduceMotion]);
+
   // Note that a row landing, or a fold opened, at the newest row keeps it in view, while one landing as the reader reads back leaves their place.
   const onContentSizeChange = useCallback(() => {
     // Note that the scroller itself is asked, since the list's own end is an estimate until every row has been measured.
@@ -1064,8 +1092,10 @@ export function AgentTranscript({
         contentInsetAdjustmentBehavior="automatic"
         // Note that rows laid before the oldest, as an older page lands, leave the row the reader reads where it stood.
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-        // Note that a drag down into the keyboard lowers it, as Messages' transcript does, since the composer docked over the list holds no key that does.
-        keyboardDismissMode="interactive"
+        // Note that the list stands its end clear of the keyboard with the system's own inset, moved on the keyboard's own curve, so the newest rows never sit behind it.
+        automaticallyAdjustKeyboardInsets
+        // Note that a drag lowers the keyboard, since the composer docked over the list holds no key that does. It lowers it at once rather than under the finger, because the docked composer follows the keyboard's announced moves alone, and so stood still while an interactive drag pulled the keyboard away, then jumped.
+        keyboardDismissMode="on-drag"
         onContentSizeChange={onContentSizeChange}
         onScrollToIndexFailed={onScrollToIndexFailed}
         onScroll={onScroll}
@@ -1079,7 +1109,8 @@ export function AgentTranscript({
       />
       {away ? (
         <JumpToLatest
-          bottom={foot}
+          bottom={jumpFoot}
+          end={right + sides + SPACE.EDGE}
           onPress={() => {
             anchored.current = true;
             // Note that the jump scrolls at once where the reader asked for less motion.
