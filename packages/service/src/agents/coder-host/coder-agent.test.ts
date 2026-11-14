@@ -634,7 +634,7 @@ test("with Suggestions off the instructions say nothing of add_suggestion; with 
   );
 
   assert.ok(!off.includes(AGENT_TOOL.ADD_SUGGESTION));
-  const start = on.indexOf("## Suggestions in your reply\n\n");
+  const start = on.indexOf("## Suggestions\n\n");
   const end = on.indexOf("## Writing", start);
   assert.ok(start > 0 && end > start);
   assert.ok(on.slice(start, end).includes(`\`${AGENT_TOOL.ADD_SUGGESTION}\``));

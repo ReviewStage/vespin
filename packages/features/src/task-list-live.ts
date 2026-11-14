@@ -129,6 +129,14 @@ const taskLiveRowSchema = EffectSchema.Struct({
   creatorAgentId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   /** The task this one is a child of; null for a task at the top. Absent from a service before child tasks. */
   parentTaskId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
+  /**
+   * How many tasks the reader reaches are this one's direct children, and
+   * how many of those are finished (done or canceled), counted by the
+   * service over every task rather than those the list holds; absent from a
+   * service before it counted them.
+   */
+  subTaskCount: EffectSchema.optionalKey(EffectSchema.Int),
+  finishedSubTaskCount: EffectSchema.optionalKey(EffectSchema.Int),
   /** How the task is worked; absent from a service before modes. */
   mode: plan.mode,
   /** Whether it waits on an open task the reader reaches; absent from a service before blocks. */
@@ -254,7 +262,7 @@ const agentLiveRowSchema = EffectSchema.Struct({
  * plans and its agents, each by id, newest started first as the held read
  * orders them, and the issues plans linked, which answer no rows and stand
  * for a released desktop that follows them, and which this build keeps
- * none of. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
+ * none of; beside them, the workspaces holding any task it reaches. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
  * The service answers `unavailable` where its deployment's Realtime is
  * misconfigured.
  */
@@ -287,6 +295,15 @@ export const TASK_LIST_READ = liveRead({
       optional: true,
     }),
   },
+  beside: {
+    /**
+     * The workspaces in which the account reaches any task, whatever the
+     * list holds of them: whether it has ever had a task there, which the
+     * first-run welcome and a workspace's "No tasks yet." read. Absent from a
+     * service before it was answered.
+     */
+    taskWorkspaces: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
+  },
 });
 
 export type TaskListLiveAnswer = LiveReadAnswer<typeof TASK_LIST_READ>;
@@ -312,6 +329,25 @@ export const TASK_ROWS_READ = liveRead({
 
 export type TaskRowsLiveAnswer = LiveReadAnswer<typeof TASK_ROWS_READ>;
 
+/**
+ * The tasks related to the task `id` names, read once rather than followed,
+ * for a window drawing its relations past the list it holds: every sub-task
+ * of it, its parent, and the tasks it waits on and holds up, as the list's
+ * plans answer them, with every agent of them as the list's agents do. The
+ * rows are the list's own, read on the same rule of who may read them, so a
+ * task the account does not reach answers no rows.
+ */
+export const TASK_RELATIONS_READ = liveRead({
+  name: "taskRelations",
+  path: HOSTED_SERVICE_PATH.LIVE_TASK_RELATIONS,
+  params: { id: LIVE_PARAM.ID, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    plans: TASK_LIST_READ.parts.plans,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
 /** The most tasks one search answers, the latest changed first, so a query of one letter reads no account whole. */
 export const TASK_SEARCH_LIMIT = 20;
 
@@ -331,6 +367,115 @@ export const TASK_SEARCH_READ = liveRead({
   params: { query: LIVE_PARAM.TEXT, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
+    plans: TASK_LIST_READ.parts.plans,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
+/** How many settled tasks one page of `TASK_PAGE_READ` answers at most. */
+export const SETTLED_PAGE_SIZE = 50;
+
+/**
+ * Where a page of settled tasks ends, which the next page reads past: the
+ * instant the page's last task was finished, in whole milliseconds, and its
+ * id, which breaks a tie between tasks finished at one instant.
+ */
+export interface SettledPageCursor {
+  readonly finishedAt: number;
+  readonly taskId: string;
+}
+
+/**
+ * One page of a workspace's settled tasks, Done and Canceled, read once
+ * rather than followed, for a list that shows finished work past what the
+ * list a window holds: the newest finished first, as the Tasks page's
+ * completed window measures them (`completedAt`, else the last save), each
+ * with every agent of it, as the list's plans and agents answer them and on
+ * their rule of who may read them. A page names the cursor it reads past
+ * (`beforeAt`, `beforeId`), the first page none, and holds at most
+ * `SETTLED_PAGE_SIZE` tasks; one with fewer is the last.
+ */
+export const TASK_PAGE_READ = liveRead({
+  name: "taskPage",
+  path: HOSTED_SERVICE_PATH.LIVE_TASK_PAGE,
+  params: {
+    workspaceId: LIVE_PARAM.TEXT,
+    beforeAt: LIVE_PARAM.OPTIONAL_TEXT,
+    beforeId: LIVE_PARAM.OPTIONAL_ID,
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+  },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    plans: TASK_LIST_READ.parts.plans,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
+/**
+ * The cursor the page after `plans` reads past: its last task's, as the
+ * service orders them; none where the page was the last, holding fewer than
+ * a page's tasks.
+ */
+export function settledPageCursorOf(
+  plans: readonly Pick<TaskLiveRow, "id" | "completedAt" | "updatedAt">[],
+): SettledPageCursor | undefined {
+  if (plans.length < SETTLED_PAGE_SIZE) return undefined;
+  let last: SettledPageCursor | undefined;
+
+  for (const plan of plans) {
+    const finishedAt = plan.completedAt ?? plan.updatedAt;
+
+    if (
+      last === undefined ||
+      finishedAt < last.finishedAt ||
+      (finishedAt === last.finishedAt && plan.id < last.taskId)
+    ) {
+      last = { finishedAt, taskId: plan.id };
+    }
+  }
+
+  return last;
+}
+
+/** How many of a person's tasks one page of `PERSON_PAGE_READ` answers of each section, Assigned and Created, the newest first. */
+export const PERSON_PAGE_TASKS = 5;
+
+/** How many of a person's agents one page of `PERSON_PAGE_READ` answers the tasks of, the newest started first. */
+export const PERSON_PAGE_AGENTS = 50;
+
+/**
+ * A person's tasks and agents in a workspace, read once rather than
+ * followed, for their page, which lists what of theirs the window holds
+ * and, past it, what only the service does: how many tasks are assigned
+ * to them, how many more they created that are assigned to someone else
+ * or no one, and how many agents they started on a task, none archived
+ * (`counts`, one row), each as the reader may read them; and a page of
+ * rows, the newest `PERSON_PAGE_TASKS` of each section by their last save
+ * and the tasks of their newest `PERSON_PAGE_AGENTS` agents, each with
+ * every agent of it, as the list's plans and agents answer them and on
+ * their rule of who may read them. A person the reader shares no task
+ * with is counted as having none.
+ */
+export const PERSON_PAGE_READ = liveRead({
+  name: "personPage",
+  path: HOSTED_SERVICE_PATH.LIVE_PERSON_PAGE,
+  params: {
+    workspaceId: LIVE_PARAM.TEXT,
+    personId: LIVE_PARAM.TEXT,
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+  },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    counts: liveRows({
+      row: EffectSchema.Struct({
+        personId: EffectSchema.String,
+        assigned: countedNumber,
+        created: countedNumber,
+        agents: countedNumber,
+      }),
+      key: "personId",
+      order: [["personId", ORDER.ASC]],
+    }),
     plans: TASK_LIST_READ.parts.plans,
     agents: TASK_LIST_READ.parts.agents,
   },
@@ -537,6 +682,13 @@ function followersOf(row: TaskLiveRow): Pick<TaskSummary, "followers"> | undefin
   };
 }
 
+/** The task's sub-task count as its row says it; none for a task with no child, or from a service before it counted them. */
+function subTaskCountOf(row: TaskLiveRow): Pick<TaskSummary, "subTasks"> | undefined {
+  const total = row.subTaskCount ?? 0;
+
+  return total === 0 ? undefined : { subTasks: { total, finished: row.finishedSubTaskCount ?? 0 } };
+}
+
 /** One plan as the list's row says it, its agents in brief (`agentsSummaryOf`) where it has any. */
 export function taskSummaryOf(
   row: TaskLiveRow,
@@ -572,6 +724,7 @@ export function taskSummaryOf(
     ...(row.parentTaskId === undefined || row.parentTaskId === null
       ? undefined
       : { parentTaskId: row.parentTaskId }),
+    ...subTaskCountOf(row),
     ...(row.mode === undefined ? undefined : { mode: row.mode }),
     ...(row.blocked === true ? { blocked: true } : undefined),
     ...(row.blockedBy === undefined ? undefined : { blockedBy: row.blockedBy }),

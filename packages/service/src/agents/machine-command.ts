@@ -19,13 +19,16 @@ import {
   type ComputerPermission,
   MACHINE_COMMAND_BOUNDS,
   MACHINE_COMMAND_KIND,
+  MACHINE_REFUSAL,
   type MacComputerAction,
   type MacComputerResult,
   type MachineCommand,
   type MachineCommandKind,
   type MachineCommandResult,
+  type MachineRefusal,
   type MachineUnreached,
   type MacShellResult,
+  machineAskSeconds,
   machineCommandSchema,
 } from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -151,6 +154,8 @@ export type MachineCommandAnswer = (
       readonly reason: string;
       /** The grants the Mac lacked for an action on an app, which the transcript offers the place to turn on. */
       readonly missingPermissions?: readonly ComputerPermission[];
+      /** How an ask came to run nothing, or that the machine never answered, which the transcript names in its own words. */
+      readonly outcome?: MachineRefusal;
       /** Why the call reached no machine, where routing refused it, which the transcript says in its own words. */
       readonly why?: MachineUnreached;
       /** The machines that could take the call now, where routing refused it, which the transcript offers to make the default. */
@@ -253,10 +258,14 @@ export function macListening(userId: string): TaskStoreEffect<boolean> {
 /** What a call answers for what the Mac said: what a shell command did, or why the Mac ran nothing. */
 function answered(result: MachineCommandResult): MachineCommandAnswer {
   if ("refused" in result) {
-    const { refused, missingPermissions } = result;
-    const reason = { status: MACHINE_COMMAND_STATUS.NOT_RUN, reason: refused } as const;
+    const { refused, missingPermissions, outcome } = result;
 
-    return missingPermissions === undefined ? reason : { ...reason, missingPermissions };
+    return {
+      status: MACHINE_COMMAND_STATUS.NOT_RUN,
+      reason: refused,
+      ...(missingPermissions === undefined ? undefined : { missingPermissions }),
+      ...(outcome === undefined ? undefined : { outcome }),
+    };
   }
 
   return { status: MACHINE_COMMAND_STATUS.RAN, ...result };
@@ -267,13 +276,18 @@ function commandTopics(userId: string): readonly SyncTopic[] {
   return [[TOPIC.ACCOUNT, userId]];
 }
 
-/** The command's result once a Mac settles it, looked for again as each write to the account's commands lands, until the deadline; nothing past it. */
+/**
+ * The command's result once a Mac settles it, looked for again as each
+ * write to the account's commands lands, until the deadline; nothing past
+ * it. The deadline outlasts the Mac's ask, its own time to run once allowed,
+ * and the grace, so a late Allow is still heard.
+ */
 function awaitedResult(
   userId: string,
   queued: MachineCommand,
 ): TaskStoreEffect<Option.Option<MachineCommandResult>> {
   const deadline = Duration.sum(
-    Duration.seconds(queued.timeoutSeconds),
+    Duration.seconds(queued.timeoutSeconds + machineAskSeconds(queued.timeoutSeconds)),
     MACHINE_COMMAND_SERVICE.ANSWER_GRACE,
   );
 
@@ -361,7 +375,15 @@ export function askMacHeard(
 
     if (heard === undefined) return notRun(MACHINE_COMMAND_REFUSAL.UNAVAILABLE);
 
-    if (Option.isNone(heard)) return notRun(MACHINE_COMMAND_REFUSAL.NO_ANSWER);
+    if (Option.isNone(heard)) {
+      return {
+        answer: {
+          ...machineCommandNotRun(MACHINE_COMMAND_REFUSAL.NO_ANSWER),
+          outcome: MACHINE_REFUSAL.NO_ANSWER,
+        },
+      };
+    }
+
     const { result, recording } = heard.value;
     const answer = answered(result);
 

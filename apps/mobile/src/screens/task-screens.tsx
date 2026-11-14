@@ -1221,7 +1221,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const { task, document, tasks, relations } = overview;
   const byId = new Map(tasks.map((each) => [each.id, each]));
   const subTasks = subTasksOf(tasks, task.id);
-  const finished = subTaskCount(subTasks);
+  const finished = subTaskCount(task, subTasks);
 
   // Note that each side is listed apart, since one task may both wait on this one and hold it up.
   const sides = [

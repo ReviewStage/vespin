@@ -38,7 +38,14 @@ import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
-import { TASK_LIST_READ, TASK_ROWS_READ, TASK_SEARCH_READ } from "@repo/features/task-list-live";
+import {
+  PERSON_PAGE_READ,
+  TASK_LIST_READ,
+  TASK_PAGE_READ,
+  TASK_RELATIONS_READ,
+  TASK_ROWS_READ,
+  TASK_SEARCH_READ,
+} from "@repo/features/task-list-live";
 import { AGENT_PAGES_READ, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
 import type {
@@ -165,6 +172,8 @@ export interface FakeService extends TasksClient, WorkspacesClient {
   liveListReads: number;
   /** Whether a delete is refused, as a service that did not answer refuses it. */
   deleteFails: boolean;
+  /** Whether a read of one task outside the list, or of its relations, goes unanswered, as a service that did not answer leaves it. */
+  taskRowsFail: boolean;
   /** What a delete's answer waits on, so a test can see what is drawn while it is out. */
   deleteAnswered: Effect.Effect<void>;
   /** Whether a relation's change is refused, as a service that did not answer refuses it. */
@@ -661,6 +670,7 @@ export function fakeService(tasks: Task[]): FakeService {
     agents: {},
     liveListReads: 0,
     deleteFails: false,
+    taskRowsFail: false,
     deleteAnswered: Effect.void,
     relationFails: false,
     relationAnswered: Effect.void,
@@ -1251,6 +1261,8 @@ export function fakeService(tasks: Task[]): FakeService {
       read: { readonly name: string },
       params: {
         readonly id: string;
+        readonly workspaceId?: string;
+        readonly personId?: string;
         readonly page?: string;
         readonly query?: string;
         readonly userId?: string;
@@ -1264,9 +1276,35 @@ export function fakeService(tasks: Task[]): FakeService {
         // One task outside the list, read with its agents, none of which the fake's tasks hold.
         if (read.name === TASK_ROWS_READ.name) {
           service.reads.push(`task-rows:${params.id}`);
+
+          if (service.taskRowsFail) return Effect.succeed(UNANSWERED_LIVE);
           const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
           rows.set({
             plans: service.tasks.filter((each) => each.id === params.id).map(rowOfTask),
+            agents: [],
+          });
+
+          return Effect.succeed(rows.first());
+        }
+
+        // A task's relations, its sub-tasks, its parent, and its blocks among the fake's tasks, none with agents.
+        if (read.name === TASK_RELATIONS_READ.name) {
+          service.reads.push(`task-relations:${params.id}`);
+
+          if (service.taskRowsFail) return Effect.succeed(UNANSWERED_LIVE);
+          const of = service.tasks.find((each) => each.id === params.id);
+          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+
+          const related = new Set([
+            ...(of?.parentTaskId === undefined ? [] : [of.parentTaskId]),
+            ...(of?.blockedBy ?? []),
+            ...(of?.blocks ?? []),
+          ]);
+
+          rows.set({
+            plans: service.tasks
+              .filter((each) => related.has(each.id) || each.parentTaskId === params.id)
+              .map(rowOfTask),
             agents: [],
           });
 
@@ -1281,6 +1319,47 @@ export function fakeService(tasks: Task[]): FakeService {
             plans: service.tasks
               .filter((each) => each.name.toLowerCase().includes(query))
               .map(rowOfTask),
+            agents: [],
+          });
+
+          return Effect.succeed(rows.first());
+        }
+
+        // A page of the workspace's settled tasks, every one the fake holds in a page of its own, with no agents.
+        if (read.name === TASK_PAGE_READ.name) {
+          service.reads.push(`task-page:${params.workspaceId}`);
+          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+
+          const settled = service.tasks.filter(
+            (each) =>
+              each.workspaceId === params.workspaceId &&
+              (each.status === TASK_STATUS.DONE || each.status === TASK_STATUS.CANCELED),
+          );
+
+          rows.set({ plans: settled.map(rowOfTask), agents: [] });
+
+          return Effect.succeed(rows.first());
+        }
+
+        // A person's page: every task of the workspace the fake assigns them, counted and read with no agents, as none of theirs were created by them.
+        if (read.name === PERSON_PAGE_READ.name) {
+          service.reads.push(`person-page:${params.personId}`);
+          const rows = polledLive<"counts" | "plans" | "agents">(["counts", "plans", "agents"]);
+
+          const assigned = service.tasks.filter(
+            (each) =>
+              each.workspaceId === params.workspaceId && each.assignee?.userId === params.personId,
+          );
+
+          rows.set({
+            counts: [
+              { personId: params.personId, assigned: assigned.length, created: 0, agents: 0 },
+            ],
+            plans: assigned.map((each) => ({
+              ...rowOfTask(each),
+              assigneeId: each.assignee?.userId ?? null,
+              assigneeName: each.assignee?.name ?? null,
+            })),
             agents: [],
           });
 
@@ -1909,5 +1988,7 @@ export function rowOfTask(each: Task) {
     status: each.status ?? TASK_STATUS.TODO,
     priority: each.priority ?? TASK_PRIORITY.NONE,
     parentTaskId: each.parentTaskId ?? null,
+    blockedBy: each.blockedBy ?? [],
+    blocks: each.blocks ?? [],
   };
 }

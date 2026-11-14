@@ -208,6 +208,13 @@ export const tasksViewSchema = EffectSchema.Struct({
    */
   pendingTasks: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   listStatus: tasksReadSchema,
+  /**
+   * The workspaces in which the account reaches any task, as the list's
+   * last answer said, whatever the list holds of them: whether it has ever
+   * had a task there. Absent before an answer says, as one drawn from disk
+   * or from a service before it was answered.
+   */
+  taskWorkspaces: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   /** Whether what the host follows live is current (`HOST_LIVE`); absent before the list's follow first says, which reads as live. */
   live: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(HOST_LIVE))),
   /** The workspaces the account is a member of, its first one first, as the last list read answered; none before the first lands. */
@@ -770,10 +777,56 @@ export const tasksFindAnswerSchema = EffectSchema.Union([
 /** The most characters a task search sends the service. */
 export const TASK_SEARCH_QUERY_MAX_CHARS = 200;
 
+/** How long typing pauses before a task search's words are asked of the host, so a word typed out reads once rather than once a letter. */
+export const TASK_SEARCH_PAUSE_MILLIS = 250;
+
+/** The words a task search typed as `typed` asks of the service (`TASKS_SEARCH`): trimmed and cut to what it sends, or none where nothing is typed. */
+export function serviceTaskSearchQuery(typed: string): string | undefined {
+  const words = typed.trim().slice(0, TASK_SEARCH_QUERY_MAX_CHARS);
+
+  return words.length === 0 ? undefined : words;
+}
+
 /** A search of the account's tasks the window asks the host to read past the list it holds: the words typed. */
 export const tasksSearchParamsSchema = EffectSchema.Struct({
   query: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(TASK_SEARCH_QUERY_MAX_CHARS)),
 });
+
+/** Where a page of a workspace's settled tasks ends, which the next page reads past (`SettledPageCursor`). */
+const settledPageCursorSchema = EffectSchema.Struct({
+  finishedAt: EffectSchema.Finite,
+  taskId: EffectSchema.NonEmptyString,
+});
+
+/** A page of a workspace's settled tasks, as a list that shows finished work asks the host for it: the workspace, and the cursor the page reads past where it is not the first. */
+export const tasksSettledPageParamsSchema = EffectSchema.Struct({
+  workspaceId: EffectSchema.NonEmptyString,
+  before: EffectSchema.optionalKey(settledPageCursorSchema),
+});
+
+/** A page of settled tasks read into the task list, as the window hears it: the cursor the next page reads past, none after the last, or that the service did not answer. */
+export const tasksSettledPageAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({ next: EffectSchema.optionalKey(settledPageCursorSchema) }),
+  EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
+]);
+
+/** A person's tasks and agents in a workspace, as their page asks the host for them. */
+export const tasksPersonPageParamsSchema = EffectSchema.Struct({
+  workspaceId: EffectSchema.NonEmptyString,
+  personId: EffectSchema.NonEmptyString,
+});
+
+/** How many of a person's tasks and agents the service counts (`PersonCounts`), as their page hears it once their newest are read into the task list, or that the service did not answer. */
+export const tasksPersonPageAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    counts: EffectSchema.Struct({
+      assigned: EffectSchema.Finite,
+      created: EffectSchema.Finite,
+      agents: EffectSchema.Finite,
+    }),
+  }),
+  EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
+]);
 
 /** A page of a description's history, as the version history asks the host for it: the task, and the revision the page is read before where it is an older page. */
 export const tasksRevisionsParamsSchema = EffectSchema.Struct({

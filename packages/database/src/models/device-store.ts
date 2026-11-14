@@ -618,6 +618,8 @@ const findWorkspaceMachines = SqlSchema.findAll({
     platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     userId: Schema.String,
     online: Schema.Boolean,
+    commandMode: Schema.NullOr(machineCommandModeSchema),
+    computerUse: Schema.NullOr(Schema.Boolean),
   }),
   execute: ({ readerId, workspaceId, memberId, listenedSince }) =>
     Database.use((db) =>
@@ -628,6 +630,8 @@ const findWorkspaceMachines = SqlSchema.findAll({
           platform: device.platform,
           userId: device.userId,
           online: machineOnline(listenedSince),
+          commandMode: device.commandMode,
+          computerUse: device.computerUse,
         })
         .from(device)
         .innerJoin(
@@ -902,13 +906,15 @@ export function markCommandsAwayDevices(now: number, freshMs: number): DeviceEff
   );
 }
 
-/** A machine of a workspace's member as the workspace's members see it: its id, name, platform, whose it is, and whether it is there now. */
+/** A machine of a workspace's member as the workspace's members see it: its id, name, platform, whose it is, whether it is there now, and, where it carried them up, its terminal commands mode and its apps switch. */
 export interface WorkspaceMachine {
   readonly id: string;
   readonly name: string;
   readonly platform: DevicePlatform;
   readonly userId: string;
   readonly online: boolean;
+  readonly commandMode?: MachineCommandMode;
+  readonly computerUse?: boolean;
 }
 
 /**
@@ -917,9 +923,12 @@ export interface WorkspaceMachine {
  * and only those of an owner who stands in it too, so a reader never reads
  * the machines of someone who shares no workspace with them; one member's
  * alone where `memberId` names one; each online where its app listened at
- * or after `listenedSince` or it beats as a host (`machineOnline`). Note
- * that it selects no secret, setting, or folder, since a teammate is shown
- * only what each machine is, whose, and whether it is there.
+ * or after `listenedSince` or it beats as a host (`machineOnline`). Each
+ * carries its terminal commands mode and apps switch where its row holds
+ * them, so any member can see why a call there would be refused. Note that
+ * it selects no secret, folder, or always-allowed app, since a teammate is
+ * shown only what each machine is, whose, whether it is there, and what it
+ * lets agents do.
  */
 export function workspaceMachinesOf(
   readerId: string,
@@ -927,10 +936,18 @@ export function workspaceMachinesOf(
   listenedSince: Date,
   memberId?: string,
 ): DeviceEffect<readonly WorkspaceMachine[]> {
-  return findWorkspaceMachines({
-    readerId,
-    workspaceId,
-    memberId: memberId ?? null,
-    listenedSince,
-  });
+  return Effect.map(
+    findWorkspaceMachines({
+      readerId,
+      workspaceId,
+      memberId: memberId ?? null,
+      listenedSince,
+    }),
+    (rows) =>
+      rows.map(({ commandMode, computerUse, ...machine }) => ({
+        ...machine,
+        ...(commandMode === null ? undefined : { commandMode }),
+        ...(computerUse === null ? undefined : { computerUse }),
+      })),
+  );
 }

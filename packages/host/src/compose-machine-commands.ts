@@ -19,6 +19,7 @@ import {
   MACHINE_COMMAND_BOUNDS,
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
+  MACHINE_REFUSAL,
   type MacComputerCommand,
   type MachineCommandKind,
   type MachineCommandMode,
@@ -27,6 +28,7 @@ import {
   type MachineCommandResult,
   type MachineDeviceSettings,
   type MacShellResult,
+  machineAskSeconds,
   machineCommandKindsQuery,
   machineCommandResultSchema,
 } from "@repo/features/machine-command-wire";
@@ -72,9 +74,8 @@ import type { HostKernel } from "./host-kernel.js";
 import { decodedLiveRows, LIVE_RESTART, waitOrRegained } from "./live-follow.js";
 import {
   MACHINE_COMMAND_DECISION,
-  type MacAppAsk,
+  type MachineCommandAnswer,
   type MachineCommandAsk,
-  type MachineCommandDecision,
 } from "./machine-command-ask.js";
 import { type MacShell, runMachineCommand } from "./machine-command-runner.js";
 import type { RunMode } from "./run-mode.js";
@@ -187,11 +188,12 @@ const DEVICE_LOOK_EVERY = Duration.seconds(15);
 /** What the device's looks run on: a look again at whether it joined and its settings moved, or the service's say over it heard live. */
 const DEVICE_LOOK = { AGAIN: "again", HEARD: "heard" } as const;
 
-/** The device this Mac joined as for an account, the settings the service keeps for it as last read or written, and the apps whose looks it last posted for it; none before it posted any. */
+/** The device this Mac joined as for an account, the settings the service keeps for it as last read or written, the service's say Settings has not yet taken, and the apps whose looks it last posted for it; none before it posted any. */
 interface Joined {
   readonly userId: string;
   readonly deviceId: string;
   readonly settings: MachineDeviceSettings;
+  readonly pending?: MachineDeviceSettings | undefined;
   readonly looks?: readonly string[] | undefined;
 }
 
@@ -400,12 +402,30 @@ const SWITCHED_OFF: MacShellResult = {
 /** What a command the developer declined answers. */
 const DECLINED: MachineCommandRefusal = {
   refused: "Not run: the developer declined this command.",
+  outcome: MACHINE_REFUSAL.DECLINED,
 };
 
-/** What a command the developer did not answer for answers: not run, since its timeout had passed before it could start. */
+/** A denial as the agent reads it: the refusal, and after it the words the developer gave with it, where they gave any. */
+function declinedWith(
+  declined: MachineCommandRefusal,
+  note: string | undefined,
+): MachineCommandRefusal {
+  return note === undefined
+    ? declined
+    : { ...declined, refused: `${declined.refused} They said: "${note}"` };
+}
+
+/** What the developer answered an ask: Allow or Deny, and with a Deny, the words they gave the agent. */
+type Answered = Pick<MachineCommandAnswer, "decision" | "note">;
+
+/** How long a withdrawn ask's refusal may take to post, so a gate shut on it is not held up. */
+const WITHDRAWN_SETTLE = Duration.seconds(5);
+
+/** What a command the developer did not answer for answers: not run, since its ask closed, or was withdrawn, before anyone answered. */
 const UNANSWERED: MachineCommandRefusal = {
   refused:
     "Not run: the developer did not answer in time whether to allow this command on their Mac.",
+  outcome: MACHINE_REFUSAL.UNANSWERED,
 };
 
 /** What a command asked under an account that signed out before it was answered answers. */
@@ -426,11 +446,13 @@ const APPS_SWITCHED_OFF: MachineCommandRefusal = { refused: `Not run: ${APPS_OFF
 /** What an action on an app the developer declined answers. */
 const APP_DECLINED: MachineCommandRefusal = {
   refused: "Not run: the developer declined to let agents use this app.",
+  outcome: MACHINE_REFUSAL.DECLINED,
 };
 
 /** What an action on an app the developer did not answer for in time answers. */
 const APP_UNANSWERED: MachineCommandRefusal = {
   refused: "Not run: the developer did not answer in time whether agents may use this app.",
+  outcome: MACHINE_REFUSAL.UNANSWERED,
 };
 
 /** What an action on an app agents are never offered answers, by the app's name. */
@@ -647,7 +669,7 @@ export function composeMachineCommands(
 
     const asks = new Map<
       string,
-      { ask: MachineCommandAsk; userId: string; decided: Deferred.Deferred<MachineCommandDecision> }
+      { ask: MachineCommandAsk; userId: string; decided: Deferred.Deferred<Answered> }
     >();
 
     const tellAsks = () =>
@@ -658,24 +680,25 @@ export function composeMachineCommands(
 
     /**
      * The developer's answer to one ask, a claimed shell command or an app
-     * an action names, asked of the panel and waited for until `deadline`, the command's own timeout
-     * past the claim; no answer by then is a denial of its own kind. The
-     * ask is withdrawn however the wait ends, an interruption included, so
-     * a prompt never outlives its command.
+     * an action names, asked of the panel and waited for until `closesAt`,
+     * which the ask carries so the prompt and the agent's row count down to
+     * it; no answer by then is none. The ask is withdrawn however the wait
+     * ends, an interruption included, so a prompt never outlives its command.
      */
     const consent = (
-      ask: MachineCommandAsk,
+      shown: (times: { readonly askedAt: number; readonly expiresAt: number }) => MachineCommandAsk,
       userId: string,
-      deadline: number,
-    ): Effect.Effect<MachineCommandDecision | undefined> =>
+      closesAt: number,
+    ): Effect.Effect<Answered | undefined> =>
       Effect.gen(function* () {
-        const decided = yield* Deferred.make<MachineCommandDecision>();
+        const ask = shown({ askedAt: kernel.now(), expiresAt: closesAt });
+        const decided = yield* Deferred.make<Answered>();
         asks.set(ask.id, { ask, userId, decided });
         tellAsks();
         const now = yield* Clock.currentTimeMillis;
 
         return yield* Deferred.await(decided).pipe(
-          Effect.timeoutOption(Duration.millis(Math.max(0, deadline - now))),
+          Effect.timeoutOption(Duration.millis(Math.max(0, closesAt - now))),
           Effect.map(Option.getOrUndefined),
           Effect.ensuring(
             Effect.sync(() => {
@@ -685,6 +708,21 @@ export function composeMachineCommands(
           ),
         );
       });
+
+    /**
+     * An ask's wait that answers the call with `refusal` at once where the
+     * ask is withdrawn, as a gate shut on it or the quit withdraws it, so the
+     * agent hears back now rather than once the service gives up; a post
+     * that does not land in a few seconds is let go.
+     */
+    const withdrawnAs =
+      (id: string, refusal: MachineCommandRefusal) =>
+      <A>(wait: Effect.Effect<A>): Effect.Effect<A> =>
+        wait.pipe(
+          Effect.onInterrupt(() =>
+            settled(id, refusal).pipe(Effect.timeoutOption(WITHDRAWN_SETTLE), Effect.ignore),
+          ),
+        );
 
     /** The asks of any account but the one signed in, let go: their prompts come down, and their calls hear nothing from this Mac. */
     const withdrawOtherAccounts = Effect.gen(function* () {
@@ -719,17 +757,19 @@ export function composeMachineCommands(
     /**
      * One claimed command as the setting now says: run, or under Ask every
      * time, a shell command run only once the developer allows it, and
-     * answered as declined or unanswered otherwise. The command's own
-     * timeout is one deadline from the claim, over the wait for the answer
-     * and the run together, so a command allowed late runs in what is left
-     * of it, because the service waits for the result only that long past
-     * queueing and a result after that is lost. Note that the wait for the
-     * answer is interruptible inside the claim's uninterruptible region,
-     * because a gate shut meanwhile, or the quit, must not hold on a prompt
-     * nobody will answer; the service answers the call on its own clock
-     * then. An Always allow the setting could not keep still runs the
-     * command, which the developer allowed, and is reported, since the next
-     * command asks again.
+     * answered as declined, with the words they gave, or unanswered
+     * otherwise. One deadline from the claim stands over the ask and the run
+     * together, the ask's window (`machineAskSeconds`) and then the
+     * command's own timeout, which the service waits out past queueing, so
+     * the ask closes in time to leave the run the whole of its timeout
+     * however late it is allowed. Note that the wait for the answer is
+     * interruptible inside the claim's uninterruptible region, because a
+     * gate shut meanwhile, or the quit, must not hold on a prompt nobody
+     * will answer; an ask withdrawn so answers the call as unanswered at
+     * once (`withdrawnAs`), rather than leave it to the service's clock. An
+     * Always allow the setting could not keep still runs the command, which
+     * the developer allowed, and is reported, since the next command asks
+     * again.
      */
     const decided = (command: MachineCommandRead, userId: string) =>
       Effect.gen(function* () {
@@ -745,21 +785,27 @@ export function composeMachineCommands(
           return yield* run(command);
         }
 
+        const runs = Duration.toMillis(Duration.seconds(command.timeoutSeconds));
+
         const deadline =
           (yield* Clock.currentTimeMillis) +
-          Duration.toMillis(Duration.seconds(command.timeoutSeconds));
+          Duration.toMillis(Duration.seconds(machineAskSeconds(command.timeoutSeconds))) +
+          runs;
 
-        const decision = yield* Effect.interruptible(
+        const answer = yield* Effect.interruptible(
           consent(
-            { id: command.id, command: command.command, askedAt: kernel.now() },
+            (times) => ({ id: command.id, command: command.command, ...times }),
             userId,
-            deadline,
+            deadline - runs,
           ),
-        );
+        ).pipe(withdrawnAs(command.id, UNANSWERED));
 
-        if (decision === undefined) return yield* settled(command.id, UNANSWERED);
+        if (answer === undefined) return yield* settled(command.id, UNANSWERED);
+        const { decision, note } = answer;
 
-        if (decision === MACHINE_COMMAND_DECISION.DENY) return yield* settled(command.id, DECLINED);
+        if (decision === MACHINE_COMMAND_DECISION.DENY) {
+          return yield* settled(command.id, declinedWith(DECLINED, note));
+        }
 
         if (dependencies.accountId() !== userId) return yield* settled(command.id, ACCOUNT_CHANGED);
 
@@ -776,14 +822,14 @@ export function composeMachineCommands(
     /**
      * Whether the agent may use the app its action names: the app named by
      * the helper, launching nothing, then refused, allowed already, or asked
-     * about until `deadline`. Answers why not, or the app as the helper
+     * about until `closesAt`. Answers why not, or the app as the helper
      * named it where it may, with the pin that holds the action to it.
      */
     const appAllowed = (
       use: MacComputerUse,
       command: MacComputerCommand & { readonly action: { readonly app: string } },
       userId: string,
-      deadline: number,
+      closesAt: number,
     ): Effect.Effect<
       MachineCommandRefusal | { readonly app: ComputerApp; readonly pin: PinnedApp }
     > =>
@@ -816,21 +862,24 @@ export function composeMachineCommands(
           return { app, pin };
         }
 
-        const asked: MacAppAsk = {
+        const asked = {
           id: command.id,
           app: {
             name: app.name,
             ...(app.bundleId === undefined ? undefined : { bundleId: app.bundleId }),
             ...(app.iconPng === undefined ? undefined : { iconPng: app.iconPng }),
           },
-          askedAt: kernel.now(),
+          ...(command.agentId === undefined ? undefined : { agentId: command.agentId }),
         };
 
-        const decision = yield* Effect.interruptible(consent(asked, userId, deadline));
+        const answer = yield* Effect.interruptible(
+          consent((times) => ({ ...asked, ...times }), userId, closesAt),
+        ).pipe(withdrawnAs(command.id, APP_UNANSWERED));
 
-        if (decision === undefined) return APP_UNANSWERED;
+        if (answer === undefined) return APP_UNANSWERED;
+        const { decision, note } = answer;
 
-        if (decision === MACHINE_COMMAND_DECISION.DENY) return APP_DECLINED;
+        if (decision === MACHINE_COMMAND_DECISION.DENY) return declinedWith(APP_DECLINED, note);
 
         if (dependencies.accountId() !== userId) return ACCOUNT_CHANGED;
         // Note that an Always allow the settings kept is held by them alone, so a Remove in Settings takes it back; one they could not keep holds for this conversation, as Allow once does.
@@ -883,19 +932,20 @@ export function composeMachineCommands(
      * use no apps here, refused at once, naming them, where the Mac lacks a
      * grant the action needs, so neither the developer nor the agent waits
      * on an action that cannot run; the app allowed or asked about where the
-     * action names one, and run through the helper in what is left of the command's own
-     * timeout from the claim, on the same terms as a shell command allowed
-     * late.
+     * action names one, and run through the helper within the command's own
+     * timeout, on the same terms as a shell command allowed late.
      */
     const used = (command: MacComputerCommand, userId: string) =>
       Effect.gen(function* () {
         if (computer === undefined) return yield* settled(command.id, CANNOT_RUN);
 
         if (!(yield* computer.enabled)) return yield* settled(command.id, APPS_SWITCHED_OFF);
+        const runs = Duration.toMillis(Duration.seconds(command.timeoutSeconds));
 
         const deadline =
           (yield* Clock.currentTimeMillis) +
-          Duration.toMillis(Duration.seconds(command.timeoutSeconds));
+          Duration.toMillis(Duration.seconds(machineAskSeconds(command.timeoutSeconds))) +
+          runs;
 
         const { action } = command;
         const owner: RecordingOwner = { userId, conversationId: command.conversationId };
@@ -916,7 +966,12 @@ export function composeMachineCommands(
 
         // Note that only an action that names an app asks about it, since listing the apps and stopping a recording act on none.
         if ("app" in action) {
-          const allowed = yield* appAllowed(computer, { ...command, action }, userId, deadline);
+          const allowed = yield* appAllowed(
+            computer,
+            { ...command, action },
+            userId,
+            deadline - runs,
+          );
 
           if ("refused" in allowed) return yield* settled(command.id, allowed);
           app = allowed.app;
@@ -941,7 +996,12 @@ export function composeMachineCommands(
         // Note that the cursor is the agent's from the moment its action is handed to the helper, since the action may move it though it then fails.
         if (!STILL_CURSOR.has(action.op)) yield* heldBy({ userId, agentId: command.agentId });
 
-        const answer = yield* computer.helper.ask(request, Duration.millis(left), stillLet);
+        // Note that the action gets its own time to run and no more, which is all that is left of the deadline only where it was allowed late.
+        const answer = yield* computer.helper.ask(
+          request,
+          Duration.millis(Math.min(runs, left)),
+          stillLet,
+        );
 
         if ("recording" in answer)
           return yield* settled(command.id, yield* posted(command.id, answer.recording));
@@ -1221,6 +1281,18 @@ export function composeMachineCommands(
         const here = yield* device.settings;
 
         if (standing?.userId === userId) {
+          // Note that a say heard from the service that Settings refused is written again before anything goes up, since this Mac's own then is no edit of the developer's but the one the service's replaced.
+          if (standing.pending !== undefined) {
+            if (
+              sameSettings(here, standing.pending) ||
+              (yield* device.applySettings(standing.pending))
+            ) {
+              return yield* SubscriptionRef.set(joined, { ...standing, pending: undefined });
+            }
+
+            return yield* Effect.sleep(DEVICE_LOOK_EVERY);
+          }
+
           if (sameSettings(here, standing.settings)) return;
           const saved = yield* asked(client.saveDeviceSettings(standing.deviceId, here));
 
@@ -1271,23 +1343,31 @@ export function composeMachineCommands(
      * made on another device or the web reaches this Mac without joining
      * again. It runs in turn with the looks (`reconciled`), never beside
      * one, so a look never carries this Mac's say up over the service's
-     * between the two. Note that a write Settings refused leaves this Mac's
-     * own say to differ from the one held, which the next look carries up,
-     * so the two end the same either way.
+     * between the two. Note that a write Settings refused is held as
+     * pending, which the next look writes again rather than carrying this
+     * Mac's old say up over it, and that a say heard for an account no longer
+     * signed in is let go.
      */
     const heard = (device: MachineCommandsDevice, from: Joined, service: MachineDeviceSettings) =>
       Effect.gen(function* () {
         const standing = yield* SubscriptionRef.get(joined);
 
         if (
+          dependencies.accountId() !== from.userId ||
           standing?.userId !== from.userId ||
           standing.deviceId !== from.deviceId ||
-          sameSettings(standing.settings, service)
+          (sameSettings(standing.settings, service) && standing.pending === undefined)
         )
           return;
-        yield* SubscriptionRef.set(joined, { ...standing, settings: service });
 
-        if (!sameSettings(yield* device.settings, service)) yield* device.applySettings(service);
+        const taken =
+          sameSettings(yield* device.settings, service) || (yield* device.applySettings(service));
+
+        yield* SubscriptionRef.set(joined, {
+          ...standing,
+          settings: service,
+          pending: taken ? undefined : service,
+        });
       });
 
     /** Waits until the Mac no longer stands joined as the device it joined as for `from`'s account. */
@@ -1681,12 +1761,14 @@ export function composeMachineCommands(
 
     const acts: HostActTable<typeof MACHINE_COMMAND_ACTS> = {
       /** The developer's answer to one ask, by its id; one no longer waiting, answered or timed out, is answered all the same, since the prompt goes with it. */
-      MACHINE_COMMAND_ANSWER: ({ id, decision }) =>
+      MACHINE_COMMAND_ANSWER: ({ id, decision, note }) =>
         Effect.gen(function* () {
           const held = asks.get(id);
 
           if (held === undefined) return;
-          yield* Deferred.succeed(held.decided, decision);
+          // Note that words are kept only with a denial, since an Allow hands the agent nothing to read.
+          const denied = decision === MACHINE_COMMAND_DECISION.DENY && note !== undefined;
+          yield* Deferred.succeed(held.decided, denied ? { decision, note } : { decision });
         }),
       /** Computer use as Settings shows it: the Mac's grants, and the apps agents use without asking. */
       COMPUTER_USE_STATUS: () =>

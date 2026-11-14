@@ -119,7 +119,7 @@ test("a signed-out Workspace page says to sign in rather than drawing nothing", 
   assert.equal(container.textContent, "Sign in to use this page.");
 });
 
-test("This Mac says under Ask every time where macOS refused Vespin's last notification, and opens System Settings", () => {
+test("This Mac's Permissions say where macOS refused Vespin's notifications, and open System Settings", () => {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -140,13 +140,15 @@ test("This Mac says under Ask every time where macOS refused Vespin's last notif
       ),
     );
 
-    return container.textContent ?? "";
+    const row = [...container.querySelectorAll(".ui-settings-row")].find(
+      (each) => each.textContent?.startsWith("Notifications") ?? false,
+    );
+
+    return row?.textContent ?? "";
   };
 
-  const offLine = "macOS has notifications off for Vespin";
-
-  assert.equal(drawn(NOTIFICATIONS_STATUS.ON).includes(offLine), false);
-  assert.equal(drawn(NOTIFICATIONS_STATUS.OFF).includes(offLine), true);
+  assert.equal(drawn(NOTIFICATIONS_STATUS.ON).includes("Not allowed"), false);
+  assert.equal(drawn(NOTIFICATIONS_STATUS.OFF).includes("Not allowed"), true);
 
   const open = [...container.querySelectorAll("button")].find(
     (button) => button.textContent === "Open System Settings",

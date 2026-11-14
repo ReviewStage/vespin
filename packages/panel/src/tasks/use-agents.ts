@@ -36,6 +36,7 @@ import type { TranscriptReader } from "@repo/features/transcript-copy";
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActPayload } from "@repo/host/contract";
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import { EXPERIMENT } from "@repo/settings";
 import { STATUS_TONE } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
@@ -75,7 +76,7 @@ import { modelsRetryMutation } from "../live-reads.js";
 import type { RenameTerms } from "../rename-write.js";
 import { rendererFork } from "../renderer-runtime.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
-import { type TaskListCollections, useTaskListCollections } from "../task-list-collections.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import {
   type LocalWrite,

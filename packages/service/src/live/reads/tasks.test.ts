@@ -36,6 +36,8 @@ import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { TOPIC } from "@repo/database/sync/notification";
+import { taskSync } from "@repo/database/sync/tables";
 import {
   DEVICE_LAYOUT,
   getTestDB,
@@ -61,7 +63,14 @@ import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { agentsOfTask, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import {
   agentPullRequestsOfLiveRows,
+  PERSON_PAGE_READ,
+  PERSON_PAGE_TASKS,
+  SETTLED_PAGE_SIZE,
+  type SettledPageCursor,
+  settledPageCursorOf,
   TASK_LIST_READ,
+  TASK_PAGE_READ,
+  TASK_RELATIONS_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_READ,
   taskAgentPinsOfLiveRows,
@@ -84,7 +93,7 @@ import {
   TURN_STATUS,
   type TurnStatus,
 } from "@repo/wire";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { Clock, Duration, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
@@ -93,7 +102,15 @@ import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/code
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
 import { withTaskAgents } from "../../agents/task-agents.js";
 import { TURN_FAILURE } from "../../core.js";
-import { taskRowsRead, taskSearchRead, tasksRead } from "./tasks.js";
+import type { SyncMoved } from "../../sync/live-query.js";
+import {
+  personPageRead,
+  taskPageRead,
+  taskRelationsRead,
+  taskRowsRead,
+  taskSearchRead,
+  tasksRead,
+} from "./tasks.js";
 
 /**
  * The plan list's live statements against the held read it stands in for:
@@ -235,6 +252,22 @@ const taskRowsOf = (userId: string, id: string) =>
     };
   });
 
+/** The tasks related to the task `id` names and their agents, as its relations' read delivers them to the account, decoded as the desktop decodes them. */
+const relatedOf = (userId: string, id: string) =>
+  Effect.gen(function* () {
+    const statements = Option.getOrThrow(taskRelationsRead.statements({ userId, id }));
+
+    const rows = yield* Schema.decodeUnknownEffect(TASK_RELATIONS_READ.rows)({
+      plans: yield* runLive(statements.plans),
+      agents: yield* runLive(statements.agents),
+    });
+
+    return {
+      plans: rows.plans.map((plan) => plan.id).toSorted(),
+      agents: rows.agents.map((agent) => agent.id).toSorted(),
+    };
+  });
+
 /** The tasks and agents a search delivers to the account, decoded as the desktop decodes them. */
 const searchedOf = (userId: string, query: string) =>
   Effect.gen(function* () {
@@ -246,6 +279,56 @@ const searchedOf = (userId: string, query: string) =>
     });
 
     return {
+      plans: rows.plans.map((plan) => plan.id).toSorted(),
+      agents: rows.agents.map((agent) => agent.id).toSorted(),
+    };
+  });
+
+/** One page of the workspace's settled tasks the account reads past `before`, decoded as the desktop decodes them: its tasks in the order a reader lists them, newest finished first, their names, its agents, and the cursor the next page reads past. */
+const settledPageOf = (userId: string, workspaceId: string, before?: SettledPageCursor) =>
+  Effect.gen(function* () {
+    const statements = Option.getOrThrow(
+      taskPageRead.statements({
+        userId,
+        workspaceId,
+        beforeAt: before === undefined ? "" : String(before.finishedAt),
+        beforeId: before?.taskId ?? "",
+      }),
+    );
+
+    const rows = yield* Schema.decodeUnknownEffect(TASK_PAGE_READ.rows)({
+      plans: yield* runLive(statements.plans),
+      agents: yield* runLive(statements.agents),
+    });
+
+    const plans = rows.plans.toSorted(
+      (a, b) =>
+        (b.completedAt ?? b.updatedAt) - (a.completedAt ?? a.updatedAt) || (a.id < b.id ? 1 : -1),
+    );
+
+    return {
+      plans: plans.map((plan) => plan.id),
+      names: plans.map((plan) => plan.name),
+      agents: rows.agents.map((agent) => agent.id).toSorted(),
+      next: settledPageCursorOf(rows.plans),
+    };
+  });
+
+/** A person's page in the workspace as the account reads it, decoded as the desktop decodes it: the counts, then the page's tasks and agents by id. */
+const personPageOf = (userId: string, workspaceId: string, personId: string) =>
+  Effect.gen(function* () {
+    const statements = Option.getOrThrow(
+      personPageRead.statements({ userId, workspaceId, personId }),
+    );
+
+    const rows = yield* Schema.decodeUnknownEffect(PERSON_PAGE_READ.rows)({
+      counts: yield* runLive(statements.counts),
+      plans: yield* runLive(statements.plans),
+      agents: yield* runLive(statements.agents),
+    });
+
+    return {
+      counts: rows.counts.map(({ assigned, created, agents }) => ({ assigned, created, agents })),
       plans: rows.plans.map((plan) => plan.id).toSorted(),
       agents: rows.agents.map((agent) => agent.id).toSorted(),
     };
@@ -325,16 +408,35 @@ function countedOf(plan: HeldTaskSummary): TaskSummary {
   return { ...rest, agents: counts };
 }
 
-/** The held list with each plan's followers as the store reads them, which the held read leaves to the live one. */
+/** Each listed task's direct children among `tasks`, the finished ones apart, by the parent's id, as the live row counts them over the tasks its reader reaches. */
+function subTasksAmong(
+  tasks: readonly { readonly parentTaskId?: string; readonly status?: string }[],
+): ReadonlyMap<string, { readonly finished: number; readonly total: number }> {
+  const counts = new Map<string, { finished: number; total: number }>();
+
+  for (const { parentTaskId, status } of tasks) {
+    if (parentTaskId === undefined) continue;
+    const count = counts.get(parentTaskId) ?? { finished: 0, total: 0 };
+    count.total += 1;
+    count.finished += status === TASK_STATUS.DONE || status === TASK_STATUS.CANCELED ? 1 : 0;
+    counts.set(parentTaskId, count);
+  }
+
+  return counts;
+}
+
+/** The held list with each plan's followers as the store reads them, which the held read leaves to the live one, and its sub-tasks counted over the held list itself, which the held read carries no count of. */
 const heldList = (userId: string) =>
   Effect.gen(function* () {
     const tasks = yield* listTasks(userId);
     const ids = tasks.map((each) => each.id);
     const followers = yield* listTasksFollowersNamed(userId, ids);
+    const subTasks = subTasksAmong(tasks);
 
     return {
       plans: (yield* withTaskAgents(userId, tasks)).map((plan) => ({
         ...countedOf(plan),
+        ...(subTasks.has(plan.id) ? { subTasks: subTasks.get(plan.id) } : undefined),
         followers: (followers.get(plan.id) ?? []).map(({ userId, assignee, machines }) => ({
           userId,
           assignee,
@@ -453,6 +555,34 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         ]);
         assert.deepEqual(yield* pinsOf(owner), []);
         assert.deepEqual(yield* pinsOf(outsider), []);
+      }),
+  );
+
+  it.effect(
+    "follow a task the reader pinned, and the task of an agent it pinned, however long ago it was done",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const pinned = yield* startTask(owner, { name: "Teammate invitations" });
+        const ofAgent = yield* startTask(owner, { name: "Billing export" });
+        const agent = yield* openAgent(owner, { taskId: ofAgent.id }, 60_000);
+        yield* updateTask(owner, pinned.id, { pinned: true });
+        yield* pinAgent(owner, agent.id, true);
+        // Both were finished a year before the list is read, well past any recent window.
+        const db = yield* Database;
+        const yearAgo = new Date(NOW - Duration.toMillis(Duration.days(365)));
+        yield* db
+          .update(task)
+          .set({ status: TASK_STATUS.DONE, completedAt: yearAgo, updatedAt: yearAgo })
+          .where(inArray(task.id, [pinned.id, ofAgent.id]));
+
+        const followedBy = (reader: string) =>
+          Effect.map(liveRowsOf(reader), (rows) => rows.plans.map((plan) => plan.id).toSorted());
+
+        assert.deepEqual(yield* followedBy(owner), [pinned.id, ofAgent.id].toSorted());
+        assert.deepEqual(yield* followedBy(outsider), [], "no other account's list holds them");
       }),
   );
 
@@ -1022,6 +1152,37 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
+    "deliver a task's sub-tasks, parent, and blocks with their agents, to a member and to no one else",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const plan = yield* startTask(owner, { name: "Teammate invitations" });
+        const parent = yield* startTask(owner, { name: "Onboarding" });
+        const child = yield* startTask(owner, { name: "Invitation emails" });
+        const blocker = yield* startTask(owner, { name: "Invitation links" });
+        const blocked = yield* startTask(owner, { name: "Seat billing" });
+        yield* startTask(owner, { name: "Billing export" });
+        yield* joinWorkspace(plan.workspaceId, teammate);
+        yield* db.update(task).set({ parentTaskId: parent.id }).where(eq(task.id, plan.id));
+        yield* db.update(task).set({ parentTaskId: plan.id }).where(eq(task.id, child.id));
+        yield* addTaskBlock(owner, { blockerTaskId: blocker.id, blockedTaskId: plan.id });
+        yield* addTaskBlock(owner, { blockerTaskId: plan.id, blockedTaskId: blocked.id });
+        const agent = yield* openAgent(owner, { taskId: child.id }, 30_000);
+        yield* openAgent(owner, { taskId: plan.id }, 30_000);
+
+        assert.deepEqual(yield* relatedOf(teammate, plan.id), {
+          plans: [parent.id, child.id, blocker.id, blocked.id].toSorted(),
+          agents: [agent.id],
+        });
+        assert.deepEqual(yield* relatedOf(outsider, plan.id), { plans: [], agents: [] });
+      }),
+  );
+
+  it.effect(
     "find a task by every word of its name or by its key, with its agents, for a member and no one else",
     () =>
       Effect.gen(function* () {
@@ -1049,6 +1210,239 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           agents: [],
         });
         assert.deepEqual(yield* searchedOf(outsider, "invitations"), { plans: [], agents: [] });
+      }),
+  );
+
+  it.effect(
+    "page a workspace's settled tasks, newest finished first, past the cursor, to a member and to no one else",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const open = yield* startTask(owner, { name: "Teammate invitations" });
+        const elsewhere = yield* startTask(outsider, { name: "Billing export" });
+        const { workspaceId } = open;
+        yield* joinWorkspace(workspaceId, teammate);
+
+        // Two more settled tasks than a page holds, a minute apart, the newest first; the last two finished in the same millisecond, and the one before kept no finish, so its last save stands for it.
+        const finished = Array.from({ length: SETTLED_PAGE_SIZE + 2 }, (_, index) => ({
+          id: randomUUID(),
+          at: new Date(NOW - (Math.min(index, SETTLED_PAGE_SIZE) + 1) * 60_000),
+          index,
+        }));
+
+        yield* db.insert(task).values(
+          finished.map(({ id, at, index }) => ({
+            id,
+            organizationId: workspaceId,
+            userId: owner,
+            name: `Shipped ${index}`,
+            number: 1000 + index,
+            description: "",
+            status: index % 2 === 0 ? TASK_STATUS.DONE : TASK_STATUS.CANCELED,
+            completedAt: index === SETTLED_PAGE_SIZE - 1 ? null : at,
+            updatedAt: at,
+          })),
+        );
+
+        yield* db
+          .update(task)
+          .set({ status: TASK_STATUS.DONE, completedAt: new Date(NOW) })
+          .where(eq(task.id, elsewhere.id));
+
+        const first = finished[0]?.id ?? "";
+        const agent = yield* openAgent(owner, { taskId: first }, 30_000);
+        // Note that the two finished in one millisecond stand by id, the greater first.
+        const tied = finished.slice(SETTLED_PAGE_SIZE).toSorted((a, b) => (a.id < b.id ? 1 : -1));
+        const order = [...finished.slice(0, SETTLED_PAGE_SIZE), ...tied].map(({ id }) => id);
+
+        const page = yield* settledPageOf(teammate, workspaceId);
+        assert.deepEqual(page.plans, order.slice(0, SETTLED_PAGE_SIZE));
+        assert.deepEqual(page.agents, [agent.id]);
+        assert.notEqual(page.next, undefined);
+
+        // A task of the first page reopened, and one of the next renamed, while the reader pages: the next page reads past where the first ended, the rename with it.
+        yield* updateTask(owner, first, { status: TASK_STATUS.TODO });
+        yield* updateTask(owner, order[SETTLED_PAGE_SIZE] ?? "", { name: "Shipped, renamed" });
+        const next = yield* settledPageOf(teammate, workspaceId, page.next);
+        assert.deepEqual(next.plans, order.slice(SETTLED_PAGE_SIZE));
+        assert.deepEqual(next.names[0], "Shipped, renamed");
+        assert.deepEqual(next.agents, []);
+        assert.equal(next.next, undefined);
+
+        const none = { plans: [], names: [], agents: [], next: undefined };
+        assert.deepEqual(yield* settledPageOf(outsider, workspaceId), none);
+        assert.deepEqual(yield* settledPageOf(outsider, workspaceId, page.next), none);
+      }),
+  );
+  it.effect(
+    "count a task's direct children the reader reaches, the finished apart, and send both parents of a child moved between them past a sync id to a member and no one else",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const parent = yield* startTask(owner, { name: "Teammate invitations" });
+        const other = yield* startTask(owner, { name: "Billing export" });
+        yield* joinWorkspace(parent.workspaceId, teammate);
+        const shipped = yield* startTask(owner, { name: "Invitation emails" });
+        const working = yield* startTask(owner, { name: "Invitation links" });
+        const hidden = yield* startTask(owner, { name: "Invitation audit" });
+        const grandchild = yield* startTask(owner, { name: "Link expiry" });
+        const db = yield* Database;
+
+        for (const child of [shipped, working, hidden]) {
+          yield* db.update(task).set({ parentTaskId: parent.id }).where(eq(task.id, child.id));
+        }
+
+        yield* db.update(task).set({ parentTaskId: working.id }).where(eq(task.id, grandchild.id));
+        yield* updateTask(owner, shipped.id, { status: TASK_STATUS.DONE });
+        // A child on its owner's own token, which the teammate does not reach, and so does not count.
+        yield* db
+          .update(task)
+          .set({ githubAccess: GITHUB_ACCESS.TOKEN, repository: "acme/side" })
+          .where(eq(task.id, hidden.id));
+
+        const countsOf = (reader: string) =>
+          Effect.map(liveListOf(reader, NOW), (list) =>
+            [parent, working, other].map(
+              ({ id }) => list.plans.find((plan) => plan.id === id)?.subTasks,
+            ),
+          );
+
+        assert.deepEqual(yield* countsOf(owner), [
+          { finished: 1, total: 3 },
+          { finished: 0, total: 1 },
+          undefined,
+        ]);
+        assert.deepEqual(yield* countsOf(teammate), [
+          { finished: 1, total: 2 },
+          { finished: 0, total: 1 },
+          undefined,
+        ]);
+        assert.deepEqual(yield* countsOf(outsider), [undefined, undefined, undefined]);
+
+        // The finished child moves to the other parent, which the log names as both of its parents (`TOPIC.TASK_PARENT`).
+        yield* db.update(task).set({ parentTaskId: other.id }).where(eq(task.id, shipped.id));
+
+        const moved: SyncMoved = {
+          keys: (table) => (table === taskSync ? [shipped.id] : []),
+          topics: (table, kind) =>
+            table === taskSync && kind === TOPIC.TASK_PARENT ? [parent.id, other.id] : [],
+        };
+
+        const { delta } = tasksRead;
+        assert.ok(delta !== undefined, "the list answers deltas");
+        const statements = Option.getOrThrow(delta.statements({ userId: teammate }, moved));
+
+        const rows = yield* Schema.decodeUnknownEffect(
+          Schema.Array(TASK_LIST_READ.parts.plans.row),
+        )(yield* runLive(statements.plans));
+
+        assert.deepEqual(
+          rows
+            .map(({ id, subTaskCount, finishedSubTaskCount }) => ({
+              id,
+              subTaskCount,
+              finishedSubTaskCount,
+            }))
+            .toSorted((a, b) => a.id.localeCompare(b.id)),
+          [
+            { id: parent.id, subTaskCount: 1, finishedSubTaskCount: 0 },
+            { id: other.id, subTaskCount: 1, finishedSubTaskCount: 1 },
+            { id: shipped.id, subTaskCount: 0, finishedSubTaskCount: 0 },
+          ].toSorted((a, b) => a.id.localeCompare(b.id)),
+          "the child and both its parents are sent, each counted anew",
+        );
+      }),
+  );
+
+  it.effect(
+    "count a person's tasks and agents and page the newest of them, to a member and to no one else",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const owner = yield* openUser;
+        const person = yield* openUser;
+        const reader = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const unrelated = yield* startTask(owner, { name: "Teammate invitations" });
+        const { workspaceId } = unrelated;
+        yield* joinWorkspace(workspaceId, person);
+        yield* joinWorkspace(workspaceId, reader);
+
+        /** A task of the workspace, saved `minutes` before the list is read. */
+        const row = (
+          name: string,
+          minutes: number,
+          made: { readonly by: string; readonly to: string | null },
+        ) => ({
+          id: randomUUID(),
+          organizationId: workspaceId,
+          userId: made.by,
+          assigneeId: made.to,
+          name,
+          number: 2000 + minutes,
+          description: "",
+          status: TASK_STATUS.TODO,
+          updatedAt: new Date(NOW - minutes * 60_000),
+        });
+
+        // Two more tasks assigned to them than a page holds, the oldest of them Done; one of them they created themselves, which counts as assigned alone.
+        const assigned = Array.from({ length: PERSON_PAGE_TASKS + 2 }, (_, index) =>
+          row(`Assigned ${index}`, index + 1, { by: owner, to: person }),
+        );
+
+        const own = row("Their own", 30, { by: person, to: person });
+
+        const created = [
+          row("Handed over", 40, { by: person, to: owner }),
+          row("Unassigned", 50, { by: person, to: null }),
+        ];
+
+        const oldest = assigned.at(-1);
+
+        yield* db
+          .insert(task)
+          .values([
+            ...assigned.map((each) =>
+              each === oldest
+                ? { ...each, status: TASK_STATUS.DONE, completedAt: each.updatedAt }
+                : each,
+            ),
+            own,
+            ...created,
+          ]);
+
+        // Their agent on the oldest assigned task, past the page's tasks, their archived one, and the owner's beside it.
+        const theirs = yield* openAgent(person, { taskId: oldest?.id ?? "" }, 60_000);
+        const archived = yield* openAgent(person, { taskId: own.id }, 90_000);
+        yield* db
+          .update(agentTable)
+          .set({ archivedAt: new Date(NOW) })
+          .where(eq(agentTable.id, archived.id));
+        const owners = yield* openAgent(owner, { taskId: oldest?.id ?? "" }, 30_000);
+
+        assert.deepEqual(yield* personPageOf(reader, workspaceId, person), {
+          counts: [{ assigned: PERSON_PAGE_TASKS + 3, created: 2, agents: 1 }],
+          plans: [
+            ...assigned.slice(0, PERSON_PAGE_TASKS).map(({ id }) => id),
+            ...created.map(({ id }) => id),
+            oldest?.id ?? "",
+          ].toSorted(),
+          agents: [theirs.id, owners.id].toSorted(),
+        });
+
+        assert.deepEqual(yield* personPageOf(outsider, workspaceId, person), {
+          counts: [{ assigned: 0, created: 0, agents: 0 }],
+          plans: [],
+          agents: [],
+        });
       }),
   );
 });
