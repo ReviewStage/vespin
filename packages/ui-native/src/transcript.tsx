@@ -6,11 +6,13 @@ import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
-import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type AccessibilityActionEvent,
+  AccessibilityInfo,
   ActivityIndicator,
   FlatList,
+  type HostInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   ScrollView,
@@ -274,12 +276,23 @@ function CallRow({
   item,
   held,
   onToggle,
+  revealed,
 }: {
   readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.CALL }>;
   /** The answer the agent holds the call for, where it does. */
   readonly held: HeldCall | undefined;
   readonly onToggle: (item: TranscriptItem) => void;
+  readonly revealed: RevealedCall | undefined;
 }) {
+  const press = useRef<HostInstance>(null);
+  const asked = revealed?.reveal.callId === item.callId ? revealed.reveal.serial : undefined;
+
+  // Note that a reader sent to this call, as the composer's line about a waiting approval sends them, lands on it: the list only scrolls, and VoiceOver's focus would otherwise stay on the composer, the whole transcript between it and the call's Deny and Allow.
+  useEffect(() => {
+    if (asked === undefined || press.current === null || revealed?.claim(asked) !== true) return;
+    AccessibilityInfo.sendAccessibilityEvent(press.current, "focus");
+  }, [asked, revealed]);
+
   const colors = useColors();
   const large = useAccessibilitySize();
   // Note that at an accessibility size the line's words wrap rather than cut to a word or two.
@@ -291,6 +304,7 @@ function CallRow({
   return (
     <View style={[styles.row, inset(item.depth)]}>
       <Press
+        ref={press}
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
@@ -549,6 +563,15 @@ interface RowDrawing {
   readonly suggestion?:
     | ((link: ReplyButtonLink, words: string) => SuggestionLook | undefined)
     | undefined;
+  /** The call's row last asked into view, which takes VoiceOver's focus once it stands, so a reader sent to it lands on it. */
+  readonly revealed?: RevealedCall | undefined;
+}
+
+/** The call last asked into view, and the one claim on its focus, so a row drawn anew as it scrolls takes the focus once. */
+interface RevealedCall {
+  readonly reveal: TranscriptReveal;
+  /** Whether this row may take the focus now: true once per ask. */
+  readonly claim: (serial: number) => boolean;
 }
 
 /** A pull request an agent opened, as the transcript lists it. */
@@ -573,7 +596,10 @@ function TranscriptRow({
             <OriginFrom parts={item.from} onOpenLink={drawing.onOpenLink} />
           )}
           {item.sender === undefined ? null : (
-            <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}>
+            <Text
+              accessibilityRole="header"
+              style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}
+            >
               {item.sender}
             </Text>
           )}
@@ -639,7 +665,12 @@ function TranscriptRow({
       );
     case TRANSCRIPT_ITEM.CALL:
       return (
-        <CallRow item={item} held={drawing.heldCall?.(item.callId)} onToggle={drawing.onToggle} />
+        <CallRow
+          item={item}
+          held={drawing.heldCall?.(item.callId)}
+          onToggle={drawing.onToggle}
+          revealed={drawing.revealed}
+        />
       );
     case TRANSCRIPT_ITEM.FOLD:
       return <FoldRow item={item} onToggle={drawing.onToggle} />;
@@ -958,7 +989,23 @@ export function AgentTranscript({
   // The list's own width, so a wide window's rows stand centered within the reading width rather than across it.
   const [width, setWidth] = useState(0);
   const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
-  const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
+  // The ask whose focus a row has taken, so the row the list draws anew as it scrolls takes it once.
+  const focused = useRef<number | undefined>(undefined);
+
+  const claim = useCallback((serial: number) => {
+    if (focused.current === serial) return false;
+
+    focused.current = serial;
+
+    return true;
+  }, []);
+
+  const revealed = useMemo(
+    () => (reveal === undefined ? undefined : { reveal, claim }),
+    [reveal, claim],
+  );
+
+  const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now(), revealed };
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
   const foot = bottom + TAB_BAR_ROOM + useDockRoom();
 
