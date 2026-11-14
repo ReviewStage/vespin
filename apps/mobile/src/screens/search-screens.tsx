@@ -32,6 +32,7 @@ import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
+import { lowerKeyboard } from "../native-interactions-module.js";
 import { useHandColumns } from "../place-columns.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { useRefilledSearchField } from "../search-field.js";
@@ -180,7 +181,10 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
   const open = (id: string) => {
     const route = routes.get(id);
 
-    if (route !== undefined) router.push(onTab(route));
+    if (route === undefined) return;
+    // Note that a pick lowers the keyboard the query raised, as Mail and Notes do, since a split view's field keeps its focus while the pick opens beside it.
+    lowerKeyboard();
+    router.push(onTab(route));
   };
 
   const shown = scopedFound(found, scope);
