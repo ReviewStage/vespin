@@ -1688,11 +1688,16 @@ function stagedComments(
 
   if (staged !== undefined) return staged;
 
+  // Note that a thread a fixture run started stands after the staged ones, as the host drew it, so the new comment's thread opens on its page.
+  const started = (held[COMMENT_SUBJECT.DESCRIPTION][TASK.INVITES]?.rows ?? []).filter(
+    (thread) => !INVITES_THREADS.some((each) => each.id === thread.id),
+  );
+
   const laid = {
     ...held,
     [COMMENT_SUBJECT.DESCRIPTION]: {
       ...held[COMMENT_SUBJECT.DESCRIPTION],
-      [TASK.INVITES]: { rows: INVITES_THREADS },
+      [TASK.INVITES]: { rows: [...INVITES_THREADS, ...started] },
     },
   };
 
@@ -2496,6 +2501,37 @@ const ANSWERS: StagedAnswers = {
   // Note that a rename and a delete are taken as the service takes them, though nothing here moves, so the window draws its own write.
   [ACT_KIND.TASKS_RENAME]: () => true,
   [ACT_KIND.TASKS_DELETE]: () => true,
+  // Note that a new comment on the invites task's description is taken as the service takes one, answered with its thread under the id the window chose, so a flow sees the thread open with the words as its first comment.
+  [ACT_KIND.TASKS_COMMENT_START]: ({ planId, start }) => {
+    if (planId !== TASK.INVITES || !("scope" in start)) {
+      return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
+    }
+
+    const at = Date.now();
+
+    const thread: DescriptionCommentThread = {
+      id: start.id ?? fixtureId(307),
+      scope: start.scope,
+      quote: start.quote,
+      anchor: start.anchor,
+      section: "Goal",
+      status: DESCRIPTION_COMMENT_STATUS.OPEN,
+      entries: [
+        {
+          id: fixtureId(308),
+          kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+          writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+          words: start.words,
+          at,
+        },
+      ],
+      createdAt: at,
+      updatedAt: at,
+      revision: 1,
+    };
+
+    return { thread };
+  },
   // Note that a reply is taken as the service takes one, answered with its thread as it then stands, though nothing here moves.
   [ACT_KIND.TASKS_COMMENT_ACT]: ({ planId, threadId, action }) => {
     const thread = INVITES_THREADS.find((each) => each.id === threadId);

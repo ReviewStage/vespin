@@ -1,4 +1,4 @@
-# description-comment.yaml -- a task's description drawn block by block, a block's count of the open comment threads on it, and a long press on a block offering Comment, which opens a new thread on that block with its words quoted and the comment field taking the keyboard.
+# description-comment.yaml -- a task's description drawn block by block, a block's count of the open comment threads on it, and a long press on a block offering Comment, which opens a new thread on that block with its words quoted and the comment field taking the keyboard; Send opens the thread at once with the words as its first comment.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -6,7 +6,7 @@ appId: dev.vespin.ios
 ---
 # Launched on the host's Inbox fixture, as `tasks.yaml` is, so Teammate
 # invitations holds its description and its comment threads and no server is
-# reached. Nothing is sent, since the fixture stages no comment start.
+# reached. The fixture answers a comment start on it with the new thread.
 - launchApp:
     clearState: true
     arguments:
@@ -34,6 +34,13 @@ appId: dev.vespin.ios
 - inputText: "Should this name the expiry?"
 - waitForAnimationToEnd
 - takeScreenshot: description-new-comment
+# Send opens the thread in the field's place as it goes, the words its first
+# comment, and the field is the thread's reply box.
+- tapOn: "Send"
+- assertVisible: "Should this name the expiry?"
+- assertNotVisible: "Add a comment"
+- waitForAnimationToEnd
+- takeScreenshot: description-comment-sent
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
