@@ -33,7 +33,7 @@ import {
   tint,
   toggleStyle,
 } from "@expo/ui/swift-ui/modifiers";
-import { CHOOSE_AN_ITEM_WORDS, FIELD_WORDS } from "@repo/features/words";
+import { FIELD_WORDS, SELECTION_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode } from "react";
 import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
@@ -316,8 +316,8 @@ function TypedFieldRow({
 /**
  * A select: its label and the system's menu picker on one row, the label
  * leading and the picker's value at its end, as a Form's picker row stands;
- * it reads "Choose" until an option is picked, the recommended option said
- * as such. Past the accessibility sizes the picker stands under its label at
+ * it reads "None" until an option is picked, as Settings' pickers do, the
+ * recommended option said as such. Past the accessibility sizes the picker stands under its label at
  * the leading edge, as a typed field stands under its name, since a long
  * value beside the label ran past the row.
  */
@@ -355,7 +355,7 @@ function SelectRow({
         ...(large ? [] : [fixedSize()]),
       ]}
     >
-      <Text modifiers={[tag("")]}>{CHOOSE_AN_ITEM_WORDS}</Text>
+      <Text modifiers={[tag("")]}>{SELECTION_WORDS.NONE}</Text>
       {(field.options ?? []).map((option) => (
         <Text key={option} modifiers={[tag(option)]}>
           {option === field.recommended ? `${option} (${recommendedWord})` : option}
