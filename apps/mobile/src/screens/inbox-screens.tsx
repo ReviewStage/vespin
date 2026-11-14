@@ -56,6 +56,7 @@ import {
   LIST_LOOK,
   type ListLook,
   ListRow,
+  type ListScopes,
   type MarkdownVideo,
   menuWithout,
   NoSelection,
@@ -173,6 +174,8 @@ type InboxRowsProps = {
   readonly onResolve: (item: InboxItem) => void;
   /** The list's Select mode, while it stands in one. */
   readonly choosing?: RowChoosing | undefined;
+  /** The Inbox's scopes, standing as the list's first row; none beside the app sidebar, where they stand as the bar's filter. */
+  readonly scopes?: ListScopes | undefined;
 };
 
 /**
@@ -194,6 +197,7 @@ function InboxRows({
   remindMenu,
   onResolve,
   choosing,
+  scopes,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
   const pictureOf = useMemberPictures();
@@ -205,6 +209,7 @@ function InboxRows({
       onSelect={onSelect}
       onRefresh={onRefresh}
       choosing={choosing}
+      scopes={scopes}
     >
       <InboxItemRows
         listed={listed}
@@ -1000,32 +1005,33 @@ function InboxStackList(words: InboxSearch) {
         </Stack.Toolbar>
       )}
       <Screen>
-        <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-          {listing.listed.length === 0 ? (
+        {listing.listed.length === 0 ? (
+          <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
             <InboxEmpty
               show={show}
               search={search}
               feed={listing.feed}
               onRetry={() => void acts.refresh()}
             />
-          ) : (
-            <InboxRows
-              look={LIST_LOOK.PLAIN}
-              listed={listing.listed}
-              readerId={listing.readerId}
-              onSelect={(id) =>
-                router.push(
-                  onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
-                )
-              }
-              onRefresh={acts.refresh}
-              onMark={acts.mark}
-              remindMenu={(item) => remind.menu([item])}
-              onResolve={acts.resolve}
-              choosing={choosing?.rows}
-            />
-          )}
-        </ScopePicker>
+          </ScopePicker>
+        ) : (
+          <InboxRows
+            scopes={{ label: SCOPE_LABEL, scopes }}
+            look={LIST_LOOK.PLAIN}
+            listed={listing.listed}
+            readerId={listing.readerId}
+            onSelect={(id) =>
+              router.push(
+                onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
+              )
+            }
+            onRefresh={acts.refresh}
+            onMark={acts.mark}
+            remindMenu={(item) => remind.menu([item])}
+            onResolve={acts.resolve}
+            choosing={choosing?.rows}
+          />
+        )}
       </Screen>
       {remind.sheet}
     </>
@@ -1068,6 +1074,7 @@ function InboxSplitScreen({
       />
     ) : (
       <InboxRows
+        scopes={threeColumns ? undefined : { label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
         look={LIST_LOOK.PLAIN}
         listed={listing.listed}
         readerId={listing.readerId}
@@ -1083,13 +1090,15 @@ function InboxSplitScreen({
 
   // Note that beside the app sidebar the scopes leave the list for Mail's filter button in its bar, so the list starts at its first thread; a two-column window keeps the menu picker over the list.
   const list = {
-    view: threeColumns ? (
-      rows
-    ) : (
-      <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
-        {rows}
-      </ScopePicker>
-    ),
+    // Note that a list with rows stands its scopes as its first row, so they scroll away with the rows, and one listing nothing keeps them over its empty state.
+    view:
+      threeColumns || listing.listed.length > 0 ? (
+        rows
+      ) : (
+        <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
+          {rows}
+        </ScopePicker>
+      ),
     // Note that Select mode names how many are chosen in the column's title, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
     bar:
       choosing === undefined
