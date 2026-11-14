@@ -38,7 +38,7 @@ builds a control of its own.
   answer's fields, and `AskNote` for what a send that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
-  merge under the checks in a regular window), `ConfirmAsk` (the question
+  merge under its heading), `ConfirmAsk` (the question
   an act asks first: the system's action sheet from the screen's foot in a
   compact window, its act first, and its alert in a regular one or where
   words must be typed), `WordsAsk` (the system's alert words are typed in,
@@ -282,12 +282,13 @@ navigation, tab bar, swipes, menus, sheets and glass.
   GitHub's color, the merge queue's in the attention ink with its place
   ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
   its checks and reviewers as rows, each glyph the panel's own
-  (`pull-request-look.ts`); and its acts in the bar, an act that
-  asks first asking in `ConfirmAsk`, but for the merge's press in a regular
-  window, whose bar folds it into More: it stands under the checks as a
-  large button as wide as its words (`MergeActRow`), as GitHub's own app
-  draws Merge, and as a split button where the repository merges more than
-  one way, its chevron choosing the way as the panel's merge box does.
+  (`pull-request-look.ts`); the merge's press under the heading in every
+  window, as the panel's head stands Merge under the title, a large button
+  as wide as its words (`MergeActRow`), and a split button where the
+  repository merges more than one way, its chevron choosing the way as the
+  panel's merge box does; and the rest of its acts in the bar's ⋯, an act
+  that asks first asking in `ConfirmAsk`. The bar holds no press of words,
+  which pushed the page's path out of a compact bar.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
   New task; a regular window's bar keeps its labels. A window wide enough
