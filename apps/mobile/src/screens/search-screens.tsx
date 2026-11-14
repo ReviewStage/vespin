@@ -15,7 +15,7 @@ import {
   scopedFound,
   searchPlaceholder,
 } from "@repo/features/search-found-model";
-import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
+import { CHOOSE_AN_ITEM_WORDS, readingWords } from "@repo/features/words";
 import {
   EmptyState,
   GLYPH,
@@ -49,6 +49,9 @@ import { StatusQuestionAsk, TaskAgentRow, TaskRows, useAgentArchiveAsk } from ".
 /** The Search tab's name, at its head. */
 const SEARCH_TITLE = "Search";
 
+/** What a search under Tasks or Agents says while the task list is still being read. */
+const READING_TASKS = readingWords("your tasks");
+
 /** What the scopes choose, heard by VoiceOver before the scope chosen. */
 const SCOPE_LABEL = "Show";
 
@@ -74,6 +77,21 @@ function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined
     ),
     ...found.agents.map(({ agent }) => [agent.id, iosAgentRoute(agent.id)] as const),
   ]);
+}
+
+/**
+ * What a scope's rows are still being read from, as the words its wait
+ * says, so it never says it found nothing before the lists it searches have
+ * answered: Inbox waits on the Inbox's first read, Tasks and Agents on the
+ * task list, which holds both, and All on either; none once they answered.
+ */
+function scopeReading(found: SearchFound, scope: SearchScope): string | undefined {
+  const inbox = scope !== SEARCH_SCOPE.TASKS && scope !== SEARCH_SCOPE.AGENTS;
+  const tasks = scope !== SEARCH_SCOPE.INBOX;
+
+  if (inbox && found.inboxReading) return READING_INBOX;
+
+  return tasks && found.tasksReading ? READING_TASKS : undefined;
 }
 
 /** The query and the scope, and how to change them, held by the tab's root screen above its two layouts. */
@@ -185,10 +203,7 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
 
   const shown = scopedFound(found, scope);
   const none = shown.tasks.length + shown.inbox.length + shown.agents.length === 0;
-
-  // Note that only a scope that lists Inbox items waits on the Inbox's first read; Tasks and Agents say they found nothing at once.
-  const inboxReading =
-    found.inboxReading && (scope === SEARCH_SCOPE.ALL || scope === SEARCH_SCOPE.INBOX);
+  const reading = scopeReading(found, scope);
 
   const scopes = SCOPES.map((each) => ({
     label: SEARCH_SCOPE_TITLE[each],
@@ -202,8 +217,8 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
       <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
     ) : (
       <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-        {none && inboxReading ? (
-          <EmptyState title={READING_INBOX} symbol={GLYPH.SEARCH} loading />
+        {none && reading !== undefined ? (
+          <EmptyState title={reading} symbol={GLYPH.SEARCH} loading />
         ) : none && found.current ? (
           <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
         ) : (

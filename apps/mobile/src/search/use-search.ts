@@ -19,6 +19,7 @@ import {
   taskSearchSubject,
 } from "@repo/features/search-found-model";
 import type { TaskSummary } from "@repo/features/task-wire";
+import { TASKS_READ } from "@repo/features/tasks-view";
 import { INBOX_FEED, selectTasks } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { useDeferredValue, useMemo } from "react";
@@ -32,6 +33,12 @@ import {
   useWaiting,
 } from "../tasks/use-tasks.js";
 
+/** Where a read of the task list stands. */
+type TasksRead = (typeof TASKS_READ)[keyof typeof TASKS_READ];
+
+/** Where the task list stands while its rows may still be coming: not yet asked, or asked and not yet answered. */
+const TASKS_STILL_READING: ReadonlySet<TasksRead> = new Set([TASKS_READ.IDLE, TASKS_READ.READING]);
+
 /** What a query finds: each kind's rows best first, the Tasks listing their rows are drawn and acted on through, and the reader the Inbox's rows are read for. */
 export interface SearchFound {
   readonly tasks: readonly TaskSummary[];
@@ -43,6 +50,8 @@ export interface SearchFound {
   readonly current: boolean;
   /** Whether the Inbox's first read is still out, so an Inbox item it would find may not be held yet. */
   readonly inboxReading: boolean;
+  /** Whether the task list, which holds the tasks and the agents on them, is still being read, so a task or an agent it would find may not be held yet. */
+  readonly tasksReading: boolean;
 }
 
 /**
@@ -81,6 +90,8 @@ export function useSearchFound(typed: string): SearchFound {
       listing,
       readerId: inbox.readerId,
       inboxReading: inbox.feed === INBOX_FEED.READING,
+      // Note that a list read from the phone's disk is still being read again, and a task or agent it would find may only come with that read.
+      tasksReading: view === undefined || TASKS_STILL_READING.has(view.listStatus),
     };
   }, [listing, inbox, view, workspace, waiting, query]);
 
