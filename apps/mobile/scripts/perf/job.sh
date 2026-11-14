@@ -13,7 +13,7 @@ git -C $R worktree remove --force $WT 2>/dev/null; rm -rf $WT; git -C $R worktre
 git -C $R worktree add -q --detach $WT origin/chore/probe-tap-timing || { echo "WORKTREE FAILED" >> $L; exit 1; }
 trap 'cd $HOME; git -C $R worktree remove --force $WT 2>/dev/null; rm -rf $WT; git -C $R worktree prune' EXIT
 cd $WT
-for ref in "$@"; do git -c user.name=perf -c user.email=perf@localhost merge -q --no-edit origin/${ref} >> $L 2>&1 || { git merge --abort 2>/dev/null; echo "MERGE FAILED ${ref}" >> $L; exit 1; }; done
+for ref in "$@"; do echo "merging ${ref} at $(git rev-parse --short origin/${ref})" >> $L; git -c user.name=perf -c user.email=perf@localhost merge -q --no-edit origin/${ref} >> $L 2>&1 || { git merge --abort 2>/dev/null; echo "MERGE FAILED ${ref}" >> $L; exit 1; }; done
 echo "built $(git rev-parse --short HEAD) = probe + $* (PROFILE=${PROFILE:-1})" >> $L
 pnpm install --frozen-lockfile --prefer-offline > $O/install.log 2>&1; echo "install $?" >> $L
 cd apps/mobile && rm -rf dist && env -u LC_ALL LANG=en_US.UTF-8 EXPO_NO_TELEMETRY=1 PERF_PROFILE=${PROFILE:-1} pnpm exec expo export --platform ios $([[ ${PROFILE:-1} == 1 ]] && echo --no-minify) --output-dir dist > $O/export.log 2>&1; echo "export $?" >> $L
