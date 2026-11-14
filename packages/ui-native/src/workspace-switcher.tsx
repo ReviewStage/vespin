@@ -31,7 +31,7 @@ import {
   presentationDragIndicator,
 } from "@expo/ui/swift-ui/modifiers";
 import { WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
-import { memo, type ReactNode, useState } from "react";
+import { memo, type ReactNode, useEffect, useState } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar } from "./marks.js";
@@ -63,9 +63,11 @@ export type SwitcherLook = (typeof SWITCHER_LOOK)[keyof typeof SWITCHER_LOOK];
 
 /** The heights the switcher's sheet stands at: half the screen first, then the whole, or the whole alone. */
 const SHEET_DETENTS = {
-  HALF_THEN_WHOLE: ["medium", "large"],
   WHOLE: ["large"],
 } as const;
+
+/** The room over the list's rows a sheet keeps for its grabber, which the rows' own reckoning leaves out. */
+const SHEET_GRABBER_ROOM = 24;
 
 /** How the switcher's list opens: a popover over its button, in a regular window such as an iPad's, or a sheet from the screen's foot, in a compact one such as an iPhone's, as Notion's switcher opens on each. Note that `@expo/ui`'s popover keeps itself a popover in a compact window too, so the caller says which the window takes. */
 export const SWITCHER_PRESENTATION = {
@@ -85,6 +87,8 @@ export type SwitcherAccount = {
   readonly name: string;
   /** The account's sign-in picture, which its row leads with; its letters where it has none. */
   readonly picture?: string | undefined;
+  /** The account's email address, which its row is named by where it has one, as Mail and Notes name an account, so it never reads as a personal workspace of the same name and face. */
+  readonly address?: string | undefined;
   readonly onPress: () => void;
 };
 
@@ -234,10 +238,9 @@ function SwitcherRow({
  * tile or photo, its name, and who shares it, the chosen one checked in
  * copper; then the acts, such as New workspace, and Workspace settings, in
  * the panel's two groups and its words (`workspaceMenuGroups`); and last,
- * where a caller hands one, the account by its photo and name, opening
- * Settings. Each row closes the list and says
- * what it does through `closed`, which runs a choice at once and an act that
- * opens a screen once the list has gone.
+ * where a caller hands one, the account by its photo and address, opening
+ * Settings. Each row closes the list and says what it does through
+ * `closed`, which runs it once the list has gone.
  */
 function SwitcherList({
   props,
@@ -245,7 +248,7 @@ function SwitcherList({
   onContentHeight,
 }: {
   readonly props: WorkspaceSwitcherProps;
-  readonly closed: (then: () => void, presents: boolean) => void;
+  readonly closed: (then: () => void) => void;
   /** Told the height its rows stand in, for the popover to fit them; none in a sheet. */
   readonly onContentHeight?: ((height: number) => void) | undefined;
 }) {
@@ -262,7 +265,7 @@ function SwitcherList({
             name={workspace.name}
             line={workspace.line}
             checked={workspace.id === chosen.id}
-            onPress={() => closed(() => onChoose(workspace.id), false)}
+            onPress={() => closed(() => onChoose(workspace.id))}
           />
         ))}
       </Section>
@@ -273,14 +276,14 @@ function SwitcherList({
               key={action.label}
               label={action.label}
               symbol={action.symbol}
-              onPress={() => closed(action.onPress, true)}
+              onPress={() => closed(action.onPress)}
             />
           ))}
           {onWorkspaceSettings === undefined ? null : (
             <ActionRow
               label={WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS}
               symbol={GLYPH.SETTINGS}
-              onPress={() => closed(onWorkspaceSettings, true)}
+              onPress={() => closed(onWorkspaceSettings)}
             />
           )}
         </Section>
@@ -289,9 +292,9 @@ function SwitcherList({
         <Section>
           <SwitcherRow
             mark={<Avatar name={account.name} picture={account.picture} size={markSize} />}
-            name={account.name}
+            name={account.address || account.name}
             line={SETTINGS}
-            onPress={() => closed(account.onPress, true)}
+            onPress={() => closed(account.onPress)}
           />
         </Section>
       )}
@@ -360,9 +363,10 @@ function SwitcherFace({
  * window and in a sheet from the screen's foot in a compact one, half the
  * screen tall and dragged to its whole height. It replaced the system's menu,
  * which draws its rows' images as templates in one ink, so no workspace's
- * photo or the account's showed in it. Note that an act that opens a screen,
- * such as Settings, runs only once the list has gone, since a screen
- * presented while the popover or the sheet is still leaving is refused.
+ * photo or the account's showed in it. Note that a row's act, a workspace
+ * chosen or Settings, runs only once the list has gone, since a screen
+ * presented while the popover or the sheet is still leaving is refused, and
+ * a choice redrawing every screen as it left made it stutter.
  */
 export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
   props: WorkspaceSwitcherProps,
@@ -375,8 +379,11 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
   } = props;
 
   const colors = useColors();
-  // Note that at an accessibility size the sheet opens at its full height, since at its half height the account's row, the way into Settings, stood below the fold.
-  const detents = useAccessibilitySize() ? SHEET_DETENTS.WHOLE : SHEET_DETENTS.HALF_THEN_WHOLE;
+
+  // Note that the sheet first stands as tall as its rows rather than half the screen, so the account's row, the way into Settings, shows on a short screen such as the folded Duo's; at an accessibility size it opens at its full height, since the rows outgrow the reckoning.
+  const fitted = useAccessibilitySize()
+    ? SHEET_DETENTS.WHOLE
+    : [{ height: popoverHeight(props) + SHEET_GRABBER_ROOM }, "large" as const];
 
   const [presented, setPresented] = useState(false);
   // Note that the popover's list mounts on its first open and stays, since a closed popover's content stays mounted, every workspace's photo with it, and a list mounted anew on each open would draw each photo's letter tile again.
@@ -391,12 +398,16 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
     after?.act();
   };
 
-  const closed = (then: () => void, presents: boolean) => {
-    if (presents) setAfter({ act: then });
-    else then();
-
+  // Note that every row's act, a workspace chosen among them, runs once the list has gone, because a choice redraws every screen that reads the workspace, which made the list's leaving stutter, and a screen presented while it leaves is refused; the first row pressed is the one that runs.
+  const closed = (then: () => void) => {
+    setAfter((held) => held ?? { act: then });
     setPresented(false);
   };
+
+  // Note that a window crossing between a sheet and a popover drops the list without telling it gone, so an act left waiting is dropped with it rather than run by a later close.
+  useEffect(() => {
+    setAfter(undefined);
+  }, [presentation]);
 
   const face = (
     <SwitcherFace
@@ -420,7 +431,7 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
       >
         <Group
           modifiers={[
-            presentationDetents([...detents]),
+            presentationDetents([...fitted]),
             presentationDragIndicator("visible"),
             presentationBackground(colors.GROUPED),
           ]}
