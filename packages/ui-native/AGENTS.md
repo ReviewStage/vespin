@@ -169,8 +169,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   bold at its bar's leading edge (`inlineLarge`), as Mail names the mailbox
   over its list, and its search is one button at the window's trailing edge,
   as Mail's is; a list standing first, as a portrait iPad's, keeps its title
-  small and inline, since its bar also holds the switcher, compose, ⋯ and
-  the sidebar button. A pushed page shows its path (task › agent, repository › key) small
+  small and inline, since its bar also holds the switcher, ⋯ and the
+  sidebar button. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
   under it; a split view's detail column draws the same path in its bar. A
   thread's path opens its task and its agent, as the panel's crumbs do: in a
