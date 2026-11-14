@@ -568,7 +568,6 @@ function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
 }
 
 /** One of the transcript's rows, as its kind draws it. */
-
 function TranscriptRow({
   item,
   drawing,
@@ -593,6 +592,7 @@ function TranscriptRow({
           )}
           {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side. */}
           <PictureSet
+            atEnd
             pictures={(item.pictures ?? []).map((picture) => ({
               key: picture.key,
               source: picture.url ?? saidSource(drawing, picture.pictureId),
@@ -601,7 +601,8 @@ function TranscriptRow({
                 picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
             }))}
           />
-          {item.words.trim() === "" ? null : (
+          {/* Note that a line of pictures alone draws no empty bubble under them, while a line of other files alone, which the phone leaves to the panel, keeps its bubble so the line still stands. */}
+          {item.words.trim() === "" && (item.pictures ?? []).length > 0 ? null : (
             <CopyWordsMenu words={item.words}>
               <View style={styles.saidHeld}>
                 <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
