@@ -31,10 +31,14 @@ import {
   type PullRequestRefusal,
   type PullRequestWriteAnswer,
 } from "@repo/features/pull-request-write-wire";
-import { Effect, Match, type Redacted } from "effect";
+import { Effect, Match } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
-import { GitHubApp } from "../github/github-app.js";
-import { logGitHubReadFailure, logWorkspaceReadFailure } from "../github/github-refusal.js";
+import { GitHubApp, type GitHubBearer } from "../github/github-app.js";
+import {
+  GITHUB_READ_FAILURE_TAGS,
+  logGitHubReadFailure,
+  logWorkspaceReadFailure,
+} from "../github/github-refusal.js";
 import type { GitHubWriteFailure } from "../github/pull-request-writes.js";
 import { HOSTED_REFUSAL, type HostedRefusal } from "../http/http-effect.js";
 import { agentPullRequestReach } from "./coder-host/published.js";
@@ -45,7 +49,7 @@ export interface MemberPullRequest {
   readonly repository: string;
   readonly number: number;
   /** The member's own GitHub App user token; never logged, never answered. */
-  readonly token: Redacted.Redacted;
+  readonly bearer: GitHubBearer;
 }
 
 /** How a write went: made, with what it answered; the member to sign in with GitHub again; or GitHub's refusal in its words, and why where the tab acts on it. */
@@ -81,10 +85,10 @@ const memberToken = (userId: string) =>
 
     return yield* app.userToken(userId);
   }).pipe(
-    Effect.map((token): Redacted.Redacted | undefined => token),
+    Effect.map((bearer): GitHubBearer | undefined => bearer),
     Effect.catchTag("GitHubSignInRequired", () => Effect.succeed(undefined)),
     Effect.catchTag(
-      ["GitHubAppNotConfigured", "GitHubUnavailable"],
+      GITHUB_READ_FAILURE_TAGS,
       (failure) =>
         Effect.andThen(logGitHubReadFailure(failure), Effect.fail(HOSTED_REFUSAL.UNAVAILABLE)),
       (failure) =>
@@ -99,7 +103,7 @@ const memberToken = (userId: string) =>
  */
 export const memberReadToken = (
   userId: string,
-): Effect.Effect<Redacted.Redacted | undefined, never, WriteServices> =>
+): Effect.Effect<GitHubBearer | undefined, never, WriteServices> =>
   memberToken(userId).pipe(Effect.catch(() => Effect.succeed(undefined)));
 
 /** A write's failure as how it went: the token refused, GitHub's refusal, or a GitHub that did not answer. */
@@ -115,13 +119,15 @@ function writtenOf<A>(failure: GitHubWriteFailure): Effect.Effect<MemberWritten<
       }),
     GitHubUnavailable: (unavailable): Effect.Effect<MemberWritten<A>, HostedRefusal> =>
       Effect.andThen(logGitHubReadFailure(unavailable), Effect.fail(HOSTED_REFUSAL.UNAVAILABLE)),
+    GitHubUnreadable: (unreadable): Effect.Effect<MemberWritten<A>, HostedRefusal> =>
+      Effect.andThen(logGitHubReadFailure(unreadable), Effect.fail(HOSTED_REFUSAL.UNAVAILABLE)),
   });
 }
 
 /** The write a caller makes on a pull request, on the member's token. */
 export type MemberWrite<A> = (
   pullRequest: MemberPullRequest,
-) => Effect.Effect<A, GitHubWriteFailure, HttpClient.HttpClient>;
+) => Effect.Effect<A, GitHubWriteFailure>;
 
 /**
  * One write as the member on a pull request whose repository the caller
@@ -130,15 +136,15 @@ export type MemberWrite<A> = (
  */
 export const memberWriteOnReached = <A>(
   userId: string,
-  pullRequest: Omit<MemberPullRequest, "token">,
+  pullRequest: Omit<MemberPullRequest, "bearer">,
   write: MemberWrite<A>,
 ): Effect.Effect<MemberWritten<A>, HostedRefusal, WriteServices> =>
   Effect.gen(function* () {
-    const token = yield* memberToken(userId);
+    const bearer = yield* memberToken(userId);
 
-    if (token === undefined) return SIGN_IN_REQUIRED;
+    if (bearer === undefined) return SIGN_IN_REQUIRED;
 
-    return yield* write({ ...pullRequest, token }).pipe(
+    return yield* write({ ...pullRequest, bearer }).pipe(
       Effect.map(
         (value): MemberWritten<A> => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE, value }),
       ),

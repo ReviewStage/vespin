@@ -1,4 +1,4 @@
-// account.tsx -- Settings' Account page: who is signed in, the Privacy group (Share usage data and support access), Sign out, and Delete account last, asked first as the panel asks it.
+// account.tsx -- Settings' Account page, as Apple Account's: who is signed in, centered at its head, the Privacy group (Share usage data and support access), Sign out, and Delete account last, asked first as the panel asks it.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { SOCIAL_PROVIDER_LABEL } from "@repo/features/sign-in-provider";
@@ -13,7 +13,7 @@ import {
   supportAccessStanding,
 } from "@repo/host/app-state-reads";
 import {
-  AccountRow,
+  AccountHead,
   ActionRow,
   ConfirmAsk,
   ListSection,
@@ -87,12 +87,15 @@ export default function AccountScreen() {
 
   const goneWith = accountDeleteWorkspacesWords(workspaces, listStatus === TASKS_READ.READY);
 
+  // Note that support access's words describe its row, so they stand under the group only while a row grants or revokes it.
+  const supportShown = support?.granted === true || support?.grantable === true;
+
   return (
     <>
       <Screen>
         <SettingsForm>
           <ListSection>
-            <AccountRow
+            <AccountHead
               name={account.name ?? account.email}
               email={account.email}
               picture={account.pictureUrl}
@@ -101,7 +104,9 @@ export default function AccountScreen() {
           </ListSection>
           <ListSection
             title="Privacy"
-            footer={usage.refusal ?? supportPress.refusal ?? support?.words}
+            footer={
+              usage.refusal ?? supportPress.refusal ?? (supportShown ? support?.words : undefined)
+            }
           >
             {settings === undefined ? null : (
               <ToggleRow
@@ -139,10 +144,15 @@ export default function AccountScreen() {
             ) : null}
           </ListSection>
           <ListSection footer={signOut.refusal}>
-            <ActionRow label={VERB.SIGN_OUT} destructive onPress={signOutNow} />
+            <ActionRow label={VERB.SIGN_OUT} destructive centered onPress={signOutNow} />
           </ListSection>
           <ListSection footer={deletion.refusal}>
-            <ActionRow label={DELETE_ACCOUNT} destructive onPress={() => setAsking(true)} />
+            <ActionRow
+              label={DELETE_ACCOUNT}
+              destructive
+              centered
+              onPress={() => setAsking(true)}
+            />
           </ListSection>
         </SettingsForm>
       </Screen>

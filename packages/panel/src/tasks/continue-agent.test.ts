@@ -90,7 +90,7 @@ const NOTES: AgentAttachment = {
 function agentOf(id: string, overrides: Partial<AgentSummary> = {}): AgentSummary {
   return {
     id,
-    planId: TASK,
+    taskId: TASK,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: `Agent ${id.slice(0, 4)}`,
@@ -170,7 +170,7 @@ function Seeded({
   const writer = useDraftWriter();
   onWriter?.(writer);
   useEffect(() => {
-    writer.update({ kind: DRAFT_PLACE.AGENT, planId: TASK, agentId: SOURCE }, () => ({
+    writer.update({ kind: DRAFT_PLACE.AGENT, taskId: TASK, agentId: SOURCE }, () => ({
       ...EMPTY_DRAFT,
       text: words,
       attachments: files,
@@ -590,7 +590,7 @@ test("a message its agent's Mac was offline for says so under the box, whose Con
   await settle();
   // A later message fails with nothing to mend it, which leaves the note of the first.
   act(() =>
-    writer?.update({ kind: DRAFT_PLACE.AGENT, planId: TASK, agentId: SOURCE }, (was) => ({
+    writer?.update({ kind: DRAFT_PLACE.AGENT, taskId: TASK, agentId: SOURCE }, (was) => ({
       ...was,
       text: "And check the logs",
     })),
@@ -939,7 +939,7 @@ test("words changed in the closed box while its continue is out stay once it lan
 
   // Another window writes on in the same draft while the Start is out.
   act(() =>
-    writer?.update({ kind: DRAFT_PLACE.AGENT, planId: TASK, agentId: SOURCE }, (was) => ({
+    writer?.update({ kind: DRAFT_PLACE.AGENT, taskId: TASK, agentId: SOURCE }, (was) => ({
       ...was,
       text: "Fix tests and lint",
     })),
@@ -953,7 +953,7 @@ test("words changed in the closed box while its continue is out stay once it lan
   );
   let kept = "";
   act(() =>
-    writer?.update({ kind: DRAFT_PLACE.AGENT, planId: TASK, agentId: SOURCE }, (was) => {
+    writer?.update({ kind: DRAFT_PLACE.AGENT, taskId: TASK, agentId: SOURCE }, (was) => {
       kept = was.text;
 
       return was;
@@ -1073,7 +1073,7 @@ test("where the tab's place opens drafts, Continue again opens the continue's dr
   assert.deepEqual(tab.drafted, [{ words: "Try the other parser.", attachments: [] }]);
   let kept: string | undefined;
   act(() =>
-    writer?.update({ kind: DRAFT_PLACE.AGENT, planId: TASK, agentId: SOURCE }, (was) => {
+    writer?.update({ kind: DRAFT_PLACE.AGENT, taskId: TASK, agentId: SOURCE }, (was) => {
       kept = was.text;
 
       return was;

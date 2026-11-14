@@ -118,8 +118,8 @@ export const task = pgTable(
       .$type<readonly DescriptionAgentEdit[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
-    /** The plan as one free Markdown document, its whole text: no title line, and its assumptions a section like any other (`@repo/features/description-document`). */
-    document: text("document").notNull(),
+    /** The task's description, its whole free Markdown text: no title line, and its assumptions a section like any other (`@repo/features/description-sections`). */
+    description: text("description").notNull(),
     /**
      * The GitHub repository the task is about, `owner/name` as GitHub spells
      * it, confirmed reachable through our GitHub App by the account

@@ -1,5 +1,5 @@
 import type { AdminUserList, AdminUserListRow } from "@repo/features/admin-answer-wire";
-import { ADMIN_USERS_SEARCH_MAX_LENGTH, type AdminMetricsWindow } from "@repo/features/admin-wire";
+import { ADMIN_USERS_SEARCH_MAX_LENGTH } from "@repo/features/admin-wire";
 import { formatCount } from "@repo/features/number-format";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { formatDate, formatDayTick } from "@repo/features/time-format";
@@ -28,16 +28,17 @@ import {
 } from "../accounts-table/accounts-table.js";
 import { useAdminDoors } from "../admin-doors.js";
 import { adminUsersQuery, useAdminSignOut, useFavoriteMutation } from "../admin-queries.js";
-import { adminReadView } from "../admin-read-view.js";
+import {
+  type AdminRosterChoice,
+  type AdminScreenShell,
+  type AdminWindowChoice,
+  adminReadView,
+} from "../admin-read-view.js";
 import { SignInMethodsChart, SignInMethodsChartSkeleton } from "../charts/signups-chart.js";
 import { AdminSection } from "../charts/stat-card.js";
 import { AdminViewOptions, PageSections, windowWords } from "../chrome/controls.js";
 import { RosterNote } from "../chrome/notes.js";
-import {
-  AdminCollectionPage,
-  CollectionCountSkeleton,
-  type ViewerAccount,
-} from "../chrome/page-header.js";
+import { AdminCollectionPage, CollectionCountSkeleton } from "../chrome/page-header.js";
 import { searchTerm, usersReadQuery } from "../routing.js";
 import { useSettledSearch } from "../settled-search.js";
 
@@ -157,17 +158,11 @@ export function UsersScreen({
   onSignOut,
   onOpenAccount,
   frame,
-}: {
-  hideAdmins: boolean;
-  onHideAdminsChange: (hide: boolean) => void;
-  windowDays: AdminMetricsWindow;
-  onWindowDaysChange: (windowDays: AdminMetricsWindow) => void;
-  account: ViewerAccount | undefined;
-  onSignOut: () => Promise<void>;
-  onOpenAccount: (id: string) => void;
-  /** Applied around every answer but the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
-}): React.JSX.Element {
+}: AdminScreenShell &
+  AdminRosterChoice &
+  AdminWindowChoice & {
+    onOpenAccount: (id: string) => void;
+  }): React.JSX.Element {
   // What the box holds and what the service was asked to search for, apart:
   // the query redraws on every keystroke and filters the loaded rows at once,
   // while the read's own debounce commits it into the address the roster is

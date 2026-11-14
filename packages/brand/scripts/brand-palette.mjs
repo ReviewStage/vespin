@@ -42,7 +42,8 @@ const AVATAR = { TILE: "#171412", INK: COPPER.DARK.FILL };
 // accent: a burnt orange in the light theme and an orange in the dark. Each
 // role takes the step Geist names for it: background-100 the ground and
 // background-200 the frame and the wells, gray-100 to 300 a control's rest,
-// hover, and press, gray-400 and 500 its edges, gray-900 the secondary
+// hover, and press, gray-400 and 500 its edges (gray-300 a chip's in the
+// dark, as soft as a card's border there), gray-900 the secondary
 // words and gray-1000 the primary. A status ink is its scale's 900, Geist's
 // accessible text step. Attention shares the accent, as copper's did, and so
 // does a start, which copper drew in a yellow Geist has no scale for; work
@@ -185,7 +186,7 @@ const BRAND_PALETTES = {
       CHIP: GEIST_DARK.GRAY[100],
       CHIP_HOVER: GEIST_DARK.GRAY[200],
       CHIP_SELECTED: GEIST_DARK.GRAY[300],
-      CHIP_EDGE: GEIST_DARK.GRAY[400],
+      CHIP_EDGE: GEIST_DARK.GRAY[300],
       CHIP_EDGE_STRONG: GEIST_DARK.GRAY[500],
       FILL_STRONG: GEIST_DARK.GRAY_ALPHA[200],
       INK: GEIST_WHITE,

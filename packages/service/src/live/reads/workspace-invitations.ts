@@ -7,7 +7,7 @@
  * once the reader no longer owns or administers the workspace, so a
  * subscription stays bound to the rule its endpoint checked
  * (`WORKSPACE_INVITATIONS_READ`). Note that the statement keeps no window
- * measured from the clock, as Realtime requires: an invitation past its
+ * measured from the clock, as a live read must (`live-statement.ts`): an invitation past its
  * expiry is the desktop's to leave out, by its own clock, as the held read
  * leaves it out by the service's.
  *
