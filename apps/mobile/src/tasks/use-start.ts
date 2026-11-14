@@ -63,10 +63,11 @@ import {
 import type { PickOption } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import type { HeldPicture } from "../use-attached-pictures.js";
 
 /** No models read yet. */
 const NO_MODELS: readonly CatalogModel[] = [];
@@ -313,6 +314,120 @@ export function useRepositoryPick(
   };
 }
 
+/* ----- A start that opened its task at once ----- */
+
+/** The id New task makes its task under, minted on the phone as the sheet opens, so the task opens the moment Start is pressed, as the panel's does. */
+interface MintedTask {
+  readonly id: string;
+}
+
+/** What a New task start came to after its sheet closed, which its task's page hears. */
+export const START_LANDED = {
+  /** Its agent started, which the task's page opens while it still stands in front. */
+  AGENT: "agent",
+  /** The start was refused, so the task the page opened on was never made. */
+  REFUSED: "refused",
+} as const;
+
+export type StartLanded =
+  | { readonly kind: typeof START_LANDED.AGENT; readonly agentId: string }
+  | { readonly kind: typeof START_LANDED.REFUSED };
+
+/** The page of each task that stands, by its task, which hears what its start came to. */
+const hearing = new Map<string, (landed: StartLanded) => void>();
+
+/** The tasks a start opened whose answer is still on its way. */
+const awaiting = new Set<string>();
+
+/**
+ * How long an answer that found no page standing is kept for one that
+ * mounts: long enough for a page a moment late, as a task handed to the
+ * iPad's split view stands again in its detail column, and short enough
+ * that a visit to the task later on never acts on it.
+ */
+const UNHEARD_FOR_MS = 5000;
+
+/** What a start came to while no page of its task stood to hear it, by its task, and when it landed. */
+const unheard = new Map<string, { readonly landed: StartLanded; readonly at: number }>();
+
+/** Marks the task a start just opened as awaiting what the start comes to. */
+export function awaitStart(taskId: string): void {
+  awaiting.add(taskId);
+}
+
+/**
+ * Tells the page of the task a New task start opened what the start came
+ * to, or keeps it a moment for a page about to mount. Note that it is kept
+ * only for a page that mounts soon after, so a later visit to the task never
+ * opens its agent or steps back.
+ */
+export function startLanded(taskId: string, landed: StartLanded): void {
+  if (!awaiting.delete(taskId)) return;
+  const hear = hearing.get(taskId);
+
+  if (hear === undefined) unheard.set(taskId, { landed, at: Date.now() });
+  else hear(landed);
+}
+
+/**
+ * Hears what the start of the task `taskId` came to while its page stands,
+ * including an answer that landed a moment before the page mounted, as an
+ * answer to a start refused at once does, or one landing while a task's
+ * page hands itself to the iPad's split view.
+ */
+export function useStartLanded(
+  taskId: string | undefined,
+  hear: (landed: StartLanded) => void,
+): void {
+  const heard = useEffectEvent(hear);
+
+  useEffect(() => {
+    if (taskId === undefined) return;
+    const listener = (landed: StartLanded) => heard(landed);
+    hearing.set(taskId, listener);
+    const waiting = unheard.get(taskId);
+    unheard.delete(taskId);
+
+    if (waiting !== undefined && Date.now() - waiting.at < UNHEARD_FOR_MS) listener(waiting.landed);
+
+    // Note that a page leaving leaves its start awaited, so a page standing again in its place, as the split view's detail does, still hears it.
+    return () => {
+      if (hearing.get(taskId) === listener) hearing.delete(taskId);
+    };
+  }, [taskId]);
+}
+
+/** New task as it pressed Start, which a start refused after the sheet closed opens New task again on, with why it was refused. */
+export interface RefusedStart {
+  readonly prompt: string;
+  readonly parent: string | undefined;
+  readonly workspaceId: string | undefined;
+  readonly repository: string | undefined;
+  readonly relation: TaskCreateRelation | undefined;
+  readonly picked: ModelChoice | undefined;
+  readonly runsOn: string;
+  readonly pictures: readonly HeldPicture[];
+  readonly note: string;
+}
+
+/** The start refused after its sheet closed, which the next New task opens on; none once it has. */
+let refusedStart: RefusedStart | undefined;
+
+/** Keeps a start refused after its sheet closed for New task to open on. */
+export function keepRefusedStart(refused: RefusedStart): void {
+  refusedStart = refused;
+}
+
+/** The start refused after its sheet closed that New task opens on, if any. */
+export function heldRefusedStart(): RefusedStart | undefined {
+  return refusedStart;
+}
+
+/** Lets go of `refused` once New task has opened on it, unless a newer one was kept since. */
+export function forgetRefusedStart(refused: RefusedStart | undefined): void {
+  if (refused !== undefined && refusedStart === refused) refusedStart = undefined;
+}
+
 /* ----- The starts ----- */
 
 /** The words, pictures, and choices a start carries. */
@@ -389,12 +504,13 @@ function unanswered(what: string) {
  */
 export function useStartTask(
   workspaceId: string | undefined,
-): (ask: StartAsk & TaskPlace) => Promise<StartAnswer> {
+): (ask: StartAsk & TaskPlace & MintedTask) => Promise<StartAnswer> {
   const acts = useHostActs();
   const [key] = useState(randomUUID);
 
-  return async ({ prompt, attachments, picked, runsOn, ...place }) => {
+  return async ({ id, prompt, attachments, picked, runsOn, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
+      id,
       ...placeOf(workspaceId, place),
       planning: false,
       agent: {
@@ -428,11 +544,12 @@ export function useStartTask(
  */
 export function useFileTask(
   workspaceId: string | undefined,
-): (ask: { readonly filed: FiledTask } & TaskPlace) => Promise<StartAnswer> {
+): (ask: { readonly filed: FiledTask } & TaskPlace & MintedTask) => Promise<StartAnswer> {
   const acts = useHostActs();
 
-  return async ({ filed, ...place }) => {
+  return async ({ id, filed, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
+      id,
       ...placeOf(workspaceId, place),
       ...filed,
       status: TASK_STATUS.BACKLOG,

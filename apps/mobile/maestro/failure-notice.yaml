@@ -5,7 +5,7 @@
 appId: dev.vespin.ios
 ---
 # Launched on the host's Inbox fixture with `-refuseWrites true`, so the
-# fixture refuses a task's status and its pin as the service would
+# fixture refuses a task's status, its pin and its start as the service would
 # (`src/host/fixture-host.ts`), and no server is reached.
 - launchApp:
     clearState: true
@@ -46,3 +46,17 @@ appId: dev.vespin.ios
 - assertVisible: "The task could not be marked done. Try again."
 - assertVisible: "Weekly digest email"
 - takeScreenshot: failure-notice-mark-done
+# New task closes the moment Start is pressed, as the panel's does; once its
+# start is refused, the task it opened on goes and New task opens again on
+# the words it held, the refusal said under them.
+- tapOn: "Inbox"
+- tapOn: "New task"
+- assertVisible: "Describe the task"
+- inputText: "Write the invite reminder email."
+- hideKeyboard
+- tapOn: "Start"
+- extendedWaitUntil:
+    visible: "Write the invite reminder email."
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: failure-notice-start-refused
