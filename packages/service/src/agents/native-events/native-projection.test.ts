@@ -18,7 +18,10 @@ test("an unknown tool's call settled with a new input, as Codex settles one, kee
       {
         kind: NATIVE_MOMENT.TOOL_SETTLED,
         callId: "call_plan",
-        settlement: toolAnswerSettlement({ workspaceTool: true, text: "Unknown tool" }, true),
+        settlement: toolAnswerSettlement(
+          { workspaceTool: true, name: "edit_plan", text: "Unknown tool" },
+          true,
+        ),
         input: { notes: [] },
       },
     ],
@@ -47,6 +50,23 @@ test("an unknown tool's call settled with a new input, as Codex settles one, kee
       [RUN_EVENT.TOOL_CALL_STARTED, "unknown_tool", { name: "edit_plan", input: {} }],
       [RUN_EVENT.TOOL_CALL_SETTLED, "unknown_tool", undefined],
     ],
+  );
+});
+
+test("a machine call the harness flagged as an error for running nothing keeps its answer, so its row names the machine and why", () => {
+  const answer = {
+    status: "not-run",
+    reason: "Not run: the developer declined this command.",
+    outcome: "declined",
+    machine: { id: "m_1", name: "Ada's Mac mini", owner: { userId: "u_ada", name: "Ada" } },
+  };
+
+  assert.deepEqual(
+    toolAnswerSettlement(
+      { workspaceTool: true, name: "run_on_mac", text: JSON.stringify(answer) },
+      true,
+    ),
+    { state: "output-available", output: answer, status: "not-run" },
   );
 });
 

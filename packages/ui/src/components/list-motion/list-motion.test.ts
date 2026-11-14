@@ -3,6 +3,7 @@
 import { act, createElement, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { leavingPlace } from "../../testing/leaving-place.js";
 import { useDisclosureFold } from "../disclosure/disclosure.js";
 import { LIST_MOTION_WAY, ListMotion, motionKey, motionRows, useLeaving } from "./list-motion.js";
 
@@ -82,27 +83,23 @@ beforeEach(() => {
       return motion;
     },
   });
-  // Note that each list stands in its own column, and each row under the rows before it still in the layout.
+  // Note that each list stands in its own column, and each row under the rows before it still in the layout, laid out as list-motion.css lays a leaving row, which jsdom does not read.
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
   ) {
     const list = this.parentElement;
 
     // Note that a row taken out of the layout is drawn nowhere, as a browser draws it: an empty box at the window's corner.
-    if (!this.matches("li") || list === null || this.style.display === "none") {
+    if (!this.matches("li") || list === null || leavingPlace(this) === "gone") {
       return new DOMRect(0, 0, 0, 0);
     }
 
     const laidOut = [...list.children].filter(
-      (each) => each instanceof HTMLElement && each.style.position !== "absolute",
+      (each) => each instanceof HTMLElement && topOf(each) === undefined,
     );
 
     const column = [...(list.parentElement?.children ?? [])].indexOf(list);
-
-    const top =
-      this.style.position === "absolute"
-        ? Number.parseFloat(this.style.top)
-        : laidOut.indexOf(this) * ROW;
+    const top = topOf(this) ?? laidOut.indexOf(this) * ROW;
 
     return new DOMRect(column * COLUMN, top, COLUMN, ROW);
   });
@@ -118,41 +115,69 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** One list's rows, each by its key, drawn on while it leaves. */
-function Rows({ keys }: { keys: readonly string[] }): React.JSX.Element {
+/** Where a row out of the layout stands: laid over its place as it leaves, else where its run placed it; none for a row in the layout. */
+function topOf(row: HTMLElement): number | undefined {
+  const place = leavingPlace(row);
+
+  if (place !== undefined && place !== "gone") return place.top;
+
+  return row.style.position === "absolute" ? Number.parseFloat(row.style.top) : undefined;
+}
+
+/** Where a row a run places itself stands: absolutely, at its place in the run, as `VirtualRows` stands one. */
+function placedAt(at: number): React.CSSProperties {
+  return { position: "absolute", top: `${at * ROW}px` };
+}
+
+/** One list's rows, each by its key, drawn on while it leaves, each standing where it is `placed` where the list places its rows itself. */
+function Rows({
+  keys,
+  placed = false,
+}: {
+  keys: readonly string[];
+  placed?: boolean;
+}): React.JSX.Element {
   const drawn = useLeaving(keys, (key) => key);
 
   return createElement(
     "ul",
     motionRows(),
-    drawn.map(({ key }) => createElement("li", { key, ...motionKey(key) }, key)),
+    drawn.map(({ key }, at) =>
+      createElement(
+        "li",
+        { key, ...motionKey(key), ...(placed ? { style: placedAt(at) } : undefined) },
+        key,
+      ),
+    ),
   );
 }
 
-/** Lists side by side, each by its rows' keys, under one motion where `moving`, still being read where `reading`, as the scene `scene`. */
+/** Lists side by side, each by its rows' keys, under one motion where `moving`, still being read where `reading`, as the scene `scene`, their rows placed by the lists where `placed`. */
 function Lists({
   lists,
   moving,
   reading,
   scene,
+  placed,
 }: {
   lists: readonly (readonly string[])[];
   moving: boolean;
   reading: boolean;
   scene?: string | undefined;
+  placed: boolean;
 }): React.JSX.Element {
   const box = useRef<HTMLDivElement>(null);
 
   const drawn = createElement(
     "div",
     { ref: box },
-    lists.map((keys, at) => createElement(Rows, { key: String(at), keys })),
+    lists.map((keys, at) => createElement(Rows, { key: String(at), keys, placed })),
   );
 
   return moving ? createElement(ListMotion, { root: box, reading, scene, children: drawn }) : drawn;
 }
 
-/** Draws `lists`, the motion's tokens set where `tokens`, and hands back a way to draw others, still being read where it says, as the scene it names. */
+/** Draws `lists`, the motion's tokens set where `tokens`, their rows placed by the lists where `placed`, and hands back a way to draw others, still being read where it says, as the scene it names. */
 function draw(
   lists: readonly (readonly string[])[],
   {
@@ -160,7 +185,14 @@ function draw(
     tokens = true,
     reading = false,
     scene,
-  }: { moving?: boolean; tokens?: boolean; reading?: boolean; scene?: string } = {},
+    placed = false,
+  }: {
+    moving?: boolean;
+    tokens?: boolean;
+    reading?: boolean;
+    scene?: string;
+    placed?: boolean;
+  } = {},
 ): (next: readonly (readonly string[])[], stillReading?: boolean, nextScene?: string) => void {
   if (tokens) {
     for (const [name, value] of Object.entries(TOKENS)) {
@@ -170,12 +202,18 @@ function draw(
 
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  act(() => root?.render(createElement(Lists, { lists, moving, reading, scene })));
+  act(() => root?.render(createElement(Lists, { lists, moving, reading, scene, placed })));
 
   return (next, stillReading = false, nextScene = scene) =>
     act(() =>
       root?.render(
-        createElement(Lists, { lists: next, moving, reading: stillReading, scene: nextScene }),
+        createElement(Lists, {
+          lists: next,
+          moving,
+          reading: stillReading,
+          scene: nextScene,
+          placed,
+        }),
       ),
     );
 }
@@ -336,6 +374,19 @@ test("a row listed again before its exit has played stands again, and comes back
     [{ opacity: 0 }, { opacity: 1 }],
     [{ transform: "translateX(-16px)" }, { transform: "none" }],
   ]);
+});
+
+test("a row its list places itself, as a virtual run does, stands again where it is placed, not over the run's first row", () => {
+  const show = draw([["A", "B", "C"]], { placed: true });
+  show([["A", "C"]]);
+  const leaving = rowOf("B", true);
+
+  show([["A", "B", "C"]]);
+
+  const back = rowOf("B");
+  expect(back).toBe(leaving);
+  expect(back instanceof HTMLElement ? back.style.position : undefined).toBe("absolute");
+  expect(back?.getBoundingClientRect().top).toBe(ROW);
 });
 
 test("a key listed twice is drawn once, so no row is left behind as the list changes after it", () => {

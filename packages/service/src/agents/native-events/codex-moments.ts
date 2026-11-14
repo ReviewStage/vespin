@@ -347,11 +347,13 @@ function mcpCall(item: WireValue): Option.Option<Answered> {
         ? ""
         : mcpAnswerText(call.result.content, workspaceTool));
 
+    const stored = storedMcpCall(call, args);
+
     return {
       callId: call.id,
-      ...storedMcpCall(call, args),
+      ...stored,
       answer: workspaceTool
-        ? { workspaceTool: true, text }
+        ? { workspaceTool: true, name: stored.name, text }
         : { workspaceTool: false, text, output: text },
       failed:
         call.error !== undefined && call.error !== null ? true : FAILED_STATUSES.has(call.status),

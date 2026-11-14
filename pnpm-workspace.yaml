@@ -220,6 +220,17 @@ patchedDependencies:
 # ueberdosis/tiptap#8317, each manager lexing with a `marked` of its own.
 # Delete each half when a TipTap release carries its PR.
   "@tiptap/markdown@3.33.1": patches/@tiptap__markdown@3.33.1.patch
+#
+# `@xterm/addon-webgl` 0.19.0 builds each glyph's canvas font as
+# `${style} ${weight} …`, which starts with a space for upright text. Chromium's
+# font parser briefly refused a font with leading whitespace (crrev.com/c/8525429,
+# fixed by crrev.com/c/8573817), and Electron 43.8.8 shipped the first change
+# without the second, so the canvas kept its `10px sans-serif` default and the
+# desktop's terminal drew tiny letters spread across full-size cells. The patch
+# makes upstream's change in xtermjs/xterm.js#6312 (#6297): the space goes with
+# the optional style. Only `lib/addon-webgl.mjs` is patched, the build the
+# browser bundles resolve. Delete it when an addon release carries #6312.
+  "@xterm/addon-webgl@0.19.0": patches/@xterm__addon-webgl@0.19.0.patch
 
 # Transitive versions raised past a published advisory, each within the major
 # its dependents already take. Delete a line once nothing resolves below it.

@@ -15,9 +15,9 @@ export { SETTINGS_VIEW };
 /**
  * The pages in the order the command palette and the settings search list
  * them, and the Settings sidebar within each of its groups, Account first
- * since Settings opens on it, and Preferences under it. Every option has one home among them;
- * Experimental follows This Mac, so About and Keyboard shortcuts, which only
- * lists the window's own chords, stay last.
+ * since Settings opens on it, and Preferences under it. Every option has one
+ * home among them; Experimental is last, as it stands alone at the
+ * sidebar's foot.
  */
 export const SETTINGS_PAGE_LIST = [
   SETTINGS_VIEW.ACCOUNT,
@@ -32,9 +32,9 @@ export const SETTINGS_PAGE_LIST = [
   SETTINGS_VIEW.SKILLS,
   SETTINGS_VIEW.APPEARANCE,
   SETTINGS_VIEW.THIS_MAC,
-  SETTINGS_VIEW.EXPERIMENTAL,
   SETTINGS_VIEW.ABOUT,
   SETTINGS_VIEW.SHORTCUTS,
+  SETTINGS_VIEW.EXPERIMENTAL,
 ] as const satisfies readonly SettingsView[];
 
 /**
@@ -93,22 +93,25 @@ export function settingsViewNamed(page: string | undefined): SettingsView | unde
 }
 
 /**
- * The headings the Settings sidebar groups its pages under, in the order it
- * draws them, as Linear and Notion group theirs: the workspace the sidebar
- * lists, what is the account's whichever workspace is listed, and what is
- * this Mac's alone.
+ * The groups the Settings sidebar draws its pages in, in the order it draws
+ * them, as Linear and Notion group theirs: the workspace the sidebar lists,
+ * what is the account's whichever workspace is listed, what is this Mac's
+ * alone, and last, under no heading, what is none of theirs alone.
  */
 export const SETTINGS_PAGE_GROUP = {
   WORKSPACE: "workspace",
   ACCOUNT: "account",
   THIS_MAC: "thisMac",
+  UNHEADED: "unheaded",
 } as const;
 
 export type SettingsPageGroup = (typeof SETTINGS_PAGE_GROUP)[keyof typeof SETTINGS_PAGE_GROUP];
 
 /**
- * The heading each page stands under. Experiments are the account's choice,
- * carried to every window, so Experimental stands under Account.
+ * The group each page stands in. Experimental stands in the unheaded group,
+ * because it holds both the experiments a workspace's admins choose for
+ * everyone in it and the account's own, so neither Workspace nor Account
+ * heads the whole of it; its own groups say whom each switch reaches.
  */
 const GROUP_OF_PAGE = {
   [SETTINGS_VIEW.ACCOUNT]: SETTINGS_PAGE_GROUP.ACCOUNT,
@@ -123,17 +126,18 @@ const GROUP_OF_PAGE = {
   [SETTINGS_VIEW.MEMORY]: SETTINGS_PAGE_GROUP.WORKSPACE,
   [SETTINGS_VIEW.APPEARANCE]: SETTINGS_PAGE_GROUP.THIS_MAC,
   [SETTINGS_VIEW.THIS_MAC]: SETTINGS_PAGE_GROUP.THIS_MAC,
-  [SETTINGS_VIEW.EXPERIMENTAL]: SETTINGS_PAGE_GROUP.ACCOUNT,
+  [SETTINGS_VIEW.EXPERIMENTAL]: SETTINGS_PAGE_GROUP.UNHEADED,
   [SETTINGS_VIEW.ABOUT]: SETTINGS_PAGE_GROUP.THIS_MAC,
   [SETTINGS_VIEW.SHORTCUTS]: SETTINGS_PAGE_GROUP.THIS_MAC,
 } as const satisfies Record<SettingsView, SettingsPageGroup>;
 
-/** What each of the Settings groups is headed by where no workspace is listed to name the first, on the panel's sidebar and the iOS app's Settings alike. */
+/** What each of the Settings groups is headed by where no workspace is listed to name the first, on the panel's sidebar and the iOS app's Settings alike; the unheaded group by nothing. */
 export const SETTINGS_PAGE_GROUP_HEADING = {
   [SETTINGS_PAGE_GROUP.WORKSPACE]: "Workspace",
   [SETTINGS_PAGE_GROUP.ACCOUNT]: "Account",
   [SETTINGS_PAGE_GROUP.THIS_MAC]: "This Mac",
-} as const satisfies Record<SettingsPageGroup, string>;
+  [SETTINGS_PAGE_GROUP.UNHEADED]: undefined,
+} as const satisfies Record<SettingsPageGroup, string | undefined>;
 
 /** The Settings sidebar's groups in the order it draws them, each with its pages in the list's own order. */
 export const SETTINGS_PAGE_GROUPS: readonly {

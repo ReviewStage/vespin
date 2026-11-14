@@ -1358,7 +1358,7 @@ The agent is offered Vespin's own tools on Vespin's MCP server
 runner's bearer, minted at each launch and kept on the agent's row only as
 its hash (`workspace-mcp/bearer.ts`), and runs each call as the agent's starter
 through the shared doors (`src/agents/coder-host/agent-doors.ts`): Claude
-Code sees them as `mcp__workspace__<tool>`, Codex as the `workspace` server. Its shell,
+Code sees them as `mcp__team__<tool>`, Codex as the `team` server. Its shell,
 files, search, and page reads are the harness's own. Among Vespin's tools,
 `edit_description` (`src/agents/coder-host/description-edit.ts`) takes notes
 (`@repo/features/description-notes`'s `descriptionNotesSchema`)

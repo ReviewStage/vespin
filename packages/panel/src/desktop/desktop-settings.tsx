@@ -3,6 +3,7 @@ import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { integrationNamed } from "@repo/features/integration-search";
 import { INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { type HostCapability, NO_EXPERIMENTS, SETTINGS_VIEW_COUNTED_AS } from "@repo/settings";
 import {
@@ -42,6 +43,7 @@ import { appPlatform } from "../app-platform.js";
 import { CallCardDock } from "../call/standing-call.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
 import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
+import { SettingsPageLink } from "../open-settings.js";
 import type { NavigationHistory } from "../places/window-history.js";
 import { revealWithin, scrollerOf } from "../scroll-within.js";
 import {
@@ -95,8 +97,9 @@ export interface SettingsStep {
  * The line under the title of the pages that connect something: one short
  * sentence saying what the page is for, since its name alone may not. Agents
  * says once, for both harnesses' lists, the order their credentials are
- * tried in. The MCP & CLI page has none, since each of its two sections
- * says under its own heading what it is for. No other page has one.
+ * tried in. This Mac's says where what agents may do on it is set. The MCP
+ * & CLI page has none, since each of its two sections says under its own
+ * heading what it is for. No other page has one.
  */
 function pageDescription(view: SettingsView): ReactNode {
   switch (view) {
@@ -108,6 +111,13 @@ function pageDescription(view: SettingsView): ReactNode {
       return (
         <ReplayUnmask>
           Run agents on your own Mac or Linux server instead of the cloud.
+        </ReplayUnmask>
+      );
+    case SETTINGS_VIEW.THIS_MAC:
+      return (
+        <ReplayUnmask>
+          How {PRODUCT_NAME} runs on this Mac. What agents may do here is set on{" "}
+          <SettingsPageLink page={SETTINGS_VIEW.HOSTS} />.
         </ReplayUnmask>
       );
     default:
@@ -230,17 +240,21 @@ function PageGroup({
   children: ReactNode;
 }): React.JSX.Element {
   const workspace = group === SETTINGS_PAGE_GROUP.WORKSPACE ? listed : undefined;
+  const heading = settingsGroupHeadingOf(group, capabilities);
+
+  // Note that the unheaded group stands apart by its gap alone, because a heading would claim its pages for one scope.
+  if (workspace === undefined && heading === undefined) {
+    return (
+      <section className="settings-nav-group [.settings-nav-group+&]:mt-section-gap">
+        {children}
+      </section>
+    );
+  }
 
   return (
     <section className="settings-nav-group [.settings-nav-group+&]:mt-section-gap">
       <GroupHeader
-        label={
-          workspace === undefined ? (
-            settingsGroupHeadingOf(group, capabilities)
-          ) : (
-            <ReplayMask>{workspace.name}</ReplayMask>
-          )
-        }
+        label={workspace === undefined ? heading : <ReplayMask>{workspace.name}</ReplayMask>}
         glyph={
           workspace === undefined ? undefined : (
             <ReplayMask>
@@ -264,7 +278,8 @@ function PageGroup({
  * under three headings, as Linear and Notion group theirs: the workspace the
  * tasks' sidebar lists, by its tile and name, over its Members and GitHub;
  * Account, over what is the account's whichever workspace is listed; and
- * This Mac. Settings opens on Profile, Account's first page, with the caret
+ * This Mac; and Experimental stands alone under them, under no heading, since
+ * it holds the workspace's experiments and the account's alike. Settings opens on Profile, Account's first page, with the caret
  * in the search. The page is a document: its title heads its column, under
  * the page's bar (`SettingsPage`), which picks up the title once it scrolls
  * away, and a page's reset ends the title's line. The Workspace page's title is
