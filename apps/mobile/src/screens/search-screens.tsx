@@ -238,6 +238,7 @@ const SEARCH_IDLE = (
 function useSearchScreen(
   { query, scope, setScope }: SearchWords,
   pick?: SearchPicking | undefined,
+  leave?: () => void,
 ) {
   const router = useRouter();
   const found = useSearchFound(query);
@@ -259,7 +260,11 @@ function useSearchScreen(
 
     const route = routes.get(id);
 
-    if (route !== undefined) router.push(onTab(route));
+    if (route === undefined) return;
+
+    // Note that the field gives up its focus before the route opens, because a regular window opens it on its own tab, and the iPad's top tab bar, folded into the field while it is searched, stood folded over the tab it switched to, with no way back to Search.
+    leave?.();
+    router.push(onTab(route));
   };
 
   const shown = scopedFound(found, scope);
@@ -294,8 +299,12 @@ function useSearchScreen(
 }
 
 /** What a typed query finds under the Stack's bar, with the questions and sheets its rows' acts raise beside it. */
-function SearchStackFound(words: SearchWords) {
-  const { results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
+function SearchStackFound({ leave, ...words }: SearchWords & { readonly leave: () => void }) {
+  const { results, status, deletion, remind, archiveAsk } = useSearchScreen(
+    words,
+    undefined,
+    leave,
+  );
 
   return (
     <>
@@ -355,7 +364,11 @@ function SearchStackScreen(words: SearchWords) {
           />
         </Stack.Toolbar>
       ) : null}
-      {query.trim() === "" ? <Screen>{SEARCH_IDLE}</Screen> : <SearchStackFound {...words} />}
+      {query.trim() === "" ? (
+        <Screen>{SEARCH_IDLE}</Screen>
+      ) : (
+        <SearchStackFound {...words} leave={() => field.current?.blur()} />
+      )}
     </>
   );
 }
