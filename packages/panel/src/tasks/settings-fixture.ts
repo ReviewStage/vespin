@@ -489,7 +489,7 @@ const MEMORY_AGENT = {
 function memoryAgent(id: string, title: string, model: string, agoDays: number): ListedAgent {
   return {
     id,
-    planId: USAGE_ALERTS.taskId,
+    taskId: USAGE_ALERTS.taskId,
     model,
     effort: "high",
     title,

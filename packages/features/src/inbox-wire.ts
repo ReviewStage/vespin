@@ -1466,7 +1466,7 @@ export function inboxStartTitle(
  */
 export const inboxItemHomeSchema = EffectSchema.Struct({
   agentId: wireUuidSchema,
-  planId: wireUuidSchema,
+  taskId: wireUuidSchema,
   workspaceId: EffectSchema.NonEmptyString,
 });
 

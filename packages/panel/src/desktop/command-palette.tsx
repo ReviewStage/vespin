@@ -1159,7 +1159,7 @@ function archivedAgentRows(
         />
       ),
       terms: [look.label, ...(taskName === undefined ? [] : [taskName])],
-      onChoose: () => show(() => tasks.onShowAgent(agent.planId, agent.id)),
+      onChoose: () => show(() => tasks.onShowAgent(agent.taskId, agent.id)),
     };
   });
 }

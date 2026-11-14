@@ -341,7 +341,7 @@ export function useAgentComposer(input: {
     | undefined;
 }): HeldComposer {
   const { agentId, messages, sending } = input;
-  const kept = useDraft({ kind: DRAFT_PLACE.AGENT, planId: input.taskId, agentId });
+  const kept = useDraft({ kind: DRAFT_PLACE.AGENT, taskId: input.taskId, agentId });
   const queryClient = useQueryClient();
   const [held, setHeld] = useState<Held>(() => fresh(agentId));
 

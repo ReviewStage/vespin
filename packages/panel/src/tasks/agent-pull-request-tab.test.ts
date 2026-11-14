@@ -144,7 +144,7 @@ const HELD_PEOPLE: AppWorkspaceMembers = { "workspace-acme": { rows: { members: 
 
 const AGENT: AgentSummary = {
   id: "1e3c5a7b-9d2f-4b6e-8a1c-3e5f7a9b1d2c",
-  planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+  taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Expiry job",
@@ -2570,7 +2570,7 @@ test("until the pull request's own read lands, the line under the title draws wh
           workspaces: [workspace],
           tasks: [
             {
-              id: AGENT.planId,
+              id: AGENT.taskId,
               workspaceId: workspace.id,
               name: "Expire invitations",
               createdAt: 1,
@@ -2923,7 +2923,7 @@ test("a change refused for a repository out of the workspace's reach says where 
     assert.fail("the line offers Settings, where access is given");
 
   act(() => open.click());
-  assert.deepEqual(opened, [AGENT.planId]);
+  assert.deepEqual(opened, [AGENT.taskId]);
 });
 
 test("a change GitHub refused says so in GitHub's own words until dismissed, and the pull request is read again in case it moved", async () => {
@@ -3880,7 +3880,7 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
     ...(agent === undefined ? undefined : { agent }),
   });
 
-  const sibling = { id: "5a7c9e1b-3d5f-4b7d-9f1b-3d5f7b9d1f3a", taskId: AGENT.planId };
+  const sibling = { id: "5a7c9e1b-3d5f-4b7d-9f1b-3d5f7b9d1f3a", taskId: AGENT.taskId };
   const away = { id: "7c9e1b3d-5f7b-4d9f-8b3d-5f7b9d1f3b5d", taskId: elsewhere };
   const beside = { id: "9e1b3d5f-7b9d-4f1b-8d5f-7b9d1f3b5d7f", taskId: elsewhere };
   const links: ReadLink[] = [];
@@ -3894,7 +3894,7 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
             stack: [
               entry(38, away),
               entry(40, sibling),
-              entry(42, { id: AGENT.id, taskId: AGENT.planId }),
+              entry(42, { id: AGENT.id, taskId: AGENT.taskId }),
               entry(44, beside),
               entry(46),
             ],
@@ -3949,15 +3949,15 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
   assert.deepEqual(links, [
     {
       workspace: "",
-      place: { kind: LINK_DESTINATION.CHANGES, planId: AGENT.planId, agentId: sibling.id },
+      place: { kind: LINK_DESTINATION.CHANGES, taskId: AGENT.taskId, agentId: sibling.id },
     },
     {
       workspace: "",
-      place: { kind: LINK_DESTINATION.CHANGES, planId: elsewhere, agentId: away.id },
+      place: { kind: LINK_DESTINATION.CHANGES, taskId: elsewhere, agentId: away.id },
     },
     {
       workspace: "",
-      place: { kind: LINK_DESTINATION.CHANGES, planId: elsewhere, agentId: beside.id },
+      place: { kind: LINK_DESTINATION.CHANGES, taskId: elsewhere, agentId: beside.id },
     },
   ]);
   await vi.waitFor(() => assert.deepEqual(opened, ["https://github.com/acme/relay/pull/46"]));
@@ -6431,7 +6431,7 @@ test("a link to a thread opens a folded Conversation to land on it, centering it
         workspace: "acme",
         place: {
           kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
-          planId: AGENT.planId ?? "",
+          taskId: AGENT.taskId ?? "",
           agentId: AGENT.id,
           threadId: JUMPED,
           view: PULL_REQUEST_THREAD_VIEW.CONVERSATION,
@@ -6483,7 +6483,7 @@ test("a thread whose file the changes no longer hold stays in the Conversation, 
       workspace: "acme",
       place: {
         kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
-        planId: AGENT.planId ?? "",
+        taskId: AGENT.taskId ?? "",
         agentId: AGENT.id,
         threadId: "PRRT_kwDOnone",
         view: PULL_REQUEST_THREAD_VIEW.CONVERSATION,

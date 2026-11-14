@@ -79,7 +79,7 @@ export const KEPT_CHARACTERS = 150_000;
 /** One item as the follow last took it, and the plan it is on. */
 interface HeldItem {
   readonly item: InboxItem;
-  readonly planId: string;
+  readonly taskId: string;
 }
 
 /** Every item held, by its id. */
@@ -128,8 +128,8 @@ function heldAfter(
     if (item === undefined) continue;
     const before = held.get(stamp.id);
 
-    if (before !== undefined && before.planId !== stamp.planId) placed.push(stamp.id);
-    next.set(stamp.id, { item, planId: stamp.planId });
+    if (before !== undefined && before.taskId !== stamp.taskId) placed.push(stamp.id);
+    next.set(stamp.id, { item, taskId: stamp.taskId });
   }
 
   for (const id of standing?.gone ?? []) next.delete(id);
@@ -197,28 +197,28 @@ function inboxItemsPatched(
   const touched = new Set<string>();
 
   for (const id of moved) {
-    for (const on of [was.get(id), held.get(id)]) if (on !== undefined) touched.add(on.planId);
+    for (const on of [was.get(id), held.get(id)]) if (on !== undefined) touched.add(on.taskId);
   }
 
   if (touched.size === 0) return told;
   const lists = new Map<string, InboxItem[]>();
 
-  for (const [id, { item, planId }] of held) {
-    if (!touched.has(planId)) continue;
-    const items = lists.get(planId);
+  for (const [id, { item, taskId }] of held) {
+    if (!touched.has(taskId)) continue;
+    const items = lists.get(taskId);
     const shown = drawnOf(id) ?? item;
 
-    if (items === undefined) lists.set(planId, [shown]);
+    if (items === undefined) lists.set(taskId, [shown]);
     else items.push(shown);
   }
 
   const next = { ...told[INBOX_SCOPE_KIND.PLAN] };
 
-  for (const planId of touched) {
-    const items = lists.get(planId);
+  for (const taskId of touched) {
+    const items = lists.get(taskId);
 
-    if (items === undefined) Reflect.deleteProperty(next, planId);
-    else next[planId] = inboxInOrder(items);
+    if (items === undefined) Reflect.deleteProperty(next, taskId);
+    else next[taskId] = inboxInOrder(items);
   }
 
   return { [INBOX_SCOPE_KIND.PLAN]: next };

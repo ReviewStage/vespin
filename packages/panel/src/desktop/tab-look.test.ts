@@ -79,7 +79,7 @@ const SUMMARY: TaskSummary = {
 function agent(id: string, title: string, status: AgentSummary["status"]): AgentSummary {
   return {
     id,
-    planId: TASK.id,
+    taskId: TASK.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title,

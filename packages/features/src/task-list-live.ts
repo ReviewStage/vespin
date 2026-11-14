@@ -174,7 +174,7 @@ const archiveLiveSchema = EffectSchema.Struct({
 /** One agent as its row delivers it: its own columns, its newest turn's, and what stands beside it, null where none does. */
 const agentLiveRowSchema = EffectSchema.Struct({
   id: EffectSchema.String,
-  planId: EffectSchema.String,
+  taskId: EffectSchema.String,
   workspaceId: EffectSchema.String,
   model: EffectSchema.String,
   effort: EffectSchema.String,
@@ -854,14 +854,14 @@ function agentSummaryOf(
   const mac = macOf(row);
 
   const owner = agentOwnerOf({
-    taskId: row.planId,
+    taskId: row.taskId,
     runId: row.runId ?? null,
     runAutomationId: row.runAutomationId ?? null,
   });
 
   return {
     id: row.id,
-    planId: row.planId,
+    taskId: row.taskId,
     model: row.model,
     effort: row.effort,
     ...(row.contextWindow === CONTEXT_WINDOW.STANDARD
@@ -945,10 +945,10 @@ function gracedAt(row: AgentLiveRow, now: number): GracedAgent {
 
 /** The reader's pin of an agent; none for one unpinned or archived, since an archived agent stands in no list a pin is drawn in. */
 export function agentPinOf(row: AgentLiveRow): TaskAgentPin | undefined {
-  const { planId, pinnedAt, pinPosition } = row;
+  const { taskId, pinnedAt, pinPosition } = row;
 
   if (pinnedAt === null || row.archivedAt !== null) return undefined;
-  const at = { agentId: row.id, taskId: planId, pinnedAt };
+  const at = { agentId: row.id, taskId: taskId, pinnedAt };
 
   return pinPosition === null ? at : { ...at, pinPosition };
 }
@@ -957,7 +957,7 @@ export function agentPinOf(row: AgentLiveRow): TaskAgentPin | undefined {
 export function agentPullRequestOf(row: AgentLiveRow): ListedPullRequest | undefined {
   const marked = markedOfRow(row);
 
-  return marked === null ? undefined : { agentId: row.id, taskId: row.planId, pullRequest: marked };
+  return marked === null ? undefined : { agentId: row.id, taskId: row.taskId, pullRequest: marked };
 }
 
 /** The agents started from each agent by its id (`continuedByOf`); none for an agent nothing was started from. */
@@ -1027,7 +1027,7 @@ export function taskPullRequestsOfLiveRows(rows: TaskListLiveRows): readonly Tas
   const byTask = new Map<string, AgentLiveRow[]>();
 
   for (const row of rows.agents) {
-    byTask.set(row.planId, [...(byTask.get(row.planId) ?? []), row]);
+    byTask.set(row.taskId, [...(byTask.get(row.taskId) ?? []), row]);
   }
 
   return [...byTask].flatMap(([taskId, agents]) => {
@@ -1064,9 +1064,9 @@ export function taskListOfLiveRows(rows: TaskListLiveRows, now: number): TaskLis
 
   for (const row of rows.agents) {
     const graced = gracedAt(row, now);
-    const group = byTask.get(row.planId);
+    const group = byTask.get(row.taskId);
 
-    if (group === undefined) byTask.set(row.planId, [graced]);
+    if (group === undefined) byTask.set(row.taskId, [graced]);
     else group.push(graced);
   }
 

@@ -411,7 +411,7 @@ export interface InboxImageReads {
 
 /** Where an item's card keeps its draft: the item, whatever its revision or status, so a message landing on it never moves the words being written. */
 function draftPlace(item: InboxItem, taskId: string | null): InboxPlace {
-  return { kind: DRAFT_PLACE.INBOX, planId: taskId, agentId: item.agentId, itemId: item.id };
+  return { kind: DRAFT_PLACE.INBOX, taskId: taskId, agentId: item.agentId, itemId: item.id };
 }
 
 /** The items with one replaced by the service's newer word on it. */
@@ -998,7 +998,7 @@ export function useInboxDraftsLetGo(
   // which stand on the ask as it was, while the words and files being written stay as they are.
   useEffect(() => {
     if (!drawn || taskId === undefined) return;
-    const covered = standings.filter(({ place }) => place.planId === taskId);
+    const covered = standings.filter(({ place }) => place.taskId === taskId);
 
     const gone =
       whole === undefined

@@ -269,7 +269,7 @@ const COMMENT_UNANSWERED: TasksCommentAnswer = { failure: TASK_CALL_FAILURE.UNAN
 
 /** A plan's skills, by its id and the workspace and repository the list names it in, so a plan moved to another of either is another key, its workspace's installed skills among what is read. */
 class PlanSkillsKey extends Data.Class<{
-  readonly planId: string;
+  readonly taskId: string;
   readonly workspaceId: string | undefined;
   readonly repository: string | undefined;
 }> {}
@@ -751,7 +751,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     return Effect.map(
       served(
         key instanceof PlanSkillsKey
-          ? client.readSkills(key.planId)
+          ? client.readSkills(key.taskId)
           : client.readRepositorySkills(
               key.repository === undefined
                 ? { workspaceId: key.workspaceId }
@@ -1116,11 +1116,11 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
   /** The windows' writes to a task's comments, each drawn over its thread at once; behind a closed gate each answers unanswered, taken back as it is drawn. */
   const commentWrites = descriptionCommentWrites({
-    start: (planId, start) =>
-      gate() ? served(client.startComment(planId, start)) : Effect.succeed(COMMENT_UNANSWERED),
-    act: (planId, threadId, action) =>
+    start: (taskId, start) =>
+      gate() ? served(client.startComment(taskId, start)) : Effect.succeed(COMMENT_UNANSWERED),
+    act: (taskId, threadId, action) =>
       gate()
-        ? served(client.actOnComment(planId, threadId, action))
+        ? served(client.actOnComment(taskId, threadId, action))
         : Effect.succeed(COMMENT_UNANSWERED),
     member: dependencies.member,
     now: kernel.now,
@@ -2283,7 +2283,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
                   } else if (opened !== undefined && !waits) yield* startedBack(opened, id);
 
                   return untaken<FieldChange<PlanRow>, TasksStartAnswer>(went, {
-                    kept: { planId: id },
+                    kept: { taskId: id },
                     refused: {
                       failure,
                       ...(localAgentRefusal === undefined ? undefined : { localAgentRefusal }),
@@ -2299,7 +2299,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
                 return {
                   answer: {
-                    planId: task.id,
+                    taskId: task.id,
                     ...(agent === undefined ? undefined : { agentStart: agent }),
                   },
                   txid,
@@ -2314,7 +2314,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     queue: {
       name: TASK_QUEUED_WRITE.START,
       input: startKeptSchema,
-      queued: ({ request }) => ({ planId: request.id }),
+      queued: ({ request }) => ({ taskId: request.id }),
       holds: ({ request }) => request.agent !== undefined,
     },
   };
@@ -2702,8 +2702,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         };
 
         const answer = yield* served(
-          "planId" in asked
-            ? client.readTree(asked.planId, folder)
+          "taskId" in asked
+            ? client.readTree(asked.taskId, folder)
             : client.readRepositoryTree(asked, folder),
         );
 
@@ -2719,12 +2719,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
 
         const listed =
-          "planId" in asked ? view.tasks.find((each) => each.id === asked.planId) : undefined;
+          "taskId" in asked ? view.tasks.find((each) => each.id === asked.taskId) : undefined;
 
         const key: SkillsKey =
-          "planId" in asked
+          "taskId" in asked
             ? new PlanSkillsKey({
-                planId: asked.planId,
+                taskId: asked.taskId,
                 workspaceId: listed?.workspaceId,
                 repository: listed?.repository ?? undefined,
               })
@@ -2884,9 +2884,9 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     TASKS_PICTURE_READ: (read) =>
       gate()
         ? kept.answer(
-            new DescriptionPictureKey({ planId: read.planId, attachmentId: read.attachmentId }),
+            new DescriptionPictureKey({ taskId: read.taskId, attachmentId: read.attachmentId }),
             dependencies.accountId,
-            served(client.readPicture(read.planId, read.attachmentId)),
+            served(client.readPicture(read.taskId, read.attachmentId)),
             (answer) => ("base64" in answer ? answer : undefined),
           )
         : Effect.succeed({ failure: TASK_CALL_FAILURE.UNANSWERED }),
@@ -2900,7 +2900,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     // the description's text names it once the editor lays its address in.
     TASKS_PICTURE_KEEP: (read) =>
       gate()
-        ? served(client.keepPicture(read.planId, read.picture))
+        ? served(client.keepPicture(read.taskId, read.picture))
         : Effect.succeed({ failure: TASK_CALL_FAILURE.UNANSWERED }),
     // The service answers the task as restored, so the list's row and its
     // held description take it in place and nothing is read again. It is confirmed

@@ -353,7 +353,7 @@ export class HostedTaskClient {
 
   /** A thread started on the description, or one of its task's pages, with its first comment, answered as it stands, or why not; a request the service would refuse by shape travels nowhere. */
   startComment(
-    planId: string,
+    taskId: string,
     request: DescriptionCommentStart,
   ): Effect.Effect<TasksCommentAnswer, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(
@@ -364,7 +364,7 @@ export class HostedTaskClient {
 
     return Effect.map(
       hostedCall(this.#hosted.descriptionComments.start, {
-        params: { id: planId },
+        params: { id: taskId },
         body: admitted,
       }),
       (started) => ("failure" in started ? bareFailure(started) : started.body),
@@ -373,7 +373,7 @@ export class HostedTaskClient {
 
   /** One thing done to one thread of the description, answered with the thread as it stands, its deletion, or why not. */
   actOnComment(
-    planId: string,
+    taskId: string,
     threadId: string,
     request: DescriptionCommentActionRequest,
   ): Effect.Effect<TasksCommentAnswer, never, HttpClient.HttpClient> {
@@ -385,7 +385,7 @@ export class HostedTaskClient {
 
     return Effect.map(
       hostedCall(this.#hosted.descriptionComments.act, {
-        params: { id: planId, thread: threadId },
+        params: { id: taskId, thread: threadId },
         body: admitted,
       }),
       (acted) => ("failure" in acted ? bareFailure(acted) : acted),

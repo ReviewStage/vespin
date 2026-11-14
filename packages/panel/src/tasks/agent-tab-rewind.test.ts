@@ -42,7 +42,7 @@ const AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 
 const AGENT_SUMMARY: AgentSummary = {
   id: AGENT,
-  planId: TASK,
+  taskId: TASK,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Fix the tile",
@@ -87,7 +87,7 @@ const MESSAGES: readonly AgentTranscriptMessage[] = [
 const REWOUND: AgentAgentAnswer = {
   agent: {
     id: AGENT,
-    planId: TASK,
+    taskId: TASK,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,
@@ -159,7 +159,7 @@ async function drawnTab(
         taskAgents: [
           {
             id: AGENT,
-            planId: TASK,
+            taskId: TASK,
             turnId: null,
             title: AGENT_SUMMARY.title,
             model: AGENT_SUMMARY.model,

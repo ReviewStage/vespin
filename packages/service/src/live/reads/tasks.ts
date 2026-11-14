@@ -347,7 +347,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
       ordered: false,
       columns: {
         id: agentTable.id,
-        planId: agentTable.taskId,
+        taskId: agentTable.taskId,
         workspaceId: agentTable.organizationId,
         model: agentTable.model,
         effort: agentTable.effort,

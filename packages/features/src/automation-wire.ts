@@ -24,8 +24,8 @@ import { SENTRY_LEVEL, SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "./trigger-
  * as JSON (`packages/database/src/schemas/automation.ts`) and what the
  * routes answer, declared once.
  *
- * Note that `planId` and `planName` keep the wire's legacy spelling of a task, because a
- * released desktop sends and reads them; they are renamed with the wire in a
+ * Note that `planName` keeps the wire's legacy spelling of a task, because a
+ * released desktop sends and reads it; it is renamed with the wire in a
  * follow-up, with no alias.
  */
 
@@ -533,7 +533,7 @@ export const automationRunReasonSchema = EffectSchema.Literals(
 );
 
 /** The query an automation list may narrow by: one task's automations alone. */
-export const AUTOMATION_LIST_QUERY = { TASK_ID: "planId", WORKSPACE_ID: "workspaceId" } as const;
+export const AUTOMATION_LIST_QUERY = { TASK_ID: "taskId", WORKSPACE_ID: "workspaceId" } as const;
 
 /**
  * One run as the history shows it: what fired it, where it stands, why
@@ -571,7 +571,7 @@ export type AutomationRunSummary = typeof automationRunSummarySchema.Type;
 const automationSummarySchema = EffectSchema.Struct({
   id: wireUuidSchema,
   /** The task it was made on; null for an automation made on its workspace with no task, which its repositories stand in for. */
-  planId: EffectSchema.NullOr(wireUuidSchema),
+  taskId: EffectSchema.NullOr(wireUuidSchema),
   planName: EffectSchema.NullOr(EffectSchema.String),
   /** The workspace it belongs to, whose members its scope lets reach it; absent from a service before it. */
   workspaceId: EffectSchema.optionalKey(EffectSchema.String),
@@ -662,7 +662,7 @@ const automationRepositoriesSchema = EffectSchema.Array(githubRepositoryFullName
  */
 export const automationCreateRequestSchema = EffectSchema.Struct({
   id: EffectSchema.optionalKey(chosenIdSchema),
-  planId: EffectSchema.optionalKey(wireUuidSchema),
+  taskId: EffectSchema.optionalKey(wireUuidSchema),
   workspaceId: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
   repositories: EffectSchema.optionalKey(automationRepositoriesSchema),
   name: nameSchema,

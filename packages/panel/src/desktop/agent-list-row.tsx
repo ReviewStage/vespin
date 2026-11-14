@@ -154,7 +154,7 @@ export function AgentListRow({
                 card={
                   <PullRequestCard
                     pullRequest={pullRequest}
-                    place={{ taskId: agent.planId }}
+                    place={{ taskId: agent.taskId }}
                     lines={pullRequest}
                     files={pullRequest.changedFiles}
                     opener={people?.author ?? openerOf(pullRequest)}
