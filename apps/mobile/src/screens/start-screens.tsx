@@ -43,7 +43,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
@@ -370,13 +370,15 @@ function useSheetStart(
   // Note that what a start says is held with it, so a task filed for later shows the spinner without the words an agent's start says.
   const [out, setOut] = useState<{ readonly says: string | undefined } | undefined>(undefined);
   const starting = out !== undefined;
+  // Note that a start out is also held in a ref, so two presses in one frame, which both read the render's state, start one task.
+  const sending = useRef(false);
 
   const go = (
     start: () => Promise<StartAnswer>,
     refusal?: string | undefined,
     says?: string | undefined,
   ) => {
-    if (starting) return;
+    if (sending.current) return;
 
     if (refusal !== undefined) {
       setNote(refusal);
@@ -385,6 +387,7 @@ function useSheetStart(
       return;
     }
 
+    sending.current = true;
     setOut({ says });
     setNote(undefined);
     const started: Started = {};
@@ -414,7 +417,10 @@ function useSheetStart(
 
         if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
       })
-      .finally(() => setOut(undefined));
+      .finally(() => {
+        sending.current = false;
+        setOut(undefined);
+      });
   };
 
   return { starting, pending: out?.says, go };
