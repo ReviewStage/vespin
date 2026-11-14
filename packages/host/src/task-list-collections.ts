@@ -90,7 +90,7 @@ import { timeOrdered } from "./time-ordered.js";
 const RECHECKS = 3;
 
 /** A plan's row as the list's statement answers it. */
-export type PlanRow = TaskListLiveRows["plans"][number];
+export type PlanRow = TaskListLiveRows["tasks"][number];
 
 /** An agent's row as the list's statement answers it. */
 export type AgentRow = TaskListLiveRows["agents"][number];
@@ -416,7 +416,7 @@ export function taskListCollections(
       const edge = gracesAt(at);
       const listed = tasks.plans();
 
-      if (list?.plans !== listed) list = { plans: listed };
+      if (list?.tasks !== listed) list = { tasks: listed };
 
       dependencies.draw({
         list,
@@ -462,7 +462,7 @@ export function taskListCollections(
 
         // Note that the follow answers a task deleted and one that only left its set alike, as gone, so one it let go while this read was out is neither drawn nor dropped but read again, asked after the let-go, whose answer settles which it was.
         const letGo = new Set([
-          ...rows.plans
+          ...rows.tasks
             .filter((row) => !plans.holds(row.id) && letGoSince(row.id) && !drawnLater(row.id))
             .map((row) => row.id),
           ...rows.agents
@@ -479,7 +479,7 @@ export function taskListCollections(
           for (const id of letGo) yield* FiberSet.run(rechecks, recheck(id, tries + 1));
         }
 
-        const planRows = rows.plans.filter((row) => !plans.holds(row.id) && standing(row));
+        const planRows = rows.tasks.filter((row) => !plans.holds(row.id) && standing(row));
 
         // Note that an agent stands only where its task's snapshot does, so an earlier read draws back no agent a later one of its task left out.
         const agentRows = rows.agents.filter(
@@ -520,7 +520,7 @@ export function taskListCollections(
           // Note that one past a sync id joins what it names onto the rows held, less those it lets go, and a whole one holds its rows alone.
           const past = standing?.past !== undefined;
           const gone = new Set(past ? standing.gone : []);
-          const answeredPlans = new Map(answeredRows.plans.map((row) => [row.id, row]));
+          const answeredPlans = new Map(answeredRows.tasks.map((row) => [row.id, row]));
           const answeredAgents = new Map(answeredRows.agents.map((row) => [row.id, row]));
           const planOf = (id: string) => answeredPlans.get(id) ?? plans.row(id);
           const agentOf = (id: string) => answeredAgents.get(id) ?? agents.row(id);
@@ -570,7 +570,7 @@ export function taskListCollections(
           const ofStanding = (row: AgentRow) => row.taskId === null || !left.has(row.taskId);
 
           const rows = {
-            plans: answeredRows.plans.filter((row) => !left.has(row.id)),
+            plans: answeredRows.tasks.filter((row) => !left.has(row.id)),
             agents: answeredRows.agents.filter(ofStanding),
           };
 
@@ -630,7 +630,7 @@ export function taskListCollections(
             return plansMoved.length + agentsMoved.length > 0;
           });
         }),
-      synced: () => ({ plans: plans.synced(), agents: agents.synced() }),
+      synced: () => ({ tasks: plans.synced(), agents: agents.synced() }),
       holds: (id) =>
         plans.holds(id) || agents.holds(id) || coldPlans.holds(id) || coldAgents.holds(id),
       mark,
