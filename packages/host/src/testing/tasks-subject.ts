@@ -42,6 +42,7 @@ import {
   PERSON_PAGE_READ,
   TASK_LIST_READ,
   TASK_PAGE_READ,
+  TASK_RELATIONS_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_READ,
 } from "@repo/features/task-list-live";
@@ -1286,6 +1287,28 @@ export function fakeService(tasks: Task[]): FakeService {
           return Effect.succeed(rows.first());
         }
 
+        // A task's relations, its sub-tasks, its parent, and its blocks among the fake's tasks, none with agents.
+        if (read.name === TASK_RELATIONS_READ.name) {
+          service.reads.push(`task-relations:${params.id}`);
+          const of = service.tasks.find((each) => each.id === params.id);
+          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+
+          const related = new Set([
+            ...(of?.parentTaskId === undefined ? [] : [of.parentTaskId]),
+            ...(of?.blockedBy ?? []),
+            ...(of?.blocks ?? []),
+          ]);
+
+          rows.set({
+            plans: service.tasks
+              .filter((each) => related.has(each.id) || each.parentTaskId === params.id)
+              .map(rowOfTask),
+            agents: [],
+          });
+
+          return Effect.succeed(rows.first());
+        }
+
         // A search, finding each of the fake's tasks whose name holds the query, none with agents.
         if (read.name === TASK_SEARCH_READ.name) {
           const query = params.query?.toLowerCase() ?? "";
@@ -1963,5 +1986,7 @@ export function rowOfTask(each: Task) {
     status: each.status ?? TASK_STATUS.TODO,
     priority: each.priority ?? TASK_PRIORITY.NONE,
     parentTaskId: each.parentTaskId ?? null,
+    blockedBy: each.blockedBy ?? [],
+    blocks: each.blocks ?? [],
   };
 }

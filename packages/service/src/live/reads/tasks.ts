@@ -61,6 +61,7 @@ import {
   SETTLED_PAGE_SIZE,
   TASK_LIST_READ,
   TASK_PAGE_READ,
+  TASK_RELATIONS_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_LIMIT,
   TASK_SEARCH_READ,
@@ -600,6 +601,62 @@ export const taskRowsRead = bindLiveRead(TASK_ROWS_READ, {
         userId,
         or(eq(agentTable.id, id), sql`${agentTable.taskId} in (${ofTask})`) ?? sql`false`,
       ),
+    };
+  },
+});
+
+/** The task a relation is read from, apart from the row a statement reads. */
+const relatedFrom = alias(task, "related_from");
+
+/**
+ * The tasks related to the task `id` names: each sub-task of it, its
+ * parent, and each task it waits on or holds up. Note that the parent is
+ * read off the task itself under an alias of its own, so the statement's
+ * row is never shadowed.
+ */
+function taskRelatedTo(id: string): SQL {
+  const parent = queryBuilder
+    .select({ id: relatedFrom.parentTaskId })
+    .from(relatedFrom)
+    .where(eq(relatedFrom.id, id));
+
+  const blockers = queryBuilder
+    .select({ id: taskBlock.blockerTaskId })
+    .from(taskBlock)
+    .where(eq(taskBlock.blockedTaskId, id));
+
+  const blocked = queryBuilder
+    .select({ id: taskBlock.blockedTaskId })
+    .from(taskBlock)
+    .where(eq(taskBlock.blockerTaskId, id));
+
+  return (
+    or(
+      eq(task.parentTaskId, id),
+      sql`${task.id} in (${parent})`,
+      sql`${task.id} in (${blockers})`,
+      sql`${task.id} in (${blocked})`,
+    ) ?? sql`false`
+  );
+}
+
+/**
+ * The tasks related to one task (`taskRelations`), by the task its `id`
+ * names: the list's own statements narrowed to its sub-tasks, its parent,
+ * and the tasks it waits on and holds up, and every agent of them, on the
+ * list's rule of who reads them, so a task the account does not reach reads
+ * no row. It is read once, as a window opens the task or hangs its card,
+ * and never followed, so it wakes as the list does.
+ */
+export const taskRelationsRead = bindLiveRead(TASK_RELATIONS_READ, {
+  reads: TASK_LIST_TABLES,
+  topics: ({ userId }) => readerAndWorkspaceTopics(userId),
+  statements: ({ userId, id }) => {
+    const related = queryBuilder.select({ id: task.id }).from(task).where(taskRelatedTo(id));
+
+    return {
+      plans: tasksStatement(userId, taskRelatedTo(id)),
+      agents: agentsStatement(userId, sql`${agentTable.taskId} in (${related})`),
     };
   },
 });

@@ -38,6 +38,7 @@ import {
   settledPageCursorOf,
   TASK_LIST_READ,
   TASK_PAGE_READ,
+  TASK_RELATIONS_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_READ,
 } from "@repo/features/task-list-live";
@@ -1300,6 +1301,68 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       return Effect.asVoid(FiberMap.run(coldReads, id, pending, { onlyIfMissing: true }));
     });
 
+  const decodeRelationRows = Schema.decodeUnknownOption(TASK_RELATIONS_READ.rows);
+  /** Each read out now of a task's relations, by the task's id, which every ask meanwhile joins. */
+  const relationReads = yield* FiberMap.make<string>();
+  /** The tasks whose relations were read into this list, which a card hung again reads not, and a session signing in reads again. */
+  const relationsRead = new Set<string>();
+  /** The tasks whose relations are being read now, which a sign-out meanwhile reads again for the session signing in. */
+  const relationsPending = new Set<string>();
+  /** The tasks whose relations were asked while the list could not be read outside of, each read once the list answers. */
+  const relationsWaiting = new Set<string>();
+
+  /**
+   * The tasks related to the task `taskId` names, its sub-tasks, its parent,
+   * and the tasks it waits on and holds up, read from the service with their
+   * agents and drawn in the list as cold tasks (`task-list-collections.ts`)
+   * where it holds them not, so the task's relations and its count of
+   * sub-tasks finished stand whole however few tasks the list follows.
+   * Answered at once, the read running on. An open reads them each time,
+   * since a relation may have been added since; a card hung (`again` false)
+   * reads them once a list. Note that a task the list holds already is the
+   * list's alone, so nothing moves while it holds every one related.
+   */
+  const relationsOpened = (taskId: string, again: boolean): Effect.Effect<void> =>
+    Effect.suspend(() => {
+      const userId = dependencies.accountId();
+      const { collections } = taskList;
+
+      if (!again && relationsRead.has(taskId)) return Effect.void;
+
+      if (!gate() || userId === undefined || view.listStatus !== TASKS_READ.READY) {
+        relationsWaiting.add(taskId);
+
+        return Effect.void;
+      }
+
+      // Note that the read is marked before it is asked, so a task the follow lets go while it is out is not drawn back by its answer.
+      const mark = collections.mark();
+
+      const read = Effect.gen(function* () {
+        const sealed = yield* served(
+          client.liveRead(TASK_RELATIONS_READ, { id: taskId, userId }, {}),
+        );
+
+        if ("failure" in sealed) return;
+        const { plans, agents } = sealed.queries;
+        const rows = decodeRelationRows({ plans: plans.rows, agents: agents.rows });
+
+        if (Option.isNone(rows) || taskList.collections !== collections) return;
+        // Note that only an answer drawn counts as read, so a card hung after a read that failed asks again.
+        relationsRead.add(taskId);
+        yield* collections.cold(rows.value, mark);
+      });
+
+      relationsPending.add(taskId);
+
+      const pending = Effect.ensuring(
+        read,
+        Effect.sync(() => relationsPending.delete(taskId)),
+      );
+
+      return Effect.asVoid(FiberMap.run(relationReads, taskId, pending, { onlyIfMissing: true }));
+    });
+
   const openedOutside = (id: string): Effect.Effect<void> =>
     Effect.suspend(() => {
       // Note that a task a window opens is the window's, read again for a session signing in, though the Inbox asked it first.
@@ -1443,6 +1506,11 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           const waiting = [...coldWaiting];
           coldWaiting.clear();
           yield* Effect.forEach(waiting, openedOutside, { discard: true });
+          const relationsAsked = [...relationsWaiting];
+          relationsWaiting.clear();
+          yield* Effect.forEach(relationsAsked, (taskId) => relationsOpened(taskId, true), {
+            discard: true,
+          });
 
           if (inboxWaiting) yield* FiberHandle.run(inboxReads, readInboxTasks);
           // Note that an answer the list did not draw tells its standing here, as after a poll that failed, and one it drew told it already.
@@ -2662,6 +2730,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       }),
     // A search past the list is read into it, answered to the window once drawn.
     TASKS_SEARCH: ({ query }) => searched(query),
+    // A task's card hung reads the tasks related to it into the list, once a list.
+    TASKS_RELATIONS_READ: ({ taskId }) => relationsOpened(taskId, false),
     // A tab pinned in a window on a task the list holds not reads its task into it, as an open does, without opening it.
     TASKS_LOAD: ({ taskId }) => openedOutside(taskId),
     // A page of a workspace's settled tasks is read into the list as cold
@@ -2995,8 +3065,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     TASKS_BROWSER_TABS_FOLLOW: { hold: (place) => heldBrowserTabs.hold(browserTabsOwnerOf(place)) },
     TASKS_PAGES_FOLLOW: { hold: (place) => heldPageReads.hold(pageOwnerOf(place)) },
     TASKS_DOCUMENT_FOLLOW: {
-      // A task a window opens that the list does not hold is read into it beside its description.
-      hold: ({ taskId }) => Effect.andThen(openedOutside(taskId), documents.hold(taskId)),
+      // A task a window opens that the list does not hold is read into it beside its description, and so are the tasks related to it.
+      hold: ({ taskId }) =>
+        Effect.andThen(
+          Effect.andThen(openedOutside(taskId), relationsOpened(taskId, true)),
+          documents.hold(taskId),
+        ),
       retry: ({ taskId }) => (gate() ? documents.retry(taskId) : Effect.void),
     },
     TASKS_HISTORY_FOLLOW: {
@@ -3073,6 +3147,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       inboxWaiting = false;
       inboxAsked.clear();
       yield* FiberMap.clear(coldReads);
+
+      // Note that the relations read are read again for the session signing in, as the cold tasks are.
+      for (const id of [...relationsRead, ...relationsPending]) relationsWaiting.add(id);
+
+      yield* FiberMap.clear(relationReads);
+      relationsRead.clear();
 
       coldRead.clear();
       coldNone.clear();

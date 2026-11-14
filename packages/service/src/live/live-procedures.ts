@@ -37,6 +37,10 @@
  * settled tasks and every agent of them, the newest finished first, past
  * `beforeAt` and `beforeId` where named (`taskPageRead`), for a list that
  * shows finished work the task list does not hold.
+ * `GET /api/live/task-relations?id=` answers the tasks related to the task
+ * `id` names, its sub-tasks, its parent, and its blocks, and every agent of
+ * them, the same way (`taskRelationsRead`), for a window drawing an open or
+ * hovered task's relations past the list it holds.
  * `GET /api/live/person-page?workspaceId=&personId=` answers how many of a
  * person's tasks and agents the account reads, and a page of the newest
  * with every agent of them (`personPageRead`), for their page.
@@ -235,6 +239,7 @@ import { taskRecordRead } from "./reads/task-record.js";
 import {
   personPageRead,
   taskPageRead,
+  taskRelationsRead,
   taskRowsRead,
   taskSearchRead,
   tasksRead,
@@ -933,6 +938,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     taskRows: signedIn.taskRows.effect(answerBoundRead(taskRowsRead)),
     taskSearch: signedIn.taskSearch.effect(answerBoundRead(taskSearchRead)),
     taskPage: signedIn.taskPage.effect(answerBoundRead(taskPageRead)),
+    taskRelations: signedIn.taskRelations.effect(answerBoundRead(taskRelationsRead)),
     personPage: signedIn.personPage.effect(answerBoundRead(personPageRead)),
     automations: signedIn.automations.effect(answerBoundRead(automationsRead)),
     automationWorkspaceRuns: signedIn.automationWorkspaceRuns.effect(

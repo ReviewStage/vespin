@@ -414,6 +414,14 @@ export const TASKS_ACTS = declaredActs({
     door: ACT.READ,
     unanswered: undefined,
   }),
+  TASKS_RELATIONS_READ: hostAct({
+    input: taskIdParamsSchema,
+    output: EffectSchema.Void,
+    refusal: "Could not read that task's relations on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: undefined,
+  }),
   TASKS_LOAD: hostAct({
     input: taskIdParamsSchema,
     output: EffectSchema.Void,

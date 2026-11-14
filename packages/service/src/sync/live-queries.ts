@@ -32,6 +32,7 @@ import { taskRecordRead } from "../live/reads/task-record.js";
 import {
   personPageRead,
   taskPageRead,
+  taskRelationsRead,
   taskRowsRead,
   taskSearchRead,
   tasksRead,
@@ -48,6 +49,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   taskRowsRead,
   taskSearchRead,
   taskPageRead,
+  taskRelationsRead,
   personPageRead,
   accountInboxRead,
   inboxItemsRead,

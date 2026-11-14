@@ -320,6 +320,25 @@ export const TASK_ROWS_READ = liveRead({
 
 export type TaskRowsLiveAnswer = LiveReadAnswer<typeof TASK_ROWS_READ>;
 
+/**
+ * The tasks related to the task `id` names, read once rather than followed,
+ * for a window drawing its relations past the list it holds: every sub-task
+ * of it, its parent, and the tasks it waits on and holds up, as the list's
+ * plans answer them, with every agent of them as the list's agents do. The
+ * rows are the list's own, read on the same rule of who may read them, so a
+ * task the account does not reach answers no rows.
+ */
+export const TASK_RELATIONS_READ = liveRead({
+  name: "taskRelations",
+  path: HOSTED_SERVICE_PATH.LIVE_TASK_RELATIONS,
+  params: { id: LIVE_PARAM.ID, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    plans: TASK_LIST_READ.parts.plans,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
 /** The most tasks one search answers, the latest changed first, so a query of one letter reads no account whole. */
 export const TASK_SEARCH_LIMIT = 20;
 
