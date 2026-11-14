@@ -848,9 +848,11 @@ export function TaskRow(props: TaskRowProps) {
   const colors = useColors();
   // Note that each level of sub-tasks stands in past a parent's fold, its column the lead's scaled width, so a sub-task's mark stands under its parent's at every size.
   const lead = useScaledSize(MARK_SIZE.LEAD);
+  const dot = useScaledSize(MARK_SIZE.DOT);
   const column = lead + SPACE.ROW;
-  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth, past a parent's fold, and by however much the lead has grown.
-  const indent = depth * column + (fold === undefined ? 0 : column) + lead - MARK_SIZE.LEAD;
+  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth, past a parent's fold, and by however much the unread dot's column and the lead have grown, since the dot holds its width even while hidden.
+  const grown = lead - MARK_SIZE.LEAD + dot - MARK_SIZE.DOT;
+  const indent = depth * column + (fold === undefined ? 0 : column) + grown;
 
   const row: ReactElement = (
     <HStack modifiers={[padding({ leading: depth * column })]}>
