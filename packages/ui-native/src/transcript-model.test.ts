@@ -9,6 +9,7 @@ import {
   TRANSCRIPT_ITEM,
   transcriptItems,
   transcriptOriginOf,
+  withWaitingLine,
 } from "./transcript-model.js";
 
 const PICTURE = { id: "picture-1", mediaType: "image/png", width: 320, height: 180, byteCount: 10 };
@@ -217,7 +218,7 @@ describe("transcriptItems", () => {
       },
     },
   ])(
-    "draws a pull request a call opened as the task list holds it, or as it was opened where the list holds none ($card.state)",
+    "draws a pull request a call opened as its card alone, as the task list holds it, or as it was opened where the list holds none ($card.state)",
     ({ held, card }) => {
       const items = transcriptItems([OPENED], {
         writing: false,
@@ -232,8 +233,47 @@ describe("transcriptItems", () => {
         url: "https://github.com/ada/relay/pull/128",
         ...card,
       });
+      expect(items.some((item) => item.kind === TRANSCRIPT_ITEM.CALL)).toBe(false);
     },
   );
+});
+
+describe("withWaitingLine", () => {
+  it("stops a fold's spinner while the agent waits on the reader", () => {
+    const done = (id: string) => ({
+      type: "tool-bash",
+      toolCallId: id,
+      state: "output-available",
+      input: { command: `pnpm test ${id}` },
+      output: { stdout: "ok" },
+    });
+
+    const items = transcriptItems(
+      [
+        {
+          id: "work",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            done("a"),
+            done("b"),
+            {
+              type: "tool-bash",
+              toolCallId: "c",
+              state: "input-available",
+              input: { command: "pnpm test c" },
+            },
+          ],
+        },
+      ],
+      { writing: true, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    const folds = (shown: readonly (typeof items)[number][]) =>
+      shown.flatMap((item) => (item.kind === TRANSCRIPT_ITEM.FOLD ? [item.running] : []));
+
+    expect(folds(items)).toEqual([true]);
+    expect(folds(withWaitingLine(items, "Waiting on you · 1 approval"))).toEqual([false]);
+  });
 });
 
 describe("a call whose answer its page carried cut", () => {

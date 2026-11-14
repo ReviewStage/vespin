@@ -61,12 +61,11 @@ const LATEST_REACH = 240;
 const ANCHOR_REACH = 48;
 
 /**
- * The room the system's tab bar floats over at the screen's foot, past the
- * safe area, which the newest row and Jump to latest stand clear of. Note
- * that the list keeps it at its own end, because a scroll to the end reaches
- * the end of the rows alone and not the room the system keeps for the bar.
+ * The widest a picture or a recording stands in the transcript, in points,
+ * near the width Messages draws a photo at, so one shown never fills the
+ * screen and the words around it stay in view.
  */
-const TAB_BAR_ROOM = 64;
+const MEDIA_WIDTH = 280;
 
 /** How wide the round control that brings the newest row into view stands, in points: the system's least target. */
 const JUMP_SIZE = 44;
@@ -148,6 +147,7 @@ const styles = StyleSheet.create({
   blockTitle: { paddingHorizontal: SPACE.ROW, paddingTop: 6 },
   blockText: { padding: SPACE.ROW, paddingTop: SPACE.TIGHT },
   media: { gap: SPACE.ROW },
+  shown: { width: "100%", maxWidth: MEDIA_WIDTH, gap: SPACE.TIGHT },
   page: {
     flexDirection: "row",
     alignItems: "center",
@@ -195,7 +195,7 @@ type InsetResult = { readonly paddingLeft: number };
 
 /** The step a row stands in by, for the folds that hold it. */
 function inset(depth: number): InsetResult {
-  return { paddingLeft: SPACE.PAGE + depth * DEPTH_INSET };
+  return { paddingLeft: SPACE.EDGE + depth * DEPTH_INSET };
 }
 
 /** Where a call or a group stands, at its line's end: the working mark while it runs, the failed mark once it failed, and nothing once it ended well; heard in its row's value rather than apart. */
@@ -317,7 +317,10 @@ function CallRow({
           </Text>
           {chip === undefined ? null : (
             <View
-              style={[styles.chip, { backgroundColor: colors.WELL, borderColor: colors.CHIP_EDGE }]}
+              style={[
+                styles.chip,
+                { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
+              ]}
             >
               <Text
                 numberOfLines={lines}
@@ -647,7 +650,7 @@ function TranscriptRow({
       return (
         <View style={[styles.row, inset(item.depth), styles.media]}>
           {item.media.map((shown) => (
-            <View key={shown.id} style={{ gap: SPACE.TIGHT }}>
+            <View key={shown.id} style={styles.shown}>
               {shown.video ? (
                 <Video
                   source={drawing.mediaSource(shown.id)}
@@ -960,7 +963,7 @@ export function AgentTranscript({
   const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
-  const foot = bottom + TAB_BAR_ROOM + useDockRoom();
+  const foot = bottom + useDockRoom();
 
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {

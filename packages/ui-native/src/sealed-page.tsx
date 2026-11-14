@@ -115,6 +115,10 @@ type SealedPageProps = {
   readonly html: string;
   /** What the page is, heard in its place. */
   readonly title: string;
+  /** Told once WebKit has drawn the page, which a first web view's process launch can hold back for seconds. */
+  readonly onDrawn?: () => void;
+  /** Told where WebKit could not draw the page, or its process ended under it. */
+  readonly onFailed?: () => void;
 };
 
 /**
@@ -125,7 +129,7 @@ type SealedPageProps = {
  * brand's theme in the window's scheme at the reader's text size, and is
  * drawn anew as either changes.
  */
-export function SealedPage({ html, title }: SealedPageProps) {
+export function SealedPage({ html, title, onDrawn, onFailed }: SealedPageProps) {
   const colors = useColors();
   const dark = useColorScheme() === "dark";
   const { fontScale } = useWindowDimensions();
@@ -152,6 +156,9 @@ export function SealedPage({ html, title }: SealedPageProps) {
       allowsInlineMediaPlayback
       setSupportMultipleWindows={false}
       contentInsetAdjustmentBehavior="automatic"
+      onLoad={onDrawn}
+      onError={onFailed}
+      onContentProcessDidTerminate={onFailed}
       style={[styles.page, { backgroundColor: colors.GROUND }]}
       accessibilityLabel={title}
     />
