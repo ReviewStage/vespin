@@ -1272,14 +1272,32 @@ test("a post to the inbox opens the Inbox on the item it posted, by the thread i
   assert.deepEqual(target("read_inbox", {}), { kind: TOOL_TARGET.INBOX });
   assert.deepEqual(target("list_threads", {}), { kind: TOOL_TARGET.INBOX });
 
-  const read = toolCallView({
+  const readCall = {
     tool: "read_thread",
+    callId: "call-read",
     input: { threadId: "item-1" },
-    output: { status: "accepted", thread: { id: "item-1", title: "Invite expiry" } },
-  });
+    output: {
+      status: "accepted",
+      thread: { id: "item-1", key: "invite-ttl", title: "Invite expiry" },
+    },
+  };
+
+  const read = toolCallView(readCall);
 
   assert.equal(read.kind, CALL_KIND.INBOX_THREAD_READ);
   assert.equal(read.subject, "Invite expiry");
+  assert.deepEqual(toolTarget(readCall), {
+    kind: TOOL_TARGET.INBOX,
+    key: "invite-ttl",
+    item: "item-1",
+  });
+  assert.deepEqual(
+    toolTarget({
+      ...readCall,
+      output: { thread: { id: "item-2", key: "theirs", agentId: "agent-2" } },
+    }),
+    { kind: TOOL_TARGET.INBOX },
+  );
 });
 
 test("withdraw_ask is a row naming the thread's key and saying why, opening the Inbox on its item, and the retired reply_inbox and close_inbox_item still draw as they did", () => {
