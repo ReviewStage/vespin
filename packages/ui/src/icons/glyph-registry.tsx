@@ -43,6 +43,7 @@ import {
   ListTodo,
   ListTree,
   Lock,
+  LockKeyhole,
   MemoryStick,
   MessageSquareHeart,
   MessagesSquare,
@@ -165,7 +166,7 @@ export const GLYPH = {
   // An environment variable, as a shell names one by its `$`.
   VARIABLE: lucideGlyph(DollarSign),
   // A value no one can read back once it is saved, as a secret variable's.
-  SECRET: lucideGlyph(Lock),
+  SECRET: lucideGlyph(LockKeyhole),
   // A thread, the Inbox's item, where no ask of its own says more.
   THREAD: lucideGlyph(MessagesSquare),
   TERMINAL: TerminalIcon,
