@@ -114,7 +114,7 @@ interface FileForLater {
   readonly onFile: () => void;
 }
 
-/** The sheet's bar: its name, Cancel at its leading edge, and Start at its trailing one, lit once there are words or pictures to send and while no start is out, with File for later before it on New task; and the ask a Cancel or a swipe down raises while the sheet holds a draft. */
+/** The sheet's bar: its name, the system's ✕ at its leading edge (Cancel to VoiceOver), and Start at its trailing one, lit once there are words or pictures to send and while no start is out, with File for later before it on New task; and the ask the ✕ or a swipe down raises while the sheet holds a draft. */
 function SheetBar({
   title,
   ready,
