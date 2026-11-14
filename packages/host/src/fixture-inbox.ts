@@ -209,6 +209,15 @@ const ACCOUNT: AccountSnapshot = {
   provider: ACCOUNT_PROVIDER.GITHUB,
 };
 
+/** The account's own experiments its screens stand behind: Skills', which a `/` typed in a composer offers skills by. Task descriptions' is its workspace's ({@link FIXTURE_WORKSPACE}). */
+const STAGED_EXPERIMENTS = { [EXPERIMENT.SKILLS]: true } as const;
+
+/** Main's settings with the staged experiments on, one object for each of main's, so a staging that moves nothing of them hands nothing new. */
+const STAGED_SETTINGS = new WeakMap<
+  NonNullable<AppStateSnapshot["settings"]>,
+  NonNullable<AppStateSnapshot["settings"]>
+>();
+
 /** The tasks holding items: the reference journey's, and two of the account's own beside it. */
 const TASK = {
   INVITES: FIXTURE_IDS.TASK,
@@ -842,7 +851,12 @@ function agentsLine(taskId: string): Pick<TaskSummary, "agents"> {
   };
 }
 
-/** The account's own tasks beside the reference journey's: one in progress assigned to it, and one done it created. */
+/**
+ * The account's own tasks beside the reference journey's: one in progress
+ * assigned to it, and one done it created. Note that each row carries both
+ * lists of blocks whole, as a service's rows do, so a block is judged by
+ * the row and never waits on a description the fixture does not hold.
+ */
 const OWN_TASKS: readonly TaskSummary[] = [
   {
     id: TASK.DIGEST,
@@ -858,6 +872,8 @@ const OWN_TASKS: readonly TaskSummary[] = [
     createdBy: ADA,
     assignee: ADA,
     pinnedAt: LANDED - 9 * DAY,
+    blockedBy: [],
+    blocks: [],
     // Note that its followers are the account, its assignee, letting its agents use her machines, and both teammates, one letting them.
     followers: [
       { userId: ADA.userId, assignee: true, machines: true },
@@ -879,6 +895,8 @@ const OWN_TASKS: readonly TaskSummary[] = [
     number: 41,
     ownerId: ADA.userId,
     createdBy: ADA,
+    blockedBy: [],
+    blocks: [],
     ...agentsLine(TASK.ROUNDING),
   },
 ];
@@ -898,6 +916,8 @@ function listedTask(
     ownerId: ADA.userId,
     createdBy: ADA,
     assignee: ADA,
+    blockedBy: [],
+    blocks: [],
     ...more,
   };
 }
@@ -936,6 +956,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     number: 45,
     updatedAt: LANDED - 5 * HOUR,
     priority: TASK_PRIORITY.LOW,
+    blocks: [TASK.INVITES],
   }),
   listedTask(LISTED.LAUNCH, "Launch checklist", {
     repository: "ada/relay",
@@ -1510,7 +1531,7 @@ function invitesDocument(listed: TaskSummary): Task {
 
   return {
     ...task,
-    document: { body: INVITES_DESCRIPTION, assumptions: [] },
+    description: { body: INVITES_DESCRIPTION, assumptions: [] },
     blockedBy: [LISTED.ALERTS, LISTED.LANDING],
     blocks: [],
   };
@@ -1961,9 +1982,23 @@ const REPOSITORIES: GitHubRepositoriesAnswer = {
   installationUrl: "https://github.com/apps/vespin/installations/new",
 };
 
+/** Main's settings with the account's staged experiments on, the same object for the same settings. */
+function stagedSettings(
+  settings: NonNullable<AppStateSnapshot["settings"]>,
+): NonNullable<AppStateSnapshot["settings"]> {
+  const held = STAGED_SETTINGS.get(settings);
+
+  if (held !== undefined) return held;
+  const staged = { ...settings, experiments: { ...settings.experiments, ...STAGED_EXPERIMENTS } };
+  STAGED_SETTINGS.set(settings, staged);
+
+  return staged;
+}
+
 /**
- * Main's document as these profiles draw it: the account signed in, its
- * read of what waits naming the tasks holding items, and each of
+ * Main's document as these profiles draw it: the account signed in with
+ * its staged experiments on, its read of what waits naming the tasks
+ * holding items, and each of
  * `workspaceIds` held with no automation, so the person page and the
  * sidebar list none rather than reading for good. The same document, the
  * very object, under any other profile.
@@ -1979,6 +2014,7 @@ export function inboxAppState(
   return {
     ...state,
     account: ACCOUNT,
+    ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
     inbox: stagedInbox(state.inbox),
     [LIVE_READ.INBOX_ITEMS]: {
       rows: { [INBOX_SCOPE_KIND.PLAN]: fed },
@@ -2348,7 +2384,11 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
   // Note that a version of the reference journey's description is read as the service reads one, and a restore is taken as the service takes one, though nothing here moves.
   [ACT_KIND.TASKS_REVISION]: ({ seq }) => ({
-    revision: { seq, document: { body: invitesVersionBody(seq), assumptions: [] }, previous: null },
+    revision: {
+      seq,
+      description: { body: invitesVersionBody(seq), assumptions: [] },
+      previous: null,
+    },
   }),
   [ACT_KIND.TASKS_RESTORE]: () => true,
   // Note that a note to the people who make the app is taken as the feedback service takes one, and goes nowhere, so a run that sends one mails no one.

@@ -1,7 +1,7 @@
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentSummary } from "@repo/features/agent-wire";
-import { descriptionSections } from "@repo/features/description-document";
 import { revisionSummary, VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
+import { descriptionSections } from "@repo/features/description-sections";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { sectionAnchors } from "@repo/features/mention-link";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -13,6 +13,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BACK_BUTTON_LOOK,
   BackButton,
+  CALL_CARD_SURFACE,
   EmptyState,
   ERROR_STATE_PLACEMENT,
   ErrorState,
@@ -58,6 +59,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { type RefObject, useEffect, useMemo, useRef } from "react";
 import { ACTOR_SIZE, ActorMark, actorCard, LeftWords } from "../actor-ref.js";
 import { useAppCommand } from "../app-commands.js";
+import { CallCardDock } from "../call/standing-call.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
 import { useCopyToast } from "../copy-feedback.js";
@@ -644,7 +646,7 @@ function openedSections(
 
   if (read.kind !== HISTORY_READ.READY) return undefined;
 
-  return changedSections(versionDiff(read.previous, read.document), read.previous === null);
+  return changedSections(versionDiff(read.previous, read.description), read.previous === null);
 }
 
 /** Whether the open revision's version failed to read, so its sections will not stand until it is read again. */
@@ -747,7 +749,7 @@ export function taskVersionSubject(tasks: TasksControl): VersionSubject {
             place: { workspace: workspace?.slug ?? task.workspaceId, repository: task.repository },
             anchors: new Set(
               sectionAnchors(
-                descriptionSections(task.document.body).map((section) => section.heading),
+                descriptionSections(task.description.body).map((section) => section.heading),
               ),
             ),
           },
@@ -1121,6 +1123,8 @@ export function DesktopVersionHistory({
             </ScrollArea>
           </Fill>
         </div>
+        {/* The window's call card, at the foot of the column as the sidebar docks it. */}
+        <CallCardDock docked surface={CALL_CARD_SURFACE.SIDEBAR} />
         {/* Last, so the drag strip above the way back does not take the edge's top from it. */}
         {split.single ? null : <ResizeEdge edge={edge} />}
       </nav>

@@ -116,7 +116,7 @@ it.layer(getTestDB())("a task's history followed live", (it) => {
             seq: 5 + index,
             actor: DESCRIPTION_ACTOR.DEVELOPER,
             userId: owner,
-            document: `# Teammate invitations\n\nSave ${index}.`,
+            description: `# Teammate invitations\n\nSave ${index}.`,
             changes: 1,
             startedAt: new Date(10_000_000 + index),
             at: new Date(10_000_000 + index),

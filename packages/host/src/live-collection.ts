@@ -103,6 +103,65 @@ export function drawnAtEdges(
   });
 }
 
+/**
+ * How long a draw that can wait waits for the changes landing beside it
+ * (`drawnPerTick`). Note that it is a quarter second because the task list's
+ * follow answers in bursts 26–38 ms apart and most of them within 300 ms of
+ * the one before (measured live on a large account), each answer a whole
+ * draw of the list and a document pushed to every window, while a change
+ * another machine made already crossed the network, so a quarter second
+ * more is beneath notice; at most four such draws a second follow.
+ */
+export const DRAW_TICK = Duration.millis(250);
+
+/** A draw at once, and the same draw batched with every other asked within one tick. */
+export interface TickDrawn {
+  /** Draws now, as a write the member just made asks, standing for any draw batched meanwhile. */
+  readonly drawn: Effect.Effect<void>;
+  /**
+   * Draws at the end of the tick the first change since the last draw opened,
+   * once for every change asked within it. Note that it is a batch, never a
+   * debounce: a change asked while one is due arms no later draw, so a
+   * steady stream of changes still draws once a tick.
+   */
+  readonly soon: Effect.Effect<void>;
+}
+
+/** `draw` at once or batched per `DRAW_TICK`, a batch due when the scope closes drawing nothing. */
+export function drawnPerTick(
+  draw: Effect.Effect<void>,
+): Effect.Effect<TickDrawn, never, Scope.Scope> {
+  return Effect.map(Effect.scope, (scope) => {
+    /** Whether a change asked since the last draw waits on the tick. */
+    let due = false;
+    /** Whether a tick is armed, which every change asked before it ends rides. */
+    let armed = false;
+
+    const drawn = Effect.suspend(() => {
+      due = false;
+
+      return draw;
+    });
+
+    const ticked = Effect.suspend(() => {
+      armed = false;
+
+      return due ? drawn : Effect.void;
+    });
+
+    const soon = Effect.suspend(() => {
+      due = true;
+
+      if (armed) return Effect.void;
+      armed = true;
+
+      return Effect.asVoid(Effect.forkIn(Effect.delay(ticked, DRAW_TICK), scope));
+    });
+
+    return { drawn, soon };
+  });
+}
+
 /** A collection a followed read answers whole, and the door its answers come in by. */
 export interface AnsweredCollection<Row extends object, Key extends string> {
   readonly collection: RowCollection<Row, Key>;

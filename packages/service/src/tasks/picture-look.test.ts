@@ -15,7 +15,7 @@ import { unparsedWire } from "@repo/wire";
 import { webmBytes } from "@repo/wire/testing";
 import { Effect } from "effect";
 import { Base64 } from "effect/encoding";
-import type { DescriptionDocumentBinding } from "./description-notes.js";
+import type { DescriptionBinding } from "./description-notes.js";
 import {
   lookNamedOnly,
   type PdfWrite,
@@ -71,14 +71,14 @@ const openPicturedTasks = Effect.gen(function* () {
 });
 
 /** A look as a turn makes one: bound to the description as the account. */
-function lookCall(userId: string, taskId: string): DescriptionDocumentBinding {
+function lookCall(userId: string, taskId: string): DescriptionBinding {
   return { userId, taskId: taskId };
 }
 
 /** A writer for a look that names no PDF, which writes nothing. */
 const noPdfWrite: PdfWrite = () => Effect.die(new Error("a PDF was written"));
 
-const look = (call: DescriptionDocumentBinding, address: string) =>
+const look = (call: DescriptionBinding, address: string) =>
   runLookAtPicture(call, unparsedWire({ address }), noPdfWrite);
 
 it.layer(getTestDB())("look_at_picture", (it) => {

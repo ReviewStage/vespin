@@ -1,9 +1,9 @@
 import { AGENT_KIND, AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
-import type { DescriptionSectionWriter } from "@repo/features/description-document";
 import {
   type DescriptionAgentEdit,
   descriptionAgentEditSchema,
 } from "@repo/features/description-notes";
+import type { DescriptionSectionWriter } from "@repo/features/description-sections";
 import { DEVICE_KIND } from "@repo/features/device-agent-wire";
 import {
   GITHUB_ACCESS,
@@ -306,7 +306,7 @@ const TASK_SUMMARY_COLUMNS = {
 const TASK_COLUMNS = {
   ...TASK_SUMMARY_COLUMNS,
   agentEdits: task.agentEdits,
-  document: task.document,
+  description: task.description,
   brief: task.brief,
 };
 
@@ -367,7 +367,7 @@ const TaskRowSchema = Schema.Struct({
   ...TaskSummaryRowSchema.fields,
   agentEdits: Schema.Array(descriptionAgentEditSchema),
   // Every task is one document since the backfill, so a row with none is the store breaking its own contract.
-  document: Schema.String,
+  description: Schema.String,
   brief: Schema.NullOr(Schema.String),
 });
 
@@ -671,13 +671,13 @@ function storedTaskOf(userId: string, row: TaskRow): TaskStoreEffect<StoredTask>
         ...summary,
         agentEdits: agentEdits.map(({ agentId, label, at }) => ({ agentId, label, at })),
         ...(Option.isSome(lastEdit) ? { lastEdit: lastEdit.value } : undefined),
-        document: { body: row.document, assumptions: [] },
+        description: { body: row.description, assumptions: [] },
         sectionEdits: sectionWriters.map((writer) => sectionEditOf(writer, labels)),
         ...Option.getOrUndefined(read.blocks),
       },
       ownerId: row.userId,
       githubAccess: row.githubAccess,
-      text: row.document,
+      text: row.description,
       agentEdits,
       saved: row.updatedAt.getTime() > row.createdAt.getTime(),
       sectionWriters,
@@ -830,7 +830,7 @@ const TaskInsertSchema = Schema.Struct({
   repository: Schema.NullOr(Schema.String),
   githubAccess: GitHubAccessSchema,
   parentTaskId: Schema.NullOr(Schema.String),
-  document: Schema.String,
+  description: Schema.String,
   brief: Schema.NullOr(Schema.String),
   madeByStart: Schema.Boolean,
   now: Schema.Date,
@@ -867,7 +867,7 @@ function taskValues(write: typeof TaskInsertSchema.Type) {
     repository: write.repository,
     githubAccess: write.githubAccess,
     parentTaskId: write.parentTaskId,
-    document: write.document,
+    description: write.description,
     brief: write.brief,
     createdAt: write.now,
     updatedAt: write.now,
@@ -1026,7 +1026,7 @@ const replaceText = SqlSchema.findOneOption({
       db
         .update(task)
         .set({
-          document: text,
+          description: text,
           ...(agentEdits ? { agentEdits } : undefined),
           updatedAt: now,
         })
@@ -1240,7 +1240,7 @@ const insertOf = (userId: string, started: NewTask & { readonly id?: string }) =
       repository: started.repository ?? null,
       githubAccess: started.githubAccess ?? GITHUB_ACCESS.APP,
       parentTaskId: started.parentTaskId ?? null,
-      document: started.text ?? "",
+      description: started.text ?? "",
       brief: brief.length > 0 ? brief : null,
       mode: TASK_MODE.AGENT,
       status: started.status ?? TASK_STATUS.TODO,

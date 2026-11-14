@@ -62,7 +62,7 @@ const blocking = (bearers: ReadonlyMap<string, string>) =>
     );
 
     const handle = hostedFetch({
-      plans: tasksProcedures({
+      tasks: tasksProcedures({
         resolveUserId: (incoming: Request) =>
           Effect.succeed(
             Option.fromNullishOr(bearers.get(incoming.headers.get("authorization") ?? "")),
@@ -84,7 +84,7 @@ const blocking = (bearers: ReadonlyMap<string, string>) =>
     ) =>
       Effect.promise(async () => {
         const response = await handle(
-          new Request(new URL(`/api/plans/${taskId}/${write}`, ORIGIN), {
+          new Request(new URL(`/api/tasks/${taskId}/${write}`, ORIGIN), {
             method: "POST",
             headers: { authorization: bearer, "content-type": "application/json" },
             body: JSON.stringify(change),

@@ -7,11 +7,11 @@
  * UUID, so nothing is learned about plans the caller does not hold. The
  * developer writes a document in two ways here, each through the plan's one
  * write (`packages/service/src/tasks/description-notes.ts`) that the notetaker and
- * the coding agents save their notes through: `POST /api/plans/{id}/edit` is
+ * the coding agents save their notes through: `POST /api/tasks/{id}/description` is
  * their edit of the document, saved, or answered as a conflict with the text
  * as it stands now where we wrote it meanwhile and the edit no longer
  * lands, with nothing saved; and a restore puts back an earlier revision.
- * `GET /api/plans/{id}` is the window opening a plan, a read that moves
+ * `GET /api/tasks/{id}` is the window opening a plan, a read that moves
  * nothing: the list stands newest started first whatever is opened, and
  * `GET /api/workspaces/{workspace}/tasks/{number}` finds the plan's id for
  * a link naming it by its number in its workspace (`task-number-store.ts`). Its
@@ -26,19 +26,19 @@
  * an older build still sends, lists no plan more, and an archive asked for
  * settles the plan instead (`archive-settle.ts`).
  *
- * `POST /api/plans/{id}/parent` sets the plan's parent, or clears it with
+ * `POST /api/tasks/{id}/parent` sets the plan's parent, or clears it with
  * null, under the rules a child is made under (`setTaskParent`), and
- * `POST /api/plans/{id}/relation` moves one relation of the plan to another
+ * `POST /api/tasks/{id}/relation` moves one relation of the plan to another
  * kind in one transaction (`task-relation.ts`).
- * `POST /api/plans/{id}/blocks` adds or takes away one block of the plan,
+ * `POST /api/tasks/{id}/blocks` adds or takes away one block of the plan,
  * as Linear's blocked-by and blocks are: the other task, of the plan's own
  * workspace and one the caller reaches, waits on it or is waited on, and a
  * block that would close a cycle is refused
  * (`@repo/database/models/task-block-store`).
  *
- * `/api/plans/{id}/revisions` is the description's history for the History tab, a
- * page at a time; `/api/plans/{id}/revisions/{seq}` one revision's content
- * beside the one before it; and `/api/plans/{id}/revisions/{seq}/restore`
+ * `/api/tasks/{id}/description/revisions` is the description's history for the History tab, a
+ * page at a time; `/api/tasks/{id}/description/revisions/{seq}` one revision's content
+ * beside the one before it; and `/api/tasks/{id}/description/revisions/{seq}/restore`
  * puts that content back as a revision of the developer's
  * (`@repo/database/models/description-revisions`).
  *
@@ -398,10 +398,10 @@ const blockWritten = (
   return Effect.catch(written, relationRefused);
 };
 
-/** The plans resource, every procedure to a signed-in caller. */
+/** The tasks resource, every procedure to a signed-in caller. */
 export function tasksProcedures(seams: TasksProcedureSeams) {
   const writer: Effect.Effect<StoreWriter> = storeWriter({ tools: CODER_TOOL_SET });
-  const plans = hosted.plans.use(accountMiddleware(seams.resolveUserId));
+  const tasks = hosted.tasks.use(accountMiddleware(seams.resolveUserId));
 
   return {
     /**
@@ -413,7 +413,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
      * which an older build still sends, changes nothing: a plan is archived
      * no longer.
      */
-    list: plans.list.effect(function* ({ context }) {
+    list: tasks.list.effect(function* ({ context }) {
       yield* refreshRepositoryReads(context.userId);
 
       const tasks = yield* hostedStoreOrUnavailable(
@@ -438,7 +438,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
      * it was taken under is refused as already written without running
      * (`writeReceiptMiddleware`), so none of its checks can refuse a plan it made.
      */
-    create: plans.create.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
+    create: tasks.create.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const { userId } = context;
       const { agent } = input;
       const organizationId = yield* startingWorkspace(seams, userId, input.workspaceId);
@@ -505,7 +505,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
     }),
 
     /** The plan a link names by its workspace and its number there, by its id; one the caller does not reach answers as none. */
-    find: plans.find.effect(function* ({ input, context }) {
+    find: tasks.find.effect(function* ({ input, context }) {
       const found = yield* hostedStoreOrUnavailable(
         taskIdOfNumber(context.userId, input.workspace, input.number),
       );
@@ -516,7 +516,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
     }),
 
     /** One plan with its saved document. */
-    open: plans.open.effect(function* ({ input, context }) {
+    open: tasks.open.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
       const opened = yield* hostedStoreOrUnavailable(readTask(context.userId, taskId));
 
@@ -530,7 +530,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
      * The plan changed as every door changes a task (`task-change.ts`):
      * confirmed, written, and followed through, any archive by the member.
      */
-    update: plans.update.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
+    update: tasks.update.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const { userId } = context;
       const taskId = yield* pathUuid(input.params.id);
       // Note that a place a released desktop names (`runsOn`) is read and goes nowhere, because a task holds none.
@@ -555,7 +555,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
      * written in, none where it stood as asked already. A task the caller
      * does not reach, on either side, answers as no plan.
      */
-    block: plans.block.effect(function* ({ input, context }) {
+    block: tasks.block.effect(function* ({ input, context }) {
       const { userId } = context;
       const taskId = yield* pathUuid(input.params.id);
       const written = yield* blockWritten(userId, taskId, input.body);
@@ -575,7 +575,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
      * plan as it then stands and the transaction the parent was written in,
      * none where it stood as asked already.
      */
-    parent: plans.parent.effect(function* ({ input, context }) {
+    parent: tasks.parent.effect(function* ({ input, context }) {
       const { userId } = context;
       const taskId = yield* pathUuid(input.params.id);
 
@@ -596,7 +596,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
      * (`relationRefused`), and answered as a block's change is: the plan as
      * it then stands, and the transaction the move was written in.
      */
-    relation: plans.relation.effect(function* ({ input, context }) {
+    relation: tasks.relation.effect(function* ({ input, context }) {
       const { userId } = context;
       const taskId = yield* pathUuid(input.params.id);
 
@@ -615,7 +615,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
     }),
 
     /** The plan deleted as every door deletes one (`task-delete.ts`): its agents stopped for good first. */
-    delete: plans.delete.effect(function* ({ input, context }) {
+    delete: tasks.delete.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
       const { txid } = yield* deleteTaskStoppingAgents(writer, context.userId, taskId);
 
@@ -629,7 +629,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
      * text as it now stands and who last wrote it where the edit conflicts
      * with it, or as refused where the description would be longer than a description may be.
      */
-    editDescription: plans.editDescription.effect(function* ({ input, context }) {
+    editDescription: tasks.editDescription.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.params.id);
       const saved = yield* saveDeveloperEdit({ userId: context.userId, taskId }, input.body);
 
@@ -660,14 +660,14 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
      * yet answers an empty page, and so does a plan id the account does not
      * own, which it answers no differently.
      */
-    descriptionRevisions: plans.descriptionRevisions.effect(function* ({ input, context }) {
+    descriptionRevisions: tasks.descriptionRevisions.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
 
       return yield* hostedStoreOrUnavailable(listRevisions(context.userId, taskId, input.before));
     }),
 
     /** One revision's content and the content before it. */
-    descriptionRevision: plans.descriptionRevision.effect(function* ({ input, context }) {
+    descriptionRevision: tasks.descriptionRevision.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
 
       const revision = yield* hostedStoreOrUnavailable(
@@ -686,7 +686,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
      * nothing. It names nothing in a body: the plan and the revision are the
      * path's.
      */
-    restoreDescription: plans.restoreDescription.effect(function* ({ input, context }) {
+    restoreDescription: tasks.restoreDescription.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
       const restored = yield* restoreRevision({ userId: context.userId, taskId }, input.seq);
 

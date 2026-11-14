@@ -7,6 +7,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BACK_BUTTON_LOOK,
   BackButton,
+  CALL_CARD_SURFACE,
   COLLECTION_STATE,
   CollectionPage,
   DetailPage,
@@ -29,6 +30,7 @@ import {
   useDrawerSwipe,
 } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { Outlet, useMatch } from "@tanstack/react-router";
 import {
@@ -47,6 +49,7 @@ import { AdminCollectionPage, AdminPlaceFrameProvider } from "../admin/chrome/pa
 import type { AdminView } from "../admin/routing.js";
 import { useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
+import { CallAgentShown, CallCardDock } from "../call/standing-call.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { MERGE_QUEUE_WORDS } from "../history-titles.js";
 import { useMergeQueueOn } from "../merge-queue-route.js";
@@ -917,6 +920,22 @@ export function DesktopShell({
       ? region.task
       : undefined;
 
+  // The agent the window shows in its work, where a call into it is drawn by the agent's own controls rather
+  // than a card: an agent's page's, or the agent the open task's column shows, while no version or panel covers it.
+  const columnTab = tasks.mainTabs.tab;
+
+  const columnAgent =
+    standingIn ||
+    tasks.history.open ||
+    tasks.sidePanel.fullScreen ||
+    columnTab === undefined ||
+    isOverviewTab(columnTab) ||
+    columnTab.kind !== STRIP_TAB_KIND.AGENT
+      ? undefined
+      : columnTab.agent;
+
+  const agentShown = tab === PANEL_TAB.TASKS ? (tasks.agentView.agentId ?? columnAgent) : undefined;
+
   // Note that while the plan's description is read, the window is named by the task as the list holds it.
   const namedTask =
     shownTask ??
@@ -1085,7 +1104,9 @@ export function DesktopShell({
   return (
     <NewWorkspaceOpener value={newWorkspace.onOpen}>
       <ShellPlacesContext value={places}>
-        <Outlet />
+        <CallAgentShown value={agentShown}>
+          <Outlet />
+        </CallAgentShown>
       </ShellPlacesContext>
     </NewWorkspaceOpener>
   );
@@ -1187,6 +1208,8 @@ export function ShellPlaces(): React.JSX.Element {
         ) : null}
       </main>
       {barShown ? <MobileBar tasks={tasks} /> : null}
+      {/* Folded, the sidebar's call card floats in the corner it would have stood over. */}
+      <CallCardDock docked={sidebar.collapsed} surface={CALL_CARD_SURFACE.FLOATING} />
       {/* Note that the floating sidebar's title-bar row is claimed back from the work's drag strips here, after the work,
           because a later drag region wins and the sidebar comes before the work, so its Back and Forward keep their presses. */}
       {sidebar.overlay !== SIDEBAR_OVERLAY.CLOSED && room === SHELL_ROOM.WIDE ? (

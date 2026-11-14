@@ -61,7 +61,7 @@ const TASK: Task = {
   ...DOCUMENT_TASK,
   id: TASK_ID,
   repository: REPOSITORY,
-  document: { body: `## Rollout\n\n${WORDS}`, assumptions: [] },
+  description: { body: `## Rollout\n\n${WORDS}`, assumptions: [] },
 };
 
 /** What every surface draws the two plain links as: the label, and the bare address without its scheme. */
@@ -75,7 +75,7 @@ const PAGE: TaskMentionsValue = {
   taskName: "Invitations",
   workspace: "acme",
   repository: REPOSITORY,
-  text: () => TASK.document.body,
+  text: () => TASK.description.body,
   doors: {
     holder: { taskId: TASK_ID },
     place: { workspace: "acme", repository: REPOSITORY },
@@ -147,7 +147,7 @@ function Version(): ReactNode {
         changes: 1,
       },
       current: false,
-      read: { kind: HISTORY_READ.READY, document: TASK.document, previous: null },
+      read: { kind: HISTORY_READ.READY, description: TASK.description, previous: null },
     },
     restore,
   });
@@ -269,7 +269,7 @@ test("a plain link to an address the window refuses to open is drawn going nowhe
     createElement(DescriptionBody, {
       task: {
         ...TASK,
-        document: { body: `## Rollout\n\n[the long page](${long})`, assumptions: [] },
+        description: { body: `## Rollout\n\n[the long page](${long})`, assumptions: [] },
       },
       sectionLinks: SECTION_LINKS,
     }),

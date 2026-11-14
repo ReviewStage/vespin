@@ -250,7 +250,9 @@ export function pendingSave(editor: DocumentEditor): DescriptionEditRequest | un
   if (draft === base || tooLong(draft)) return undefined;
   const document = { base, value: draft };
 
-  return anchors === undefined ? { document } : { document, comments: anchors };
+  return anchors === undefined
+    ? { description: document }
+    : { description: document, comments: anchors };
 }
 
 export function editorSent(
@@ -265,7 +267,7 @@ export function editorAnswered(editor: DocumentEditor, answer: TasksEditAnswer):
   const { sending: sent, ...rest } = editor;
 
   if ("saved" in answer) {
-    const base = sent === undefined ? editor.base : sent.document.value;
+    const base = sent === undefined ? editor.base : sent.description.value;
 
     // Note that words typed past the bound while the save was out still say so, so they hold the editor open.
     return editorTyped(

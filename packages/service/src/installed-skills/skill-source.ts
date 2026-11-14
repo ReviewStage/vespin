@@ -20,9 +20,9 @@ import {
   INSTALLED_SKILL_MAIN_FILE,
   INSTALLED_SKILL_REFUSAL,
 } from "@repo/features/installed-skill-wire";
-import { Effect, Option, type Redacted } from "effect";
+import { Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
-import { GitHubApp } from "../github/github-app.js";
+import { GitHubApp, type GitHubBearer } from "../github/github-app.js";
 import { githubReachOrRefusal } from "../github/github-refusal.js";
 import {
   ARCHIVE_UNREAD,
@@ -45,7 +45,7 @@ export interface SkillRepository {
   readonly fullName: string;
   /** The ref read where none is named: its default branch, or `HEAD` where it was reached anonymously. */
   readonly defaultBranch: string;
-  readonly bearer: Redacted.Redacted | null;
+  readonly bearer: GitHubBearer | null;
   readonly public: boolean;
 }
 
@@ -89,14 +89,14 @@ export const reachSkillRepository = /* @__PURE__ */ Effect.fnUntraced(function* 
     };
   }
 
-  const { repository, token } = reached.value;
+  const { repository, bearer } = reached.value;
 
   return {
     owner: repository.owner,
     name: repository.name,
     fullName: repository.fullName,
     defaultBranch: repository.defaultBranch,
-    bearer: token,
+    bearer,
     public: !repository.private,
   };
 });

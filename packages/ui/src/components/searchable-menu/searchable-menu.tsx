@@ -170,6 +170,8 @@ export interface MenuRow {
   icon?: React.ReactNode;
   /** Faces drawn ahead of the label in place of a mark, in a column a pair of faces wide so the rows' names line up: a commit's author and co-author. */
   faces?: React.ReactNode;
+  /** A small mark drawn right before the label, after the row's mark: a teammate's face on a machine of theirs. */
+  before?: React.ReactNode;
   /** Words a search matches beside the label, such as a model's provider. */
   terms?: readonly string[];
   /** Muted words after the label: the effort a model runs at, an owner, "(Fast)", where an agent stands. */
@@ -218,7 +220,17 @@ interface Submenu {
   note?: string | undefined;
   /** Whether a pick in it leaves the menu standing, as a choice that changes what the list holds does; in a sheet the list comes back in its place. */
   stays?: boolean | undefined;
+  /** How wide it stands: regular where none is named, or wide where a checked row's name and its end marks need the room, as an agent's default machine with its owner's face. */
+  width?: SubmenuWidth | undefined;
 }
+
+/** How wide a submenu stands beside its row. */
+export const SUBMENU_WIDTH = {
+  REGULAR: "regular",
+  WIDE: "wide",
+} as const;
+
+export type SubmenuWidth = (typeof SUBMENU_WIDTH)[keyof typeof SUBMENU_WIDTH];
 
 /** The acts on a listed row's own thing, opened beside it as a submenu whose rows are presses, not choices. */
 export interface RowActions {
@@ -383,7 +395,7 @@ const HEADING = "ui-searchable-menu-heading px-row-inset pt-ui-8 pb-ui-4";
  * or two.
  */
 const SUBMENU =
-  "ui-searchable-menu-submenu absolute top-0 left-submenu-reach z-1 w-submenu data-[hinted]:w-submenu-hinted data-[side=left]:right-submenu-reach data-[side=left]:left-auto data-[stand=up]:top-auto data-[stand=up]:bottom-0";
+  "ui-searchable-menu-submenu absolute top-0 left-submenu-reach z-1 w-submenu data-[wide]:w-submenu-wide data-[hinted]:w-submenu-hinted data-[side=left]:right-submenu-reach data-[side=left]:left-auto data-[stand=up]:top-auto data-[stand=up]:bottom-0";
 
 /** The row a submenu stands beside, which holds it. */
 const BRANCH = "ui-searchable-menu-branch relative";
@@ -507,6 +519,18 @@ function highlightOver(input: {
   return input.first;
 }
 
+/** A row's words led by its `before` mark where it has one, as the row draws them. */
+function ledLabel(row: MenuRow, label: React.ReactNode): React.ReactNode {
+  if (row.before === undefined || row.before === null) return label;
+
+  return (
+    <span className="ui-searchable-menu-led inline-flex min-w-0 items-center gap-icon-gap">
+      {row.before}
+      <span className="min-w-0">{label}</span>
+    </span>
+  );
+}
+
 /** What a row prints at its end: why it cannot be picked now, unless its marks say it, or its shortcut, then its own marks; or nothing. */
 function rowHint(row: MenuRow): React.ReactNode {
   const why = row.why === MENU_ROW_WHY.MARK ? undefined : row.disabled;
@@ -543,7 +567,7 @@ function optionGroups(
     replayUnmasked: unmasked,
     options: section.rows.map(({ row, index }) => ({
       id: row.id,
-      label: rowWords(row, unmasked, markedLabel(row, query)),
+      label: ledLabel(row, rowWords(row, unmasked, markedLabel(row, query))),
       words: row.label,
       ...(row.faces === undefined
         ? { icon: row.icon }
@@ -590,7 +614,7 @@ function rowWords(row: MenuRow, unmasked: boolean, words: React.ReactNode): Reac
 function submenuOptions(open: Submenu, unmasked: boolean): ComboboxOption[] {
   return open.rows.map((row) => ({
     id: row.id,
-    label: rowWords(row, unmasked, row.label),
+    label: ledLabel(row, rowWords(row, unmasked, row.label)),
     icon: row.icon,
     detail: rowWords(row, unmasked, row.detail),
     detailWords: Predicate.isString(row.detail) ? row.detail : undefined,
@@ -598,6 +622,7 @@ function submenuOptions(open: Submenu, unmasked: boolean): ComboboxOption[] {
     hint: rowWords(row, unmasked, rowHint(row)),
     replayMasked: row.replayMasked,
     card: row.card,
+    disabled: row.disabled !== undefined,
     current: row.id === open.value,
   }));
 }
@@ -784,6 +809,8 @@ export function SearchableMenu(
     noMatch: string;
     /** Present, the owner answers the search: it hears each query as typed, and the rows it hands are listed as they are, unfiltered. */
     onSearch?: ((query: string) => void) | undefined;
+    /** Hears each query as typed while the menu still filters its rows, as an owner that reads more rows past those it holds as the typing pauses does. */
+    onQuery?: ((query: string) => void) | undefined;
     onPick: (id: string) => void;
     /** Escape was pressed: the owner closes the menu and hands focus back to its trigger. */
     onClose: () => void;
@@ -883,9 +910,9 @@ export function SearchableMenu(
   const subAt = highlightOver({
     moved: submenu?.moved,
     chosen: subChosen,
-    first: open === undefined || open.rows.length === 0 ? NOWHERE : 0,
+    first: open === undefined ? NOWHERE : open.rows.findIndex((row) => row.disabled === undefined),
     count: open?.rows.length ?? 0,
-    blocked: () => false,
+    blocked: (index) => open?.rows[index]?.disabled !== undefined,
   });
 
   const listId = useId();
@@ -1066,7 +1093,7 @@ export function SearchableMenu(
     if (open !== undefined) {
       const row = open.rows[index];
 
-      if (row !== undefined) pickIn(open, row.id);
+      if (row !== undefined && row.disabled === undefined) pickIn(open, row.id);
 
       return;
     }
@@ -1088,7 +1115,7 @@ export function SearchableMenu(
     open: true,
     active: steered,
     count: open === undefined ? matches.length + foot.length : open.rows.length,
-    skipped: open === undefined ? blocked : undefined,
+    skipped: open === undefined ? blocked : (index) => open.rows[index]?.disabled !== undefined,
     controls: controlled.join(" "),
     activeId: subActive ?? listActive ?? footActive,
     onActiveChange: (index) => {
@@ -1191,6 +1218,7 @@ export function SearchableMenu(
       data-side={place.side}
       data-stand={place.stand}
       data-hinted={shown.rows.some((row) => row.detailUnder === true) ? "" : undefined}
+      data-wide={shown.width === SUBMENU_WIDTH.WIDE ? "" : undefined}
       style={cssCustomProperties({ "--ui-submenu-shift": `${place.shift}px` })}
       onMouseDown={(event) => event.preventDefault()}
     >
@@ -1210,6 +1238,7 @@ export function SearchableMenu(
       onChange={(typed) => {
         setQuery(typed);
         props.onSearch?.(typed);
+        props.onQuery?.(typed);
         // The first match that may be picked takes the highlight; with
         // none, nothing does, so Enter picks nothing. The owner's own
         // answer is not in yet, so its first row takes it as it comes.

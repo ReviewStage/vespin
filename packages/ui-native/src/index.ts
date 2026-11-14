@@ -57,7 +57,7 @@ export {
   SkillSuggestions,
 } from "./composer-head.js";
 
-export { EmptyState } from "./empty-state.js";
+export { EmptyState, NoSelection } from "./empty-state.js";
 
 export {
   FailureNoticeProvider,
@@ -228,6 +228,7 @@ export {
   menuWithout,
   SplitOverTabs,
   SplitView,
+  scopeMenu,
   UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 

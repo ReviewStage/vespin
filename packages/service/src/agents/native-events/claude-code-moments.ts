@@ -492,7 +492,7 @@ function settlementOf(
       : workspaceAnswerText(content ?? []);
 
   return workspaceTool
-    ? toolAnswerSettlement({ workspaceTool: true, text }, isError)
+    ? toolAnswerSettlement({ workspaceTool: true, name: storedName, text }, isError)
     : toolAnswerSettlement({ workspaceTool: false, text, output: text }, isError);
 }
 

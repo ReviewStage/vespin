@@ -49,7 +49,8 @@ import { randomUUID, type UUID } from "node:crypto";
 import type {
   AgentDefinition,
   HookCallback,
-  McpSdkServerConfigWithInstance,
+  HookCallbackMatcher,
+  McpServerConfig,
   Options,
   SDKMessage,
   SDKUserMessage,
@@ -94,10 +95,12 @@ import {
   type LaunchOutcome,
   RunnerFailed,
   RunnerUnconfigured,
+  runsOnHost,
   toolEnvOf,
 } from "./launch.js";
 import { readLines } from "./lines.js";
 import { openMcpRelay } from "./mcp-relay.js";
+import { MCP_SERVER, MCP_STARTUP, type McpServer, mcpServersOf } from "./mcp-servers.js";
 import { type ClaudeCodeMemoryWatch, claudeCodeMemoryWatch } from "./out-of-memory.js";
 import {
   APPROVAL_BY,
@@ -163,9 +166,6 @@ const ANTHROPIC_BASE_URL = "ANTHROPIC_BASE_URL";
 
 /** The API's host where no base URL is set. */
 const ANTHROPIC_API_HOST = "api.anthropic.com";
-
-/** The name our MCP server is registered under, so its tools reach the model as `mcp__workspace__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
-const MCP_SERVER = "workspace";
 
 /** Claude Code's built-ins the worker goes without: those that write a file or start another worker. */
 const WORKER_DENIED_BUILT_INS = ["Edit", "Write", "NotebookEdit", "Agent"] as const;
@@ -289,11 +289,25 @@ function allowedCommandRules(allowedCommands: readonly (readonly string[])[]): s
 }
 
 /**
+ * The allow rule of each server the first turn waits on (`MCP_STARTUP.REQUIRED`),
+ * in every mode: a server a rule names is one the CLI waits on for up to two
+ * seconds before its first turn, though `CLAUDE_CODE_MCP_STARTUP_WAIT_MS` is
+ * `0` (https://code.claude.com/docs/en/agent-sdk/mcp#named-servers), so our
+ * first-turn tools are there when it starts.
+ */
+function requiredServerRules(servers: readonly McpServer[]): string[] {
+  return servers.flatMap((server) =>
+    server.startup === MCP_STARTUP.REQUIRED ? [`mcp__${server.name}`] : [],
+  );
+}
+
+/**
  * How the CLI answers its tool calls in the launch's mode. Under full access
  * every call runs, as every launch ran before modes, and no callback is
  * handed, since `bypassPermissions` would never call it. A mode that asks
  * runs the reads and every MCP server the launch hands the CLI unasked
- * (`CLAUDE_CODE_UNASKED_TOOLS`), and every command its starter always
+ * (`CLAUDE_CODE_UNASKED_TOOLS`), a background one by its hook
+ * (`backgroundServerHooks`), and every command its starter always
  * allows, as a Bash rule for this launch alone (`Bash(pnpm test *)`, which
  * matches the bare command too), so the CLI's own reading of a compound
  * command decides each part and nothing is written to a settings file; it
@@ -302,7 +316,7 @@ function allowedCommandRules(allowedCommands: readonly (readonly string[])[]): s
  */
 function permissionsOf(
   mode: PermissionMode,
-  servers: Readonly<Record<string, McpSdkServerConfigWithInstance>>,
+  servers: readonly McpServer[],
   approvals: Approvals,
   allowedCommands: readonly (readonly string[])[],
 ): Permissions {
@@ -310,7 +324,7 @@ function permissionsOf(
     return {
       permissionMode: "bypassPermissions",
       allowDangerouslySkipPermissions: true,
-      allowedTools: [...CLAUDE_CODE_TOOLS.ADDED],
+      allowedTools: [...CLAUDE_CODE_TOOLS.ADDED, ...requiredServerRules(servers)],
     };
   }
 
@@ -319,12 +333,83 @@ function permissionsOf(
     allowedTools: [
       ...CLAUDE_CODE_TOOLS.ADDED,
       ...CLAUDE_CODE_UNASKED_TOOLS,
-      ...Object.keys(servers).map((server) => `mcp__${server}`),
+      ...requiredServerRules(servers),
       ...allowedCommandRules(allowedCommands),
     ],
     canUseTool: canUseToolOf(approvals),
   };
 }
+
+/**
+ * In a mode that asks, the hook that runs each background server's tools
+ * unasked (`MCP_STARTUP.BACKGROUND`). Note that they are allowed by a hook
+ * rather than an allow rule, because a rule naming a server holds the first
+ * turn up to two seconds while it connects (`requiredServerRules`), which is
+ * the wait a background server exists to skip; a `PreToolUse` hook names none.
+ * Server names are bare words (`IntegrationServer`), so each stands in the
+ * matcher's pattern as written.
+ */
+function backgroundServerHooks(
+  mode: PermissionMode,
+  servers: readonly McpServer[],
+): HookCallbackMatcher[] {
+  const names = servers.flatMap((server) =>
+    server.startup === MCP_STARTUP.BACKGROUND ? [server.name] : [],
+  );
+
+  if (mode === PERMISSION_MODE.FULL_ACCESS || names.length === 0) return [];
+
+  const allow: HookCallback = async () => ({
+    hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" },
+  });
+
+  return [{ matcher: `^mcp__(${names.join("|")})__`, hooks: [allow] }];
+}
+
+/**
+ * Whether a server reaches the CLI relayed as an SDK server rather than over
+ * HTTP: every one on a host, and ours everywhere. Note that ours is relayed in
+ * the cloud's sandbox too, because CLI 2.1.322 reserves `workspace` among the
+ * names of its own servers and silently drops an HTTP server registered
+ * under it, which left every cloud launch without its `mcp__workspace__*`
+ * tools; an SDK server under the name is kept. Ours holds the first turn
+ * either way (`MCP_STARTUP.REQUIRED`), so the relay costs it no wait.
+ */
+function relayedServer(server: McpServer, onHost: boolean): boolean {
+  return onHost || server.name === MCP_SERVER;
+}
+
+/**
+ * The launch's MCP servers (`mcp-servers.ts`) as the CLI's `mcpServers`. In
+ * the cloud's sandbox each is an HTTP server the CLI reaches itself, so a
+ * background one connects behind the first turn rather than holding it: the
+ * SDK puts its config in the CLI's argv, the bearer's header among it, which
+ * is the launch's placeholder, worth nothing past the sandbox's firewall, and
+ * readable there by root, which every command can become, wherever it
+ * stands. On a host the bearer is the real one, with no firewall in front of
+ * it, so there each is an SDK server the runner relays (`mcp-relay.ts`).
+ * Our own server is relayed everywhere (`relayedServer`).
+ */
+const claudeCodeServers = Effect.fn("agent-runner/claudeCodeServers")(function* (
+  servers: readonly McpServer[],
+  bearer: Redacted.Redacted,
+  onHost: boolean,
+) {
+  const rendered: Record<string, McpServerConfig> = {};
+
+  for (const server of servers) {
+    rendered[server.name] = relayedServer(server, onHost)
+      ? yield* openMcpRelay(server.name, server.url, bearer)
+      : {
+          type: "http",
+          url: server.url,
+          headers: { authorization: `Bearer ${Redacted.value(bearer)}` },
+          timeout: server.toolTimeoutSeconds * 1000,
+        };
+  }
+
+  return rendered;
+});
 
 /**
  * The documented options a launch runs `query()` with (the plan's P05), the
@@ -339,7 +424,8 @@ function permissionsOf(
 function queryOptions(
   config: ClaudeCodeConfig,
   env: RunnerInput["env"],
-  servers: Readonly<Record<string, McpSdkServerConfigWithInstance>>,
+  listed: readonly McpServer[],
+  servers: Readonly<Record<string, McpServerConfig>>,
   onStop: HookCallback,
   memoryWatch: ClaudeCodeMemoryWatch,
   from: ResumePoint,
@@ -348,6 +434,7 @@ function queryOptions(
   goalFile: GoalWatchedFile | undefined,
 ): Options {
   const mode = config.permissionMode ?? PERMISSION_MODE.FULL_ACCESS;
+  const background = backgroundServerHooks(mode, listed);
 
   const options: Options = {
     cwd: config.cwd,
@@ -355,7 +442,7 @@ function queryOptions(
     model: config.model,
     systemPrompt: { type: "preset", preset: "claude_code", append: config.append },
     settingSources: ["project"],
-    ...permissionsOf(mode, servers, approvals, config.allowedCommands ?? []),
+    ...permissionsOf(mode, listed, approvals, config.allowedCommands ?? []),
     includePartialMessages: true,
     disallowedTools: [...CLAUDE_CODE_TOOLS.DENIED],
     agents: { [CLAUDE_CODE_WORKER]: workerOf(config) },
@@ -364,9 +451,9 @@ function queryOptions(
     // leaves an undefined one unset. Every command the agent runs inherits it,
     // the CLI's credential among it, which in the cloud's sandbox is a placeholder; on a host the CLI
     // is handed none and runs on the machine's own login (`harnessEnvOf`).
-    // The first turn waits on no server of the checkout's own (`.mcp.json`), which keeps connecting in the
-    // background (`CLAUDE_CODE_MCP_STARTUP_WAIT_MS`). Note that ours and each integration's are SDK servers,
-    // which the CLI waits on whatever the wait is set to (https://code.claude.com/docs/en/agent-sdk/mcp#connection-timing).
+    // The first turn waits on no server of the checkout's own (`.mcp.json`), nor on an HTTP server of ours
+    // no rule names, which keep connecting in the background (`CLAUDE_CODE_MCP_STARTUP_WAIT_MS`). Note that a
+    // host's SDK servers are waited on whatever the wait is set to (https://code.claude.com/docs/en/agent-sdk/mcp#connection-timing).
     env: {
       ...env,
       ...toolEnvOf(env),
@@ -380,12 +467,15 @@ function queryOptions(
         ? { [PROMPT_CACHE_TTL.FORCE_SHORT]: undefined }
         : undefined),
     },
-    // Note that the SDK puts an HTTP server's config, headers and all, in the
-    // CLI's argv, which any process in the sandbox can read, so ours is an
-    // SDK server the runner relays over the CLI's own stdio (`mcp-relay.ts`), as is each integration's.
+    // HTTP servers in the cloud's sandbox, relayed SDK servers on a host (`claudeCodeServers`).
     mcpServers: { ...servers },
     sandbox: { enabled: false },
-    hooks: { Stop: [{ hooks: [onStop] }], ...memoryWatch.hooks, ...goalFile?.hooks },
+    hooks: {
+      Stop: [{ hooks: [onStop] }],
+      ...memoryWatch.hooks,
+      PreToolUse: [...memoryWatch.hooks.PreToolUse, ...background],
+      ...goalFile?.hooks,
+    },
   };
 
   if (config.effort !== undefined) options.effort = config.effort;
@@ -1037,20 +1127,12 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     return { continue: true };
   };
 
+  // Each integration the agent is handed is a server of its own, its tools named `mcp__<connection>__<tool>`.
+  const listed = mcpServersOf(config);
+
   const servers = yield* trace.step(
     RUNNER_SPAN.MCP_RELAY,
-    Effect.gen(function* () {
-      const opened: Record<string, McpSdkServerConfigWithInstance> = {};
-      opened[MCP_SERVER] = yield* openMcpRelay(MCP_SERVER, config.mcpUrl, bearer);
-
-      // Each integration the agent is handed is a server of its own, its tools named `mcp__<connection>__<tool>`.
-      for (const integration of config.integrations ?? []) {
-        if (integration.name === MCP_SERVER) continue;
-        opened[integration.name] = yield* openMcpRelay(integration.name, integration.url, bearer);
-      }
-
-      return opened;
-    }),
+    claudeCodeServers(listed, bearer, runsOnHost(context.env)),
   );
 
   const prompts = yield* Queue.unbounded<SDKUserMessage, Cause.Done>();
@@ -1080,6 +1162,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   const options = queryOptions(
     config,
     context.env,
+    listed,
     servers,
     onStop,
     memoryWatch,

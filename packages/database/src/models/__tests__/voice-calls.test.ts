@@ -5,12 +5,13 @@ import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
-import { getTestDB, startTask } from "../../testing/index.js";
+import { getTestDB, joinWorkspace, startTask } from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
 import {
   claimVoiceCallLease,
   deleteVoiceCall,
   insertVoiceCall,
+  listStandingVoiceCalls,
   readVoiceCall,
   saveVoiceCallState,
 } from "../voice-calls.js";
@@ -18,8 +19,8 @@ import {
 /**
  * The row a voice call keeps while it stands, over a real dialect: a member
  * reads and ends only their own call, a lease is claimed by epoch so a stale
- * claimant takes nothing, and only the epoch's holder saves the call's state.
- * Synthetic accounts throughout.
+ * claimant takes nothing, only the epoch's holder saves the call's state, and
+ * which calls stand on an agent is read only within its workspace. Synthetic accounts throughout.
  */
 
 const STARTED_AT = new Date("2026-11-13T02:00:00Z");
@@ -61,7 +62,7 @@ const openCall = Effect.gen(function* () {
     leaseUntil: LEASE_UNTIL,
   });
 
-  return { callerId, call };
+  return { callerId, call, workspaceId: task.workspaceId };
 });
 
 it.layer(getTestDB())("the row a voice call keeps", (it) => {
@@ -81,6 +82,26 @@ it.layer(getTestDB())("the row a voice call keeps", (it) => {
       assert.equal(yield* deleteVoiceCall(callerId, call.id), true);
       assert.equal(Option.isNone(yield* readVoiceCall(callerId, call.id)), true);
     }),
+  );
+
+  it.effect(
+    "a teammate reads the calls standing on the agent, and no one outside its workspace",
+    () =>
+      Effect.gen(function* () {
+        const { callerId, call, workspaceId } = yield* openCall;
+        const teammate = yield* openAccount;
+        yield* joinWorkspace(workspaceId, teammate);
+        const outsider = yield* openAccount;
+
+        assert.deepEqual(yield* listStandingVoiceCalls(teammate, call.agentId), [
+          { id: call.id, callerId, startedAt: STARTED_AT },
+        ]);
+
+        assert.deepEqual(yield* listStandingVoiceCalls(outsider, call.agentId), []);
+
+        yield* deleteVoiceCall(callerId, call.id);
+        assert.deepEqual(yield* listStandingVoiceCalls(teammate, call.agentId), []);
+      }),
   );
 
   it.effect(

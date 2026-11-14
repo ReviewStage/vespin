@@ -22,6 +22,7 @@ import {
   GITHUB_APP_WITH_TOKENS,
   memberRepositoryJson,
   openTokenMember,
+  overNoGitHub,
   type SentToGitHub,
 } from "../testing/github-app-fake.js";
 import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
@@ -67,7 +68,7 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
     );
 
     const handle = hostedFetch({
-      plans: tasksProcedures({
+      tasks: tasksProcedures({
         resolveUserId: (incoming: Request) =>
           Effect.succeed(
             Option.fromNullishOr(bearers.get(incoming.headers.get("authorization") ?? "")),
@@ -118,7 +119,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
         );
 
         const patch = (taskId: string, bearer: string, body: WireRecord) =>
-          send("PATCH", `/api/plans/${taskId}`, bearer, body);
+          send("PATCH", `/api/tasks/${taskId}`, bearer, body);
 
         const accessOf = Effect.map(readTask(owner, task.id), (read) => {
           const { githubAccess, task: summary } = Option.getOrThrow(read);
@@ -147,7 +148,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
           githubAccess: GITHUB_ACCESS.TOKEN,
           repository: "octo-member/side",
         });
-      }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+      }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 
   it.effect(
@@ -168,7 +169,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
         const send = yield* standing(new Map([["Bearer owner", owner]]));
 
         const start = (body: WireRecord) =>
-          send("POST", "/api/plans", "Bearer owner", { workspaceId: workspace, ...body });
+          send("POST", "/api/tasks", "Bearer owner", { workspaceId: workspace, ...body });
 
         const made = yield* start({
           name: "Child",
@@ -204,7 +205,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
           body: { error: HOSTED_API_ERROR.CHILD_REPOSITORY_LOCKED },
         });
         assert.equal((yield* listTasks(owner)).length, 2);
-      }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+      }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 
   it.effect("a child plan's repository cannot be changed to another", () =>
@@ -227,7 +228,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
 
       const send = yield* standing(new Map([["Bearer owner", owner]]));
 
-      const moved = yield* send("PATCH", `/api/plans/${child.id}`, "Bearer owner", {
+      const moved = yield* send("PATCH", `/api/tasks/${child.id}`, "Bearer owner", {
         repository: "octo-member/side",
       });
 
@@ -237,7 +238,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
       });
       const read = Option.getOrThrow(yield* readTask(owner, child.id));
       assert.equal(read.task.repository, "octo-member/other");
-    }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+    }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 
   it.effect("a member cannot make a child of a plan they do not reach, and nothing is made", () =>
@@ -265,13 +266,13 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
 
       const notFound = { status: 404, body: { error: HOSTED_API_ERROR.NOT_FOUND } };
 
-      const byTeammate = yield* send("POST", "/api/plans", "Bearer teammate", {
+      const byTeammate = yield* send("POST", "/api/tasks", "Bearer teammate", {
         name: "Child",
         workspaceId: workspace,
         parentTaskId: parent.id,
       });
 
-      const byStranger = yield* send("POST", "/api/plans", "Bearer stranger", {
+      const byStranger = yield* send("POST", "/api/tasks", "Bearer stranger", {
         name: "Child",
         parentTaskId: parent.id,
       });
@@ -282,6 +283,6 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
         [parent.id],
       );
       assert.deepEqual(yield* listTasks(stranger), []);
-    }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+    }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 });

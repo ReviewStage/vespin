@@ -137,7 +137,7 @@ function MachinesPage({ accountId }: { readonly accountId: string }) {
       <EmptyState title={MACHINES_WORDS.NONE} symbol={GLYPH.HOST} />
     ) : (
       <SettingsForm>
-        <ListSection title={MACHINES_WORDS.TITLE} count={hosts.length}>
+        <ListSection>
           {[...hosts]
             .sort((one, other) => one.name.localeCompare(other.name))
             .map((host) => {

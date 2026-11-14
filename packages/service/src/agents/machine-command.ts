@@ -19,11 +19,14 @@ import {
   type ComputerPermission,
   MACHINE_COMMAND_BOUNDS,
   MACHINE_COMMAND_KIND,
+  MACHINE_REFUSAL,
   type MacComputerAction,
   type MacComputerResult,
   type MachineCommand,
   type MachineCommandKind,
   type MachineCommandResult,
+  type MachineRefusal,
+  type MachineUnreached,
   type MacShellResult,
   machineCommandSchema,
 } from "@repo/features/machine-command-wire";
@@ -77,13 +80,15 @@ import {
  * default) is the one guard.
  */
 
+/** How lately a Mac must have read for a call to count it listening: one hold, and room for the next read to arrive. The scheduled sweep marks a machine away from its commands past it. */
+export const MACHINE_LISTENER_FRESH = Duration.seconds(45);
+
 const MACHINE_COMMAND_SERVICE = {
   /** How long the Mac's read is held while nothing waits for it. */
   HOLD: Duration.seconds(20),
   /** How often a held read, and a call waiting on its result, looks again where the sync hub cannot wake it. */
   POLL: Duration.millis(500),
-  /** How lately a Mac must have read for a call to count it listening: one hold, and room for the next read to arrive. */
-  LISTENER_FRESH: Duration.seconds(45),
+  LISTENER_FRESH: MACHINE_LISTENER_FRESH,
   /**
    * How long a command may wait for a Mac to take it; one not taken by then
    * is never run. A listening Mac takes one within a poll, and a command
@@ -148,6 +153,12 @@ export type MachineCommandAnswer = (
       readonly reason: string;
       /** The grants the Mac lacked for an action on an app, which the transcript offers the place to turn on. */
       readonly missingPermissions?: readonly ComputerPermission[];
+      /** How an ask came to run nothing, or that the machine never answered, which the transcript names in its own words. */
+      readonly outcome?: MachineRefusal;
+      /** Why the call reached no machine, where routing refused it, which the transcript says in its own words. */
+      readonly why?: MachineUnreached;
+      /** The machines that could take the call now, where routing refused it, which the transcript offers to make the default. */
+      readonly others?: readonly RoutedMachine[];
     }
 ) & {
   /** The machine the call went to, or was refused on, and whose it is; none for a call that went to an account's Macs from before machines claimed, or to no machine. */
@@ -167,6 +178,7 @@ export type MachineCommandAsk =
   | {
       readonly kind: typeof MACHINE_COMMAND_KIND.COMPUTER;
       readonly conversationId: string;
+      readonly agentId?: string;
       readonly action: MacComputerAction;
       readonly timeoutSeconds?: number;
     };
@@ -245,10 +257,14 @@ export function macListening(userId: string): TaskStoreEffect<boolean> {
 /** What a call answers for what the Mac said: what a shell command did, or why the Mac ran nothing. */
 function answered(result: MachineCommandResult): MachineCommandAnswer {
   if ("refused" in result) {
-    const { refused, missingPermissions } = result;
-    const reason = { status: MACHINE_COMMAND_STATUS.NOT_RUN, reason: refused } as const;
+    const { refused, missingPermissions, outcome } = result;
 
-    return missingPermissions === undefined ? reason : { ...reason, missingPermissions };
+    return {
+      status: MACHINE_COMMAND_STATUS.NOT_RUN,
+      reason: refused,
+      ...(missingPermissions === undefined ? undefined : { missingPermissions }),
+      ...(outcome === undefined ? undefined : { outcome }),
+    };
   }
 
   return { status: MACHINE_COMMAND_STATUS.RAN, ...result };
@@ -353,7 +369,15 @@ export function askMacHeard(
 
     if (heard === undefined) return notRun(MACHINE_COMMAND_REFUSAL.UNAVAILABLE);
 
-    if (Option.isNone(heard)) return notRun(MACHINE_COMMAND_REFUSAL.NO_ANSWER);
+    if (Option.isNone(heard)) {
+      return {
+        answer: {
+          ...machineCommandNotRun(MACHINE_COMMAND_REFUSAL.NO_ANSWER),
+          outcome: MACHINE_REFUSAL.NO_ANSWER,
+        },
+      };
+    }
+
     const { result, recording } = heard.value;
     const answer = answered(result);
 
@@ -390,7 +414,14 @@ export function askMachine(
   if (route.kind === MACHINE_ROUTE.ACCOUNT) return askMacHeard(route.userId, ask);
 
   if (route.kind === MACHINE_ROUTE.REFUSED) {
-    const refused = machineCommandNotRun(route.reason);
+    const { reason, why, others } = route;
+
+    const refused: MachineCommandAnswer = {
+      status: MACHINE_COMMAND_STATUS.NOT_RUN,
+      reason,
+      why,
+      others,
+    };
 
     return Effect.succeed({
       answer: route.machine === undefined ? refused : { ...refused, machine: route.machine },

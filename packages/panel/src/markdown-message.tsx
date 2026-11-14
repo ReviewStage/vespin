@@ -15,6 +15,7 @@ import { createContext, memo, type ReactNode, useContext, useMemo } from "react"
 import { DescriptionDiagram } from "./description-diagram.js";
 import { TranscriptCodeBlock } from "./tasks/transcript-markdown.js";
 import { useWordTargets } from "./tasks/use-known-names.js";
+import { useKeysFound } from "./tasks/use-task-outside.js";
 import { TextLink } from "./text-link.js";
 
 const SAFE_LINK = /^(?:https?:\/\/|mailto:)/i;
@@ -672,6 +673,8 @@ export const MarkdownMessage = memo(function MarkdownMessage({
 }): React.JSX.Element {
   const link = drawer ?? undefined;
   const keyTargets = useWordTargets();
+  // Note that a key the window lists no task by is asked of the service where the place draws links as chips, and linked once the list holds its task.
+  useKeysFound(words, drawer !== null);
 
   const rehypePlugins = useMemo(() => {
     const plugins: MarkdownSteps = [];

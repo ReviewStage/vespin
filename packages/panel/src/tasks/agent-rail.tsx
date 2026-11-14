@@ -1,11 +1,13 @@
 /**
- * agent-rail.tsx -- the rail beside an agent's transcript: a line for each line sent into it, a bubble round those in view, and a list of them, each under its sender's face, going to it on a press.
+ * agent-rail.tsx -- the rail beside an agent's transcript: a line for each line sent into it, a bubble round those in view, and a stack of the lines round the pointer, each under its sender's face, going to one on a press.
  *
  * A long run buries the reader's own asks among what teammates, other
  * agents, GitHub, and automations send the agent, so the transcript wears
  * `@repo/ui`'s `TranscriptRail` down its leading edge, a mark for each line
- * sent in (`sent-lines.ts`). Its list names each line as the app names a
- * person: their face and name, the reader's own under their own face as "You". A press
+ * sent in (`sent-lines.ts`). Its stack names each line as the app names a
+ * person: their face and name, the reader's own under their own face as
+ * "You". The rail stands in the whole tab (`useAgentTabBox`), so its middle
+ * is the tab's, composer and all, rather than the log's above it. A press
  * goes to the line as a link to a message does, bringing its row in where
  * the log has not drawn it and lighting it once it lands
  * (`message-links.tsx`).
@@ -30,9 +32,11 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { ACTOR_SIZE, ActorMark, BotBadge } from "../actor-ref.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { usePhoneRoom } from "../stage-room.js";
+import { useAgentTabBox } from "./agent-tab-frame.js";
 import { drawnMessages, messageElement } from "./message-links.js";
 import type { SentLine } from "./sent-lines.js";
 
@@ -183,6 +187,7 @@ export function AgentRail({
   const reader = usePerson(readerId === undefined ? undefined : { userId: readerId, name: "" });
   const inView = useLinesInView(list, rows, lines);
   const narrow = usePhoneRoom();
+  const tab = useAgentTabBox();
 
   const marks = lines.map(
     ({ line }): TranscriptRailMark => ({
@@ -213,5 +218,8 @@ export function AgentRail({
     });
   };
 
-  return <TranscriptRail marks={marks} narrow={narrow} onJump={onJump} />;
+  const rail = <TranscriptRail marks={marks} narrow={narrow} onJump={onJump} />;
+
+  // Note that the rail stands in the whole tab where there is one, so its middle is the tab's, composer and all, rather than the log's above the composer.
+  return tab === null ? rail : createPortal(rail, tab);
 }
