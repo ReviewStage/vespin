@@ -746,7 +746,7 @@ export function AgentScreen() {
                     <Stack.Toolbar.MenuAction
                       key={offered.action.id}
                       icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
-                      subtitle={offered.action.command}
+                      subtitle={offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command}
                       onPress={offered.onPress}
                     >
                       {runActionMenuLabel(offered.action, offered.runs)}

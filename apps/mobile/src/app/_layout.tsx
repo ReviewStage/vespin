@@ -163,9 +163,10 @@ function GuardedScreens() {
             name={SHEET_ROUTE.START_AGENT}
             options={{ presentation: sheetPresentation, title: "New agent" }}
           />
+          {/* Note that Options opens whole rather than as a short sheet, since its rows run past half the screen and half height cut Ask for approval mid-row. */}
           <Stack.Screen
             name={SHEET_ROUTE.AGENT_MODEL}
-            options={{ ...shortSheet, title: "Options" }}
+            options={{ presentation: sheetPresentation, title: "Options" }}
           />
           <Stack.Screen
             name={SHEET_ROUTE.AGENT_PORTS}
