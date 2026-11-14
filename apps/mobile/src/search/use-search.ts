@@ -50,7 +50,7 @@ export interface SearchFound {
   readonly current: boolean;
   /** Whether the Inbox's first read is still out, so an Inbox item it would find may not be held yet. */
   readonly inboxReading: boolean;
-  /** Whether the task list, which holds the tasks and the agents on them, is still being read, so a task or an agent it would find may not be held yet. */
+  /** Whether the task list, which holds the tasks and the agents on them, is still being read, or the service still searched for the tasks past it, so a task or an agent it would find may not be held yet. */
   readonly tasksReading: boolean;
 }
 
@@ -91,7 +91,8 @@ export function useSearchFound(typed: string): SearchFound {
       readerId: inbox.readerId,
       inboxReading: inbox.feed === INBOX_FEED.READING,
       // Note that a list read from the phone's disk is still being read again, and a task or agent it would find may only come with that read.
-      tasksReading: view === undefined || TASKS_STILL_READING.has(view.listStatus),
+      tasksReading:
+        view === undefined || TASKS_STILL_READING.has(view.listStatus) || listing.searching,
     };
   }, [listing, inbox, view, workspace, waiting, query]);
 
