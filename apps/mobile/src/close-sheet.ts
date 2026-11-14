@@ -2,26 +2,24 @@
 
 import { releaseFields } from "@repo/ui-native";
 import { useRouter } from "expo-router";
-import { useCallback } from "react";
-
-/** How a screen leaves: back down its stack, or the whole sheet at once. */
-export const CLOSE_SHEET = { BACK: "back", DISMISS: "dismiss" } as const;
-
-type CloseSheet = (typeof CLOSE_SHEET)[keyof typeof CLOSE_SHEET];
+import { useCallback, useRef } from "react";
 
 /**
  * Closes the screen once every field holding the keyboard has let it go
  * (`releaseFields`), since a SwiftUI form that drops a focused field's row as
  * its screen closes ends the app. Every screen whose form holds a field
- * closes through it, on Cancel and after a save alike.
+ * closes through it, on Cancel and after a save alike. Note that a screen
+ * closes once: a second press while its fields let go is let pass, because
+ * it would otherwise go back a second time, past the sheet to the screen
+ * under it.
  */
-export function useCloseSheet(how: CloseSheet = CLOSE_SHEET.BACK): () => void {
+export function useCloseSheet(): () => void {
   const router = useRouter();
+  const closing = useRef(false);
 
   return useCallback(() => {
-    void releaseFields().then(() => {
-      if (how === CLOSE_SHEET.DISMISS) router.dismiss();
-      else router.back();
-    });
-  }, [router, how]);
+    if (closing.current) return;
+    closing.current = true;
+    void releaseFields().then(() => router.back());
+  }, [router]);
 }
