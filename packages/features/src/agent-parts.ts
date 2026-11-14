@@ -428,6 +428,8 @@ export function computerAppsOf(messages: readonly AgentTranscriptMessage[]): Com
   const newestOn = newestMachinesOf(calls, keys);
   // Each app's calls as kept, by its machine's id (none where no answer named one) and then its key.
   const held = new Map<string | undefined, Map<string, AppHeld>>();
+  // Note that each machine finds an app by the spellings its own calls gave it, since one name may be two apps on two machines.
+  const spelledOnMachine = new Map<string, Map<string, string>>();
 
   const placeOf = (call: ComputerCallSeen) => {
     const key = keys.byCall.get(call);
@@ -453,6 +455,16 @@ export function computerAppsOf(messages: readonly AgentTranscriptMessage[]): Com
     });
 
     held.set(place.machine?.id, onMachine);
+    const machineId = place.machine?.id;
+
+    if (machineId === undefined) continue;
+    const spelled = spelledOnMachine.get(machineId) ?? new Map<string, string>();
+
+    for (const spelling of spellingsOf(call)) {
+      if (!spelled.has(spelling)) spelled.set(spelling, place.key);
+    }
+
+    spelledOnMachine.set(machineId, spelled);
   }
 
   const apps = new Map(
@@ -473,10 +485,10 @@ export function computerAppsOf(messages: readonly AgentTranscriptMessage[]): Com
     return app === undefined ? [] : [app];
   };
 
-  const spelledOn = (machineId: string) =>
+  const spelledOn = (machineId: string, spelled: ReadonlyMap<string, string>) =>
     new Map(
-      [...keys.bySpelling].flatMap(([spelled, key]) =>
-        appOf(machineId, key).map((app) => [spelled, app] as const),
+      [...spelled].flatMap(([spelling, key]) =>
+        appOf(machineId, key).map((app) => [spelling, app] as const),
       ),
     );
 
@@ -494,8 +506,8 @@ export function computerAppsOf(messages: readonly AgentTranscriptMessage[]): Com
       ),
     ),
     byMachine: new Map(
-      [...apps.keys()].flatMap((machineId) =>
-        machineId === undefined ? [] : [[machineId, spelledOn(machineId)] as const],
+      [...spelledOnMachine].map(
+        ([machineId, spelled]) => [machineId, spelledOn(machineId, spelled)] as const,
       ),
     ),
   };
