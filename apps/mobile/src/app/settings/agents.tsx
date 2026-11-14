@@ -1,6 +1,7 @@
 // agents.tsx -- Settings' Agents page: the model, effort, and speed a new agent starts on, and the rest of how agents work for the account (default permissions, follow-up behavior, commit author), drawn from the panel's own settings rows.
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
+import { DEFAULT_SAVE_FAILED_NOTE } from "@repo/features/agent-refusal-words";
 import {
   choiceOn,
   effortFor,
@@ -44,6 +45,7 @@ import {
   SettingsForm,
   ToggleRow,
 } from "@repo/ui-native";
+import { actionRefused } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
@@ -52,6 +54,9 @@ import { effortOptions, modelOptions, useModelCatalog } from "../../tasks/use-st
 import { useLatestWrites } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
+
+/** No setting's row redrawn yet. */
+const NO_ROUNDS: ReadonlyMap<AppSettingField, number> = new Map();
 
 /** No models read yet. */
 const NO_MODELS: readonly CatalogModel[] = [];
@@ -122,9 +127,12 @@ export default function AgentsScreen() {
   // Note that each pick goes at once, even while an earlier one is out, such as an effort right after a model, since the host draws the default and a setting as they are sent.
   const write = useLatestWrites<string, ModelChoice | undefined>(rejectionWords);
   const setting = useLatestWrites<string, string>(rejectionWords);
-  // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was refused redraws its section, which reads the stored choice again.
+  // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was refused redraws its own controls, which read the stored choice again: the default's model, effort and speed together, and each setting's row alone, so another row's pick still out stands.
   const [defaultRound, setDefaultRound] = useState(0);
-  const [settingRound, setSettingRound] = useState(0);
+
+  const [settingRounds, setSettingRounds] =
+    useState<ReadonlyMap<AppSettingField, number>>(NO_ROUNDS);
+
   const standard = current === undefined ? undefined : standardModelIdOf(current.model);
   const speeds = standard === undefined ? [] : speedsOffered(catalog, standard);
   const speed = current === undefined ? MODEL_SPEED.STANDARD : modelSpeedOf(current.model);
@@ -152,7 +160,10 @@ export default function AgentsScreen() {
     // Note that the model, effort and speed write the one default, so they follow each other as one row's writes.
     void write
       .run(ACT_KIND.AGENTS_DEFAULT_WRITE, choice, () =>
-        acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined),
+        // Note that a refusal comes back in the answer rather than thrown, as the panel reads it (`choiceRefused`).
+        acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then((answer) =>
+          "failure" in answer ? DEFAULT_SAVE_FAILED_NOTE : undefined,
+        ),
       )
       .then((landed) => {
         if (!landed) setDefaultRound((round) => round + 1);
@@ -171,11 +182,11 @@ export default function AgentsScreen() {
     if (view === undefined) return;
     const value = settingFromOption(field, token, view);
     void setting
-      .run(field, token, () =>
-        acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(() => undefined),
-      )
+      .run(field, token, () => acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(actionRefused))
       .then((landed) => {
-        if (!landed) setSettingRound((round) => round + 1);
+        if (!landed) {
+          setSettingRounds((rounds) => new Map(rounds).set(field, (rounds.get(field) ?? 0) + 1));
+        }
       });
   };
 
@@ -200,7 +211,7 @@ export default function AgentsScreen() {
       // Note that SwiftUI's picker keeps the pick a person made, so a refused write draws the row anew under the next round, reading the stored choice again.
       <Fragment key={entry.id}>
         <MenuPickRow
-          key={settingRound}
+          key={settingRounds.get(field) ?? 0}
           label={entry.label}
           options={control.options.map((option) => ({ id: option.value, label: option.label }))}
           picked={control.value}
@@ -215,13 +226,9 @@ export default function AgentsScreen() {
     <Screen>
       <SettingsForm>
         {current === undefined && newAgentRows.length === 0 ? null : (
-          <ListSection
-            key={defaultRound}
-            title={DEFAULT_WORDS.SECTION}
-            footer={refusalOf(newAgentRows, write.said)}
-          >
+          <ListSection title={DEFAULT_WORDS.SECTION} footer={refusalOf(newAgentRows, write.said)}>
             {current === undefined || standard === undefined ? null : (
-              <>
+              <Fragment key={defaultRound}>
                 <MenuPickRow
                   label={DEFAULT_WORDS.MODEL}
                   options={modelOptions(catalog)}
@@ -276,7 +283,7 @@ export default function AgentsScreen() {
                     }}
                   />
                 ) : null}
-              </>
+              </Fragment>
             )}
             {newAgentRows.map(pickRow)}
           </ListSection>

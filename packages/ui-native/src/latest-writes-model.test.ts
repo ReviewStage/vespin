@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { NO_WRITES, newestValue, writeSent, writeSettled } from "./latest-writes-model.js";
+import {
+  NO_WRITES,
+  newestValue,
+  takesRowBack,
+  writeSent,
+  writeSettled,
+} from "./latest-writes-model.js";
 
 describe("writeSettled", () => {
   it("keeps one row's refusal when another row's write lands after it", () => {
@@ -35,5 +41,16 @@ describe("newestValue", () => {
     const aLanded = writeSettled(bLanded, "follow-up", sentA.write, undefined);
 
     expect(newestValue(aLanded, "follow-up", "queue")).toBe("queue");
+  });
+});
+
+describe("takesRowBack", () => {
+  it("takes a row back for its newest write refused, never for one a later write on the row passed", () => {
+    const opus = writeSent<string, string>(NO_WRITES, "default", "opus");
+    const sonnet = writeSent(opus.book, "default", "sonnet");
+
+    expect(takesRowBack(sonnet.book, "default", opus.write, "That model is off.")).toBe(false);
+    expect(takesRowBack(sonnet.book, "default", sonnet.write, "That model is off.")).toBe(true);
+    expect(takesRowBack(sonnet.book, "default", sonnet.write, undefined)).toBe(false);
   });
 });
