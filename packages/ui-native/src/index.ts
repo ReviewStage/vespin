@@ -161,6 +161,8 @@ export { RenameAsk, SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
+export { ProblemLine } from "./problem-line.js";
+
 export {
   PROVIDER_MARK_ASSET,
   ProviderButton,
@@ -194,6 +196,8 @@ export {
 export { RemindSheet } from "./remind-sheet.js";
 
 export {
+  FOOTER_TONE,
+  type FooterTone,
   LIST_LOOK,
   type ListLook,
   ListSection,
