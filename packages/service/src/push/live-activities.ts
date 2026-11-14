@@ -103,7 +103,7 @@ export const LIVE_ACTIVITY_CAUSE = {
 
 export type LiveActivityCause = (typeof LIVE_ACTIVITY_CAUSE)[keyof typeof LIVE_ACTIVITY_CAUSE];
 
-export const LIVE_ACTIVITY_PUSH = {
+const LIVE_ACTIVITY_PUSH = {
   /** The least time between two routine updates to one phone; what it holds back the sweep sends. */
   THROTTLE: Duration.seconds(30),
   /** How long after a push its content counts as current, unless a later push says otherwise. */

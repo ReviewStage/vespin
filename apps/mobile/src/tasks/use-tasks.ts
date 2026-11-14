@@ -426,9 +426,9 @@ function agentsByTask(
 
   for (const agent of listed ?? []) {
     if (agent.archivedAt !== undefined) continue;
-    const onTask = byTask.get(agent.planId);
+    const onTask = byTask.get(agent.taskId);
 
-    if (onTask === undefined) byTask.set(agent.planId, [agent]);
+    if (onTask === undefined) byTask.set(agent.taskId, [agent]);
     else onTask.push(agent);
   }
 
@@ -691,7 +691,7 @@ export interface TaskOverview {
   readonly task: TaskSummary;
   /** Its whole document, where the host has read it: its description and the tasks it waits on and holds up. */
   readonly document: Task | undefined;
-  /** Reads its document again, as the panel's Try again does (`TASKS_DOCUMENT_RETRY`), where its read failed and none is held; none otherwise. */
+  /** Reads its document again, as the panel's Try again does (`TASKS_HELD_RETRY`), where its read failed and none is held; none otherwise. */
   readonly documentRetry: (() => void) | undefined;
   readonly workspace: Workspace | undefined;
   readonly agents: readonly TaskAgentLine[];
@@ -733,7 +733,7 @@ const listedOnce = new Set<string>();
 function idNamed(named: string | undefined): string | undefined {
   if (named === undefined) return undefined;
 
-  return taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: named }) === undefined
+  return taskNumberOf({ kind: LINK_DESTINATION.TASK, taskId: named }) === undefined
     ? named
     : undefined;
 }
@@ -741,7 +741,7 @@ function idNamed(named: string | undefined): string | undefined {
 /**
  * One task by its id or its number, as a link names it, with all its page
  * shows, its description and pages followed while the page stands, as the
- * panel's Overview follows them (`TASKS_DOCUMENT_FOLLOW`, `TASKS_PAGES_FOLLOW`).
+ * panel's Overview follows them (`TASKS_HELD_FOLLOW`, `TASKS_PAGES_FOLLOW`).
  * A task the list doesn't hold, named by its id, stands on its own
  * description read, as the panel's page stands on it (`use-found-task.ts`
  * finds one a link names by number); none until that read answers with it.
@@ -761,7 +761,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   // Note that an id the list doesn't hold is followed by its own read, while a number it doesn't hold names nothing to follow.
   const taskId = listedTask?.id ?? idNamed(named);
   const relations = useTaskRelationWrites();
-  useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_DOCUMENT_FOLLOW]({ taskId: id }));
+  useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_HELD_FOLLOW]({ taskId: id }));
   useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_PAGES_FOLLOW]({ taskId: id }));
 
   const { data: held } = useQuery({
@@ -770,8 +770,8 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       taskId === undefined
         ? undefined
         : {
-            document: state[LIVE_READ.DESCRIPTION_DOCUMENT][taskId]?.rows,
-            documentFailed: state[LIVE_READ.DESCRIPTION_DOCUMENT][taskId]?.failed === true,
+            document: state[LIVE_READ.HELD_TASK][taskId]?.rows,
+            documentFailed: state[LIVE_READ.HELD_TASK][taskId]?.failed === true,
             pages: state[LIVE_READ.PAGES][PAGE_OWNER.TASK][taskId]?.rows,
           },
   });
@@ -810,7 +810,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
     const documentRetry =
       held?.documentFailed === true && document === undefined
         ? () => {
-            acts[ACT_KIND.TASKS_DOCUMENT_RETRY]({ taskId: task.id }).catch(documentRetryLost);
+            acts[ACT_KIND.TASKS_HELD_RETRY]({ taskId: task.id }).catch(documentRetryLost);
           }
         : undefined;
 

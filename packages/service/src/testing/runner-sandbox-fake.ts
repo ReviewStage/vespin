@@ -220,6 +220,8 @@ function asUserCommand(command: string, args: readonly string[]) {
 
 type Hooks = {
   onStart?: ((command: FakeCommand) => Promise<void>) | undefined;
+  /** Run as a stop reaches the session, before its sandbox stops and its commands end, as Vercel's stop takes a moment in which the runner still runs. */
+  onStop?: ((sessionId: string) => Promise<void>) | undefined;
   runExit?: ((args: readonly string[]) => number) | undefined;
   runStdout?: ((args: readonly string[]) => string | undefined) | undefined;
   onRun?:
@@ -480,6 +482,8 @@ export function runnerSandboxApi() {
           { status: 400 },
         );
       }
+
+      await hooks.onStop?.(sessionId);
 
       for (const sandbox of sandboxes.filter((each) => each.currentSessionId === sessionId)) {
         sandbox.status = "stopped";
@@ -751,7 +755,7 @@ export const readCodexConfig = (input: UnparsedWireValue): CodexConfig =>
 export const readInputLine = (input: UnparsedWireValue): InputLine => decodeInputLine(input, WHOLE);
 
 /** The lines a command's stdin holds, each read back. */
-export function linesOf(command: FakeCommand | undefined): WireValue[] {
+function linesOf(command: FakeCommand | undefined): WireValue[] {
   assert.ok(command !== undefined);
 
   return command.stdin

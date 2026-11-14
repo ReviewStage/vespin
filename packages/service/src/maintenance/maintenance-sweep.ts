@@ -40,6 +40,8 @@ interface MaintenanceSweeps {
   markAwayHosts: (now: number) => SweepRead<number>;
   /** Marks away from its commands every machine whose app stopped listening and is not marked yet, so the machines read wakes as it goes quiet, answering how many (`device-store.ts`'s `markCommandsAwayDevices`). */
   markCommandsAway: (now: number) => SweepRead<number>;
+  /** Takes down every machine ask that stood past its keep, answering how many (`machine-command-ask-store.ts`'s `pruneMachineAsks`). */
+  pruneMachineAsks: (now: number) => SweepRead<number>;
   /** Queues the release of the cloud agents' sandboxes unused past their keep, and of those whose release stands unfinished, a sweep's worth, or only logs them where deleting is off (`agents/session-sandboxes.ts`'s `releaseUnusedSandboxes`). */
   releaseSandboxes: (now: number) => SweepRead<SandboxReleaseSweep>;
 }
@@ -80,6 +82,8 @@ interface MaintenanceSweepAnswer {
   awayHosts: Swept<number>;
   /** Machines whose app stopped listening for commands, marked away. */
   commandsAway: Swept<number>;
+  /** Machine asks that stood past their keep, taken down. */
+  machineAsks: Swept<number>;
   /** Cloud agents' sandboxes due for release, and the releases published. */
   sandboxReleases: Swept<SandboxReleaseSweep>;
 }
@@ -126,6 +130,7 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
     liveActivities: yield* isolated("refreshLiveActivities", sweeps.refreshLiveActivities(now)),
     awayHosts: yield* isolated("markAwayHosts", sweeps.markAwayHosts(now)),
     commandsAway: yield* isolated("markCommandsAway", sweeps.markCommandsAway(now)),
+    machineAsks: yield* isolated("pruneMachineAsks", sweeps.pruneMachineAsks(now)),
     sandboxReleases: yield* isolated("releaseSandboxes", sweeps.releaseSandboxes(now)),
   };
 });

@@ -73,7 +73,7 @@ const REPOSITORY_REFUSALS = [
 /** The list's query: one task's or one workspace's automations, or every one the account reads. */
 const automationListQuerySchema = EffectSchema.Struct({
   [AUTOMATION_LIST_QUERY.TASK_ID]: EffectSchema.optionalKey(
-    automationCreateRequestSchema.fields.planId.schema,
+    automationCreateRequestSchema.fields.taskId.schema,
   ),
   [AUTOMATION_LIST_QUERY.WORKSPACE_ID]: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
 });

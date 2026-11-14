@@ -10,16 +10,13 @@
  */
 
 /** The scheme a page is read over, on its own port alone. */
-const WEB_PORT = {
-  "https:": "443",
-} as const;
+const WEB_PORT: ReadonlyMap<string, string> = new Map([["https:", "443"]]);
 
 /** The address as a page the service may read: an `https` address on its own port with no credential; none for anything else. */
 export function webPageAddressOf(href: string): URL | undefined {
   if (!URL.canParse(href)) return undefined;
   const url = new URL(href);
-  // SAFETY: a protocol the table lacks reads undefined, which the line below answers.
-  const port = WEB_PORT[url.protocol as keyof typeof WEB_PORT];
+  const port = WEB_PORT.get(url.protocol);
 
   if (port === undefined) return undefined;
 

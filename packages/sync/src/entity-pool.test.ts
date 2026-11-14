@@ -97,6 +97,31 @@ it.effect("two reads hold one row, which leaves the pool only once the last lets
 );
 
 it.effect(
+  "an answer of only what moved keeps every row the read held, takes up its own, and lets go those it names gone, but one another read holds",
+  () =>
+    Effect.gen(function* () {
+      const pool = yield* entityPool();
+      const feed = yield* standing(pool);
+      const inbox = yield* standing(pool);
+      const triage = { id: "1", name: "Triage", runs: 0 };
+      const billing = { id: "2", name: "Billing", runs: 0 };
+      const invites = { id: "3", name: "Invites", runs: 0 };
+      const exports = { id: "4", name: "Exports", runs: 0 };
+      yield* feed.rows.answer([triage, billing, exports]);
+      yield* inbox.rows.answer([billing]);
+
+      const moved = yield* feed.rows.answer([invites], { gone: ["1", "2"] });
+
+      assert.deepEqual(moved.toSorted(), ["1", "2", "3"]);
+      assert.deepEqual(feed.rows.rows(), [exports, invites]);
+      assert.deepEqual(inbox.rows.rows(), [billing], "a row another read holds stays");
+
+      const made = { id: "1", name: "Made", runs: 0 };
+      assert.deepEqual(yield* shownOver(pool, made), [made], "nothing of the row let go is left");
+    }).pipe(Effect.scoped),
+);
+
+it.effect(
   "an answer lands while a write stands, and the write is drawn over the newer row it brings",
   () =>
     Effect.gen(function* () {

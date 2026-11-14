@@ -45,7 +45,6 @@ import {
   selectListedTasks,
 } from "../use-app-state.js";
 import { startFailureNote as agentStartFailureNote, choiceRequest } from "./agent-model.js";
-import type { NewTaskPress } from "./new-task-composer.js";
 import { NEW_TASK_PURPOSE, type NewTaskPurpose } from "./new-task-purpose.js";
 import type { NewTaskRelation } from "./new-task-relation.js";
 import type { RepositoryChooser } from "./repository-chip.js";
@@ -144,6 +143,23 @@ export interface NewTaskPreset {
   readonly purpose?: NewTaskPurpose;
   /** The card as it pressed Start, and why the start was refused, where the card is opened again on a refusal. */
   readonly refused?: NewTaskRefusal;
+}
+
+/** What one Agent-mode press asked beside its key: the task's repository and workspace, and where its agents run, and the agent's words, files, and the model picked, none for the account's default. */
+export interface AgentAsk {
+  readonly repository: string | null;
+  readonly workspaceId: string | undefined;
+  /** The device the task's agents run on, by its id; none for the cloud. */
+  readonly deviceId?: string | undefined;
+  /** The relations the task starts in, in the order they were picked. */
+  readonly relations: readonly TaskCreateRelation[];
+  readonly agent: Omit<NewTaskAgent, "idempotencyKey">;
+}
+
+/** One Agent-mode press: what it asked, and the key it carried. */
+export interface NewTaskPress {
+  readonly ask: AgentAsk;
+  readonly key: string;
 }
 
 /** The card as it pressed Start, and why the start was refused, which the card opens again on. */
@@ -559,10 +575,10 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
         // what stands now is the developer's since, a New task opened again among it, and stays.
         if (stays) {
           if (handed === undefined) setNewTaskAsk(undefined);
-          else openAgent(answer.planId, handed, answer.agentStart, from.device);
+          else openAgent(answer.taskId, handed, answer.agentStart, from.device);
           const { agentStart } = answer;
           sayStarted(
-            answer.planId,
+            answer.taskId,
             handed === undefined || (agentStart !== undefined && !("failure" in agentStart)),
           );
 
@@ -578,7 +594,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
         }
 
         letGoOfPage();
-        openAgent(answer.planId, handed, answer.agentStart, from.device);
+        openAgent(answer.taskId, handed, answer.agentStart, from.device);
 
         return undefined;
       },
@@ -594,7 +610,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   // Note that Open goes to the task first, which asks while a page stands
   // unsaved work, as the sidebar's press does, and reads the opener of the
   // render it is pressed in.
-  const sayStarted = (planId: string, agentRan: boolean) =>
+  const sayStarted = (taskId: string, agentRan: boolean) =>
     toast({
       replayUnmasked: true,
       words: agentRan ? TASK_STARTED_NOTE : TASK_STARTED_AGENT_REFUSED_NOTE,
@@ -602,7 +618,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
       action: {
         label: OPEN_STARTED_TASK,
         replayUnmasked: true,
-        onPress: () => openStarted.current(planId),
+        onPress: () => openStarted.current(taskId),
       },
     });
 
@@ -614,24 +630,24 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   // panel stands as it stood on every other task.
   // Note that an answer naming neither is read as one the service never gave.
   const openAgent = (
-    planId: string,
+    taskId: string,
     handed: NewTaskAgent,
     started: AgentAgentAnswer | undefined,
     device: MacOffer | undefined,
   ) => {
     if (started !== undefined && !("failure" in started)) {
-      agents.onTaskStarted(planId, started.agent);
-      showTab(planId, agentTab(started.agent.id));
+      agents.onTaskStarted(taskId, started.agent);
+      showTab(taskId, agentTab(started.agent.id));
 
       return;
     }
 
     // Note that the refusal keeps the answer that said it, so the draft's tab reports the service's word for it.
     const answer = started ?? { failure: AGENT_CALL_FAILURE.UNANSWERED };
-    const refused = { ...agentStartFailureNote(answer, planId, device), cause: answer };
+    const refused = { ...agentStartFailureNote(answer, taskId, device), cause: answer };
     const { idempotencyKey: id, ...words } = handed;
-    agents.onHandDraft(planId, { id, ...words, refused });
-    showTab(planId, draftTab(id));
+    agents.onHandDraft(taskId, { id, ...words, refused });
+    showTab(taskId, draftTab(id));
   };
 
   // Note that New task's start is a steady door, so the dialog handed it holds while nothing it draws moves.

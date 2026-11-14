@@ -96,7 +96,7 @@ test("an edit the service refused keeps its words as the comment's draft, which 
 
   const place = {
     kind: DRAFT_PLACE.DESCRIPTION_COMMENT,
-    planId: PLAN,
+    taskId: PLAN,
     on: { threadId: THREAD.id, entryId },
   } as const;
 

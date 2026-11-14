@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { NOTIFICATIONS_STATUS } from "@repo/settings/settings-controls";
@@ -276,9 +276,9 @@ function HistoryWindow({ at }: { at: HistorySpot }): React.JSX.Element {
   const base = tasksControl();
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: DOCUMENT_TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     history: { ...base.history, ...versions, open: true },
   });
 
