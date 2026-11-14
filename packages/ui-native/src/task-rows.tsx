@@ -69,9 +69,6 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** What parts the pieces of an agent's line. */
 const LINE_PART = "· ";
 
-/** The same part's mark after what leads a line, such as an agent's task before what it is doing. */
-const LINE_PART_AFTER = " ·";
-
 /** What a pull request's number in an agent's line is heard to do. */
 const OPENS_PULL_REQUEST = "Opens the pull request";
 
@@ -321,10 +318,20 @@ export function AgentRow(props: AgentRowProps) {
               modifiers={[
                 font({ textStyle: TYPE_ROLE.ROW_LINE }),
                 foregroundStyle(colors.TEXT_MUTED),
-                lineLimit(1),
+                lineLimit(stacked ? 2 : 1),
               ]}
             >
-              {`${task}${(told || waiting > 0) && !stacked ? LINE_PART_AFTER : ""}`}
+              {task}
+            </Text>
+          )}
+          {task === undefined || (!told && waiting === 0) || stacked ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+              ]}
+            >
+              {LINE_PART.trim()}
             </Text>
           )}
           {resting ? null : <AgentStateWords working={state === AGENT_ROW_STATE.WORKING} />}
