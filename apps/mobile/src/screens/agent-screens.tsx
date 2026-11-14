@@ -117,7 +117,13 @@ import {
 } from "../agents/use-suggestions.js";
 import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
 import { useWarmAgent } from "../agents/use-warm-agent.js";
-import { PUSHED_PAGE, useDetailLeave, useDetailPush, useHandToDetail } from "../detail-stack.js";
+import {
+  PUSHED_PAGE,
+  useDetailCovered,
+  useDetailLeave,
+  useDetailPush,
+  useHandToDetail,
+} from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
@@ -797,6 +803,13 @@ export function AgentConversation({
   const pick = useAgentModelPick(id);
   const actions = useAgentActions(id, address);
   const transcriptCopy = useTranscriptCopy(id, title, shown?.brief);
+  const covered = useDetailCovered();
+  const cancelCopy = transcriptCopy.cancel;
+
+  // Note that a page pushed over this one in its own column leaves the tab focused, so a copy still reading is outdated here, as a push over the window outdates it.
+  useEffect(() => {
+    if (covered) cancelCopy();
+  }, [covered, cancelCopy]);
 
   // Note that a copy or share lets the menu's last note go, so an older Rename or Pin refusal never stands over what the copy says.
   const copyTranscript = (way: TranscriptCopy) => {
