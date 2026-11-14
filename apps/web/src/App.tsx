@@ -45,7 +45,7 @@ export function App(): React.JSX.Element {
       barCall={<SiteBarDownload />}
       badge={<LandingBackedBy href={Y_COMBINATOR_PAGE} />}
       title="The unified workspace for engineering teams and agents."
-      lead="An opinionated process for working with your teammates and agents. Free and open source."
+      lead="Designed for how you and your team ship."
       actions={
         <>
           <SiteDownload />
