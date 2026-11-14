@@ -2,7 +2,8 @@
  * video-player.tsx -- a recording played in place of a picture under our
  * own bar, with its Expand, and as the file viewer plays it, both on a
  * short WebM the page records from a canvas as it opens, since the catalog
- * fetches nothing, and waiting on one whose size it never reads. While it records it says so, and where the browser can
+ * fetches nothing; one recorded with a tone beside it, whose bar offers
+ * Mute; and waiting on one whose size it never reads. While it records it says so, and where the browser can
  * record no WebM, as a test's window cannot, it says that instead.
  */
 
@@ -38,6 +39,9 @@ const STAND_IN_WORDS = {
 /** A WebM whose header is cut off before its size, so the player stays on its wait as one still arriving does. */
 const UNREAD_URL = "data:video/webm;base64,GkXfow==";
 
+/** The pitch of the tone a stand-in recorded with sound carries, in hertz: an A. */
+const TONE_HZ = 440;
+
 /** The stand-in's colors, a page with a button sliding across it. */
 const INK = { PAGE: "#f5f5f7", ROW: "#e3e3e8", BUTTON: "#3d5ac8" } as const;
 
@@ -53,21 +57,37 @@ function drawFrame(pen: CanvasRenderingContext2D, at: number): void {
 }
 
 /**
- * Records the stand-in from a canvas, a frame each animation frame, and
- * hands it to `done` as a `data:` URL; answers how to stop early.
+ * Records the stand-in from a canvas, a frame each animation frame, with a
+ * tone's track beside it where it has `sound`, and hands it to `done` as a
+ * `data:` URL; answers how to stop early.
  */
-function recordStandIn(done: (url: string) => void): () => void {
+function recordStandIn(done: (url: string) => void, sound: boolean): () => void {
   const canvas = document.createElement("canvas");
   canvas.width = RECORDING.WIDTH;
   canvas.height = RECORDING.HEIGHT;
   const pen = canvas.getContext("2d");
 
   if (pen === null) return () => undefined;
-  const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: "video/webm" });
+  const stream = canvas.captureStream(30);
+  // Note that a tone's track is enough for its header to name sound, though a page no one pressed yet plays it silent.
+  const audio = sound ? new AudioContext() : undefined;
+
+  if (audio !== undefined) {
+    const tone = audio.createOscillator();
+    const out = audio.createMediaStreamDestination();
+    tone.frequency.value = TONE_HZ;
+    tone.connect(out);
+    tone.start();
+
+    for (const track of out.stream.getAudioTracks()) stream.addTrack(track);
+  }
+
+  const recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
   const parts: Blob[] = [];
   let gone = false;
   recorder.ondataavailable = (event) => parts.push(event.data);
   recorder.onstop = () => {
+    audio?.close().catch(() => undefined);
     const reader = new FileReader();
     reader.onload = () => {
       if (!gone && Predicate.isString(reader.result)) done(reader.result);
@@ -103,8 +123,8 @@ function canRecord(): boolean {
   return typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("video/webm");
 }
 
-/** The stand-in recording once made, that it is being made, or that this browser cannot make one. */
-export function useStandIn(): StandIn {
+/** The stand-in recording once made, with a tone where it has `sound`, that it is being made, or that this browser cannot make one. */
+export function useStandIn(sound = false): StandIn {
   const [standIn, setStandIn] = useState<StandIn>(() =>
     canRecord() ? STAND_IN.RECORDING : STAND_IN.UNSUPPORTED,
   );
@@ -112,14 +132,15 @@ export function useStandIn(): StandIn {
   useEffect(() => {
     if (!canRecord()) return undefined;
 
-    return recordStandIn((url) => setStandIn({ url }));
-  }, []);
+    return recordStandIn((url) => setStandIn({ url }), sound);
+  }, [sound]);
 
   return standIn;
 }
 
 function VideoPlayers(): React.JSX.Element {
   const standIn = useStandIn();
+  const heard = useStandIn(true);
   const [expanded, setExpanded] = useState(0);
 
   if (Predicate.isString(standIn)) {
@@ -152,6 +173,15 @@ function VideoPlayers(): React.JSX.Element {
           label="A button sliding across a page"
           place={VIDEO_PLAYER_PLACE.VIEWER}
         />
+      </CatalogSection>
+      <CatalogSection id="video-player-sound" title="With sound">
+        {Predicate.isString(heard) ? (
+          <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+            {STAND_IN_WORDS[heard]}
+          </Text>
+        ) : (
+          <VideoPlayer dataUrl={heard.url} label="A button sliding across a page, with a tone" />
+        )}
       </CatalogSection>
       <CatalogSection id="video-player-loading" title="Still loading">
         <VideoPlayer dataUrl={UNREAD_URL} label="A recording still arriving" />

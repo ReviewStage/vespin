@@ -1,5 +1,6 @@
 import { MinimizeIcon } from "../../icons/lucide-glyphs.js";
 import { PICTURE_STATE, type PictureState } from "../../picture-read.js";
+import { AgentPointer, type AgentPointerKind } from "../agent-pointer/agent-pointer.js";
 import { APP_ICON_SIZE, AppIcon } from "../app-icon/app-icon.js";
 import { BUTTON_SIZE, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_LOOK, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
@@ -28,6 +29,10 @@ import { WorkingMark } from "../working-mark/working-mark.js";
  * walk the other apps' windows too. A window not read yet holds the frame
  * with a spinner, one whose read did not land holds it with Retry and is no
  * press, and an app whose window the agent never read stands as its icon.
+ * Where the agent's cursor stands over the window in front, its pointer
+ * (`AgentPointer`) is drawn over the picture at that spot, gliding as the
+ * agent moves it, as its cursor does on the Mac; the picture may lag a press
+ * or two behind it, until the agent reads the window again.
  *
  * The other apps stand behind it as cards peeking out above it, stepping in
  * from the edge as a deck does, at most two: the one used last nearest as
@@ -69,12 +74,27 @@ const PILE_PLACE = [
 /** Each card behind the front window, by its depth from it: stepping in from the edge, the deeper the further. */
 const BEHIND_INSET = ["mx-app-window-peek", "mx-app-window-peek-twice"] as const;
 
-/** An app in the stack: its name, its icon's address, and its newest window, where the agent read one. */
+/** The agent's pointer over an app's window: where it stands as a share of the window from its top left, what it does there, the move it stands at, and whether it shows, as it does while the agent works. */
+export interface StackedPointer {
+  readonly x: number;
+  readonly y: number;
+  readonly kind: AgentPointerKind;
+  readonly move: string;
+  readonly shown: boolean;
+}
+
+/** An app in the stack: what tells it apart from every other, such as its bundle id, its name, its icon's address, and its newest window, where the agent read one, with the agent's pointer where it stands over that window. Note that two apps may share a name, so the stack knows each by its id and only shows its name. */
 export interface StackedApp {
+  readonly id: string;
   readonly name: string;
   readonly iconSrc?: string | undefined;
   readonly window?:
-    | { readonly state: PictureState; readonly width: number; readonly height: number }
+    | {
+        readonly state: PictureState;
+        readonly width: number;
+        readonly height: number;
+        readonly pointer?: StackedPointer | undefined;
+      }
     | undefined;
 }
 
@@ -83,7 +103,7 @@ function IconPile({ apps }: { apps: readonly StackedApp[] }): React.JSX.Element 
   return (
     <span className="ui-app-icon-pile inline-flex items-center" aria-hidden="true">
       {apps.slice(0, PILE_PLACE.length).map((app, at) => (
-        <span key={app.name} className={`relative inline-flex ${PILE_PLACE[at] ?? ""}`}>
+        <span key={app.id} className={`relative inline-flex ${PILE_PLACE[at] ?? ""}`}>
           <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />
         </span>
       ))}
@@ -96,14 +116,28 @@ function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
   const window = app.window;
 
   if (window?.state.kind === PICTURE_STATE.READY) {
+    const pointer = window.pointer;
+
+    // Note that the pointer stands over the picture alone, which the tile's face hugs and positions.
     return (
-      <img
-        className="ui-app-window block h-auto max-h-app-window-tall w-auto max-w-full"
-        src={window.state.url}
-        width={window.width}
-        height={window.height}
-        alt=""
-      />
+      <>
+        <img
+          className="ui-app-window block h-auto max-h-app-window-tall w-auto max-w-full"
+          src={window.state.url}
+          width={window.width}
+          height={window.height}
+          alt=""
+        />
+        {pointer === undefined ? null : (
+          <AgentPointer
+            x={pointer.x}
+            y={pointer.y}
+            kind={pointer.kind}
+            move={pointer.move}
+            shown={pointer.shown}
+          />
+        )}
+      </>
     );
   }
 
@@ -131,7 +165,7 @@ function AppName({
   onShowApp,
 }: {
   app: StackedApp;
-  onShowApp: ((name: string) => void) | undefined;
+  onShowApp: ((id: string) => void) | undefined;
 }): React.JSX.Element {
   const face = (
     <>
@@ -153,7 +187,7 @@ function AppName({
       look={CHIP_LOOK.TOOLBAR}
       size={CHIP_SIZE.COMPACT}
       aria-label={WORDS.SHOW_ON_MAC(app.name)}
-      onClick={() => onShowApp(app.name)}
+      onClick={() => onShowApp(app.id)}
     >
       {face}
     </Chip>
@@ -191,11 +225,11 @@ function BehindTitle({
   app: StackedApp;
   using: boolean;
   depth: number;
-  onPick: (name: string) => void;
+  onPick: (id: string) => void;
 }): React.JSX.Element {
   return (
     <Behind depth={depth}>
-      <CardPress label={WORDS.FORWARD(app.name)} onPress={() => onPick(app.name)}>
+      <CardPress label={WORDS.FORWARD(app.name)} onPress={() => onPick(app.id)}>
         <span className="flex min-w-0 items-center gap-ui-6 pt-ui-4 pb-ui-12 ps-ui-8 pe-ui-8">
           <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />
           <Text
@@ -222,7 +256,7 @@ function BehindPile({
   apps: readonly StackedApp[];
   using: string | undefined;
   depth: number;
-  onPick: (name: string) => void;
+  onPick: (id: string) => void;
 }): React.JSX.Element {
   const menu = useMenu(true);
 
@@ -233,7 +267,7 @@ function BehindPile({
           <IconPile apps={apps} />
           <ChipName>{WORDS.MORE_COUNT(apps.length)}</ChipName>
         </Chip>
-        {apps.some((app) => app.name === using) ? <WorkingMark /> : null}
+        {apps.some((app) => app.id === using) ? <WorkingMark /> : null}
       </span>
       {menu.drawn === undefined ? null : (
         <Menu
@@ -241,11 +275,11 @@ function BehindPile({
           menu={menu.drawn}
           groups={[
             apps.map((app) => ({
-              key: app.name,
+              key: app.id,
               label: app.name,
               icon: <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />,
-              tag: app.name === using ? <WorkingMark /> : undefined,
-              onSelect: () => onPick(app.name),
+              tag: app.id === using ? <WorkingMark /> : undefined,
+              onSelect: () => onPick(app.id),
             })),
           ]}
           onClose={menu.close}
@@ -270,22 +304,22 @@ export function AppWindowStack({
   label: string;
   /** The apps, the one used last first; nothing is drawn for none. */
   apps: readonly StackedApp[];
-  /** The app in front, by its name; the one used last where it names none of them. */
+  /** The app in front, by its id; the one used last where it names none of them. */
   shown?: string | undefined;
-  /** The app the agent is in now, by its name; none while it is in none, or done. */
+  /** The app the agent is in now, by its id; none while it is in none, or done. */
   using?: string | undefined;
-  /** Brings an app forward, by its name. */
-  onPick: (name: string) => void;
+  /** Brings an app forward, by its id. */
+  onPick: (id: string) => void;
   /** Opens the window in front full size. */
   onOpen: () => void;
   /** Puts the stack down to its pill. */
   onMinimize: () => void;
-  /** Brings an app's own window forward on the Mac, by its name; none where the reader is not at that Mac. */
-  onShowApp?: ((name: string) => void) | undefined;
+  /** Brings an app's own window forward on the Mac, by its id; none where the reader is not at that Mac. */
+  onShowApp?: ((id: string) => void) | undefined;
   /** Its owner's class, to place it and nothing else. */
   className?: string | undefined;
 }): React.JSX.Element | null {
-  const front = apps.find((app) => app.name === shown) ?? apps[0];
+  const front = apps.find((app) => app.id === shown) ?? apps[0];
 
   if (front === undefined) return null;
   const others = apps.filter((app) => app !== front);
@@ -305,9 +339,9 @@ export function AppWindowStack({
       )}
       {titled.toReversed().map((app, at) => (
         <BehindTitle
-          key={app.name}
+          key={app.id}
           app={app}
-          using={app.name === using}
+          using={app.id === using}
           depth={titled.length - 1 - at}
           onPick={onPick}
         />
@@ -321,7 +355,7 @@ export function AppWindowStack({
       >
         <div className="flex min-w-0 items-center gap-ui-4 border-b border-border p-ui-4">
           <AppName app={front} onShowApp={onShowApp} />
-          {front.name === using ? <WorkingMark /> : null}
+          {front.id === using ? <WorkingMark /> : null}
           <span className="flex-1" />
           <IconButton
             icon={<MinimizeIcon />}
@@ -357,13 +391,13 @@ export function AppStackPill({
 }: {
   /** The apps, the one used last first; nothing is drawn for none. */
   apps: readonly StackedApp[];
-  /** The app the agent is in now, by its name; none while it is in none, or done. */
+  /** The app the agent is in now, by its id; none while it is in none, or done. */
   using?: string | undefined;
   onRestore: () => void;
   /** Its owner's class, to place it and nothing else. */
   className?: string | undefined;
 }): React.JSX.Element | null {
-  const named = apps.find((app) => app.name === using) ?? apps[0];
+  const named = apps.find((app) => app.id === using) ?? apps[0];
 
   if (named === undefined) return null;
   const pile = [named, ...apps.filter((app) => app !== named)];
