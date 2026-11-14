@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
   headModel: { flexDirection: "row", alignItems: "center", gap: 3 },
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
-  jump: { position: "absolute", alignSelf: "center" },
+  jump: { position: "absolute" },
   jumpFace: {
     width: JUMP_SIZE,
     height: JUMP_SIZE,
@@ -809,18 +809,22 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
 }
 
 /**
- * The control that brings the newest row into view, as Messages and the
- * chat apps draw it: a round button of Liquid Glass holding a down arrow,
- * centered over the list's foot, standing only once the reader has scrolled
- * back. Note that where Liquid Glass is unavailable, before iOS 26, or the
+ * The control that brings the newest row into view: a round button of
+ * Liquid Glass holding a down arrow, standing only once the reader has
+ * scrolled back, over the list's foot at the end of the rows' words, as the
+ * panel's way back stands in its log's corner, so it covers at most a
+ * line's end rather than the middle of the words. Note that where Liquid Glass is unavailable, before iOS 26, or the
  * reader turned on Reduce Transparency, it is drawn solid on the surface's
  * ground inside the quiet ink rather than a hand-drawn copy of glass.
  */
 function JumpToLatest({
   bottom,
+  end,
   onPress,
 }: {
   readonly bottom: number;
+  /** How far in from the list's trailing edge it stands: where the rows' words end. */
+  readonly end: number;
   readonly onPress: () => void;
 }) {
   const colors = useColors();
@@ -842,7 +846,7 @@ function JumpToLatest({
       accessibilityRole="button"
       accessibilityLabel={JUMP_TO_LATEST}
       hitSlop={SPACE.TIGHT}
-      style={[styles.jump, { bottom }]}
+      style={[styles.jump, { bottom, right: end }]}
     >
       {solid ? (
         <View
@@ -1080,6 +1084,7 @@ export function AgentTranscript({
       {away ? (
         <JumpToLatest
           bottom={foot}
+          end={right + sides + SPACE.EDGE}
           onPress={() => {
             anchored.current = true;
             // Note that the jump scrolls at once where the reader asked for less motion.
