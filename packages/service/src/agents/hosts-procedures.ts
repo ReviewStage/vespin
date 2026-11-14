@@ -1,5 +1,5 @@
 /**
- * hosts-procedures.ts -- the account's enrolled machines as Settings › Hosts reads and changes them: listed, removed, and a box's pairing read, approved, or denied by its code.
+ * hosts-procedures.ts -- the account's enrolled machines as Settings › Machines reads and changes them: listed, removed, each machine's own settings for agents changed, and a box's pairing read, approved, or denied by its code.
  *
  * A machine is any device of the account's that holds a device secret, a
  * box its approved pairing keyed and a Mac its desktop enrolled alike
@@ -15,7 +15,13 @@
  * leave on its own secret the same way (`removeAccountHost`). The apps each
  * of the account's machines always allow are read for an agent's `@` where
  * it is typed off that machine, and only while the reader has Computer use
- * on. Each host is
+ * on. Each of the account's machines, enrolled or one whose app only
+ * joined to take commands, has its own settings for agents' commands and
+ * apps changed from any device of the member's, which the machine follows
+ * live, and is removed the same way, as a host where it runs agents. An
+ * ask one of the account's machines holds is answered from any of its
+ * devices the same way, the first answer standing; an Allow given after
+ * its window closed tells the agent in the owner's words to try again. Each host is
  * listed with whether its daemon is below the floor, where its setup
  * stands, where its update to a newer release stands, whether its program
  * has called in since it joined, and, for a Mac, the user it runs as, and
@@ -38,7 +44,13 @@
 import { randomUUID } from "node:crypto";
 import { runningTurnIds } from "@repo/database/models/abandoned-turns";
 import { accountExperimentOn } from "@repo/database/models/account-store";
-import { allowedAppsOf, devicesSeenSince } from "@repo/database/models/device-store";
+import { readVisibleAgent } from "@repo/database/models/agent-store";
+import {
+  allowedAppsOf,
+  changeMachine,
+  devicesSeenSince,
+  removeMachine,
+} from "@repo/database/models/device-store";
 import {
   approveHostPairing,
   denyHostPairing,
@@ -47,9 +59,16 @@ import {
   readHostPairing,
 } from "@repo/database/models/host-pairing-store";
 import { hostAgentConversations, hostsOf, removeHost } from "@repo/database/models/host-store";
+import { answerMachineAsk } from "@repo/database/models/machine-command-ask-store";
+import { storeWriter } from "@repo/database/models/writer";
 import { HOST_WIRE, hostUserCodeOf, hostVersionMeets } from "@repo/features/host-wire";
+import {
+  lateAllowedWords,
+  MACHINE_ASK_DECISION,
+  type MachineAskSubject,
+} from "@repo/features/machine-ask-wire";
 import { EXPERIMENT } from "@repo/settings";
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Option } from "effect";
 import { HOST_VERSION } from "../auth/device-secret.js";
 import {
   recordServerEvent,
@@ -63,6 +82,8 @@ import {
   type UserIdResolver,
 } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
+import { steerMemberWords } from "./coder-host/steer.js";
+import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { settleLostHostTurns } from "./lost-host-turns.js";
 
 export interface HostsProcedureSeams {
@@ -129,6 +150,34 @@ export const removeAccountHost = (userId: string, id: string) =>
   });
 
 /** A remove answered with the transaction it removed in, or refused as not found where none was removed. */
+/** Writes the words a member's message carries, as the agents' own tools do. */
+const writer = storeWriter({ tools: CODER_TOOL_SET });
+
+/**
+ * The agent an ask was for, told in its owner's words that the ask was
+ * allowed after its call gave up, so it tries again, which its machine now
+ * lets through; nothing where the ask names no agent, the owner may not see
+ * it, or the agent takes no words from them. Note that the line goes under
+ * the ask's own id, so it is sent once however often it is asked, and that
+ * the answer stands whether or not it lands.
+ */
+const toldToTryAgain = (
+  userId: string,
+  askId: string,
+  late: { readonly agentId?: string; readonly subject: MachineAskSubject },
+) =>
+  Effect.gen(function* () {
+    if (late.agentId === undefined) return;
+    const agent = Option.getOrUndefined(yield* readVisibleAgent(userId, late.agentId));
+
+    if (agent === undefined) return;
+
+    yield* steerMemberWords(writer, userId, agent, {
+      text: lateAllowedWords(late.subject),
+      clientKey: askId,
+    });
+  }).pipe(Effect.ignore);
+
 const removedOrNotFound = (txid: string | undefined) =>
   txid === undefined ? Effect.fail(HOSTED_REFUSAL.NOT_FOUND) : Effect.succeed({ ...DONE, txid });
 
@@ -203,6 +252,36 @@ export function hostsProcedures(seams: HostsProcedureSeams) {
     }),
     remove: hosts.remove.effect(function* ({ context, input }) {
       return yield* removedOrNotFound(yield* removeAccountHost(context.userId, input.id));
+    }),
+    changeMachine: hosts.changeMachine.effect(function* ({ context, input }) {
+      const { id, ...change } = input;
+
+      return yield* removedOrNotFound(
+        yield* hostedStoreOrUnavailable(changeMachine(context.userId, id, change)),
+      );
+    }),
+    // Note that the first answer stands, from whichever device, and a later one is answered with it.
+    answerMachineAsk: hosts.answerMachineAsk.effect(function* ({ context, input }) {
+      const standing = yield* hostedStoreOrUnavailable(answerMachineAsk(context.userId, input));
+
+      if (standing === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+      const { answer, txid, late } = standing;
+
+      if (late !== undefined && answer.decision !== MACHINE_ASK_DECISION.DENY) {
+        yield* toldToTryAgain(context.userId, input.id, late);
+      }
+
+      return txid === undefined ? answer : { ...answer, txid };
+    }),
+    // Note that a machine that runs agents is removed as a host is, so its agents' running turns are settled lost with it; any other only stops being listed and routed to.
+    removeMachine: hosts.removeMachine.effect(function* ({ context, input }) {
+      const host = yield* removeAccountHost(context.userId, input.id);
+
+      if (host !== undefined) return { ...DONE, txid: host };
+
+      return yield* removedOrNotFound(
+        yield* hostedStoreOrUnavailable(removeMachine(context.userId, input.id)),
+      );
     }),
     readPairing: hosts.readPairing.effect(function* ({ context, input }) {
       const code = yield* codeOf(input.code);

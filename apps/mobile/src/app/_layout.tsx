@@ -11,7 +11,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -27,6 +27,7 @@ import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
+import { VoiceCallProvider } from "../voice-call.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
@@ -40,16 +41,52 @@ const SHORT_SHEET_DETENTS = [0.5, 1];
 /** The presentations that stand a screen in a sheet over the root, which would hide a notice drawn there. */
 const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set(["modal", "formSheet"]);
 
+/** What a root screen's layout is told of its screen's place in the stack: whether it is the one in front, and when that changes. */
+interface ScreenFocus {
+  readonly isFocused: () => boolean;
+  readonly addListener: (event: "focus" | "blur", listener: () => void) => () => void;
+}
+
+/** Whether the screen `navigation` names is the one in front, followed as it comes forward and goes behind. */
+function useScreenInFront(navigation: ScreenFocus): boolean {
+  const [inFront, setInFront] = useState(() => navigation.isFocused());
+
+  useEffect(() => {
+    const comes = navigation.addListener("focus", () => setInFront(true));
+    const goes = navigation.addListener("blur", () => setInFront(false));
+
+    return () => {
+      comes();
+      goes();
+    };
+  }, [navigation]);
+
+  return inFront;
+}
+
+/** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. */
+function SheetNoticeLayer({
+  navigation,
+  children,
+}: {
+  readonly navigation: ScreenFocus;
+  readonly children: ReactNode;
+}) {
+  return <FailureNoticeLayer inFront={useScreenInFront(navigation)}>{children}</FailureNoticeLayer>;
+}
+
 /** A root screen, wrapped in a place of its own for the failure notice where it stands as a sheet, so a notice shows over the sheet rather than behind it. */
 function screenLayout({
   options,
+  navigation,
   children,
 }: {
   readonly options: { readonly presentation?: string | undefined };
+  readonly navigation: ScreenFocus;
   readonly children: ReactNode;
 }) {
   return SHEET_PRESENTATIONS.has(options.presentation) ? (
-    <FailureNoticeLayer>{children}</FailureNoticeLayer>
+    <SheetNoticeLayer navigation={navigation}>{children}</SheetNoticeLayer>
   ) : (
     <>{children}</>
   );
@@ -174,7 +211,7 @@ function KeptScreens() {
   );
 }
 
-/** The root: the host, the one notice of a write that did not go, and the screens under both. */
+/** The root: the host, the one notice of a write that did not go, the voice call, which outlives every screen, and the screens under them. */
 export default function RootLayout() {
   // Note that a compact window's tab bar floats at its foot, which the notice stands over; a regular window's tabs stand at its top or its side.
   const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
@@ -182,7 +219,9 @@ export default function RootLayout() {
   return (
     <HostProvider>
       <FailureNoticeProvider footRoom={compact ? TAB_BAR_ROOM : 0}>
-        <KeptScreens />
+        <VoiceCallProvider>
+          <KeptScreens />
+        </VoiceCallProvider>
       </FailureNoticeProvider>
     </HostProvider>
   );

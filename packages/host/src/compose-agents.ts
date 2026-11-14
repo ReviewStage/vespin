@@ -1,4 +1,5 @@
 import type { HostedAgentClient, HostedAgentPortsClient } from "@repo/features";
+import type { AccountInboxAnswer } from "@repo/features/account-inbox-wire";
 import { ACCOUNT_PREFERENCES_READ } from "@repo/features/account-preferences-live";
 import { AGENT_ORIGIN_READ } from "@repo/features/agent-origin-live";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
@@ -107,6 +108,7 @@ import {
   type CHAPTERS_ACTS,
   CHAPTERS_FOLLOWS,
 } from "./contract/index.js";
+import type { EntityStore } from "./entity-store.js";
 import type { HostMethodTable } from "./gateway-door.js";
 import { type AccountHeld, accountHeld, type HeldFetch, heldFetch } from "./held-fetch.js";
 import { type HostActTable, liveTold } from "./host-acts.js";
@@ -288,7 +290,7 @@ export interface AgentsDependencies extends AccountGateDependencies {
    * Start is answered once the list carries it; none waits for nothing.
    */
   listed?: (txid: string | undefined) => Effect.Effect<void>;
-  /** The task list as each drawing of it stands, from the caller's listening on (`TasksComposer.pullRequestListings`), on which the Pull request tabs' parts are asked again; none moves nothing. */
+  /** What each drawing of the task list moved, from the caller's listening on (`TasksComposer.pullRequestListings`), on which the Pull request tabs' parts are asked again; none moves nothing. */
   pullRequestListings?: Effect.Effect<Stream.Stream<PullRequestListing>, never, Scope.Scope>;
   /**
    * The sync engine's pool, which an agent's row of the task list stands in
@@ -298,6 +300,22 @@ export interface AgentsDependencies extends AccountGateDependencies {
   pool: EntityPool;
   /** The agent as the task list shows it now, which a rename or a pin waiting for the service answers its caller with; none where the list shows no such agent. */
   agentListed?: (agentId: string) => AgentSummary | undefined;
+  /** Reads an agent a window opens into the task list with its task where the list holds neither (`TasksComposer.openedOutside`); none reads nothing. */
+  openedOutside?: (agentId: string) => Effect.Effect<void>;
+  /** Reads the tasks the account's Inbox holds items of into the task list where it holds them not (`TasksComposer.inboxNamed`); none reads nothing. */
+  inboxNamed?: (taskIds: readonly string[]) => Effect.Effect<void>;
+  /** The signed-in account's lists kept on disk (`entity-store.ts`), which the Inbox is kept among and drawn from at a launch; none keeps nothing. */
+  entities?: () => EntityStore | undefined;
+}
+
+/** The tasks an account inbox answer holds items of, once each: those with an item waiting on the reader first, as they are counted, then every other holding one. */
+function inboxTaskIds(answer: AccountInboxAnswer): readonly string[] {
+  return [
+    ...new Set([
+      ...answer.items.map((item) => item.taskId),
+      ...answer.tasks.map((task) => task.taskId),
+    ]),
+  ];
 }
 
 /** The acts this composer answers: the Inbox's, every agent act but This Mac's and the hosts', which their own concerns answer, and a pull request's chapters generated; and every agent's live follow but the hosts' and their beats', the Inbox's, and a pull request's chapters. */
@@ -519,6 +537,9 @@ export function composeAgents(
             ),
           pool: dependencies.pool,
           accountWide,
+          ...(dependencies.entities === undefined
+            ? undefined
+            : { entities: dependencies.entities }),
         },
         userId,
         tellItems,
@@ -1149,7 +1170,13 @@ function composed(
     AGENTS_REWIND: declaredWrite(dependencies.pool, rewound),
     AGENTS_CLEAR: ({ agentId }) => asked(client.clear(agentId)),
     AGENTS_BOOT: ({ agentId }) => asked(client.boot(agentId)),
-    AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
+    AGENTS_WARM: ({ agentId, chat, holder }) =>
+      asked(
+        client.warm(
+          agentId,
+          chat === undefined || holder === undefined ? undefined : { chat, holder },
+        ),
+      ),
     AGENTS_UNSEND: (params) => queues.unsend(params),
     // Note that a button in a reply is asked of the service on each act and held nowhere here, since its press is the service's to keep.
     AGENTS_REPLY_BUTTON: (params) => asked(client.replyButton(params)),
@@ -1226,7 +1253,12 @@ function composed(
     },
     // A transcript is held for a window while its tab shows it.
     AGENTS_TRANSCRIPT: {
-      hold: (transcript) => transcriptSlice.hold(transcriptKeyOf(transcript)),
+      // An agent a window opens that the task list does not hold is read into it beside its transcript.
+      hold: (transcript) =>
+        Effect.andThen(
+          dependencies.openedOutside?.(transcript.agentId) ?? Effect.void,
+          transcriptSlice.hold(transcriptKeyOf(transcript)),
+        ),
       retry: (transcript) => transcriptSlice.retry(transcriptKeyOf(transcript)),
     },
     // A Pull request tab's parts are held for the windows while the tab shows.
@@ -1259,11 +1291,18 @@ function composed(
         const tell = (answer: AgentAccountInboxAnswerView) =>
           Effect.sync(() => kernel.emit(GATEWAY_EVENT.ACCOUNT_INBOX_CHANGED, carried(answer)));
 
+        // Note that the tasks an answer names are read into the list where it holds them not, so the Inbox lists and counts their items.
+        const told = (answer: AccountInboxAnswer) =>
+          Effect.andThen(
+            dependencies.inboxNamed?.(inboxTaskIds(answer)) ?? Effect.void,
+            tell(answer),
+          );
+
         const userId = dependencies.accountId();
 
         const follow =
           gate() && userId !== undefined
-            ? followAccountInbox(accounts, userId, tell)
+            ? followAccountInbox(accounts, userId, told)
             : tell(gateKept());
 
         yield* FiberHandle.run(accountFollow, follow);

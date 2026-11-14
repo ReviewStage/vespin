@@ -76,6 +76,7 @@ import { TestClock } from "effect/testing";
 import { type AppTranscript, type AppTranscripts, OWN_TRANSCRIPT } from "../app-state.js";
 import { type AccountAsksClient, composeAccountAsks } from "../compose-account-asks.js";
 import { type AgentClient, composeAgents } from "../compose-agents.js";
+import type { EntityStore } from "../entity-store.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "../kept-content.js";
 import { windowFocus } from "../window-focus.js";
 import { type PolledLive, polledLive } from "./polled-live.js";
@@ -87,7 +88,7 @@ export const WORKSPACE_ID = "2a9c4e6f-1b3d-4f5a-8c7e-9d0b1a2c3e4f";
 
 export const AGENT: AgentSummary = {
   id: AGENT_ID,
-  planId: TASK_ID,
+  taskId: TASK_ID,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: null,
@@ -250,7 +251,7 @@ export const ITEM: InboxItem = {
 /** That item as what waits across the account carries it. */
 export const WAITING: AccountInboxEntry = {
   id: ITEM.id,
-  planId: TASK_ID,
+  taskId: TASK_ID,
   agentId: AGENT_ID,
   agentTitle: null,
   agentModel: AGENT.model,
@@ -427,7 +428,8 @@ function fakeService() {
       const settled = (answer: ItemsAnswer) =>
         itemsStalledAt ?? answer.queries.stamps.digest ?? "0";
 
-      if (sync === "") {
+      // Note that a read past an id the fake never answered, as one kept on disk by an earlier launch, is answered whole, as the service answers a reader too far behind.
+      if (sync === "" || !itemsBySync.at.has(sync)) {
         const whole = live.items.first();
 
         return Effect.succeed(
@@ -525,6 +527,8 @@ function fakeService() {
           Effect.sync(() => removeAnswer),
         ),
       ),
+    changeMachine: () => Effect.succeed({ failure: "unanswered" }),
+    removeMachine: () => Effect.succeed({ failure: "unanswered" }),
     machineAllowedApps: () => Effect.succeed({ machines: [] }),
     readHostPairing: () => Effect.succeed({ failure: "unanswered" }),
     approveHostPairing: () => Effect.succeed({ failure: "unanswered" }),
@@ -924,7 +928,7 @@ function fakeService() {
       Effect.sync(() => {
         asked.push(`inbox-home:${itemId}`);
 
-        return { agentId: ITEM.agentId, planId: TASK_ID, workspaceId: "workspace-1" };
+        return { agentId: ITEM.agentId, taskId: TASK_ID, workspaceId: "workspace-1" };
       }),
     markInboxItemUnread: (itemId) =>
       Effect.sync(() => {
@@ -1181,7 +1185,7 @@ const TRANSCRIPT_PARTS = [
 ] as const;
 
 const SCOPE_PARTS = ["items", "messages", "files"] as const;
-export const ACCOUNT_PARTS = ["items", "planless", "plans", "automations", "failedRuns"] as const;
+export const ACCOUNT_PARTS = ["items", "taskless", "tasks", "automations", "failedRuns"] as const;
 export const ITEMS_PARTS = ["stamps", "items", "messages", "files"] as const;
 const MEMORIES_PARTS = ["memories"] as const;
 
@@ -1331,6 +1335,7 @@ export function subject(
     agentListed?: (agentId: string) => AgentSummary | undefined;
     repositoriesMoved?: Effect.Effect<void>;
     pool?: EntityPool;
+    entities?: EntityStore;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -1368,6 +1373,7 @@ export function subject(
       },
       ...(options.listed === undefined ? undefined : { listed: options.listed }),
       ...(options.agentListed === undefined ? undefined : { agentListed: options.agentListed }),
+      ...(options.entities === undefined ? undefined : { entities: () => options.entities }),
       pool,
     }).pipe(Effect.provide(noNetwork));
 

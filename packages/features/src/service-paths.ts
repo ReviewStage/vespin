@@ -190,6 +190,16 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_AGENT_INBOX: "/api/live/agent-inbox",
   /** The task list sealed for following over Neon Realtime (GET): its tasks and every agent of them, or `unavailable`. `task-list-live.ts` declares the answer. */
   LIVE_TASKS: "/api/live/tasks",
+  /** One task and every agent of it, by the task or the agent under `?id=`, as the task list answers them, with `?poll=true` their rows inline: none for one the account does not reach. `task-list-live.ts` declares the answer. */
+  LIVE_TASK_ROWS: "/api/live/task-rows",
+  /** The tasks related to the task under `?id=`, its sub-tasks, its parent, and the tasks it waits on and holds up, with every agent of them, as the task list answers them, with `?poll=true` their rows inline: none the account does not reach. `task-list-live.ts` declares the answer. */
+  LIVE_TASK_RELATIONS: "/api/live/task-relations",
+  /** The tasks a search finds by their name, number, or key under `?query=`, the latest changed first and few, with every agent of them, as the task list answers them, with `?poll=true` their rows inline. `task-list-live.ts` declares the answer. */
+  LIVE_TASK_SEARCH: "/api/live/task-search",
+  /** One page of a workspace's settled tasks under `?workspaceId=`, the newest finished first, past `?beforeAt=&beforeId=` where named, each with every agent of it, as the task list answers them: none the account does not reach. `task-list-live.ts` declares the answer. */
+  LIVE_TASK_PAGE: "/api/live/task-page",
+  /** A person's tasks and agents in a workspace under `?workspaceId=&personId=`: how many of each the account may read, and a page of the newest, each with every agent of it, as the task list answers them. `task-list-live.ts` declares the answer. */
+  LIVE_PERSON_PAGE: "/api/live/person-page",
   /** A workspace's automations under `?workspaceId=`, sealed for following over Neon Realtime (GET), or `unavailable`. `automation-live.ts` declares the answer. */
   LIVE_AUTOMATIONS: "/api/live/automations",
   /** One automation's runs under `?id=`, sealed for following over Neon Realtime (GET), or `not-found` or `unavailable`. */
@@ -210,6 +220,10 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_WORKSPACE_INTEGRATIONS: "/api/live/workspace-integrations",
   /** The account's hosts, sealed for following over Neon Realtime (GET), with the install script's address on the service's own origin, or their rows inline where polled. `host-live.ts` declares the answer. */
   LIVE_HOSTS: "/api/live/hosts",
+  /** The account's machines with their settings for agents' commands and apps, sealed for following over Neon Realtime (GET), or their rows inline where polled. `machine-live.ts` declares the answer. */
+  LIVE_MACHINES: "/api/live/machines",
+  /** The asks the account's machines hold for its answer, sealed for following over Neon Realtime (GET), or their rows inline where polled. `machine-ask-live.ts` declares the answer. */
+  LIVE_MACHINE_ASKS: "/api/live/machine-asks",
   /** One coding agent's pull request's newest chapters, the agent under `?id=` and the pull request under `&number=`, sealed for following over Neon Realtime (GET), with whether the reader can generate them, or `not-found`. `pull-request-chapters-live.ts` declares the answer. */
   LIVE_PULL_REQUEST_CHAPTERS: "/api/live/pull-request-chapters",
   /** The skills the account sees in one workspace under `?workspaceId=`, the workspace's and its own, sealed for following over Neon Realtime (GET), each with whether the account may manage it, or `not-found`, or their rows inline where polled. `installed-skill-live.ts` declares the answer. */
@@ -260,6 +274,12 @@ export const HOSTED_SERVICE_PATH = {
   HOST_ALLOWED_APPS: "/api/hosts/allowed-apps",
   /** One of the account's hosts removed, its secret refused at once (POST). */
   HOST_REMOVE: "/api/hosts/remove",
+  /** One of the account's machines changed: how agents' commands run there, whether agents may use its apps, or an app it always allows taken back (POST). `host-wire.ts` declares the body. */
+  MACHINE_CHANGE: "/api/hosts/machine",
+  /** One of the account's machines removed, which a host's Remove does for one that runs agents (POST). */
+  MACHINE_REMOVE: "/api/hosts/machine/remove",
+  /** An ask one of the account's machines holds, answered from any of its devices, the web included (POST); the first answer stands. `machine-ask-wire.ts` declares the bodies. */
+  MACHINE_ASK_ANSWER: "/api/hosts/machine/ask",
   /** A pending pairing read by its code, as the approve screen shows it (POST, so the code rides in the body). `host-wire.ts` declares the bodies. */
   HOST_PAIRING: "/api/hosts/pairing",
   /** A pending pairing approved by its code, which makes the account's host (POST). */
@@ -285,6 +305,12 @@ export const HOSTED_SERVICE_PATH = {
   MACHINE_COMMAND_DEVICE_APP_LOOKS: "/api/mac-commands/device/app-looks",
   /** A stopped recording's video, posted by the Mac that claimed its command before its result (POST). `machine-command-wire.ts` declares the bodies. */
   MACHINE_COMMAND_RECORDING: "/api/mac-commands/recording",
+  /** An ask a machine shows for a command it claimed, posted so any of its owner's devices may answer it (POST). `machine-ask-wire.ts` declares the bodies. */
+  MACHINE_ASK: "/api/mac-commands/asks",
+  /** An ask taken down by its machine, once it took an answer or its call stopped waiting (POST). */
+  MACHINE_ASK_CLOSE: "/api/mac-commands/asks/close",
+  /** An ask whose window ran out on its machine with no answer, said closed (POST), answered with an answer that beat it, where one did. */
+  MACHINE_ASK_LAPSE: "/api/mac-commands/asks/lapse",
   /**
    * The commands of the kinds named that no Mac of the account has claimed,
    * sealed for following (GET), or with `?poll=true` their rows inline.
@@ -293,7 +319,7 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_MACHINE_COMMANDS: "/api/live/mac-commands",
   /**
    * The account's automations: list them, newest first, or one task's where
-   * `planId` names it (GET), or make one (POST). `automation-wire.ts`
+   * `taskId` names it (GET), or make one (POST). `automation-wire.ts`
    * declares the bodies.
    */
   AUTOMATIONS: "/api/automations",

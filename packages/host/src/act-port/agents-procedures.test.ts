@@ -44,7 +44,7 @@ const PAIRING_CODE = "BCDF-GHJK";
 const STARTED = {
   agent: {
     id: AGENT_ID,
-    planId: TASK_ID,
+    taskId: TASK_ID,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,
@@ -62,6 +62,8 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_CHAPTERS_PROVIDER_WRITE]:
     "Could not change which key chapters run on on this system.",
   [AGENT_ACT_KIND.HOSTS_REMOVE]: "Could not remove the host on this system.",
+  [AGENT_ACT_KIND.MACHINES_CHANGE]: "Could not change the machine on this system.",
+  [AGENT_ACT_KIND.MACHINES_REMOVE]: "Could not remove the machine on this system.",
   [AGENT_ACT_KIND.HOSTS_THIS_MAC_SET]: "Could not change this Mac on this system.",
   [AGENT_ACT_KIND.HOSTS_ALLOWED_APPS]:
     "Could not read the apps your machines allow on this system.",
@@ -119,6 +121,8 @@ const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
   AGENTS_SET_DEFAULT_MACHINE: { agentId: AGENT_ID, machineId: HOST_ID },
   AGENTS_PREFERENCES_RETRY: undefined,
   HOSTS_REMOVE: { id: HOST_ID },
+  MACHINES_CHANGE: { id: HOST_ID, computerUse: false },
+  MACHINES_REMOVE: { id: HOST_ID },
   HOSTS_THIS_MAC_SET: { on: true },
   HOSTS_ALLOWED_APPS: {},
   HOSTS_PAIRING_READ: { code: PAIRING_CODE },

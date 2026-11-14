@@ -1,4 +1,4 @@
-import type { ComputerAppKept } from "@repo/features/agent-parts";
+import type { ComputerApps } from "@repo/features/agent-parts";
 import {
   calledPicturesOf,
   recordedVideosOf,
@@ -18,6 +18,7 @@ import {
   APP_ICON_SIZE,
   AppIcon,
   type AppIconSize,
+  type AppIconStandIn,
   isVideoDataUrl,
   PICTURE_SET_SHOWN,
   PictureSet,
@@ -83,26 +84,23 @@ const AgentPicturesContext = createContext<AgentPictureDoor | undefined>(undefin
 /** Hands the transcript under it the door its pictures are read through. */
 export const AgentPicturesProvider = AgentPicturesContext.Provider;
 
-const ComputerIconsContext = createContext<ReadonlyMap<string, string>>(new Map());
+const NO_COMPUTER_APPS: ComputerApps = { byCall: new Map(), bySpelling: new Map() };
 
-/** Hands the transcript under it the icon each of its `computer` calls wears, by its call (`computerIconsByCall`). */
-export const ComputerIconsProvider = ComputerIconsContext.Provider;
+const ComputerAppsContext = createContext(NO_COMPUTER_APPS);
 
-const NO_KEPT_APPS: ReadonlyMap<string, ComputerAppKept> = new Map();
+/** Hands what stands under it the apps the conversation's `computer` calls used, each named once (`computerAppsOf`): a call's row wears its app's icon by it, and a mention of an app is named and drawn by it where the window lists none of its own. */
+export const ComputerAppsProvider = ComputerAppsContext.Provider;
 
-const KeptAppsContext = createContext(NO_KEPT_APPS);
-
-/** Hands what stands under it the apps the conversation's `computer` calls used, by bundle id (`computerAppsKept`), which a mention of one is named and drawn by where the window lists none of its own. */
-export const KeptAppsProvider = KeptAppsContext.Provider;
-
-/** The apps the conversation's `computer` calls used, by bundle id, each with its name and the icon a call kept; none outside a conversation. */
-export function useKeptApps(): ReadonlyMap<string, ComputerAppKept> {
-  return useContext(KeptAppsContext);
+/** The apps the conversation's `computer` calls used, each named once; none outside a conversation. */
+export function useComputerApps(): ComputerApps {
+  return useContext(ComputerAppsContext);
 }
 
-/** The icon a `computer` call's row wears: the one the transcript's earlier calls lend it, or its own; none where neither kept one. */
+/** The icon a `computer` call's row wears: its own, or the newest a call on its app kept; none where no call on its app kept one. */
 export function useComputerIcon(callId: string, own: string | undefined): string | undefined {
-  return useContext(ComputerIconsContext).get(callId) ?? own;
+  const lent = useContext(ComputerAppsContext).byCall.get(callId)?.icon;
+
+  return own ?? lent;
 }
 
 /**
@@ -493,17 +491,25 @@ function notKeptWords(byteCount: number): string {
  * model saw it all the same. The videos a browser call recorded stand
  * under them as a `show_image` call's would.
  */
-/** An app's icon a call kept beside the transcript, read through the transcript's door, in a call row's glyph seat; a screen's glyph stands there until it lands, and for good where no icon was kept. */
+/** An app's icon a call kept beside the transcript, read through the transcript's door, in a call row's glyph seat; its stand-in (`AppIcon`'s) stands there until it lands, and for good where no icon was kept. */
 export function KeptAppIcon({
   id,
   size = APP_ICON_SIZE.LINE,
+  standIn,
 }: {
   id: string | undefined;
   size?: AppIconSize | undefined;
+  standIn?: AppIconStandIn | undefined;
 }): ReactNode {
   const state = useKeptPicture(id);
 
-  return <AppIcon src={state.kind === PICTURE_STATE.READY ? state.url : undefined} size={size} />;
+  return (
+    <AppIcon
+      src={state.kind === PICTURE_STATE.READY ? state.url : undefined}
+      size={size}
+      standIn={standIn}
+    />
+  );
 }
 
 /** A picture a call kept, read through the transcript's door: its state while it is read, and its bytes once they land; none is read for no id. */

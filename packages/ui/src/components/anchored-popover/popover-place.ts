@@ -55,11 +55,12 @@ export interface Box {
   bottom: number;
 }
 
-/** Where a popover stands: its side, how far its asked edge stands in from its anchor's, its width, and the height that side leaves it. */
+/** Where a popover stands: its side, how far its asked edge stands in from its anchor's, its width, the widest its room lets it be, and the height that side leaves it. */
 export interface PopoverPlace {
   side: PopoverSide;
   inset: number;
   width: number;
+  most: number;
   room: number;
 }
 
@@ -83,7 +84,8 @@ export function popoverPlace(input: {
   side?: PopoverSide | undefined;
 }): PopoverPlace {
   const { anchor, room, align } = input;
-  const width = Math.min(input.width, room.right - room.left - 2 * POPOVER_MARGIN);
+  const most = room.right - room.left - 2 * POPOVER_MARGIN;
+  const width = Math.min(input.width, most);
   const low = room.left + POPOVER_MARGIN;
   const high = room.right - POPOVER_MARGIN - width;
   const startLeft = anchor.left;
@@ -108,7 +110,13 @@ export function popoverPlace(input: {
   const side = turns ? turned : wanted;
   const inset = align === POPOVER_ALIGN.START ? left - anchor.left : anchor.right - left - width;
 
-  return { side, inset, width, room: Math.max(side === POPOVER_SIDE.BELOW ? below : above, 0) };
+  return {
+    side,
+    inset,
+    width,
+    most,
+    room: Math.max(side === POPOVER_SIDE.BELOW ? below : above, 0),
+  };
 }
 
 /** Whether two places draw the layer alike, so a scroll that moves nothing renders nothing. */
@@ -118,6 +126,7 @@ export function samePlace(a: PopoverPlace | undefined, b: PopoverPlace): boolean
     a.side === b.side &&
     a.inset === b.inset &&
     a.width === b.width &&
+    a.most === b.most &&
     a.room === b.room
   );
 }

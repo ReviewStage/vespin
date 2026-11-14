@@ -32,6 +32,7 @@ import {
   agentAnswerSchema,
   agentArchiveRequestSchema,
   agentChangesAnswerSchema,
+  agentChatHoldSchema,
   agentDeleteAnswerSchema,
   agentListAnswerSchema,
   agentPageAnswerSchema,
@@ -393,7 +394,13 @@ export const agentsContract = {
   warm: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/warm` }))
-    .input(idParams)
+    .input(
+      EffectSchema.Struct({
+        ...idParams.fields,
+        chat: EffectSchema.optionalKey(agentChatHoldSchema.fields.chat),
+        holder: EffectSchema.optionalKey(agentChatHoldSchema.fields.holder),
+      }),
+    )
     .output(EffectSchema.flip(agentWarmAnswerSchema)),
   /** One agent taken back to just before one of the developer's lines, stopped first where it still works, its files put back too where asked and a snapshot of them stands. */
   rewind: declaredProcedure
