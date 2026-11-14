@@ -460,6 +460,27 @@ it.layer(getTestDB())("the account's live reads", (it) => {
         );
       }),
   );
+
+  it.effect(
+    "a read whose query names an id that spells none answers not found, as its contract declares",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+
+        for (const path of [
+          "/api/live/task-rows?id=not-a-task",
+          "/api/live/task-relations?id=not-a-task",
+          "/api/live/task-page?workspaceId=acme&beforeId=not-a-task",
+          "/api/live/mac-commands?device=not-a-device",
+        ]) {
+          assert.deepEqual(
+            yield* ask({ bearer: dana, path }),
+            { status: HOSTED_HTTP_STATUS.NOT_FOUND, body: { error: HOSTED_API_ERROR.NOT_FOUND } },
+            path,
+          );
+        }
+      }),
+  );
 });
 
 /** The procedures answering a task's live read as `bearer`, its record's unless `path` names another, over the store. */
