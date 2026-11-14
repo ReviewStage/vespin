@@ -529,6 +529,7 @@ function fakeService() {
       ),
     changeMachine: () => Effect.succeed({ failure: "unanswered" }),
     removeMachine: () => Effect.succeed({ failure: "unanswered" }),
+    answerMachineAsk: () => Effect.succeed({ failure: "unanswered" }),
     machineAllowedApps: () => Effect.succeed({ machines: [] }),
     readHostPairing: () => Effect.succeed({ failure: "unanswered" }),
     approveHostPairing: () => Effect.succeed({ failure: "unanswered" }),
@@ -1185,7 +1186,7 @@ const TRANSCRIPT_PARTS = [
 ] as const;
 
 const SCOPE_PARTS = ["items", "messages", "files"] as const;
-export const ACCOUNT_PARTS = ["items", "planless", "plans", "automations", "failedRuns"] as const;
+export const ACCOUNT_PARTS = ["items", "taskless", "tasks", "automations", "failedRuns"] as const;
 export const ITEMS_PARTS = ["stamps", "items", "messages", "files"] as const;
 const MEMORIES_PARTS = ["memories"] as const;
 

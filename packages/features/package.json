@@ -158,6 +158,8 @@
     "./cli-release": "./src/cli-release.js",
     "./machine-command-live": "./src/machine-command-live.js",
     "./machine-live": "./src/machine-live.js",
+    "./machine-ask-live": "./src/machine-ask-live.js",
+    "./machine-ask-wire": "./src/machine-ask-wire.js",
     "./machine-command-wire": "./src/machine-command-wire.js",
     "./recording-wire": "./src/recording-wire.js",
     "./sentry-install-wire": "./src/sentry-install-wire.js",

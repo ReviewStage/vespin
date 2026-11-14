@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { Schema } from "effect";
 import { describe, it } from "vitest";
 import {
+  callAccountNames,
   INTEGRATION_PROVIDER,
   integrationAccountLabel,
   integrationAccountNames,
@@ -70,6 +71,25 @@ describe("an integration account's connection name", () => {
         ["notion-2", "Work (2)"],
         ["notion-3", "Personal"],
       ],
+    );
+  });
+
+  it("is named on a call only where its provider holds more than one, and never as Linear's first, which a workspace's own grant shares", () => {
+    assert.deepEqual(
+      [
+        ...callAccountNames([
+          { provider: INTEGRATION_PROVIDER.NOTION, connection: "notion", label: "Work" },
+          { provider: INTEGRATION_PROVIDER.NOTION, connection: "notion-2", label: "Personal" },
+          { provider: INTEGRATION_PROVIDER.SENTRY, connection: "sentry", label: "acme" },
+          { provider: INTEGRATION_PROVIDER.LINEAR, connection: "linear", label: "Vespin" },
+          { provider: INTEGRATION_PROVIDER.LINEAR, connection: "linear-2", label: "Acme" },
+        ]),
+      ].toSorted(),
+      [
+        ["linear-2", "Acme"],
+        ["notion", "Work"],
+        ["notion-2", "Personal"],
+      ].toSorted(),
     );
   });
 

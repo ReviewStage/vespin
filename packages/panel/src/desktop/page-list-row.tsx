@@ -33,7 +33,7 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * long press away. Its list chooses its rows together as a task list does,
  * by the box in a row's gutter, ⌘-click, ⇧-click, and ⌘A, and a row chosen
  * among several offers its list's acts on every one chosen instead, under
- * how many (`plan-pages.tsx`).
+ * how many (`overview-pages.tsx`).
  */
 
 /** The cells a page's row draws, in a task's row's order. */

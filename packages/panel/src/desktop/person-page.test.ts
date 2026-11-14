@@ -96,7 +96,7 @@ function automation(
   return {
     id: `5a0c4d2e-0000-4c3a-9e7d-${String(n).padStart(12, "0")}`,
     taskId: null,
-    planName: null,
+    taskName: null,
     workspaceId: "workspace-acme",
     name,
     enabled: true,
@@ -368,7 +368,7 @@ function feedNow(): AppHostRead<AppInboxItems> {
 
   return {
     rows: {
-      [INBOX_SCOPE_KIND.PLAN]: Object.fromEntries(
+      [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(
         [...INBOXES].filter(([, items]) => items.length > 0),
       ),
     },

@@ -148,10 +148,10 @@ export type HostLive = (typeof HOST_LIVE)[keyof typeof HOST_LIVE];
 
 /**
  * One task's description as the host holds it for the windows that opened it
- * (`LIVE_READ.DESCRIPTION_DOCUMENT`): the task with its text as last read or
+ * (`LIVE_READ.HELD_TASK`): the task with its text as last read or
  * written, or that the account no longer reaches it.
  */
-export type HeldDescriptionDocument = { readonly task: Task } | { readonly gone: true };
+export type HeldTask = { readonly task: Task } | { readonly gone: true };
 
 /** One run of a line in one color per appearance, as the host's highlighter split it. */
 const codeTokenSchema = EffectSchema.Struct({
@@ -227,7 +227,7 @@ export const tasksViewSchema = EffectSchema.Struct({
   repositoryPins: EffectSchema.optionalKey(EffectSchema.Array(repositoryPinSchema)),
   /** The sections the account made in its sidebars and the tasks it keeps in them, as last read or written; absent before the first read lands. */
   taskSections: EffectSchema.optionalKey(taskSectionsAnswerSchema),
-  /** The one active task, absent while the window has none open; its plan is held apart (`LIVE_READ.DESCRIPTION_DOCUMENT`). */
+  /** The one active task, absent while the window has none open; its plan is held apart (`LIVE_READ.HELD_TASK`). */
   activeTaskId: EffectSchema.optionalKey(EffectSchema.String),
 });
 
@@ -842,8 +842,8 @@ export const tasksRevisionsAnswerSchema = EffectSchema.Union([
 
 export type TasksRevisionsAnswer = typeof tasksRevisionsAnswerSchema.Type;
 
-/** One task's description, held by a window while it has the task open (`LIVE_READ.DESCRIPTION_DOCUMENT`), and read again at once on its Try again. */
-export const taskDocumentFollowSchema = EffectSchema.Struct({
+/** One task's description, held by a window while it has the task open (`LIVE_READ.HELD_TASK`), and read again at once on its Try again. */
+export const heldTaskFollowSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
 });
 

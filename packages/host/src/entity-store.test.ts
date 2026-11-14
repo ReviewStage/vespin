@@ -32,7 +32,7 @@ const files = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 /** The task list as one answer left it, read at sync id 7. */
 const LIST: KeptRows[typeof KEPT_READ.TASK_LIST] = {
   rows: {
-    plans: [planListRow("7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10", "Teammate invitations")],
+    tasks: [planListRow("7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10", "Teammate invitations")],
     agents: [],
   },
   at: "7",

@@ -80,6 +80,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAppReadyCount } from "../app-ready.js";
 import { PUSHED_PAGE, useDetailPush } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
@@ -880,6 +881,7 @@ type InboxSearch = { readonly search: string; readonly setSearch: (search: strin
 function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
+  useAppReadyCount(listing.listed.length > 0);
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
   const remind = useRemindSheet();

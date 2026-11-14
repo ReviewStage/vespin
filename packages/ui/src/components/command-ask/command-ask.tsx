@@ -50,16 +50,18 @@ const ALLOW_SCOPE = {
 
 type AllowScope = (typeof ALLOW_SCOPE)[keyof typeof ALLOW_SCOPE];
 
-/** The choice of how often, Always allow first and recommended. */
-const SCOPE_OPTIONS = [
-  {
-    value: ALLOW_SCOPE.ALWAYS,
-    label: "Always allow",
-    detail: "Agents run commands on this Mac without asking",
-    badge: "Recommended",
-  },
-  { value: ALLOW_SCOPE.ONCE, label: "Just this once" },
-] as const;
+/** The choice of how often, Always allow first and recommended, naming the machine that asks, this Mac where none is named. */
+function scopeOptions(machineName: string | undefined) {
+  return [
+    {
+      value: ALLOW_SCOPE.ALWAYS,
+      label: "Always allow",
+      detail: `Agents run commands on ${machineName ?? "this Mac"} without asking`,
+      badge: "Recommended",
+    },
+    { value: ALLOW_SCOPE.ONCE, label: "Just this once" },
+  ] as const;
+}
 
 export function CommandAsk({
   open,
@@ -71,6 +73,7 @@ export function CommandAsk({
   noteMaxLength,
   onExited,
   copy,
+  machineName,
 }: {
   /** Whether the ask stands; falling, the card fades out before it goes. */
   open: boolean;
@@ -90,6 +93,8 @@ export function CommandAsk({
   onExited?: (() => void) | undefined;
   /** The caller's platform act that puts words on the clipboard, for the Shell card's Copy. */
   copy: (text: string) => Promise<void>;
+  /** The machine that asks, where it is not the one the window runs on, which the title names in this Mac's place. */
+  machineName?: string | undefined;
 }): React.JSX.Element {
   const deny = useRef<HTMLButtonElement | null>(null);
   const note = useAskNote();
@@ -103,7 +108,7 @@ export function CommandAsk({
       open={open}
       role={DIALOG_ROLE.ALERT_DIALOG}
       size={DIALOG_SIZE.WIDE}
-      title={TITLE}
+      title={machineName === undefined ? TITLE : `Run on ${machineName}?`}
       subtitle={SUBTITLE}
       initialFocus={deny}
       onDismiss={() => onDeny(undefined)}
@@ -138,7 +143,7 @@ export function CommandAsk({
       <ChoiceList
         legend="How often to allow"
         look={CHOICE_LOOK.MARKED}
-        options={SCOPE_OPTIONS}
+        options={scopeOptions(machineName)}
         value={scope}
         onChange={setScope}
       />

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import type { Task } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { agentTab } from "@repo/ui/tab-strip-model";
 import { act, createElement } from "react";
@@ -123,11 +123,11 @@ function openTab(
   onMoveTask: TasksControl["onMoveTask"] = () => Promise.resolve(false),
 ): TasksControl {
   return tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     me: DANA,
     tasks: [task],
     activeTaskId: task.id,
-    region: { kind: DOCUMENT_REGION.READY, task: task },
+    region: { kind: TASK_REGION.READY, task: task },
     workspaces,
     workspace: workspaces.find((workspace) => workspace.id === task.workspaceId),
     onMoveTask,

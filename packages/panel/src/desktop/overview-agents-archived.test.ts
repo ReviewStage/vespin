@@ -9,10 +9,10 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { agentsControl } from "../testing/tasks-control.js";
-import { PlanAgents } from "./plan-agents.js";
+import { OverviewAgents } from "./overview-agents.js";
 
 /**
- * plan-agents-archived.test.ts -- a phone's Overview folds the task's
+ * overview-agents-archived.test.ts -- a phone's Overview folds the task's
  * archived agents under Archived, standing as the reader left it; an
  * archived agent's row hangs the agent's tab's card, saying it was
  * archived, and by whom and why where the service said; and a press on it
@@ -40,7 +40,7 @@ function drawPhoneAgents(
   act(() =>
     root.render(
       withQueryClient(
-        createElement(PlanAgents, {
+        createElement(OverviewAgents, {
           agents,
           held: { agents: new Map(), workers: new Map() },
           tab: undefined,
