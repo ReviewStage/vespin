@@ -78,13 +78,18 @@ function nextEdit(): number {
   return lastEdit;
 }
 
-/** The draft kept toward a new thread on one block of a task; none kept, or no block yet read. */
-function startDraftOf(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
+/** The draft kept at one block's offsets of a task, whatever block it was typed on; none kept, or no block yet read. */
+function heldDraftAt(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
   if (block === undefined) return undefined;
 
-  const draft = startDrafts.get(taskId)?.get(block.from)?.get(block.to);
+  return startDrafts.get(taskId)?.get(block.from)?.get(block.to);
+}
 
-  return draft?.quote === block.quote ? draft : undefined;
+/** The draft kept toward a new thread on one block of a task, typed on these same words; none kept, or no block yet read. */
+function startDraftOf(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
+  const draft = heldDraftAt(taskId, block);
+
+  return draft?.quote === block?.quote ? draft : undefined;
 }
 
 /** Keeps a new thread's draft on one block of a task, or lets it go at none. */
@@ -450,16 +455,20 @@ export function useCommentStart(
       });
 
       if (!went) return undefined;
-      const now = startDraftOf(taskId, block);
+      const now = heldDraftAt(taskId, block);
       // Note that a newer send's key, kept by a screen a rotation drew, stays with the draft until that send settles.
       const pending = now?.sent?.threadId === threadId ? undefined : now?.sent;
-      setSentLocal(pending);
 
-      // Note that the draft goes only while it still holds the words this send carried, so words typed meanwhile, on this screen or one a rotation drew, stay in the field and kept.
+      // Note that the draft goes only while it still holds the words this send carried, so words typed meanwhile, on this screen or one a rotation drew, stay in the field and kept; and a draft another block's words now stand under at these offsets is left as it is.
       if (now === undefined || now.revision === revision) {
+        setSentLocal(pending);
         setLocal("");
         keepStartDraft(taskId, block, undefined);
+      } else if (now.quote !== block.quote) {
+        setSentLocal(undefined);
+        setLocal("");
       } else {
+        setSentLocal(pending);
         setLocal(now.words);
         keepStartDraft(taskId, block, { ...now, sent: pending });
       }

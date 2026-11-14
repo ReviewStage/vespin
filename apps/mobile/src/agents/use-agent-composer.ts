@@ -61,11 +61,16 @@ import { useWrite } from "../use-write.js";
 const PLACEHOLDER = "Send a follow-up";
 
 /**
- * Each agent's words typed and not yet sent, by the agent, so they outlive
- * the page that drew them, as a widening window hands a page from its tab's
- * stack to a split view's detail, each drawing its own.
+ * Each agent's words typed and not yet sent, with the suggestion last laid
+ * into them, by the agent, so they outlive the page that drew them, as a
+ * widening window hands a page from its tab's stack to a split view's
+ * detail, each drawing its own, and the page drawn anew lays no suggestion
+ * in again.
  */
-const unsentWords = new Map<string, string>();
+const unsentWords = new Map<
+  string,
+  { readonly words: string; readonly laidFor: string | undefined }
+>();
 
 /** A send out on the act port: what it carries, so a refusal hands it back. */
 interface Sent {
@@ -151,15 +156,15 @@ export function useAgentComposer(
   });
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const [words, setWords] = useState(() => unsentWords.get(agentId) ?? "");
-  // Note that the words are kept beside the agent as they change, so a page drawn anew for it opens on them.
-  useEffect(() => {
-    if (words === "") unsentWords.delete(agentId);
-    else unsentWords.set(agentId, words);
-  }, [agentId, words]);
-
+  const [words, setWords] = useState(() => unsentWords.get(agentId)?.words ?? "");
   // The suggestion whose words the box last laid in, so each is laid in once.
-  const [laidFor, setLaidFor] = useState<string | undefined>(undefined);
+  const [laidFor, setLaidFor] = useState(() => unsentWords.get(agentId)?.laidFor);
+
+  // Note that the words and the suggestion laid in are kept beside the agent as they change, so a page drawn anew for it opens on them.
+  useEffect(() => {
+    if (words === "" && laidFor === undefined) unsentWords.delete(agentId);
+    else unsentWords.set(agentId, { words, laidFor });
+  }, [agentId, words, laidFor]);
 
   if (suggested !== undefined && suggested.key !== laidFor) {
     setLaidFor(suggested.key);
