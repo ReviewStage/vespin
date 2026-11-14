@@ -219,9 +219,9 @@ function useSubject(signedIn: boolean): Subject {
   if (pushed?.kind === PUSHED_PAGE.PULL_REQUEST) {
     address = pulled.find(({ number }) => number === pushed.number)?.url;
   } else if (pushed?.kind === PUSHED_PAGE.AGENT_PAGE && agent !== undefined) {
-    address = linked({ kind: LINK_DESTINATION.PAGE, planId: agent.planId, pageId: pushed.pageId });
+    address = linked({ kind: LINK_DESTINATION.PAGE, taskId: agent.taskId, pageId: pushed.pageId });
   } else if (pushed?.kind === PUSHED_PAGE.TASK_PAGE) {
-    address = linked({ kind: LINK_DESTINATION.PAGE, planId: pushed.taskId, pageId: pushed.pageId });
+    address = linked({ kind: LINK_DESTINATION.PAGE, taskId: pushed.taskId, pageId: pushed.pageId });
   }
 
   if (address !== undefined) enabled.push(MENU_COMMAND.OPEN_IN_BROWSER);
