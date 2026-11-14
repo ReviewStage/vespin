@@ -262,7 +262,7 @@ function useSearchScreen(
 
     if (route === undefined) return;
 
-    // Note that the field gives up its focus before the route opens, because a regular window opens it on its own tab, and the iPad's top tab bar, folded into the field while it is searched, stood folded over the tab it switched to, with no way back to Search.
+    // Note that the search is ended before the route opens, because a regular window opens it on its own tab, and the iPad's top tab bar, folded into the field while it is searched, stood folded over the tab it switched to, with no way back to Search; blurring the field alone left it folded.
     leave?.();
     router.push(onTab(route));
   };
@@ -367,7 +367,7 @@ function SearchStackScreen(words: SearchWords) {
       {query.trim() === "" ? (
         <Screen>{SEARCH_IDLE}</Screen>
       ) : (
-        <SearchStackFound {...words} leave={() => field.current?.blur()} />
+        <SearchStackFound {...words} leave={() => field.current?.cancelSearch()} />
       )}
     </>
   );
