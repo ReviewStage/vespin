@@ -32,6 +32,10 @@ appId: dev.vespin.ios
       id: "failure-notice-undo"
     timeout: 5000
 - assertVisible: "Got it: “acceptInvite can add a member twice”"
+# Note that the fixture answers a Got it without drawing the thread settled,
+# so this shot shows the Got it chip back under its own notice; on a device
+# the host draws the thread settled until a read carries it, and the chip
+# stays gone.
 - takeScreenshot: got-it-undo
 - tapOn:
     id: "failure-notice-undo"
