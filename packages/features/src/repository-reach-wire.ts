@@ -53,7 +53,7 @@ export const REPOSITORY_UNREACHED = {
 const GITHUB_SETTINGS_URL_PATTERN = /^https:\/\/github\.com\/[A-Za-z0-9/_.-]+$/u;
 
 /** Where GitHub's SAML SSO authorization may live: a page of GitHub's own site, with the query GitHub gives it. */
-export const GITHUB_SSO_URL_PATTERN =
+const GITHUB_SSO_URL_PATTERN =
   /^https:\/\/github\.com\/[A-Za-z0-9/_.-]+(?:\?[A-Za-z0-9_.~=&%+-]*)?$/u;
 
 /** A workspace as the reason names it: its id, for the move, and its name, for the sentence. */
