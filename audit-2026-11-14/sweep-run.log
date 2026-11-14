@@ -46,3 +46,12 @@ iphone-iphone-light wrap-description-comment.yaml: fails 0 shots 3
 iphone-iphone-dark wrap-description-comment.yaml: fails 0 shots 3 
   ax none on iphone: contrast disabled transparency-key 
 iphone-iphone-light wrap-undo.yaml: fails 3 shots 6     Tap on "More", Index: 1... FAILED
+iphone-iphone-dark wrap-undo.yaml: fails 2 shots 2   Scrolling DOWN until "acceptInvite can add a member twice" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... FAILED
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-sign-in.yaml: fails 0 shots 4 
+iphone-iphone-dark wrap-sign-in.yaml: fails 0 shots 4 
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-update-needed.yaml: fails 0 shots 1 
+iphone-iphone-dark wrap-update-needed.yaml: fails 0 shots 1 
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-task-history.yaml: fails 0 shots 3 
