@@ -351,7 +351,14 @@ function fieldMark(props: FieldChipProps, colors: BrandColors, glyphSize: number
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
 
   if (props.face !== undefined) {
-    return <Avatar name={props.face.name} picture={props.face.picture} size={MARK_SIZE.FACE} />;
+    return (
+      <Avatar
+        name={props.face.name}
+        id={props.face.id}
+        picture={props.face.picture}
+        size={MARK_SIZE.FACE}
+      />
+    );
   }
 
   if (props.symbol !== undefined) {
@@ -533,6 +540,7 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
               // Note that a face is keyed by its place, since two followers may share a name.
               key={at}
               name={face.name}
+              id={face.id}
               picture={face.picture}
               size={MARK_SIZE.FACE}
             />

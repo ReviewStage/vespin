@@ -51,6 +51,8 @@ const SOMEONE = "Someone";
  * words sent again go under the same key, and why it did not go.
  */
 type StartDraft = {
+  /** The block's words as the draft was typed on it, since an edited description can stand another block at the same offsets. */
+  readonly quote: string | undefined;
   readonly words: string;
   readonly sent: SentStart | undefined;
   readonly note?: string | undefined;
@@ -64,11 +66,18 @@ type StartDraft = {
  */
 const startDrafts = new Map<string, Map<number, Map<number, StartDraft>>>();
 
-/** The draft kept toward a new thread on one block of a task; none kept, or no block yet read. */
-function startDraftOf(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
+/** The draft kept at one block's offsets of a task, whatever block it was typed on; none kept, or no block yet read. */
+function heldDraftAt(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
   if (block === undefined) return undefined;
 
   return startDrafts.get(taskId)?.get(block.from)?.get(block.to);
+}
+
+/** The draft kept toward a new thread on one block of a task, typed on these same words; none kept, or no block yet read. */
+function startDraftOf(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
+  const draft = heldDraftAt(taskId, block);
+
+  return draft?.quote === block?.quote ? draft : undefined;
 }
 
 /** Keeps a new thread's draft on one block of a task, or lets it go at none. */
@@ -357,7 +366,7 @@ export function useCommentStart(
         block,
         next === "" && was?.sent === undefined
           ? undefined
-          : { words: next, sent: was?.sent, note: was?.note },
+          : { quote: block.quote, words: next, sent: was?.sent, note: was?.note },
       );
     },
     [taskId, block],
@@ -382,8 +391,9 @@ export function useCommentStart(
 
       setSentLocal(start);
       setNote(undefined);
+
       // Note that the draft goes as the send does, since the thread opens in the field's place; a refusal keeps it again below, so whichever field opens next, on this block, after a rotation or in a split view's detail, opens on the words under the same key.
-      keepStartDraft(taskId, block, undefined);
+      if (startDraftOf(taskId, block) !== undefined) keepStartDraft(taskId, block, undefined);
 
       void write(
         () =>
@@ -409,11 +419,15 @@ export function useCommentStart(
                 : COMMENT_NOTE.NOT_POSTED,
           unanswered: COMMENT_NOTE.NOT_POSTED,
           inPlace: (why, noticed) => {
-            const now = startDraftOf(taskId, block);
+            const now = heldDraftAt(taskId, block);
 
-            // Note that words typed toward this block since the send, in a field opened on it again, are kept over the refused ones; an earlier refusal's draft gives way to this one.
-            if (now === undefined || now.sent !== undefined || now.words.trim() === "") {
-              keepStartDraft(taskId, block, { words: kept, sent: start, note: why });
+            // Note that words typed toward this block since the send, in a field opened on it again, are kept over the refused ones, and so is a draft another block's words now stand under at these offsets; an earlier refusal's draft on this block gives way to this one.
+            const ours =
+              now === undefined ||
+              (now.quote === quote && (now.sent !== undefined || now.words.trim() === ""));
+
+            if (ours) {
+              keepStartDraft(taskId, block, { quote, words: kept, sent: start, note: why });
             }
 
             refused({ ...start, note: why }, noticed);
