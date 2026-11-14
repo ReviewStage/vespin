@@ -36,7 +36,7 @@ import { FIELD_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode } from "react";
 import { useAnnounced } from "./accessibility.js";
-import { Chip } from "./button.js";
+import { CHIP_LOOK, Chip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
@@ -91,6 +91,8 @@ export type AnswerField = {
 export type AskAct = {
   readonly label: string;
   readonly symbol: Glyph;
+  /** Whether it is the lesser of the card's acts, such as Couldn't do it beside Mark done, which stands quiet, as the panel's does. */
+  readonly quiet?: boolean | undefined;
   readonly onPress: () => void;
 };
 
@@ -158,7 +160,13 @@ export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
   return (
     <HStack spacing={SPACE.TIGHT * 2}>
       {acts.map((act) => (
-        <Chip key={act.label} label={act.label} symbol={act.symbol} onPress={act.onPress} />
+        <Chip
+          key={act.label}
+          label={act.label}
+          symbol={act.symbol}
+          look={act.quiet === true ? CHIP_LOOK.QUIET : CHIP_LOOK.BORDERED}
+          onPress={act.onPress}
+        />
       ))}
     </HStack>
   );
@@ -246,12 +254,13 @@ export function StepList({
 /** A field's label, with "Optional" after it in the muted ink where it may be left empty, as the panel's form says it. */
 function FieldWords({
   label,
-  required,
+  optional,
   textStyle,
   ink,
 }: {
   readonly label: string;
-  readonly required: boolean;
+  /** Whether the label says the field is optional after it, where nothing else in the row does. */
+  readonly optional: boolean;
   readonly textStyle: (typeof TYPE_ROLE)[keyof typeof TYPE_ROLE];
   readonly ink: string;
 }) {
@@ -260,13 +269,13 @@ function FieldWords({
   return (
     <Text modifiers={[font({ textStyle, weight: "medium" }), foregroundStyle(ink)]}>
       <Text>{label}</Text>
-      {required ? null : (
+      {optional ? (
         <Text
           modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
         >
           {`  ${FIELD_WORDS.OPTIONAL}`}
         </Text>
-      )}
+      ) : null}
     </Text>
   );
 }
@@ -274,9 +283,10 @@ function FieldWords({
 /**
  * A text or number field: its label over the system's plain field, as the
  * panel stands a field's name over it, the field with no box of its own
- * inside the card's (one layer, as a Form's field stands in its row) and
- * prompting with its label while it is empty, as Contacts' fields do, so an
- * empty one never reads as a gap; heard by its label, a number's with the
+ * inside the card's (one layer, as a Form's field stands in its row); a
+ * field prompts "Required" or "Optional" while it is empty, as iOS's account
+ * forms do, so it never reads as a gap nor repeats the label over it, and
+ * its label says nothing more; heard by its label, a number's with the
  * decimal pad.
  */
 function TypedFieldRow({
@@ -293,13 +303,13 @@ function TypedFieldRow({
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
       <FieldWords
         label={field.label}
-        required={field.required}
+        optional={false}
         textStyle={TYPE_ROLE.ROW_LINE}
         ink={colors.TEXT_MUTED}
       />
       <TextField
         text={text}
-        placeholder={field.label}
+        placeholder={field.required ? FIELD_WORDS.REQUIRED : FIELD_WORDS.OPTIONAL}
         onTextChange={onChange}
         modifiers={[
           textFieldStyle("plain"),
@@ -336,7 +346,7 @@ function SelectRow({
     <HStack spacing={SPACE.ROW} modifiers={[padding(ROW_PADDING)]}>
       <FieldWords
         label={field.label}
-        required={field.required}
+        optional={!field.required}
         textStyle={TYPE_ROLE.ROW_TITLE}
         ink={colors.TEXT}
       />
@@ -380,7 +390,7 @@ function BooleanRow({
     >
       <FieldWords
         label={field.label}
-        required={field.required}
+        optional={!field.required}
         textStyle={TYPE_ROLE.ROW_TITLE}
         ink={colors.TEXT}
       />

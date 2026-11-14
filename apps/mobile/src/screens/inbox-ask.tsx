@@ -243,6 +243,7 @@ export function OpenAskCard({
             {
               label: ASK_PRESS.NOT_DONE,
               symbol: GLYPH.UNDO,
+              quiet: true,
               onPress: () => press(INBOX_REPLY.NOT_DONE),
             },
           ]}
