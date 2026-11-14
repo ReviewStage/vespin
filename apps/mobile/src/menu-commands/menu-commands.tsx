@@ -221,7 +221,16 @@ function useSubject(signedIn: boolean): Subject {
   } else if (pushed?.kind === PUSHED_PAGE.AGENT_PAGE && agent !== undefined) {
     address = linked({ kind: LINK_DESTINATION.PAGE, taskId: agent.taskId, pageId: pushed.pageId });
   } else if (pushed?.kind === PUSHED_PAGE.TASK_PAGE) {
-    address = linked({ kind: LINK_DESTINATION.PAGE, taskId: pushed.taskId, pageId: pushed.pageId });
+    // Note that a task's page carries its own workspace, so it opens even where the task isn't in the list read.
+    const pageStep = linkWorkspaceStep(pushed.workspaceId ?? task?.workspaceId, workspaces);
+
+    const page = {
+      kind: LINK_DESTINATION.PAGE,
+      taskId: pushed.taskId,
+      pageId: pushed.pageId,
+    } as const;
+
+    address = pageStep === undefined ? undefined : linkOf(page, pageStep);
   }
 
   if (address !== undefined) enabled.push(MENU_COMMAND.OPEN_IN_BROWSER);
