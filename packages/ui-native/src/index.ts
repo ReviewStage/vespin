@@ -141,6 +141,8 @@ export { RenameAsk, SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
+export { PictureSet, type SetPicture } from "./picture-set.js";
+
 export {
   PROVIDER_MARK_ASSET,
   ProviderButton,

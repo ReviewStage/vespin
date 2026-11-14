@@ -947,6 +947,8 @@ type PictureProps = {
   readonly tileAspect?: number | undefined;
   /** Reads the picture again where it could not be read; none offers nothing. */
   readonly onRetry?: (() => void) | undefined;
+  /** Whether it fills its tile, cropped as a set's tiles stand, rather than standing whole inside it. */
+  readonly fill?: boolean | undefined;
 };
 
 /**
@@ -959,7 +961,7 @@ type PictureProps = {
  * is, the system's spinner in it as Photos stands one, so the words under
  * it do not jump twice and it never reads as an empty box.
  */
-export function Picture({ source, alt, tileAspect, onRetry }: PictureProps) {
+export function Picture({ source, alt, tileAspect, onRetry, fill = false }: PictureProps) {
   const colors = useColors();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -1010,7 +1012,7 @@ export function Picture({ source, alt, tileAspect, onRetry }: PictureProps) {
         >
           <Image
             source={{ uri: source }}
-            resizeMode="contain"
+            resizeMode={fill ? "cover" : "contain"}
             onLoad={(event) => {
               const loaded = event.nativeEvent.source;
 
