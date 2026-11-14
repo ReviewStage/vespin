@@ -2428,9 +2428,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         // Vercel holds the stop, its runner retired by then, until the call gives up.
         let reached: () => void = () => undefined;
+
         const stopping = new Promise<void>((settle) => {
           reached = settle;
         });
+
         api.hooks.onStop = () => {
           reached();
 
@@ -2446,10 +2448,12 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* Effect.promise(() => stopping);
         yield* Fiber.interrupt(idling);
         api.hooks.onStop = undefined;
+
         const sent = yield* sessions.send(
           opened.sessionId,
           yield* writtenLine(agent, "Now the emails."),
         );
+
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
 
         const read = yield* runnerLinesPast(userId, agent.id, {
