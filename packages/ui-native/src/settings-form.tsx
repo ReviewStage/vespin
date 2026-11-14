@@ -904,6 +904,8 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
 type FollowerRowProps = {
   /** Their name, or You for the reader. */
   readonly name: string;
+  /** Their member id, which their letters' hue is read off. */
+  readonly id: string;
   readonly picture?: string | undefined;
   /** The muted word after their name, such as Assignee; none for none. */
   readonly role?: string | undefined;
@@ -920,7 +922,7 @@ type FollowerRowProps = {
  * press. VoiceOver hears it as one element, its name then its role and what
  * agents may do there, since the laptop alone says that on screen.
  */
-export function FollowerRow({ name, picture, role, machines, heard }: FollowerRowProps) {
+export function FollowerRow({ name, id, picture, role, machines, heard }: FollowerRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(ROW_FACE_SIZE);
 
@@ -934,7 +936,7 @@ export function FollowerRow({ name, picture, role, machines, heard }: FollowerRo
         ...spokenValue(role, heard),
       ]}
     >
-      <Avatar name={name} picture={picture} size={faceSize} />
+      <Avatar name={name} id={id} picture={picture} size={faceSize} />
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
       {role === undefined ? null : (
         <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>

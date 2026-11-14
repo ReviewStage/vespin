@@ -130,6 +130,8 @@ export type FaceKind = (typeof FACE_KIND)[keyof typeof FACE_KIND];
 /** A person as a mark draws them: their name, whose letters stand in for a picture, and their sign-in picture where one is known. */
 export type Face = {
   readonly name: string;
+  /** What its letters' hue is read off, such as a member's id, as the panel keys a person's disc, so they wear one color on every client; their name where none is given. */
+  readonly id?: string | undefined;
   readonly picture?: string | undefined;
   /** What it is of, a person where none is given. */
   readonly kind?: FaceKind | undefined;
@@ -185,7 +187,7 @@ export function AvatarPhoto({
  * from and asked for at the size it is drawn, and their letters otherwise.
  * An App, or its bot, stands in a rounded square rather than a circle, as
  * the panel and GitHub tell one from a person. The letters stand on the
- * name's identity hue, as the panel's `Avatar` draws a person's letter, so
+ * identity hue read off its id, or its name where none is given, as the panel's `Avatar` draws a person's letter, so
  * a face holds its edge on the dark ground too. Note that the letters stand
  * only until the photo has drawn, so they show while it loads and once it
  * fails, which takes the photo away, but never through a photo's
@@ -196,10 +198,13 @@ export function Avatar({
   size = MARK_SIZE.AVATAR,
   picture,
   kind = FACE_KIND.PERSON,
+  id = name,
 }: AvatarProps & {
   /** The address of the person's photo, such as their sign-in picture; their letters alone where none is given. */
   readonly picture?: string | undefined;
   readonly kind?: FaceKind | undefined;
+  /** What its letters' hue is read off, such as a member's id; its name where none is given. */
+  readonly id?: string | undefined;
 }) {
   const dark = useColorScheme() === "dark";
   const pinned = pinnedPictureUrl(picture);
@@ -214,7 +219,7 @@ export function Avatar({
         <>
           <RoundedRectangle
             cornerRadius={corner}
-            modifiers={[foregroundStyle(tileHue(name, dark))]}
+            modifiers={[foregroundStyle(tileHue(id, dark))]}
           />
           <Text
             modifiers={[
