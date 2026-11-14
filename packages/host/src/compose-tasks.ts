@@ -1312,7 +1312,6 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
       // Note that the read is marked before it is asked, so a task the follow lets go while it is out is not drawn back by its answer.
       const mark = collections.mark();
-      relationsRead.add(taskId);
 
       const read = Effect.gen(function* () {
         const sealed = yield* served(
@@ -1324,6 +1323,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         const rows = decodeRelationRows({ plans: plans.rows, agents: agents.rows });
 
         if (Option.isNone(rows) || taskList.collections !== collections) return;
+        // Note that only an answer drawn counts as read, so a card hung after a read that failed asks again.
+        relationsRead.add(taskId);
         yield* collections.cold(rows.value, mark);
       });
 
