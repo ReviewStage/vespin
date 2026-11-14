@@ -142,7 +142,7 @@ function SheetBar({
       headerTintColor: colors.TEXT,
       headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
       headerShadowVisible: false,
-      contentStyle: { backgroundColor: colors.GROUPED },
+      contentStyle: { backgroundColor: colors.GROUND },
     }),
     [title, colors],
   );
@@ -156,12 +156,9 @@ function SheetBar({
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         {file === undefined ? null : (
-          <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.FILE_FOR_LATER)}
-            accessibilityLabel={WORDS.FILE_FOR_LATER}
-            disabled={!file.ready}
-            onPress={file.onFile}
-          />
+          <Stack.Toolbar.Button disabled={!file.ready} onPress={file.onFile}>
+            {WORDS.FILE_FOR_LATER}
+          </Stack.Toolbar.Button>
         )}
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.SEND)}

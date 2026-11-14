@@ -271,7 +271,7 @@ function ComposePage(props: ComposeSheetProps) {
   useAnnounced(busy === undefined ? undefined : (busy.says ?? BUSY_HEARD));
 
   return (
-    <Host style={{ flex: 1, backgroundColor: colors.GROUPED }} modifiers={[tint(colors.TEXT)]}>
+    <Host style={{ flex: 1, backgroundColor: colors.GROUND }} modifiers={[tint(colors.TEXT)]}>
       <ScrollView modifiers={[scrollDismissesKeyboard("immediately")]}>
         <VStack
           alignment="leading"
