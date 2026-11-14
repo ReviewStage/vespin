@@ -204,7 +204,7 @@ export default function FeedbackScreen() {
         setWords((current) => ({ ...current, [kind]: "" }));
 
         // Note that the field is drawn afresh only on a page that stays, because a new field takes the keyboard as it appears, and a List torn down around a field taking focus aborts the app.
-        if (!leaves) setSends((count) => count + 1);
+        if (standing.current && !leaves) setSends((count) => count + 1);
       }
 
       if (!leaves) return;
