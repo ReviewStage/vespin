@@ -1,6 +1,6 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message, each taken off on a press, and the skills a `/` offers.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message as thumbnails, each taken off by its ×, and the skills a `/` offers.
 
-import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, ScrollView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
@@ -10,9 +10,10 @@ import {
   foregroundStyle,
   frame,
   lineLimit,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
-import { Chip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { AvatarPhoto } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -127,13 +128,38 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
   );
 }
 
-/** What a press on an attached picture is heard to do, since its × alone says so on screen. */
-const DETACH_HINT = "Removes it from the message";
+/** A picture's thumbnail over a composer's field, as Messages draws one: a square cropped from it, its corners rounded as a card's. */
+const THUMBNAIL = { SIZE: 56, CORNER: 10 } as const;
 
-/** One picture attached to the message, by the name the message carries it under ("Picture 1"). */
-export type AttachedPicture = { readonly id: string; readonly name: string };
+/** How large the × in a thumbnail's corner stands, the system's mini control, its mark small inside it. */
+const DETACH_MARK = 9;
 
-/** The pictures attached to the message as a row of capsules, each taken off the message on a press, scrolling sideways where they outrun the bar. */
+/** How far the × stands in from the thumbnail's corner. */
+const DETACH_INSET = SPACE.TIGHT;
+
+/** What a picture's × is heard as, by the name it goes under ("Remove Picture 1"). */
+function detachWords(name: string): string {
+  return `Remove ${name}`;
+}
+
+/** One picture attached to the message: the name it goes under ("Picture 1"), and the address its thumbnail draws from, such as a `data:` address of its bytes. */
+export type AttachedPicture = {
+  readonly id: string;
+  readonly name: string;
+  readonly address: string;
+};
+
+/** Does nothing, for a thumbnail's load and failure, which the composer has no use for: its own bytes are drawn, and the × stands either way. */
+function ignore() {}
+
+/**
+ * The pictures attached to the message as a row of thumbnails, scrolling
+ * sideways where they outrun the bar, as Messages and the panel show what a
+ * message carries before it goes. Note that only the × in a thumbnail's
+ * corner takes the picture off, so a press meant to look at a picture never
+ * removes it; VoiceOver hears each as its × alone, "Remove Picture 1", since
+ * the thumbnail says nothing a reader could act on.
+ */
 export function AttachedPictures({
   pictures,
   onDetach,
@@ -141,19 +167,41 @@ export function AttachedPictures({
   readonly pictures: readonly AttachedPicture[];
   readonly onDetach: (id: string) => void;
 }) {
+  const colors = useColors();
+
   if (pictures.length === 0) return null;
 
   return (
     <ScrollView axes="horizontal" showsIndicators={false}>
       <HStack spacing={SPACE.TIGHT * 2}>
         {pictures.map((picture) => (
-          <Chip
+          <ZStack
             key={picture.id}
-            label={picture.name}
-            symbol={GLYPH.REMOVE}
-            hint={DETACH_HINT}
-            onPress={() => onDetach(picture.id)}
-          />
+            alignment="topTrailing"
+            modifiers={[frame({ width: THUMBNAIL.SIZE, height: THUMBNAIL.SIZE })]}
+          >
+            <AvatarPhoto
+              address={picture.address}
+              size={THUMBNAIL.SIZE}
+              corner={THUMBNAIL.CORNER}
+              onLoad={ignore}
+              onFail={ignore}
+            />
+            <Button
+              onPress={() => onDetach(picture.id)}
+              modifiers={[
+                buttonStyle("borderedProminent"),
+                SwiftModifiers.buttonBorderShape("circle"),
+                SwiftModifiers.controlSize("mini"),
+                tint(colors.TEXT),
+                foregroundStyle(colors.GROUND),
+                SwiftModifiers.padding({ top: DETACH_INSET, trailing: DETACH_INSET }),
+                accessibilityLabel(detachWords(picture.name)),
+              ]}
+            >
+              <Image {...glyphImage(GLYPH.REMOVE)} size={DETACH_MARK} />
+            </Button>
+          </ZStack>
         ))}
       </HStack>
     </ScrollView>
