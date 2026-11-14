@@ -10,9 +10,10 @@ import {
 import { LINK_DESTINATION } from "./link-grammar.js";
 
 /**
- * inbox-list-model.test.ts -- a thread's message as a client draws it: what
- * its words name in place is drawn there as what it is, a recording as a
- * video, and only what they do not name stands after them, a PDF among it.
+ * inbox-list-model.test.ts -- a thread as a client draws it: what a
+ * message's words name in place is drawn there as what it is, a recording as
+ * a video, and only what they do not name stands after them, a PDF among it;
+ * and the lines of what happened to it, who closed it and where.
  */
 
 const ITEM = "0b6e2f1a-3c4d-4e5f-8a9b-1c2d3e4f5a60";
@@ -103,13 +104,15 @@ describe("inboxThreadEventsShown", () => {
       updatedAt: 3_000,
     };
 
-    expect([...inboxThreadEventsShown(item, "Agent", "reader-1")]).toEqual([
+    const names = { agentName: "Agent", readerId: "reader-1", memberName: () => undefined };
+
+    expect([...inboxThreadEventsShown(item, names)]).toEqual([
       [
         1,
         [
           {
             key: ITEM,
-            who: { name: "You", agent: false, userId: "reader-1" },
+            who: { name: "You", agent: false },
             did: "resolved this without an answer",
             at: 2_500,
           },

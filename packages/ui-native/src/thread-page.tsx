@@ -119,14 +119,12 @@ export type ThreadMessage = {
   readonly media: readonly ThreadMedia[];
   /** What the answer it carries says it was, "Chose Both", and whether it went ahead, a check in the done tone, or held back, a turn back in the muted ink. */
   readonly stamp?: { readonly words: string; readonly ahead: boolean } | undefined;
-  /** What happened to the thread before it, such as a close with no message read before it. */
-  readonly before?: readonly ThreadEvent[] | undefined;
   /** What happened to the thread after it, such as a member resolving it or the agent withdrawing its ask. */
   readonly after?: readonly ThreadEvent[] | undefined;
 };
 
 /** A line of what happened to a thread: who did it, what they did in the panel's words, when, and an agent's why for a withdrawn ask. */
-export type ThreadEvent = {
+type ThreadEvent = {
   readonly key: string;
   readonly who: { readonly name: string; readonly agent: boolean };
   readonly did: string;
@@ -144,6 +142,8 @@ type ThreadPageProps = {
   /** The thread's title, which heads the page. */
   readonly title: string;
   readonly messages: readonly ThreadMessage[];
+  /** What happened to the thread before every message read, such as a close on a thread nobody wrote on, drawn under its heading. */
+  readonly opening?: readonly ThreadEvent[] | undefined;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
   /** Opens a link or a chip pressed, by the address it was written as, where the app draws it or in Safari. */
@@ -325,13 +325,19 @@ function EventLine({
 }) {
   const colors = useColors();
   const resolved = !event.who.agent;
-  const when = event.at === undefined ? undefined : sinceText(event.at, now ?? Date.now());
+  const moment = now ?? Date.now();
+  const when = event.at === undefined ? undefined : sinceText(event.at, moment);
+  const heard = `${event.who.name} ${event.did}${event.at === undefined ? "" : `, ${sinceHeard(event.at, moment)}`}${event.reason === undefined ? "" : `. ${event.reason}`}`;
 
   return (
     <VStack
       alignment="leading"
       spacing={SPACE.TIGHT}
-      modifiers={[padding({ horizontal: SPACE.EDGE }), accessibilityElement("combine")]}
+      modifiers={[
+        padding({ horizontal: SPACE.EDGE }),
+        accessibilityElement("ignore"),
+        accessibilityLabel(heard),
+      ]}
     >
       <HStack spacing={WRITER_GAP} alignment="firstTextBaseline">
         <Image
@@ -463,6 +469,7 @@ export function ThreadPage(props: ThreadPageProps) {
     pathActions,
     title,
     messages,
+    opening,
     ask,
     acts = [],
     menu,
@@ -497,11 +504,11 @@ export function ThreadPage(props: ThreadPageProps) {
             ]}
           >
             <ThreadHead title={title} standing={standing} />
+            {(opening ?? []).map((event) => (
+              <EventLine key={event.key} event={event} now={drawing.now} />
+            ))}
             {messages.map((message) => (
               <VStack key={message.id} alignment="leading" spacing={SPACE.EDGE}>
-                {(message.before ?? []).map((event) => (
-                  <EventLine key={event.key} event={event} now={drawing.now} />
-                ))}
                 <MessageView message={message} {...drawing} />
                 {(message.after ?? []).map((event) => (
                   <EventLine key={event.key} event={event} now={drawing.now} />

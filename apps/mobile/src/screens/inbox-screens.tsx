@@ -93,7 +93,7 @@ import {
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { useKeeping } from "../keeping.js";
-import { type PictureOf, useMemberPictures } from "../member-pictures.js";
+import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns, useInFront } from "../place-columns.js";
 import { useRefilledSearchField } from "../search-field.js";
@@ -530,10 +530,17 @@ function ThreadDetail({
     [item, agentName, readerId],
   );
 
-  // What happened to the thread, by the message each line follows, -1 before every message read, as the panel's thread draws it.
+  const memberFace = useMemberFaces();
+
+  // What happened to the thread, by the message each line follows, -1 before every message read, as the panel's thread draws it, a member named as the workspace's members name them.
   const events = useMemo(
-    () => inboxThreadEventsShown(item, agentName, readerId),
-    [item, agentName, readerId],
+    () =>
+      inboxThreadEventsShown(item, {
+        agentName,
+        readerId,
+        memberName: (userId) => memberFace(userId)?.name,
+      }),
+    [item, agentName, readerId, memberFace],
   );
 
   // Note that a file its words draw, or its open ask's options carry, is read beside the files drawn after them, since its bytes come the same way.
@@ -662,7 +669,6 @@ function ThreadDetail({
 
   const drawn: readonly ThreadMessage[] = messages.map((message, index) => ({
     ...message,
-    before: index === 0 ? events.get(-1) : undefined,
     after: events.get(index),
     writer: {
       ...message.writer,
@@ -744,6 +750,7 @@ function ThreadDetail({
       pathActions={pathActions}
       title={cardTitle(item.title)}
       messages={drawn}
+      opening={events.get(-1)}
       repository={holder.task.repository}
       onOpenLink={openLink}
       pictureSource={pictureSource}
