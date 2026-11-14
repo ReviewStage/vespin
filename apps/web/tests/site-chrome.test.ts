@@ -110,7 +110,7 @@ test("the landing offers the web app beside the download, and nothing in its sce
     "Get the apps → -> /docs/install",
     "Connect an agent → -> /docs/install",
     "Download for macOS -> https://github.com/ReviewStage/vespin/releases/latest/download/Vespin.dmg",
-    "View on GitHub -> https://github.com/ReviewStage/vespin",
+    "GitHub -> https://github.com/ReviewStage/vespin",
   ]);
 });
 

@@ -70,7 +70,7 @@ export function App(): React.JSX.Element {
               href={REPOSITORY_URL}
               icon={<ProviderMark provider={MARK_PROVIDER.GITHUB} />}
             >
-              View on GitHub
+              GitHub
             </ButtonLink>
           </>
         ),
