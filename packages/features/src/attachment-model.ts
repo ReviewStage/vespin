@@ -78,6 +78,17 @@ export function linesLabel(text: string): string {
   return countWords(Math.max(1, breaks), { one: "line", many: "lines" });
 }
 
+/** What a chip says of a file's size: a text file's count of lines and any other file's bytes, and the bytes too where a text file's are no base64 the system reads, so a damaged file still draws. */
+export function chipSize(file: FileChip, base64: string): string {
+  if (attachmentView(file) !== ATTACHMENT_VIEW.TEXT) return sizeLabel(base64);
+
+  try {
+    return linesLabel(attachmentText(base64));
+  } catch {
+    return sizeLabel(base64);
+  }
+}
+
 /** The head of a text file's words its chip's card peeks at. */
 export function peekOf(text: string): string {
   return text.slice(0, PEEK_CHARS);

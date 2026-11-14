@@ -12,8 +12,13 @@
  * (`DESCRIPTION_COMMENT_SCOPE.BLOCK`), as a long press on it offers, since
  * the app's read-only description has no selection of words; its span is
  * read from the shared parse (`@repo/features/description-blocks`).
+ * A comment's files are read through the host as the panel reads them
+ * (`TASKS_PICTURE_READ`), so no credential leaves it: a picture drawn from
+ * its bytes, and any other file, such as a PDF, written under the app's
+ * caches for its chip to open.
  */
 
+import { ATTACHMENT_VIEW, attachmentView, chipSize } from "@repo/features/attachment-model";
 import type { DescriptionBlock } from "@repo/features/description-blocks";
 import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
 import {
@@ -23,16 +28,19 @@ import {
   DESCRIPTION_COMMENT_SCOPE,
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentEntry,
+  type DescriptionCommentFile,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
+import { markersAsNames } from "@repo/features/file-marker";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { COMMENT_SUBJECT } from "@repo/features/tasks-view";
+import { COMMENT_SUBJECT, TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { BUZZ, type ThreadMessage } from "@repo/ui-native";
+import { BUZZ, THREAD_MEDIA, type ThreadMedia, type ThreadMessage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { cachedFile } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -44,6 +52,52 @@ const NO_THREADS: readonly DescriptionCommentThread[] = [];
 
 /** What an entry says of who wrote it where its writer's account is gone. */
 const SOMEONE = "Someone";
+
+/** The prefix a comment's file is written under in the app's caches. */
+const COMMENT_MEDIA_PREFIX = "comment";
+
+/** One file of a comment as read: what it is drawn from, or `null` where it could not be read, its size in words once read, and whether it is gone for good, which no Try again brings back. */
+interface CommentFileRead {
+  readonly source: string | null;
+  readonly size: string | undefined;
+  readonly gone?: boolean | undefined;
+}
+
+/** A thread's files as read, by the attachment each is kept under. */
+type CommentFilesRead = ReadonlyMap<string, CommentFileRead>;
+
+/** Nothing read yet. */
+const NOTHING_READ: CommentFilesRead = new Map();
+
+/** What draws a thread's files: each one's read, by its attachment, none while on its way, and what reads one again that could not be. */
+export interface CommentMedia {
+  readonly readOf: (attachmentId: string) => CommentFileRead | undefined;
+  readonly retry: (attachmentId: string) => void;
+}
+
+/** Whether a comment's file stands as a picture beside its words, rather than as its chip. */
+function pictured(file: DescriptionCommentFile): boolean {
+  return (
+    attachmentView({ name: file.name, mediaType: file.mediaType, url: "" }) ===
+    ATTACHMENT_VIEW.IMAGE
+  );
+}
+
+/** What a comment's file is drawn from once its bytes land: a picture's `data:` address, or any other file's address under the app's caches. */
+async function sourceOf(
+  file: DescriptionCommentFile,
+  read: { readonly contentType: string; readonly base64: string },
+): Promise<string> {
+  if (pictured(file)) return `data:${read.contentType};base64,${read.base64}`;
+
+  return cachedFile(
+    COMMENT_MEDIA_PREFIX,
+    file.attachmentId,
+    file.name,
+    file.mediaType,
+    read.base64,
+  );
+}
 
 /**
  * A task's description threads, followed while `taskId` is named, the
@@ -132,20 +186,126 @@ function writerOf(
   return { name: writer.by?.name ?? SOMEONE, agent: false, picture: pictureOf(writer.by?.userId) };
 }
 
-/** A thread's comments as its page draws them, each by its writer, its words typed line by line; the files a comment carries are left to the desktop and the web. */
+/** A comment's files as its message draws them after its words, in the order attached: a picture as a picture, any other file as its chip, one that could not be read offering Try again. */
+function commentMedia(entry: DescriptionCommentEntry, media: CommentMedia): readonly ThreadMedia[] {
+  return (entry.files ?? []).map((file): ThreadMedia => {
+    const key = file.attachmentId;
+    const read = media.readOf(key);
+
+    const onRetry =
+      read?.source === null && read.gone !== true ? () => media.retry(key) : undefined;
+
+    return pictured(file)
+      ? { kind: THREAD_MEDIA.PICTURE, key, source: read?.source, alt: file.name, onRetry }
+      : {
+          kind: THREAD_MEDIA.FILE,
+          key,
+          source: read?.source,
+          name: file.name,
+          mediaType: file.mediaType,
+          size: read?.size,
+          onRetry,
+        };
+  });
+}
+
+/** A thread's comments as its page draws them, each by its writer, its words typed line by line, and the files it carries after them. */
 export function threadMessages(
   thread: DescriptionCommentThread,
   agentNames: ReadonlyMap<string, string>,
   pictureOf: PictureOf,
+  media: CommentMedia,
 ): readonly ThreadMessage[] {
   return threadComments(thread).map((entry) => ({
     id: entry.id,
     writer: writerOf(entry, agentNames, pictureOf),
     at: entry.at,
-    words: entry.words ?? "",
+    // Note that a marker naming one of its files is said as the file's name, since the file stands as its own picture or chip after the words.
+    words: markersAsNames(entry.words ?? ""),
     typed: entry.writer.actor === DESCRIPTION_COMMENT_ACTOR.MEMBER,
-    media: [],
+    media: commentMedia(entry, media),
   }));
+}
+
+/**
+ * Each file a thread's comments carry, read once through the host while
+ * the page stands, as the panel reads a comment's (`TASKS_PICTURE_READ`):
+ * a picture drawn from its bytes, any other file written under the app's
+ * caches, which its chip opens and shares. One the service answers is not
+ * there stands unread for good, as a description's picture does
+ * (`useDescriptionPictures`), and one that got no answer stands unread with
+ * Try again, which asks for it anew. Note that a read that lands once the
+ * page left is dropped.
+ */
+export function useCommentMedia(
+  taskId: string | undefined,
+  thread: DescriptionCommentThread | undefined,
+): CommentMedia {
+  const acts = useHostActs();
+  const [read, setRead] = useState<CommentFilesRead>(NOTHING_READ);
+  const [round, setRound] = useState(0);
+  // The files asked for, by attachment, so each is asked for once while the page stands.
+  const asked = useRef(new Set<string>());
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (taskId === undefined || thread === undefined) return;
+
+    const landed = (id: string, file: CommentFileRead) => {
+      if (mounted.current) setRead((held) => new Map(held).set(id, file));
+    };
+
+    for (const file of threadComments(thread).flatMap((entry) => entry.files ?? [])) {
+      const id = file.attachmentId;
+
+      if (asked.current.has(id)) continue;
+      asked.current.add(id);
+
+      acts[ACT_KIND.TASKS_PICTURE_READ]({ planId: taskId, attachmentId: id })
+        .then(async (answer) => {
+          // Note that a file the service says is not there stays so, while one that got no answer offers Try again.
+          if (!("base64" in answer) && answer.failure === TASK_CALL_FAILURE.NOT_FOUND) {
+            landed(id, { source: null, size: undefined, gone: true });
+
+            return;
+          }
+
+          if (!("base64" in answer)) throw new Error(`The file was not read: ${answer.failure}.`);
+          const chip = { name: file.name, mediaType: file.mediaType, url: "" };
+          landed(id, { source: await sourceOf(file, answer), size: chipSize(chip, answer.base64) });
+        })
+        .catch((cause: unknown) => {
+          console.error("A comment's file was not read.", cause);
+          landed(id, { source: null, size: undefined });
+        });
+    }
+    // Note that `round` is read so a Try again, which forgets the file's ask, reads it anew.
+  }, [acts, taskId, thread, round]);
+
+  return useMemo(
+    () => ({
+      readOf: (attachmentId) => read.get(attachmentId),
+      retry: (attachmentId) => {
+        asked.current.delete(attachmentId);
+        setRead((held) => {
+          const next = new Map(held);
+          next.delete(attachmentId);
+
+          return next;
+        });
+        setRound((at) => at + 1);
+      },
+    }),
+    [read],
+  );
 }
 
 /** A reply's field on a thread: its words, whether they may go, and what a send that did not land said. */
