@@ -86,7 +86,7 @@ interface Candidate {
 /**
  * The tasks the sheet offers for `kind`: the workspace's others, or those
  * a search finds by name, repository, or key, each one that cannot take the
- * kind kept with why, as the panel's menu dims it.
+ * kind kept with why, as the panel's menu dims it, after those that can.
  */
 function candidatesFor(
   subject: TaskRelationSubject,
@@ -103,7 +103,7 @@ function candidatesFor(
       ? tasks.filter((each) => each.workspaceId === subject.workspaceId)
       : searchedTasks({ tasks, workspaceId: subject.workspaceId, workspaceName, tokens });
 
-  return offered
+  const candidates = offered
     .filter((each) => each.id !== subject.id)
     .map((each) => ({
       task: each,
@@ -113,6 +113,12 @@ function candidatesFor(
           : taskKey(workspaceName, each.number),
       why: relationWhyNot(subject, each, kind, byId),
     }));
+
+  // Note that the tasks it can take stand first, each group in the list's order, so a phone's short sheet opens on what a press can pick rather than on rows dimmed with why.
+  return [
+    ...candidates.filter((each) => each.why === undefined),
+    ...candidates.filter((each) => each.why !== undefined),
+  ];
 }
 
 /** The kinds the sheet opens on where none is named, each by its glyph and what choosing it does. */
