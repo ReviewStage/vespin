@@ -38,7 +38,8 @@ import { Fragment, type ReactNode } from "react";
 import { useAnnounced } from "./accessibility.js";
 import { Chip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { useColors } from "./tokens/colors.js";
+import { ToneGlyph } from "./marks.js";
+import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -134,22 +135,35 @@ function Card({
   );
 }
 
-/** What the box's last send said where it did not go, under the ask: what the answer lacks, or the refusal, in the danger's ink. */
+/**
+ * What the box's last send said where it did not go: what the answer lacks,
+ * or the refusal. Note that it reads as Settings' problem line does, the
+ * muted words led by the alert glyph in the attention ink, never red words,
+ * since the words put back beside it are how to mend it.
+ */
 export function AskNote({ words }: { readonly words: string }) {
   const colors = useColors();
   // Note that a note stands because a send did not go, so VoiceOver is told it at once, rather than the reader finding it only by walking the screen.
   useAnnounced(words, true);
 
   return (
-    <Text
-      modifiers={[
-        font({ textStyle: TYPE_ROLE.ROW_LINE }),
-        foregroundStyle(colors.DANGER_TEXT),
-        accessibilityIdentifier("ask-note"),
-      ]}
+    <HStack
+      spacing={SPACE.TIGHT}
+      alignment="firstTextBaseline"
+      modifiers={[accessibilityIdentifier("ask-note")]}
     >
-      {words}
-    </Text>
+      <ToneGlyph
+        glyph={GLYPH.FAILED}
+        tone={STATUS_TONE.ATTENTION}
+        textStyle={TYPE_ROLE.ROW_LINE}
+        hidden
+      />
+      <Text
+        modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+      >
+        {words}
+      </Text>
+    </HStack>
   );
 }
 
