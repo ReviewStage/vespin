@@ -561,13 +561,6 @@ const clearDefault = SqlSchema.void({
     ),
 });
 
-/** The account's machines held against any other pick of its default until the transaction ends, so two picks at once take turns rather than one failing on the one-default index. */
-const holdDefaults = SqlSchema.void({
-  Request: Schema.Struct({ userId: Schema.String }),
-  execute: ({ userId }) =>
-    Database.use((db) => db.execute(sql`select pg_advisory_xact_lock(hashtext(${userId}))`)),
-});
-
 /** The account's machine of the id picked as its default. */
 const markDefault = SqlSchema.void({
   Request: DeviceKeySchema,
@@ -955,7 +948,6 @@ export function changeMachine(
 
     // Note that the default moves only once the machine is known to stand, so a pick of one gone leaves the default where it was.
     if (changed !== undefined && change.makeDefault === true) {
-      yield* holdDefaults({ userId });
       yield* clearDefault({ userId, id });
       yield* markDefault({ userId, id });
     }
