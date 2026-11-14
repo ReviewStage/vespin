@@ -1,0 +1,39 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2fd6b6c7 (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow undo
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Scrolling DOWN until "acceptInvite can add a member twice" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "acceptInvite can add a member twice"... COMPLETED
+Assert that "Got it" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot got-it... COMPLETED
+Tap on "Got it"... COMPLETED
+Assert that "Got it: “acceptInvite can add a member twice”" is visible... COMPLETED
+Take screenshot got-it-undo... COMPLETED
+Tap on id: failure-notice-undo... COMPLETED
+Assert that id: failure-notice-undo is not visible... COMPLETED
+Assert that "Got it" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot got-it-undone... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Scrolling DOWN until "What the expired invite page says" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "What the expired invite page says"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "More" is visible... FAILED
+
+Assertion is false: "More" is visible
+
+Assertion '"More" is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state
+- This could be a real regression that needs to be addressed
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/r3/8694/probe/run/2026-11-14_032521
