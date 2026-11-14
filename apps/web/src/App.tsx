@@ -1,4 +1,5 @@
 import { PANEL_ASSET_BASE } from "@repo/features/link-home";
+import { PRODUCT_TAGLINE } from "@repo/features/words";
 import {
   BUTTON_VARIANT,
   ButtonLink,
@@ -43,7 +44,7 @@ export function App(): React.JSX.Element {
       bar={<SiteNavigation current={{ page: SITE_PAGE.HOME }} />}
       barCall={<SiteBarDownload />}
       badge={<LandingBackedBy href={Y_COMBINATOR_PAGE} />}
-      title="An inbox for all your coding agents."
+      title={PRODUCT_TAGLINE}
       actions={
         <>
           <SiteDownload />

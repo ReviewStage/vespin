@@ -126,6 +126,9 @@ export function orListParts(
 /** What a page that needs an account says to someone not signed in. One line for every page, so none is worded its own way. */
 export const SIGNED_OUT_WORDS = "Sign in to use this page.";
 
+/** What the product is, in one line: the site's headline and the line under the iPhone's sign-in title. */
+export const PRODUCT_TAGLINE = "An inbox for all your coding agents.";
+
 /** What every client says once the service refused its build as older than it serves (`network.updateNeeded`), beside the act that updates it. */
 export const BUILD_TOO_OLD_WORDS = `This ${PRODUCT_NAME} is older than the one now live`;
 
