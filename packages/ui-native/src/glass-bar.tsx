@@ -81,9 +81,11 @@ function moveWithKeyboard({ duration, easing }: KeyboardEvent) {
   });
 }
 
-/** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. Where `moves` is given, the next layout moves with the keyboard on its own curve. */
+/** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. Where `moves` is given, the next layout moves with the keyboard on its own curve. Note that it starts from the keyboard standing as it mounts, so a piece drawn while the keyboard is up, such as a composer's head a refused send adds, reads it at once rather than at the keyboard's next move. */
 function useKeyboardHeight(moves = true): number {
-  const [height, setHeight] = useState(0);
+  const [height, setHeight] = useState(() =>
+    Keyboard.isVisible() ? (Keyboard.metrics()?.height ?? 0) : 0,
+  );
   useEffect(() => {
     const rising = Keyboard.addListener("keyboardWillShow", (event) => {
       if (moves) moveWithKeyboard(event);
