@@ -220,7 +220,7 @@ export function useQuickAdd(tasks: TasksControl, into: QuickAddInto): QuickAdd {
 }
 
 /** The draft's own parts, each standing where its view draws a task's: its title's field, and the chips for its status, priority, and assignee. */
-export interface DraftParts {
+interface DraftParts {
   readonly title: React.ReactNode;
   readonly status: React.ReactNode;
   readonly priority: React.ReactNode;

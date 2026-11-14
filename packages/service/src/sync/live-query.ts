@@ -44,16 +44,24 @@ function keyValues(row: SyncWindowRow, column: string): readonly string[] {
   });
 }
 
-/** Each part's own row keys the window's rows the reader's topics reach moved, by part, each read under the key its part declares: what a narrowed read that misses one answers gone. */
+/** Each part's own row keys the window's rows the reader's topics reach moved, by part, each read under the column its table names them by: what a narrowed read that misses one answers gone. */
 export function ownMovedKeys<Part extends string>(
-  own: ReadonlyMap<Part, { readonly table: SyncTable; readonly key: string }>,
+  own: ReadonlyMap<
+    Part,
+    { readonly sources: readonly { readonly table: SyncTable; readonly column: string }[] }
+  >,
   rows: readonly SyncWindowRow[],
 ): ReadonlyMap<Part, ReadonlySet<string>> {
   const moved = new Map<Part, ReadonlySet<string>>();
 
-  for (const [part, read] of own) {
-    const reached = rows.filter((row) => row.reached && row.table === read.table.name);
-    moved.set(part, new Set(reached.flatMap((row) => keyValues(row, read.key))));
+  for (const [part, { sources }] of own) {
+    const keys = sources.flatMap(({ table, column }) =>
+      rows
+        .filter((row) => row.reached && row.table === table.name)
+        .flatMap((row) => keyValues(row, column)),
+    );
+
+    moved.set(part, new Set(keys));
   }
 
   return moved;

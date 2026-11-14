@@ -49,7 +49,7 @@ const readGoalStatus = Schema.decodeUnknownOption(GoalStatusEntrySchema);
 const readGoalStatusLine = Schema.decodeUnknownOption(Schema.fromJsonString(GoalStatusEntrySchema));
 
 /** The GOAL event a transcript entry settles, met or judged impossible; none for any other entry, a verdict that it is not met yet among them. */
-export function settledGoal(entry: SessionStoreEntry): RunnerGoal | undefined {
+function settledGoal(entry: SessionStoreEntry): RunnerGoal | undefined {
   return goalSettledBy(readGoalStatus(entry));
 }
 

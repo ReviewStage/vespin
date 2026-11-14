@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
+import { readAgentHeaderOfConversation } from "@repo/database/models/agent-store";
 import {
   claimMachineCommand,
   claimMachineCommands,
@@ -28,6 +29,7 @@ import {
   type MachineRefusal,
   type MachineUnreached,
   type MacShellResult,
+  machineAskSeconds,
   machineCommandSchema,
 } from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -173,6 +175,7 @@ export type MachineCommandAsk =
   | {
       readonly kind: typeof MACHINE_COMMAND_KIND.SHELL;
       readonly command: string;
+      readonly agentId?: string;
       readonly timeoutSeconds?: number;
     }
   | {
@@ -275,13 +278,18 @@ function commandTopics(userId: string): readonly SyncTopic[] {
   return [[TOPIC.ACCOUNT, userId]];
 }
 
-/** The command's result once a Mac settles it, looked for again as each write to the account's commands lands, until the deadline; nothing past it. */
+/**
+ * The command's result once a Mac settles it, looked for again as each
+ * write to the account's commands lands, until the deadline; nothing past
+ * it. The deadline outlasts the Mac's ask, its own time to run once allowed,
+ * and the grace, so a late Allow is still heard.
+ */
 function awaitedResult(
   userId: string,
   queued: MachineCommand,
 ): TaskStoreEffect<Option.Option<MachineCommandResult>> {
   const deadline = Duration.sum(
-    Duration.seconds(queued.timeoutSeconds),
+    Duration.seconds(queued.timeoutSeconds + machineAskSeconds(queued.timeoutSeconds)),
     MACHINE_COMMAND_SERVICE.ANSWER_GRACE,
   );
 
@@ -340,8 +348,11 @@ export function askMacHeard(
     answer: machineCommandNotRun(reason),
   });
 
+  // Note that a shell command's wire names no agent, so its agent rides beside it to the queue alone.
+  const { agentId, ...wire } = ask;
+
   const asked = readMachineCommand({
-    ...ask,
+    ...(ask.kind === MACHINE_COMMAND_KIND.COMPUTER ? ask : wire),
     id: randomUUID(),
     timeoutSeconds: ask.timeoutSeconds ?? MACHINE_COMMAND_BOUNDS.DEFAULT_TIMEOUT_SECONDS,
   });
@@ -355,7 +366,7 @@ export function askMacHeard(
 
     const heard = yield* Effect.gen(function* () {
       // A device no longer the account's queues nothing, and nothing would ever claim it.
-      if (!(yield* queueMachineCommand(userId, queued, deviceId))) return undefined;
+      if (!(yield* queueMachineCommand(userId, queued, deviceId, agentId))) return undefined;
       const result = yield* awaitedResult(userId, queued);
 
       if (Option.isSome(result) && isRecorded(result.value)) {
@@ -464,7 +475,15 @@ export function runOnMacTool(
     // Note that a read that fails refuses, because a command run on a guess could land on the wrong Mac.
     if (Result.isFailure(route)) return machineCommandNotRun(MACHINE_COMMAND_REFUSAL.UNAVAILABLE);
 
-    return (yield* askMachine(route.success, ask)).answer;
+    // Note that the agent rides along so its owner's devices draw the command's ask on it; a read that fails leaves the ask on no agent.
+    const agent = yield* Effect.option(
+      readAgentHeaderOfConversation(target.userId, target.conversationId),
+    );
+
+    const agentId = Option.getOrUndefined(Option.flatten(agent))?.id;
+
+    return (yield* askMachine(route.success, agentId === undefined ? ask : { ...ask, agentId }))
+      .answer;
   });
 }
 

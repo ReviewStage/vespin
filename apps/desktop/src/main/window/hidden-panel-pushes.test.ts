@@ -12,7 +12,7 @@ import { STAND_IN_DISPLAY } from "./stand-in-display";
 import { windowPushes } from "./window-pushes";
 
 /** An app link to a task, as the system hands one to the app. */
-const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, planId: "task-1" } };
+const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, taskId: "task-1" } };
 
 /**
  * What a panel no one can see is pushed: no document while it is hidden, the

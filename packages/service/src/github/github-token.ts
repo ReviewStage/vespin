@@ -49,7 +49,7 @@ export function memberGitHubToken(
 }
 
 /** The same read under the ring given, the deployment's `providerKeyEncryptionKeys`, for a service built over it. */
-export function openMemberGitHubToken(
+function openMemberGitHubToken(
   configured: Redacted.Redacted | undefined,
   userId: string,
 ): Effect.Effect<

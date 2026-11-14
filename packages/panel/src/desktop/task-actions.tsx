@@ -12,12 +12,12 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import {
-  DOCUMENT_REGION,
   deleteTaskWords,
   RENAME_FAILED_NOTE,
   SETTLED_STATUS,
   settleOffered,
   TASK_MARK,
+  TASK_REGION,
   type TaskMark,
 } from "@repo/features/tasks-model";
 import { EXPERIMENT } from "@repo/settings";
@@ -313,7 +313,7 @@ export function openedTaskOf(
 ): OpenedTask | undefined {
   const { region } = tasks;
 
-  return region.kind === DOCUMENT_REGION.READY
+  return region.kind === TASK_REGION.READY
     ? { task: region.task, agents: tasks.agents }
     : undefined;
 }
