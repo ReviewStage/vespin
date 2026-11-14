@@ -537,10 +537,21 @@ export function useTasksListing(search: string): ReadListing {
   useServiceTaskSearch(search, view?.listStatus === TASKS_READ.READY);
   // Note that the last tree is kept where the new one draws the same rows, because a group's new array resets every row it holds (`RowForEach`), and every delivery to the task list built the tree anew.
   const [keepTree] = useState(answerKeeper<TaskTree>);
+  const tasks = useMemo(() => withHeld(listed, held), [listed, held]);
 
-  return useMemo(() => {
-    const tasks = withHeld(listed, held);
+  // Note that what a search finds is worked out apart from the rest, because a key typed would otherwise build the whole tree and every row's act anew.
+  const found = useMemo(
+    () =>
+      searchedTasks({
+        tasks,
+        workspaceId: workspace?.id,
+        workspaceName: workspace?.name,
+        tokens: searchTokens(search),
+      }),
+    [tasks, workspace, search],
+  );
 
+  const rest = useMemo(() => {
     const tree = keepTree(
       taskTree({
         view: { tasks, taskSections: view?.taskSections, repositoryPins: view?.repositoryPins },
@@ -550,13 +561,6 @@ export function useTasksListing(search: string): ReadListing {
         tasksHead: TASKS_HEAD_WORDS[ASSIGNED_TO.ME],
       }),
     );
-
-    const found = searchedTasks({
-      tasks,
-      workspaceId: workspace?.id,
-      workspaceName: workspace?.name,
-      tokens: searchTokens(search),
-    });
 
     const lookOf = (task: TaskSummary) =>
       taskRowLook(task, waiting.byTask.get(task.id) ?? 0, view?.taskPullRequests);
@@ -607,7 +611,6 @@ export function useTasksListing(search: string): ReadListing {
 
     return {
       tree,
-      found,
       workspace,
       lookOf,
       setStatus,
@@ -625,18 +628,18 @@ export function useTasksListing(search: string): ReadListing {
     keepTree,
     acts,
     write,
-    listed,
+    tasks,
     listedAgents,
-    held,
     view,
     workspace,
     readerId,
     waiting,
-    search,
     rename,
     placing,
     relations,
   ]);
+
+  return useMemo(() => ({ ...rest, found }), [rest, found]);
 }
 
 /** One agent on a task as its row draws it: the agent, how many of its threads wait on the reader, and the pull request it opened. */

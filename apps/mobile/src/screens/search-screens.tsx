@@ -1,5 +1,6 @@
 // search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, each row drawn by its own list's row, its results beside the app sidebar in a window wide enough for three columns.
 
+import { READING_INBOX } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
@@ -197,7 +198,9 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
       <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
     ) : (
       <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-        {none ? (
+        {none && found.inboxReading ? (
+          <EmptyState title={READING_INBOX} symbol={GLYPH.SEARCH} loading />
+        ) : none && found.current ? (
           <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
         ) : (
           <FoundList

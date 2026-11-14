@@ -19,9 +19,9 @@ import {
   taskSearchSubject,
 } from "@repo/features/search-found-model";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { selectTasks } from "@repo/host/app-state-reads";
+import { INBOX_FEED, selectTasks } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useDeferredValue, useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxListing } from "../inbox/use-inbox.js";
 import {
@@ -39,10 +39,20 @@ export interface SearchFound {
   readonly agents: readonly TaskAgentLine[];
   readonly listing: ReadListing;
   readonly readerId: string | undefined;
+  /** Whether the rows were found for what is typed now, the deferred finding caught up. */
+  readonly current: boolean;
+  /** Whether the Inbox's first read is still out, so an Inbox item it would find may not be held yet. */
+  readonly inboxReading: boolean;
 }
 
-/** The tasks, Inbox items, and agents of the chosen workspace that `query` finds; none of any while nothing is typed. */
-export function useSearchFound(query: string): SearchFound {
+/**
+ * The tasks, Inbox items, and agents of the chosen workspace that `typed`
+ * finds; none of any while nothing is typed. Note that they are found for a
+ * deferred copy of what is typed, as ⌘K ranks its rows, so a key typed
+ * draws at once and the finding that follows gives way to the next key.
+ */
+export function useSearchFound(typed: string): SearchFound {
+  const query = useDeferredValue(typed);
   const listing = useTasksListing(query);
   const inbox = useInboxListing({ show: INBOX_SHOW.ALL, search: query });
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
@@ -70,6 +80,8 @@ export function useSearchFound(query: string): SearchFound {
       ).map((agent) => agentLine(agent, waiting.byAgent, view)),
       listing,
       readerId: inbox.readerId,
+      current: query === typed,
+      inboxReading: inbox.feed === INBOX_FEED.READING,
     };
-  }, [listing, inbox, view, workspace, waiting, query]);
+  }, [listing, inbox, view, workspace, waiting, query, typed]);
 }
