@@ -1743,7 +1743,7 @@ it.effect(
         type: "http",
         url: CONFIG.mcpUrl,
         headers: { authorization: `Bearer ${BEARER}` },
-        timeout: 600_000,
+        timeout: 800_000,
       });
       assert.ok(!JSON.stringify(rest).includes(BEARER));
       assert.equal(options.env?.[RUNNER_ENV.BEARER], undefined);

@@ -1399,6 +1399,21 @@ const updateAgentRunnerToken = SqlSchema.findAll({
     ),
 });
 
+const updateRunnerTokenRestored = SqlSchema.void({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    runnerTokenHash: Schema.String,
+  }),
+  execute: ({ userId, agentId, runnerTokenHash }) =>
+    Database.use((db) =>
+      db
+        .update(agentTable)
+        .set({ runnerTokenHash })
+        .where(and(reachableAgent(userId, agentId), isNull(agentTable.runnerTokenHash))),
+    ),
+});
+
 const findRunnerLaunch = SqlSchema.findOneOption({
   Request: Schema.Struct({ agentId: Schema.String }),
   Result: Schema.Struct({ launch: Schema.Number }),
@@ -3516,6 +3531,19 @@ export function recordAgentRunnerToken(
     updateAgentRunnerToken({ userId, agentId, runnerTokenHash }),
     (rows) => rows.length > 0,
   );
+}
+
+/**
+ * A bearer `recordAgentRunnerToken` retired given back to the launch it was
+ * recorded as, its number unmoved, as a stop that failed leaves that launch's
+ * runner running; nothing where a newer bearer stands since.
+ */
+export function restoreAgentRunnerToken(
+  userId: string,
+  agentId: string,
+  runnerTokenHash: string,
+): AgentStoreEffect<void> {
+  return updateRunnerTokenRestored({ userId, agentId, runnerTokenHash });
 }
 
 /**

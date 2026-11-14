@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import { APP_ICON_SIZE, AppIcon } from "../app-icon/app-icon.js";
+import { AskDeadline } from "../ask-deadline/ask-deadline.js";
+import { AskNoteField, useAskNote } from "../ask-note/ask-note.js";
 import { BUTTON_VARIANT, Button } from "../button/button.js";
 import { CHOICE_LOOK, ChoiceList } from "../choice-list/choice-list.js";
 import { DIALOG_ROLE, DIALOG_SIZE, Dialog } from "../dialog/dialog.js";
@@ -15,9 +17,12 @@ import { TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
  * may do with it, and a choice of how often: Always allow, picked and marked
  * Recommended, which adds the app to the apps agents use without asking,
  * or Allow once, which lets the agent that asked use it for now. Allow
- * answers with the choice, and Deny sits before it. Focus lands on Deny, so
+ * answers with the choice, and Deny sits before it, an optional field for
+ * the words it hands the agent above them (`AskNoteField`) and the time the
+ * ask has left at the foot's start (`AskDeadline`). Focus lands on Deny, so
  * a key already pressed lets nothing in; Escape and a press on the dimmed
- * window deny too, since a prompt waved away must not let an agent in.
+ * window deny too, with no words, since a prompt waved away must not let an
+ * agent in.
  * Whoever owns the card holds it mounted while the ask stands and passes
  * `open` as the ask goes, answered or timed out, so the card fades out
  * (`Dialog`'s `open`), taking it down once it says it is gone.
@@ -62,7 +67,10 @@ export function AppAsk({
   onAllowOnce,
   onAllowAlways,
   onDeny,
+  expiresAt,
+  noteMaxLength,
   onExited,
+  machineName,
 }: {
   /** Whether the ask stands; falling, the card fades out before it goes. */
   open: boolean;
@@ -71,12 +79,20 @@ export function AppAsk({
   onAllowOnce: () => void;
   /** Let every agent use the app without asking: Allow, with Always allow picked. */
   onAllowAlways: () => void;
-  /** Let no agent in, which Escape and the dimmed window also answer. */
-  onDeny: () => void;
+  /** Let no agent in, which Escape and the dimmed window also answer. with the words written for the agent where some were; Escape and the dimmed window answer it with none. */
+  onDeny: (note: string | undefined) => void;
+  /** When the ask closes by itself, in epoch milliseconds on the window's clock, which its foot counts down to. */
+  expiresAt: number;
+  /** The most characters of the words a Deny hands the agent. */
+  noteMaxLength: number;
   /** Its fade has run and the card is gone, which its owner takes the ask down on. */
   onExited?: (() => void) | undefined;
+  /** The machine that asks, where it is not the one the window runs on, which the subtitle names. */
+  machineName?: string | undefined;
 }): React.JSX.Element {
   const deny = useRef<HTMLButtonElement | null>(null);
+  const note = useAskNote();
+  const denied = () => onDeny(note.note);
   const [scope, setScope] = useState<readonly AllowScope[]>([ALLOW_SCOPE.ALWAYS]);
   // Note that a pick taken back leaves no scope, which allows once rather than widening.
   const allow = scope[0] === ALLOW_SCOPE.ALWAYS ? onAllowAlways : onAllowOnce;
@@ -87,14 +103,19 @@ export function AppAsk({
       role={DIALOG_ROLE.ALERT_DIALOG}
       size={DIALOG_SIZE.WIDE}
       title={`Let agents use ${app.name}?`}
-      subtitle={SUBTITLE}
+      subtitle={
+        machineName === undefined
+          ? SUBTITLE
+          : `An agent wants to see and control an app on ${machineName}.`
+      }
       initialFocus={deny}
-      onDismiss={onDeny}
+      onDismiss={() => onDeny(undefined)}
       onExited={onExited}
+      actionsStart={<AskDeadline expiresAt={expiresAt} />}
       actions={
         <>
-          <Button ref={deny} variant={BUTTON_VARIANT.QUIET} onClick={onDeny}>
-            Deny
+          <Button ref={deny} variant={BUTTON_VARIANT.QUIET} onClick={denied}>
+            {note.denyLabel}
           </Button>
           <Button variant={BUTTON_VARIANT.PRIMARY} onClick={allow}>
             Allow
@@ -121,6 +142,7 @@ export function AppAsk({
         value={scope}
         onChange={setScope}
       />
+      <AskNoteField note={note} maxLength={noteMaxLength} onDeny={denied} />
     </Dialog>
   );
 }

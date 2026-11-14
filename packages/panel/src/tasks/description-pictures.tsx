@@ -131,7 +131,7 @@ export function DescriptionPictures({
 
   const read = useCallback(
     (owner: string, id: string) =>
-      askAct(ACT_KIND.TASKS_PICTURE_READ, { planId: owner, attachmentId: id }),
+      askAct(ACT_KIND.TASKS_PICTURE_READ, { taskId: owner, attachmentId: id }),
     [],
   );
 

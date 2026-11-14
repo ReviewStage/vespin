@@ -74,7 +74,7 @@ type HoldKind =
   | typeof WORKSPACE_ACT_KIND.WORKSPACE_SLACK_CHANNELS_FOLLOW
   | typeof WORKSPACE_ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW
   | typeof WORKSPACE_ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_FOLLOW
-  | typeof TASKS_ACT_KIND.TASKS_DOCUMENT_FOLLOW;
+  | typeof TASKS_ACT_KIND.TASKS_HELD_FOLLOW;
 
 /** Every hold a window keeps on a read the host lays on app state, which a test's port holds quietly unless it answers it. */
 const QUIET_HOLDS: ReadonlySet<PortActKind> = new Set<HoldKind>([
@@ -108,7 +108,7 @@ const QUIET_HOLDS: ReadonlySet<PortActKind> = new Set<HoldKind>([
   WORKSPACE_ACT_KIND.WORKSPACE_SLACK_CHANNELS_FOLLOW,
   WORKSPACE_ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW,
   WORKSPACE_ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_FOLLOW,
-  TASKS_ACT_KIND.TASKS_DOCUMENT_FOLLOW,
+  TASKS_ACT_KIND.TASKS_HELD_FOLLOW,
 ]);
 
 /** A hold as the host answers it: a stream carrying nothing, standing until the window closes it. */

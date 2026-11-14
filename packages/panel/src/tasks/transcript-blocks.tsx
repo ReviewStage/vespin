@@ -50,6 +50,7 @@ import {
 } from "@repo/features/turn-rows";
 import { keyWordsIn } from "@repo/features/workspace-key";
 import {
+  APP_ICON_STAND_IN,
   DISCLOSURE_BODY,
   DISCLOSURE_LOOK,
   DISCLOSURE_SUMMARY,
@@ -96,6 +97,7 @@ import {
 import {
   AlarmClockCheckIcon,
   AlarmClockOffIcon,
+  AppWindowMacIcon,
   ArchiveIcon,
   ArchiveRestoreIcon,
   CalendarCheckIcon,
@@ -125,7 +127,6 @@ import {
   LayoutListIcon,
   LinkIcon,
   type LucideIcon,
-  MonitorIcon,
   PencilLineIcon,
   PlayIcon,
   PlugIcon,
@@ -1218,8 +1219,8 @@ function CutWords({
 const CALL_ICON = {
   [CALL_KIND.COMMAND]: TerminalIcon,
   [CALL_KIND.MACHINE_COMMAND]: LaptopIcon,
-  [CALL_KIND.BROWSER]: GlobeIcon,
-  [CALL_KIND.COMPUTER]: MonitorIcon,
+  [CALL_KIND.BROWSER]: AppWindowMacIcon,
+  [CALL_KIND.COMPUTER]: () => <GLYPH.COMPUTER_USE />,
   [CALL_KIND.READ_FILE]: FileTextIcon,
   [CALL_KIND.WRITE_FILE]: FilePenIcon,
   [CALL_KIND.EDIT]: FilePenIcon,
@@ -1487,7 +1488,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
 
 /** A call held for an answer, as its row draws it (`TranscriptTool`'s `held`). */
 export interface HeldCall {
-  readonly status: string;
+  /** Where the ask stands, in words, or words that move on their own, as a countdown to an ask's close. */
+  readonly status: ReactNode;
   /** Whether it still waits on an answer, which holds the call rather than working it. */
   readonly waiting: boolean;
   readonly about: string | undefined;
@@ -1584,7 +1586,12 @@ export function TranscriptTool({
           provider !== undefined ? (
             <ProviderMark provider={provider} />
           ) : appIcon !== undefined || kind === CALL_KIND.COMPUTER ? (
-            <KeptAppIcon id={appIcon} />
+            <KeptAppIcon
+              id={appIcon}
+              standIn={
+                kind === CALL_KIND.COMPUTER ? APP_ICON_STAND_IN.COMPUTER_USE : APP_ICON_STAND_IN.APP
+              }
+            />
           ) : (
             <Icon aria-hidden="true" />
           )

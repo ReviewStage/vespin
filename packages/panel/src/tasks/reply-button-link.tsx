@@ -163,12 +163,12 @@ export function ReplyButtonLink({
     const to = view.sendTo;
 
     if (to === null) return;
-    writer.update({ kind: DRAFT_PLACE.AGENT, planId: to.taskId, agentId: to.id }, (was) =>
+    writer.update({ kind: DRAFT_PLACE.AGENT, taskId: to.taskId, agentId: to.id }, (was) =>
       was.suggestion?.buttonId === buttonId
         ? was
         : { ...was, text: suggestedWords(was.text, action.text), suggestion },
     );
-    openPlace?.({ kind: LINK_DESTINATION.AGENT, planId: to.taskId, agentId: to.id });
+    openPlace?.({ kind: LINK_DESTINATION.AGENT, taskId: to.taskId, agentId: to.id });
   };
 
   const target =

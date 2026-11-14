@@ -60,7 +60,7 @@ function agentNameNow(tasks: StepNameTasks, taskId: string, agentId: string): st
       : undefined;
 
   const listed = tasks.rows.agent(agentId);
-  const line = open ?? (listed?.planId === taskId ? listed : undefined);
+  const line = open ?? (listed?.taskId === taskId ? listed : undefined);
 
   return line === undefined ? undefined : agentName(line, tasks.agents.models);
 }
@@ -187,7 +187,7 @@ export type NamedStep =
   | { readonly kind: typeof NAMED_STEP.PERSON; readonly userId: string };
 
 /** The name a person goes by now, by their id, as the workspace's members say; none for someone not among them, or while they are unread. */
-export function memberName(
+function memberName(
   members: readonly WorkspaceMember[] | undefined,
   userId: string,
 ): string | undefined {

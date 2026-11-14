@@ -1,10 +1,10 @@
 /**
- * tasks-procedures.ts -- the account's plans: list, start, open, change, and delete, and each one's edit and history.
+ * tasks-procedures.ts -- the account's tasks: list, start, open, change, and delete, and each one's edit and history.
  *
  * Every procedure resolves the caller before it touches a row, and every row
  * it touches is one the caller reaches: a plan id another account owns
  * answers exactly as one that names nothing, and so does an id that is no
- * UUID, so nothing is learned about plans the caller does not hold. The
+ * UUID, so nothing is learned about tasks the caller does not hold. The
  * developer writes a document in two ways here, each through the plan's one
  * write (`packages/service/src/tasks/description-notes.ts`) that the notetaker and
  * the coding agents save their notes through: `POST /api/tasks/{id}/description` is
@@ -188,7 +188,7 @@ const startedBefore = /* @__PURE__ */ Effect.fnUntraced(function* (
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
 
-  return Option.some({ plan: task.value, agent: yield* summaryOf(userId, made.value) });
+  return Option.some({ task: task.value, agent: yield* summaryOf(userId, made.value) });
 });
 
 /**
@@ -246,7 +246,7 @@ const startedAgentOn = (
       Effect.map(
         taskAfterStart(userId, task),
         (plan): TaskStartAnswer => ({
-          plan,
+          task: plan,
           agent: started.agent,
           ...(started.txid === undefined ? undefined : { txid: started.txid }),
         }),
@@ -259,7 +259,7 @@ const startedAgentOn = (
         if (Option.isSome(made)) {
           const plan = yield* taskAfterStart(userId, task);
 
-          return { plan, agent: made.value } satisfies TaskStartAnswer;
+          return { task: plan, agent: made.value } satisfies TaskStartAnswer;
         }
 
         // Note that the provider and the model asked for are kept beside the refusal, because a credential refused names neither in its words.
@@ -283,7 +283,7 @@ const startedAgentOn = (
             : { localAgentRefusal: refusal.localAgentRefusal }),
         };
 
-        return { plan: task, agentRefusal } satisfies TaskStartAnswer;
+        return { task: task, agentRefusal } satisfies TaskStartAnswer;
       }),
     ),
   );
@@ -405,7 +405,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
 
   return {
     /**
-     * The account's plans; a teammate's plan on their own GitHub token among
+     * The account's tasks; a teammate's plan on their own GitHub token among
      * them where the account's own token reads its repository, asked of
      * GitHub first where the answer kept is older than the hour. Every agent
      * stands on a task, so the answer carries no `planlessAgents`, which a
@@ -422,7 +422,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
         ),
       );
 
-      return { plans: tasks };
+      return { tasks: tasks };
     }),
 
     /**
@@ -485,7 +485,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
 
       const answer: TaskStartAnswer =
         agent === undefined
-          ? { plan: stored.task }
+          ? { task: stored.task }
           : yield* startedAgentOn(
               userId,
               stored,
@@ -523,7 +523,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
       if (Option.isNone(opened)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const { task, brief } = opened.value;
 
-      return { plan: task, ...(brief === undefined ? undefined : { brief }) };
+      return { task, ...(brief === undefined ? undefined : { brief }) };
     }),
 
     /**
@@ -544,9 +544,9 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
 
       if (Option.isNone(task)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       yield* taskChangeSettled(seams, userId, task.value);
-      const { task: plan, txid } = task.value;
+      const { task: changed, txid } = task.value;
 
-      return txid === undefined ? { plan } : { plan, txid };
+      return txid === undefined ? { task: changed } : { task: changed, txid };
     }),
 
     /**
@@ -566,7 +566,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
       if (Option.isNone(opened)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const { txid } = written.value;
 
-      return txid === undefined ? { plan: opened.value } : { plan: opened.value, txid };
+      return txid === undefined ? { task: opened.value } : { task: opened.value, txid };
     }),
 
     /**
@@ -585,9 +585,9 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
       );
 
       if (Option.isNone(written)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      const { task: plan, txid } = written.value;
+      const { task: changed, txid } = written.value;
 
-      return txid === undefined ? { plan } : { plan, txid };
+      return txid === undefined ? { task: changed } : { task: changed, txid };
     }),
 
     /**
@@ -611,7 +611,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
       if (Option.isNone(opened)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const { txid } = written.value;
 
-      return txid === undefined ? { plan: opened.value } : { plan: opened.value, txid };
+      return txid === undefined ? { task: opened.value } : { task: opened.value, txid };
     }),
 
     /** The plan deleted as every door deletes one (`task-delete.ts`): its agents stopped for good first. */
@@ -636,7 +636,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
       switch (saved.status) {
         case DESCRIPTION_SAVE_STATUS.SAVED:
           return {
-            plan: saved.task,
+            task: saved.task,
             ...(saved.txid === undefined ? undefined : { txid: saved.txid }),
           };
         case DESCRIPTION_SAVE_STATUS.CONFLICT:
@@ -697,7 +697,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
       }
 
       return {
-        plan: restored.task,
+        task: restored.task,
         ...(restored.txid === undefined ? undefined : { txid: restored.txid }),
       };
     }),

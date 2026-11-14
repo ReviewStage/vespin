@@ -4,6 +4,7 @@ import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { Deferred, Effect, Exit, Layer, Scope } from "effect";
+import { TestClock } from "effect/testing";
 import { type AgentNotice, AgentNoticeDoors, NOTICE_KIND } from "../agent-notices.js";
 import { type AppHostRead, type AppTranscript, OWN_TRANSCRIPT } from "../app-state.js";
 import { runModeFor } from "../run-mode.js";
@@ -86,16 +87,18 @@ function linked(
 }
 
 it.effect(
-  "a command asked while the panel is behind is announced once, its click bringing the window forward, and one asked in front is not",
+  "a command still waiting a few seconds after it was asked while the panel is behind is announced once, its click bringing the window forward; one answered by then, or asked in front, is not",
   () =>
     Effect.gen(function* () {
       posted.length = 0;
       const scope = yield* Scope.make();
       const { focus, state, forwarded } = yield* linked(scope, () => Effect.void, []);
-      const ask = (id: string) => ({ id, command: "node --version", askedAt: 1 });
+      const ask = (id: string) => ({ id, command: "node --version", askedAt: 1, expiresAt: 2 });
 
       state.update({ machineCommands: { asks: [ask("first")] } });
       yield* Effect.yieldNow;
+      assert.equal(posted.length, 0, "nothing is announced at once");
+      yield* TestClock.adjust("10 seconds");
       assert.equal(posted.length, 1);
       assert.deepEqual(posted[0]?.subject, {
         kind: NOTICE_KIND.MACHINE_COMMAND_ASK,
@@ -108,7 +111,7 @@ it.effect(
 
       // The same ask told again, beside a second, announces only the second.
       state.update({ machineCommands: { asks: [ask("first"), ask("second")] } });
-      yield* Effect.yieldNow;
+      yield* TestClock.adjust("10 seconds");
       assert.deepEqual(
         posted.map((notice) => notice.subject),
         [
@@ -117,9 +120,16 @@ it.effect(
         ],
       );
 
+      // One answered before its few seconds are up is never announced.
+      state.update({ machineCommands: { asks: [ask("first"), ask("second"), ask("answered")] } });
+      yield* TestClock.adjust("5 seconds");
+      state.update({ machineCommands: { asks: [ask("first"), ask("second")] } });
+      yield* TestClock.adjust("10 seconds");
+      assert.equal(posted.length, 2, "an ask answered in time is not announced");
+
       focus()?.(true);
       state.update({ machineCommands: { asks: [ask("first"), ask("second"), ask("third")] } });
-      yield* Effect.yieldNow;
+      yield* TestClock.adjust("10 seconds");
       assert.equal(posted.length, 2, "the panel in front shows the prompt itself");
 
       yield* Scope.close(scope, Exit.void);
@@ -189,7 +199,7 @@ const TASK: TaskSummary = {
 /** An agent on the task, as the task list carries it beside the tasks. */
 const AGENT: ListedAgent = {
   id: "a1b2c3d4-0000-4000-8000-0000000000aa",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: null,

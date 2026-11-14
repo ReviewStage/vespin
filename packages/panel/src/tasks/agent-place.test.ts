@@ -290,7 +290,7 @@ test("the Default machine row names the agent's default with its dot, offline as
   await settle();
 
   // Note that the machines are a teammate's, Ada's, so each wears her face, "A", before its name.
-  assert.deepEqual(rows, ["Agent runs inCloud", "Default machineALaptop"]);
+  assert.deepEqual(rows, ["Agent runs inCloud", "Terminal and computer useALaptop"]);
   assert.equal(standing, "Offline");
   assert.equal(machines.length, 2);
   assert.deepEqual(sent, [{ agentId: AGENT_ID, machineId: "studio" }]);
