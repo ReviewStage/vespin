@@ -17,7 +17,7 @@ import { useThreeColumns } from "../use-window-size-class.js";
  * Where the launch opens: the agent it names, or that agent's pull request
  * by its number; else, where the app sidebar stands, the place it last
  * picked, as Mail opens on the mailbox last read; else the Inbox. An agent
- * and its pull request open on Tasks' stack.
+ * and its pull request open on Tasks' stack, over the Tasks list.
  */
 function launchHref(threeColumns: boolean): string {
   const agent = launchAgent();
@@ -36,5 +36,6 @@ function launchHref(threeColumns: boolean): string {
 }
 
 export default function RootIndex() {
-  return <Redirect href={launchHref(useThreeColumns())} />;
+  // Note that the redirect stands the tab's anchored root under the page it opens, as a link's push does, because a redirect is a navigation the stack's anchor alone never fills, so a launch onto an agent or its pull request had no Back.
+  return <Redirect href={launchHref(useThreeColumns())} withAnchor />;
 }
