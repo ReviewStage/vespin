@@ -263,9 +263,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it, at the system's regular size,
   Mark done filled as the card's one act and Couldn't do it its words
-  alone; `AnswerFields`, a row per
+  alone, the two stacked past the accessibility sizes; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
-  card and prompting "Required" while a required one is empty, a select's menu picker at
+  card and prompting "Required" or "Optional" while it is empty, a select's menu picker at
   the end of its label's row, a
   boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because
   a `Form` scrolls on its own inside the thread's scroll; a card's hairlines

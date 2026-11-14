@@ -35,7 +35,7 @@ import {
 import { FIELD_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode } from "react";
-import { useAnnounced } from "./accessibility.js";
+import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
@@ -162,18 +162,25 @@ export function AskNote({ words }: { readonly words: string }) {
  * Couldn't do it, its words alone in the ink, as the panel's quiet button.
  */
 export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
-  return (
-    <HStack spacing={SPACE.TIGHT * 2}>
-      {acts.map((act) => (
-        <Button
-          key={act.label}
-          label={act.label}
-          symbol={act.symbol}
-          look={act.quiet === true ? BUTTON_LOOK.PLAIN : BUTTON_LOOK.PROMINENT}
-          onPress={act.onPress}
-        />
-      ))}
-    </HStack>
+  const stacked = useAccessibilitySize();
+
+  const buttons = acts.map((act) => (
+    <Button
+      key={act.label}
+      label={act.label}
+      symbol={act.symbol}
+      look={act.quiet === true ? BUTTON_LOOK.PLAIN : BUTTON_LOOK.PROMINENT}
+      onPress={act.onPress}
+    />
+  ));
+
+  // Note that past the accessibility sizes the acts stand one under the other, as a row's end does, because two regular buttons side by side run past an iPhone's width there.
+  return stacked ? (
+    <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
+      {buttons}
+    </VStack>
+  ) : (
+    <HStack spacing={SPACE.TIGHT * 2}>{buttons}</HStack>
   );
 }
 
