@@ -17,18 +17,18 @@
 
 import { type ClaudeCodeConfig, type CodexConfig, RUNNER_ENV } from "./protocol.js";
 
-/** The name our MCP server is registered under, so its tools reach the model as `mcp__workspace__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
-export const MCP_SERVER = "workspace";
+/** The name our MCP server is registered under, so its tools reach the model as `mcp__team__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
+export const MCP_SERVER = "team";
 
 /**
  * How long a harness waits on one of our tool calls, in seconds: our MCP
  * function's own duration (`workspace-mcp/app.ts`'s `WORKSPACE_MCP_FUNCTION`, the
- * longest `run_on_mac` and two minutes around it), so a harness never gives up
+ * longest ask and `run_on_mac` and the time around them), so a harness never gives up
  * on a call the service is still running. Note that Codex's default is 60 s, past
  * which it fails the call while the service carries it out, and the agent retries a
  * call that already ran.
  */
-const MCP_TOOL_TIMEOUT_SECONDS = 600;
+const MCP_TOOL_TIMEOUT_SECONDS = 800;
 
 /**
  * How long a harness waits on an integration's server to start, in seconds:

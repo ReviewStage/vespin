@@ -66,7 +66,7 @@ import {
   TASK_SEARCH_LIMIT,
   TASK_SEARCH_READ,
 } from "@repo/features/task-list-live";
-import { TASK_BLOCK_RELATION, TASK_STATUS } from "@repo/features/task-wire";
+import { TASK_BLOCK_RELATION, TASK_SETTLED, TASK_STATUS } from "@repo/features/task-wire";
 import { SANDBOX_IDLE } from "@repo/sandbox";
 import {
   and,
@@ -122,6 +122,31 @@ type AgentRow = (typeof TASK_LIST_READ.parts.agents.row)["Encoded"];
 const starter = alias(user, "starter");
 const archiver = alias(user, "archiver");
 const assignee = alias(user, "assignee");
+const subTask = alias(task, "sub_task");
+
+/**
+ * One column counting the row's direct children the account reaches, the
+ * finished ones (done or canceled) alone where `finished`, over every task
+ * rather than those a reader's list holds. As in `taskBlockedFor`, the
+ * reached tasks are read in a subquery of their own over `task`, so the
+ * child's parent alone names the row the statement reads.
+ */
+function subTaskCountOf(userId: string, finished: boolean): SQL<number> {
+  const reached = queryBuilder.select({ id: task.id }).from(task).where(taskReachableBy(userId));
+
+  const children = queryBuilder
+    .select({ count: sql<number>`count(*)::int` })
+    .from(subTask)
+    .where(
+      and(
+        eq(subTask.parentTaskId, task.id),
+        inArray(subTask.id, reached),
+        finished ? inArray(subTask.status, [...TASK_SETTLED]) : undefined,
+      ),
+    );
+
+  return sql<number>`(${children})`;
+}
 
 /**
  * One column of the task's followers who are members of its workspace, the
@@ -191,6 +216,8 @@ function tasksStatement(userId: string, narrowed: SQL = sql`true`) {
         creatorActor: task.creatorActor,
         creatorAgentId: task.creatorAgentId,
         parentTaskId: task.parentTaskId,
+        subTaskCount: subTaskCountOf(userId, false),
+        finishedSubTaskCount: subTaskCountOf(userId, true),
         mode: task.mode,
         blocked: sql<boolean>`${taskBlockedFor(userId)}`,
         blockedBy: taskBlockIdsFor(userId, TASK_BLOCK_RELATION.BLOCKED_BY),
@@ -425,7 +452,9 @@ const PENDING_APPROVALS_OF_AGENT = sql<
 /**
  * The plans what moved could move: their own rows, the reader's pins and
  * read marks, a block either way, a follower, a plan a moved plan blocks,
- * a plan whose agent's pin moved, and a plan naming a moved member.
+ * a plan whose agent's pin moved, a plan a moved plan is or was the child
+ * of, whose sub-task count it moves (`TOPIC.TASK_PARENT`), and a plan
+ * naming a moved member.
  */
 function movedPlans(moved: SyncMoved): SQL {
   const plans = moved.keys(taskSync, task.id);
@@ -451,6 +480,7 @@ function movedPlans(moved: SyncMoved): SQL {
         ...moved.keys(taskBlockSync, taskBlock.blockedTaskId),
         ...moved.keys(taskBlockSync, taskBlock.blockerTaskId),
         ...moved.keys(taskFollowerSync, taskFollower.taskId),
+        ...moved.topics(taskSync, TOPIC.TASK_PARENT),
       ]),
       sql`${task.id} in ${blockedByMoved}`,
       sql`${task.id} in ${ofPinnedAgent}`,

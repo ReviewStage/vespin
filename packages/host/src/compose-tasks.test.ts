@@ -910,7 +910,7 @@ it.effect(
         [INVITES, BILLING, shipped].toSorted(),
         "the sub-task and the blocker outside the list are drawn",
       );
-      assert.deepEqual(subTaskCount(subTasksOf(listed, INVITES)), { finished: 1, total: 1 });
+      assert.deepEqual(subTaskCount({}, subTasksOf(listed, INVITES)), { finished: 1, total: 1 });
     }),
 );
 

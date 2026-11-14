@@ -20,6 +20,10 @@ export * from "./components/approval-actions/approval-actions.js";
 
 export * from "./components/arrival/arrival.js";
 
+export * from "./components/ask-deadline/ask-deadline.js";
+
+export * from "./components/ask-note/ask-note.js";
+
 export * from "./components/attachment-chip/attachment-chip.js";
 
 export * from "./components/attachment-ref/attachment-ref.js";

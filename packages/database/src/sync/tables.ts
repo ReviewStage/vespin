@@ -72,7 +72,9 @@ import { TOPIC } from "./notification.js";
 import { defineSyncTable, LOG, type SyncTable } from "./sync-table.js";
 
 /**
- * A task, on its own topic and its workspace's. Note that the plan's text
+ * A task, on its own topic and its workspace's, and naming its parent, the
+ * one it had and the one it has (`TOPIC.TASK_PARENT`), so a delta read of
+ * the task list sends the parent whose sub-task count a child moved. Note that the plan's text
  * and the agents' journal of saves are ignored, because every save rewrites
  * both and no view reads them live: a save moves `updated_at` beside them,
  * which the task list and the task's record read, so a save still notifies.
@@ -83,6 +85,7 @@ export const taskSync = defineSyncTable(task, {
   topics: [
     { kind: TOPIC.TASK, column: task.id },
     { kind: TOPIC.WORKSPACE, column: task.organizationId },
+    { kind: TOPIC.TASK_PARENT, column: task.parentTaskId },
   ],
   ignore: [task.description, task.agentEdits, task.doneBy],
   log: LOG.EVERY,
