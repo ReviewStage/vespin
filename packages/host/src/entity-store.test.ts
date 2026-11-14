@@ -32,7 +32,7 @@ const files = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 /** The task list as one answer left it, read at sync id 7. */
 const LIST: KeptRows[typeof KEPT_READ.TASK_LIST] = {
   rows: {
-    plans: [planListRow("7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10", "Teammate invitations")],
+    tasks: [planListRow("7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10", "Teammate invitations")],
     agents: [],
   },
   at: "7",
@@ -69,7 +69,7 @@ const INBOX: KeptRows[typeof KEPT_READ.INBOX] = {
         postedAt: 1_800_000_000_000,
         updatedAt: 1_800_000_000_000,
       },
-      planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+      taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
     },
   ],
   at: "7",
@@ -162,6 +162,55 @@ it.effect(
       const sealed = yield* writtenText(directory);
 
       assert.equal(sealed.includes("Teammate invitations"), false, "nothing is kept in the clear");
+      assert.deepEqual(JSON.parse(yield* openedText(directory)).reads, {
+        [KEPT_READ.TASK_LIST]: LIST,
+      });
+    }).pipe(Effect.provide(files)),
+);
+
+it.effect(
+  "where the shell names its moments, lists that moved wait for one rather than thirty seconds, then are written",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("entity-store-");
+      const due = yield* PubSub.unbounded<void>();
+      let saves = 0;
+
+      // Note that a save's first touch of the disk is making its folder, counted here, since a write the disk has not finished can't be awaited from a test.
+      const counted = Layer.effect(
+        FileSystem.FileSystem,
+        Effect.map(FileSystem.FileSystem, (fileSystem) => ({
+          ...fileSystem,
+          makeDirectory: (path: string, options?: Parameters<typeof fileSystem.makeDirectory>[1]) =>
+            Effect.suspend(() => {
+              saves += 1;
+
+              return fileSystem.makeDirectory(path, options);
+            }),
+        })),
+      ).pipe(Layer.provide(NodeFileSystem.layer));
+
+      const scope = yield* Scope.make();
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+
+      const store = yield* Scope.provide(scope)(
+        openEntityStore({
+          directory,
+          cipher: testCipher(),
+          accountId: DANA,
+          listsDue: Stream.fromPubSub(due),
+        }),
+      ).pipe(Effect.provide(Layer.merge(counted, NodePath.layer)));
+
+      yield* store.keep(KEPT_READ.TASK_LIST, LIST);
+      yield* TestClock.adjust("30 seconds");
+      yield* Effect.yieldNow;
+
+      assert.equal(saves, 0, "nothing is written while the app stays in front");
+
+      yield* PubSub.publish(due, undefined);
+      yield* writtenText(directory);
+
       assert.deepEqual(JSON.parse(yield* openedText(directory)).reads, {
         [KEPT_READ.TASK_LIST]: LIST,
       });

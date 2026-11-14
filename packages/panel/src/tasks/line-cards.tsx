@@ -170,9 +170,9 @@ function commentLink(line: CommentLineMetadata, doors: MentionDoors): string | u
   if (line.task_id === undefined || doors.place.workspace === "") return undefined;
 
   return line.page_id === undefined
-    ? linkOf({ kind: LINK_DESTINATION.TASK, planId: line.task_id }, doors.place.workspace)
+    ? linkOf({ kind: LINK_DESTINATION.TASK, taskId: line.task_id }, doors.place.workspace)
     : linkOf(
-        { kind: LINK_DESTINATION.PAGE, planId: line.task_id, pageId: line.page_id },
+        { kind: LINK_DESTINATION.PAGE, taskId: line.task_id, pageId: line.page_id },
         doors.place.workspace,
       );
 }

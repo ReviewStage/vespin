@@ -47,7 +47,9 @@ import { parsedUrl } from "./parsed-url.js";
  *   `/automation/<id>`, and one of its runs, `/automation/<id>/run/<runId>`;
  * - a page of Settings, `/settings[/<page>]`;
  * - a person's page in the workspace, `/person/<userId>`, a member or
- *   someone who left, by the account id the service names them by;
+ *   someone who left, by the account id the service names them by, and
+ *   one of their machines on it, `#machine-<deviceId>`, which the page
+ *   scrolls to and lights;
  * - the Admin place, an admin's alone, which reads every workspace's
  *   accounts, so its workspace is only the one the link was copied in:
  *   `/admin`, a section of it, `/admin/<cost|reliability|workspaces|users>`,
@@ -205,6 +207,9 @@ const STEP = {
 
 /** The query a task's link names one of its comment threads under. */
 const COMMENT_QUERY = "comment";
+
+/** What a person's link writes before a machine's id in its fragment, `#machine-<deviceId>`. */
+const MACHINE_FRAGMENT = "machine-";
 
 /** The steps a task is read under: the one written, and the one every older link holds. */
 const TASK_STEPS: ReadonlySet<string> = new Set([STEP.PLAN, STEP.TASK]);
@@ -410,25 +415,25 @@ const wholeSchema = EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(0
 const linkDestinationSchema = EffectSchema.Union([
   EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.HOME) }),
   EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.BOARD) }),
-  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.TASK), planId: idSchema }),
+  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.TASK), taskId: idSchema }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.SECTION),
-    planId: idSchema,
+    taskId: idSchema,
     anchor: EffectSchema.String.check(EffectSchema.isPattern(ANCHOR)),
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.COMMENT),
-    planId: idSchema,
+    taskId: idSchema,
     threadId: idSchema,
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.VERSION),
-    planId: idSchema,
+    taskId: idSchema,
     revision: wholeSchema,
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.PAGE),
-    planId: idSchema,
+    taskId: idSchema,
     pageId: idSchema,
   }),
   EffectSchema.Struct({
@@ -438,40 +443,40 @@ const linkDestinationSchema = EffectSchema.Union([
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.AGENT),
-    planId: EffectSchema.optionalKey(idSchema),
+    taskId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.WORKER),
-    planId: EffectSchema.optionalKey(idSchema),
+    taskId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
     callId: idSchema,
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.CHANGES),
-    planId: EffectSchema.optionalKey(idSchema),
+    taskId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.PULL_REQUEST_THREAD),
-    planId: EffectSchema.optionalKey(idSchema),
+    taskId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
     threadId: idSchema,
     view: EffectSchema.Literals(Object.values(PULL_REQUEST_THREAD_VIEW)),
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.MESSAGE),
-    planId: EffectSchema.optionalKey(idSchema),
+    taskId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
     messageId: idSchema,
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.INBOX),
-    planId: EffectSchema.optionalKey(idSchema),
+    taskId: EffectSchema.optionalKey(idSchema),
   }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.INBOX_ITEM),
-    planId: idSchema,
+    taskId: idSchema,
     itemId: idSchema,
   }),
   EffectSchema.Struct({
@@ -493,7 +498,11 @@ const linkDestinationSchema = EffectSchema.Union([
     automationId: idSchema,
     runId: idSchema,
   }),
-  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.PERSON), userId: idSchema }),
+  EffectSchema.Struct({
+    kind: EffectSchema.Literal(LINK_DESTINATION.PERSON),
+    userId: idSchema,
+    machineId: EffectSchema.optionalKey(idSchema),
+  }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(LINK_DESTINATION.SETTINGS),
     page: EffectSchema.optionalKey(
@@ -560,6 +569,14 @@ export function decodedStep(step: string): string | undefined {
   }
 }
 
+/** The machine a person's link names by its fragment, written without its `#`; none for any other fragment, or one naming no id, which is the address's own. */
+export function machineOfFragment(fragment: string): string | undefined {
+  if (!fragment.startsWith(MACHINE_FRAGMENT)) return undefined;
+  const machineId = decodedStep(fragment.slice(MACHINE_FRAGMENT.length));
+
+  return machineId !== undefined && ID.test(machineId) ? machineId : undefined;
+}
+
 /** A step of a link of ours read back, or nothing where its encoding is broken or it is too long to be one. */
 function boundedStep(step: string): string | undefined {
   return step.length > LINK_BOUNDS.MAX_STEP_CHARS * 3 ? undefined : decodedStep(step);
@@ -585,7 +602,7 @@ function taskFields(taskId: string, rest: readonly string[]) {
 
   // A picture in an item's words opens the item, and nothing of the picture.
   if (step === STEP.INBOX && id !== undefined && namesItemPicture(more)) {
-    return { kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId: id };
+    return { kind: LINK_DESTINATION.INBOX_ITEM, taskId: taskId, itemId: id };
   }
 
   if (id === undefined || more.length > 0) return undefined;
@@ -593,19 +610,19 @@ function taskFields(taskId: string, rest: readonly string[]) {
   switch (step) {
     case STEP.VERSION:
       return WHOLE.test(id)
-        ? { kind: LINK_DESTINATION.VERSION, planId: taskId, revision: Number(id) }
+        ? { kind: LINK_DESTINATION.VERSION, taskId: taskId, revision: Number(id) }
         : undefined;
     case STEP.PAGE:
-      return { kind: LINK_DESTINATION.PAGE, planId: taskId, pageId: id };
+      return { kind: LINK_DESTINATION.PAGE, taskId: taskId, pageId: id };
     case STEP.WORK:
-      return WHOLE.test(id) ? { kind: LINK_DESTINATION.TASK, planId: taskId } : undefined;
+      return WHOLE.test(id) ? { kind: LINK_DESTINATION.TASK, taskId: taskId } : undefined;
     case STEP.WORKER:
-      return { kind: LINK_DESTINATION.TASK, planId: taskId };
+      return { kind: LINK_DESTINATION.TASK, taskId: taskId };
     case STEP.INBOX:
-      return { kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId: id };
+      return { kind: LINK_DESTINATION.INBOX_ITEM, taskId: taskId, itemId: id };
     // A picture of the task's description opens the task, and nothing of the picture.
     case STEP.FILES:
-      return PICTURE_ID.test(id) ? { kind: LINK_DESTINATION.TASK, planId: taskId } : undefined;
+      return PICTURE_ID.test(id) ? { kind: LINK_DESTINATION.TASK, taskId: taskId } : undefined;
     default:
       return undefined;
   }
@@ -614,7 +631,7 @@ function taskFields(taskId: string, rest: readonly string[]) {
 /** The steps after an agent's id, under the task an older link names it under or none: the agent itself, a worker, its Changes, a message, an Inbox item of its own, or a page an older link names under it. */
 function agentFields(taskId: string | undefined, agentId: string, rest: readonly string[]) {
   const [step, id, ...more] = rest;
-  const task = taskId === undefined ? {} : { planId: taskId };
+  const task = taskId === undefined ? {} : { taskId: taskId };
 
   if (step === undefined) return { kind: LINK_DESTINATION.AGENT, ...task, agentId };
 
@@ -646,7 +663,7 @@ function agentFields(taskId: string | undefined, agentId: string, rest: readonly
 
 /** A review thread's steps after its agent's Changes, `<view>/thread/<threadId>`; nothing for any other. */
 function threadFields(
-  task: { readonly planId?: string },
+  task: { readonly taskId?: string },
   agentId: string,
   rest: readonly string[],
 ) {
@@ -714,7 +731,7 @@ function inboxFields(step: string | undefined, rest: readonly string[]) {
 
     return taskId === undefined || more.length > 0
       ? undefined
-      : { kind: LINK_DESTINATION.INBOX, planId: taskStepOf(taskId) };
+      : { kind: LINK_DESTINATION.INBOX, taskId: taskStepOf(taskId) };
   }
 
   return rest.length === 0 || namesItemPicture(rest)
@@ -751,13 +768,26 @@ function workspaceStep(workspace: string): boolean {
 /** A task's link, or a section's by its fragment, an empty one the task's own; the anchor read in lower case. */
 function taskLink(taskId: string, hash: string): LinkDestination | undefined {
   if (hash === "" || hash === "#") {
-    return Option.getOrUndefined(readPlace({ kind: LINK_DESTINATION.TASK, planId: taskId }));
+    return Option.getOrUndefined(readPlace({ kind: LINK_DESTINATION.TASK, taskId: taskId }));
   }
 
   const anchor = decodedStep(hash.slice(1))?.toLowerCase();
 
   return Option.getOrUndefined(
-    readPlace({ kind: LINK_DESTINATION.SECTION, planId: taskId, anchor }),
+    readPlace({ kind: LINK_DESTINATION.SECTION, taskId: taskId, anchor }),
+  );
+}
+
+/** A person's link, or one of their machines' on it by its fragment (`machineOfFragment`). */
+function personLink(userId: string, hash: string): LinkDestination | undefined {
+  const machineId = machineOfFragment(hash.replace(/^#/u, ""));
+
+  return Option.getOrUndefined(
+    readPlace({
+      kind: LINK_DESTINATION.PERSON,
+      userId,
+      ...(machineId !== undefined && { machineId }),
+    }),
   );
 }
 
@@ -771,33 +801,33 @@ function placePath(place: LinkDestination): readonly string[] {
     case LINK_DESTINATION.TASK:
     case LINK_DESTINATION.SECTION:
     case LINK_DESTINATION.COMMENT:
-      return [STEP.TASK, place.planId];
+      return [STEP.TASK, place.taskId];
     case LINK_DESTINATION.VERSION:
-      return [STEP.TASK, place.planId, STEP.VERSION, String(place.revision)];
+      return [STEP.TASK, place.taskId, STEP.VERSION, String(place.revision)];
     case LINK_DESTINATION.PAGE:
-      return "planId" in place
-        ? [STEP.TASK, place.planId, STEP.PAGE, place.pageId]
+      return "taskId" in place
+        ? [STEP.TASK, place.taskId, STEP.PAGE, place.pageId]
         : [STEP.AGENT, place.agentId, STEP.PAGE, place.pageId];
     case LINK_DESTINATION.AGENT:
-      return agentPath(place.planId, place.agentId);
+      return agentPath(place.taskId, place.agentId);
     case LINK_DESTINATION.WORKER:
-      return [...agentPath(place.planId, place.agentId), STEP.WORKER, place.callId];
+      return [...agentPath(place.taskId, place.agentId), STEP.WORKER, place.callId];
     case LINK_DESTINATION.CHANGES:
-      return [...agentPath(place.planId, place.agentId), STEP.CHANGES];
+      return [...agentPath(place.taskId, place.agentId), STEP.CHANGES];
     case LINK_DESTINATION.PULL_REQUEST_THREAD:
       return [
-        ...agentPath(place.planId, place.agentId),
+        ...agentPath(place.taskId, place.agentId),
         STEP.CHANGES,
         place.view,
         STEP.THREAD,
         place.threadId,
       ];
     case LINK_DESTINATION.MESSAGE:
-      return [...agentPath(place.planId, place.agentId), STEP.MESSAGE, place.messageId];
+      return [...agentPath(place.taskId, place.agentId), STEP.MESSAGE, place.messageId];
     case LINK_DESTINATION.INBOX:
-      return place.planId === undefined ? [STEP.INBOX] : [STEP.INBOX, STEP.TASK, place.planId];
+      return place.taskId === undefined ? [STEP.INBOX] : [STEP.INBOX, STEP.TASK, place.taskId];
     case LINK_DESTINATION.INBOX_ITEM:
-      if ("planId" in place) return [STEP.TASK, place.planId, STEP.INBOX, place.itemId];
+      if ("taskId" in place) return [STEP.TASK, place.taskId, STEP.INBOX, place.itemId];
 
       return "agentId" in place
         ? [STEP.AGENT, place.agentId, STEP.INBOX, place.itemId]
@@ -831,8 +861,9 @@ function agentPath(taskId: string | undefined, agentId: string): readonly string
 /**
  * The link a place is shared by, under its workspace by slug, or by id
  * where the slug is not yet known, by its ids alone: a section's with its
- * anchor as the fragment, the task's own where the anchor is empty, and a
- * comment thread's in the task's query.
+ * anchor as the fragment, the task's own where the anchor is empty, a
+ * comment thread's in the task's query, and a person's machine's as its
+ * fragment.
  */
 export function linkOf(place: LinkDestination, workspace: string): string {
   const link = [LINK_ORIGIN, workspace, ...placePath(place)]
@@ -845,6 +876,10 @@ export function linkOf(place: LinkDestination, workspace: string): string {
 
   if (place.kind === LINK_DESTINATION.COMMENT) {
     return `${link}?${new URLSearchParams({ [COMMENT_QUERY]: place.threadId })}`;
+  }
+
+  if (place.kind === LINK_DESTINATION.PERSON && place.machineId !== undefined) {
+    return `${link}#${MACHINE_FRAGMENT}${encodedStep(place.machineId)}`;
   }
 
   return link;
@@ -878,14 +913,17 @@ export function readLink(target: string): ReadLink | undefined {
   // Note that a task's link naming one of its comment threads opens the thread; any other query is the address's own, which the place has no use for.
   const thread = url.searchParams.getAll(COMMENT_QUERY);
 
-  const place =
+  const read =
     taskOwn && thread.length === 1
       ? Option.getOrUndefined(
-          readPlace({ kind: LINK_DESTINATION.COMMENT, planId: taskId, threadId: thread[0] }),
+          readPlace({ kind: LINK_DESTINATION.COMMENT, taskId: taskId, threadId: thread[0] }),
         )
       : taskOwn
         ? taskLink(taskId, url.hash)
         : Option.getOrUndefined(readPlace(placeFields(placeSteps)));
+
+  // Note that a person's link names one of their machines by its fragment alone.
+  const place = read?.kind === LINK_DESTINATION.PERSON ? personLink(read.userId, url.hash) : read;
 
   if (place === undefined) return undefined;
 
@@ -897,12 +935,12 @@ export function readLink(target: string): ReadLink | undefined {
 
 /** The number a place names its task by in its link's workspace, `42` from `/task/42`, which the service finds the task by; nothing for a place naming its task by its id, or no task. */
 export function taskNumberOf(place: LinkDestination): number | undefined {
-  return "planId" in place && TASK_NUMBER.test(place.planId) ? Number(place.planId) : undefined;
+  return "taskId" in place && TASK_NUMBER.test(place.taskId) ? Number(place.taskId) : undefined;
 }
 
 /** The place with its task named by the id the service found for its number, everything else as it was. */
 export function withTaskId(place: LinkDestination, taskId: string): LinkDestination {
-  return "planId" in place ? { ...place, planId: taskId } : place;
+  return "taskId" in place ? { ...place, taskId: taskId } : place;
 }
 
 /**

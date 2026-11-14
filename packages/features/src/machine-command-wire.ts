@@ -577,6 +577,21 @@ const computerRecordedSchema = EffectSchema.Struct({
   ),
 });
 
+/** A share of a window's width or height from its top left: 0 at its left or top edge, 1 at its right or bottom. */
+const windowShare = EffectSchema.Finite.check(EffectSchema.isBetween({ minimum: 0, maximum: 1 }));
+
+/**
+ * Where the agent's cursor stands on the Mac once an action lands, or as a
+ * read leaves it, as a share of the window the app's last read captured, so
+ * it lands on the same spot of that read's picture at any size it is drawn.
+ */
+const computerCursorSchema = EffectSchema.Struct({
+  xFraction: windowShare,
+  yFraction: windowShare,
+});
+
+export type ComputerCursor = typeof computerCursorSchema.Type;
+
 /** What an action came to: the apps listed, an app's window read, the action done on its app, or a recording stopped, or why it came to no video. */
 const computerOutcomeSchema = EffectSchema.Union([
   EffectSchema.Struct({
@@ -600,9 +615,14 @@ const computerOutcomeSchema = EffectSchema.Union([
     shots: EffectSchema.Array(computerShotSchema).check(
       EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_SHOTS),
     ),
+    cursor: EffectSchema.optionalKey(computerCursorSchema),
   }),
   // Note that an action names the app it acted on, as the Mac described it before asking, so its row wears the app's icon.
-  EffectSchema.Struct({ done: keyName, app: EffectSchema.optionalKey(computerAppSchema) }),
+  EffectSchema.Struct({
+    done: keyName,
+    app: EffectSchema.optionalKey(computerAppSchema),
+    cursor: EffectSchema.optionalKey(computerCursorSchema),
+  }),
   EffectSchema.Struct({ recorded: computerRecordedSchema }),
   EffectSchema.Struct({ unrecorded: EffectSchema.Literals(Object.values(RECORDING_FAILURE)) }),
 ]);
@@ -693,8 +713,10 @@ export const MACHINE_UNREACHED = {
   DEFAULT_GONE: "default-gone",
   /** The call named a machine this task's agents may not use. */
   UNKNOWN_MACHINE: "unknown-machine",
-  /** No default was set and none of the owner's machines could take it. */
+  /** The call named no machine, its agent picked none, and its owner has no default machine. */
   NO_MACHINE: "no-machine",
+  /** A terminal command for the machine a local agent runs on itself, whose own shell runs there already. */
+  OWN_SHELL: "own-shell",
 } as const;
 
 export type MachineUnreached = (typeof MACHINE_UNREACHED)[keyof typeof MACHINE_UNREACHED];

@@ -167,21 +167,21 @@ it.layer(getTestDB())("a plan started in a relation to another", (it) => {
           assert.match(started.body.txid, /^\d+$/u);
         }
 
-        assert.equal(subTask.body.plan.parentTaskId, above);
+        assert.equal(subTask.body.task.parentTaskId, above);
         assert.deepEqual(
-          [parent.body.plan.parentTaskId, parent.body.plan.repository],
+          [parent.body.task.parentTaskId, parent.body.task.repository],
           [undefined, SIDE_REPOSITORY],
         );
-        assert.equal(yield* parentOf(owner, below), parent.body.plan.id);
+        assert.equal(yield* parentOf(owner, below), parent.body.task.id);
         // The answer is the plan as it stands with its relation, since the window opens it without reading again.
-        assert.deepEqual([blocker.body.plan.blockedBy, blocker.body.plan.blocks], [[], [waiting]]);
-        assert.deepEqual([blocked.body.plan.blockedBy, blocked.body.plan.blocks], [[holding], []]);
+        assert.deepEqual([blocker.body.task.blockedBy, blocker.body.task.blocks], [[], [waiting]]);
+        assert.deepEqual([blocked.body.task.blockedBy, blocked.body.task.blocks], [[holding], []]);
         assert.deepEqual(
-          yield* readTaskBlocks(owner, blocker.body.plan.id),
+          yield* readTaskBlocks(owner, blocker.body.task.id),
           Option.some({ blockedBy: [], blocks: [waiting] }),
         );
         assert.deepEqual(
-          yield* readTaskBlocks(owner, blocked.body.plan.id),
+          yield* readTaskBlocks(owner, blocked.body.task.id),
           Option.some({ blockedBy: [holding], blocks: [] }),
         );
       }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
@@ -221,7 +221,7 @@ it.layer(getTestDB())("a plan started in a relation to another", (it) => {
         });
 
         assert.equal(between.status, 201, JSON.stringify(between.body));
-        const { plan } = between.body;
+        const { task: plan } = between.body;
         assert.deepEqual(
           [plan.parentTaskId, plan.repository, plan.blockedBy, plan.blocks],
           [top, SIDE_REPOSITORY, [], [waiting]],
@@ -268,7 +268,7 @@ it.layer(getTestDB())("a plan started in a relation to another", (it) => {
         assert.equal(again.status, 201, JSON.stringify(again.body));
         assert.match(first.body.txid, /^\d+$/u);
         assert.equal(again.body.txid, undefined);
-        assert.deepEqual([first.body.plan.id, again.body.plan.id], [id, id]);
+        assert.deepEqual([first.body.task.id, again.body.task.id], [id, id]);
         assert.deepEqual(keyed, { status: 409, body: { error: HOSTED_API_ERROR.ALREADY_WRITTEN } });
         assert.equal(yield* parentOf(owner, below), id);
         assert.deepEqual(yield* listedIds(owner), [below, id].sort());

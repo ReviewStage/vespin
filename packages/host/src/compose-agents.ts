@@ -290,7 +290,7 @@ export interface AgentsDependencies extends AccountGateDependencies {
    * Start is answered once the list carries it; none waits for nothing.
    */
   listed?: (txid: string | undefined) => Effect.Effect<void>;
-  /** The task list as each drawing of it stands, from the caller's listening on (`TasksComposer.pullRequestListings`), on which the Pull request tabs' parts are asked again; none moves nothing. */
+  /** What each drawing of the task list moved, from the caller's listening on (`TasksComposer.pullRequestListings`), on which the Pull request tabs' parts are asked again; none moves nothing. */
   pullRequestListings?: Effect.Effect<Stream.Stream<PullRequestListing>, never, Scope.Scope>;
   /**
    * The sync engine's pool, which an agent's row of the task list stands in
@@ -312,8 +312,8 @@ export interface AgentsDependencies extends AccountGateDependencies {
 function inboxTaskIds(answer: AccountInboxAnswer): readonly string[] {
   return [
     ...new Set([
-      ...answer.items.map((item) => item.planId),
-      ...answer.plans.map((plan) => plan.planId),
+      ...answer.items.map((item) => item.taskId),
+      ...answer.tasks.map((task) => task.taskId),
     ]),
   ];
 }

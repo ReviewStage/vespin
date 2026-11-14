@@ -30,6 +30,7 @@ import {
   ErrorState,
   Fill,
   GAP,
+  type GroupFold,
   LIST_INSET,
   List,
   ListRow,
@@ -66,6 +67,7 @@ import {
   ROLE_WORDS,
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
+import { land } from "@repo/ui/landed";
 import {
   agentStarter,
   PERSON_TASKS_SHOWN,
@@ -84,7 +86,7 @@ import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { queryOptions, skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Duration } from "effect";
 import { ListFilterIcon, MailIcon, UsersIcon } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { askAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor, YouBadge } from "../actor-ref.js";
 import { useAppCommand } from "../app-commands.js";
@@ -93,11 +95,14 @@ import { useCopyToast } from "../copy-feedback.js";
 import { LinkWorkspaceProvider, linkItems, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
+import { focusSeek } from "../focus-seek.js";
 import { useThisMac } from "../machine-name.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { useAutomationsDoor, usePersonDoor } from "../places/routed-doors.js";
+import type { PersonLanding } from "../places/routed-exits.js";
 import { QUERY_ROOT } from "../query-keys.js";
+import { centerWithin, scrollerOf } from "../scroll-within.js";
 import { useShortcutTargetsOf } from "../shortcut-target.js";
 import { stateEndMark } from "../state-glyph.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
@@ -205,26 +210,23 @@ function headName(person: Actor): string {
   return person.kind === ACTOR_KIND.PERSON ? person.name : actorName(person);
 }
 
-/** A section: its name and count, then its rows, folding on a press on its head. */
+/** A section: its name and count, then its rows, folding on a press on its head, open at first unless its owner holds its fold. */
 function PersonSection({
   title,
   count,
   noun,
+  fold = PERSON_SECTION_FOLD,
   children,
 }: {
   title: string;
   count: number;
   noun: Noun;
+  /** How it folds, where its owner holds it open or shut. */
+  fold?: GroupFold | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <PersonSectionFrame
-      label={title}
-      title={title}
-      count={count}
-      noun={noun}
-      fold={PERSON_SECTION_FOLD}
-    >
+    <PersonSectionFrame label={title} title={title} count={count} noun={noun} fold={fold}>
       <List label={title} inset={LIST_INSET.ROW} moves>
         {children}
       </List>
@@ -692,6 +694,60 @@ function usePersonMachines(workspaceId: string | undefined, userId: string): Per
 }
 
 /**
+ * The Machines section's fold, open at first, which a machine the page is
+ * opened at opens again, each time it is asked for, so its row is drawn to
+ * land on.
+ */
+function useMachinesFold(landing: PersonLanding | undefined): GroupFold {
+  const [open, setOpen] = useState(true);
+  const ask = landing?.ask;
+
+  useEffect(() => {
+    if (ask !== undefined) setOpen(true);
+  }, [ask]);
+
+  return { open, onOpenChange: setOpen };
+}
+
+/** The id a machine's row wears, which a landing finds it by. */
+function machineRowId(machineId: string): string {
+  return `person-machine-${machineId}`;
+}
+
+/**
+ * Takes the view to the machine the page was opened at and lights its row,
+ * once each time it is asked for (`PersonLanding.ask`), as soon as the
+ * machine is drawn; a machine they do not have, or no longer do, is given
+ * up on quietly, the page standing as it opened. Note that it scrolls the
+ * page's own scroller rather than call `scrollIntoView`, since the page may
+ * still be sliding in.
+ */
+function useMachineLanding(
+  machines: readonly WorkspaceMachine[],
+  landing: PersonLanding | undefined,
+): void {
+  const landed = useRef<number | undefined>(undefined);
+  const machineId = landing?.machineId;
+  const ask = landing?.ask;
+  const drawn = machineId !== undefined && machines.some((machine) => machine.id === machineId);
+
+  useEffect(() => {
+    if (!drawn || machineId === undefined || landed.current === ask) return undefined;
+    landed.current = ask;
+
+    return focusSeek({
+      find: () => document.getElementById(machineRowId(machineId)),
+      act: (row) => {
+        const scroller = scrollerOf(row);
+
+        if (scroller !== undefined) centerWithin(scroller, row);
+        land(row);
+      },
+    });
+  }, [drawn, machineId, ask]);
+}
+
+/**
  * One of their machines as a row: its platform's glyph wearing whether it
  * is there now, its name, and its platform in words. Note that its
  * standing is the dot's alone to the eye, with words for a reader only,
@@ -709,6 +765,7 @@ function MachineRow({
 
   return (
     <ListRow
+      id={machineRowId(machine.id)}
       motionKey={machine.id}
       leading={<DeviceStandingGlyph device={machine} standing={standing} hinted={false} />}
       title={name}
@@ -723,16 +780,20 @@ function MachineRow({
   );
 }
 
-/** Their machines' rows, each named as every list of machines names it, This Mac on the reader's own page. */
+/** Their machines' rows, each named as every list of machines names it, This Mac on the reader's own page, the one the page was opened at landed on. */
 function MachineRows({
   machines,
   thisMac,
+  landing,
 }: {
   machines: readonly WorkspaceMachine[];
   /** The reader's own Mac, which only their own page names so. */
   thisMac: ThisMac;
+  /** The machine the page was opened at, none where it was opened at none. */
+  landing: PersonLanding | undefined;
 }): React.JSX.Element {
   const listed = machines.map((machine) => ({ deviceId: machine.id, name: machine.name }));
+  useMachineLanding(machines, landing);
 
   return (
     <>
@@ -919,7 +980,7 @@ function PersonColumn({
   away: TaskHeadBack | undefined;
 }): React.JSX.Element {
   const now = useMinute();
-  const standing = usePersonRoute().workspace;
+  const { workspace: standing, landing } = usePersonRoute();
   // What a phone's bar picks up from the page's header once it scrolls away.
   const [pickUp, setPickUp] = useState<ToolbarPickUp>({ name: "", shown: false });
   const listed = tasks.listed.tasks;
@@ -967,6 +1028,7 @@ function PersonColumn({
   const theirMachines = usePersonMachines(tasks.workspace?.id, userId);
   const { machines } = theirMachines;
   const thisMac = useThisMac();
+  const machinesFold = useMachinesFold(landing);
   const read = useWaitingItems(tasks);
 
   // An item is theirs where it waits on them (`inboxWaitsOn`), on a task its assignee or else its agent's starter, by the list followed live from a service that names neither.
@@ -1153,8 +1215,17 @@ function PersonColumn({
             <RowsSkeleton label={`Reading ${theirs} automations…`} />
           ) : null}
           {machines.length === 0 ? null : (
-            <PersonSection title={MACHINES_TITLE} count={machines.length} noun={MACHINE_NOUN}>
-              <MachineRows machines={machines} thisMac={you ? thisMac : undefined} />
+            <PersonSection
+              title={MACHINES_TITLE}
+              count={machines.length}
+              noun={MACHINE_NOUN}
+              fold={machinesFold}
+            >
+              <MachineRows
+                machines={machines}
+                thisMac={you ? thisMac : undefined}
+                landing={landing}
+              />
             </PersonSection>
           )}
           {theirMachines.failed ? (

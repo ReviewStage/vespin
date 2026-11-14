@@ -17,12 +17,13 @@
  * place module's to keep (`places/place-binding.ts`).
  */
 
+import { machineOfFragment } from "@repo/features/link-grammar";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
 import { useAutomationsPlace } from "./automations-route.js";
 import { type InboxRoute, useInboxRoute } from "./inbox-route.js";
 import { placeParamsOf } from "./places/place-params.js";
-import { useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
+import { type PersonLanding, useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
 import { ROUTED_PLACE, routedPlaceOf, useWindowPlace } from "./places/routed-places.js";
 import { useRouteAccess } from "./route-gates.js";
 import type { AutomationsPlace } from "./tasks/automations-place.js";
@@ -86,7 +87,15 @@ export interface PersonRoute {
   readonly name: string | undefined;
   /** The address step of the workspace the page is the person's in, while it stands. */
   readonly workspace: string | undefined;
-  readonly onOpen: (userId: string, name: string | undefined, workspace: string) => void;
+  /** The machine the page standing was last opened at, which it scrolls to and lights once per ask; none where it was opened at none. */
+  readonly landing: PersonLanding | undefined;
+  /** Opens a person's page, at one of their machines where `machineId` names one. */
+  readonly onOpen: (
+    userId: string,
+    name: string | undefined,
+    workspace: string,
+    machineId?: string,
+  ) => void;
   readonly onClose: () => void;
   /** Reads the page ahead of a press the pointer says is coming. */
   readonly onPreload: (userId: string, workspace: string) => void;
@@ -131,14 +140,36 @@ export function usePersonRoute(): PersonRoute {
   const navigate = useNavigate();
   const here = useWindowPlace();
   // Only grows: each name a page was opened with, by the person, which the address leaves out.
-  const names = useRoutedMemory().personNames;
+  const { personNames: names, personLanding: landings } = useRoutedMemory();
   const open = here.place === ROUTED_PLACE.PERSON;
   const userId = open ? here.params.userId : undefined;
   const name = useSelector(names, (held) => (userId === undefined ? undefined : held.get(userId)));
   const workspace = open ? here.params.workspace : undefined;
+  const asked = useSelector(landings, (held) => (held.at?.userId === userId ? held.at : undefined));
+  const neverAsked = useSelector(landings, (held) => held.asks === 0);
 
-  const onOpen = (to: string, named: string | undefined, toWorkspace: string) => {
+  // Note that an address loaded whole, never opened by the window, lands on the machine its fragment names, once.
+  const loaded = machineOfFragment(here.href.split("#")[1] ?? "");
+
+  const landing =
+    asked ??
+    (neverAsked && userId !== undefined && loaded !== undefined
+      ? { userId, machineId: loaded, ask: 0 }
+      : undefined);
+
+  const onOpen = (
+    to: string,
+    named: string | undefined,
+    toWorkspace: string,
+    machineId?: string,
+  ) => {
     if (named !== undefined) names.setState((held) => new Map(held).set(to, named));
+
+    // Note that a machine asked for again lands again, on the page already standing too, and a page opened at none lands nowhere.
+    landings.setState(({ asks }) => ({
+      asks: asks + 1,
+      at: machineId === undefined ? undefined : { userId: to, machineId, ask: asks + 1 },
+    }));
 
     if (to === userId && toWorkspace === workspace) {
       exits.stay();
@@ -163,6 +194,7 @@ export function usePersonRoute(): PersonRoute {
     userId,
     name,
     workspace,
+    landing,
     onOpen,
     onClose: () => exits.leave(),
     onPreload,

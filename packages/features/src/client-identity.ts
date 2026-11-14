@@ -18,7 +18,7 @@ import { PRODUCT_PLATFORM } from "./analytics/product-events.js";
  * changes in a way a build before the move cannot read, so the service can
  * refuse every build below its floor as needing an update.
  */
-export const HOSTED_API_VERSION = 1;
+export const HOSTED_API_VERSION = 2;
 
 /** The headers a client names itself in: which app and version, as `platform/version`, and the hosted API version it was built against. */
 export const CLIENT_HEADER = {

@@ -65,7 +65,7 @@ const wakesTheTaskList = <A, E, R>(
   userId: string,
 ) =>
   Effect.gen(function* () {
-    const woken = yield* tasksRead.topics({ userId });
+    const woken = yield* tasksRead.topics({ userId, liveSince: "0" });
     const fired = yield* expectTopicsFire(write, topics);
     assert.ok(
       wokenBy(topics, woken),
@@ -202,10 +202,13 @@ it.layer(getTestDB())("what moves an account's task list notifies", (it) => {
         const notified: readonly SyncTopic[] = [team, [TOPIC.ACCOUNT, userId]];
 
         yield* wakesTheTaskList(joinWorkspace(teamId, userId), notified, userId);
-        assert.ok(wokenBy([team], yield* tasksRead.topics({ userId })), "the joined team wakes it");
+        assert.ok(
+          wokenBy([team], yield* tasksRead.topics({ userId, liveSince: "0" })),
+          "the joined team wakes it",
+        );
         yield* wakesTheTaskList(leaveWorkspace(teamId, userId), notified, userId);
         assert.ok(
-          !wokenBy([team], yield* tasksRead.topics({ userId })),
+          !wokenBy([team], yield* tasksRead.topics({ userId, liveSince: "0" })),
           "the team left wakes none",
         );
       }),

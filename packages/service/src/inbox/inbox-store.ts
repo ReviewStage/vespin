@@ -1410,7 +1410,7 @@ const findTasksWithItems = SqlSchema.findAll({
  * in epoch milliseconds, so a row decodes as the held read's entry does. The order is the reader's to keep, since Realtime keeps none.
  * The account's failed runs are its binding's own (`../live/reads/account-inbox.ts`).
  * The items of agents with no task, and the automations and agents holding
- * them (`planless`, `automations`, `agents`), answer no rows, since every
+ * them (`taskless`, `automations`, `agents`), answer no rows, since every
  * agent stands on a task, and stand because a released desktop follows
  * them: each still joins its items' agents and their automations, so its
  * columns read as they did, and takes no row.
@@ -1425,7 +1425,7 @@ export function accountInboxLiveStatements(userId: string) {
       columns: {
         id: inboxItem.id,
         // Note that a waiting item stands on a task (`accountWaiting`).
-        planId: sql<string>`${inboxItem.taskId}`,
+        taskId: sql<string>`${inboxItem.taskId}`,
         agentId: inboxItem.agentId,
         agentTitle: agentTable.title,
         agentModel: agentTable.model,
@@ -1450,8 +1450,8 @@ export function accountInboxLiveStatements(userId: string) {
         .where(accountWaiting(userId)),
   );
 
-  const planless = liveRowsStatement(
-    parts.planless,
+  const taskless = liveRowsStatement(
+    parts.taskless,
     {
       ordered: false,
       columns: {
@@ -1485,13 +1485,13 @@ export function accountInboxLiveStatements(userId: string) {
         .where(sql`false`),
   );
 
-  const plans = liveRowsStatement(
-    parts.plans,
+  const tasks = liveRowsStatement(
+    parts.tasks,
     {
       ordered: false,
       columns: {
         // Note that a grouped item stands on a task (`isNotNull` below).
-        planId: columnAs<string>(inboxItem.taskId),
+        taskId: columnAs<string>(inboxItem.taskId),
         items: LIVE_COUNT,
         toDo: toDoCount(userId),
       },
@@ -1549,7 +1549,7 @@ export function accountInboxLiveStatements(userId: string) {
         .groupBy(agentTable.id, automation.id),
   );
 
-  return { items, planless, plans, automations, agents };
+  return { items, taskless, tasks, automations, agents };
 }
 
 /** A message of an item's thread as its live row declares it, which each of its columns, an expression of the thread's union, is typed to. */
@@ -1751,7 +1751,7 @@ function accountItemsOf(userId: string, settledSince: Date, narrowed: SQL, chang
       ordered: false,
       columns: {
         id: inboxItem.id,
-        planId: inboxItem.taskId,
+        taskId: inboxItem.taskId,
         agentId: inboxItem.agentId,
         revision: inboxItem.revision,
         version: inboxItem.version,
@@ -1873,7 +1873,7 @@ const findItemHome = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, itemId: Schema.String }),
   Result: Schema.Struct({
     agentId: Schema.String,
-    planId: Schema.String,
+    taskId: Schema.String,
     workspaceId: Schema.String,
   }),
   execute: ({ userId, itemId }) =>
@@ -1881,7 +1881,7 @@ const findItemHome = SqlSchema.findOneOption({
       db
         .select({
           agentId: inboxItem.agentId,
-          planId: inboxItem.taskId,
+          taskId: inboxItem.taskId,
           workspaceId: inboxItem.organizationId,
         })
         .from(inboxItem)
@@ -4166,7 +4166,7 @@ export function accountWaitingItems(
       ...row,
       // Note that the reminder is carried under `snoozedUntil` too, as `liveReminderFor` carries it.
       snoozedUntil: row.remindAt,
-      planId: taskId,
+      taskId: taskId,
       postedAt: row.postedAt.getTime(),
       updatedAt: row.updatedAt.getTime(),
     })),
@@ -4241,7 +4241,7 @@ export function accountInboxTasks(userId: string): InboxStoreEffect<readonly Acc
   return Effect.map(findTasksWithItems({ userId }), (rows) =>
     rows.map(({ taskId, ...row }) => ({
       ...row,
-      planId: taskId,
+      taskId: taskId,
       updatedAt: row.updatedAt.getTime(),
     })),
   );
