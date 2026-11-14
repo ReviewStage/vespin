@@ -22,9 +22,9 @@ import {
   DataTable,
   DataTableSkeleton,
 } from "@repo/ui/data-table";
+import type { AdminScreenShell } from "../admin-read-view.js";
 import { AdminSection } from "../charts/stat-card.js";
 import { PageNote } from "../chrome/notes.js";
-import type { ViewerAccount } from "../chrome/page-header.js";
 import {
   type CatalogDetail,
   CatalogDetailDialog,
@@ -153,22 +153,11 @@ function PromptSections({ catalog }: { catalog: AdminCatalog | undefined }): Rea
   );
 }
 
-export function PromptsScreen({
-  account,
-  onSignOut,
-  frame,
-}: {
-  account: ViewerAccount | undefined;
-  onSignOut: () => Promise<void>;
-  /** Applied around every answer but the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
-}): React.JSX.Element {
+export function PromptsScreen(shell: AdminScreenShell): React.JSX.Element {
   return (
     <CatalogPage
+      {...shell}
       title="Prompts"
-      account={account}
-      onSignOut={onSignOut}
-      frame={frame}
       sections={(catalog) => <PromptSections catalog={catalog} />}
     />
   );

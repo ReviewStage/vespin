@@ -15,7 +15,8 @@
  * A live read may be polled (`poll`): asked for its rows inline, and, past
  * where they last stood (`after`), held until they move, under the held
  * deadline. `askLiveRead` asks a declared live read (`live-read.ts`) so,
- * past a sync id it names (`LIVE_POLL.SYNC`) under the held deadline too.
+ * past a sync id it names (`LIVE_POLL.SYNC`) under the held deadline too,
+ * and a sync-followed read asked whole under the whole deadline.
  */
 
 import type { ORPCError } from "@orpc/client";
@@ -41,7 +42,12 @@ import {
   hostedFailureFacts,
   type LivePollInput,
 } from "./hosted-link.js";
-import type { AnyLiveRead, LiveReadAnswer, LiveReadAsked } from "./live-read.js";
+import {
+  type AnyLiveRead,
+  LIVE_MODE,
+  type LiveReadAnswer,
+  type LiveReadAsked,
+} from "./live-read.js";
 import { LIVE_POLL, LIVE_SIGNED_OUT } from "./live-wire.js";
 import { HOSTED_API_ERROR, type HostedApiError } from "./service-wire.js";
 
@@ -157,14 +163,18 @@ export function askLiveRead<Read extends AnyLiveRead, As extends HostedRenames =
 
   // SAFETY: a read's params are the fields of its input its mode's poll fields stand beside, each as text.
   const input = params as LivePollInput & { readonly [LIVE_POLL.SYNC]?: string };
-  // Note that a read past a sync id is held by the service until something moves, polled or not, so it travels under the held deadline, as a poll past `after` does.
   const sync = input[LIVE_POLL.SYNC];
-  const held = sync !== undefined && sync !== "";
+
+  // Note that a read past a sync id is held by the service until something moves, polled or not, so it travels under the held deadline, as a poll past `after` does.
+  const past = sync !== undefined && sync !== "";
+  // Note that a sync-followed read asked whole, first or after a stall, answers every row the account reaches at once, which for the largest account takes longer than the usual deadline to read and carry.
+  const whole = !past && read.mode === LIVE_MODE.DELTA && poll?.after === undefined;
+  const deadline = past ? HOSTED_DEADLINE.HELD : whole ? HOSTED_DEADLINE.WHOLE : undefined;
 
   return hostedCall(procedure, input, {
     live: true,
     ...(poll !== undefined && { poll }),
-    ...(held && { deadline: HOSTED_DEADLINE.HELD }),
+    ...(deadline !== undefined && { deadline }),
     ...(as !== undefined && { as }),
   });
 }

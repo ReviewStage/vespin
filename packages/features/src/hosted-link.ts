@@ -97,13 +97,16 @@ import {
  * take: the usual one, a held read the service keeps open for as long as it
  * waits on the next change (or a dictated clip the model hears through), a
  * read of the account's devices' beats, which must land or fail inside a
- * poll, a message to an agent, which waits on the agent's conversation and on
+ * poll, a sync-followed read asked whole, which carries every row the
+ * account reaches at once, a message to an agent, which waits on the agent's conversation and on
  * its session taking the words before it answers, and a Start, which may copy another
  * agent's work before it answers.
  */
 export const HOSTED_DEADLINE = {
   USUAL: "usual",
   HELD: "held",
+  /** A sync-followed read asked whole (`LIVE_POLL.SYNC` empty), whose one answer is every row the account reaches, each whole. */
+  WHOLE: "whole",
   STEER: "steer",
   /** A rewind that puts the files back too, which waits on a Mac's restore (`MAC_MACHINE.RESTORE_WAIT`, two minutes) past the rewind's own steps. */
   REWIND_FILES: "rewind-files",
@@ -120,7 +123,9 @@ export type HostedDeadline = (typeof HOSTED_DEADLINE)[keyof typeof HOSTED_DEADLI
 /**
  * The deadlines longer than the usual one, which is the account call's own
  * default or the one a client keeps: a held read's is the service's hold and
- * room for the answer to travel after it, a message's outlasts the service's
+ * room for the answer to travel after it, a whole read's is a minute, since
+ * the largest account's answer is megabytes the service reads, sends, and a
+ * slow phone takes in before it is answered at all, a message's outlasts the service's
  * wait for the conversation's lock (five seconds) and its hand-over to the
  * agent's session under it (thirty, `@repo/database/models/writer`'s bounds) with room for
  * the reads before them, so a send that lands slowly is never read as one
@@ -133,6 +138,7 @@ export type HostedDeadline = (typeof HOSTED_DEADLINE)[keyof typeof HOSTED_DEADLI
  */
 const LONG_DEADLINE_MS = {
   [HOSTED_DEADLINE.HELD]: 35_000,
+  [HOSTED_DEADLINE.WHOLE]: 60_000,
   [HOSTED_DEADLINE.STEER]: 45_000,
   [HOSTED_DEADLINE.REWIND_FILES]: 165_000,
   [HOSTED_DEADLINE.TURN_CHANGES]: 75_000,

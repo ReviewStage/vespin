@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { HTTP_STATUS, type JsonValue, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
-import { Effect, Predicate } from "effect";
+import { Effect, Fiber, Predicate } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
+import { TestClock } from "effect/testing";
 import { accountBearer, CALL_FAULT } from "./account-call.js";
 import { FAILURE_FACT } from "./failure-facts.js";
 import { HOSTS_READ } from "./host-live.js";
 import { askLiveRead, hostedCall } from "./hosted-call.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
+import { INBOX_ITEMS_READ } from "./inbox-live.js";
 import { LIVE_POLL, LIVE_SIGNED_OUT, LIVE_USER_QUERY } from "./live-wire.js";
 import { REPOSITORY_UNREACHED } from "./repository-reach-wire.js";
 import { HOSTED_API_ERROR } from "./service-wire.js";
@@ -172,5 +174,36 @@ it.effect(
         [LIVE_POLL.QUERY, LIVE_POLL.ON],
         [LIVE_USER_QUERY, "user-1"],
       ]);
+    }),
+);
+
+it.effect(
+  "a sync-followed read asked whole outlasts the usual deadline, so the largest account's first answer can land",
+  () =>
+    Effect.gen(function* () {
+      const silent = recordingHttpClient(() => new Promise<Response>(() => undefined));
+      const hosted = hostedClient({ baseUrl: BASE_URL, credential: account("token-1") });
+
+      const whole = yield* Effect.forkChild(
+        Effect.provide(
+          askLiveRead(hosted.live, INBOX_ITEMS_READ, { [LIVE_USER_QUERY]: "user-1", sync: "" }),
+          silent.layer,
+        ),
+      );
+
+      // Note that the link's promise steps run until the client is asked, so the deadline is armed before the clock moves.
+      while (silent.requests.length === 0) yield* Effect.yieldNow;
+      yield* TestClock.adjust("59 seconds");
+      assert.equal(whole.pollUnsafe(), undefined, "still waiting a minute's moment short");
+      yield* TestClock.adjust("1 second");
+      const answer = yield* Fiber.join(whole);
+      assert.deepEqual(untraced(answer), {
+        failure: "unanswered",
+        cause: {
+          _tag: FAILURE_FACT.HOSTED_UNANSWERED,
+          fault: CALL_FAULT.NETWORK,
+          errorName: "TimeoutError",
+        },
+      });
     }),
 );

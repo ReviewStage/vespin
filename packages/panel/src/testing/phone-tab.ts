@@ -8,7 +8,7 @@ import { SHELL_ROOM } from "../shell-room.js";
 import { ShellRoomContext } from "../stage-room.js";
 
 /** What a tab drawn on a phone handed its header's ⋯, as the ⋯ would offer it. */
-export interface PhoneHanded {
+interface PhoneHanded {
   /** The items' names in the order the ⋯ offers them; none once the body handed none. */
   readonly labels: () => string[];
   /** The item named `label`, as the ⋯ draws it. */

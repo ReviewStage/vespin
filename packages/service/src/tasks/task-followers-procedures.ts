@@ -1,18 +1,20 @@
 /**
- * task-followers-procedures.ts -- the members following a task, as the hosted API answers them: follow, unfollow, the account's own machines switch, and another member added.
+ * task-followers-procedures.ts -- the members following a task, as the hosted API answers them: follow, unfollow, the account's own machines switch, another member added or removed, and the followers' machines read.
  *
  * Each is a thin door over `task-following.ts`, which every door of
  * following shares: the path names the task by its id, read as a UUID so one
  * that is none answers as no task, and each answers the task's followers as
  * they then stand and the transaction the write committed in. No procedure
- * here switches another member's machines or unfollows them.
+ * here switches another member's machines.
  */
 
 import { pathUuid, type UserIdResolver } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import {
   addTaskFollowerAsked,
+  followerMachinesAsked,
   followTaskAsked,
+  removeTaskFollowerAsked,
   setFollowerMachinesAsked,
   unfollowTaskAsked,
 } from "./task-following.js";
@@ -41,6 +43,16 @@ export function taskFollowersProcedures(seams: TaskFollowersProcedureSeams) {
       const taskId = yield* pathUuid(input.params.id);
 
       return yield* addTaskFollowerAsked(context.userId, taskId, input.body.userId);
+    }),
+    machines: followers.machines.effect(function* ({ input, context }) {
+      return yield* followerMachinesAsked(context.userId, yield* pathUuid(input.id));
+    }),
+    remove: followers.remove.effect(function* ({ input, context }) {
+      return yield* removeTaskFollowerAsked(
+        context.userId,
+        yield* pathUuid(input.id),
+        input.userId,
+      );
     }),
   };
 }

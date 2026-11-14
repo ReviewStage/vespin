@@ -121,9 +121,9 @@ const ISSUE_WORDS = {
 } as const satisfies Record<IssueState, string>;
 
 /** The numbered pages of GitHub's a link may name. */
-export const GITHUB_PAGE = { PULL_REQUEST: "pull-request", ISSUE: "issue" } as const;
+const GITHUB_PAGE = { PULL_REQUEST: "pull-request", ISSUE: "issue" } as const;
 
-export type GitHubPage = (typeof GITHUB_PAGE)[keyof typeof GITHUB_PAGE];
+type GitHubPage = (typeof GITHUB_PAGE)[keyof typeof GITHUB_PAGE];
 
 /** What a link mention asks GitHub: a pull request or an issue by repository and number. */
 export interface GitHubPageAsked {

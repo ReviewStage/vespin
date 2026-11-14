@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { CARD_CORNER, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
 
 /**
  * block-list.tsx -- blocks one under another in one box: its hairline and a control's corner round them all, and a hairline between each and the next.
@@ -30,9 +31,11 @@ export function BlockList({
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <Element className="ui-block-list" aria-label={label}>
-      {children}
-    </Element>
+    <Card look={CARD_LOOK.OUTLINE} corner={CARD_CORNER.CONTROL} padding={CARD_PADDING.FLUSH}>
+      <Element className="ui-block-list" aria-label={label}>
+        {children}
+      </Element>
+    </Card>
   );
 }
 

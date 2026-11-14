@@ -20,6 +20,12 @@ export const TYPE_ROLE = {
   SCREEN_TITLE: "headline",
   /** A page's heading under its bar: a thread's or a task's title. */
   PAGE_HEADING: "title3",
+  /** A wide window's sidebar row's name, at the body's 17 pt, as Mail names its mailboxes, larger than a list's rows since a sidebar names places. */
+  SIDEBAR_TITLE: "body",
+  /** A sidebar row's glyph, a step over its name, as Mail's mailbox glyphs stand. */
+  SIDEBAR_GLYPH: "title3",
+  /** A sidebar row's count, a step under its name. */
+  SIDEBAR_COUNT: "subheadline",
 } as const;
 
 /** The system's text styles, in points at the Large Dynamic Type size; React Native scales each by the reader's setting. */

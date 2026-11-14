@@ -1,12 +1,12 @@
 /**
- * task.ts -- `vespin task list`, `view`, `create`, `update`, `relate`, `delete`, `cat`, and `ls`: the workspace's tasks, one task with its agents, pull requests, and open asks, a new task, a task changed, a relation between two tasks moved, a task deleted, and its repository's files read.
+ * task.ts -- `vespin task list`, `view`, `create`, `update`, `relate`, `delete`, `follow`, `unfollow`, `cat`, and `ls`: the workspace's tasks, one task with its agents, pull requests, and open asks, a new task, a task changed, a relation between two tasks moved, a task deleted, its followers added and removed, and its repository's files read.
  *
  * Each reads the workspace a command acts in (`../workspace.js`) and names a
  * task by its id, its number, or its key (`../tasks.js`). `create` takes its
  * repository from the working folder's `origin` unless `-R` names one, and
  * with `--start` or `--prompt` starts an agent on the new task, the one-shot
  * every peer leads with: in the create's own request where there is no plan
- * to write first, else created, then planned through `plans.editDescription`, then
+ * to write first, else created, then planned through `tasks.editDescription`, then
  * started, so the agent reads the plan it was given. `cat` and `ls` read the
  * task's repository as its File tab does, on GitHub at the default branch's
  * head or a commit, never from an agent's sandbox.
@@ -27,12 +27,13 @@ import {
   TASK_STATUS_ORDER,
   TASK_TREE_ENTRY,
   type Task,
+  type TaskFollowersAnswer,
   type TaskPullRequestLine,
   type TaskRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { taskKey } from "@repo/features/workspace-key";
-import type { Workspace } from "@repo/features/workspace-wire";
+import type { Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { fileRefused } from "../file-refusal.js";
@@ -118,9 +119,9 @@ const listCommand = Command.make(
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
       const me = mine ? yield* signedInMemberId : undefined;
-      const { plans } = yield* askService(hosted.plans.list, {});
+      const { tasks } = yield* askService(hosted.tasks.list, {});
 
-      const listed = plans.filter(
+      const listed = tasks.filter(
         (task) =>
           task.workspaceId === workspace.id &&
           (Option.isNone(status) || task.status === status.value) &&
@@ -174,18 +175,18 @@ const viewCommand = Command.make(
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
 
-      const [{ plan }, { agents }, { plans }, { items }, { workspaces }] = yield* Effect.all(
+      const [{ task: plan }, { agents }, { tasks }, { items }, { workspaces }] = yield* Effect.all(
         [
-          askService(hosted.plans.open, { id }),
+          askService(hosted.tasks.open, { id }),
           askService(hosted.agents.listOfTask, { id }),
-          askService(hosted.plans.list, {}),
+          askService(hosted.tasks.list, {}),
           askService(hosted.inbox.task, { id }),
           askService(hosted.workspaces.list, undefined),
         ],
         { concurrency: "unbounded" },
       );
 
-      const row = plans.find((listed) => listed.id === id);
+      const row = tasks.find((listed) => listed.id === id);
       const found = taskJson(plan, workspaceNamed(workspaces, plan.workspaceId));
       const pullRequests = row?.agents?.pullRequests ?? [];
 
@@ -291,7 +292,7 @@ const createCommand = Command.make(
       const together = starting && descriptionText === undefined;
 
       const created = yield* askService(
-        hosted.plans.create,
+        hosted.tasks.create,
         {
           name: title,
           workspaceId: workspace.id,
@@ -308,10 +309,10 @@ const createCommand = Command.make(
         together ? HOSTED_DEADLINE.START : HOSTED_DEADLINE.USUAL,
       );
 
-      const task = taskJson(created.body.plan, workspace.name);
+      const task = taskJson(created.body.task, workspace.name);
 
       if (descriptionText !== undefined) {
-        yield* writeDescription(task.id, created.body.plan.document.body, descriptionText);
+        yield* writeDescription(task.id, created.body.task.description.body, descriptionText);
       }
 
       const agent =
@@ -361,7 +362,7 @@ function taskFlags(name: string, description: string) {
   return Flag.String(name).pipe(Flag.atLeast(0), Flag.withDescription(description));
 }
 
-/** The blocks `--blocked-by`, `--blocks`, and their `--remove-` forms name, each as `plans.block` takes it, the tasks resolved to ids. */
+/** The blocks `--blocked-by`, `--blocks`, and their `--remove-` forms name, each as `tasks.block` takes it, the tasks resolved to ids. */
 function blockChangesOf(named: {
   readonly blockedBy: readonly string[];
   readonly blocks: readonly string[];
@@ -461,19 +462,19 @@ const updateCommand = Command.make(
       let plan: Task | undefined;
 
       if (Object.keys(fields).length > 0) {
-        plan = (yield* askService(hosted.plans.update, { params: { id }, body: fields })).plan;
+        plan = (yield* askService(hosted.tasks.update, { params: { id }, body: fields })).task;
       }
 
       if (parentTaskId !== undefined) {
-        plan = (yield* askService(hosted.plans.parent, { params: { id }, body: { parentTaskId } }))
-          .plan;
+        plan = (yield* askService(hosted.tasks.parent, { params: { id }, body: { parentTaskId } }))
+          .task;
       }
 
       for (const block of blockChanges) {
-        plan = (yield* askService(hosted.plans.block, { params: { id }, body: block })).plan;
+        plan = (yield* askService(hosted.tasks.block, { params: { id }, body: block })).task;
       }
 
-      plan ??= (yield* askService(hosted.plans.open, { id })).plan;
+      plan ??= (yield* askService(hosted.tasks.open, { id })).task;
 
       const sectionId = Option.isNone(section)
         ? undefined
@@ -553,8 +554,8 @@ const deleteCommand = Command.make(
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
 
-      const [{ plan }, { workspaces }] = yield* Effect.all(
-        [askService(hosted.plans.open, { id }), askService(hosted.workspaces.list, undefined)],
+      const [{ task: plan }, { workspaces }] = yield* Effect.all(
+        [askService(hosted.tasks.open, { id }), askService(hosted.workspaces.list, undefined)],
         { concurrency: "unbounded" },
       );
 
@@ -563,7 +564,7 @@ const deleteCommand = Command.make(
         `Delete ${taskLabel(found)} ${found.name} for good, with its agents and their transcripts?`,
         yes,
       );
-      yield* askService(hosted.plans.delete, { id });
+      yield* askService(hosted.tasks.delete, { id });
       yield* answer({
         json: { id: found.id, key: found.key, name: found.name, deleted: true },
         lines: [`Deleted ${taskLabel(found)} ${found.name}.`],
@@ -648,7 +649,7 @@ const relateCommand = Command.make(
       const otherId = yield* resolveTaskId(asked.other);
       const { hosted } = yield* session;
 
-      const { plan } = yield* askService(hosted.plans.relation, {
+      const { task: plan } = yield* askService(hosted.tasks.relation, {
         params: { id },
         body: { taskId: otherId, from: fromKind, to: asked.to },
       });
@@ -679,19 +680,35 @@ const relateCommand = Command.make(
   ]),
 );
 
+/** The task's workspace's members, as `--assignee` and `--member` name them among. */
+function taskMembersOf(taskId: string) {
+  return Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const { task: plan } = yield* askService(hosted.tasks.open, { id: taskId });
+
+    const { members } = yield* askService(hosted.workspaces.members, {
+      workspaceId: plan.workspaceId,
+    });
+
+    return { plan, members };
+  });
+}
+
 /** The account id `--assignee` names among the task's workspace's members: none for nobody, or a usage failure where it names no one, or several. */
 function memberIdOf(taskId: string, named: string) {
   return Effect.gen(function* () {
     if (named === ASSIGNEE_WORD.NONE) return null;
 
     if (named === ASSIGNEE_WORD.ME) return yield* signedInMemberId;
-    const { hosted } = yield* session;
-    const { plan } = yield* askService(hosted.plans.open, { id: taskId });
+    const { members } = yield* taskMembersOf(taskId);
 
-    const { members } = yield* askService(hosted.workspaces.members, {
-      workspaceId: plan.workspaceId,
-    });
+    return yield* memberNamed(members, named);
+  });
+}
 
+/** The account id one member is named by among `members`, by id, email, or name: a usage failure where it names no one, or several. */
+function memberNamed(members: readonly WorkspaceMember[], named: string) {
+  return Effect.gen(function* () {
     const lowered = named.toLowerCase();
 
     const matches = members.filter(
@@ -718,6 +735,133 @@ function memberIdOf(taskId: string, named: string) {
     });
   });
 }
+
+/** What a follower write answers: the task's followers as they then stand. */
+type FollowersAnswer = Pick<TaskFollowersAnswer, "followers">;
+
+/** The members `--member` names, each by account id, the signed-in member for `me`; none where it names no one. */
+function membersNamed(taskId: string, named: readonly string[]) {
+  return Effect.gen(function* () {
+    const { plan, members } = yield* taskMembersOf(taskId);
+    const readerId = yield* signedInMemberId;
+
+    const ids = yield* Effect.forEach(named, (each) =>
+      each === ASSIGNEE_WORD.ME ? Effect.succeed(readerId) : memberNamed(members, each),
+    );
+
+    return { plan, members, readerId, ids };
+  });
+}
+
+/** Prints the task's followers as the last write left them, each by name, the assignee and whose machines its agents may use marked. */
+function followersAnswer(
+  taskId: string,
+  written: FollowersAnswer,
+  members: readonly WorkspaceMember[],
+  verb: string,
+) {
+  const followers = written.followers.map((follower) => ({
+    ...follower,
+    name: members.find((member) => member.userId === follower.userId)?.name ?? follower.userId,
+  }));
+
+  return answer({
+    json: { taskId, followers },
+    lines: [
+      `${verb}. Followers (${followers.length}):`,
+      ...(followers.length === 0
+        ? ["  none"]
+        : columns(
+            followers.map((follower) => [
+              follower.name,
+              [follower.assignee ? "assignee" : "", follower.machines ? "machines on" : ""]
+                .filter((word) => word !== "")
+                .join(", "),
+            ]),
+          ).map((line) => `  ${line}`)),
+    ],
+    ids: [taskId],
+  });
+}
+
+/** A member a follower command names, again for each; none names the signed-in member. */
+const memberFlags = (description: string) =>
+  Flag.String("member").pipe(Flag.atLeast(0), Flag.withDescription(description));
+
+const followCommand = Command.make(
+  "follow",
+  {
+    task: Argument.String("task").pipe(
+      Argument.withDescription("The task, by its id, its number, or its key such as ACME-42"),
+    ),
+    member: memberFlags("A member to add as a follower, by email, name, or id; again for each"),
+  },
+  ({ task, member }) =>
+    Effect.gen(function* () {
+      const id = yield* resolveTaskId(task);
+      const { hosted } = yield* session;
+      const { members, readerId, ids } = yield* membersNamed(id, member);
+      // Note that each follower is its own request, as the popover's are, and the followers the last one answers are the ones printed.
+      let written: FollowersAnswer = { followers: [] };
+
+      for (const userId of ids.length === 0 ? [readerId] : ids) {
+        written =
+          userId === readerId
+            ? yield* askService(hosted.taskFollowers.follow, { id })
+            : yield* askService(hosted.taskFollowers.add, { params: { id }, body: { userId } });
+      }
+
+      yield* followersAnswer(id, written, members, ids.length === 0 ? "Following" : "Added");
+    }),
+).pipe(
+  Command.withDescription(
+    "Follow a task, or add members as its followers, with their machines off until they switch them on",
+  ),
+  Command.withExamples([
+    { command: "vespin task follow ACME-42", description: "Follow a task yourself" },
+    {
+      command: "vespin task follow ACME-42 --member ana@acme.dev --member Raj",
+      description: "Add two teammates as followers",
+    },
+  ]),
+);
+
+const unfollowCommand = Command.make(
+  "unfollow",
+  {
+    task: Argument.String("task").pipe(
+      Argument.withDescription("The task, by its id, its number, or its key such as ACME-42"),
+    ),
+    member: memberFlags("A follower to remove, by email, name, or id; again for each"),
+  },
+  ({ task, member }) =>
+    Effect.gen(function* () {
+      const id = yield* resolveTaskId(task);
+      const { hosted } = yield* session;
+      const { members, readerId, ids } = yield* membersNamed(id, member);
+      let written: FollowersAnswer = { followers: [] };
+
+      for (const userId of ids.length === 0 ? [readerId] : ids) {
+        written =
+          userId === readerId
+            ? yield* askService(hosted.taskFollowers.unfollow, { id })
+            : yield* askService(hosted.taskFollowers.remove, { id, userId });
+      }
+
+      yield* followersAnswer(id, written, members, ids.length === 0 ? "Unfollowed" : "Removed");
+    }),
+).pipe(
+  Command.withDescription(
+    "Stop following a task, or remove other followers; its assignee keeps following while assigned",
+  ),
+  Command.withExamples([
+    { command: "vespin task unfollow ACME-42", description: "Stop following a task" },
+    {
+      command: "vespin task unfollow ACME-42 --member ana@acme.dev",
+      description: "Remove a teammate as a follower",
+    },
+  ]),
+);
 
 /** A file or folder named by its task, as `cat` and `ls` take it. */
 const taskArgument = Argument.String("task").pipe(
@@ -823,10 +967,10 @@ const lsCommand = Command.make(
   ]),
 );
 
-/** The task group: list, view, create, update, relate, delete, cat, and ls. */
+/** The task group: list, view, create, update, relate, delete, follow, unfollow, cat, and ls. */
 export const taskCommand = Command.make("task").pipe(
   Command.withDescription(
-    "List, view, create, change, and delete tasks, and read their repository's files",
+    "List, view, create, change, follow, and delete tasks, and read their repository's files",
   ),
   Command.withSubcommands([
     listCommand,
@@ -835,6 +979,8 @@ export const taskCommand = Command.make("task").pipe(
     updateCommand,
     relateCommand,
     deleteCommand,
+    followCommand,
+    unfollowCommand,
     catCommand,
     lsCommand,
   ]),

@@ -48,8 +48,16 @@ const HAIRLINE = 0.5;
 /** A row's inner margins, as a decide option's. */
 const ROW_PADDING = { horizontal: SPACE.EDGE - 2, vertical: SPACE.ROW + 1 } as const;
 
-/** How far a typed field's words stand inside its box, as the composer's field holds its own. */
-const FIELD_PADDING = { horizontal: SPACE.ROW, vertical: SPACE.TIGHT * 2 } as const;
+/** Where a row's words start in the card: past its margin, and past its leading mark where it has one, as a step's round check. */
+export const CARD_WORDS_INSET = {
+  BARE: ROW_PADDING.horizontal,
+  MARKED: ROW_PADDING.horizontal + MARK_SIZE.LEAD + SPACE.ROW,
+} as const;
+
+/** A hairline between a card's rows, starting where the words do, as iOS insets a list's separator past a row's leading mark. */
+export function CardDivider({ inset }: { readonly inset: number }) {
+  return <Divider modifiers={[padding({ leading: inset })]} />;
+}
 
 /** What a ticked step is heard as after its words. */
 const TICKED = "ticked";
@@ -86,8 +94,14 @@ export type AskAct = {
   readonly onPress: () => void;
 };
 
-/** The bordered card on the surface the rows stand in, a hairline between each. */
-function Card({ children }: { readonly children: readonly ReactNode[] }) {
+/** The bordered card on the surface the rows stand in, a hairline between each from where their words start. */
+function Card({
+  inset,
+  children,
+}: {
+  readonly inset: number;
+  readonly children: readonly ReactNode[];
+}) {
   const colors = useColors();
 
   return (
@@ -112,7 +126,7 @@ function Card({ children }: { readonly children: readonly ReactNode[] }) {
       {children.map((child, index) => (
         // Note that the rows are keyed by their place, since they never reorder while the card stands.
         <Fragment key={index}>
-          {index === 0 ? null : <Divider />}
+          {index === 0 ? null : <CardDivider inset={inset} />}
           {child}
         </Fragment>
       ))}
@@ -213,7 +227,7 @@ export function StepList({
   return (
     <VStack alignment="leading" spacing={SPACE.ROW}>
       {steps.length === 0 ? null : (
-        <Card>
+        <Card inset={CARD_WORDS_INSET.MARKED}>
           {steps.map((step, index) => (
             <StepRow
               key={step}
@@ -258,10 +272,12 @@ function FieldWords({
 }
 
 /**
- * A text or number field: its label over the system's field, drawn as a
- * field (a box on the ground inside the card's hairline, as the panel's
- * answer box stands) rather than words with nothing round them, and heard
- * by its label; a number's with the decimal pad.
+ * A text or number field: its label over the system's plain field, as the
+ * panel stands a field's name over it, the field with no box of its own
+ * inside the card's (one layer, as a Form's field stands in its row) and
+ * prompting with its label while it is empty, as Contacts' fields do, so an
+ * empty one never reads as a gap; heard by its label, a number's with the
+ * decimal pad.
  */
 function TypedFieldRow({
   field,
@@ -283,24 +299,13 @@ function TypedFieldRow({
       />
       <TextField
         text={text}
+        placeholder={field.label}
         onTextChange={onChange}
         modifiers={[
           textFieldStyle("plain"),
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
           foregroundStyle(colors.TEXT),
-          padding(FIELD_PADDING),
           frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-          background(
-            colors.GROUND,
-            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.TAG }),
-          ),
-          strokeBorder({
-            content: colors.CHIP_EDGE,
-            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-            shape: "roundedRectangle",
-            cornerRadius: RADIUS.TAG,
-            style: { lineWidth: HAIRLINE },
-          }),
           accessibilityLabel(field.label),
           accessibilityIdentifier(`answer-field-${field.label}`),
           ...(field.kind === ANSWER_FIELD.NUMBER ? [keyboardType("decimal-pad")] : []),
@@ -310,7 +315,12 @@ function TypedFieldRow({
   );
 }
 
-/** A select: its label over the system's menu picker, which reads "Choose" until an option is picked, the recommended option said as such. */
+/**
+ * A select: its label and the system's menu picker on one row, the label
+ * leading and the picker's value at its end, as a Form's picker row stands;
+ * it reads "Choose" until an option is picked, the recommended option said
+ * as such.
+ */
 function SelectRow({
   field,
   recommendedWord,
@@ -323,13 +333,14 @@ function SelectRow({
   const colors = useColors();
 
   return (
-    <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
+    <HStack spacing={SPACE.ROW} modifiers={[padding(ROW_PADDING)]}>
       <FieldWords
         label={field.label}
         required={field.required}
-        textStyle={TYPE_ROLE.ROW_LINE}
-        ink={colors.TEXT_MUTED}
+        textStyle={TYPE_ROLE.ROW_TITLE}
+        ink={colors.TEXT}
       />
+      <Spacer />
       <Picker<string>
         label={field.label}
         selection={Predicate.isString(field.value) ? field.value : ""}
@@ -343,7 +354,7 @@ function SelectRow({
           </Text>
         ))}
       </Picker>
-    </VStack>
+    </HStack>
   );
 }
 
@@ -396,7 +407,7 @@ export function AnswerFields({
   readonly onChange: (label: string, value: string | boolean) => void;
 }) {
   return (
-    <Card>
+    <Card inset={CARD_WORDS_INSET.BARE}>
       {fields.map((field) => {
         const change = (value: string | boolean) => onChange(field.label, value);
 

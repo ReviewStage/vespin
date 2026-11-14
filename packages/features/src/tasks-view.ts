@@ -148,10 +148,10 @@ export type HostLive = (typeof HOST_LIVE)[keyof typeof HOST_LIVE];
 
 /**
  * One task's description as the host holds it for the windows that opened it
- * (`LIVE_READ.DESCRIPTION_DOCUMENT`): the task with its text as last read or
+ * (`LIVE_READ.HELD_TASK`): the task with its text as last read or
  * written, or that the account no longer reaches it.
  */
-export type HeldDescriptionDocument = { readonly task: Task } | { readonly gone: true };
+export type HeldTask = { readonly task: Task } | { readonly gone: true };
 
 /** One run of a line in one color per appearance, as the host's highlighter split it. */
 const codeTokenSchema = EffectSchema.Struct({
@@ -208,6 +208,13 @@ export const tasksViewSchema = EffectSchema.Struct({
    */
   pendingTasks: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   listStatus: tasksReadSchema,
+  /**
+   * The workspaces in which the account reaches any task, as the list's
+   * last answer said, whatever the list holds of them: whether it has ever
+   * had a task there. Absent before an answer says, as one drawn from disk
+   * or from a service before it was answered.
+   */
+  taskWorkspaces: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   /** Whether what the host follows live is current (`HOST_LIVE`); absent before the list's follow first says, which reads as live. */
   live: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(HOST_LIVE))),
   /** The workspaces the account is a member of, its first one first, as the last list read answered; none before the first lands. */
@@ -220,7 +227,7 @@ export const tasksViewSchema = EffectSchema.Struct({
   repositoryPins: EffectSchema.optionalKey(EffectSchema.Array(repositoryPinSchema)),
   /** The sections the account made in its sidebars and the tasks it keeps in them, as last read or written; absent before the first read lands. */
   taskSections: EffectSchema.optionalKey(taskSectionsAnswerSchema),
-  /** The one active task, absent while the window has none open; its plan is held apart (`LIVE_READ.DESCRIPTION_DOCUMENT`). */
+  /** The one active task, absent while the window has none open; its plan is held apart (`LIVE_READ.HELD_TASK`). */
   activeTaskId: EffectSchema.optionalKey(EffectSchema.String),
 });
 
@@ -377,6 +384,14 @@ export const tasksAddFollowerParamsSchema = EffectSchema.Struct({
 
 export type TasksAddFollowerParams = typeof tasksAddFollowerParamsSchema.Type;
 
+/** A follower taken away from a task, as the window asks it: the task, and the follower by their account's id. */
+export const tasksRemoveFollowerParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+  userId: taskAssigneeIdSchema,
+});
+
+export type TasksRemoveFollowerParams = typeof tasksRemoveFollowerParamsSchema.Type;
+
 /** A task's parent set or cleared, as the window asks it: the task, and the parent the service takes, null for none. */
 export const tasksSetParentParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
@@ -484,7 +499,7 @@ export type StartCallFailure = (typeof START_CALL_FAILURES)[number];
  */
 export const tasksStartAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({
-    planId: EffectSchema.String,
+    taskId: EffectSchema.String,
     agentStart: EffectSchema.optionalKey(agentAgentAnswerSchema),
   }),
   EffectSchema.Struct({
@@ -555,20 +570,25 @@ export const tasksSetParentAnswerSchema = EffectSchema.Union([
 
 export type TasksSetParentAnswer = typeof tasksSetParentAnswerSchema.Type;
 
-/** Why a follower write wrote nothing: the service did not answer, the task is out of reach or its workspace has Following off, or, for an unfollow, the account is its assignee. */
+/** Why a follower write wrote nothing: the service did not answer, the task is out of reach, or, for an unfollow, the account is its assignee. */
 export const FOLLOWER_CALL_FAILURE = failureSetOf(taskFollowersContract);
 
 const FOLLOWER_CALL_FAILURES = Object.values(FOLLOWER_CALL_FAILURE);
 
 export type FollowerCallFailure = (typeof FOLLOWER_CALL_FAILURES)[number];
 
-/** A follow, an unfollow, a switch, or an add, as the window hears it: the task's followers as they then stand, the earliest to follow first, or why they are unchanged. */
+/** A follow, an unfollow, a switch, an add, or a removal, as the window hears it: the task's followers as they then stand, the earliest to follow first, or why they are unchanged. */
 export const tasksFollowersAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ followers: EffectSchema.Array(taskFollowerSchema) }),
   EffectSchema.Struct({ failure: EffectSchema.Literals(FOLLOWER_CALL_FAILURES) }),
 ]);
 
 export type TasksFollowersAnswer = typeof tasksFollowersAnswerSchema.Type;
+
+/** A task's followers' machines, as the window hears them: each with whose it is, whether its owner lets the task's agents use it, and whether it listened lately, or why there is no answer. */
+export const tasksMachinesAnswerSchema = answerView(taskFollowersContract.machines);
+
+export type TasksMachinesAnswer = typeof tasksMachinesAnswerSchema.Type;
 
 /** Why a relation's move wrote nothing: a block's reasons, or a parent's. */
 const RELATION_CALL_FAILURES = Object.values(
@@ -655,7 +675,7 @@ export type TasksFileAnswer = typeof tasksFileAnswerSchema.Type;
  * the repository where no plan names it, and the folder's path from the root.
  */
 export const tasksTreeParamsSchema = EffectSchema.Union([
-  EffectSchema.Struct({ planId: EffectSchema.NonEmptyString, ...taskTreeRequestSchema.fields }),
+  EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString, ...taskTreeRequestSchema.fields }),
   EffectSchema.Struct({ ...repositoryPlaceFields, ...taskTreeRequestSchema.fields }),
 ]);
 
@@ -670,7 +690,7 @@ export type TasksTreeAnswer = typeof tasksTreeAnswerSchema.Type;
 
 /** The skills a developer may choose, as the window asks the host for them: the plan they are chosen on, or the workspace and the repository where no plan names it, or the workspace alone for an agent with no repository, which is offered its installed skills alone. */
 export const tasksSkillsParamsSchema = EffectSchema.Union([
-  EffectSchema.Struct({ planId: EffectSchema.NonEmptyString }),
+  EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString }),
   EffectSchema.Struct({
     workspaceId: repositoryPlaceFields.workspaceId,
     repository: EffectSchema.optionalKey(repositoryPlaceFields.repository),
@@ -754,6 +774,60 @@ export const tasksFindAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
 ]);
 
+/** The most characters a task search sends the service. */
+const TASK_SEARCH_QUERY_MAX_CHARS = 200;
+
+/** How long typing pauses before a task search's words are asked of the host, so a word typed out reads once rather than once a letter. */
+export const TASK_SEARCH_PAUSE_MILLIS = 250;
+
+/** The words a task search typed as `typed` asks of the service (`TASKS_SEARCH`): trimmed and cut to what it sends, or none where nothing is typed. */
+export function serviceTaskSearchQuery(typed: string): string | undefined {
+  const words = typed.trim().slice(0, TASK_SEARCH_QUERY_MAX_CHARS);
+
+  return words.length === 0 ? undefined : words;
+}
+
+/** A search of the account's tasks the window asks the host to read past the list it holds: the words typed. */
+export const tasksSearchParamsSchema = EffectSchema.Struct({
+  query: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(TASK_SEARCH_QUERY_MAX_CHARS)),
+});
+
+/** Where a page of a workspace's settled tasks ends, which the next page reads past (`SettledPageCursor`). */
+const settledPageCursorSchema = EffectSchema.Struct({
+  finishedAt: EffectSchema.Finite,
+  taskId: EffectSchema.NonEmptyString,
+});
+
+/** A page of a workspace's settled tasks, as a list that shows finished work asks the host for it: the workspace, and the cursor the page reads past where it is not the first. */
+export const tasksSettledPageParamsSchema = EffectSchema.Struct({
+  workspaceId: EffectSchema.NonEmptyString,
+  before: EffectSchema.optionalKey(settledPageCursorSchema),
+});
+
+/** A page of settled tasks read into the task list, as the window hears it: the cursor the next page reads past, none after the last, or that the service did not answer. */
+export const tasksSettledPageAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({ next: EffectSchema.optionalKey(settledPageCursorSchema) }),
+  EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
+]);
+
+/** A person's tasks and agents in a workspace, as their page asks the host for them. */
+export const tasksPersonPageParamsSchema = EffectSchema.Struct({
+  workspaceId: EffectSchema.NonEmptyString,
+  personId: EffectSchema.NonEmptyString,
+});
+
+/** How many of a person's tasks and agents the service counts (`PersonCounts`), as their page hears it once their newest are read into the task list, or that the service did not answer. */
+export const tasksPersonPageAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    counts: EffectSchema.Struct({
+      assigned: EffectSchema.Finite,
+      created: EffectSchema.Finite,
+      agents: EffectSchema.Finite,
+    }),
+  }),
+  EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
+]);
+
 /** A page of a description's history, as the version history asks the host for it: the task, and the revision the page is read before where it is an older page. */
 export const tasksRevisionsParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
@@ -768,8 +842,8 @@ export const tasksRevisionsAnswerSchema = EffectSchema.Union([
 
 export type TasksRevisionsAnswer = typeof tasksRevisionsAnswerSchema.Type;
 
-/** One task's description, held by a window while it has the task open (`LIVE_READ.DESCRIPTION_DOCUMENT`), and read again at once on its Try again. */
-export const taskDocumentFollowSchema = EffectSchema.Struct({
+/** One task's description, held by a window while it has the task open (`LIVE_READ.HELD_TASK`), and read again at once on its Try again. */
+export const heldTaskFollowSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
 });
 
@@ -792,7 +866,7 @@ export type TasksRevisionAnswer = typeof tasksRevisionAnswerSchema.Type;
 
 /** One attachment of a description, as the window drawing it names it: the plan, and the id its text or a comment's file names. */
 export const tasksPictureParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   attachmentId: EffectSchema.NonEmptyString,
 });
 
@@ -818,7 +892,7 @@ export type TasksPictureAnswer = typeof tasksPictureAnswerSchema.Type;
 
 /** A picture kept on a description, as the editor that took it asks: the plan, and the picture, video, or PDF as a `data:` URL. */
 export const tasksPictureKeepParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   picture: descriptionFileDataUrlSchema,
 });
 
@@ -1041,7 +1115,7 @@ export type TasksCommentsFollow = typeof tasksCommentsFollowSchema.Type;
 
 /** A thread started on a description, as the window asks it. */
 export const tasksCommentStartParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   start: descriptionCommentStartRequestSchema,
 });
 
@@ -1049,7 +1123,7 @@ export type TasksCommentStartParams = typeof tasksCommentStartParamsSchema.Type;
 
 /** One thing done to one thread of a description, as the window asks it. */
 export const tasksCommentActParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   threadId: EffectSchema.NonEmptyString,
   action: descriptionCommentActionRequestSchema,
 });

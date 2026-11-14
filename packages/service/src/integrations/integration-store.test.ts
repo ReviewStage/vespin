@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
+import { Database } from "@repo/database/core/query";
 import { INTEGRATION_ROW_STATUS } from "@repo/database/integration-vocabulary";
+import { integrationConnection } from "@repo/database/schemas/integration";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { expectTopicsFire, getTestDB } from "@repo/database/testing";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
@@ -68,6 +70,37 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork))("the integration connection row
         INTEGRATION_ROW_STATUS.PENDING,
       );
     }),
+  );
+
+  it.effect(
+    "a row at a provider this build no longer offers hides none of the account's others",
+    () =>
+      Effect.gen(function* () {
+        const userId = yield* openGithubUser();
+        yield* beginIntegrationSignIn(
+          userId,
+          firstIntegrationAccount(userId, LINEAR),
+          "state-kept",
+        );
+        yield* completeIntegrationSignIn(userId, LINEAR, "state-kept");
+        // A provider a release offered and a later one reverted, as Mintlify was.
+        yield* Database.use((db) =>
+          db.insert(integrationConnection).values({
+            id: "row-retired",
+            userId,
+            // SAFETY: the column holds whatever an older build wrote, which this build's providers no longer name.
+            provider: "mintlify" as typeof LINEAR,
+            connectSubject: userId,
+            connectionName: "mintlify",
+            status: INTEGRATION_ROW_STATUS.PENDING,
+          }),
+        );
+
+        assert.deepEqual(
+          (yield* readIntegrationConnections(userId)).map((row) => row.connectionName),
+          [LINEAR],
+        );
+      }),
   );
 
   it.effect(

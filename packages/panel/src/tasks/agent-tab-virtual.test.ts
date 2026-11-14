@@ -79,7 +79,7 @@ const AGENT_ID = "4b0f6d3e-2c1a-4f5e-9d8c-7a6b5c4d3e2f";
 
 const AGENT: AgentSummary = {
   id: AGENT_ID,
-  planId: "plan-1",
+  taskId: "plan-1",
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Long run",

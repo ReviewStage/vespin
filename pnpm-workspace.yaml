@@ -15,7 +15,7 @@ catalog:
   react: 19.2.8
   react-dom: 19.2.8
   ws: 8.21.3
-  ai: 7.0.172
+  ai: 7.0.173
   drizzle-orm: 1.0.0-rc.4
   drizzle-kit: 1.0.0-rc.4
   vitest: 5.1.0
@@ -25,6 +25,7 @@ catalog:
   "@orpc/experimental-effect": 2.0.0-beta.44
   "@orpc/openapi": 2.0.0-beta.44
   "@orpc/publisher": 2.0.0-beta.44
+  "@orpc/shared": 2.0.0-beta.44
   "@orpc/server": 2.0.0-beta.44
   "@modelcontextprotocol/server": 2.4.0
   "@modelcontextprotocol/client": 2.4.0
@@ -223,6 +224,17 @@ patchedDependencies:
 # ueberdosis/tiptap#8317, each manager lexing with a `marked` of its own.
 # Delete each half when a TipTap release carries its PR.
   "@tiptap/markdown@3.33.1": patches/@tiptap__markdown@3.33.1.patch
+#
+# `@xterm/addon-webgl` 0.19.0 builds each glyph's canvas font as
+# `${style} ${weight} …`, which starts with a space for upright text. Chromium's
+# font parser briefly refused a font with leading whitespace (crrev.com/c/8525429,
+# fixed by crrev.com/c/8573817), and Electron 43.8.8 shipped the first change
+# without the second, so the canvas kept its `10px sans-serif` default and the
+# desktop's terminal drew tiny letters spread across full-size cells. The patch
+# makes upstream's change in xtermjs/xterm.js#6312 (#6297): the space goes with
+# the optional style. Only `lib/addon-webgl.mjs` is patched, the build the
+# browser bundles resolve. Delete it when an addon release carries #6312.
+  "@xterm/addon-webgl@0.19.0": patches/@xterm__addon-webgl@0.19.0.patch
 
 # Transitive versions raised past a published advisory, each within the major
 # its dependents already take. Delete a line once nothing resolves below it.
@@ -250,17 +262,23 @@ overrides:
   # The same brace-expansion advisories on 1.x and 2.x, through electron-builder's `minimatch`
   "brace-expansion@>=1.0.0 <1.1.22": 1.1.22
   "brace-expansion@>=2.0.0 <2.1.8": 2.1.8
-  # GHSA-27p8-2357-5qqv, GHSA-c7q8-3ch8-vqpv and other @xmldom/xmldom advisories, through electron-builder's `plist`; Expo's `@expo/plist` keeps its own
+  # GHSA-27p8-2357-5qqv, GHSA-c7q8-3ch8-vqpv and other @xmldom/xmldom advisories, through electron-builder's `plist`
   "plist>@xmldom/xmldom@<0.8.15": 0.8.15
+  # The same advisories on 0.8, through Expo's `@expo/plist`
+  "@expo/plist>@xmldom/xmldom@<0.8.15": 0.8.15
   # The same advisories on 0.9, through `@electron/osx-sign` and `@electron/universal`'s `plist`, which Expo's `simple-plist` shares
   "@xmldom/xmldom@>=0.9.0 <0.9.12": 0.9.12
-  # GHSA-2883-xcg3-v3hh, through electron-builder and electron-updater; Expo's `@expo/xcpretty` keeps its own
+  # GHSA-2883-xcg3-v3hh, through electron-builder and electron-updater
   "app-builder-lib>js-yaml": 4.3.2
   "builder-util>js-yaml": 4.3.2
   "dmg-builder>js-yaml": 4.3.2
   "electron-updater>js-yaml": 4.3.2
-  # GHSA-2m5v-pch6-74hx and the other undici advisories on 6.x, through `@electron/rebuild`'s `node-gyp`; `@sentry/cli` keeps its own
+  # The same advisory, through Expo's `@expo/xcpretty`
+  "@expo/xcpretty>js-yaml": 4.3.2
+  # GHSA-2m5v-pch6-74hx and the other undici advisories on 6.x, through `@electron/rebuild`'s `node-gyp`
   "node-gyp>undici": 6.29.1
+  # The same undici advisories on 6.x, through `@sentry/react-native`'s `@sentry/cli`
+  "@sentry/cli>undici": 6.29.1
 
 # A dependency is keyed by its peers' names alone, not by the peers' own peer
 # graphs, so one `vitest` serves every workspace. Keyed in full, a peer's own

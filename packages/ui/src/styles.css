@@ -27,6 +27,7 @@
 @import "./components/copy-field/copy-field.css";
 @import "./components/swatch/swatch.css";
 @import "./components/calendar/calendar.css";
+@import "./components/call/call-controls.css";
 @import "./components/block-list/block-list.css";
 @import "./components/card/card.css";
 @import "./components/facts/facts.css";
@@ -91,6 +92,7 @@
 @import "./components/resources-popover/resources-popover.css";
 @import "./components/zoom-image/zoom-image.css";
 @import "./components/remote-surface/remote-surface.css";
+@import "./components/agent-pointer/agent-pointer.css";
 @import "./components/editable-block/editable-block.css";
 @import "./components/editable-heading/editable-heading.css";
 /* After the choice list's and the button's, whose fills it lays over a ground. */

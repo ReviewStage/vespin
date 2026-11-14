@@ -153,7 +153,7 @@ export function askedStyleWidth(width: number | PopoverWidth): number | string {
 function askedWidth(layer: HTMLElement, width: number | PopoverWidth): number {
   if (Predicate.isNumber(width)) return width;
 
-  // Note that a fit popover is drawn at its content's width before it is measured, so its box is the width it asks for.
+  // Note that a fit popover is always drawn at its content's width, held to its room, so its box is the width it asks for.
   if (width === POPOVER_WIDTH.FIT) return layer.getBoundingClientRect().width;
   const token = Number.parseFloat(getComputedStyle(layer).getPropertyValue(WIDTH_TOKEN[width]));
 
@@ -258,7 +258,13 @@ export function AnchoredPopover({
       style={
         place === undefined
           ? placeStyle(align, 0, askedStyleWidth(width))
-          : placeStyle(align, place.inset, place.width, place.room)
+          : width === POPOVER_WIDTH.FIT
+            ? // Note that a fit layer stays as wide as what it holds, its room's width its most, so rows that arrive after it opens fit it again.
+              {
+                ...placeStyle(align, place.inset, askedStyleWidth(width), place.room),
+                maxWidth: place.most,
+              }
+            : placeStyle(align, place.inset, place.width, place.room)
       }
     >
       {children}

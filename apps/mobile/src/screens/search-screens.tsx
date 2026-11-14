@@ -21,6 +21,7 @@ import {
   glyphSymbol,
   LIST_LOOK,
   ListSection,
+  NoSelection,
   RowList,
   ScopePicker,
   Screen,
@@ -57,7 +58,7 @@ const SCOPES: readonly SearchScope[] = Object.values(SEARCH_SCOPE);
 function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined> {
   return new Map([
     ...found.tasks.map(
-      (task) => [task.id, iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: task.id })] as const,
+      (task) => [task.id, iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: task.id })] as const,
     ),
     ...found.inbox.map(
       ({ holder, item }) =>
@@ -65,7 +66,7 @@ function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined
           item.id,
           iosAppRouteOf({
             kind: LINK_DESTINATION.INBOX_ITEM,
-            planId: holder.task.id,
+            taskId: holder.task.id,
             itemId: item.id,
           }),
         ] as const,
@@ -299,7 +300,7 @@ function SearchSplitScreen(words: SearchWords) {
       title: SEARCH_TITLE,
       search: { placeholder, text: query, onChange: setQuery },
     },
-    detail: <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.SEARCH} />,
+    detail: <NoSelection title={CHOOSE_AN_ITEM_WORDS} />,
   });
 
   return (

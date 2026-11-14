@@ -206,8 +206,8 @@ export function AccountSection({
   );
 
   // Note that each row stands in a wrapper wearing its search anchor, because
-  // a pressed result lands on and rings the whole row, as it did before the
-  // row was shared, and the shared row takes no attribute of a caller's. The
+  // a pressed result lands on and rings the whole row, and the shared row
+  // takes no attribute of a caller's. The
   // section is untitled, as the Workspace page's first is, because the page
   // over it is already headed Account, and so is the last, which holds
   // Delete account alone.

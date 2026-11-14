@@ -6,7 +6,7 @@ import {
   dateWhole,
   readerZone,
 } from "@repo/features/date-mention";
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
 import {
   ENTITY_KIND,
   ENTITY_WORD,
@@ -88,10 +88,11 @@ import {
 import { useInboxItemTitle } from "./inbox-item-chip.js";
 import { OpenedByRow, PullRequestCard } from "./pull-request-card.js";
 import { WrittenAs } from "./selection-markdown.js";
-import { useKnownNames, useWordTargets } from "./use-known-names.js";
+import { useNamesOf, useWordTargets } from "./use-known-names.js";
 import { useLinkStanding, useNumberedTaskId, useWordsWorkspaceId } from "./use-link-standing.js";
 import { useOpenLink } from "./use-open-link.js";
 import { useWordsDates } from "./words-dates.js";
+import { MachineChipOwner, useMachineOwnerHeard, useMachinePress } from "./workspace-machines.js";
 
 /**
  * mention-chip.tsx -- a mention drawn in words as its chip: its kind's glyph and its name, a button that opens what it names, or a link where that leaves the app, hanging a card that says what that is, struck through where what it names is gone.
@@ -129,7 +130,7 @@ import { useWordsDates } from "./words-dates.js";
  * mark, as the place drawing it knows it (`MentionDoors.agentOf`), and any
  * other agent, one of another task's or of none, or one named where the
  * place knows no agents, the mark of the harness the window last read it
- * running on (`useKnownNames`), or, for one the window lists not, an
+ * running on (`useNamesOf`), or, for one the window lists not, an
  * archived agent say, the harness read for it (`mentioned-agent-card.tsx`); either
  * opens its tab through the window's opener for an app link, as a link
  * copied to it does, or where its place opens it (`onOpenAgent`), and an agent hangs its tab's own card where the place
@@ -138,6 +139,10 @@ import { useWordsDates } from "./words-dates.js";
  * their picture and hangs their card, their email and role, or grayed as
  * having left, as the workspace's members around the chip say
  * (`../member-directory.tsx`), and opens their page in the workspace. A
+ * machine of the workspace wears its platform's glyph with its online dot,
+ * and before its name its owner's face where it is a teammate's, as the
+ * agent's Default machine menu draws it, and hangs whose it is and what it
+ * is (`workspace-machines.tsx`); it opens nothing. A
  * link to any other place in the app, an Inbox item, an
  * automation, an agent's message (`@repo/features/link-grammar`), is drawn as
  * the same chip, wearing the place's glyph and named as the window already
@@ -208,10 +213,8 @@ export interface MentionDoors {
   readonly onOpenTask: (mention: DescriptionMention) => void;
   /** Shows a file's tab, at its lines where a mention names them; none where no file can be opened from here. */
   readonly onOpenFile: ((path: string, lines: OpenFileLines | undefined) => void) | undefined;
-  /** Shows the changes of one of an agent's turns, the turn the developer's line opened, standing on the file; none where no such tab opens from here. */
-  readonly onOpenTurnChanges?:
-    | ((agentId: string, messageId: string, path: string) => void)
-    | undefined;
+  /** Shows the changes of one of an agent's turns, the turn the developer's line opened; none where no such tab opens from here. */
+  readonly onOpenTurnChanges?: ((agentId: string, messageId: string) => void) | undefined;
   /** Opens an agent's chip somewhere other than its tab's top, as a memory's opens its transcript at the line that kept it; none opens its tab as its link does. */
   readonly onOpenAgent?: ((agentId: string) => void) | undefined;
   /** One of the plan's agents as its chip wears it, none for an agent not of the plan; the door is none where the place knows the plan's agents not. */
@@ -265,6 +268,7 @@ const WHOLE_KINDS: ReadonlySet<Mention["kind"]> = new Set([
   MENTION_KIND.TOOL,
   MENTION_KIND.MAC_APP,
   MENTION_KIND.COMPUTER,
+  MENTION_KIND.MACHINE,
 ]);
 
 /** What a gone section's card says of it. */
@@ -309,6 +313,8 @@ function pressOf(
     case MENTION_KIND.DATE:
     case MENTION_KIND.MAC_APP:
     case MENTION_KIND.COMPUTER:
+    // A machine's press is whose machine it is (`useMachinePress`), which this cannot read.
+    case MENTION_KIND.MACHINE:
       return undefined;
     case MENTION_KIND.TASK:
       return () => doors.onOpenTask(mention);
@@ -518,7 +524,7 @@ export function MentionChipCard({
   /** What its provider answered for it, as the row read it. */
   standing: LinkStanding | undefined;
 }): ReactNode {
-  const known = useKnownNames();
+  const known = useNamesOf(mention);
 
   return (
     <MentionCard
@@ -600,7 +606,7 @@ function MentionChip({
   state?: ReactNode;
 }): React.JSX.Element {
   const openLink = useOpenLink();
-  const known = useKnownNames();
+  const known = useNamesOf(mention);
 
   const standing = useLinkStanding(mention, {
     taskId: doors.holder?.taskId,
@@ -644,7 +650,16 @@ function MentionChip({
     (github !== undefined && pull !== undefined) || keyed || WHOLE_KINDS.has(mention.kind);
 
   const state = mentionState(mention, doors);
-  const press = pressOf(mention, target, state, doors, openLink);
+  const machineId = mention.kind === MENTION_KIND.MACHINE ? mention.machineId : undefined;
+  const machineWorkspace = readLink(target)?.workspace ?? doors.place.workspace;
+  const machinePress = useMachinePress(machineId, machineWorkspace);
+
+  // Note that a machine's press is read from whose machine it is, which only the workspace's machines read says.
+  const press =
+    machineId === undefined ? pressOf(mention, target, state, doors, openLink) : machinePress;
+
+  // Note that a teammate's machine is heard as theirs, since the face that says so to the eye is hidden from a screen reader.
+  const ownerHeard = useMachineOwnerHeard(machineId, machineWorkspace);
 
   const card = (
     <MentionCard
@@ -674,6 +689,8 @@ function MentionChip({
       kind={entityWordHeard(entityOfMention(mention).kind, label)}
       label={label}
       name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
+      before={ownerOf(mention, target, doors)}
+      heard={ownerHeard}
       state={told ?? standing?.state}
       gone={state === MENTION_STATE.GONE}
       onPress={
@@ -692,6 +709,18 @@ function MentionChip({
       data-kind={mention.kind}
       data-state={state}
       data-stated={standing?.state === undefined ? undefined : ""}
+    />
+  );
+}
+
+/** What stands before a machine's chip's name: its owner's face, where it is a teammate's; nothing for any other mention. */
+function ownerOf(mention: Mention, target: string, doors: MentionDoors): ReactNode {
+  if (mention.kind !== MENTION_KIND.MACHINE) return undefined;
+
+  return (
+    <MachineChipOwner
+      machineId={mention.machineId}
+      workspace={readLink(target)?.workspace ?? doors.place.workspace}
     />
   );
 }
@@ -778,7 +807,7 @@ function WrittenDateChip({
 
 /** The task a place in the app names, where it names one. */
 function placeTaskId(place: LinkDestination): string | undefined {
-  return "planId" in place ? place.planId : undefined;
+  return "taskId" in place ? place.taskId : undefined;
 }
 
 /** The mark a place in the app leads with: its entity's (`entity-mark.tsx`), as a mention of the same entity leads with it. */
@@ -831,7 +860,7 @@ function PlaceChip({
   read?: ((known: KnownNames) => KnownNames) | undefined;
 }): React.JSX.Element {
   const openLink = useOpenLink();
-  const held = useKnownNames("automationId" in place ? place.automationId : undefined);
+  const held = useNamesOf(place);
   const known = read === undefined ? held : read(held);
   const { name, under } = placeChipLook(place, label, known);
 
