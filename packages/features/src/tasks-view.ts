@@ -775,7 +775,7 @@ export const tasksFindAnswerSchema = EffectSchema.Union([
 ]);
 
 /** The most characters a task search sends the service. */
-export const TASK_SEARCH_QUERY_MAX_CHARS = 200;
+const TASK_SEARCH_QUERY_MAX_CHARS = 200;
 
 /** How long typing pauses before a task search's words are asked of the host, so a word typed out reads once rather than once a letter. */
 export const TASK_SEARCH_PAUSE_MILLIS = 250;
