@@ -166,10 +166,15 @@ import {
   keptOfTask,
   PageVersionKey,
 } from "./kept-content.js";
+import { drawnAs } from "./list-moves.js";
 import { type HeldAnswers, heldSlice, rowWriteOn } from "./live-collection.js";
 import { confirmWrite, FOLLOW_BACKOFF, type TxWait } from "./live-follow.js";
 import { pushLive } from "./live-push.js";
-import type { PullRequestListing } from "./pull-request-parts.js";
+import {
+  type ListDrawing,
+  type PullRequestListing,
+  pullRequestListing,
+} from "./pull-request-parts.js";
 import { type OfflineRefused, TASK_QUEUED_WRITE, untaken } from "./queued-writes.js";
 import type { RunMode } from "./run-mode.js";
 import { sidebarCollections, sidebarWrites } from "./sidebar-collections.js";
@@ -207,6 +212,14 @@ import { followSidebarRows } from "./workspaces-follow.js";
  * connected, are carried on the view beside the tasks, drawn there by the
  * workspaces' own concern (`compose-workspaces.ts`).
  */
+
+/** The view's lists each a live query of the task list draws, which cross as what moved in them (`list-moves.ts`). */
+const LISTED_PARTS = [
+  "tasks",
+  "taskAgents",
+  "taskPullRequests",
+  "agentPullRequests",
+] as const satisfies readonly (keyof TasksView)[];
 
 /** A task's pin and where it stands as the list carries them, each only where it stands. */
 type TaskMarkStamps = Pick<Task, "pinnedAt" | "pinPosition">;
@@ -882,10 +895,14 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   let screenAsks = 0;
 
   function publish(): void {
+    const drawn = view;
     // Note that the view keeps the identity of what it shares with the one
     // last told, so a view that says nothing new is that one, and what is
     // told shares every part that did not move with what was told before.
     view = keepIdentity(published, view);
+
+    // Note that a list laid anew over the one told is the drawing it was laid from, so its delivery is told what moved in it rather than walking it (`list-moves.ts`).
+    for (const part of LISTED_PARTS) drawnAs(view[part], drawn[part]);
 
     if (view === published) return;
     published = view;
@@ -1185,6 +1202,9 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     PubSub.shutdown,
   );
 
+  /** The agents and their pull requests as the list last drew them, which the next drawing's listing is told the moves since. */
+  let drawnBefore: ListDrawing | undefined;
+
   const openTaskList = Effect.gen(function* () {
     const scope = yield* Scope.make();
 
@@ -1209,10 +1229,9 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
             taskAgentPins,
           });
           documents.relisted();
-          PubSub.publishUnsafe(listings, {
-            statuses: new Map(taskAgents.map((agent) => [agent.id, agent.status])),
-            pullRequests: agentPullRequests,
-          });
+          const listing = { taskAgents, agentPullRequests };
+          PubSub.publishUnsafe(listings, pullRequestListing(drawnBefore, listing));
+          drawnBefore = listing;
         },
         txWait: () => listWait,
         readAgain: (id) => readTaskRows(id),

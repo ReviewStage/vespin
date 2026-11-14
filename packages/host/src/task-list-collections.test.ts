@@ -11,7 +11,10 @@ import { entityPool } from "@repo/sync";
 import { TURN_STATUS } from "@repo/wire";
 import { Deferred, Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
+import { type AppStateSnapshot, appStateDelivery } from "./app-state.js";
+import { initialAppState } from "./client/app-state-store.js";
 import { DRAW_TICK, rowWriteOn } from "./live-collection.js";
+import { runModeFor } from "./run-mode.js";
 import { AGENT, type LiveTaskList, PLAN, taskListCollections } from "./task-list-collections.js";
 import { agentListRow, planListRow } from "./testing/task-list-rows.js";
 
@@ -29,6 +32,35 @@ function openPullRequest(number: number): AgentPullRequest {
     additions: 10,
     deletions: 2,
     changedFiles: 1,
+  };
+}
+
+/** The document a window is told, its task list drawn as `drawn`, at `version`. */
+function documentOf(drawn: LiveTaskList, version: number): AppStateSnapshot {
+  const idle = initialAppState(
+    {
+      launch: { profile: "idle", captureMode: false, fixtureMode: false },
+      runMode: runModeFor({ capture: false, fixture: false }),
+      appVersion: "1.2.3",
+      packaged: true,
+      platform: "darwin",
+    },
+    true,
+    [],
+  );
+
+  return {
+    ...idle,
+    tasks: {
+      ...idle.tasks,
+      tasks: drawn.list.plans,
+      taskAgents: drawn.taskAgents,
+      taskPullRequests: drawn.taskPullRequests,
+      agentPullRequests: drawn.agentPullRequests,
+      taskAgentPins: drawn.taskAgentPins,
+    },
+    window: { fullScreen: false },
+    version,
   };
 }
 
@@ -109,6 +141,34 @@ it.effect(
           [[moved.planId, 1]],
         );
         assert.equal(after.taskAgentPins, before.taskAgentPins);
+
+        // The delivery that brings a window holding the list before to the list after names the moved agent and its task alone, and reads no other row of either list.
+        let reads = 0;
+        const drawnAgain = new Set<object>([...newAgents, ...newTasks]);
+
+        for (const row of [...after.taskAgents, ...after.list.plans]) {
+          if (drawnAgain.has(row)) continue;
+          const { id } = row;
+
+          Object.defineProperty(row, "id", {
+            enumerable: true,
+            get: () => {
+              reads += 1;
+
+              return id;
+            },
+          });
+        }
+
+        const delivered = appStateDelivery(documentOf(before, 1), documentOf(after, 2));
+
+        assert.deepEqual(delivered?.moved, {
+          tasks: [
+            { key: ["tasks"], rows: newTasks },
+            { key: ["taskAgents"], rows: newAgents },
+          ],
+        });
+        assert.equal(reads, 0);
       }),
     ),
 );
