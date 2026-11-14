@@ -798,7 +798,7 @@ export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
             spacing={SPACE.ROW}
             modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
           >
-            <Avatar name={name} picture={picture} size={faceSize} />
+            <Avatar name={name} id={id} picture={picture} size={faceSize} />
             <VStack alignment="leading" spacing={1}>
               <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
                 {name}
