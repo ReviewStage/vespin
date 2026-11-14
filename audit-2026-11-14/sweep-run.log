@@ -22,3 +22,11 @@ iphone-iphone-light wrap-search.yaml: fails 0 shots 4
 iphone-iphone-dark wrap-search.yaml: fails 0 shots 4 
   ax none on iphone: contrast disabled transparency-key 
 iphone-iphone-light wrap-pull-request.yaml: fails 2 shots 13   Assert that "Send the invite email from the workspace.*" is not visible... FAILED
+iphone-iphone-dark wrap-pull-request.yaml: fails 2 shots 13   Tap on "Open on GitHub"... FAILED
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-settings.yaml: fails 0 shots 11 
+iphone-iphone-dark wrap-settings.yaml: fails 0 shots 11 
+  ax none on iphone: contrast disabled transparency-key 
+iphone-iphone-light wrap-inbox.yaml: fails 2 shots 11   Tap on "Inbox"... FAILED
+iphone-iphone-dark wrap-inbox.yaml: fails 2 shots 11   Tap on "Inbox"... FAILED
+  ax none on iphone: contrast disabled transparency-key 
