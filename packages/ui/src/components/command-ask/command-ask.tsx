@@ -6,7 +6,7 @@ import { BUTTON_VARIANT, Button } from "../button/button.js";
 import { CHOICE_LOOK, ChoiceList } from "../choice-list/choice-list.js";
 import { CODE_CARD_TITLE, CodeCard } from "../code-card/code-card.js";
 import { DIALOG_ROLE, DIALOG_SIZE, Dialog } from "../dialog/dialog.js";
-import { FILE_TEXT_EXTENT, FileText } from "../file-text/file-text.js";
+import { FILE_TEXT_EXTENT, FILE_TEXT_FRAME, FileText } from "../file-text/file-text.js";
 
 /**
  * command-ask.tsx -- a command an agent asks to run on this Mac, put to the developer as a modal over the window: the command in its Shell card, how often to allow it, then Deny and Run.
@@ -124,7 +124,14 @@ export function CommandAsk({
         glyph={<GLYPH.TERMINAL />}
         title="Shell"
         titleIs={CODE_CARD_TITLE.WORDS}
-        body={<FileText text={command} label={COMMAND_LABEL} extent={FILE_TEXT_EXTENT.BRIEF} />}
+        body={
+          <FileText
+            text={command}
+            label={COMMAND_LABEL}
+            extent={FILE_TEXT_EXTENT.BRIEF}
+            frame={FILE_TEXT_FRAME.CARD_BODY}
+          />
+        }
         copied={command}
         copy={copy}
       />

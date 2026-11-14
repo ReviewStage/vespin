@@ -1,10 +1,10 @@
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { TOOL_STATE, type ToolState } from "@repo/features/tool-call-block";
 import { isMachineShellAsk, type MachineCommandAsk } from "@repo/host/app-state";
-import { useAskTimeLeft } from "@repo/ui";
+import { TIME_LOOK, Time } from "@repo/ui";
 import { isRecord, type UnparsedWireValue } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useContext } from "react";
+import { useContext } from "react";
 import { appStateQuery, selectMachineCommands } from "../use-app-state.js";
 import { TranscriptAgent } from "./line-cards.js";
 import type { HeldCall } from "./transcript-blocks.js";
@@ -39,11 +39,6 @@ function holds(
   return tool === AGENT_TOOL.COMPUTER && agentId !== undefined && ask.agentId === agentId;
 }
 
-/** The words a waiting row ends on, moving each second: "Waiting for you · 4:12". */
-function WaitingWords({ expiresAt }: { expiresAt: number }): ReactNode {
-  return `${WAITING} · ${useAskTimeLeft(expiresAt)}`;
-}
-
 /** The Mac ask a call still running waits on, as its row draws it; none where none holds it. */
 export function useMachineAskHeld(call: {
   readonly tool: string;
@@ -61,7 +56,11 @@ export function useMachineAskHeld(call: {
   if (ask === undefined) return undefined;
 
   return {
-    status: <WaitingWords expiresAt={ask.expiresAt} />,
+    status: (
+      <>
+        {WAITING} · <Time at={ask.expiresAt} look={TIME_LOOK.LEFT} />
+      </>
+    ),
     waiting: true,
     about: undefined,
     actions: undefined,
