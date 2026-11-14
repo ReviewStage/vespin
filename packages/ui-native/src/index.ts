@@ -68,7 +68,7 @@ export {
   SkillSuggestions,
 } from "./composer-head.js";
 
-export { EmptyState, NoSelection } from "./empty-state.js";
+export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
 export {
   FailureNoticeProvider,
@@ -77,6 +77,8 @@ export {
 } from "./failure-notice.js";
 
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
+
+export { releaseFields } from "./field-focus.js";
 
 export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
 
@@ -120,6 +122,7 @@ export {
 export {
   NO_WRITES,
   newestValue,
+  takesRowBack,
   type WriteSent,
   type WritesBook,
   writeSent,
@@ -161,7 +164,7 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { monogramOf } from "./monogram.js";
 
-export { RenameAsk, SwitchRow } from "./option-rows.js";
+export { SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
@@ -212,7 +215,7 @@ export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./r
 
 export { latestStep, type PreviewMessage, previewMessages } from "./row-preview-model.js";
 
-export { Screen, Spacer } from "./screen.js";
+export { SCREEN_GROUND, Screen, type ScreenGround, Spacer } from "./screen.js";
 
 export { ScreenFailure } from "./screen-failure.js";
 
@@ -226,6 +229,7 @@ export {
   type ConnectionLine,
   ConnectionRow,
   FollowerRow,
+  LoadingRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,
@@ -253,6 +257,10 @@ export {
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  DetailPage,
+  type DetailStack,
+  type DetailStackPage,
+  HostedFill,
   isBarMenu,
   KeptColumns,
   type KeptView,
