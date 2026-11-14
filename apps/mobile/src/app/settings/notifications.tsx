@@ -13,6 +13,7 @@ import {
   PickRows,
   PUSH_ROW_GOES,
   PushRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   ValueRow,
@@ -55,7 +56,7 @@ export default function NotificationsScreen() {
   const allowed = notificationsAllowed(fixture, notifications.standing);
 
   return (
-    <Screen>
+    <Screen ground={SCREEN_GROUND.GROUPED}>
       <SettingsForm>
         {allowed ? (
           <ListSection>
