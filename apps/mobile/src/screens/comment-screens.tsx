@@ -7,6 +7,7 @@ import { readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import {
   AskNote,
+  AttachedPictures,
   BAR_TITLE,
   Composer,
   EmptyState,
@@ -23,6 +24,7 @@ import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
 import {
+  type CommentReply,
   threadMessages,
   threadOpen,
   useCommentMedia,
@@ -40,6 +42,18 @@ const WORDS = {
   GONE: "Original content deleted",
   NOT_FOUND: "Comment not found",
 } as const;
+
+/** A comment field's head: the pictures it carries, each taken off on a press, and what its last send or a picture's bound said; none while it holds neither. */
+function fieldHead(pictures: CommentReply["pictures"], note: string | undefined) {
+  if (pictures.attached.length === 0 && note === undefined) return undefined;
+
+  return (
+    <>
+      <AttachedPictures pictures={pictures.attached} onDetach={pictures.detach} />
+      {note === undefined ? null : <AskNote words={note} />}
+    </>
+  );
+}
 
 /** What the description is called while it is first read. */
 const READING_DESCRIPTION = readingWords("the description");
@@ -109,7 +123,9 @@ export function CommentThreadScreen() {
               onWords={reply.onWords}
               sendable={reply.sendable}
               onSend={reply.send}
-              head={reply.note === undefined ? undefined : <AskNote words={reply.note} />}
+              head={fieldHead(reply.pictures, reply.note)}
+              onAdd={reply.pictures.attach}
+              onDropPictures={reply.pictures.drop}
             />
           }
         >
@@ -210,7 +226,9 @@ export function NewCommentScreen() {
               onWords={start.onWords}
               sendable={start.sendable}
               onSend={send}
-              head={start.note === undefined ? undefined : <AskNote words={start.note} />}
+              head={fieldHead(start.pictures, start.note)}
+              onAdd={start.pictures.attach}
+              onDropPictures={start.pictures.drop}
             />
           }
         >

@@ -18,6 +18,7 @@
  * caches for its chip to open.
  */
 
+import type { AgentAttachment } from "@repo/features/agent-wire";
 import { ATTACHMENT_VIEW, attachmentView, chipSize } from "@repo/features/attachment-model";
 import type { DescriptionBlock } from "@repo/features/description-blocks";
 import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
@@ -36,7 +37,7 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { COMMENT_SUBJECT, TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { BUZZ, THREAD_MEDIA, type ThreadMedia, type ThreadMessage } from "@repo/ui-native";
+import { BUZZ, buzz, THREAD_MEDIA, type ThreadMedia, type ThreadMessage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -45,6 +46,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import type { PictureOf } from "../member-pictures.js";
+import { type AttachedPictures, useAttachedPictures } from "../use-attached-pictures.js";
 import { useWrite } from "../use-write.js";
 
 /** No threads read yet. */
@@ -312,15 +314,35 @@ export function useCommentMedia(
 export interface CommentReply {
   readonly words: string;
   readonly onWords: (words: string) => void;
+  /** The pictures the reply carries, attached from Photos, as the panel's comment field attaches files. */
+  readonly pictures: AttachedPictures;
   readonly sendable: boolean;
   readonly send: () => void;
   readonly note: string | undefined;
 }
 
-/** A reply sent and not yet answered as posted: its words, and the key it went under. */
+/** A reply sent and not yet answered as posted: its words, the pictures it carried, and the key it went under. */
 interface SentReply {
   readonly words: string;
+  readonly files: readonly AgentAttachment[];
   readonly key: string;
+}
+
+/**
+ * Whether a send goes again as the one `sent` names, under its key: the same
+ * words and the same pictures, by their bytes, as the panel's field asks
+ * (`sameFiles`), since the service answers a key it took as posted whatever
+ * the send carries, so a picture changed since would be dropped unseen.
+ */
+function sameSend(sent: SentReply | undefined, words: string, files: readonly AgentAttachment[]) {
+  return (
+    sent !== undefined &&
+    sent.words === words &&
+    sent.files.length === files.length &&
+    sent.files.every(
+      (file, at) => file.mediaType === files[at]?.mediaType && file.data === files[at]?.data,
+    )
+  );
 }
 
 /**
@@ -337,24 +359,47 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
   const [sent, setSent] = useState<SentReply | undefined>(undefined);
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | undefined>(undefined);
+  const pictures = useAttachedPictures(setNote);
+  // Note that a second tap before the next render reads no `sending` yet, so the send in flight is held here too, or two taps would post twice and hand the pictures back twice.
+  const inFlight = useRef(false);
 
   return useMemo(() => {
     const send = () => {
       const kept = words.trim();
 
-      if (kept === "" || sending) return;
-      const key = sent?.words === kept ? sent.key : randomUUID();
-      setSent({ words: kept, key });
+      if (kept === "" || sending || inFlight.current) return;
+
+      // A picture past a bound holds the send back, saying why, as an agent's composer does.
+      if (pictures.refusal !== undefined) {
+        setNote(pictures.refusal);
+        buzz(BUZZ.WARNING);
+
+        return;
+      }
+
+      const files = pictures.files ?? [];
+      const key = sameSend(sent, kept, files) && sent !== undefined ? sent.key : randomUUID();
+      inFlight.current = true;
+      setSent({ words: kept, files, key });
       setSending(true);
       setNote(undefined);
       setWords("");
+      // The pictures go with the words, and come back with them where the reply is refused.
+      const carried = pictures.take();
       // Note that a reply refused says why under the box, where its words go back, rather than in the notice.
       write(
         () =>
           acts[ACT_KIND.TASKS_COMMENT_ACT]({
             planId: taskId,
             threadId,
-            action: { action: DESCRIPTION_COMMENT_ACTION.REPLY, clientKey: key, words: kept },
+            action: {
+              action: DESCRIPTION_COMMENT_ACTION.REPLY,
+              clientKey: key,
+              words: kept,
+              ...(carried.length === 0
+                ? undefined
+                : { attachments: carried.map(({ file }) => file) }),
+            },
           }),
         {
           refused: (answer) => ("thread" in answer ? undefined : COMMENT_NOTE.NOT_POSTED),
@@ -362,6 +407,7 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
           inPlace: (said) => {
             // Note that words typed while it was out stay, after the reply given back, so neither is lost.
             setWords((now) => (now.trim() === "" ? kept : `${kept}\n\n${now}`));
+            pictures.putBack(carried);
             setNote(said);
           },
           went: BUZZ.SUCCESS,
@@ -370,17 +416,21 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
         .then((went) => {
           if (went) setSent(undefined);
         })
-        .finally(() => setSending(false));
+        .finally(() => {
+          inFlight.current = false;
+          setSending(false);
+        });
     };
 
     return {
       words,
       onWords: setWords,
+      pictures,
       sendable: words.trim() !== "" && !sending,
       send,
       note,
     };
-  }, [acts, write, taskId, threadId, words, sent, sending, note]);
+  }, [acts, write, taskId, threadId, words, sent, sending, note, pictures]);
 }
 
 /** The open threads standing on each block of a description, by the block's start, the oldest started first. */
@@ -407,6 +457,8 @@ export function threadsOnBlocks(
 export interface CommentStart {
   readonly words: string;
   readonly onWords: (words: string) => void;
+  /** The pictures the thread's first comment carries, attached from Photos. */
+  readonly pictures: AttachedPictures;
   readonly sendable: boolean;
   readonly send: () => Promise<string | undefined>;
   readonly note: string | undefined;
@@ -440,6 +492,7 @@ export function useCommentStart(
   // Note that a second tap before the next render reads no `sending` yet, so the send in flight is held here too, or two taps would start two threads.
   const inFlight = useRef(false);
   const quote = block?.quote;
+  const pictures = useAttachedPictures(setNote);
 
   return useMemo(() => {
     const send = async (): Promise<string | undefined> => {
@@ -449,11 +502,20 @@ export function useCommentStart(
         return undefined;
       }
 
+      // A picture past a bound holds the start back, saying why, as an agent's composer does.
+      if (pictures.refusal !== undefined) {
+        setNote(pictures.refusal);
+        buzz(BUZZ.WARNING);
+
+        return undefined;
+      }
+
+      const files = pictures.files ?? [];
       inFlight.current = true;
-      const again = sent?.words === kept ? sent : undefined;
+      const again = sameSend(sent, kept, files) ? sent : undefined;
       const key = again?.key ?? randomUUID();
       const threadId = again?.threadId ?? randomUUID();
-      setSent({ words: kept, key, threadId });
+      setSent({ words: kept, files, key, threadId });
       setSending(true);
       setNote(undefined);
 
@@ -469,7 +531,7 @@ export function useCommentStart(
               anchor: { from: block.from, to: block.to },
               text,
               words: kept,
-              attachments: [],
+              attachments: [...files],
             },
           }),
         {
@@ -491,6 +553,7 @@ export function useCommentStart(
       if (!went) return undefined;
       setSent(undefined);
       setWords("");
+      pictures.take();
 
       return threadId;
     };
@@ -498,9 +561,10 @@ export function useCommentStart(
     return {
       words,
       onWords: setWords,
+      pictures,
       sendable: words.trim() !== "" && !sending && quote !== undefined,
       send,
       note,
     };
-  }, [acts, write, taskId, text, block, quote, words, sent, sending, note]);
+  }, [acts, write, taskId, text, block, quote, words, sent, sending, note, pictures]);
 }
