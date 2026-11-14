@@ -4,6 +4,8 @@ export * from "./components/account-words/account-words.js";
 
 export * from "./components/address-field/address-field.js";
 
+export * from "./components/agent-pointer/agent-pointer.js";
+
 export * from "./components/anchored-popover/anchored-popover.js";
 
 export * from "./components/anchored-popover/press-away.js";
@@ -19,6 +21,10 @@ export * from "./components/app-window-stack/app-window-stack.js";
 export * from "./components/approval-actions/approval-actions.js";
 
 export * from "./components/arrival/arrival.js";
+
+export * from "./components/ask-deadline/ask-deadline.js";
+
+export * from "./components/ask-note/ask-note.js";
 
 export * from "./components/attachment-chip/attachment-chip.js";
 

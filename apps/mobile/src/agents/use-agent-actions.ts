@@ -31,9 +31,9 @@ import {
   type StopAgentsWords,
 } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
-import { selectAgentPinned } from "@repo/host/app-state-reads";
+import { selectAgentPinned, selectFollowedAgent } from "@repo/host/app-state-reads";
 import { BUZZ, buzz } from "@repo/ui-native";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -74,22 +74,23 @@ function archiveQuestion(working: boolean): ArchiveQuestion {
 export interface ArchiveAsk {
   /** What Archive asks, by where the agent stood when it was raised. */
   readonly question: ArchiveQuestion;
-  /** Reads the agent `agentId` names afresh, and answers whether the question may stand: false where a later ask overtook this one. */
+  /** Raises the question on where the list holds the agent `agentId` names, or reads one it doesn't hold afresh, and answers whether the question may stand: false where a later ask overtook this one. */
   readonly ask: (agentId: string) => Promise<boolean>;
   /** The question's act pressed: runs `archive` where the agent was asked about at work; where it was asked about at rest, reads it afresh and runs `archive` where it still rests, or asks again as Stop and archive (`present`) where it works or the read failed, unless a later ask began or the screen was left since. */
   readonly answered: (archive: () => void, present: () => void) => void;
 }
 
 /**
- * What Archive asks of the agent `agentId` names, read afresh before it's
- * raised, as the panel reads an agent again before archiving it
- * (`agent-archive.tsx`). Note that it asks Stop and archive where the fresh
- * read finds the agent at work, or where the read failed, because one that
- * started a turn since would otherwise be stopped without a word of it,
- * while a needless Stop and archive costs only its words. The question
- * keeps the words it was raised with while it stands, and an agent asked
- * about at rest is read again as the act is pressed and asked about again,
- * as Stop and archive, where it started a turn since, for the same reason.
+ * What Archive asks of the agent `agentId` names, raised at once on where
+ * the task list holds it now, and read afresh only for an agent the list
+ * doesn't hold, as the panel reads an agent before archiving it
+ * (`agent-archive.tsx`). Note that it asks Stop and archive where the agent
+ * works, or where a fresh read failed, because one that started a turn
+ * since would otherwise be stopped without a word of it, while a needless
+ * Stop and archive costs only its words. The question keeps the words it
+ * was raised with while it stands, and an agent asked about at rest is read
+ * afresh as the act is pressed and asked about again, as Stop and archive,
+ * where it started a turn since, for the same reason.
  * Only the latest ask answers, so a slow read for one agent never stands
  * its question over another's, and leaving the screen lets go of an ask
  * still reading, so its question never comes up over another screen. Note
@@ -99,8 +100,17 @@ export interface ArchiveAsk {
  */
 export function useArchiveAsk(agentId: string): ArchiveAsk {
   const readAgent = useReadAgent();
+  const queryClient = useQueryClient();
   const [askedWorking, setAskedWorking] = useState(false);
   const latest = useRef(0);
+
+  /** Whether the agent `asked` names works as the task list holds it now; none where the list doesn't hold it. */
+  const heldWorks = (asked: string): boolean | undefined => {
+    const state = queryClient.getQueryData(appStateQuery.queryKey);
+    const held = state === undefined ? undefined : selectFollowedAgent(asked)(state);
+
+    return held === undefined ? undefined : agentStillWriting(held.status);
+  };
 
   // Note that leaving the screen overtakes every ask still reading, as a later ask would.
   useFocusEffect(
@@ -131,7 +141,16 @@ export function useArchiveAsk(agentId: string): ArchiveAsk {
 
   return {
     question: archiveQuestion(askedWorking),
-    ask: (asked) => read(asked).then((working) => working !== undefined),
+    ask: (asked) => {
+      const held = heldWorks(asked);
+
+      if (held === undefined) return read(asked).then((working) => working !== undefined);
+      // Note that an ask raised from the list still overtakes a slower read raised before it.
+      latest.current += 1;
+      setAskedWorking(held);
+
+      return Promise.resolve(true);
+    },
     answered: (archive, present) => {
       if (askedWorking) {
         archive();
@@ -167,7 +186,7 @@ export interface AgentActions {
   readonly pin: () => void;
   /** What Archive asks first, by where the agent stands now, read afresh as it's raised. */
   readonly archiveAsk: ArchiveAsk;
-  /** Archives the agent, the question answered, and calls `onArchived` once the service took it. */
+  /** Archives the agent, the question answered, and calls `onArchived` as it's sent, a refusal said in the failure notice. */
   readonly archive: (onArchived: () => void) => void;
   /** What Permanently delete asks first of the agent, named as its page names it `name`. */
   readonly deleteQuestion: (name: string) => StopAgentsWords;
@@ -230,12 +249,16 @@ export function useAgentActions(agentId: string, address: string | undefined): A
         pinned ? ACT_FAILED.UNPIN : ACT_FAILED.PIN,
       ),
     archiveAsk,
-    archive: (onArchived) =>
-      send(
-        () => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }),
-        ACT_FAILED.ARCHIVE,
-        onArchived,
-      ),
+    archive: (onArchived) => {
+      setNote(undefined);
+      // Note that the page gives way as the archive is sent, since the host draws the agent archived at once, so a refusal says why in the failure notice rather than on a page that has gone.
+      void write(() => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }), {
+        refused: (answer) => ("failure" in answer ? ACT_FAILED.ARCHIVE : undefined),
+        unanswered: ACT_FAILED.ARCHIVE,
+        went: BUZZ.SUCCESS,
+      });
+      onArchived();
+    },
     deleteQuestion: (name) => deleteAgentWords(name, agent?.archivedAt !== undefined),
     remove: (onDeleted) =>
       send(

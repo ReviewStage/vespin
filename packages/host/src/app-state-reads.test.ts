@@ -31,6 +31,27 @@ describe("shareAppState", () => {
     expect(shared.tasks[0]).toBe(kept);
     expect(shared.tasks[1]).toBe(changed);
   });
+
+  it("answers a list a row joined at its head with the document's own rows, not each row laid over its neighbor", () => {
+    const by = { userId: "user-ada", name: "Ada" };
+    const first = { id: "first", title: "First", sentBy: { ...by }, files: [] };
+    const second = { id: "second", title: "Second", sentBy: { ...by }, files: [] };
+    const joined = { id: "joined", title: "Joined", sentBy: { ...by }, files: [] };
+    const document = { threads: [joined, first, second] };
+
+    const shared = shareAppState({ threads: [first, second] }, document);
+
+    expect(shared).toBe(document);
+  });
+
+  it("keeps a held row whose id repeats an earlier row's while another row changes", () => {
+    const repeated = { id: "a", value: 2 };
+    const held = [{ id: "a", value: 1 }, repeated, { id: "b" }];
+
+    const shared = shareAppState(held, [{ id: "a", value: 1 }, { id: "a", value: 2 }, { id: "c" }]);
+
+    expect(shared[1]).toBe(repeated);
+  });
 });
 
 describe("answerKeeper", () => {
@@ -72,7 +93,7 @@ const AGENT_ID = "a1b2c3d4-0000-4000-8000-0000000000aa";
 
 const UNTITLED_AGENT = {
   id: AGENT_ID,
-  planId: "a1b2c3d4-0000-4000-8000-0000000000bb",
+  taskId: "a1b2c3d4-0000-4000-8000-0000000000bb",
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: null,

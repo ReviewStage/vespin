@@ -120,7 +120,7 @@ test("an agent's written mentions of a page, an agent, a section, and a file are
     ],
   );
   assert.deepEqual(opened, [
-    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, planId: TASK, pageId: PAGE } },
+    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, taskId: TASK, pageId: PAGE } },
   ]);
 });
 

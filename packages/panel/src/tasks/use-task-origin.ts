@@ -57,7 +57,7 @@ const selectOriginAgents = memoizedSelect(
     const names = new Map(planning.tasks.map((task) => [task.id, task.name]));
 
     for (const agent of planning.taskAgents ?? []) {
-      agents.set(agent.id, originAgentOf(agent, agent.planId, names));
+      agents.set(agent.id, originAgentOf(agent, agent.taskId, names));
     }
 
     return agents;

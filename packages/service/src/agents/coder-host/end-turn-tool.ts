@@ -17,7 +17,7 @@ import { ACTION_RESULT_STATUS, isRecord, type UnparsedWireValue } from "../../co
 import { type AgentCall, agentToolRejected, callerAgent } from "../agent-tools.js";
 
 /** The bounds a turn's end is held to: the summary's characters, how many follow-ups, and each one's characters. */
-export const END_TURN_BOUNDS = {
+const END_TURN_BOUNDS = {
   SUMMARY_CHARS: 2_000,
   FOLLOW_UPS: 3,
   FOLLOW_UP_CHARS: 120,

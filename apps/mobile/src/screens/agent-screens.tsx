@@ -14,7 +14,7 @@ import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/feature
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
-import { agentName, modelLabel } from "@repo/features/model-label";
+import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -38,7 +38,9 @@ import {
   AskNote,
   AttachedPictures,
   BAR_TITLE,
+  CallCardRow,
   Composer,
+  type ComposerCall,
   type ComposerMenu,
   ConfirmAsk,
   DeniesWaiting,
@@ -116,6 +118,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { PageScreen } from "./page-screens.js";
 
@@ -168,7 +171,6 @@ const OPTIONS_WORDS = {
   EFFORT: "Effort",
   FAST: "Fast",
   DONE: "Done",
-  APPLIES: "Takes effect from the agent's next step.",
   READING_SERVERS: "Reading your MCP servers",
   NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
   MORE_SERVERS: "Connect another in Settings.",
@@ -196,7 +198,7 @@ function useAgentAddress(
   const place =
     taskId === undefined
       ? { kind: LINK_DESTINATION.AGENT, agentId }
-      : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId };
+      : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId };
 
   return step === undefined ? undefined : linkOf(place, step);
 }
@@ -274,6 +276,8 @@ function AgentComposerBar({
   onShowWaiting,
   addMenu,
   note,
+  call,
+  otherCall,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -282,6 +286,10 @@ function AgentComposerBar({
   readonly addMenu: ComposerMenu;
   /** What the last act of the page's menu or the + that did not take said, where the composer's own says nothing. */
   readonly note: string | undefined;
+  /** Talk, or the call's presses while a call into this agent stands; none while calls are not offered. */
+  readonly call: ComposerCall | undefined;
+  /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
+  readonly otherCall: ReturnType<typeof useStandingCallCard>;
 }) {
   const said = composer.note ?? note;
   const { banner, waiting } = approvals;
@@ -297,8 +305,12 @@ function AgentComposerBar({
     composer.paused === undefined &&
     composer.attached.length === 0 &&
     composer.skills === undefined &&
+    otherCall === undefined &&
     said === undefined ? undefined : (
       <>
+        {otherCall === undefined ? null : (
+          <CallCardRow call={otherCall.card} onOpen={otherCall.open} />
+        )}
         {composer.skills === undefined ? null : (
           <SkillSuggestions
             skills={composer.skills.skills}
@@ -330,6 +342,7 @@ function AgentComposerBar({
       onDropPictures={composer.dropPictures}
       onStop={composer.stop}
       stopping={composer.stopping}
+      call={call}
       head={head}
     />
   );
@@ -483,7 +496,7 @@ export function AgentScreen() {
   const asked = merging === undefined ? undefined : offers.get(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const address = useAgentAddress(id, shown?.workspaceId, shown?.planId);
+  const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
   const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
@@ -575,7 +588,7 @@ export function AgentScreen() {
     suggested,
   );
 
-  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.planId);
+  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId);
   const older = useOlderPages(id, transcript?.before);
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
@@ -592,7 +605,7 @@ export function AgentScreen() {
             id,
             title,
             workspaceId: shown.workspaceId,
-            taskId: shown.planId,
+            taskId: shown.taskId,
           },
           workspaces,
         ),
@@ -639,6 +652,8 @@ export function AgentScreen() {
   };
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
+  const talk = useAgentTalk(id, shown?.taskId);
+  const otherCall = useStandingCallCard(id);
 
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
   const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
@@ -730,7 +745,7 @@ export function AgentScreen() {
                     <Stack.Toolbar.MenuAction
                       key={offered.action.id}
                       icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
-                      subtitle={offered.action.command}
+                      subtitle={offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command}
                       onPress={offered.onPress}
                     >
                       {runActionMenuLabel(offered.action, offered.runs)}
@@ -788,6 +803,8 @@ export function AgentScreen() {
             onShowWaiting={showWaiting}
             addMenu={addMenu}
             note={actions.note ?? transcriptCopy.note ?? mode?.note ?? pick.note}
+            call={talk.call}
+            otherCall={otherCall}
           />
         }
       >
@@ -797,6 +814,7 @@ export function AgentScreen() {
           head={
             <AgentHead
               model={agent === undefined ? undefined : modelLabel(agent.model)}
+              harness={agent === undefined ? undefined : providerOf(agent.model)}
               status={status}
               onModel={openOptions}
             />
@@ -845,6 +863,7 @@ export function AgentScreen() {
         }}
         onDismiss={() => setRenaming(false)}
       />
+      <ConfirmAsk destructive {...talk.switching} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}
@@ -895,7 +914,7 @@ export function AgentPageScreen() {
   return (
     <PageScreen
       workspaceId={agent?.workspaceId}
-      taskId={agent?.planId}
+      taskId={agent?.taskId}
       pageId={page}
       version={Number(version)}
       title={title}
@@ -949,7 +968,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection footer={pick.note ?? OPTIONS_WORDS.APPLIES}>
+          <ListSection footer={pick.note}>
             <MenuPickRow
               label={OPTIONS_WORDS.MODEL}
               options={pick.models}

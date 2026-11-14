@@ -232,7 +232,7 @@ export interface AgentNotices {
   observeMessaged(agent: AgentSummary): void;
   /** A task the host no longer holds: its agents are forgotten. */
   observeTaskGone(taskId: string): void;
-  /** Every agent on a plan as the list followed live carries them, and the plans it holds: an agent of any other plan, or one of a held plan the list no longer names, as one archived, is forgotten. */
+  /** Every agent on a plan as the list followed live carries them, and the tasks it holds: an agent of any other plan, or one of a held plan the list no longer names, as one archived, is forgotten. */
   observeFollowed(agents: readonly AgentSummary[], taskIds: readonly string[]): void;
   /** The panel said which agent's tab it shows, or none. */
   shown(agentId: string | null): void;
@@ -307,9 +307,9 @@ function waitingTasks(items: readonly AccountInboxEntry[]): AppInboxSlice["waiti
       ...reminderOf(item),
     };
 
-    const held = tasks.get(item.planId);
+    const held = tasks.get(item.taskId);
 
-    if (held === undefined) tasks.set(item.planId, [waiting]);
+    if (held === undefined) tasks.set(item.taskId, [waiting]);
     else held.push(waiting);
   }
 
@@ -322,7 +322,7 @@ function dueBy(now: number): (item: { readonly remindAt?: number | null }) => bo
 }
 
 /** What an answer of the inbox read carries that the window and the Dock are told of. */
-type InboxAnswered = Pick<AccountInboxAnswer, "items" | "plans" | "failedRuns">;
+type InboxAnswered = Pick<AccountInboxAnswer, "items" | "tasks" | "failedRuns">;
 
 /** Whether two answers list the same tasks holding items, alike in order, count, To do count, and instant: a read mark moves the To do count alone. */
 function sameTasks(one: readonly AccountInboxTask[], other: readonly AccountInboxTask[]): boolean {
@@ -333,7 +333,7 @@ function sameTasks(one: readonly AccountInboxTask[], other: readonly AccountInbo
 
       return (
         was !== undefined &&
-        was.planId === task.planId &&
+        was.taskId === task.taskId &&
         was.items === task.items &&
         was.toDo === task.toDo &&
         was.updatedAt === task.updatedAt
@@ -390,7 +390,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     const clock = yield* Clock.Clock;
     const ledger = new Map<string, HeldAgent>();
     const unseen = new Set<string>();
-    /** The agents on plans the followed list last named, so one it stops naming is known to have left it rather than not reached it yet. */
+    /** The agents on tasks the followed list last named, so one it stops naming is known to have left it rather than not reached it yet. */
     let followedAgents = new Set<string>();
     /** How many pushes in a row have left out each agent the list has not named yet, as one only a Start answered. */
     const unnamedPushes = new Map<string, number>();
@@ -495,7 +495,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
                   : "Your agent failed.",
             place: {
               kind: LINK_DESTINATION.AGENT,
-              planId: agent.taskId,
+              taskId: agent.taskId,
               agentId,
             },
           },
@@ -511,7 +511,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     function sliceOf(answer: InboxAnswered): AppInboxSlice {
       return {
         waiting: waitingTasks(answer.items),
-        tasks: answer.plans.map(({ planId: taskId, ...holding }) => ({
+        tasks: answer.tasks.map(({ taskId, ...holding }) => ({
           ...holding,
           taskId,
         })),
@@ -578,8 +578,8 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       // Note that an answer at the same cursor holding fewer of the account's own items is written, because the account's id, which picks them, may have arrived since.
       if (was?.cursor === answer.cursor && was.items.length === answer.items.length) {
         // Note that the tasks holding items may move with nothing waiting moving, an archive or a read mark, so they are written alone.
-        if (sameTasks(was.plans, answer.plans)) return Effect.void;
-        const moved = { ...was, plans: answer.plans };
+        if (sameTasks(was.tasks, answer.tasks)) return Effect.void;
+        const moved = { ...was, tasks: answer.tasks };
         waiting = moved;
         dependencies.onInboxChanged(sliceOf(moved));
 
@@ -605,9 +605,9 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         if (item.asking !== true) continue;
         now.set(item.id, {
           kind: NOTICE_KIND.ITEM_ASKED,
-          title: dependencies.taskName(item.planId) ?? item.agentTitle ?? UNNAMED_AGENT,
+          title: dependencies.taskName(item.taskId) ?? item.agentTitle ?? UNNAMED_AGENT,
           body: item.title,
-          place: { kind: LINK_DESTINATION.INBOX_ITEM, planId: item.planId, itemId: item.id },
+          place: { kind: LINK_DESTINATION.INBOX_ITEM, taskId: item.taskId, itemId: item.id },
         });
       }
 
@@ -632,7 +632,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       Effect.suspend(() => {
         waiting = undefined;
         asking = undefined;
-        const letGo = publishWaiting({ items: [], plans: [] });
+        const letGo = publishWaiting({ items: [], tasks: [] });
 
         if (reader === undefined) return letGo;
 
@@ -721,10 +721,10 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
 
     /** The agent as the ledger holds it. */
     function heldOf(
-      agent: Pick<AgentSummary, "planId" | "status" | "turn" | "turnId" | "startedBy" | "title">,
+      agent: Pick<AgentSummary, "taskId" | "status" | "turn" | "turnId" | "startedBy" | "title">,
     ): HeldAgent {
       return {
-        taskId: agent.planId,
+        taskId: agent.taskId,
         status: agent.status,
         failure: agent.turn?.failure,
         turnId: agent.turnId,
@@ -749,9 +749,9 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       observeTaskGone: (taskId) => forget((agent) => agent.taskId !== taskId),
       observeFollowed: (agents, taskIds) => {
         const held = new Set(taskIds);
-        // The list names every agent on its plans but the archived, so one it named and no longer
+        // The list names every agent on its tasks but the archived, so one it named and no longer
         // does takes its dot with it. One only a Start answered is kept through a push or two that
-        // leave it out, since a push of the plans may carry agents from before that Start, and let go
+        // leave it out, since a push of the tasks may carry agents from before that Start, and let go
         // after that, as one archived before the list ever named it.
         const named = new Set(agents.map((agent) => agent.id));
         forget((agent, agentId) => {
