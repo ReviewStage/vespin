@@ -1,0 +1,18 @@
+created iphone 6F427BF7-49AC-4C48-A453-0B4922E0A707
+iphone local storage: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/6F427BF7-49AC-4C48-A453-0B4922E0A707/data/Containers/Shared/AppGroup/73843397-54A2-4261-934D-69C5D1A0BC2F
+sel-iphone-light-pselfiles: fails 0 shots 2 
+sel-iphone-light-pselinbox: fails 0 shots 1 
+sel-iphone-dark-pselfiles: fails 0 shots 2 
+sel-iphone-dark-pselinbox: fails 0 shots 1 
+created ipad26 73C070FC-2E6E-4EDF-82D0-FC84D5E93F55
+ipad26 local storage: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/73C070FC-2E6E-4EDF-82D0-FC84D5E93F55/data/Containers/Shared/AppGroup/BB7A4CDD-BBE2-42A0-924C-3DB2C90C49FF
+sel-ipad26-light-pselfiles: fails 0 shots 2 
+sel-ipad26-light-pselinbox: fails 0 shots 1 
+sel-ipad26-dark-pselfiles: fails 0 shots 6 
+sel-ipad26-dark-pselinbox: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+created ipad27 B295FCD1-5AAD-4879-9275-C5ED6CA8021D
+ipad27 local storage: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/B295FCD1-5AAD-4879-9275-C5ED6CA8021D/data/Containers/Shared/AppGroup/B21EB1B1-8FF4-4FBC-B2EB-6CC3DFBF9780
+sel-ipad27-light-pselfiles: fails 0 shots 2 
+sel-ipad27-light-pselinbox: fails 0 shots 1 
+sel-ipad27-dark-pselfiles: fails 0 shots 6 
+sel-ipad27-dark-pselinbox: fails 0 shots 1 
