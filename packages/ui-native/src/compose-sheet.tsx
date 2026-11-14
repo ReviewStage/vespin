@@ -15,8 +15,10 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityAddTraits,
   accessibilityIdentifier,
   accessibilityLabel,
+  accessibilityRemoveTraits,
   buttonStyle,
   controlSize,
   disabled,
@@ -33,7 +35,7 @@ import {
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
-import type { ComposerMenu } from "./composer.js";
+import { ADD_LABEL, AddMenuItems, type ComposerMenu } from "./composer.js";
 import {
   type AttachedPicture,
   AttachedPictures,
@@ -54,9 +56,6 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How far apart the capsules in the dock's row stand, as the glass buttons over Notes' keyboard stand apart. */
 const CHIP_SPACING = SPACE.TIGHT * 2;
-
-/** What the sheet's + is heard as. */
-const ADD_LABEL = "Add";
 
 /**
  * Where a capsule menu stands: in a compose sheet's dock over the keyboard,
@@ -152,12 +151,19 @@ export function MenuChip(props: MenuChipProps) {
   const content = <ChipLabel label={label} {...leadOf(props)} />;
   const found = testId === undefined ? [] : [accessibilityIdentifier(testId)];
 
-  // Note that a capsule that can't be changed here stands as the same glass button held still, so the row's capsules keep one height and one look.
+  // Note that a capsule that can't be changed here stands as the same glass button held still, so the row's capsules keep one height and one look, and is heard as words rather than a button, as the field it reads is.
   if (menu === undefined) {
     return (
       <SwiftUIButton
         onPress={() => undefined}
-        modifiers={[...chipStyle(look), tint(colors.TEXT), disabled(true), ...found]}
+        modifiers={[
+          ...chipStyle(look),
+          tint(colors.TEXT),
+          disabled(true),
+          accessibilityRemoveTraits(["isButton"]),
+          accessibilityAddTraits(["isStaticText"]),
+          ...found,
+        ]}
       >
         {content}
       </SwiftUIButton>
@@ -322,32 +328,9 @@ function ComposeAddPress({ add }: { readonly add: ComposeAdd }) {
     );
   }
 
-  const submenus = menu.submenus ?? [];
-  const switches = menu.switches ?? [];
-
   return (
     <Menu label={glyph} modifiers={[...style, menuIndicator("hidden")]}>
-      {menu.actions.map((action) => (
-        <SwiftUIButton
-          key={action.label}
-          {...actContent(action.label, action.symbol)}
-          onPress={action.onPress}
-        />
-      ))}
-      {menu.actions.length === 0 || (submenus.length === 0 && switches.length === 0) ? null : (
-        <Divider />
-      )}
-      {submenus.map((submenu) => (
-        <BarMenuButton key={submenu.label} menu={submenu} />
-      ))}
-      {switches.map((each) => (
-        <Toggle
-          key={each.label}
-          label={each.label}
-          isOn={each.on}
-          onIsOnChange={() => each.onPress()}
-        />
-      ))}
+      <AddMenuItems menu={menu} />
     </Menu>
   );
 }
