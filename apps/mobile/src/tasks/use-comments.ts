@@ -18,6 +18,7 @@
  * caches for its chip to open.
  */
 
+import type { AgentAttachment } from "@repo/features/agent-wire";
 import { ATTACHMENT_VIEW, attachmentView, chipSize } from "@repo/features/attachment-model";
 import type { DescriptionBlock } from "@repo/features/description-blocks";
 import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
@@ -36,7 +37,7 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { COMMENT_SUBJECT, TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { BUZZ, THREAD_MEDIA, type ThreadMedia, type ThreadMessage } from "@repo/ui-native";
+import { BUZZ, buzz, THREAD_MEDIA, type ThreadMedia, type ThreadMessage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -320,10 +321,28 @@ export interface CommentReply {
   readonly note: string | undefined;
 }
 
-/** A reply sent and not yet answered as posted: its words, and the key it went under. */
+/** A reply sent and not yet answered as posted: its words, the pictures it carried, and the key it went under. */
 interface SentReply {
   readonly words: string;
+  readonly files: readonly AgentAttachment[];
   readonly key: string;
+}
+
+/**
+ * Whether a send goes again as the one `sent` names, under its key: the same
+ * words and the same pictures, by their bytes, as the panel's field asks
+ * (`sameFiles`), since the service answers a key it took as posted whatever
+ * the send carries, so a picture changed since would be dropped unseen.
+ */
+function sameSend(sent: SentReply | undefined, words: string, files: readonly AgentAttachment[]) {
+  return (
+    sent !== undefined &&
+    sent.words === words &&
+    sent.files.length === files.length &&
+    sent.files.every(
+      (file, at) => file.mediaType === files[at]?.mediaType && file.data === files[at]?.data,
+    )
+  );
 }
 
 /**
@@ -341,14 +360,27 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
+  // Note that a second tap before the next render reads no `sending` yet, so the send in flight is held here too, or two taps would post twice and hand the pictures back twice.
+  const inFlight = useRef(false);
 
   return useMemo(() => {
     const send = () => {
       const kept = words.trim();
 
-      if (kept === "" || sending || pictures.refusal !== undefined) return;
-      const key = sent?.words === kept ? sent.key : randomUUID();
-      setSent({ words: kept, key });
+      if (kept === "" || sending || inFlight.current) return;
+
+      // A picture past a bound holds the send back, saying why, as an agent's composer does.
+      if (pictures.refusal !== undefined) {
+        setNote(pictures.refusal);
+        buzz(BUZZ.WARNING);
+
+        return;
+      }
+
+      const files = pictures.files ?? [];
+      const key = sameSend(sent, kept, files) && sent !== undefined ? sent.key : randomUUID();
+      inFlight.current = true;
+      setSent({ words: kept, files, key });
       setSending(true);
       setNote(undefined);
       setWords("");
@@ -384,14 +416,17 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
         .then((went) => {
           if (went) setSent(undefined);
         })
-        .finally(() => setSending(false));
+        .finally(() => {
+          inFlight.current = false;
+          setSending(false);
+        });
     };
 
     return {
       words,
       onWords: setWords,
       pictures,
-      sendable: words.trim() !== "" && !sending && pictures.refusal === undefined,
+      sendable: words.trim() !== "" && !sending,
       send,
       note,
     };
@@ -463,15 +498,24 @@ export function useCommentStart(
     const send = async (): Promise<string | undefined> => {
       const kept = words.trim();
 
-      const blocked = block === undefined || quote === undefined || pictures.refusal !== undefined;
+      if (kept === "" || inFlight.current || block === undefined || quote === undefined) {
+        return undefined;
+      }
 
-      if (kept === "" || inFlight.current || blocked) return undefined;
+      // A picture past a bound holds the start back, saying why, as an agent's composer does.
+      if (pictures.refusal !== undefined) {
+        setNote(pictures.refusal);
+        buzz(BUZZ.WARNING);
 
+        return undefined;
+      }
+
+      const files = pictures.files ?? [];
       inFlight.current = true;
-      const again = sent?.words === kept ? sent : undefined;
+      const again = sameSend(sent, kept, files) ? sent : undefined;
       const key = again?.key ?? randomUUID();
       const threadId = again?.threadId ?? randomUUID();
-      setSent({ words: kept, key, threadId });
+      setSent({ words: kept, files, key, threadId });
       setSending(true);
       setNote(undefined);
 
@@ -487,7 +531,7 @@ export function useCommentStart(
               anchor: { from: block.from, to: block.to },
               text,
               words: kept,
-              attachments: [...(pictures.files ?? [])],
+              attachments: [...files],
             },
           }),
         {
@@ -518,8 +562,7 @@ export function useCommentStart(
       words,
       onWords: setWords,
       pictures,
-      sendable:
-        words.trim() !== "" && !sending && quote !== undefined && pictures.refusal === undefined,
+      sendable: words.trim() !== "" && !sending && quote !== undefined,
       send,
       note,
     };

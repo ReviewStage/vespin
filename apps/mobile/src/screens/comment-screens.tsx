@@ -125,6 +125,7 @@ export function CommentThreadScreen() {
               onSend={reply.send}
               head={fieldHead(reply.pictures, reply.note)}
               onAdd={reply.pictures.attach}
+              onDropPictures={reply.pictures.drop}
             />
           }
         >
@@ -227,6 +228,7 @@ export function NewCommentScreen() {
               onSend={send}
               head={fieldHead(start.pictures, start.note)}
               onAdd={start.pictures.attach}
+              onDropPictures={start.pictures.drop}
             />
           }
         >

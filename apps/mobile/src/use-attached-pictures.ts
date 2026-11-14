@@ -220,6 +220,15 @@ export function useAttachedPictures(
 
       return pictures;
     },
-    putBack: (carried) => setPictures((held) => [...carried, ...held]),
+    // Note that the pictures are numbered again in order, since a picture attached while the send was out was named from none held, and two of one name would both go.
+    putBack: (carried) => {
+      const next = [...carried, ...held.current].map((picture, at) => ({
+        ...picture,
+        file: { ...picture.file, name: pictureName(at + 1) },
+      }));
+
+      held.current = next;
+      setPictures(next);
+    },
   };
 }
