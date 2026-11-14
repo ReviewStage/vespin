@@ -49,7 +49,7 @@ const PostedRowSchema = Schema.Struct({
  * Writes the ask, where the account holds the command claimed and the
  * device is the account's and not removed, and the command was queued for
  * that device or for none; the agent is the command's. An ask posted again
- * under its id stands as it was, so a machine's retry answers it held.
+ * under its id writes nothing.
  */
 const insertAsk = SqlSchema.findAll({
   Request: PostedRowSchema,
@@ -86,12 +86,7 @@ const insertAsk = SqlSchema.findAll({
               ),
             ),
         )
-        .onConflictDoUpdate({
-          target: machineCommandAsk.id,
-          // Note that the row is written again as it stands, so a retry answers the transaction it stands in.
-          set: { askedAt: sql`${machineCommandAsk.askedAt}` },
-          setWhere: eq(machineCommandAsk.userId, row.userId),
-        })
+        .onConflictDoNothing({ target: machineCommandAsk.id })
         .returning(TXID_RETURNING),
     ),
 });
@@ -108,14 +103,13 @@ const writeAnswer = SqlSchema.findAll({
     ...AskKeySchema.fields,
     decision: machineAskDecisionSchema,
     note: Schema.NullOr(Schema.String),
-    now: Schema.Date,
   }),
   Result: Schema.Struct({ ...StandingSchema.fields, txid: Schema.String }),
-  execute: ({ userId, id, decision, note, now }) =>
+  execute: ({ userId, id, decision, note }) =>
     Database.use((db) =>
       db
         .update(machineCommandAsk)
-        .set({ decision, note, answeredAt: now })
+        .set({ decision, note })
         .where(
           and(
             eq(machineCommandAsk.id, id),
@@ -242,7 +236,6 @@ export function answerMachineAsk(
   answer: { readonly id: string; readonly decision: MachineAskDecision; readonly note?: string },
 ): TaskStoreEffect<MachineAskStanding | undefined> {
   return Effect.gen(function* () {
-    const now = yield* DateTime.nowAsDate;
     const note = answer.decision === MACHINE_ASK_DECISION.DENY ? (answer.note ?? null) : null;
 
     const [written] = yield* writeAnswer({
@@ -250,7 +243,6 @@ export function answerMachineAsk(
       id: answer.id,
       decision: answer.decision,
       note,
-      now,
     });
 
     if (written !== undefined) {

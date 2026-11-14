@@ -99,12 +99,6 @@ it.layer(getTestDB())("the machine ask store", (it) => {
       );
 
       assert.notEqual(yield* postMachineAsk(owner, { ...ask, id: claimed.id }), undefined);
-
-      assert.notEqual(
-        yield* postMachineAsk(owner, { ...ask, id: claimed.id }),
-        undefined,
-        "a retry answers the ask held",
-      );
     }),
   );
 

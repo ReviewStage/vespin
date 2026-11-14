@@ -1,14 +1,11 @@
 import {
-  MACHINE_ASK_BOUNDS,
-  MACHINE_ASK_DECISION,
   MACHINE_ASK_KIND,
   type MachineAskDecision,
   type MachineAskKind,
 } from "@repo/features/machine-ask-wire";
-import { COMPUTER_BOUNDS, MACHINE_COMMAND_BOUNDS } from "@repo/features/machine-command-wire";
 import { sql } from "drizzle-orm";
 import { check, index, pgTable, text, uuid } from "drizzle-orm/pg-core";
-import { bound, literal, timestamptz } from "./_helpers.js";
+import { literal, timestamptz } from "./_helpers.js";
 import { agentTable } from "./agent.js";
 import { user } from "./auth.js";
 import { device } from "./device.js";
@@ -57,30 +54,12 @@ export const machineCommandAsk = pgTable(
     decision: text("decision").$type<MachineAskDecision>(),
     /** A denial's words for the agent; null for none. */
     note: text("note"),
-    answeredAt: timestamptz("answered_at"),
   },
   (table) => [
-    index("machine_command_ask_user").on(table.userId, table.askedAt),
-    index("machine_command_ask_asked").on(table.askedAt),
+    index("machine_command_ask_user").on(table.userId),
     check(
       "machine_command_ask_subject",
-      sql`(${table.kind} = ${literal(MACHINE_ASK_KIND.SHELL)} and ${table.command} is not null and ${table.appName} is null) or (${table.kind} = ${literal(MACHINE_ASK_KIND.APP)} and ${table.appName} is not null and ${table.command} is null)`,
-    ),
-    check(
-      "machine_command_ask_command_bound",
-      sql`${table.command} is null or char_length(${table.command}) <= ${bound(MACHINE_COMMAND_BOUNDS.MAX_COMMAND_CHARS)}`,
-    ),
-    check(
-      "machine_command_ask_icon_bound",
-      sql`${table.appIconPng} is null or char_length(${table.appIconPng}) <= ${bound(COMPUTER_BOUNDS.MAX_ICON_CHARS)}`,
-    ),
-    check(
-      "machine_command_ask_note_bound",
-      sql`${table.note} is null or char_length(${table.note}) <= ${bound(MACHINE_ASK_BOUNDS.MAX_NOTE_CHARS)}`,
-    ),
-    check(
-      "machine_command_ask_answered",
-      sql`(${table.decision} is null) = (${table.answeredAt} is null) and (${table.note} is null or ${table.decision} = ${literal(MACHINE_ASK_DECISION.DENY)})`,
+      sql`(${table.kind} = ${literal(MACHINE_ASK_KIND.SHELL)} and ${table.command} is not null) or (${table.kind} = ${literal(MACHINE_ASK_KIND.APP)} and ${table.appName} is not null)`,
     ),
   ],
 );

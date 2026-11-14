@@ -441,11 +441,12 @@ export const taskReadSync = defineSyncTable(taskRead, {
  * `machine_command_device_listener`), which every such read rewrites, are not
  * captured: no read waits on them. A stopped recording's video is ignored
  * too, since its call reads it only once the result it comes before
- * notifies, and an update comparing it would weigh its bytes.
+ * notifies, and an update comparing it would weigh its bytes, and so is the
+ * agent the command is for, which is written with it and never moves.
  */
 export const machineCommandSync = defineSyncTable(machineCommand, {
   topics: [{ kind: TOPIC.ACCOUNT, column: machineCommand.userId }],
-  ignore: [machineCommand.recording],
+  ignore: [machineCommand.recording, machineCommand.agentId],
 });
 
 /**
