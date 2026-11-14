@@ -195,20 +195,26 @@ function processOf(run: RunActionStart): readonly string[] {
  * under the id, as a tab's attach makes one afresh after a stop forgot the
  * action's (`attachTerminal`), is ended first, so the action's id is never
  * lost to it; one marked for a run action, as a press made at once beside
- * this one starts, is left, and tmux refuses this start. Note that the pane
- * is kept on exit by a command of the same list, because tmux runs a list
- * whole before it hears a process end, so even a command that ends at once
- * leaves its pane and its status standing.
+ * this one starts, is left, and tmux refuses this start. Note that the mark
+ * is read by tmux in the start's own list (`if-shell -F`), because the
+ * server runs a client's list whole, so a press beside this one never marks
+ * the session between the read and the end of the shell; and that the shell
+ * ends in that list too, because a server left with no session exits, and a
+ * start sent after would reach it as it goes. The pane is kept on exit by a
+ * command of the same list, because tmux runs a list whole before it hears
+ * a process end, so even a command that ends at once leaves its pane and its
+ * status standing.
  */
 export function startRunAction(terminalId: string, run: RunActionStart): CommandAsk {
   const target = optionTargetOf(terminalId);
+  const unmarked = `#{==:#{${TMUX.RUN_ACTION_OPTION}},}`;
 
   return script(
     [
       "target=$1 && shift",
-      `if tmux has-session -t "$target" 2>/dev/null && [ -z "$(tmux show-options -qv -t "$target:" ${TMUX.RUN_ACTION_OPTION} 2>/dev/null)" ]; then`,
-      // Note that the shell ends in the start's own list, because a server left with no session exits, and a start sent after would reach it as it goes.
-      `  exec tmux -L ${TMUX.SOCKET} kill-session -t "$target" ";" "$@"`,
+      // A session not there has nothing to end, and the list's read of its mark would fail on it.
+      `if tmux has-session -t "$target" 2>/dev/null; then`,
+      `  exec tmux -L ${TMUX.SOCKET} if-shell -F -t "$target:" '${unmarked}' "kill-session -t $target" ";" "$@"`,
       "fi",
       `exec tmux -L ${TMUX.SOCKET} "$@"`,
     ].join("\n"),
