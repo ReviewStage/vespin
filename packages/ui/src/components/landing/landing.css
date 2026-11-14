@@ -39,10 +39,9 @@
   }
 
   /* A hairline across the page's whole width, between its parts. */
-  /* off-scale: the hairline at half the border's ink, barely there */
   .ui-landing-rule {
     height: 1px;
-    background: color-mix(in srgb, var(--ui-color-border) 50%, transparent);
+    background: var(--ui-color-border);
   }
 
   /* The bar: across the page at its top, then, once the page scrolls, a
