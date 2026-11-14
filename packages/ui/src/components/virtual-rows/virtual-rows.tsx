@@ -534,7 +534,9 @@ export function VirtualRows({
   }, [scroller, shiftedBy]);
   // The rows' block stands below whatever the scroller draws above it, its padding among it (`scrollMargin`).
   // Note that it is read only as the rows or the scroller's size change, never on a scroll's
-  // draw, because reading where the block stands lays the whole log out again mid-frame.
+  // draw, because reading where the block stands lays the whole log out again mid-frame; and
+  // the rows are the steady keys, because a caller hands its keys anew on each delivery of
+  // app state, which would read it on every one though no row moved.
   useLayoutEffect(() => {
     const element = block.current;
     const box = scroller.current;
@@ -542,7 +544,7 @@ export function VirtualRows({
     if (element === null || box === null) return;
     const at = Math.round(offsetWithin(element, box));
     setMargin((was) => (was === at ? was : at));
-  }, [keys, sized, scroller]);
+  }, [steady, sized, scroller]);
   const bringing = useRef<Bringing | undefined>(undefined);
 
   const rowElement = useCallback(
@@ -633,10 +635,10 @@ export function VirtualRows({
   };
 
   useLayoutEffect(() => {
-    const listed = new Set<VirtualItem["key"]>(keys);
+    const listed = new Set<VirtualItem["key"]>(steady);
 
     for (const key of places.current.keys()) if (!listed.has(key)) places.current.delete(key);
-  }, [keys]);
+  }, [steady]);
   const items: VirtualItem[] = virtualizer.getVirtualItems();
   const own = listItems || options ? "ui-virtual-rows ui-virtual-items" : "ui-virtual-rows";
 

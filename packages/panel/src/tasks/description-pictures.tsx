@@ -4,7 +4,7 @@ import {
   descriptionAttachmentOf,
   taskPicturesIn,
 } from "@repo/features/description-attachment-link";
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
 import { ACT_KIND } from "@repo/host/acts";
 import { PICTURE_STATE, usePicture } from "@repo/ui/picture-read";
 import { useQueryClient } from "@tanstack/react-query";
@@ -131,7 +131,7 @@ export function DescriptionPictures({
 
   const read = useCallback(
     (owner: string, id: string) =>
-      askAct(ACT_KIND.TASKS_PICTURE_READ, { planId: owner, attachmentId: id }),
+      askAct(ACT_KIND.TASKS_PICTURE_READ, { taskId: owner, attachmentId: id }),
     [],
   );
 

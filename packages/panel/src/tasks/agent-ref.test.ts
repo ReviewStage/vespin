@@ -39,7 +39,7 @@ test("an agent no read of its task holds is named and marked as its thread was r
 test("an agent its task's read holds is named as that read names it, over the line its thread was read with", () => {
   const held: AgentSummary = {
     id: AGENT_ID,
-    planId: "5d0c3f0e-7b8a-4d2b-9c61-2f4e8a1b6c73",
+    taskId: "5d0c3f0e-7b8a-4d2b-9c61-2f4e8a1b6c73",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Renamed since the channel was read",

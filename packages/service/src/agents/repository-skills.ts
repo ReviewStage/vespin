@@ -33,9 +33,9 @@ import {
   SKILL_NAME_RULE,
 } from "@repo/features/skill-file";
 import { TASK_SKILL_BOUNDS } from "@repo/features/task-wire";
-import { Effect, type Redacted } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
-import type { GitHubUnavailable } from "../github/github-app.js";
+import type { GitHubFailure } from "@repo/github";
+import { Effect } from "effect";
+import type { GitHubBearer } from "../github/github-app.js";
 import { readRepositoryFile } from "../github/repository-file.js";
 import { GIT_ENTRY, readRepositoryFolder } from "../github/repository-folder.js";
 
@@ -107,11 +107,11 @@ interface SkillFolder {
 
 /** The skill folders a root holds, by the convention's names, in name order; none where the root stands nowhere. */
 function rootFolders(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   repository: { readonly fullName: string; readonly defaultBranch: string },
   root: SkillRoot,
-): Effect.Effect<readonly SkillFolder[], GitHubUnavailable, HttpClient.HttpClient> {
-  return Effect.map(readRepositoryFolder(token, repository, root), (folder) =>
+): Effect.Effect<readonly SkillFolder[], GitHubFailure> {
+  return Effect.map(readRepositoryFolder(bearer, repository, root), (folder) =>
     folder.found
       ? folder.entries
           .filter((entry) => entry.type === GIT_ENTRY.TREE && SKILL_NAME_RULE.test(entry.name))
@@ -123,14 +123,14 @@ function rootFolders(
 
 /** One folder's `SKILL.md` read and held to the convention; nothing where it is missing, too large, not text, or breaks it. */
 function readSkill(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   repository: { readonly fullName: string; readonly defaultBranch: string },
   folder: SkillFolder,
-): Effect.Effect<RepositorySkill | undefined, GitHubUnavailable, HttpClient.HttpClient> {
+): Effect.Effect<RepositorySkill | undefined, GitHubFailure> {
   const path = `${folder.root}/${folder.name}/${SKILL_FILE}`;
 
   return Effect.map(
-    readRepositoryFile(token, repository, repository.defaultBranch, path),
+    readRepositoryFile(bearer, repository, repository.defaultBranch, path),
     (file) => {
       if (!file.regular || file.content === undefined) return undefined;
 
@@ -154,12 +154,12 @@ export function skillFilePath(skill: Pick<RepositorySkill, "folder">): string {
  * first's breaks the convention, and no more than the bounds.
  */
 export function readRepositorySkills(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   repository: { readonly fullName: string; readonly defaultBranch: string },
-): Effect.Effect<readonly RepositorySkill[], GitHubUnavailable, HttpClient.HttpClient> {
+): Effect.Effect<readonly RepositorySkill[], GitHubFailure> {
   return Effect.gen(function* () {
     const listed = yield* Effect.forEach(Object.values(SKILL_ROOT), (root) =>
-      rootFolders(token, repository, root),
+      rootFolders(bearer, repository, root),
     );
 
     // Note that the sort is stable, so a name's folders stay in root order.
@@ -168,7 +168,7 @@ export function readRepositorySkills(
       .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, REPOSITORY_SKILLS.MAX_READS);
 
-    const read = yield* Effect.forEach(folders, (folder) => readSkill(token, repository, folder), {
+    const read = yield* Effect.forEach(folders, (folder) => readSkill(bearer, repository, folder), {
       concurrency: REPOSITORY_SKILLS.READ_CONCURRENCY,
     });
 

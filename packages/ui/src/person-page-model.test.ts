@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import { AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { test } from "vitest";
-import { agentStarter, personPage, personPageEmpty, personRef } from "./person-page-model.js";
+import {
+  agentStarter,
+  personCounts,
+  personHeld,
+  personPage,
+  personPageEmpty,
+  personRef,
+} from "./person-page-model.js";
 
 /**
  * A person's page lists what of theirs the listed workspace's task list
@@ -47,7 +54,7 @@ function agent(
 
   const listed: ListedAgent = {
     id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
-    planId: on.id,
+    taskId: on.id,
     title: `Agent ${n}`,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
@@ -147,4 +154,25 @@ test("a person is named as the list names them, by a task they created or an age
   assert.deepEqual(personRef(DANA.userId, TASKS, AGENTS), DANA);
   assert.deepEqual(personRef(CHARLES.userId, [CACHE], AGENTS), CHARLES);
   assert.equal(personRef("user-sam", TASKS, AGENTS), undefined);
+});
+
+test("each section counts what it lists and what the service counted past what the list held, never fewer than it lists", () => {
+  const page = personPage(CHARLES.userId, TASKS, AGENTS);
+  const held = personHeld(page);
+
+  assert.deepEqual(personCounts(page, undefined), { assigned: 0, created: 2, agents: 2 });
+  // Three assigned tasks and one agent the list does not hold, the agents counted at work or not.
+  assert.deepEqual(personCounts(page, { counts: { assigned: 3, created: 2, agents: 5 }, held }), {
+    assigned: 3,
+    created: 2,
+    agents: 3,
+  });
+  // A count read before a task joined the list counts no fewer than the section lists.
+  assert.deepEqual(
+    personCounts(page, {
+      counts: { assigned: 0, created: 1, agents: 4 },
+      held: { ...held, created: 1 },
+    }),
+    { assigned: 0, created: 2, agents: 2 },
+  );
 });

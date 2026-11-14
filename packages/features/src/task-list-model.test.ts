@@ -4,6 +4,7 @@ import {
   childTaskCounts,
   createdByOnly,
   drawnTaskRows,
+  orderTasks,
   type RepositoryGroup,
   repositoryGroups,
   repositoryLabel,
@@ -58,11 +59,13 @@ const names = (groups: readonly RepositoryGroup[]) =>
   groups.map((group) => group.tasks.map((each) => each.name));
 
 test("a repository group lists its tasks newest updated first, the time each row shows", () => {
-  const groups = repositoryGroups([
-    task("old", "acme/relay", 3, 10),
-    task("touched", "acme/relay", 1, 30),
-    task("new", "acme/relay", 2, 20),
-  ]);
+  const groups = repositoryGroups(
+    orderTasks([
+      task("old", "acme/relay", 3, 10),
+      task("touched", "acme/relay", 1, 30),
+      task("new", "acme/relay", 2, 20),
+    ]),
+  );
 
   expect(names(groups)).toEqual([["touched", "new", "old"]]);
 });
@@ -111,7 +114,7 @@ test("a task whose agent ended a turn after another task's description was edite
     },
   };
 
-  const groups = repositoryGroups([edited, worked]);
+  const groups = repositoryGroups(orderTasks([edited, worked]));
   expect(names(groups)).toEqual([["Agent finished at 800", "Description edited at 500"]]);
   expect(taskTime(worked, TASK_ORDER.UPDATED)).toBe(800);
   expect(taskTime(edited, TASK_ORDER.UPDATED)).toBe(500);
@@ -313,4 +316,34 @@ test("a parent counts its direct child tasks that are done or canceled, of all i
   expect(counts.get("parent")).toEqual({ finished: 2, total: 4 });
   expect(counts.get("working")).toEqual({ finished: 1, total: 1 });
   expect(counts.has("shipped")).toBe(false);
+});
+
+test("a parent counts the finished sub-task the service counted outside the list, its own children where the list holds every one, and the service's where the list holds one more", () => {
+  const withStatus = (name: string, parent: string | undefined, status: TaskStatus) => ({
+    ...childTask(name, 1, parent),
+    status,
+  });
+
+  const counts = childTaskCounts([
+    // The list holds the open child alone; the service counted a finished one beside it.
+    {
+      ...withStatus("parent", undefined, TASK_STATUS.IN_PROGRESS),
+      subTasks: { finished: 1, total: 2 },
+    },
+    withStatus("working", "parent", TASK_STATUS.IN_PROGRESS),
+    // The list holds the child, just marked done, which the service has not counted yet.
+    { ...withStatus("other", undefined, TASK_STATUS.TODO), subTasks: { finished: 0, total: 1 } },
+    withStatus("shipped", "other", TASK_STATUS.DONE),
+    // The service counted a child the list holds none of.
+    { ...withStatus("lone", undefined, TASK_STATUS.TODO), subTasks: { finished: 1, total: 1 } },
+    // The list still holds a child read outside it that has since moved to another parent.
+    { ...withStatus("left", undefined, TASK_STATUS.TODO), subTasks: { finished: 0, total: 1 } },
+    withStatus("staying", "left", TASK_STATUS.TODO),
+    withStatus("moved", "left", TASK_STATUS.DONE),
+  ]);
+
+  expect(counts.get("parent")).toEqual({ finished: 1, total: 2 });
+  expect(counts.get("other")).toEqual({ finished: 1, total: 1 });
+  expect(counts.get("lone")).toEqual({ finished: 1, total: 1 });
+  expect(counts.get("left")).toEqual({ finished: 0, total: 1 });
 });

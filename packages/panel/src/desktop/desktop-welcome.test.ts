@@ -13,7 +13,14 @@ const PLAN = {
   repository: "acme/relay",
 };
 
-test.each([
+test.each<{
+  case: string;
+  signedIn: boolean;
+  listRead: boolean;
+  tasks: (typeof PLAN)[];
+  taskWorkspaces?: readonly string[];
+  fresh: boolean;
+}>([
   {
     case: "signed in, its list read, holding nothing",
     signedIn: true,
@@ -30,6 +37,15 @@ test.each([
     tasks: [PLAN],
     fresh: false,
   },
-])("an account $case is new: $fresh", ({ signedIn, listRead, tasks, fresh }) => {
-  assert.equal(welcomed(tasksControl({ signedIn, listRead, tasks })), fresh);
+  {
+    case: "whose only tasks the list does not hold, as old and finished ones",
+    signedIn: true,
+    listRead: true,
+    tasks: [],
+    taskWorkspaces: ["workspace-team"],
+    fresh: false,
+  },
+])("an account $case is new: $fresh", ({ signedIn, listRead, tasks, taskWorkspaces, fresh }) => {
+  const said = taskWorkspaces === undefined ? undefined : { taskWorkspaces };
+  assert.equal(welcomed(tasksControl({ signedIn, listRead, tasks, ...said })), fresh);
 });

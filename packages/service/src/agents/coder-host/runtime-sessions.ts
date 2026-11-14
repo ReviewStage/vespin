@@ -40,6 +40,7 @@ import {
 } from "@repo/features/agent-wire";
 import { failureKind } from "@repo/runtime/effect";
 import { Context, Effect, Option } from "effect";
+import type * as HttpClient from "effect/http/HttpClient";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import {
   HOSTED_REFUSAL,
@@ -60,6 +61,7 @@ import {
   SESSION_SEND_OUTCOME,
   type SessionMessage,
   type SessionTurn,
+  type TypedTurn,
 } from "../sessions/agent-sessions.js";
 import { agentLogIds } from "./agent-log.js";
 import { harnessOf, type NativeRuntime, nativeRuntimeOfSession } from "./native-runtime.js";
@@ -205,6 +207,15 @@ export const routedSessions = <Turn extends SessionTurn>(
   account: string,
 ): Effect.Effect<AgentSessions<Turn>, never, DatabaseServices> =>
   Effect.map(sessionsRouter, (route) => route<Turn>(account));
+
+/** The agents' sessions as the service reaches them acting for one member, whose queued message goes as theirs, or the refusal where it cannot. */
+export type QueueSessions = (
+  account: string,
+) => Effect.Effect<
+  AgentSessions<TypedTurn>,
+  HostedRefusal,
+  HttpClient.HttpClient | DatabaseServices
+>;
 
 /** The sessions of each account a composer acts for, as `routedSessions` reads them. */
 export type SessionsRouter = <Turn extends SessionTurn>(account: string) => AgentSessions<Turn>;

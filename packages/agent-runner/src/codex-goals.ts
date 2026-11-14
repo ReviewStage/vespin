@@ -17,7 +17,7 @@ import type { ThreadGoal, ThreadGoalStatus } from "./codex-protocol/v2/index.js"
 import { RUNNER_EVENT, type RunnerGoal } from "./protocol.js";
 
 /** Codex's goal statuses, as app-server spells them. */
-export const CODEX_GOAL_STATUS = {
+const CODEX_GOAL_STATUS = {
   ACTIVE: "active",
   PAUSED: "paused",
   BLOCKED: "blocked",

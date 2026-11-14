@@ -3,7 +3,7 @@
  *
  * A task stands to another in one of four ways (`TASK_RELATION_KIND`): the
  * other blocks it, it blocks the other, the other is its sub-task (a child
- * of it), or the other is its parent. `POST /api/plans/{id}/relation`
+ * of it), or the other is its parent. `POST /api/tasks/{id}/relation`
  * (`tasks-procedures.ts`) moves one such relation from the kind it stood in
  * to another, as the task head's menu changes a row's kind in place: the
  * old relation is taken away and the new one added inside one transaction,

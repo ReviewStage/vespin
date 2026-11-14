@@ -77,6 +77,28 @@ export function typeInComposer(container: ParentNode, text: string): void {
   });
 }
 
+/** The words typed one key at a time, as the browser's text input hands each to the editor, so a Markdown rule a key completes, as `> ` making a quote, runs. */
+export function typeKeysInComposer(container: ParentNode, text: string): void {
+  const view = composerEditor(container).editor?.view;
+
+  if (view === undefined) throw new Error("the box's editor is running");
+  view.focus();
+
+  // Note that each key is its own act, because the box's owner draws again between a browser's keystrokes.
+  for (const character of text) {
+    act(() => {
+      const { from, to } = view.state.selection;
+      const typed = () => view.state.tr.insertText(character, from, to);
+
+      const ruled = view.someProp("handleTextInput", (handle) =>
+        handle(view, from, to, character, typed),
+      );
+
+      if (ruled !== true) view.dispatch(typed());
+    });
+  }
+}
+
 /** The box's words replaced by `text`, as words selected whole and typed over are; nothing empties it. */
 export function writeInComposer(container: ParentNode, text: string): void {
   const editor = composerEditor(container).editor;

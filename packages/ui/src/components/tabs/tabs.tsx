@@ -28,6 +28,7 @@ import type { StatusTone } from "../../status-tone.js";
 import { useClipped } from "../../use-clipped.js";
 import { ANNOUNCE, announce } from "../announcer/announcer.js";
 import { BUTTON_SIZE, IconButton } from "../button/button.js";
+import { CARD_CORNER, CARD_PADDING, Card } from "../card/card.js";
 import type { ContextMenuProps } from "../menu/context-menu.js";
 import { MENU_ALIGN, MENU_DROP, type MenuPlacement, opensMenu } from "../menu/menu.js";
 import {
@@ -741,7 +742,11 @@ export function TabCard({
       }}
       onContextMenu={pickOnPress ? (event) => event.preventDefault() : undefined}
     >
-      <div className="ui-tab-card-preview flex h-[110px] items-center justify-center mb-0.5 border border-solid border-border rounded-ui-6 bg-surface overflow-hidden group-data-[here=true]/card:opacity-55">
+      <Card
+        corner={CARD_CORNER.CONTROL}
+        padding={CARD_PADDING.FLUSH}
+        className="ui-tab-card-preview flex h-[110px] items-center justify-center mb-0.5 group-data-[here=true]/card:opacity-55"
+      >
         {still === undefined ? (
           <span className="ui-tab-card-glyph inline-flex text-muted-foreground [--ui-glyph-size:28px] [&_:is(svg,img)]:size-[28px]">
             {icon}
@@ -754,7 +759,7 @@ export function TabCard({
             draggable={false}
           />
         )}
-      </div>
+      </Card>
       <div className="ui-tab-card-name flex min-w-0 items-center gap-icon-gap px-0.5 whitespace-nowrap [--ui-glyph-size:var(--ui-menu-glyph)] [&>:is(svg,img)]:size-menu-glyph [&>:is(svg,img)]:flex-none [&>.ui-text]:min-w-0 [&>.ui-text]:flex-auto [&>.ui-text]:overflow-hidden [&>.ui-text]:text-ellipsis">
         {icon}
         <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.LABEL}>

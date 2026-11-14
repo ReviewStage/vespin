@@ -807,7 +807,7 @@ test("on To do, the chosen row stands once the Inbox is come back to, gray, thou
   };
 
   // The invites plan's change is pushed, as an answer from another Mac would be.
-  world.main.push({ kind: INBOX_SCOPE_KIND.PLAN, id: INVITES.id }, { items: [answered] });
+  world.main.push({ kind: INBOX_SCOPE_KIND.TASK, id: INVITES.id }, { items: [answered] });
   await settle();
   // Note that the push reaches the hidden Inbox's read one notify tick later, which lands before it is shown again.
   await settle();
@@ -904,7 +904,7 @@ test("an answer no reply came back for stays on its thread marked Not delivered,
   const [reply, ...rest] = THRESHOLD_ANSWERED.thread ?? [];
   const lookalike = rest.at(-1) ?? assert.fail("the answered item ends with its answer");
   world.main.push(
-    { kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id },
+    { kind: INBOX_SCOPE_KIND.TASK, id: BILLING.id },
     { items: [THRESHOLD_ANSWERED, RETRY] },
   );
   await settle();
@@ -918,7 +918,7 @@ test("an answer no reply came back for stays on its thread marked Not delivered,
     thread: [...(reply === undefined ? [] : [reply]), { ...lookalike, clientKey }],
   };
 
-  world.main.push({ kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id }, { items: [landed, RETRY] });
+  world.main.push({ kind: INBOX_SCOPE_KIND.TASK, id: BILLING.id }, { items: [landed, RETRY] });
   await settle();
   await vi.waitFor(() => assert.deepEqual(undeliveredWords(page), [], "the reply is let go"));
   assert.equal(composerEditor(itemPane(page)).textContent, "");

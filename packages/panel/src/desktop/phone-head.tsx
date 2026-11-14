@@ -20,7 +20,6 @@ import { useEffect, useRef, useState } from "react";
 import { appCommandOffered, runAppCommand } from "../app-commands.js";
 import { ActionMenu, type MenuAction, type MenuEnds, type MenuEntry } from "./action-menu.js";
 import { OfflineStrip } from "./offline-mark.js";
-import type { TaskHeadBack } from "./task-pane-switcher.js";
 
 /**
  * phone-head.tsx -- a phone's page header: one control in each corner and the page's title centered between them.
@@ -43,6 +42,13 @@ import type { TaskHeadBack } from "./task-pane-switcher.js";
  * behind (`OfflineStrip`), because a phone keeps the sidebar's foot, where
  * the mark stands, in a drawer out of sight.
  */
+
+/** Where the way back goes, what it is called there, and what a reader is told it does where its glyph stands alone. */
+export interface TaskHeadBack {
+  readonly label: string;
+  readonly name?: string | undefined;
+  readonly onPress: () => void;
+}
 
 /** An ask, from a phone's ⋯, to open a menu of the page's own under it: the ⋯ it hangs from, and the ask's turn, so the same ask twice opens it twice. */
 export interface MenuAsk {

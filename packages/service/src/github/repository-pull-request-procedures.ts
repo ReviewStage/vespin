@@ -58,10 +58,10 @@ export function repositoryPullRequestProcedures(seams: RepositoryPullRequestProc
      * gain: a non-member is refused all the same.
      */
     reviewOptions: signedIn.reviewOptions.effect(function* ({ input, context }) {
-      const { token, access, subject } = yield* reachedRepository(context.userId, input);
+      const { bearer, access, subject } = yield* reachedRepository(context.userId, input);
 
       return yield* githubReadRefusal(
-        pullRequestReviewOptions(token, subject.repository).pipe(markRefusedToken(access)),
+        pullRequestReviewOptions(bearer, subject.repository).pipe(markRefusedToken(access)),
       ).pipe(
         Effect.flatMap((read) =>
           namedReviewOptions({ organizationId: subject.organizationId }, read),

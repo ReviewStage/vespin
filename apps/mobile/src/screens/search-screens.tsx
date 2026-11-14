@@ -21,7 +21,9 @@ import {
   glyphSymbol,
   LIST_LOOK,
   ListSection,
+  NoSelection,
   RowList,
+  type RowSubmenu,
   ScopePicker,
   Screen,
   UNDER_SPLIT_SCREEN,
@@ -40,7 +42,7 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
-import { useRemindSheet } from "./inbox-remind.js";
+import { useRemind } from "./inbox-remind.js";
 import { InboxItemRows } from "./inbox-screens.js";
 import { StatusQuestionAsk, TaskAgentRow, TaskRows, useAgentArchiveAsk } from "./task-screens.js";
 
@@ -57,7 +59,7 @@ const SCOPES: readonly SearchScope[] = Object.values(SEARCH_SCOPE);
 function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined> {
   return new Map([
     ...found.tasks.map(
-      (task) => [task.id, iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: task.id })] as const,
+      (task) => [task.id, iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: task.id })] as const,
     ),
     ...found.inbox.map(
       ({ holder, item }) =>
@@ -65,7 +67,7 @@ function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined
           item.id,
           iosAppRouteOf({
             kind: LINK_DESTINATION.INBOX_ITEM,
-            planId: holder.task.id,
+            taskId: holder.task.id,
             itemId: item.id,
           }),
         ] as const,
@@ -94,7 +96,7 @@ function FoundList({
   scope,
   listing,
   onOpen,
-  onRemind,
+  remindMenu,
   onArchiveAgent,
 }: {
   readonly found: SearchFound;
@@ -102,8 +104,8 @@ function FoundList({
   /** The Tasks listing a task's row acts through, its status asking first where it stops agents. */
   readonly listing: TasksListing;
   readonly onOpen: (id: string) => void;
-  /** Opens Remind me on a thread found, as the Inbox's row does. */
-  readonly onRemind: (item: InboxItem) => void;
+  /** Remind me's times on a thread found, as the Inbox's row offers them. */
+  readonly remindMenu: (item: InboxItem) => RowSubmenu;
   /** Asks to archive an agent found, once it rests, as a task's Agents do. */
   readonly onArchiveAgent: (agentId: string) => void;
 }) {
@@ -139,7 +141,7 @@ function FoundList({
             readerId={found.readerId}
             pictureOf={pictureOf}
             onMark={mark}
-            onRemind={onRemind}
+            remindMenu={remindMenu}
             onResolve={resolve}
           />
         </ListSection>
@@ -177,7 +179,7 @@ function useSearchScreen({ query, scope, setScope }: SearchWords) {
   const found = useSearchFound(query);
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
   const { listing, status, deletion } = useListingAsks(found.listing);
-  const remind = useRemindSheet();
+  const remind = useRemind();
   const archiveAsk = useAgentArchiveAsk();
   const routes = foundRoutes(found);
   const onTab = useOnTab();
@@ -208,7 +210,7 @@ function useSearchScreen({ query, scope, setScope }: SearchWords) {
           scope={scope}
           listing={listing}
           onOpen={open}
-          onRemind={remind.open}
+          remindMenu={(item) => remind.menu([item])}
           onArchiveAgent={archiveAsk.archive}
         />
       )}
@@ -323,7 +325,7 @@ function SearchSplitColumns({
       title: SEARCH_TITLE,
       search: { placeholder: searchPlaceholder(scope), text: query, onChange: setQuery },
     },
-    detail: <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.SEARCH} />,
+    detail: <NoSelection title={CHOOSE_AN_ITEM_WORDS} />,
   });
 
   return null;
