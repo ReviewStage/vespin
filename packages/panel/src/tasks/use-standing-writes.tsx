@@ -87,13 +87,13 @@ function standingTasksOf(rows: TaskRows, taskIds: readonly string[]): readonly T
   });
 }
 
-/** Whether any of the task's agents is starting or running, read off the agents the list follows, else its count of them. */
-function agentsWorking(rows: TaskRows, task: TaskSummary): boolean {
+/** How many of the task's agents are starting or running, read off the agents the list follows, else its count of them. */
+function workingAgents(rows: TaskRows, task: TaskSummary): number {
   const listed = rows.tasks.taskAgents;
 
   return listed === undefined
-    ? (task.agents?.working ?? 0) > 0
-    : agentsOfTask(listed, task.id).some((agent) => agentStillWriting(agent.status));
+    ? (task.agents?.working ?? 0)
+    : agentsOfTask(listed, task.id).filter((agent) => agentStillWriting(agent.status)).length;
 }
 
 /** The standing writes a surface sends. */
@@ -216,8 +216,10 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
     const rows = standingDoors.rows();
     const changed = tasks.filter((task) => asked.some((change) => change.taskId === task.id));
 
-    if (!changed.some((task) => agentsWorking(rows, task))) return false;
-    setHeld({ changes: asked, status, words: settleStopWords(status) });
+    const working = changed.reduce((count, task) => count + workingAgents(rows, task), 0);
+
+    if (working === 0) return false;
+    setHeld({ changes: asked, status, words: settleStopWords(status, working) });
     confirm.ask();
 
     return true;

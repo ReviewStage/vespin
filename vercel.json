@@ -2,12 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
     "deploymentEnabled": {
-      "gh-readonly-queue/**": false,
-      "agent/**": false,
-      "luke/**": false,
-      "pr-assets": false,
-      "pr-assets-*": false,
-      "evidence/**": false
+      "main": true,
+      "**": false
     }
   },
   "services": {
