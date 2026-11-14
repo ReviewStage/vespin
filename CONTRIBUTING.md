@@ -38,8 +38,9 @@ A plain `./scripts/run.sh` quits any running Vespin first: a development build,
 a test build, and the installed release (`scripts/lib/workspace.sh`). Pass
 `--instance <name>` to leave the plain instance running, or `--keep-running` to
 leave every running instance as it is; the new launch then quits at startup
-and only brings the running panel forward. `--preview` needs a Vercel Preview
-that a maintainer has approved.
+and only brings the running panel forward. `--preview` needs a Vercel Preview,
+which no push builds: deploy the branch with Create Deployment in Vercel, or
+`vercel deploy` from its checkout.
 
 ## Developing without Vespin's accounts
 
@@ -150,8 +151,8 @@ section of [AGENTS.md](AGENTS.md) says how it merges.
 
 ## What happens to your PR
 
-A maintainer reviews it. CI runs every check; the Vercel Preview on a pull
-request from a fork waits for a maintainer to approve it. Once it is approved
+A maintainer reviews it. CI runs every check. No Vercel Preview is built
+on a push; a maintainer deploys one when the change needs looking at. Once it is approved
 and green, the merge queue tests it against the latest `main` and lands it.
 
 Contributions are licensed under Apache-2.0, as section 5 of the

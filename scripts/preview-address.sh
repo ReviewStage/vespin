@@ -43,7 +43,7 @@ set -euo pipefail
 #   5  PROTECTED: the preview answers only to a Vercel session
 #   6  NOT_READY: no record settled within the wait
 #   7  UNREADABLE: gh, git, or curl would not answer
-#   8  NOT_REQUESTED: an agent's branch no preview was asked for
+#   8  NOT_REQUESTED: a branch no preview was asked for
 
 EXIT_NOT_AFFECTED=3
 EXIT_NOT_BUILT=4
@@ -60,12 +60,9 @@ IGNORED_STATUS="success: Canceled by Ignored Build Step"
 PREVIEW_ENVIRONMENT=Preview
 SSO_HOST=vercel.com
 SSO_PATH=/sso-api
-# An agent's branch builds no preview on a push (`vercel.json`'s
+# No branch but production's builds a preview on a push (`vercel.json`'s
 # `git.deploymentEnabled`); one is built only when asked for, through Vercel.
-# Note that `luke/` is the prefix agents' branches had before `agent/`, kept
-# in both places until no branch under it is still open.
-AGENT_BRANCH_PREFIX=agent/
-LEGACY_AGENT_BRANCH_PREFIX=luke/
+PRODUCTION_BRANCH=main
 # The deployed tree is whatever the deployment's ignoreCommand diffs, read
 # from its script so the two cannot drift apart.
 VERCEL_IGNORE="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/vercel-ignore.sh"
@@ -210,8 +207,8 @@ read_preview() {
                 printf 'preview: %s was skipped by the Ignored Build Step; nothing it deploys changed\n' "$sha" >&2
                 return
             fi
-            if ((quiet >= quiet_attempts)) && [[ $branch == "$AGENT_BRANCH_PREFIX"* || $branch == "$LEGACY_AGENT_BRANCH_PREFIX"* ]]; then
-                printf 'NOT_REQUESTED: %s is an agent branch, which builds no preview on a push; ask an agent to build one through the Vercel connection, or use Create Deployment in Vercel, or pass --preview URL\n' "$branch" >&2
+            if ((quiet >= quiet_attempts)) && [[ -n $branch && $branch != "$PRODUCTION_BRANCH" ]]; then
+                printf 'NOT_REQUESTED: %s builds no preview on a push; ask an agent to build one through the Vercel connection, or use Create Deployment in Vercel, or pass --preview URL\n' "$branch" >&2
                 exit "$EXIT_NOT_REQUESTED"
             fi
             printf 'preview: waiting (no record yet for %s; Vercel says %s)\n' "$sha" "${vercel_status:-nothing}" >&2
