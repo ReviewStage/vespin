@@ -3,6 +3,7 @@ import { inboxAttachmentAddress } from "./inbox-attachment-link.js";
 import { INBOX_MEDIA, inboxThreadMessages } from "./inbox-list-model.js";
 import {
   INBOX_MESSAGE_AUTHOR,
+  INBOX_REPLY,
   INBOX_STATUS,
   INBOX_WIRE_VERSION,
   type InboxItem,
@@ -72,6 +73,51 @@ describe("inboxThreadMessages", () => {
     expect(message?.media.map(({ kind, attachmentId }) => ({ kind, attachmentId }))).toEqual([
       { kind: INBOX_MEDIA.PICTURE, attachmentId: SHOT },
       { kind: INBOX_MEDIA.FILE, attachmentId: PLAN_PDF },
+    ]);
+  });
+
+  it("keeps the values an answer filled, in the order it sent them, a yes or no as its word, so a settled thread still says what was answered", () => {
+    const item: InboxItem = {
+      id: ITEM,
+      agentId: "agent-1",
+      key: "limits",
+      revision: 2,
+      version: INBOX_WIRE_VERSION,
+      title: "Invite limits",
+      needsReply: false,
+      status: INBOX_STATUS.ANSWERED,
+      thread: [
+        {
+          id: "0c1d2e3f-4a5b-4c6d-8e7f-90a1b2c3d4e5",
+          author: INBOX_MESSAGE_AUTHOR.AGENT,
+          text: "Fill in the limits.",
+          createdAt: 1_000,
+        },
+        {
+          id: "message-2",
+          author: INBOX_MESSAGE_AUTHOR.MEMBER,
+          text: "",
+          answers: {
+            ask: "0c1d2e3f-4a5b-4c6d-8e7f-90a1b2c3d4e5",
+            reply: INBOX_REPLY.ANSWERED,
+            values: [
+              { label: "Invites a day", value: 20 },
+              { label: "Admins only", value: false },
+            ],
+          },
+          createdAt: 2_000,
+        },
+      ],
+      postedAt: 1_000,
+      updatedAt: 2_000,
+    };
+
+    const [asking, answering] = inboxThreadMessages(item, "Agent", undefined);
+
+    expect(asking?.values).toBeUndefined();
+    expect(answering?.values).toEqual([
+      { label: "Invites a day", words: "20" },
+      { label: "Admins only", words: "no" },
     ]);
   });
 });
