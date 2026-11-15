@@ -63,6 +63,7 @@ import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import type { TaskStep } from "../places/task-step.js";
 import type { RecentStep, RecentSteps } from "../places/window-history.js";
 import { type Place, type StepTitle, sameScreen } from "../places/window-steps.js";
+import { useNamedTask } from "../task-list-collections.js";
 import { stripTabLook } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, type KindLook, PlanGlyph, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import type { MainTab } from "../tasks/use-main-tabs.js";
@@ -176,10 +177,13 @@ function PersonStopFace({ userId, name }: { userId: string; name: string }): Rea
   return <ActorMark actor={usePerson({ userId, name })} size={ACTOR_SIZE.INLINE} />;
 }
 
-/** A task's card: its status glyph and its name as Back's list names the step now, then its panes' tabs as their strips drew them where nothing names them. */
-function taskLook(step: TaskStep, title: StepTitle | undefined, tasks: TasksControl): CardLook {
+/** A task's card: its status glyph and its name as Back's list names the step now, then its panes' tabs as their strips drew them where nothing names them, `task` the step's task as the window lists it. */
+function taskLook(
+  step: TaskStep,
+  title: StepTitle | undefined,
+  task: TaskSummary | undefined,
+): CardLook {
   const { taskId } = step;
-  const task = tasks.tasks.find((each) => each.id === taskId);
   const side = step.side ?? (step.panel?.open === true ? step.panel.tab : undefined);
 
   const column: HeldLook | undefined =
@@ -224,11 +228,11 @@ function agentLook(agentId: string, tasks: TasksControl): CardLook {
   };
 }
 
-/** How a card wears its screen, from what Back's list calls the step now and what the window holds of what it names. */
-function cardLook(step: RecentStep, tasks: TasksControl): CardLook {
+/** How a card wears its screen, from what Back's list calls the step now and what the window holds of what it names, `task` the step's task as the window lists it. */
+function cardLook(step: RecentStep, tasks: TasksControl, task: TaskSummary | undefined): CardLook {
   const { place, title, routed, params } = step;
 
-  if (place.task !== undefined) return taskLook(place.task, title, tasks);
+  if (place.task !== undefined) return taskLook(place.task, title, task);
 
   if (routed === ROUTED_PLACE.AGENT && params.agentId !== undefined) {
     return agentLook(params.agentId, tasks);
@@ -273,7 +277,9 @@ function ScreenCard({
   onPoint: () => void;
   onPick: () => void;
 }): React.JSX.Element {
-  const look = cardLook(step, tasks);
+  // The step's task as the window lists it, read by its id, so a delivery moving another task leaves the card as it is.
+  const task = useNamedTask(step.place.task?.taskId, tasks.typedNames);
+  const look = cardLook(step, tasks, task);
 
   return (
     <TabCard
