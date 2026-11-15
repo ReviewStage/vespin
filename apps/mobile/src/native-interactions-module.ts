@@ -9,8 +9,8 @@
 import { type NativeModule, requireOptionalNativeModule } from "expo";
 
 declare class NativeInteractionsModule extends NativeModule {
-  /** Lowers the keyboard, resigning whatever field holds it, a SwiftUI search field among them. */
-  lowerKeyboard(): Promise<void>;
+  /** Lowers the keyboard, ending editing in every window, a SwiftUI search field among them; answers whether any field let go. */
+  lowerKeyboard(): Promise<boolean>;
 }
 
 const nativeInteractionsModule =

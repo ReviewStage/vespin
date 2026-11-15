@@ -257,6 +257,8 @@ function useSearchScreen(
 
     if (pick !== undefined && picked !== undefined) {
       pick.choose(picked);
+      // Note that the keyboard is lowered again once the pick has drawn beside the results, since the column's field may take its focus back as its column draws anew.
+      requestAnimationFrame(lowerKeyboard);
 
       return;
     }

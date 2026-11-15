@@ -49,9 +49,14 @@ public final class NativeInteractionsModule: Module {
       ModifierName.all.forEach { ViewModifierRegistry.unregister($0) }
     }
 
-    // Note that the keyboard is lowered by resigning whatever holds it, since a SwiftUI field such as a split view's search, unlike React Native's, has no focus JavaScript can reach.
-    AsyncFunction("lowerKeyboard") {
-      UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    // Note that the keyboard is lowered by ending editing in every window of every scene, forced, since a SwiftUI field such as a split view's search, unlike React Native's, has no focus JavaScript can reach, and an action sent to the first responder never reached the search field of a split view's column on an iPad. It answers whether any field let go, and logs it, so a run on the simulator shows whether a pick reached it.
+    AsyncFunction("lowerKeyboard") { () -> Bool in
+      let windows = UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap { $0.windows }
+      let lowered = windows.reduce(false) { ended, window in window.endEditing(true) || ended }
+      NSLog("[Vespin] lowerKeyboard ended editing: %@", lowered ? "yes" : "no")
+      return lowered
     }.runOnQueue(.main)
   }
 }
