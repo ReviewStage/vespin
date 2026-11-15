@@ -1,5 +1,6 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
+import type { IntegrationProvider } from "@repo/features/integration-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -33,6 +34,7 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
+import { IntegrationMark } from "./marks.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
@@ -246,18 +248,35 @@ function BodyBlock({
   );
 }
 
-/** A call's glyph at a row mark's size, the panel's own for its kind, through the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's row costs no SwiftUI host. */
-function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
+/**
+ * A call's glyph at a row mark's size, the panel's own for its kind, through
+ * the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's
+ * row costs no SwiftUI host; or, for a call of an integration's tool, the
+ * integration's mark, as the panel's row leads with it. Note that the mark
+ * alone takes a SwiftUI host, because the symbol view tints whatever it draws
+ * in one ink, which would flatten a mark in its brand's own colors.
+ */
+function CallGlyph({
+  callKind,
+  provider,
+}: {
+  readonly callKind: CallKind;
+  readonly provider: IntegrationProvider | undefined;
+}) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
 
-  return (
+  return provider === undefined ? (
     <SymbolView
       name={glyphSymbol(CALL_SYMBOL[callKind])}
       size={size}
       tintColor={colors.TEXT_MUTED}
       accessibilityElementsHidden
     />
+  ) : (
+    <InlineHost style={{ width: size, height: size }}>
+      <IntegrationMark provider={provider} size={size} ink={colors.TEXT_MUTED} />
+    </InlineHost>
   );
 }
 
@@ -305,7 +324,7 @@ function CallRow({
         hitSlop={LINE_REACH}
         style={styles.callLine}
       >
-        <CallGlyph callKind={item.callKind} />
+        <CallGlyph callKind={item.callKind} provider={item.provider} />
         <View style={[styles.callWords, large ? styles.wrapped : null]}>
           <Text
             numberOfLines={lines}

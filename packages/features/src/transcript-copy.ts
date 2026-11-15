@@ -24,6 +24,7 @@ import {
   applyMessagesPage,
 } from "./agent-wire.js";
 import { threadLineTitle, threadLineWords } from "./inbox-wire.js";
+import type { IntegrationProvider } from "./integration-wire.js";
 import { fencedBlock } from "./markdown-fence.js";
 import { cardTitle, plainWords } from "./plain-words.js";
 import {
@@ -53,6 +54,7 @@ import {
 } from "./transcript-lines.js";
 import {
   CALL_KIND,
+  CALL_MARK,
   CALL_WORDS,
   type CallKind,
   callLine,
@@ -166,6 +168,10 @@ type CopiedBlock =
       readonly description: string | undefined;
       /** For a call of an MCP server's tool, the server it ran on. */
       readonly server?: string | undefined;
+      /** For a call of an integration's tool, the integration, whose mark leads its row in the panel. */
+      readonly provider?: IntegrationProvider | undefined;
+      /** For a call of an integration's tool, the account among its owner's several it ran on. */
+      readonly account?: string | undefined;
       readonly input: ToolBlock | undefined;
       /** Nothing while the call has not answered. */
       readonly output: ToolBlock | undefined;
@@ -239,7 +245,7 @@ function agentBlock(part: AgentPart): CopiedBlock[] {
   }
 
   const view = toolCallView(part);
-  const { input, output, subject, description, server } = view;
+  const { input, output, subject, description, server, provider, account } = view;
 
   return [
     {
@@ -248,6 +254,8 @@ function agentBlock(part: AgentPart): CopiedBlock[] {
       subject,
       description,
       server,
+      provider,
+      account,
       input,
       output,
       error,
@@ -263,14 +271,16 @@ function agentBlock(part: AgentPart): CopiedBlock[] {
  */
 function drawnWords(block: CopiedBlock): readonly string[] {
   if (block.kind !== COPIED_BLOCK.CALL) return [block.text];
-  const { call, subject, description, server, input, output, error } = block;
+  const { call, subject, description, server, provider, account, input, output, error } = block;
   const line = callLine(call, subject, description);
 
   const said =
     input !== undefined &&
     ((isCommandKind(call) && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject));
 
-  const lead = [line.verb, said ? undefined : line.subject, callPlace(call, server)];
+  // Note that the panel's row leads with the integration's mark, so it names only what the mark does not.
+  const place = callPlace({ kind: call, server, provider, account }, CALL_MARK.LEADS);
+  const lead = [line.verb, said ? undefined : line.subject, place];
 
   return [
     lead.filter((words) => words !== undefined).join(" "),
@@ -480,7 +490,8 @@ function oneLine(text: string): string {
 function callParts(call: CopiedCall) {
   const worker = call.call === CALL_KIND.WORKER;
   const said = call.description ?? CALL_WORDS[call.call].verb;
-  const place = callPlace(call.call, call.server);
+  // Note that a copy carries no mark, so it names the server an integration's call ran on ("Linear · Acme").
+  const place = callPlace({ kind: call.call, server: call.server }, CALL_MARK.NONE);
   // Note that a server's name keeps its own capitals ("PostHog"), where the other places read as words in a sentence.
   const named = call.server === undefined ? place?.replace(/^./u, (c) => c.toLowerCase()) : place;
 
