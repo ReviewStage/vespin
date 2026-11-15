@@ -1,4 +1,4 @@
-// KeyboardDockModule.swift -- a screen that lifts the bar at its foot with the system's keyboard, read frame by frame from UIKit's keyboard layout guide, and tells JavaScript how far the keyboard stands over it.
+// KeyboardDockModule.swift -- a screen that lifts the bar at its foot with the system's keyboard, read frame by frame from UIKit's keyboard layout guide, stands it as its content's bottom scroll edge, and tells JavaScript how far the keyboard stands over it.
 //
 // `@repo/ui-native`'s `GlassDock` stands its content and its bar inside this
 // view (`keyboard-dock.ts`), the bar as its last child. React Native hears the
@@ -14,6 +14,11 @@
 // link holds this view while it runs, so it stops as the view leaves its
 // window, which it does before it goes. JavaScript
 // hears the same overlap, so the content under the bar leaves room for it.
+//
+// The bar also stands as the content's bottom edge element, so iOS 26 draws
+// its soft scroll edge under the bar, as it does under its own bars: words
+// scrolling under the composer's glass fade rather than standing sharp behind
+// its placeholder and its +.
 //
 // Note that the overlap is read against this view, which stands still, and
 // never against the bar it moves, which would chase its own lift. A keyboard
@@ -37,6 +42,13 @@ public final class KeyboardDockModule: Module {
 /// The least change in the keyboard's overlap, in points, that is told to JavaScript, so a layout pass that moves nothing sends nothing.
 private let overlapStep: CGFloat = 0.5
 
+/// How many times, and how far apart, the content's scroll view is looked for while the content holds none yet, such as while a screen reads: about ten seconds.
+private let edgeLooks = 20
+private let edgeLookPause: TimeInterval = 0.5
+
+/// How deep under the dock's content its scroll view is looked for, so a screen still reading, with no list yet, costs a layout pass little.
+private let scrollViewDepth = 8
+
 final class KeyboardDockView: ExpoView {
   let onOverlap = EventDispatcher()
 
@@ -48,6 +60,13 @@ final class KeyboardDockView: ExpoView {
 
   /// The view the dock last lifted, so a view that stops being the bar, as a page goes Back with the keyboard up, is set down before Fabric draws it anew elsewhere.
   private weak var lifted: UIView?
+
+  /// The bar's standing as the content's bottom edge element, which draws the scroll edge under it.
+  private let edge = UIScrollEdgeElementContainerInteraction()
+
+  /// How many more times the content's scroll view is looked for while none is found, and whether a look is already on its way, so a layout pass on each frame doesn't spend them all at once.
+  private var looksLeft = edgeLooks
+  private var lookPending = false
 
   /// Follows the keyboard each frame while it stands, since a drag that pulls it down moves the layout guide without asking this view for a layout pass.
   private var frames: CADisplayLink?
@@ -111,6 +130,7 @@ final class KeyboardDockView: ExpoView {
   override func didMoveToWindow() {
     super.didMoveToWindow()
     guard window == nil else {
+      looksLeft = edgeLooks
       follow()
       if (told ?? 0) > 0 { followFrames() }
       return
@@ -123,6 +143,7 @@ final class KeyboardDockView: ExpoView {
   override func willRemoveSubview(_ subview: UIView) {
     super.willRemoveSubview(subview)
     if subview === lifted { setDown() }
+    if subview === edge.view { subview.removeInteraction(edge) }
   }
 
   /// Sets the lifted view back where its layout stands it.
@@ -134,6 +155,70 @@ final class KeyboardDockView: ExpoView {
   override func layoutSubviews() {
     super.layoutSubviews()
     follow()
+  }
+
+  /// Stands the bar as the bottom edge element of the first scroll view the content holds, as soon as both are mounted, and again once the content's scroll view is another, such as a list drawn in place of its skeleton.
+  private func standAsEdge() {
+    if edgeStands() { return }
+    letEdgeGo()
+    // Note that once the looks are spent with no scroll view found, a layout pass does not walk the content again until a held one goes or the dock comes back into a window.
+    guard looksLeft > 0 || lookPending else { return }
+    findEdge()
+  }
+
+  /// Walks the content for its first scroll view and stands the bar as its edge, or looks again a moment later where there is none yet.
+  private func findEdge() {
+    guard let bar = subviews.last, subviews.count > 1 else { return }
+
+    guard let scroller = subviews.dropLast().lazy.compactMap({ firstScrollView(in: $0) }).first else {
+      lookAgainSoon()
+      return
+    }
+
+    edge.view?.removeInteraction(edge)
+    edge.edge = .bottom
+    edge.scrollView = scroller
+    scroller.bottomEdgeEffect.style = .soft
+    // Note that its top edge fades softly under the navigation bar too, as Messages fades a conversation, since the stack's own scroll edge option reaches only the first scroll view down its first children, which a docked screen's content need not be.
+    scroller.topEdgeEffect.style = .soft
+    bar.addInteraction(edge)
+    looksLeft = edgeLooks
+  }
+
+  /// Whether the bar stands as the edge of a scroll view the content still holds.
+  private func edgeStands() -> Bool {
+    guard let bar = subviews.last, subviews.count > 1, let held = edge.scrollView, held.window != nil else {
+      return false
+    }
+
+    return edge.view === bar && subviews.dropLast().contains(where: { held.isDescendant(of: $0) })
+  }
+
+  /// On a frame drawn, lets a scroll view the content no longer holds go and looks for its successor a moment later, without walking the content on the frame.
+  private func keepEdge() {
+    guard !edgeStands() else { return }
+    letEdgeGo()
+    lookAgainSoon()
+  }
+
+  /// Lets go of a scroll view the content no longer holds, and looks for its successor afresh.
+  private func letEdgeGo() {
+    guard edge.scrollView != nil else { return }
+    edge.view?.removeInteraction(edge)
+    edge.scrollView = nil
+    looksLeft = edgeLooks
+  }
+
+  /// Looks for the content's scroll view again a moment later, a bounded number of times, since a list mounted deep in the content after its skeleton asks the dock for no layout pass of its own.
+  private func lookAgainSoon() {
+    guard looksLeft > 0, !lookPending else { return }
+    looksLeft -= 1
+    lookPending = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + edgeLookPause) { [weak self] in
+      guard let self else { return }
+      self.lookPending = false
+      if !self.edgeStands() { self.findEdge() }
+    }
   }
 
   /// Lifts the bar by how far the keyboard stands over this view's foot, less the bottom safe area the bar already stands clear of, and tells JavaScript the overlap where the keyboard has settled or is announced to move, never on a frame drawn.
@@ -148,6 +233,9 @@ final class KeyboardDockView: ExpoView {
       lifted = bar
     }
 
+    // Note that a frame drawn only checks the content's scroll view still stands, which costs nothing, while a layout pass looks for it again where it does not.
+    if framing { keepEdge() } else { standAsEdge() }
+
     guard !framing else { return }
 
     // Note that a step to or from no overlap is always told, however small, so the content never keeps room for a keyboard that has gone.
@@ -155,4 +243,14 @@ final class KeyboardDockView: ExpoView {
     told = overlap
     onOverlap(["overlap": overlap])
   }
+}
+
+/// The first scroll view at or under a view, the shallowest first, so a list's own scroller is found before any it holds in its rows.
+private func firstScrollView(in root: UIView) -> UIScrollView? {
+  var level: [UIView] = [root]
+  for _ in 0..<scrollViewDepth where !level.isEmpty {
+    if let found = level.lazy.compactMap({ $0 as? UIScrollView }).first { return found }
+    level = level.flatMap(\.subviews)
+  }
+  return nil
 }
