@@ -36,6 +36,7 @@
     "./integration-settings-words": "./src/integration-settings-words.js",
     "./mcp-clients-words": "./src/mcp-clients-words.js",
     "./memory-live": "./src/memory-live.js",
+    "./picture-fit": "./src/picture-fit.js",
     "./replay-card-model": "./src/replay-card-model.js",
     "./reply-quote": "./src/reply-quote.js",
     "./skills-settings-words": "./src/skills-settings-words.js",
