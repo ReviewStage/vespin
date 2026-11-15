@@ -169,6 +169,7 @@ describe("inboxAtNow and inboxCounts", () => {
       updatedAt: 1_000,
       repository: null,
     };
+
     const item: InboxItem = {
       id: ITEM,
       agentId: "agent-1",
@@ -183,6 +184,7 @@ describe("inboxAtNow and inboxCounts", () => {
       updatedAt: 2_000,
       remindAt: 10_000,
     };
+
     const groups = [inboxGroup(taskHolder(task), [item])];
 
     const standing = inboxAtNow(groups, 5_000);

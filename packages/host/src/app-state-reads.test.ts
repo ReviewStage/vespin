@@ -78,6 +78,7 @@ describe("inboxGroupsIn", () => {
       updatedAt: 1_000,
       repository: null,
     };
+
     const holdings: InboxHoldings = {
       read: new Map([[task.id, []]]),
       tasks: [{ taskId: task.id, items: 0, updatedAt: 1_000 }],
