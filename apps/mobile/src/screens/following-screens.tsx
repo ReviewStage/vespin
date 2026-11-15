@@ -60,7 +60,9 @@ export function useFollowingChip(taskId: string): PageFollowing | undefined {
 
   return {
     label: following.chipWords,
-    faces: followers.slice(0, FOLLOWING_FACES).map(({ name, picture }) => ({ name, picture })),
+    faces: followers
+      .slice(0, FOLLOWING_FACES)
+      .map(({ userId, name, picture }) => ({ id: userId, name, picture })),
     more: Math.max(0, followers.length - FOLLOWING_FACES),
     hint: SHEET_WORDS.OPENS,
     heard: followers.map((face) => (face.you ? FOLLOWING_WORDS.YOU : face.name)).join(", "),
@@ -164,6 +166,7 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
                 <FollowerRow
                   key={face.userId}
                   name={face.you ? FOLLOWING_WORDS.YOU : face.name}
+                  id={face.userId}
                   picture={face.picture}
                   role={face.assignee ? FOLLOWING_WORDS.ASSIGNEE : undefined}
                   machines={face.machines}

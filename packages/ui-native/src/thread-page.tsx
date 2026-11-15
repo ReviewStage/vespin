@@ -386,7 +386,12 @@ function MessageView({
           {writer.agent ? (
             <AgentTile name={writer.name} harness={writer.harness} size={MARK_SIZE.WRITER} />
           ) : (
-            <Avatar name={writer.name} picture={writer.picture} size={MARK_SIZE.WRITER} />
+            <Avatar
+              name={writer.name}
+              id={writer.id}
+              picture={writer.picture}
+              size={MARK_SIZE.WRITER}
+            />
           )}
           <Text
             modifiers={[

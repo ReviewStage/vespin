@@ -19,10 +19,13 @@ import {
   taskSearchSubject,
 } from "@repo/features/search-found-model";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { selectTasks } from "@repo/host/app-state-reads";
-import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { appStateQuery } from "../host/app-state-query.js";
+import {
+  useListedAgents,
+  useListedTasks,
+  useTaskListCollections,
+  useTaskListRows,
+} from "../host/host-provider.js";
 import { useInboxListing } from "../inbox/use-inbox.js";
 import {
   agentLine,
@@ -45,15 +48,18 @@ export interface SearchFound {
 export function useSearchFound(query: string): SearchFound {
   const listing = useTasksListing(query);
   const inbox = useInboxListing({ show: INBOX_SHOW.ALL, search: query });
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const collections = useTaskListCollections();
+  const listedTasks = useListedTasks();
+  const listedAgents = useListedAgents();
+  const pullRequests = useTaskListRows(collections.agentPullRequests);
   const workspace = listing.workspace;
   const waiting = useWaiting(workspace?.id);
 
   return useMemo(() => {
-    const names = new Map((view?.tasks ?? []).map((task) => [task.id, task.name]));
+    const names = new Map(listedTasks.map((task) => [task.id, task.name]));
 
     // Note that an archived agent is left out, as a task's page leaves it out of its Agents.
-    const agents = (view?.taskAgents ?? []).filter(
+    const agents = listedAgents.filter(
       (agent) =>
         agent.archivedAt === undefined &&
         (workspace === undefined || agent.workspaceId === workspace.id),
@@ -67,9 +73,9 @@ export function useSearchFound(query: string): SearchFound {
       inbox: rankedBySearch(inbox.listed, query, inboxSearchSubject),
       agents: rankedBySearch(agents, query, (agent) =>
         agentSearchSubject(agent, names.get(agent.taskId)),
-      ).map((agent) => agentLine(agent, waiting.byAgent, view)),
+      ).map((agent) => agentLine(agent, waiting.byAgent, pullRequests)),
       listing,
       readerId: inbox.readerId,
     };
-  }, [listing, inbox, view, workspace, waiting, query]);
+  }, [listing, inbox, listedTasks, listedAgents, pullRequests, workspace, waiting, query]);
 }

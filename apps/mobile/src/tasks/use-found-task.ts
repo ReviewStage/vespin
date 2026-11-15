@@ -20,10 +20,10 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import { useHostActs, useListedTasks } from "../host/host-provider.js";
 
 /** The key a number's find is held under, by the account, the workspace and the number. */
 const TASK_BY_NUMBER_QUERY = "task-by-number";
@@ -68,7 +68,7 @@ function selectAccountId(state: AppStateSnapshot): string | undefined {
  */
 export function useFoundTask(named: string | undefined, workspace: string | undefined): FoundTask {
   const acts = useHostActs();
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const tasks = useListedTasks();
   const { data: workspaces } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
 
@@ -79,8 +79,8 @@ export function useFoundTask(named: string | undefined, workspace: string | unde
 
   const listed =
     number === undefined
-      ? view?.tasks.find((task) => task.id === named)
-      : view?.tasks.find(
+      ? tasks.find((task) => task.id === named)
+      : tasks.find(
           (task) =>
             task.number === number && (workspace === undefined || task.workspaceId === home?.id),
         );
