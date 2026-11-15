@@ -107,7 +107,9 @@ export const BROWSER_TOOL = {
   description:
     "Drive a real browser, a Chromium in your own sandbox, whose tabs the developer can watch " +
     "and take over in its Browser tab. Your own dev server is at localhost " +
-    "there, such as http://localhost:3000/. Each call takes up to " +
+    "there, such as http://localhost:3000/. Use it for what the developer should see or finish " +
+    "themselves, such as a flow to show them or a sign-in, and keep your own checks on Playwright " +
+    "from your shell. Each call takes up to " +
     `${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, run in order. Take a snapshot for ` +
     "the refs before you click or type on an element. Choose in a native dropdown, a select " +
     "the snapshot shows as a combobox or listbox, with select on its ref and the option's " +

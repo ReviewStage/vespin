@@ -921,7 +921,8 @@ export const LIST_AGENTS_TOOL = {
     "and whether it is archived. The agents that matter to you come first: the agent that started you and " +
     "the agents you started, then those on your task, then the rest, the newest started first, at most " +
     `${WORKSPACE_AGENTS_LIST_LIMIT} a page, with nextOffset where more stand. ` +
-    "Failed covers a session that ended for good, which no message reaches again. An agent " +
+    "Failed covers a session that ended for good, which no message reaches again: tell the " +
+    "developer, or start a new agent to go on from its work. An agent " +
     "still running long after its last activity may have lost its session; a message to it " +
     "refused as ended for good settles it as failed.",
   inputSchema: AGENT_LIST_INPUT,
@@ -1037,7 +1038,7 @@ export const STOP_AGENT_TOOL = {
     "later message starts a new turn. Stop an agent you or the developer started that is going the " +
     "wrong way, or one the developer asked you to stop; never a teammate's agent still in use " +
     "unless the developer asked for it. No agent stops itself. `stopped` false is an agent " +
-    "already idle, which changes nothing.",
+    "already idle, which changes nothing. Then say which agent you stopped and why.",
   inputSchema: READ_AGENT_INPUT,
 } as const;
 

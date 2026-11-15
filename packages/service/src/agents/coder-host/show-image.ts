@@ -70,9 +70,10 @@ export const SHOW_IMAGE_TOOL = {
   name: AGENT_TOOL.SHOW_IMAGE,
   description:
     "Show the developer pictures from your sandbox in your transcript, such as screenshots of a UI " +
-    "you changed, each named by its path with a one-line caption saying what it shows. Show the pictures " +
+    "you changed, taken first, such as with the installed `playwright screenshot <url> <file>`, each " +
+    "named by its path with a one-line caption saying what it shows. Show the pictures " +
     "that belong together in one call, as one set: before and after, or each screen a change touches. " +
-    "A flow, such as clicking through a form, is shown as a WebM recording started once the page has drawn, which the transcript plays. " +
+    "A flow, such as clicking through a form, is shown as a WebM recording, such as Playwright's `page.screencast.start({ path })` once the page has drawn, which the transcript plays. " +
     `Each is a PNG, JPEG, or WebP, or a WebM or MP4 video, of at most ${CONVERSATION_PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB. ` +
     "Never show a picture of a secret. A Markdown image in your reply shows nothing; this is the one " +
     "way to show a picture in your transcript.",

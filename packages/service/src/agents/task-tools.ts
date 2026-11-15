@@ -368,7 +368,8 @@ function createTaskWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
   return (
     "Make a task in your workspace for the developer you work for, as the sidebar's New task " +
     "would: owned by them, on the repository named or the one you work in, " +
-    `${CREATE_TASK_STARTS_WITH[on.descriptionsOn ? "on" : "off"]}, and no agent on it; ` +
+    `${CREATE_TASK_STARTS_WITH[on.descriptionsOn ? "on" : "off"]}, and no agent on it, for work that ` +
+    "should stand as a task of its own where the developer asked for one; " +
     `start an agent on it with ${AGENT_TOOL.START_AGENT}'s taskId. ` +
     "Give it a status, a priority, and an assignee where the developer said them. Its parent, " +
     "sub-tasks, and blocks are all written in the same call: a child always works in its parent's " +

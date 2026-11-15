@@ -232,8 +232,8 @@ export const RUN_ON_MAC_TOOL = {
     "decline, which answers `not-run`. It reaches whatever their account on the Mac reaches. Never walk the whole home folder, as " +
     "`find ~`, `du ~`, or `grep -r ~` do, which makes macOS ask the developer for their Music, " +
     "Photos, Desktop, and Documents; find a checkout with Spotlight, such as " +
-    "`mdfind -name <folder>`, or ask the developer where it is. Read the task's repository where " +
-    "you have it. Nothing reads stdin, so a command that asks for input fails. Answers the exit " +
+    "`mdfind -name <folder>`, or ask the developer where it is. Use it for what only the Mac has; " +
+    "read the task's repository where you have it. Nothing reads stdin, so a command that asks for input fails. Answers the exit " +
     `code, stdout, and stderr, each cut to ${MACHINE_COMMAND_BOUNDS.MAX_OUTPUT_CHARS} characters.`,
   inputSchema: RUN_ON_MAC_INPUT,
 } as const;
