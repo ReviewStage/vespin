@@ -107,6 +107,8 @@ export interface ToolCallView {
   readonly appIcon?: string;
   /** For a terminal command or an action on an app, the machine its answer says it went to, which its row names; absent while it has not answered, and where its answer names none, as one from before machines were named. */
   readonly machine?: CallMachine;
+  /** For a terminal command or an action on an app, the id of the machine its input names, where it names one rather than the agent's default, which a row still unanswered names it by. */
+  readonly namedMachine?: string;
   /** For a call of an MCP server's tool, or a search of its tools, the server's name as its card gives it, which the row says it ran on. */
   readonly server?: string;
   /** For a call of an integration's own tool, the name of the account it ran on as its owner called it, where they held more than one at the provider, which every reader is shown; absent for the rest. */
@@ -1498,12 +1500,14 @@ const AGENT_TOOL_VIEWS = {
         : MACHINE_NOT_RUN_WORDS.COMMAND;
 
     const machine = callMachineOf(output);
+    const namedMachine = stringAt(input, "machine");
 
     return {
       kind: CALL_KIND.MACHINE_COMMAND,
       subject: command,
       ...(description === undefined ? undefined : { description }),
       ...(machine === undefined ? undefined : { machine }),
+      ...(namedMachine === undefined ? undefined : { namedMachine }),
       ...(notRun === undefined ? undefined : { notRun }),
       input: { kind: TOOL_BLOCK.COMMAND, text: command },
       output: output === undefined ? undefined : machineCommandOutput(output),
@@ -1521,12 +1525,14 @@ const AGENT_TOOL_VIEWS = {
 
     const icon = computerAppIcon(output);
     const machine = callMachineOf(output);
+    const namedMachine = stringAt(input, "machine");
 
     return {
       kind: CALL_KIND.COMPUTER,
       subject: computerAppName(input, output) ?? "",
       ...(description === undefined ? undefined : { description }),
       ...(machine === undefined ? undefined : { machine }),
+      ...(namedMachine === undefined ? undefined : { namedMachine }),
       ...(notRun === undefined ? undefined : { notRun }),
       ...(icon === undefined ? undefined : { appIcon: icon }),
       input: jsonBlock(input ?? {}),

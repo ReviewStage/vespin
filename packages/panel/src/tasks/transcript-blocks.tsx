@@ -197,6 +197,7 @@ import { useThisMac } from "../machine-name.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
+import type { CallRoute } from "./agent-machines.js";
 import { KeptAppIcon } from "./agent-pictures.js";
 import { useDescriptionPictureDrawer } from "./description-pictures.js";
 import { useInboxPictureDrawer } from "./inbox-pictures.js";
@@ -1423,8 +1424,8 @@ export function useMacOwner(): Actor | undefined {
   return useContext(MacOwnerContext);
 }
 
-/** The machine a terminal command or an action on an app made now would go to, as the agent's standing names it (`workspaceTools.runOnMac.machine`), which a call still unanswered names; none where it names none. */
-const RoutedMachineContext = createContext<Pick<CallMachine, "id" | "name"> | undefined>(undefined);
+/** Where a terminal command or an action on an app made now would go, as the agent's tools name it (`useCallRoute`), which a call still unanswered names; none where the window holds none. */
+const RoutedMachineContext = createContext<CallRoute | undefined>(undefined);
 
 /** Whether a call that ran nothing has a card under its row naming its machine: the refused call's card for one no machine could take, or the note for one that lacked a grant. */
 function notRunNamesMachine(notRun: MachineNotRun | undefined): boolean {
@@ -1445,19 +1446,19 @@ export function OnMachine({ machine }: { machine: Pick<CallMachine, "id" | "name
   return linkChip(link, words, doors);
 }
 
-/** Names whose Mac the transcript under it ran its Mac commands on (`MacOwnerProvider`), and the machine it would send a call to now, which a call still unanswered names. */
+/** Names whose Mac the transcript under it ran its Mac commands on (`MacOwnerProvider`), and where it would send a call now, which a call still unanswered names. */
 export function CallPlaceProvider({
   owner,
-  machine,
+  route,
   children,
 }: {
   owner: Actor | undefined;
-  machine: Pick<CallMachine, "id" | "name"> | undefined;
+  route: CallRoute | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   return (
     <MacOwnerContext.Provider value={owner}>
-      <RoutedMachineContext.Provider value={machine}>{children}</RoutedMachineContext.Provider>
+      <RoutedMachineContext.Provider value={route}>{children}</RoutedMachineContext.Provider>
     </MacOwnerContext.Provider>
   );
 }
@@ -1524,6 +1525,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     account?: string | undefined;
     /** For a terminal command or an action on an app, the machine its answer says it went to, which the row says it ran on; none where its answer names none or it has not answered. */
     machine?: CallMachine | undefined;
+    /** For a terminal command or an action on an app, the id of the machine its input names, which the row names while it has not answered; none where it names none. */
+    namedMachine?: string | undefined;
     /** For a command, the plain words the model said it is for, which the row says in its verb's place; the closed row previews the command's first line after them, and the body holds it whole. */
     description?: string | undefined;
     /** For a call about one coding agent, the agent, whose chip the row names it by in the place of "the coding agent"; none where the agent is not known. */
@@ -1605,6 +1608,7 @@ export function TranscriptTool({
   connection,
   account,
   machine,
+  namedMachine,
   subject,
   description,
   agent,
@@ -1652,10 +1656,10 @@ export function TranscriptTool({
 
   const command = isCommandKind(kind);
   const macOwner = useContext(MacOwnerContext);
-  // Note that a call names the machine its answer names, and one still unanswered the machine the agent's calls go to now, so a row never names the starter's Mac for a call routed elsewhere.
-  const routed = useContext(RoutedMachineContext);
+  // Note that a call names the machine its answer names, and one still unanswered the machine it names or else the one the agent's calls go to now, so a row never names the default for a call sent elsewhere.
+  const route = useContext(RoutedMachineContext);
   const unanswered = state === TOOL_STATE.INPUT_STREAMING || state === TOOL_STATE.INPUT_AVAILABLE;
-  const onMachine = machine ?? (unanswered ? routed : undefined);
+  const onMachine = machine ?? (unanswered ? route?.(namedMachine) : undefined);
   const machineCall = kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER;
   // Note that a call no machine could take, or that lacked a grant, ends in its status alone, since the card under it names the machine by its chip, so a narrow row keeps its own words.
   const namedBelow = machineCall && machine !== undefined && notRunNamesMachine(notRun);
