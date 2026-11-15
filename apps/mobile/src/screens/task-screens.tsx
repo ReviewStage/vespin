@@ -172,6 +172,7 @@ import {
   type SidebarPlace,
   type SidebarTasks,
   useListColumn,
+  usePortraitDetailBar,
 } from "./app-sidebar.js";
 import { useDetailStackColumn } from "./detail-stack-column.js";
 import { useFollowingChip } from "./following-screens.js";
@@ -2052,6 +2053,7 @@ function TasksSplitScreen({
   useStackRoot(SIDEBAR_PLACE.TASKS, selected);
   // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
   const stack = useDetailStackColumn(SIDEBAR_PLACE.TASKS, { id: selected }, true);
+  const firstDetailBar = usePortraitDetailBar(detailBar);
   useHandColumns(
     SIDEBAR_PLACE.TASKS,
     threeColumns
@@ -2067,7 +2069,7 @@ function TasksSplitScreen({
           <SplitView
             {...first}
             detail={stack.wrap(detail)}
-            detailBar={detailBar}
+            detailBar={firstDetailBar}
             detailStack={stack.detailStack}
           />
         </Screen>

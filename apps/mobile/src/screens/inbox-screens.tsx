@@ -106,7 +106,7 @@ import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, useListColumn } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, useListColumn, usePortraitDetailBar } from "./app-sidebar.js";
 import { useDetailStackColumn } from "./detail-stack-column.js";
 import {
   NO_THREAD_ACTS,
@@ -1136,6 +1136,7 @@ function InboxSplitScreen({
   useStackRoot(SIDEBAR_PLACE.INBOX, selected);
   // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
   const stack = useDetailStackColumn(SIDEBAR_PLACE.INBOX, { id: selected }, true);
+  const firstDetailBar = usePortraitDetailBar(detailBar);
   useHandColumns(
     SIDEBAR_PLACE.INBOX,
     threeColumns
@@ -1151,7 +1152,7 @@ function InboxSplitScreen({
           <SplitView
             {...first}
             detail={stack.wrap(detail)}
-            detailBar={detailBar}
+            detailBar={firstDetailBar}
             detailStack={stack.detailStack}
           />
         </Screen>
