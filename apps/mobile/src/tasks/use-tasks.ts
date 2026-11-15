@@ -68,12 +68,7 @@ import {
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import {
-  answerKeeper,
-  selectInboxGroupsIn,
-  selectInboxReader,
-  selectWorkspaces,
-} from "@repo/host/app-state-reads";
+import { answerKeeper, selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
 import { BUZZ } from "@repo/ui-native";
 import { caseWhen, coalesce, gt, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
@@ -88,12 +83,10 @@ import {
   useTaskListRows,
 } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { type TaskRelationWrites, useTaskRelationWrites } from "./use-relations.js";
 import { useWorkspaceRepositories } from "./use-start.js";
-
-/** No holder of Inbox items read yet. */
-const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
 function refused(what: string): (cause: unknown) => void {
@@ -112,10 +105,7 @@ export function useWaiting(workspaceId: string | undefined): {
   readonly byTask: ReadonlyMap<string, number>;
   readonly byAgent: ReadonlyMap<string, number>;
 } {
-  const { data: groups = NO_GROUPS } = useQuery({
-    ...appStateQuery,
-    select: selectInboxGroupsIn(workspaceId),
-  });
+  const groups = useInboxGroupsIn(workspaceId);
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 
