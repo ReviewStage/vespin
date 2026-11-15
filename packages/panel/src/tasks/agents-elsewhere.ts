@@ -1,11 +1,8 @@
 import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
-import type { ListedPullRequest } from "@repo/features/task-wire";
-import type { AppStateSnapshot } from "@repo/host/app-state";
-import { useQuery } from "@tanstack/react-query";
+import { inArray, useLiveQuery } from "@tanstack/react-db";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { appStateQuery, selectTasks } from "../use-app-state.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import type { AgentsControl } from "./use-agents.js";
-import { listedAgentIn } from "./use-workspace-agents.js";
 
 /**
  * agents-elsewhere.ts -- the agents a side panel's Pull request and Terminal tabs name, read where the agent stands rather than through the place the panel stands beside.
@@ -16,15 +13,12 @@ import { listedAgentIn } from "./use-workspace-agents.js";
  * anywhere, but it draws the agent's row, whether it ended and its task,
  * and the pull request it published from that control. A tab of an agent
  * the place does not list takes its row from the window's own list of
- * every agent (`listedAgentIn`), or, where that holds none, reads it once
+ * every agent (the task list's agents), or, where that holds none, reads it once
  * by the agent's id (`readAgent`), and its pull request from the window's
  * own list of every agent's (`agentPullRequests`), so it draws as it would
  * beside its own place. An agent the place lists is drawn through the
  * place's control unchanged.
  */
-
-/** Every agent's pull request the window's task list carries, a task's or one on none. */
-const selectListedPullRequests = (state: AppStateSnapshot) => state.tasks.agentPullRequests;
 
 /** Whether the place's control lists the agent, archived or not. */
 function listsAgent(agents: AgentsControl, agentId: string): boolean {
@@ -34,12 +28,36 @@ function listsAgent(agents: AgentsControl, agentId: string): boolean {
   return among(agents.agents) || among(agents.archived);
 }
 
-/** The pull request the window's list holds of the agent's; none where it opened none. */
-function listedPullRequestOf(
-  listed: readonly ListedPullRequest[] | undefined,
-  agentId: string,
-): AgentPullRequest | undefined {
-  return listed?.find((each) => each.agentId === agentId)?.pullRequest;
+/**
+ * The rows the window's task list carries of the agents `named` names, and
+ * their pull requests, each by agent id: live queries over the agents
+ * named alone, so a delivery moving any other agent tells neither.
+ */
+function useNamedRows(named: readonly string[]): {
+  readonly listedAgents: ReadonlyMap<string, AgentSummary>;
+  readonly listedPullRequests: ReadonlyMap<string, AgentPullRequest>;
+} {
+  const { agents, agentPullRequests } = useTaskListCollections();
+
+  const { data: agentRows } = useLiveQuery((q) =>
+    q.from({ agent: agents }).where(({ agent }) => inArray(agent.id, [...named])),
+  );
+
+  const { data: pullRequestRows } = useLiveQuery((q) =>
+    q
+      .from({ listed: agentPullRequests })
+      .where(({ listed }) => inArray(listed.agentId, [...named])),
+  );
+
+  return useMemo(
+    () => ({
+      listedAgents: new Map(agentRows.map((agent) => [agent.id, agent])),
+      listedPullRequests: new Map(
+        pullRequestRows.map((listed) => [listed.agentId, listed.pullRequest]),
+      ),
+    }),
+    [agentRows, pullRequestRows],
+  );
 }
 
 /**
@@ -52,17 +70,14 @@ export function useAgentsElsewhere(
   agents: AgentsControl,
   named: readonly string[],
 ): (agentId: string) => AgentsControl {
-  const listed = useQuery({ ...appStateQuery, select: selectListedPullRequests }).data;
-  const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
+  const { listedAgents, listedPullRequests } = useNamedRows(named);
   const [rows, setRows] = useState<ReadonlyMap<string, AgentSummary>>(() => new Map());
   // The agents asked for once, so a read that found none is not asked again on every draw.
   const asked = useRef(new Set<string>());
 
   const unread = named.filter(
     (agentId) =>
-      !listsAgent(agents, agentId) &&
-      listedAgentIn(tasks, agentId) === undefined &&
-      !asked.current.has(agentId),
+      !listsAgent(agents, agentId) && !listedAgents.has(agentId) && !asked.current.has(agentId),
   );
 
   const { readAgent } = agents;
@@ -86,8 +101,8 @@ export function useAgentsElsewhere(
       const known = byAgent.get(agentId);
 
       if (known !== undefined) return known;
-      const row = listedAgentIn(tasks, agentId) ?? rows.get(agentId);
-      const pullRequest = listedPullRequestOf(listed, agentId);
+      const row = listedAgents.get(agentId) ?? rows.get(agentId);
+      const pullRequest = listedPullRequests.get(agentId);
 
       const control: AgentsControl = {
         ...agents,
@@ -103,5 +118,5 @@ export function useAgentsElsewhere(
 
       return control;
     };
-  }, [agents, rows, listed, tasks]);
+  }, [agents, rows, listedAgents, listedPullRequests]);
 }

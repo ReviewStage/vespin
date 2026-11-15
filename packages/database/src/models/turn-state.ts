@@ -39,6 +39,10 @@
  */
 
 import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
+import {
+  type CheckoutRestoreSnapshot,
+  checkoutRestoreSnapshotSchema,
+} from "@repo/features/checkout-restore";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { TurnFilesSummarySchema, type TurnFilesSummaryView } from "@repo/features/turn-files-wire";
 import {
@@ -97,19 +101,6 @@ const TurnOriginSchema = Schema.Literals(Object.values(TURN_ORIGIN));
 const TurnStatusSchema = Schema.Literals(Object.values(TURN_STATUS));
 
 const IdSchema = Schema.Struct({ id: Schema.String });
-
-/** The agent's checkout as it stood before a turn, as its runner recorded it (`turns.snapshot_*`). */
-export interface TurnCheckoutSnapshot {
-  readonly commit: string;
-  readonly head: string | null;
-  readonly branch: string | null;
-}
-
-const TurnCheckoutSnapshotSchema = Schema.Struct({
-  commit: Schema.String,
-  head: Schema.NullOr(Schema.String),
-  branch: Schema.NullOr(Schema.String),
-});
 
 /**
  * That a turn still open stands lapsed at the instant given: past the
@@ -322,7 +313,7 @@ const writeSnapshot = SqlSchema.void({
   Request: Schema.Struct({
     turnId: Schema.String,
     conversationId: Schema.String,
-    snapshot: TurnCheckoutSnapshotSchema,
+    snapshot: checkoutRestoreSnapshotSchema,
   }),
   execute: (row) =>
     Database.use((db) =>
@@ -1117,7 +1108,7 @@ export function forgetTurnSnapshotsOfAgent(agentId: string): TurnStateEffect<voi
 export function recordTurnSnapshot(
   target: TurnTarget,
   turnId: string,
-  snapshot: TurnCheckoutSnapshot,
+  snapshot: CheckoutRestoreSnapshot,
 ): TurnStateEffect<void> {
   return writeSnapshot({ turnId, conversationId: target.conversationId, snapshot });
 }

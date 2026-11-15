@@ -14,10 +14,10 @@ import type { LiveRead } from "@repo/features/live-wire";
 import { type MirrorStandings, mirrorStandingsSchema } from "@repo/features/mirror-steps";
 import { type PortForwarding, portForwardingSchema } from "@repo/features/port-forward-acts";
 import {
+  type ListedTasksView,
   TASK_CALL_FAILURE,
   type TasksPageAnswer,
   type TasksPageParams,
-  type TasksView,
   tasksPageAnswerSchema,
 } from "@repo/features/tasks-view";
 import {
@@ -137,7 +137,7 @@ export interface HostOperator {
   onAccountChanged(listener: (account: AccountSnapshot) => void): () => void;
   onAccountAccessChanged(listener: (access: AppAccessSlice) => void): () => void;
   onSessionReplayChanged(listener: (replay: SessionReplayState) => void): () => void;
-  onTasksChanged(listener: (view: TasksView) => void): () => void;
+  onTasksChanged(listener: (view: ListedTasksView) => void): () => void;
   /** The commands agents asked to run on this Mac that wait on the developer, whole, each time one is asked or answered. */
   onMachineCommandAsksChanged(listener: (asks: readonly MachineCommandAsk[]) => void): () => void;
   /** The device this Mac claims commands as for the account signed in, or none before it joined for it, at every look the Mac takes at its device, moved or not. */
@@ -390,7 +390,7 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         // Note that the view is the host's own, handed over in this process
         // (`gatewayHost`), so it is passed on as built: a decode here would
         // only rebuild the same tree new, and every comparison after it walk it.
-        (payload) => (isRecord(payload) ? answered<TasksView>(payload) : undefined),
+        (payload) => (isRecord(payload) ? answered<ListedTasksView>(payload) : undefined),
         listener,
       ),
     onMachineCommandAsksChanged: (listener) =>

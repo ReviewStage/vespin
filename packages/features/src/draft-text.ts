@@ -97,6 +97,9 @@ const MARK_OF = {
   "`": DRAFT_MARK.CODE,
 } as const satisfies Record<string, DraftMark>;
 
+/** `MARK_OF` by any character, which reads no mark for one it does not name. */
+const MARK_OF_CHARACTER: ReadonlyMap<string, DraftMark> = new Map(Object.entries(MARK_OF));
+
 /** The element each mark is copied as. */
 const MARK_ELEMENT = {
   [DRAFT_MARK.BOLD]: "b",
@@ -171,10 +174,7 @@ function slackRuns(text: string): DraftRun[] {
       continue;
     }
 
-    // SAFETY: `Object.hasOwn` checked the character is one of MARK_OF's keys.
-    const mark = Object.hasOwn(MARK_OF, character)
-      ? MARK_OF[character as keyof typeof MARK_OF]
-      : undefined;
+    const mark = MARK_OF_CHARACTER.get(character);
 
     const opens =
       mark !== undefined && (at === 0 || edgeAt(text, at - 1)) && !/\s/u.test(text[at + 1] ?? " ");

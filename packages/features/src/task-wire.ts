@@ -1074,14 +1074,10 @@ export const taskFollowerAddRequestSchema = EffectSchema.Struct({
   userId: taskAssigneeIdSchema,
 });
 
-export type TaskFollowerAddRequest = typeof taskFollowerAddRequestSchema.Type;
-
 /** The account's own switch (PUT): whether the task's agents may use its machines. */
 export const taskFollowerMachinesRequestSchema = EffectSchema.Struct({
   machines: EffectSchema.Boolean,
 });
-
-export type TaskFollowerMachinesRequest = typeof taskFollowerMachinesRequestSchema.Type;
 
 /**
  * The id of the transaction a write committed in, as Postgres counts it, in

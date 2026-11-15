@@ -41,10 +41,10 @@ import { NOT_FOUND_THING, NotFound } from "../../not-found.js";
 import { AccountCell, AccountCellSkeleton } from "../accounts-table/accounts-table.js";
 import { useAdminDoors } from "../admin-doors.js";
 import { adminWorkspaceQuery, useAdminSignOut } from "../admin-queries.js";
-import { adminReadView } from "../admin-read-view.js";
+import { type AdminScreenShell, adminReadView } from "../admin-read-view.js";
 import { AdminSection, STAT_LAYOUT, StatCards, type StatSpec } from "../charts/stat-card.js";
 import { ExternalLink } from "../chrome/external-links.js";
-import { AdminPage, type AdminWayBack, type ViewerAccount } from "../chrome/page-header.js";
+import { AdminPage, type AdminWayBack } from "../chrome/page-header.js";
 import { PageSkeleton } from "../chrome/page-skeleton.js";
 import { ADMIN_TAB, workspaceReadQuery } from "../routing.js";
 import { INSTALLATION_LABEL, installationMark } from "../status-words.js";
@@ -233,14 +233,10 @@ export function WorkspaceScreen({
   onBack,
   onOpenAccount,
   frame,
-}: {
+}: AdminScreenShell & {
   id: string;
-  account: ViewerAccount | undefined;
-  onSignOut: () => Promise<void>;
   onBack: () => void;
   onOpenAccount: (id: string) => void;
-  /** Applied around every answer but the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
 }): React.JSX.Element {
   const { reads, gate } = useAdminDoors();
   const query = workspaceReadQuery(id);

@@ -156,6 +156,7 @@ import { runScheduleWakeup, SCHEDULE_WAKEUP_TOOL } from "../coder-host/wakeup-to
 import {
   COMPUTER_TOOL,
   computerScreenshot,
+  computerWatched,
   runComputerTool,
   storedComputerOutput,
 } from "../computer-tool.js";
@@ -265,6 +266,8 @@ export interface CatalogTool<Name extends string = string> {
   readonly run: Door;
   /** How a result is shown to the agent, where it is more than its JSON: a picture as an image. */
   readonly content?: (result: WorkspaceMcpToolResult) => readonly McpContent[];
+  /** What of a result the transcript keeps for the people watching and the agent is never shown, carried in its `_meta` (`WORKSPACE_MCP_WATCHED_META`); none where it holds none. */
+  readonly watched?: (result: WorkspaceMcpToolResult) => UnparsedWireValue | undefined;
   /** How a call its gate shuts is answered, given the gate's words, where its door's refusal is no `rejected` with them (`gateRefusal`). */
   readonly refused?: (words: string) => WorkspaceMcpToolResult;
   /** The tool's words and input in the words of the agent's workspace's experiments, where they name one (`listedTool`); none for a tool whose words name none. */
@@ -281,7 +284,7 @@ interface ToolSpec<Name extends string> {
 /** What of a tool the catalog declares beside its spec and its door. */
 type Served = Pick<
   CatalogTool,
-  "gate" | "alwaysLoad" | "reads" | "content" | "refused" | "variant"
+  "gate" | "alwaysLoad" | "reads" | "content" | "watched" | "refused" | "variant"
 >;
 
 function served<const Name extends string>(
@@ -637,6 +640,7 @@ const CATALOG = [
     {
       gate: TOOL_GATE.COMPUTER_USE,
       content: computerContent,
+      watched: (result) => computerWatched(unparsedWire(result)),
       refused: machineCommandNotRun,
     },
   ),
@@ -726,11 +730,12 @@ export function refusedByDoor(result: WorkspaceMcpToolResult): boolean {
   );
 }
 
-/** One call's answer: the tool's own result, and MCP's tool result of it, what the agent is shown and whether it is the tool's error. */
+/** One call's answer: the tool's own result, and MCP's tool result of it, what the agent is shown, whether it is the tool's error, and what only the transcript keeps of it. */
 export interface ToolCallAnswer {
   readonly result: WorkspaceMcpToolResult;
   readonly content: readonly McpContent[];
   readonly isError: boolean;
+  readonly watched?: UnparsedWireValue;
 }
 
 /** A call refused at the tool's gate: in the tool's own refusal where it words one, else `rejected` with the gate's words. */
@@ -743,10 +748,13 @@ function gateRefusal(tool: CatalogTool, gate: ToolGate): WorkspaceMcpToolResult 
 
 /** A result as the call answers it: as the tool shows it (a picture as an image), else its JSON as one text block, marked an error where it is a refusal. */
 function answerOf(tool: CatalogTool, result: WorkspaceMcpToolResult): ToolCallAnswer {
+  const watched = tool.watched?.(result);
+
   return {
     result,
     content: tool.content?.(result) ?? [{ type: "text", text: JSON.stringify(result) }],
     isError: refusedByDoor(result),
+    ...(watched === undefined ? undefined : { watched }),
   };
 }
 

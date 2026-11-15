@@ -129,7 +129,7 @@ export type PermissionModeWriter = (
 ) => Promise<AgentActAnswer>;
 
 /** An answer to an ask as the view hears it: the host's answer, or one that never arrived. */
-export type ApprovalActAnswer = AgentApprovalAnswerView | Unreached<"unanswered">;
+type ApprovalActAnswer = AgentApprovalAnswerView | Unreached<"unanswered">;
 
 /** How an answer is sent: the agent, the ask, and the answer. */
 export type ApprovalAnswerWriter = (
@@ -155,7 +155,7 @@ export const MODE_GROUP = PERMISSION_MODE_WORDS.GROUP;
 export const MODE_QUESTION = PERMISSION_MODE_WORDS.QUESTION;
 
 /** When a change reaches the agent, said under the menu and on the change's toast. */
-export const MODE_APPLIES = PERMISSION_MODE_WORDS.APPLIES;
+const MODE_APPLIES = PERMISSION_MODE_WORDS.APPLIES;
 
 /** Why a change of mode did not take, said under the composer's bar. */
 const MODE_CHANGE_FAILED = PERMISSION_MODE_WORDS.CHANGE_FAILED;
@@ -508,7 +508,7 @@ function DenyNoteBox({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): Reac
 }
 
 /** A held call as its row draws it: where it stands in words, who asks and why, and the presses while it waits. */
-export function heldCallOf(ask: ApprovalView): HeldCall {
+function heldCallOf(ask: ApprovalView): HeldCall {
   return {
     status: ask.settled ?? HELD_WORDS.WAITING,
     waiting: ask.settled === undefined,
