@@ -27,6 +27,7 @@ import {
   mentionLinksIn,
   mentionName,
 } from "@repo/features/mention-link";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { WireRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
@@ -105,7 +106,9 @@ export const SEND_SLACK_MESSAGE_TOOL = {
     "Send one message as the Slack bot: in the Slack thread you were started from or last " +
     "written in where you name no place, in a channel the bot is in, or to a workspace member " +
     "as a DM, at the top level or under `thread`. " +
-    `${SLACK_MANNERS} Answers \`accepted\` with the ` +
+    `${SLACK_MANNERS} Where the work opened a pull request, your closing message carries your ` +
+    `own ${PRODUCT_NAME} link, your agent's page, beside the pull request's, since nothing ` +
+    "else posts it. Answers `accepted` with the " +
     "message's `channelId`, `ts`, `threadTs`, and `link`, or `rejected` and why.",
   inputSchema: SEND_SLACK_MESSAGE_INPUT,
 } as const;
