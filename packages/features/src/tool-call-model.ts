@@ -115,6 +115,8 @@ export interface ToolCallView {
   readonly connection?: string;
   /** For a terminal command or an action on an app that ran nothing on its machine, how it came to run nothing, which its row says quietly in place of a failure; absent for the rest. */
   readonly notRun?: MachineNotRun;
+  /** Whether the service answered the call without doing it, as a pull request it refused or a browser call that ran nothing, which its row marks as failed though the call answered; absent for the rest. */
+  readonly refused?: true;
 }
 
 /** The escape every terminal color and cursor sequence starts with. */
@@ -311,8 +313,9 @@ const NOT_RUN_LABEL = {
 
 /**
  * The one quiet label a call that ran nothing wears at its line's end,
- * after the chip of the machine it was meant for: "Not answered",
- * "Declined", "Offline", or "Needs Screen Recording".
+ * after the chip of the machine it was meant for, or alone where the card
+ * under the row names that machine: "Not answered", "Declined",
+ * "Offline", or "Needs Screen Recording".
  */
 export function machineNotRunLabel(notRun: MachineNotRun): string {
   switch (notRun.outcome) {
@@ -998,7 +1001,7 @@ function openedPullRequestView(
   return {
     kind: CALL_KIND.OPEN_PULL_REQUEST,
     subject: number === undefined ? title : `#${number} ${title}`,
-    ...(reason === undefined ? undefined : { description: PULL_REQUEST_REFUSED }),
+    ...(reason === undefined ? undefined : { description: PULL_REQUEST_REFUSED, refused: true }),
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: pullRequestAnswer(output, reason),
   };
@@ -1530,6 +1533,7 @@ const AGENT_TOOL_VIEWS = {
       kind: CALL_KIND.BROWSER,
       subject: words === undefined ? "" : (tab ?? ""),
       ...(words === undefined ? undefined : { description: words }),
+      ...(stringAt(output, "status") === BROWSER_NOT_RUN ? { refused: true } : undefined),
       input: input === undefined ? textBlock("") : jsonBlock(input),
       output: output === undefined ? undefined : browserOutput(output),
     };

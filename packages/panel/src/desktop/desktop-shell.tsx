@@ -71,6 +71,7 @@ import type { NavigationHistory, WindowHistory } from "../places/window-history.
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { type HiddenColumns, hiddenColumns, SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SignInGate } from "../sign-in-gate.js";
+import { useNamedTask, useTaskListRows } from "../task-list-collections.js";
 import { ChipCards, type TaskFocus } from "../tasks/chip-cards.js";
 import { MentionedAgents } from "../tasks/mentioned-place.js";
 import { NewTaskDialog } from "../tasks/new-task-dialog.js";
@@ -945,22 +946,25 @@ export function DesktopShell({
   const agentShown = tab === PANEL_TAB.TASKS ? (tasks.agentView.agentId ?? columnAgent) : undefined;
 
   // Note that while the plan's description is read, the window is named by the task as the list holds it.
-  const namedTask =
-    shownTask ??
-    (tab === PANEL_TAB.TASKS && !standingIn && region.kind === TASK_REGION.READING
-      ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
-      : undefined);
+  const readingTask = useNamedTask(
+    tab === PANEL_TAB.TASKS && !standingIn && region.kind === TASK_REGION.READING
+      ? tasks.activeTaskId
+      : undefined,
+    tasks.typedNames,
+  );
+
+  const namedTask = shownTask ?? readingTask;
 
   useWindowTitle(titleSubject(tab, tasks, namedTask, place, inAutomations));
 
   // The plan is looked at the moment it is on screen, whichever of its column's tabs is chosen,
   // from the mark and the agents' activity its row in the list carries; not while the update screen stands over the window.
+  const listedShown = useNamedTask(shownTask?.id, tasks.typedNames);
+
   const looks = useTaskLooks(
     updateNeeded ? undefined : shownTask,
     tasks.me,
-    shownTask === undefined
-      ? undefined
-      : (tasks.tasks.find((row) => row.id === shownTask.id) ?? shownTask),
+    shownTask === undefined ? undefined : (listedShown ?? shownTask),
   );
 
   const mentionedAgents = useMemo(
@@ -972,15 +976,17 @@ export function DesktopShell({
   // Note that what the columns are handed is held across draws over the same
   // tasks, because each column holds while what it is handed does
   // (`DesktopSidebar`, `DesktopTasks`), and a chip reads its cards from here.
+  const taskRows = useTaskListRows(tasks.typedNames);
+
   const chipCards = useMemo(
     () => ({
       taskCard: (taskId: string, now: number, focus: TaskFocus | undefined) => {
-        const task = tasks.tasks.find((each) => each.id === taskId);
+        const task = taskRows.task(taskId);
 
         return task === undefined ? undefined : homeTaskCardOf(tasks, task, now, focus);
       },
     }),
-    [tasks],
+    [tasks, taskRows],
   );
 
   // New task asks over whatever stands, the tasks or a version history.

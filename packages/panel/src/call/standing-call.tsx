@@ -33,7 +33,7 @@ import {
 import { appBridge } from "../app-bridge.js";
 import { appPlatform } from "../app-platform.js";
 import { transcriptQuery } from "../live-reads.js";
-import { appStateQuery, selectListedTasks } from "../use-app-state.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { useVoiceCall } from "../voice-call.js";
 import { type CallCardOf, type CallCardPresses, callCardOf } from "./call-card-of.js";
 
@@ -61,23 +61,21 @@ function bounded(words: string): string {
   return words.slice(0, VOICE_BOUNDS.MAX_CARD_CHARS);
 }
 
-/** The call's agent by name and harness, its status, and its task's name, as the task list holds them. */
+/** The call's agent by name and harness, its status, and its task's name, as the task list holds them, read by id from its collections so only those two rows draw the card again. */
 function useListedFacts(taskId: string | undefined, agentId: string | undefined) {
-  return useQuery({
-    ...appStateQuery,
-    select: (state) => {
-      const tasks = selectListedTasks(state);
-      const task = tasks.tasks.find((each) => each.id === taskId);
-      const agent = tasks.taskAgents?.find((each) => each.id === agentId);
+  const collections = useTaskListCollections();
+  const task = useTaskListRow(collections.tasks, taskId);
+  const agent = useTaskListRow(collections.agents, agentId);
 
-      return {
-        agentName: agent === undefined ? UNNAMED_AGENT : agentName(agent),
-        provider: agent === undefined ? undefined : providerOf(agent.model),
-        taskName: task?.name,
-        status: agent?.status,
-      };
-    },
-  }).data;
+  return useMemo(
+    () => ({
+      agentName: agent === undefined ? UNNAMED_AGENT : agentName(agent),
+      provider: agent === undefined ? undefined : providerOf(agent.model),
+      taskName: task?.name,
+      status: agent?.status,
+    }),
+    [task, agent],
+  );
 }
 
 /**
