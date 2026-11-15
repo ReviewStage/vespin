@@ -155,6 +155,8 @@ export interface MobileHostOptions {
   readonly fixture: RunProfile | undefined;
   /** Whether a fixture run stands as the service's refusal of an old build leaves the document, which `-updateNeeded true` asks; never in a live run. */
   readonly fixtureUpdateNeeded?: boolean | undefined;
+  /** Whether a fixture run holds an ask of Ada's MacBook for an agent's command, which `-machineAsk true` asks; never in a live run. */
+  readonly fixtureMachineAsk?: boolean | undefined;
   /** Whether a fixture run's act port refuses the writes a flow presses, which `-refuseWrites true` asks; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
   /** This build's version, as the app's config names it. */
@@ -372,10 +374,10 @@ function streamPerfDeliveries(state: AppStateStore): void {
   }, 500);
 }
 
-const stagedFixture = (state: AppStateStore, updateNeeded: boolean) =>
+const stagedFixture = (state: AppStateStore, updateNeeded: boolean, machineAsk: boolean) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      stageFixture(state, updateNeeded);
+      stageFixture(state, updateNeeded, machineAsk);
       streamPerfDeliveries(state);
       yield* publishAppStateChanges(
         state,
@@ -435,6 +437,7 @@ const composedMobile = (options: MobileHostOptions) =>
       const notices = yield* linkClientNotices({
         state,
         host: operator.host,
+        taskList: assembly.taskListMoves,
         presenter: { openMachineCommandAsk: () => undefined, openPlace: () => undefined },
         onPanelFocusChanged: device.onAppActiveChanged,
         report,
@@ -526,7 +529,11 @@ export function composeMobile(
       const staged =
         options.fixture === undefined
           ? Layer.empty
-          : stagedFixture(mobile.state, options.fixtureUpdateNeeded === true);
+          : stagedFixture(
+              mobile.state,
+              options.fixtureUpdateNeeded === true,
+              options.fixtureMachineAsk === true,
+            );
 
       return Layer.provideMerge(staged, standing);
     }),

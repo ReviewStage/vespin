@@ -150,7 +150,7 @@ test("three documents pushed while the panel is hidden are one delivery, the thi
   const { window, stream, page } = shownPanel();
   window?.emit("hide");
 
-  for (const version of [1, 2, 3]) windowPushes.pushState(page, documentAt(version));
+  for (const version of [1, 2, 3]) windowPushes.pushState(page, documentAt(version), { tasks: [] });
 
   const pending = await nextHeard(stream);
   expect(pending.heard()).toBeUndefined();
@@ -166,7 +166,7 @@ test("three documents pushed while the panel is hidden are one delivery, the thi
 test("a minimized panel is held until it is restored", async () => {
   const { window, stream, page } = shownPanel();
   window?.emit("minimize");
-  windowPushes.pushState(page, documentAt(1));
+  windowPushes.pushState(page, documentAt(1), { tasks: [] });
   const pending = await nextHeard(stream);
   expect(pending.heard()).toBeUndefined();
 
@@ -179,7 +179,7 @@ test("a document pushed while the panel is in view is delivered as before", asyn
   const { window, stream, page } = shownPanel();
   window?.emit("hide");
   window?.emit("show");
-  windowPushes.pushState(page, documentAt(1));
+  windowPushes.pushState(page, documentAt(1), { tasks: [] });
 
   expect((await nextHeard(stream)).heard()).toBe(1);
 });
@@ -187,7 +187,7 @@ test("a document pushed while the panel is in view is delivered as before", asyn
 test("an event reaches a hidden panel, behind the document held before it", async () => {
   const { window, stream, page } = shownPanel();
   window?.emit("hide");
-  windowPushes.pushState(page, documentAt(1));
+  windowPushes.pushState(page, documentAt(1), { tasks: [] });
   windowPushes.push(page, PUSH.SHOW_LINK, LINK);
 
   expect((await nextHeard(stream)).heard()).toBe(1);

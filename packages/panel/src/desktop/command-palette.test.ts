@@ -27,7 +27,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
-import { IDLE_TASKS_VIEW, type TasksTreeAnswer } from "@repo/features/tasks-view";
+import type { TasksTreeAnswer } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppHostRead, AppInboxItems } from "@repo/host/app-state";
@@ -72,11 +72,12 @@ import {
   withExperiments,
   writeExperiments,
 } from "../testing/app-state.js";
-import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { keyPressed, reportEventTiming } from "../testing/event-timing.js";
 import { restOn } from "../testing/hint-rest.js";
+import { overEveryTask, type StandingTaskList, standingTaskList } from "../testing/history-rows.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { openTaskMenu } from "../testing/task-menu.js";
 import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
@@ -99,12 +100,16 @@ interface Sent {
 
 const roots: Root[] = [];
 
+/** The task list's collections a case stands rows on, the window's own where it stands none. */
+let listed: StandingTaskList | undefined;
+
 /** The router of the window each palette opened by `openPalette` stands under, the latest last. */
 const windows: TestWindowRouter[] = [];
 
 beforeEach(installScrollIntoView);
 
 afterEach(() => {
+  listed = undefined;
   act(() => {
     for (const root of roots.splice(0)) root.unmount();
   });
@@ -117,11 +122,14 @@ type WindowPaletteProps = Omit<Parameters<typeof CommandPalette>[0], "links"> & 
   place?: RoutedPlace | undefined;
 };
 
-/** The palette offering the links at hand through the window's own Copy link. */
+/** The palette offering the links at hand through the window's own Copy link, over task collections holding every task its tab holds, or what a case stood on them (`listed`). */
 function LinkedPalette({ place, ...props }: WindowPaletteProps): React.JSX.Element {
   const links = useCopyLink(props.tasks, undefined, true, SHELL_ROOM.WIDE, undefined, place);
 
-  return createElement(CommandPalette, { ...props, links });
+  const palette = createElement(CommandPalette, { ...props, links });
+
+  // The window's task collections hold every task the tab holds, as its root feeds them beside the tab, or what a case stood on them.
+  return listed === undefined ? overEveryTask(props.tasks, palette) : listed.provide(palette);
 }
 
 /** The palette as the window draws it, under a window's router standing at `at`, `/app` unless said, whose place its links read, an Inbox item there standing where `held` says. */
@@ -191,7 +199,7 @@ function openPalette(
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_TREE]: (payload) => readFiles("taskId" in payload ? payload.taskId : ""),
   });
-  act(() => root.render(withQueryClient(palette)));
+  act(() => root.render(withQueryClient(listed === undefined ? palette : listed.provide(palette))));
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.COMMAND_PALETTE), "⌘K is offered");
   });
@@ -1378,47 +1386,41 @@ test("a task's row ends as its sidebar row does, who is on it then an agent at w
 
 test("an agent pressed on a task's card in ⌘K over Settings leaves the palette for the tasks and opens the agent's tab, as a row does", () => {
   const shown: [string, string][] = [];
-  // The task's agent, as the list followed live holds it.
-  writeAppState(
-    stateWith(
-      {},
-      {
-        tasks: {
-          ...IDLE_TASKS_VIEW,
-          taskAgents: [
-            listedAgent({
-              id: "agent-7",
-              taskId: "plan-1",
-              title: "Invoice export",
-              model: "anthropic/claude-opus-5.5",
-              effort: "high",
-              status: AGENT_STATUS.RUNNING,
-              createdAt: 1,
-              turnId: null,
-            }),
-          ],
-        },
-      },
-    ),
-  );
+
+  const task = {
+    id: "plan-1",
+    workspaceId: "workspace-personal",
+    name: "Billing usage alerts",
+    createdAt: 1,
+    updatedAt: 2,
+    repository: null,
+    agents: {
+      total: 1,
+      working: 1,
+      pullRequestTotal: 0,
+    },
+  };
+
+  // The task and its agent, as the list followed live holds them.
+  listed = standingTaskList({
+    tasks: [task],
+    taskAgents: [
+      listedAgent({
+        id: "agent-7",
+        taskId: "plan-1",
+        title: "Invoice export",
+        model: "anthropic/claude-opus-5.5",
+        effort: "high",
+        status: AGENT_STATUS.RUNNING,
+        createdAt: 1,
+        turnId: null,
+      }),
+    ],
+  });
 
   const sent = openPalette(
     tasksControl({
-      tasks: [
-        {
-          id: "plan-1",
-          workspaceId: "workspace-personal",
-          name: "Billing usage alerts",
-          createdAt: 1,
-          updatedAt: 2,
-          repository: null,
-          agents: {
-            total: 1,
-            working: 1,
-            pullRequestTotal: 0,
-          },
-        },
-      ],
+      tasks: [task],
       onShowAgent: (taskId, agentId) => shown.push([taskId, agentId]),
     }),
     undefined,
@@ -1685,14 +1687,45 @@ test("a task whose assignee and creator share a first name says the one the whol
   assert.deepEqual(rows(), ["Audit trail · relay · Charles Ward"]);
 });
 
-test("a task Vespin or a coding agent made says who in its detail and is found by it, but wears who is on it rather than its maker", () => {
-  const dean = { userId: "user-dean", name: "Dean Stratakos" };
-
-  const task = (id: string, origin?: TaskSummary["origin"]) => ({
+test("Search lists the pinned tasks first, the newest pinned first whenever each was started, then the rest", () => {
+  const task = (id: string, createdAt: number, pinnedAt?: number) => ({
     id,
     workspaceId: "workspace-personal",
     name: id,
-    createdAt: 1,
+    createdAt,
+    updatedAt: createdAt,
+    repository: "acme/relay",
+    ...(pinnedAt === undefined ? undefined : { pinnedAt }),
+  });
+
+  // Note that the task pinned last was started first, so the order the list was started in would stand it second.
+  openPalette(
+    tasksControl({
+      tasks: [
+        task("Rate limits", 3),
+        task("Invite emails", 2, 20),
+        task("Audit log export", 1, 30),
+      ],
+    }),
+  );
+  chooseFilter("Tasks");
+
+  assert.deepEqual(rows(), [
+    "Audit log export · relay",
+    "Invite emails · relay",
+    "Rate limits · relay",
+  ]);
+});
+
+test("a task Vespin or a coding agent made says who in its detail and is found by it, but wears who is on it rather than its maker", () => {
+  const dean = { userId: "user-dean", name: "Dean Stratakos" };
+
+  // Note that each is started after the next, as the list the host hands lists them newest started first.
+  const task = (id: string, createdAt: number, origin?: TaskSummary["origin"]) => ({
+    id,
+    workspaceId: "workspace-personal",
+    name: id,
+    createdAt,
     updatedAt: 1,
     repository: "acme/relay",
     ownerId: dean.userId,
@@ -1705,9 +1738,9 @@ test("a task Vespin or a coding agent made says who in its detail and is found b
     tasksControl({
       me: dean.userId,
       tasks: [
-        task("Invite emails", { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" }),
-        task("Audit log export", { actor: DESCRIPTION_ACTOR.NOTETAKER }),
-        task("Rate limits"),
+        task("Invite emails", 3, { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" }),
+        task("Audit log export", 2, { actor: DESCRIPTION_ACTOR.NOTETAKER }),
+        task("Rate limits", 1),
       ],
     }),
   );

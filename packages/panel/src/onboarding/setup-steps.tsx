@@ -26,7 +26,7 @@ import { Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
-import { welcomed } from "../desktop/desktop-welcome.js";
+import { useListsTask, welcomed } from "../desktop/desktop-welcome.js";
 import { useHoldExpiredServerToasts } from "../expired-server-toasts.js";
 import { confirmFailure } from "../failure-report.js";
 import { workspaceMembersQuery } from "../live-reads.js";
@@ -131,7 +131,7 @@ export function useSetupGate(
 
   // Note that the models are the ones the host holds for the account, so nothing here asks for them.
   const { models, modelsFailed } = tasks.newTask;
-  const fresh = welcomed(tasks);
+  const fresh = welcomed(tasks, useListsTask(undefined));
 
   // Note that a read that failed is taken as an agent standing, so a hitch never stands setup before an account that has worked.
   const agent =

@@ -27,8 +27,8 @@ import {
   settledNote,
   settleFailedNote,
   settleStopWords,
+  type TaskNames,
 } from "@repo/features/tasks-model";
-import type { TasksView } from "@repo/features/tasks-view";
 import { CONFIRM_LOSS, ConfirmDialog, STATUS_TONE, useConfirmDialog } from "@repo/ui";
 import { neverBusyAct } from "@repo/ui/confirm-state";
 import { useQuery } from "@tanstack/react-query";
@@ -75,11 +75,11 @@ interface HeldSettle {
 
 /** The tasks as the list holds them, or the open document where the list does not hold one yet. */
 function standingTasksOf(rows: TaskRows, taskIds: readonly string[]): readonly TaskSummary[] {
-  const { activeTaskId } = rows.tasks;
+  const { activeTaskId } = rows;
   const held = activeTaskId === undefined ? undefined : heldTask(rows, activeTaskId);
 
   return taskIds.flatMap((taskId): readonly TaskSummary[] => {
-    const task = rows.tasks.tasks.find((each) => each.id === taskId);
+    const task = rows.listed(taskId);
 
     if (task !== undefined) return [task];
 
@@ -89,7 +89,7 @@ function standingTasksOf(rows: TaskRows, taskIds: readonly string[]): readonly T
 
 /** How many of the task's agents are starting or running, read off the agents the list follows, else its count of them. */
 function workingAgents(rows: TaskRows, task: TaskSummary): number {
-  const listed = rows.tasks.taskAgents;
+  const listed = rows.agents();
 
   return listed === undefined
     ? (task.agents?.working ?? 0)
@@ -118,14 +118,14 @@ export interface StandingWrites {
 
 /**
  * The standing writes, each ⌘Z's to take back once kept, their rows read
- * off `drawn`, the tasks the Tasks tab draws as they stand at the call
- * (`TasksControl`'s `drawnTasks`), and the open document as the host holds
- * it for the window.
+ * off the task list as it stands at the call, each name drawn as
+ * `typedNames` answers it (`task-row-doors.ts`), and the open document as the
+ * host holds it for the window.
  */
-export function useStandingWrites(drawn: () => TasksView): StandingWrites {
+export function useStandingWrites(typedNames: () => TaskNames): StandingWrites {
   const toast = useToast();
   const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
-  const standingDoors = useTaskRowDoors(ROW_WRITE.TASK_STANDING.kind, drawn);
+  const standingDoors = useTaskRowDoors(ROW_WRITE.TASK_STANDING.kind, typedNames);
   const sendStandingRow = standingDoors.send;
 
   // A change of where a task stands, its status, priority, or assignee, is

@@ -13,6 +13,7 @@ import {
   type StartCallFailure,
   TASK_CALL_FAILURE,
   TASK_PARENT_FAILURE,
+  type TaskListParts,
   type TasksView,
 } from "./tasks-view.js";
 import { IRREVERSIBLE_WORDS } from "./words.js";
@@ -47,7 +48,7 @@ export type TasksPage = (typeof TASKS_PAGE)[keyof typeof TASKS_PAGE];
  * With none open, the tab is the home page, which offers New task; the
  * task list is the sidebar's.
  */
-export function tasksPage(view: TasksView): TasksPage {
+export function tasksPage(view: Pick<TasksView, "activeTaskId">): TasksPage {
   return view.activeTaskId === undefined ? TASKS_PAGE.HOME : TASKS_PAGE.TASK;
 }
 
@@ -109,7 +110,7 @@ export function documentRegion(
  * task was about and offer a few before it. The list is already newest
  * started first, and a task with no repository adds none.
  */
-export function recentRepositories(tasks: TasksView["tasks"]): string[] {
+export function recentRepositories(tasks: TaskListParts["tasks"]): string[] {
   const recent: string[] = [];
 
   for (const task of tasks) {
@@ -263,7 +264,10 @@ export const ASSIGNEE_FAILED_NOTE = "The task could not be assigned. Try again."
 export type TaskNames = ReadonlyMap<string, string>;
 
 /** `task` with the name given for it drawn in place of its own, the very task where none is given. */
-function named<Named extends { id: string; name: string }>(task: Named, renames: TaskNames): Named {
+export function renamedTask<Named extends { id: string; name: string }>(
+  task: Named,
+  renames: TaskNames,
+): Named {
   const name = renames.get(task.id);
 
   return name === undefined ? task : { ...task, name };
@@ -274,20 +278,13 @@ export function renamedTasks<Named extends { id: string; name: string }>(
   tasks: readonly Named[],
   renames: TaskNames,
 ): readonly Named[] {
-  return renames.size === 0 ? tasks : tasks.map((task) => named(task, renames));
-}
-
-/** The view with each name given drawn in place of the one it replaces in the list. */
-export function renamedView(view: TasksView, renames: TaskNames): TasksView {
-  if (renames.size === 0) return view;
-
-  return { ...view, tasks: renamedTasks(view.tasks, renames) };
+  return renames.size === 0 ? tasks : tasks.map((task) => renamedTask(task, renames));
 }
 
 /** The region with the name given for its task drawn in place of the one it replaces, as the list draws it. */
 export function renamedRegion(region: TaskRegion, renames: TaskNames): TaskRegion {
   if (region.kind !== TASK_REGION.READY) return region;
-  const task = named(region.task, renames);
+  const task = renamedTask(region.task, renames);
 
   return task === region.task ? region : { ...region, task };
 }

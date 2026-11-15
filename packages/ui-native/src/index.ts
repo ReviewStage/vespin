@@ -17,6 +17,8 @@ export {
 
 export { AuthPage } from "./auth-page.js";
 
+export { type BarSubtitle, StackBarTitle } from "./bar-title.js";
+
 export { BRAND_MARK_ASSET, BrandMark } from "./brand-mark.js";
 
 export {
@@ -29,6 +31,7 @@ export {
   FieldChip,
   FollowingChip,
   LabelChip,
+  type ListScopes,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -79,7 +82,7 @@ export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-m
 
 export { releaseFields } from "./field-focus.js";
 
-export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
+export { AttachRow, MenuPickRow, WORDS_LOOK, WordsField } from "./form-rows.js";
 
 export { GlassBar, GlassDock } from "./glass-bar.js";
 
@@ -138,6 +141,8 @@ export {
   type TaskFold,
   TaskRow,
 } from "./list-row.js";
+
+export { MachineAskSheet } from "./machine-ask-sheet.js";
 
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 
@@ -256,6 +261,10 @@ export {
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  DetailPage,
+  type DetailStack,
+  type DetailStackPage,
+  HostedFill,
   isBarMenu,
   KeptColumns,
   type KeptView,
@@ -270,7 +279,7 @@ export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
-export { askForName, type NameAsk, shareLink, shareWords } from "./system-asks.js";
+export { askForName, type NameAsk, shareWords } from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,
@@ -310,7 +319,6 @@ export { MARK_SIZE, SPACE } from "./tokens/space.js";
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
 export {
-  AgentHead,
   AgentTranscript,
   type OlderPages,
   type TranscriptReveal,
