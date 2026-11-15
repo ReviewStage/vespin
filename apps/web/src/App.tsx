@@ -16,6 +16,7 @@ import {
   WaveformIcon,
 } from "@repo/ui";
 import { KanbanIcon, ServerIcon, TargetIcon, WorkflowIcon } from "@repo/ui/icons";
+import { GUIDES_PATH } from "./guides";
 import {
   DOCS_URL,
   REPOSITORY_URL,
@@ -137,26 +138,25 @@ export function App(): React.JSX.Element {
       <LandingSection
         title="Monitor all your agents with one inbox."
         lead="Agents only post to your inbox when something needs your attention."
-        more={{ label: "Learn more", href: `${DOCS_URL}/quickstart` }}
+        more={{ label: "Learn more", href: `${GUIDES_PATH}/how-the-vespin-inbox-works` }}
         scene={LANDING_SCENE.INBOX}
       />
       <LandingSection
         title="Your team and agents, in one place."
         lead="Agents hand off work and message each other, and anyone on your team can jump in with an @mention."
-        more={{ label: "Learn more", href: DOCS_URL }}
         scene={LANDING_SCENE.AGENTS}
       />
       <LandingSection
         title="Bring your own keys."
         lead="Run agents on your Codex or Claude plan, or bring your own API keys."
-        more={{ label: "Connect an agent", href: `${DOCS_URL}/install` }}
+        more={{ label: "Connect an agent", href: `${DOCS_URL}/install#connect-an-agent` }}
         scene={LANDING_SCENE.KEYS}
         codexArt={CODEX_ART}
       />
       <LandingSection
         title="Check in from anywhere."
         lead="Use the Mac app at your desk, or the web app on your phone."
-        more={{ label: "Get the apps", href: `${DOCS_URL}/install` }}
+        more={{ label: "Get the apps", href: `${DOCS_URL}/install#download-for-mac` }}
         scene={LANDING_SCENE.DEVICES}
       />
       <LandingMore title="And much more." items={MORE_FEATURES} />

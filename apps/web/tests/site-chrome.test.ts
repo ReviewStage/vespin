@@ -105,10 +105,9 @@ test("the landing offers the web app beside the download, and nothing in its sce
     "Backed by Y Combinator -> https://www.ycombinator.com/companies/vespin",
     "Download for macOS -> https://github.com/ReviewStage/vespin/releases/latest/download/Vespin.dmg",
     `Continue on web -> ${PANEL_PATH}`,
-    "Learn more → -> /docs/quickstart",
-    "Learn more → -> /docs",
-    "Connect an agent → -> /docs/install",
-    "Get the apps → -> /docs/install",
+    "Learn more → -> /guides/how-the-vespin-inbox-works",
+    "Connect an agent → -> /docs/install#connect-an-agent",
+    "Get the apps → -> /docs/install#download-for-mac",
     "Download for macOS -> https://github.com/ReviewStage/vespin/releases/latest/download/Vespin.dmg",
     "GitHub -> https://github.com/ReviewStage/vespin",
   ]);
