@@ -44,6 +44,7 @@ import {
 import { useDetailStack, useStackRoot } from "../detail-stack.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
+import { lowerKeyboard } from "../native-interactions-module.js";
 import { useHandColumns } from "../place-columns.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { useRefilledSearchField } from "../search-field.js";
@@ -259,10 +260,14 @@ function useSearchScreen(
   const onTab = useOnTab();
 
   const open = (id: string) => {
+    // Note that a pick lowers the keyboard the query raised, as Mail and Notes do, since a split view's field keeps its focus while the pick opens beside it.
+    lowerKeyboard();
     const picked = pick === undefined ? undefined : foundPick(found, id);
 
     if (pick !== undefined && picked !== undefined) {
       pick.choose(picked);
+      // Note that the keyboard is lowered again once the pick has drawn beside the results, since the column's field may take its focus back as its column draws anew.
+      requestAnimationFrame(lowerKeyboard);
 
       return;
     }
