@@ -13,6 +13,7 @@
  * the host wrote it, and a document already staged is handed nothing new.
  */
 
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { type AppStateSnapshot, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import type { AppStateStore } from "@repo/host/client";
@@ -239,6 +240,7 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
 >([
   [ACT_KIND.TASKS_SET_STANDING, () => false],
   [ACT_KIND.TASKS_PIN, () => false],
+  [ACT_KIND.AGENTS_START, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
 ]);
 
 /** A member of `members` by a key known only at run time, as the fixture reads each one of the port before it answers or forwards it. */
