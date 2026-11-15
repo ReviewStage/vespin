@@ -2034,6 +2034,11 @@ export function TaskColumnPage({ taskId }: { readonly taskId: string }) {
   );
 }
 
+/** The Tasks root's own navigation, whose route keeps the task its split view shows. */
+type TasksRootNavigation = {
+  readonly setParams: (params: { readonly selected?: string | undefined }) => void;
+};
+
 /**
  * Hears a New task start refused for the task a regular window's split view
  * shows, since the task's own page hands itself to the split view and
@@ -2042,10 +2047,11 @@ export function TaskColumnPage({ taskId }: { readonly taskId: string }) {
  * the detail draws (`OVERVIEW_HEARS`).
  */
 function useSplitStartLanded(selected: string | undefined): void {
-  const router = useRouter();
+  const navigation = useNavigation<TasksRootNavigation>();
 
   useStartLanded(selected, ROUTE_HEARS, () => {
-    router.setParams({ selected: undefined });
+    // Note that the Tasks root's own route lets go of the task, whichever tab stands in front.
+    navigation.setParams({ selected: undefined });
   });
 }
 

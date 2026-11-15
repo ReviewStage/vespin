@@ -283,8 +283,8 @@ export function useDetailStack(place: SidebarPlace): PlaceStack {
   return useSyncExternalStore(subscribe, () => stackOf(place));
 }
 
-/** The page on top of a place's stack, while it stands over the detail it was pushed over. */
-function topPageOf(place: SidebarPlace | undefined): PushedPage | undefined {
+/** The page on top of a place's stack, while it stands over the detail it was pushed over, read as it stands now. */
+export function topPageOf(place: SidebarPlace | undefined): PushedPage | undefined {
   if (place === undefined) return undefined;
   const stack = stackOf(place);
 
