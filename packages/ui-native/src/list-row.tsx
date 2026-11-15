@@ -85,6 +85,12 @@ function useRowLines(): (typeof ROW_LINES)[keyof typeof ROW_LINES] {
   return useAccessibilitySize() ? ROW_LINES.ACCESSIBILITY : ROW_LINES.STANDARD;
 }
 
+/** How a row's title is drawn: plain, or as Markdown with a search's words in bold, each by a native text of its own. */
+const TITLE_LOOK = {
+  PLAIN: "plain",
+  MARKED: "marked",
+} as const;
+
 /** What parts the pieces of what a row is heard as, as VoiceOver pauses between a label's phrases. */
 const HEARD_PART = ", ";
 
@@ -509,7 +515,10 @@ export function RowFrame({
  * it, as Mail's search results set them, and plain outside a search. Note
  * that a marked title is one Markdown string in one native text, never texts
  * nested in it, so a key typed redraws the words in place rather than
- * building the row's text anew.
+ * building the row's text anew. A title turning from marked to plain, or
+ * back, is drawn by a native text of its own (`TITLE_LOOK`), because the one
+ * native text, handed its plain words with no Markdown, kept drawing the bold
+ * of the last search it marked.
  */
 function TitleWords({
   title,
@@ -521,9 +530,11 @@ function TitleWords({
   const marked = searchedTitleMarkdown(title, useContext(RowSearchedContext));
 
   return marked === undefined ? (
-    <Text modifiers={[...modifiers]}>{title}</Text>
+    <Text key={TITLE_LOOK.PLAIN} modifiers={[...modifiers]}>
+      {title}
+    </Text>
   ) : (
-    <Text markdownEnabled modifiers={[...modifiers]}>
+    <Text key={TITLE_LOOK.MARKED} markdownEnabled modifiers={[...modifiers]}>
       {marked}
     </Text>
   );
