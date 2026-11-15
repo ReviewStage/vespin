@@ -229,7 +229,7 @@ const addCommand = Command.make(
       const words = yield* readInput(file);
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
-      const { plan } = yield* askService(hosted.tasks.open, { id });
+      const { task: plan } = yield* askService(hosted.tasks.open, { id });
       const text = plan.description.body;
       const anchor = locatedPhrase(text, on);
 

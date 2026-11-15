@@ -70,6 +70,7 @@ import {
   AppIdentity,
   ComputerUseHelper,
   type Environment,
+  KeptListsDue,
   LoopbackListener,
   MirrorPlatform,
   Reporter,
@@ -279,6 +280,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const shutdownSignal = yield* ShutdownSignal;
     const { report } = yield* Reporter;
     const { tokenCipher } = yield* AccountSource;
+    const listsDue = yield* Effect.serviceOption(KeptListsDue);
     const fileSystemContext = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
 
     const settings = yield* composeSettings();
@@ -456,7 +458,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
 
     /** An agent as the task list holds it now; none where it lists no such agent. */
     const agentListed = (agentId: string) =>
-      (tasks.snapshot().taskAgents ?? []).find((agent) => agent.id === agentId);
+      tasks.agentsListed()?.find((agent) => agent.id === agentId);
 
     /** Waits until the task list says an agent's sandbox stands open, answering whether it waited: false at once where it already says so, or does not know. */
     const sandboxOpened = (agentId: string) =>
@@ -517,6 +519,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         inboxNamed: tasks.inboxNamed,
         pool,
         agentListed,
+        entities: () => entities?.store,
       }),
     );
 
@@ -743,6 +746,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         queueMoves: pool.queueMoves,
         refused: agents.refused.kept,
         refusedMoves: agents.refused.moves,
+        ...(Option.isSome(listsDue) ? { listsDue: listsDue.value } : undefined),
       }).pipe(Scope.provide(scope), Effect.provideContext(fileSystemContext));
 
       entities = { store, scope };
@@ -927,6 +931,8 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         yield* Effect.forkScoped(account.session.refreshOnce());
       }),
       drain,
+      taskListMoves: tasks.taskListMoves,
+      agentsListed: tasks.agentsListed,
     };
 
     return assembly;

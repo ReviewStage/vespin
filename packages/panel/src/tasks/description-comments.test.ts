@@ -194,7 +194,7 @@ function drawn(
   const notes = new Map<string, string>();
 
   const control: DescriptionCommentsControl = {
-    planId: PLAN.id,
+    taskId: PLAN.id,
     threads,
     read,
     failed: false,
@@ -1396,7 +1396,7 @@ async function caretInThread() {
   installEditorLayout();
 
   const control: DescriptionCommentsControl = {
-    planId: PLAN.id,
+    taskId: PLAN.id,
     threads: THREADS,
     read: true,
     failed: false,
@@ -2304,7 +2304,7 @@ test("a thread resolved fades out of a page's column where its row stood, out of
           withQueryClient(
             createElement(PageComments, {
               control: {
-                planId: PLAN.id,
+                taskId: PLAN.id,
                 threads,
                 read: true,
                 failed: false,

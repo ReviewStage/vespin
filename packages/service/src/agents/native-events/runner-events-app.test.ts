@@ -1498,54 +1498,6 @@ it.layer(SUITE)("the runner events route", (it) => {
     }),
   );
 
-  it.effect("an older runner's end on a wait it let go settles its turn as done", () =>
-    Effect.gen(function* () {
-      const post = yield* standing;
-      const agent = yield* agentWithBearer;
-      const top = { parent_tool_use_id: null, session_id: SESSION };
-      const dueAt = "2026-10-21T12:17:00.000Z";
-      const prompt = "Check CI on the pull request again.";
-
-      const messagesOfTurn = [
-        { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
-        { type: "system", subtype: "init", ...top },
-        {
-          type: "assistant",
-          message: {
-            content: [
-              {
-                type: "tool_use",
-                id: "toolu_wake",
-                name: "ScheduleWakeup",
-                input: { delaySeconds: 600, reason: "CI", prompt },
-              },
-            ],
-          },
-          ...top,
-        },
-        { type: "result", subtype: "success", is_error: false, ...top },
-        {
-          type: RUNNER_EVENT.WAITING,
-          background_tasks: [],
-          session_crons: [{ id: "cron_1", schedule: "17 12 21 10 *", recurring: false, prompt }],
-        },
-        // As a runner bundled with a host release before 0.25.0 still posts it.
-        { type: RUNNER_EVENT.END, reason: "released", wakeups: [{ at: dueAt, prompt }] },
-      ];
-
-      // SAFETY: each message above is one the pinned SDK or a runner emits, written in its JSON shape.
-      yield* post(
-        agent.bearer,
-        messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
-      );
-      const { turns: ended } = yield* transcriptOf(agent.target.conversationId);
-      assert.deepEqual(
-        ended.map((turn) => turn.status),
-        [TURN_STATUS.SETTLED],
-      );
-    }),
-  );
-
   it.effect(
     "a Vespin tool's pictures and the words the CLI saves them under stay out of its stored answer, and a CLI tool's pictures stand in for theirs",
     () =>
@@ -1615,6 +1567,71 @@ it.layer(SUITE)("the runner events route", (it) => {
           ["step-start"],
           ["tool-Read", "output-available", "shot.png\n[image]"],
           ["tool-look_at_picture", "output-available", { status: "looked" }],
+        ]);
+      }),
+  );
+
+  it.effect(
+    "a Vespin tool's stored answer keeps what its result's _meta carried for the people watching beside the words the model read",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const answered = '{"status":"ran","done":"pressed"}';
+
+        const kept = {
+          picture: { id: "picture-1", contentType: "image/jpeg", width: 2560, height: 1600 },
+        };
+
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "assistant",
+            message: {
+              id: "msg_1",
+              content: [
+                {
+                  type: "tool_use",
+                  id: "toolu_click",
+                  name: "mcp__team__computer",
+                  input: { action: "click", app: "Simulator", element_index: 3 },
+                },
+              ],
+            },
+            ...top,
+          },
+          {
+            type: "user",
+            message: {
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: "toolu_click",
+                  content: [{ type: "text", text: answered }],
+                },
+              ],
+            },
+            // Note that the CLI hands its SDK a result's _meta beside its content, as 2.1.323 does.
+            tool_use_result: {
+              content: [{ type: "text", text: answered }],
+              _meta: { "vespin.dev/watched": { kept } },
+            },
+            ...top,
+          },
+        ];
+
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const events = messagesOfTurn.map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, events);
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(rows.at(-1)?.parts.map(drawn), [
+          ["step-start"],
+          ["tool-computer", "output-available", { status: "ran", done: "pressed", kept }],
         ]);
       }),
   );

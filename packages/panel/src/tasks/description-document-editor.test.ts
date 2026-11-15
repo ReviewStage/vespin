@@ -229,7 +229,7 @@ function threadOn(
 
 function commentsOver(threads: readonly DescriptionCommentThread[]): DescriptionCommentsControl {
   return {
-    planId: "plan-1",
+    taskId: "plan-1",
     threads,
     read: true,
     failed: false,

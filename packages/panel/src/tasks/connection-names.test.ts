@@ -56,7 +56,7 @@ function statuses(): Record<IntegrationProvider, IntegrationStatus> {
  * fallback shares too is asked beside one only the read gives, in the same render.
  */
 async function serversSay(
-  calls: readonly { connection: string; said: string }[],
+  calls: readonly { connection: string; said: string; account?: string }[],
   accounts: readonly { connection: string; label?: string }[],
   provider: IntegrationProvider = NOTION,
 ): Promise<void> {
@@ -75,17 +75,26 @@ async function serversSay(
   const root = createRoot(container);
   roots.push(root);
 
-  function Row({ connection }: { connection: string }) {
+  function Row({ connection, account }: { connection: string; account: string | undefined }) {
     const view = toolCallView({
       tool: INTEGRATION_REMOTE_TOOL[provider],
-      input: { remoteTool: "fetch", parentCallId: "wrapper", input: {}, connection },
+      input: {
+        remoteTool: "fetch",
+        parentCallId: "wrapper",
+        input: {},
+        connection,
+        ...(account === undefined ? undefined : { account }),
+      },
       output: undefined,
     });
 
     return createElement("span", null, useServerName(view));
   }
 
-  const rows = calls.map(({ connection }) => createElement(Row, { key: connection, connection }));
+  const rows = calls.map(({ connection, account }) =>
+    createElement(Row, { key: connection, connection, account }),
+  );
+
   await act(async () => {
     root.render(withQueryClient(createElement(ConnectionNames, { needed: true, children: rows })));
 
@@ -108,6 +117,16 @@ test("a call on one of two labeled accounts says the account's name as its card 
 
   await serversSay([{ connection: "notion-2", said: "Notion · Work" }], accounts);
   await serversSay([{ connection: "notion", said: "Notion · Personal" }], accounts);
+});
+
+test("a call that keeps the name of the account it ran on says that name, never the one the reader's own accounts give its connection", async () => {
+  await serversSay(
+    [{ connection: "notion-2", account: "Acme", said: "Notion · Acme" }],
+    [
+      { connection: "notion", label: "Personal" },
+      { connection: "notion-2", label: "Work" },
+    ],
+  );
 });
 
 test("a call on a provider's only account says its label where it carries one and the provider where not, and one the accounts do not hold says what its id gives", async () => {

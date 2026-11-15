@@ -32,7 +32,7 @@ import {
   tint,
   toggleStyle,
 } from "@expo/ui/swift-ui/modifiers";
-import { FIELD_WORDS } from "@repo/features/words";
+import { FIELD_WORDS, SELECTION_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode } from "react";
 import { useAnnounced } from "./accessibility.js";
@@ -61,9 +61,6 @@ export function CardDivider({ inset }: { readonly inset: number }) {
 
 /** What a ticked step is heard as after its words. */
 const TICKED = "ticked";
-
-/** What a select's picker reads before an option is picked. */
-const CHOOSE = "Choose";
 
 /** The kinds of field an answer ask types its values in. */
 export const ANSWER_FIELD = {
@@ -316,10 +313,11 @@ function TypedFieldRow({
 }
 
 /**
- * A select: its label and the system's menu picker on one row, the label
- * leading and the picker's value at its end, as a Form's picker row stands;
- * it reads "Choose" until an option is picked, the recommended option said
- * as such.
+ * A select: its label over the system's menu picker at the leading edge, as
+ * a text field stands under its name in the same card, so a long value such
+ * as "Every member (recommended)" has the row's width rather than squeezing
+ * its label into a column beside it; it reads "None" until an option is
+ * picked, as Settings' pickers do, the recommended option said as such.
  */
 function SelectRow({
   field,
@@ -333,28 +331,27 @@ function SelectRow({
   const colors = useColors();
 
   return (
-    <HStack spacing={SPACE.ROW} modifiers={[padding(ROW_PADDING)]}>
+    <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
       <FieldWords
         label={field.label}
         required={field.required}
-        textStyle={TYPE_ROLE.ROW_TITLE}
-        ink={colors.TEXT}
+        textStyle={TYPE_ROLE.ROW_LINE}
+        ink={colors.TEXT_MUTED}
       />
-      <Spacer />
       <Picker<string>
         label={field.label}
         selection={Predicate.isString(field.value) ? field.value : ""}
         onSelectionChange={onChange}
         modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.TEXT)]}
       >
-        <Text modifiers={[tag("")]}>{CHOOSE}</Text>
+        <Text modifiers={[tag("")]}>{SELECTION_WORDS.NONE}</Text>
         {(field.options ?? []).map((option) => (
           <Text key={option} modifiers={[tag(option)]}>
             {option === field.recommended ? `${option} (${recommendedWord})` : option}
           </Text>
         ))}
       </Picker>
-    </HStack>
+    </VStack>
   );
 }
 

@@ -24,7 +24,7 @@ import type { MenuAction } from "./action-menu.js";
 import { useRefusalHeard } from "./use-refusal-heard.js";
 
 /**
- * agent-archive.tsx -- a coding agent's Archive, asked first while the agent still works, and its Unarchive; the tab bar's History lists archived agents as it lists a closed agent (`agent-history.tsx`), and a phone's Overview folds them under its agents (`plan-agents.tsx`).
+ * agent-archive.tsx -- a coding agent's Archive, asked first while the agent still works, and its Unarchive; the tab bar's History lists archived agents as it lists a closed agent (`agent-history.tsx`), and a phone's Overview folds them under its agents (`overview-agents.tsx`).
  *
  * Archive stands in an agent's tab menu and its sidebar row's menu, whose
  * Unarchive stands in its place once archived
