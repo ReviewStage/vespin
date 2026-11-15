@@ -3234,7 +3234,13 @@ export function AgentPullRequestTab({
     <PullRequestNumberProvider value={source.number}>
       <PullRequestSourceProvider value={source}>
         <WritePlaceProvider value={source.place}>
-          <PullRequestTabBody {...props} number={source.number} source={source} />
+          {/* Note that the body is drawn afresh under another number, as when an off-branch pull request settles and the agent's own takes its place, so a comment written for one is never sent to the other. */}
+          <PullRequestTabBody
+            key={source.number}
+            {...props}
+            number={source.number}
+            source={source}
+          />
         </WritePlaceProvider>
       </PullRequestSourceProvider>
     </PullRequestNumberProvider>
