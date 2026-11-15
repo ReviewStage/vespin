@@ -5,11 +5,7 @@ import { wordsWithoutMarkers } from "@repo/features/file-marker";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import {
-  TASK_CREATE_RELATION_KIND,
-  type TaskCreateRelation,
-  type TaskCreateRelationKind,
-} from "@repo/features/task-wire";
+import { TASK_CREATE_RELATION_KIND, type TaskCreateRelationKind } from "@repo/features/task-wire";
 import { workspaceReaches } from "@repo/features/tasks-model";
 import { TERM } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
@@ -39,6 +35,7 @@ import {
 import { automationAgentBrief } from "../desktop/automation-agent-brief.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, type ComposerWords } from "./agent-composer.js";
@@ -68,7 +65,7 @@ import type { SkillWithFile } from "./skill-ref.js";
 import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
 import { MODELS_READ } from "./use-agents.js";
-import type { NewTaskAgent, NewTaskRefusal, NewTaskStart } from "./use-new-task.js";
+import type { AgentAsk, NewTaskPress, NewTaskRefusal, NewTaskStart } from "./use-new-task.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /**
@@ -252,23 +249,6 @@ const NO_DEVICES: readonly MacOffer[] = [];
  * because a second time would lay its words in again ahead of themselves.
  */
 const PUT_BACK = new WeakSet<NewTaskRefusal>();
-
-/** What one Agent-mode press asked beside its key: the task's repository and workspace, and where its agents run, and the agent's words, files, and the model picked, none for the account's default. */
-interface AgentAsk {
-  readonly repository: string | null;
-  readonly workspaceId: string | undefined;
-  /** The device the task's agents run on, by its id; none for the cloud. */
-  readonly deviceId?: string | undefined;
-  /** The relations the task starts in, in the order they were picked. */
-  readonly relations: readonly TaskCreateRelation[];
-  readonly agent: Omit<NewTaskAgent, "idempotencyKey">;
-}
-
-/** One Agent-mode press: what it asked, and the key it carried. */
-export interface NewTaskPress {
-  readonly ask: AgentAsk;
-  readonly key: string;
-}
 
 /** Whether two presses ask the same: the same task, device, relations in the same order, words, files in the same order, model, servers switched off, and permission mode. */
 function sameAsk(a: AgentAsk, b: AgentAsk): boolean {
@@ -464,11 +444,8 @@ export function NewTaskComposer({
   const repositories = newTask.repositoriesIn(workspaceId);
   const workspace = newTask.workspaces.find((each) => each.id === workspaceId);
 
-  // Task relation offers the tasks of the card's workspace.
-  const relatable = useMemo(
-    () => newTask.tasks.filter((each) => each.workspaceId === workspaceId),
-    [newTask.tasks, workspaceId],
-  );
+  // Task relation offers the tasks of the card's workspace, in the sidebar's order.
+  const relatable = useNamedTasks(newTask.typedNames, NAMED_ORDER.PINNED_FIRST, workspaceId);
 
   // Runs on stands on every card but an automation's agent's.
   const runsOnStands = !forAutomation;
@@ -577,7 +554,7 @@ export function NewTaskComposer({
 
   const canStart = !devicesUnread && unpaid === undefined && filled;
   // What an `@` and a `/` offer: the chosen repository's, read through the workspace, as on an agent's page no task holds.
-  const readMentionAgents = useMentionAgentsReader(workspaceId, newTask.tasks, newTask.models);
+  const readMentionAgents = useMentionAgentsReader(workspaceId, relatable, newTask.models);
   const reader = useMentionedReader();
   const slug = workspace?.slug;
   const { onShowMention } = newTask;

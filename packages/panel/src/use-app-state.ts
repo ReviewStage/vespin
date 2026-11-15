@@ -1,6 +1,7 @@
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
-import type { AppStateSnapshot } from "@repo/host/app-state";
+import type { AppStateSnapshot, TaskListDelivery } from "@repo/host/app-state";
 import {
+  type AppStateBeside,
   type AppStateBridgeReads,
   followAppStateOver,
   shareAppState,
@@ -27,7 +28,6 @@ export {
   memoizedSelect,
   type SignedInAccount,
   sameAccount,
-  selectAccess,
   selectAccount,
   selectAdminAccess,
   selectAdminAccessPending,
@@ -52,6 +52,7 @@ export {
   selectSettingsHeld,
   selectSignedIn,
   selectStoredExperimentChoices,
+  selectTaskListStanding,
   selectTaskSendRefused,
   selectTasks,
   selectVoiceCall,
@@ -81,7 +82,9 @@ const firstRead: Effect.Effect<AppStateSnapshot, AppStateUnread> = Effect.flatMa
     try: () => appBridge().requestAppState(),
     catch: (cause) => new AppStateUnread({ cause }),
   }),
-  (read) => (read.run.fixtureMode ? Effect.promise(() => staged(read)) : Effect.succeed(read)),
+  // Note that the lists the read answers beside the document are the collections', never the client's.
+  ({ taskList: _lists, ...read }) =>
+    read.run.fixtureMode ? Effect.promise(() => staged(read)) : Effect.succeed(read),
 );
 
 /**
@@ -160,26 +163,54 @@ export interface AppStateFollowing {
  * passed over. The client is handed to the fixture while it is written
  * into, whose staged acts read the run from it (`act.ts`).
  *
- * Every document written into the client is handed on to the task list's
- * collections in the same breath, the list it lists from (`selectListedTasks`)
- * under its version, so they and the client never disagree and the bridge
- * is still heard once; a staging that throws leaves their rows standing and
- * says so on them.
+ * The task list's collections are fed beside the client: the task list's
+ * rows each delivery carries beside the document (its `taskList`), handed on
+ * as the delivery is heard and before the document it came with is written,
+ * the lists a whole read answers beside the document under its version, and
+ * a fixture run's staging as the list it lists from (`selectListedTasks`)
+ * under its version; a staging that throws leaves
+ * their rows standing and says so on them. A fixture run's list is its own
+ * synthetic one, so the account's rows the host delivers are passed over
+ * there, and those heard before the first read lands wait to learn whether
+ * it is one.
  */
 export function followAppState(client: QueryClient): AppStateFollowing {
   let following = true;
   let staging: Promise<void> | undefined;
   const taskList = taskListFollowing();
+  /** Whether the window draws a fixture run's list; unknown before the first read lands, while the pushes heard wait in `rowsHeard`. */
+  let fixtureRun: boolean | undefined;
+  let rowsHeard: TaskListDelivery[] = [];
 
+  // Learns from the first document written whether the run is a fixture's, passing over the pushes heard before it where it is.
+  const heardRun = (fixture: boolean): void => {
+    fixtureRun = fixture;
+
+    if (fixture) rowsHeard = [];
+  };
+
+  // Lays the pushes heard before the first document, once it is laid.
+  const takeRowsHeard = (): void => {
+    const waiting = rowsHeard;
+    rowsHeard = [];
+
+    for (const delivery of waiting) taskList.deliver(delivery);
+  };
+
+  // Note that a fixture run's list is staged into the collections with its document, since the account's lists the host answers are passed over there.
   const shown = (state: AppStateSnapshot): void => {
     client.setQueryData(appStateQuery.queryKey, state);
-    taskList.write(state.version, selectListedTasks(state));
+
+    if (state.run.fixtureMode) taskList.write(state.version, selectListedTasks(state));
   };
 
   // Answers the staging the state waits on in a fixture run, and nothing where it is written at once.
   const write = (state: AppStateSnapshot): Promise<void> | undefined => {
+    if (fixtureRun === undefined) heardRun(state.run.fixtureMode);
+
     if (!state.run.fixtureMode && staging === undefined) {
       shown(state);
+      takeRowsHeard();
 
       return undefined;
     }
@@ -208,12 +239,32 @@ export function followAppState(client: QueryClient): AppStateFollowing {
   const takeBack = handFixtureClient(client);
   const hearing = heard();
 
+  // Hands on the task list's rows a delivery carries, those heard before the first document waiting on it, and the lists a whole read answers beside it.
+  const beside: AppStateBeside = {
+    heard: ({ taskList: rows }) => {
+      if (rows === undefined) return;
+
+      if (fixtureRun === undefined) rowsHeard.push(rows);
+      else if (!fixtureRun) taskList.deliver(rows);
+    },
+    read: (read, lists) => {
+      if (fixtureRun === undefined) heardRun(read.run.fixtureMode);
+
+      if (!fixtureRun) taskList.write(read.version, lists);
+    },
+  };
+
   const followed =
     hearing === undefined
       ? undefined
-      : followAppStateOver(hearing, write, (message, cause) => {
-          console.error(message, cause);
-        });
+      : followAppStateOver(
+          hearing,
+          write,
+          (message, cause) => {
+            console.error(message, cause);
+          },
+          beside,
+        );
 
   const stopMoves = onFixtureMoved(() => {
     const held = followed?.held();
@@ -246,6 +297,29 @@ export const selectListedTasks = (state: AppStateSnapshot): TasksView =>
 /** Whether a fixture run's synthetic tasks stand in for the account's, so its writes go nowhere. */
 export const selectFixtureStaged = (state: AppStateSnapshot): boolean =>
   loadedTasksFixture()?.fixtureTasksView(state.run) !== undefined;
+
+/** Where the task list stands on its agents: carried, which it is only once followed live, failed before it was, or still being read. */
+export const AGENTS_LISTED = {
+  CARRIED: "carried",
+  FAILED: "failed",
+  READING: "reading",
+} as const;
+
+export type AgentsListed = (typeof AGENTS_LISTED)[keyof typeof AGENTS_LISTED];
+
+/**
+ * Where the task list the window lists from stands on its agents, which the
+ * collections (`task-list-collections.tsx`) cannot say, since they hold a
+ * list not yet carried as one with no rows: carried once the list says its
+ * lists are drawn (`listed`).
+ */
+export const selectAgentsListed = (state: AppStateSnapshot): AgentsListed => {
+  const listed = selectListedTasks(state);
+
+  if (listed.listed === true) return AGENTS_LISTED.CARRIED;
+
+  return listed.listStatus === TASKS_READ.FAILED ? AGENTS_LISTED.FAILED : AGENTS_LISTED.READING;
+};
 
 /** Whether the last read of the workspaces the window lists did not land, those held still drawn. */
 export const selectWorkspacesFailed = (state: AppStateSnapshot): boolean =>

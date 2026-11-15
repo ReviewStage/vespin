@@ -62,7 +62,12 @@ import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
 import { wokenOnHub } from "../testing/sync-woken.js";
-import { computerScreenshot, runComputerTool, storedComputerOutput } from "./computer-tool.js";
+import {
+  computerScreenshot,
+  computerWatched,
+  runComputerTool,
+  storedComputerOutput,
+} from "./computer-tool.js";
 import { askMac, MACHINE_COMMAND_STATUS, machineCommandsFor } from "./machine-command.js";
 import { machineCommandsProcedures } from "./machine-commands-procedures.js";
 
@@ -633,6 +638,71 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
               "kept beside the transcript",
             );
           }
+        }),
+      ),
+  );
+  it.effect(
+    "a click asks for the window as it settled and keeps it for the people watching, while the model reads the click's answer with no picture",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* account("user-settled");
+          const db = yield* Database;
+
+          const [row] = yield* db
+            .insert(conversations)
+            .values({ userId: "user-settled", kind: CONVERSATION_KIND.AGENT })
+            .returning({ id: conversations.id });
+
+          assert.ok(row);
+          const target = { userId: "user-settled", conversationId: row.id };
+          yield* markMachineListening("user-settled");
+          const settled = Buffer.from(pngBytes(1280, 800, 4)).toString("base64");
+          const cursor = { xFraction: 0.25, yFraction: 0.5 };
+
+          const call = yield* wokenOnHub(
+            runComputerTool(target, { action: "click", app: "Simulator", element_index: 3 }),
+            Effect.gen(function* () {
+              const [claimed] = yield* claimMachineCommands("user-settled", new Date(0), [
+                MACHINE_COMMAND_KIND.COMPUTER,
+              ]);
+
+              assert.ok(claimed !== undefined && claimed.kind === MACHINE_COMMAND_KIND.COMPUTER);
+              assert.ok("shot" in claimed.action, "the Mac is asked for the settled window");
+              yield* settleMachineCommand("user-settled", claimed.id, {
+                computer: {
+                  done: "pressed",
+                  cursor,
+                  shot: { width: 1280, height: 800, jpeg: settled },
+                },
+              });
+            }),
+          );
+
+          const answer = unparsedWire(call.answered);
+          const watched = computerWatched(answer);
+
+          const read = Schema.decodeUnknownSync(
+            Schema.Struct({
+              kept: Schema.Struct({ picture: Schema.Struct({ id: Schema.String }) }),
+            }),
+          )(watched);
+
+          assert.ok(
+            Option.isSome(yield* readConversationPicture(row.id, read.kept.picture.id)),
+            "kept beside the transcript",
+          );
+          assert.equal(computerScreenshot(answer), undefined, "the model is handed no image");
+
+          const { machine: _machine, ...words } = Schema.decodeUnknownSync(
+            Schema.Record(Schema.String, Schema.Unknown),
+          )(storedComputerOutput(answer));
+
+          assert.deepEqual(
+            words,
+            { status: MACHINE_COMMAND_STATUS.RAN, done: "pressed", cursor },
+            "the model reads the click's answer as a Mac from before the picture answers it",
+          );
         }),
       ),
   );

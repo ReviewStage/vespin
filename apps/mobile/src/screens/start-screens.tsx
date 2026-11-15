@@ -4,7 +4,7 @@ import { hasWordsOrFiles } from "@repo/features/agent-wire";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
-import { agentName } from "@repo/features/model-label";
+import { agentName, providerOf } from "@repo/features/model-label";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
@@ -19,7 +19,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { filedTaskOf } from "@repo/features/tasks-model";
-import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
   type BarMenu,
@@ -44,7 +44,9 @@ import { useMemo, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
+import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useListedTasks } from "../host/host-provider.js";
 import { useOnTab } from "../tab-route.js";
 import {
   CLOUD,
@@ -129,7 +131,7 @@ function SheetBar({
   readonly kept: KeptWords;
 }) {
   const colors = useColors();
-  const router = useRouter();
+  const close = useCloseSheet(kept);
 
   return (
     <>
@@ -145,7 +147,7 @@ function SheetBar({
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button onPress={close}>{WORDS.CANCEL}</Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         {file === undefined ? null : (
@@ -232,6 +234,7 @@ function ModelChip({ pick }: { readonly pick: ModelPick }) {
   return (
     <MenuChip
       label={effort === undefined ? model : `${model}${JOINED}${effort}`}
+      harness={pick.shown === undefined ? undefined : providerOf(pick.shown.model)}
       menu={{ groups }}
     />
   );
@@ -499,7 +502,6 @@ export interface NewTaskDraft {
 }
 
 /** No task list read yet. */
-const NO_TASKS: readonly TaskSummary[] = [];
 
 /** The kinds New task's relation offers, in the panel's order: a sub-task of another, or one waiting on or holding up another. */
 const RELATION_ORDER: readonly TaskCreateRelationKind[] = [
@@ -669,8 +671,7 @@ export function NewTaskScreen({
   const [prompt, setPrompt] = useState(draft?.prompt ?? "");
   const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
-  const listed = view?.tasks ?? NO_TASKS;
+  const listed = useListedTasks();
   const chosen = useChosenWorkspace(workspaces).chosen;
   const own = workspaces.find(({ id }) => id === draft?.workspaceId) ?? chosen;
   // Note that a sub-task starts in its parent's workspace by the id its row holds, read before the workspace list may be, and holds its start until that row is read.

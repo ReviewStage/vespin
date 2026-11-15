@@ -306,6 +306,37 @@ it.effect(
     }),
 );
 
+it.effect(
+  "a drawing's moves feed the ledger as the whole list does: an agent it stops naming takes its dot, and one only a Start answered is let go after a few pushes that leave it out",
+  () =>
+    Effect.gen(function* () {
+      const f = fixture();
+      const notices = yield* f.notices;
+      f.focus(false);
+      const started = agent(AGENT_STATUS.RUNNING, { id: "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32" });
+
+      notices.observeFollowedMoved(
+        [{ was: undefined, now: agent(AGENT_STATUS.RUNNING) }],
+        [{ was: undefined, now: { id: TASK_ID } }],
+      );
+      notices.observeFollowedMoved(
+        [{ was: agent(AGENT_STATUS.RUNNING), now: agent(AGENT_STATUS.COMPLETED) }],
+        [],
+      );
+      notices.observeAgents([started]);
+      notices.observeAgents([{ ...started, status: AGENT_STATUS.COMPLETED }]);
+      yield* settled;
+      assert.deepEqual(f.unseen.at(-1), [AGENT_ID, started.id]);
+
+      notices.observeFollowedMoved([{ was: agent(AGENT_STATUS.COMPLETED), now: undefined }], []);
+      assert.deepEqual(f.unseen.at(-1), [started.id], "the agent the list stopped naming");
+      notices.observeFollowedMoved([{ was: undefined, now: agent(AGENT_STATUS.COMPLETED) }], []);
+      assert.deepEqual(f.unseen.at(-1), [started.id], "kept through a push or two that predate it");
+      notices.observeFollowedMoved([{ was: agent(AGENT_STATUS.COMPLETED), now: undefined }], []);
+      assert.deepEqual(f.unseen.at(-1), []);
+    }),
+);
+
 /**
  * Every step the inbox read has to take, taken: the accounts' stream hands
  * the account on, the read it switched to asks, and the look writes what

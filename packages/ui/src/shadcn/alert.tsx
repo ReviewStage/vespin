@@ -201,6 +201,4 @@ function AlertAction({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-export type { AlertLook, AlertTone };
-
 export { Alert, AlertAction, AlertDescription, AlertGlyph, AlertRow };

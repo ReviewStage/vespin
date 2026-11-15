@@ -319,7 +319,7 @@ function ConfirmDialogs(): React.JSX.Element {
         <Asking
           label="Mark done…"
           question={{
-            ...settleStopWords(SETTLED_STATUS.DONE),
+            ...settleStopWords(SETTLED_STATUS.DONE, 2),
             running: "Stopping agents",
             loss: CONFIRM_LOSS.IRREVERSIBLE,
           }}
@@ -327,7 +327,7 @@ function ConfirmDialogs(): React.JSX.Element {
         <Asking
           label="Cancel task…"
           question={{
-            ...settleStopWords(SETTLED_STATUS.CANCELED),
+            ...settleStopWords(SETTLED_STATUS.CANCELED, 2),
             running: "Stopping agents",
             loss: CONFIRM_LOSS.IRREVERSIBLE,
           }}

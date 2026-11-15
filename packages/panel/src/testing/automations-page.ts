@@ -178,6 +178,7 @@ export function tasksView(): TasksView {
     : {
         ...read,
         listStatus: TASKS_READ.READY,
+        listed: true,
         taskAgents: world.workspaceAgents,
       };
 

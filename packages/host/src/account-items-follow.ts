@@ -65,14 +65,16 @@ import {
  */
 
 /**
- * The most characters of items kept on disk, as JSON: about twenty threads,
- * a first screen of them on every device. Note that it is small, because
- * the file is opened whole at every launch, and on the iPhone its cipher is
- * XChaCha20 in JavaScript on Hermes: an Inbox of 640 threads, about 4.8 MB,
- * took about 4 s to open under Node `--jitless`, where this many add about
- * 0.12 s beside the task list.
+ * The most characters of items kept on disk, as JSON: about 1 MB, an Inbox
+ * of some 130 threads whole, so its first read goes past the sync id it was
+ * kept at, and the first 600 or so of a larger one. Note that it is bound,
+ * because the file is opened and decoded whole before a launch draws: since
+ * the iPhone seals it natively (#9270), the open is about 6 ms a MB, and the
+ * kept rows' decode on Hermes about 55 ms a MB on the iPhone 18 Pro and the
+ * iOS 26.5 iPad alike, so this many add about 60 ms, where a 640-thread
+ * Inbox's 4.8 MB would add about 0.3 s to every launch.
  */
-export const KEPT_CHARACTERS = 150_000;
+export const KEPT_CHARACTERS = 1_000_000;
 
 /** A read the service did not answer, `gone` where it never will again. */
 
