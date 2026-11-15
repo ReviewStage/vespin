@@ -35,7 +35,7 @@ import {
   type IntegrationStatus,
 } from "@repo/features/integration-wire";
 import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
-import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, TASKS_READ } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { type AppWorkspaceIntegrations, NO_KEYS_HELD } from "@repo/host/app-state";
@@ -62,6 +62,7 @@ import {
   holdAutomations,
   holdIntegrations,
   stateWith,
+  type WrittenTasksView,
 } from "./app-state.js";
 import { composerEditor, editorBundleLanded, installEditorLayout } from "./composer.js";
 import { settleQueries, withQueryClient } from "./copy-feedback.js";
@@ -158,8 +159,8 @@ export function onLedger(agent: AgentSummary): ListedAgent {
 }
 
 /** The task list as the host lays it: failed before it carried any agent where the test says so, else carrying the test's agents. */
-export function tasksView(): TasksView {
-  const read: TasksView = world.remembering
+export function tasksView(): WrittenTasksView {
+  const read: WrittenTasksView = world.remembering
     ? {
         ...IDLE_TASKS_VIEW,
         workspaces: [
@@ -173,11 +174,12 @@ export function tasksView(): TasksView {
       }
     : IDLE_TASKS_VIEW;
 
-  const listed: TasksView = world.agentListRefused
+  const listed: WrittenTasksView = world.agentListRefused
     ? { ...read, listStatus: TASKS_READ.FAILED }
     : {
         ...read,
         listStatus: TASKS_READ.READY,
+        listed: true,
         taskAgents: world.workspaceAgents,
       };
 
@@ -312,7 +314,7 @@ class AutomationsWorld {
   /** How many times the task list, and the workspaces with it, were asked to be read again. */
   tasksRefreshes = 0;
   /** Lays the task list on the window again, as the host does once it reads it. */
-  deliverTasks: (next: TasksView) => void = () => undefined;
+  deliverTasks: (next: WrittenTasksView) => void = () => undefined;
   /** Lays the models on the window again, as the host does once it asks them again. */
   deliverModels: HostReadsHanded["deliverModels"] = () => undefined;
   /** Whether a search among the workspace's agents answers that it could not be made. */

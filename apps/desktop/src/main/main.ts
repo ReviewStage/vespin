@@ -99,7 +99,7 @@ protocol.registerSchemesAsPrivileged([PAGE_SCHEME_PRIVILEGES]);
 // apart. The page's ground is drawn both ways at once while a region holds
 // nothing but something turning (a transcript still being read, its spinner
 // alone in the column): that region's tiles came out #0c0c0e and the rest of
-// the column #0c0c0d (the old ground), a faint box around the spinner. Drawing in sRGB leaves
+// the column #0c0c0d, a faint box around the spinner. Drawing in sRGB leaves
 // the one conversion to macOS, so the ground is one color wherever it falls.
 // Electron reads the switch once, before the app is ready.
 app.commandLine.appendSwitch("force-color-profile", "srgb");
@@ -147,11 +147,7 @@ async function main(): Promise<void> {
   // A copy that cannot update itself where it stands is offered the move
   // first, before anything stands that its quit would have to give back.
   if (await offerMoveToApplications(config)) return;
-  // This is an ordinary app with a window of its own: the bundle gives it a
-  // Dock tile and a place in Command-Tab, and these menus give its fields Copy
-  // and Paste, its window Close, Minimize, and Quit, and its own commands
-  // their shortcuts.
-  // The update item joins once the updater has said where it stands.
+  // The update item joins the menu bar once the updater has said where it stands.
   config.showMenuBar();
 
   const runtime = ManagedRuntime.make(composeDesktop(config, quit));

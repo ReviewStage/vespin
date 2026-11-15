@@ -1,5 +1,5 @@
 /**
- * sidebar.tsx -- the admin dashboard's shell: the app's sidebar beside the open view, its toggle in the title bar's row, and the account at its foot.
+ * admin-shell.tsx -- the admin dashboard's shell: the app's sidebar beside the open view, its toggle in the title bar's row, and the account at its foot.
  *
  * The shell is the app's own (`@repo/panel`'s `shell.css`, which the panel
  * lays for its window): the same two columns, the sidebar's ground, insets,
@@ -16,13 +16,7 @@
  */
 
 import { VERB } from "@repo/features/words";
-import "@repo/panel/styles/shell.css";
-import { AccountAvatar, type ViewerAccount } from "@repo/panel/admin/chrome/page-header";
-import { ADMIN_PLACES } from "@repo/panel/admin/chrome/places";
-import { type AdminTab, plainLeftClick, tabHref } from "@repo/panel/admin/routing";
-import { ProductIdentity } from "@repo/panel/desktop/product-identity";
-import { SHELL_ROOM } from "@repo/panel/shell-room";
-import { useStageRoom } from "@repo/panel/stage-room";
+import "../../styles/shell.css";
 import {
   AVATAR_SIZE,
   FailureNote,
@@ -45,6 +39,12 @@ import { accountLabel } from "@repo/ui/account-initials";
 import { UNREPORTED } from "@repo/ui/reported-failure";
 import { LogOutIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ProductIdentity } from "../../desktop/product-identity.js";
+import { SHELL_ROOM } from "../../shell-room.js";
+import { useStageRoom } from "../../stage-room.js";
+import { type AdminTab, plainLeftClick, tabHref } from "../routing.js";
+import { AccountAvatar, type ViewerAccount } from "./page-header.js";
+import { ADMIN_PLACES } from "./places.js";
 
 /** What the toggle names for a reader: the sidebar's way back, or its way away. */
 const SIDEBAR_TOGGLE_LABEL = {

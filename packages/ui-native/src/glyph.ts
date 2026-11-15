@@ -89,6 +89,13 @@ export const GLYPH = {
   ISSUE_NOT_PLANNED: lucide(LUCIDE_SYMBOL.CIRCLE_SLASH),
   COMPUTER_USE: lucide(LUCIDE_SYMBOL.MOUSE_POINTER_CLICK),
   PLUG: lucide(LUCIDE_SYMBOL.PLUG),
+  // Settings' pages, each the glyph the panel's Settings sidebar leads it with, and About's rows.
+  NOTIFICATIONS: lucide(LUCIDE_SYMBOL.BELL),
+  ENVIRONMENT: lucide(LUCIDE_SYMBOL.CLOUD_COG),
+  WHATS_NEW: lucide(LUCIDE_SYMBOL.SCROLL_TEXT),
+  HELP: lucide(LUCIDE_SYMBOL.CIRCLE_QUESTION_MARK),
+  FEEDBACK: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE),
+  EMAIL: lucide(LUCIDE_SYMBOL.MAIL),
   GLOBE: lucide(LUCIDE_SYMBOL.GLOBE),
   BROWSER: lucide(LUCIDE_SYMBOL.APP_WINDOW_MAC),
   DATE: lucide(LUCIDE_SYMBOL.CALENDAR),
@@ -198,6 +205,9 @@ export const GLYPH = {
   DISCLOSURE: system("chevron.forward"),
   // A sheet's step back to the step before it, the back chevron iOS draws in a navigation bar.
   BACK: system("chevron.backward"),
+  // A Settings row that leaves the app ends in iOS's own small arrow out, and a row that opens a menu in its up-and-down chevron, as a menu picker's value does.
+  GOES_OUT: system("arrow.up.forward"),
+  MENU_OPENS: system("chevron.up.chevron.down"),
   STOP_TURN: system("stop.fill"),
   // A task's status ring, the panel's own mark.
   STATUS_BACKLOG: statusMark(TASK_STATUS_SYMBOL.BACKLOG),

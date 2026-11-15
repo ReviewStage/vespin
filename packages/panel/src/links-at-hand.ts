@@ -19,6 +19,7 @@ import { LINK_COPY, useCopyToast } from "./copy-feedback.js";
 import { useHoldChordLinks } from "./copy-link-item.js";
 import type { RoutedPlace } from "./places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "./shell-room.js";
+import { type TaskListRows, useTaskListRows } from "./task-list-collections.js";
 import { stripTabLink } from "./tasks/strip-tab-kinds.js";
 import type { SidePanelTab } from "./tasks/use-side-panel.js";
 import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
@@ -223,13 +224,19 @@ function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
 }
 
 /** Every link the window can copy now, the most specific first; none for a place whose workspace is unknown. */
-function linksAtHand(tasks: TasksControl, views: RoutedViews, at: WindowAt): readonly LinkAtHand[] {
-  return placesAtHand(tasks, views, at).filter((each) => each.link.workspace !== "");
+function linksAtHand(
+  tasks: TasksControl,
+  rows: TaskListRows,
+  views: RoutedViews,
+  at: WindowAt,
+): readonly LinkAtHand[] {
+  return placesAtHand(tasks, rows, views, at).filter((each) => each.link.workspace !== "");
 }
 
 /** The links of what is open or focused, the most specific first, each under the workspace it is in, empty where that is unknown: a routed place's by its declaration, over the links of the place the window's state says. */
 function placesAtHand(
   tasks: TasksControl,
+  rows: TaskListRows,
   views: RoutedViews,
   at: WindowAt,
 ): readonly LinkAtHand[] {
@@ -238,7 +245,7 @@ function placesAtHand(
 
   if (at.place === undefined || at.underRouted === true) return under();
 
-  return at.place.links({ tasks, views, at, listed, under });
+  return at.place.links({ tasks, rows, views, at, listed, under });
 }
 
 /** The link of an agent's own address, which opens it on its task, under the workspace listed. */
@@ -298,10 +305,11 @@ export function useCopyLink(
     copyWords(linkOf(held.link.place, held.link.workspace), LINK_COPY.COPIED);
 
   const views = useRoutedViews();
+  const rows = useTaskListRows();
   const inboxTask = views.inbox.narrowed;
 
   const linksAt = (sidePanelFocused: boolean) =>
-    linksAtHand(tasks, views, {
+    linksAtHand(tasks, rows, views, {
       settings,
       place,
       admin,
@@ -330,7 +338,7 @@ export function useCopyLink(
   useHoldChordLinks(firstLink(false), firstLink(true));
   const standing = linksAt(false).find((each) => each.step === true)?.link;
 
-  const placed = linksAtHand(tasks, views, {
+  const placed = linksAtHand(tasks, rows, views, {
     settings: undefined,
     underRouted: true,
     sidePanelFocused: false,

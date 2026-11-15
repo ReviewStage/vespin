@@ -19,12 +19,12 @@ import { useAutomation } from "../automation-directory.js";
 import { TILE_SIZE, WorkspaceTile } from "../desktop/workspace-tile.js";
 import { usePerson } from "../member-directory.js";
 import { providerOf } from "../tasks/agent-model.js";
-import { KeptAppIcon, useComputerApps } from "../tasks/agent-pictures.js";
+import { useComputerApps } from "../tasks/agent-pictures.js";
 import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { FileTypeIcon } from "../tasks/file-type-icon.js";
 import { InboxItemChipGlyph } from "../tasks/inbox-item-chip.js";
 import { IssueMark } from "../tasks/issue-mark.js";
-import { useAllowedAppIcon, useMacAppIcon } from "../tasks/mac-apps.js";
+import { useMacAppIconAddress } from "../tasks/mac-app-card.js";
 import { ReadAgentModel } from "../tasks/mentioned-agent-card.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { SkillMark } from "../tasks/skill-ref.js";
@@ -203,17 +203,17 @@ function WorkspaceMark({ slug }: { slug: string }): React.JSX.Element {
  * the icon a `computer` call kept for the app in the conversation; a
  * screen's glyph where there is none.
  */
-function MacAppMark({ app }: { app: string }): React.JSX.Element {
-  const onMac = useMacAppIcon(app);
-  const posted = useAllowedAppIcon(app);
-  const own = onMac ?? posted;
-  const kept = computerAppNamed(useComputerApps(), app)?.icon;
+function MacAppMark({
+  app,
+  machine,
+}: {
+  app: string;
+  machine: string | undefined;
+}): React.JSX.Element {
+  const apps = useComputerApps();
+  const kept = (computerAppNamed(apps, app, machine) ?? computerAppNamed(apps, app))?.icon;
 
-  return own === undefined && kept !== undefined ? (
-    <KeptAppIcon id={kept} />
-  ) : (
-    <AppIcon src={own} />
-  );
+  return <AppIcon src={useMacAppIconAddress(app, kept)} />;
 }
 
 /** An automation's mark, or one of its runs': the automation's tile. */
@@ -276,7 +276,7 @@ const ENTITY_MARK: EntityMarks = {
   [ENTITY_KIND.REPOSITORY]: () => <EntityGlyph kind={ENTITY_KIND.REPOSITORY} />,
   [ENTITY_KIND.WORKSPACE]: (workspace) => <WorkspaceMark slug={workspace.workspace} />,
   [ENTITY_KIND.DATE]: () => <EntityGlyph kind={ENTITY_KIND.DATE} />,
-  [ENTITY_KIND.MAC_APP]: (macApp) => <MacAppMark app={macApp.app} />,
+  [ENTITY_KIND.MAC_APP]: (macApp) => <MacAppMark app={macApp.app} machine={macApp.machine} />,
   [ENTITY_KIND.COMPUTER]: () => <EntityGlyph kind={ENTITY_KIND.COMPUTER} />,
   [ENTITY_KIND.MACHINE]: (machine, at) => (
     <MachineMark machineId={machine.machineId} workspace={at.workspace} />
