@@ -49,7 +49,7 @@ const PAGE_GROUPS = [
   { heading: "Workspace", rows: ["Workspace", "Cloud environment"] },
   {
     heading: "Account",
-    rows: ["Account", "Preferences", "Agents", "Machines", "Integrations", "Vespin MCP & CLI"],
+    rows: ["Account", "Preferences", "Agents", "Machines", "Integrations", "MCP & CLI"],
   },
   {
     heading: "This Mac",

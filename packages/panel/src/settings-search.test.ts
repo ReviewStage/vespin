@@ -326,7 +326,7 @@ test("voice finds Agents' Voice row only while the Voice experiment is on", () =
   assert.ok(voiceFound(experimentsOn(EXPERIMENT.VOICE)).includes("Voice"));
 });
 
-test("mcp finds the Vespin MCP & CLI page's rows and none of the integrations", () => {
+test("mcp finds the MCP & CLI page's rows and none of the integrations", () => {
   const groups = searchSettings(settingsSearchCorpus(FULL_INPUT), "mcp")?.groups ?? [];
   assert.deepEqual(
     groups.map((group) => group.page),

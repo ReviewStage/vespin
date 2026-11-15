@@ -1,5 +1,4 @@
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SETTINGS_PAGE as SETTINGS_VIEW, type SettingsPage as SettingsView } from "@repo/settings";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 
@@ -41,11 +40,9 @@ export const SETTINGS_PAGE_LIST = [
  * What each page is called, wherever it is named: the Settings sidebar, its
  * own head, the command palette, and the iOS app's Settings and its links to
  * the web's pages. One table, because a row that opens a page and the title
- * over it must never disagree about its name. Note that the outside agents'
- * and the command's page is named for the product, never the protocol alone,
- * because "MCP servers" is what the window calls the servers its own agents
- * use; and that the cloud agents' variables and scripts stand on one page,
- * since both exist only for those agents.
+ * over it must never disagree about its name. Note that the cloud agents'
+ * variables and scripts stand on one page, since both exist only for those
+ * agents.
  */
 export const SETTINGS_PAGE_TITLE = {
   [SETTINGS_VIEW.ACCOUNT]: "Account",
@@ -55,7 +52,7 @@ export const SETTINGS_PAGE_TITLE = {
   [SETTINGS_VIEW.AGENTS]: "Agents",
   [SETTINGS_VIEW.HOSTS]: "Machines",
   [SETTINGS_VIEW.INTEGRATIONS]: "Integrations",
-  [SETTINGS_VIEW.MCP]: `${PRODUCT_NAME} MCP & CLI`,
+  [SETTINGS_VIEW.MCP]: "MCP & CLI",
   [SETTINGS_VIEW.SKILLS]: "Skills",
   [SETTINGS_VIEW.MEMORY]: "Memory",
   [SETTINGS_VIEW.APPEARANCE]: "Appearance",
