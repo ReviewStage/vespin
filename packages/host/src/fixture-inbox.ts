@@ -330,6 +330,9 @@ function item(
 const OPEN = { status: INBOX_ASK_STATUS.OPEN } as const;
 
 /** The recorded thread's files: a still its words draw, the recording sent after them, and the test plan as a PDF, by the attachment each is read by. */
+/** The PDF the reference task's description keeps as it keeps a picture, by the id the service keeps it under, so a description's file chip has one to draw. */
+const DESCRIPTION_PDF = "e738b0a4-c3f5-4a1d-b8d5-6f7182930b45";
+
 const RECORDED = {
   ITEM: fixtureId(10),
   PICTURE: "92f3b536-7eaf-4bc8-a3e0-1a2b3c4d5e6f",
@@ -1589,6 +1592,8 @@ const INVITES_DESCRIPTION = [
   "- File: [@invite.ts](https://github.com/ada/relay/blob/HEAD/src/members/invite.ts)",
   "- Date: [@Nov 16, 2026](mention://date/2026-11-16)",
   "",
+  `![Invite flow spec](https://vespin.dev/personal/task/${FIXTURE_IDS.TASK}/files/${DESCRIPTION_PDF})`,
+  "",
   "## Checks",
   "",
   "- [x] An invite is sent once per address",
@@ -2526,7 +2531,7 @@ const ANSWERS: StagedAnswers = {
 
     return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
   },
-  // Note that a file Ada's question carries is read as the service reads a description's, and any other is not there.
+  // Note that the reference task's files, the description's PDF and those Ada's question carries, are read as the service reads them, and any other is not there.
   [ACT_KIND.TASKS_PICTURE_READ]: ({ taskId, attachmentId }) => {
     if (taskId !== TASK.INVITES) return { failure: TASK_CALL_FAILURE.NOT_FOUND };
 
@@ -2534,7 +2539,7 @@ const ANSWERS: StagedAnswers = {
       return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
     }
 
-    return attachmentId === COMMENT_FILES.PLAN
+    return attachmentId === COMMENT_FILES.PLAN || attachmentId === DESCRIPTION_PDF
       ? { contentType: AGENT_ATTACHMENT_TYPE.PDF, base64: FIXTURE_PLAN_PDF }
       : { failure: TASK_CALL_FAILURE.NOT_FOUND };
   },

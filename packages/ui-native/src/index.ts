@@ -145,7 +145,7 @@ export {
 
 export { MachineAskSheet } from "./machine-ask-sheet.js";
 
-export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
+export { Markdown, type MarkdownFile, type MarkdownVideo, Picture } from "./markdown.js";
 
 export { markdownGithubPages, markdownReplyButtons } from "./markdown-model.js";
 

@@ -1619,7 +1619,7 @@ function OverviewDescription({
   const threads = useTaskComments(task.id);
   const blocks = useMemo(() => descriptionBlocks(body), [body]);
   const onBlocks = threadsOnBlocks(threads, blocks);
-  const { pictureSource, videoAt } = useDescriptionPictures(body);
+  const { pictureSource, videoAt, fileAt } = useDescriptionPictures(body);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
 
   // Note that a chip's pull request is read through the task's own workspace, as the panel's is, whichever one the phone works in.
@@ -1646,6 +1646,7 @@ function OverviewDescription({
           onOpenLink={openLink}
           pictureSource={pictureSource}
           videoAt={videoAt}
+          fileAt={fileAt}
           linkStanding={linkStanding}
         />
       </ListSection>
@@ -1666,6 +1667,7 @@ function OverviewDescription({
             onOpenLink={openLink}
             pictureSource={pictureSource}
             videoAt={videoAt}
+            fileAt={fileAt}
             linkStanding={linkStanding}
             last={index === blocks.length - 1}
             menuActions={
