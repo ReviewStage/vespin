@@ -91,7 +91,7 @@ import {
   useLandingTeammate,
 } from "./landing-desktop.js";
 import { LandingPhone, LandingWindow } from "./landing-devices.js";
-import { MINUTE, STORY_NOW, still, useStory } from "./landing-story.js";
+import { MINUTE, STORY_NOW, still, useStory, useTimeline, useTyping } from "./landing-story.js";
 
 /**
  * landing-scenes.tsx -- the landing's moving screens: the app's own components, composed as the panel composes them, stepping through a short story each.
@@ -111,7 +111,7 @@ import { MINUTE, STORY_NOW, still, useStory } from "./landing-story.js";
  */
 
 /** How long each scene holds a step, in milliseconds. */
-const BEAT = { INBOX: 1100, AGENTS: 1800, RUNS: 1700 } as const;
+const BEAT = { AGENTS: 1800, RUNS: 1700 } as const;
 
 /**
  * A window's story: how many steps it plays, the last it draws (held for the
@@ -465,7 +465,13 @@ function DraftAnswer({ picked, note }: { picked: boolean; note: string }): React
  * the reader's draft, an option picked, a note written, and the answer sent,
  * a fresh draft waiting under it.
  */
-function QuestionThread({ step }: { step: number }): React.JSX.Element {
+function QuestionThread({
+  step,
+  note,
+}: {
+  step: number;
+  note?: string | undefined;
+}): React.JSX.Element {
   const member = useLandingMember();
   const sent = step >= 5;
 
@@ -499,7 +505,7 @@ function QuestionThread({ step }: { step: number }): React.JSX.Element {
             {sent ? (
               <ReplyComposer placeholder="Reply" sendable={false} />
             ) : (
-              <DraftAnswer picked={step >= 3} note={step >= 4 ? QUESTION.NOTE : ""} />
+              <DraftAnswer picked={step >= 3} note={note ?? (step >= 4 ? QUESTION.NOTE : "")} />
             )}
           </Comment>
         </li>
@@ -593,8 +599,9 @@ function ColumnCard({
 /**
  * The Inbox demo's beats, in order: the list, the question arriving, the
  * pointer going to it and pressing, the thread opening, the pointer picking
- * an option, the note written, the send pressed, and the list again with the
- * question settled, held before the loop starts over.
+ * an option, pressing into the note and typing it, pressing send, the
+ * answer standing in the thread, and the list again with the question
+ * settled, held before the loop starts over.
  */
 const INBOX_BEAT = {
   LIST: 0,
@@ -604,20 +611,26 @@ const INBOX_BEAT = {
   OPEN: 4,
   AIM_PICK: 5,
   PICK: 6,
-  NOTE: 7,
-  SEND: 8,
-  BACK: 9,
-  HOLD: 10,
+  AIM_NOTE: 7,
+  TYPE: 8,
+  AIM_SEND: 9,
+  SEND: 10,
+  SENT: 11,
+  BACK: 12,
+  HOLD: 13,
 } as const;
 
-/** How many beats the Inbox demo plays before it loops. */
-const INBOX_BEATS = 11;
+/** How long each beat holds, in milliseconds, by its place in `INBOX_BEAT`: long enough for the pointer's move or the typing it holds. */
+const INBOX_DURATIONS: readonly number[] = [
+  1200, 1300, 1100, 450, 900, 1100, 600, 1100, 1700, 1100, 450, 1100, 1300, 1800,
+];
 
-/** What the pointer rests on at each beat: the row, the picked option, the send, or nothing. */
+/** What the pointer rests on at each beat: the row, the picked option, the note, the send, or nothing. */
 const POINTER_AIM = {
   REST: "rest",
   ROW: "row",
   PICK: "pick",
+  NOTE: "note",
   SEND: "send",
 } as const;
 
@@ -625,19 +638,33 @@ type PointerAim = (typeof POINTER_AIM)[keyof typeof POINTER_AIM];
 
 /** Where the pointer is at `beat`. */
 function pointerAim(beat: number): PointerAim {
-  if (beat === INBOX_BEAT.AIM_ROW || beat === INBOX_BEAT.PRESS_ROW) return POINTER_AIM.ROW;
+  // Note that after a press the pointer stays where it pressed while the screen answers.
+  if (beat >= INBOX_BEAT.AIM_ROW && beat <= INBOX_BEAT.OPEN) return POINTER_AIM.ROW;
 
   if (beat === INBOX_BEAT.AIM_PICK || beat === INBOX_BEAT.PICK) return POINTER_AIM.PICK;
 
-  if (beat === INBOX_BEAT.NOTE || beat === INBOX_BEAT.SEND) return POINTER_AIM.SEND;
+  if (beat === INBOX_BEAT.AIM_NOTE || beat === INBOX_BEAT.TYPE) return POINTER_AIM.NOTE;
+
+  if (beat >= INBOX_BEAT.AIM_SEND && beat <= INBOX_BEAT.SENT) return POINTER_AIM.SEND;
 
   return POINTER_AIM.REST;
+}
+
+/** The beats a press lands on: the row, the option, the note's field, and the send. */
+function pressedAt(beat: number): boolean {
+  return (
+    beat === INBOX_BEAT.PRESS_ROW ||
+    beat === INBOX_BEAT.PICK ||
+    beat === INBOX_BEAT.TYPE ||
+    beat === INBOX_BEAT.SEND
+  );
 }
 
 /** The element the pointer goes to for `aim`, found in the scene's own markup. */
 const AIM_TARGET: Readonly<Record<Exclude<PointerAim, typeof POINTER_AIM.REST>, string>> = {
   [POINTER_AIM.ROW]: ".ui-landing-demo-list li",
   [POINTER_AIM.PICK]: `.ui-landing-demo-thread [data-value="${QUESTION.PICK}"]`,
+  [POINTER_AIM.NOTE]: ".ui-landing-demo-thread textarea",
   [POINTER_AIM.SEND]: '.ui-landing-demo-thread button[aria-label="Send"]',
 };
 
@@ -656,9 +683,7 @@ function listStep(beat: number): number {
 function threadStep(beat: number): number {
   if (beat < INBOX_BEAT.PICK) return 2;
 
-  if (beat < INBOX_BEAT.NOTE) return 3;
-
-  if (beat < INBOX_BEAT.SEND) return 4;
+  if (beat < INBOX_BEAT.SENT) return 3;
 
   return 5;
 }
@@ -697,22 +722,34 @@ function usePointer(scene: RefObject<HTMLDivElement | null>, aim: PointerAim, be
   return point;
 }
 
-/** The demo's pointer: an arrow at `point`, pressing where `pressed`. A picture, never a control. */
+/**
+ * The demo's pointer: an arrow at `point`, pressing where `pressed`. A
+ * picture, never a control. Note that it moves across and down on two
+ * boxes eased apart, so its path bows as a hand's does rather than running
+ * straight.
+ */
 function DemoPointer({ point, pressed }: { point: Point; pressed: boolean }): React.JSX.Element {
   return (
-    <svg
+    <span
       className="ui-landing-pointer"
-      viewBox="0 0 16 20"
       aria-hidden="true"
-      focusable="false"
-      data-pressed={pressed || undefined}
       style={cssCustomProperties({
         "--ui-landing-pointer-x": `${point.x}px`,
         "--ui-landing-pointer-y": `${point.y}px`,
       })}
     >
-      <path d="M1 1v15.5l4.2-4.1 2.9 6.6 2.6-1.1-2.9-6.5H14L1 1z" />
-    </svg>
+      <span className="ui-landing-pointer-down">
+        <svg
+          className="ui-landing-pointer-arrow"
+          viewBox="0 0 16 20"
+          aria-hidden="true"
+          focusable="false"
+          data-pressed={pressed || undefined}
+        >
+          <path d="M1 1v15.5l4.2-4.1 2.9 6.6 2.6-1.1-2.9-6.5H14L1 1z" />
+        </svg>
+      </span>
+    </span>
   );
 }
 
@@ -724,13 +761,13 @@ function DemoPointer({ point, pressed }: { point: Point; pressed: boolean }): Re
  */
 function InboxScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
-  const beat = useStory(ref, INBOX_BEATS, BEAT.INBOX);
+  const beat = useTimeline(ref, INBOX_DURATIONS);
   const open = beat >= INBOX_BEAT.OPEN && beat < INBOX_BEAT.BACK;
   const aim = pointerAim(beat);
   const point = usePointer(ref, aim, beat);
 
-  const pressed =
-    beat === INBOX_BEAT.PRESS_ROW || beat === INBOX_BEAT.PICK || beat === INBOX_BEAT.SEND;
+  const pressed = pressedAt(beat);
+  const note = useTyping(QUESTION.NOTE, beat === INBOX_BEAT.TYPE, beat > INBOX_BEAT.TYPE);
 
   return (
     <div
@@ -769,7 +806,7 @@ function InboxScene(): React.JSX.Element {
               </List>
             </div>
             <div className="ui-landing-demo-thread">
-              <QuestionThread step={threadStep(beat)} />
+              <QuestionThread step={threadStep(beat)} note={note} />
             </div>
           </div>
         </ColumnCard>

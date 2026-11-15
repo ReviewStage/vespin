@@ -962,25 +962,39 @@
     opacity: 0;
   }
 
-  /* off-scale: the pointer's own size, a desktop arrow's */
+  /* The pointer moves across and down on two boxes eased apart, across
+     evenly and down quick then settling, so its path bows; a press dips it
+     and lets it go. */
   .ui-landing-pointer {
     position: absolute;
     top: 0;
     left: 0;
     z-index: 2;
+    pointer-events: none;
+    transform: translateX(var(--ui-landing-pointer-x));
+    transition: transform var(--ui-duration-showcase) var(--ui-motion-exit);
+  }
+
+  .ui-landing-pointer-down {
+    display: block;
+    transform: translateY(var(--ui-landing-pointer-y));
+    transition: transform var(--ui-duration-showcase) var(--ui-motion-pane);
+  }
+
+  /* off-scale: the pointer's own size, a desktop arrow's */
+  .ui-landing-pointer-arrow {
+    display: block;
     width: 16px;
     height: 20px;
     fill: var(--ui-color-text);
     stroke: var(--ui-color-ground);
     stroke-width: 1.2;
     filter: drop-shadow(0 2px 4px var(--ui-color-shadow-deep));
-    pointer-events: none;
-    transform: translate(var(--ui-landing-pointer-x), var(--ui-landing-pointer-y));
-    transition: transform var(--ui-duration-shape) var(--ui-motion-pane);
+    transform-origin: 2px 2px;
   }
 
-  .ui-landing-pointer[data-pressed] {
-    transform: translate(var(--ui-landing-pointer-x), var(--ui-landing-pointer-y)) scale(0.85);
+  .ui-landing-pointer-arrow[data-pressed] {
+    animation: ui-landing-press var(--ui-duration-fast) var(--ui-motion-pane);
   }
 
   /* A task: its log, and the plan's sub-tasks over its foot's corner,
@@ -1199,6 +1213,12 @@
   /* A message arriving in a scene rises into place. */
   .ui-landing-enter {
     animation: ui-landing-enter var(--ui-duration-shape) var(--ui-motion-pane) both;
+  }
+
+  @keyframes ui-landing-press {
+    50% {
+      transform: scale(0.82);
+    }
   }
 
   @keyframes ui-landing-enter {
