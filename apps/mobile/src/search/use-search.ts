@@ -20,10 +20,17 @@ import {
 } from "@repo/features/search-found-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASKS_READ } from "@repo/features/tasks-view";
-import { INBOX_FEED, selectTasks } from "@repo/host/app-state-reads";
+import type { AppStateSnapshot } from "@repo/host/app-state";
+import { INBOX_FEED } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { useDeferredValue, useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
+import {
+  useListedAgents,
+  useListedTasks,
+  useTaskListCollections,
+  useTaskListRows,
+} from "../host/host-provider.js";
 import { useInboxListing } from "../inbox/use-inbox.js";
 import {
   agentLine,
@@ -38,6 +45,11 @@ type TasksRead = (typeof TASKS_READ)[keyof typeof TASKS_READ];
 
 /** Where the task list stands while its rows may still be coming: not yet asked, or asked and not yet answered. */
 const TASKS_STILL_READING: ReadonlySet<TasksRead> = new Set([TASKS_READ.IDLE, TASKS_READ.READING]);
+
+/** Where the task list's read stands, which says whether a task or an agent the query would find may not be held yet. */
+function selectListStatus(state: AppStateSnapshot): TasksRead {
+  return state.tasks.listStatus;
+}
 
 /** What a query finds: each kind's rows best first, the Tasks listing their rows are drawn and acted on through, and the reader the Inbox's rows are read for. */
 export interface SearchFound {
@@ -66,15 +78,19 @@ export function useSearchFound(typed: string): SearchFound {
   const query = useDeferredValue(typed);
   const listing = useTasksListing(query);
   const inbox = useInboxListing({ show: INBOX_SHOW.ALL, search: query });
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const collections = useTaskListCollections();
+  const listedTasks = useListedTasks();
+  const listedAgents = useListedAgents();
+  const pullRequests = useTaskListRows(collections.agentPullRequests);
+  const { data: listStatus } = useQuery({ ...appStateQuery, select: selectListStatus });
   const workspace = listing.workspace;
   const waiting = useWaiting(workspace?.id);
 
   const ranked = useMemo(() => {
-    const tasksById = new Map((view?.tasks ?? []).map((task) => [task.id, task]));
+    const tasksById = new Map(listedTasks.map((task) => [task.id, task]));
 
     // Note that an archived agent is left out, as a task's page leaves it out of its Agents.
-    const agents = (view?.taskAgents ?? []).filter(
+    const agents = listedAgents.filter(
       (agent) =>
         agent.archivedAt === undefined &&
         (workspace === undefined || agent.workspaceId === workspace.id),
@@ -88,16 +104,25 @@ export function useSearchFound(typed: string): SearchFound {
       inbox: rankedBySearch(inbox.listed, query, inboxSearchSubject),
       agents: rankedBySearch(agents, query, (agent) =>
         agentSearchSubject(agent, tasksById.get(agent.taskId)?.name),
-      ).map((agent) => agentLine(agent, waiting.byAgent, view)),
+      ).map((agent) => agentLine(agent, waiting.byAgent, pullRequests)),
       tasksById,
     };
-  }, [listing.found, inbox.listed, view, workspace, waiting, query]);
+  }, [
+    listing.found,
+    inbox.listed,
+    listedTasks,
+    listedAgents,
+    pullRequests,
+    workspace,
+    waiting,
+    query,
+  ]);
 
   const inboxReading = inbox.feed === INBOX_FEED.READING;
 
   // Note that a task or agent found past the list held comes only with the service's search, and one on a list not yet read with its first read.
   const tasksReading =
-    view === undefined || TASKS_STILL_READING.has(view.listStatus) || listing.searching;
+    listStatus === undefined || TASKS_STILL_READING.has(listStatus) || listing.searching;
 
   // Note that what the rows are read through and whether the finding has caught up are joined after the ranking, so neither a key typed nor a search answered ranks again.
   return useMemo(

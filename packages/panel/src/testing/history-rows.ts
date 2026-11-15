@@ -1,5 +1,5 @@
 /**
- * history-rows.ts -- the task list's rows a test of the window's history stands on: by id over a list, or as the window's collections fed from the Tasks tab a test stands.
+ * history-rows.ts -- the task list's rows a test stands on: by id over a list, or as the window's collections fed from the Tasks tab a test stands.
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
@@ -7,9 +7,10 @@ import { taskLinkStep } from "@repo/features/link-grammar";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW, type TasksView } from "@repo/features/tasks-view";
 import { taskListFollowing } from "@repo/host/task-list-following";
-import { createElement, type ReactElement, type ReactNode } from "react";
+import { createElement, type ReactElement, type ReactNode, useLayoutEffect, useState } from "react";
 import type { HistoryRows } from "../places/history-rows.js";
 import { TaskListCollectionsProvider } from "../task-list-collections.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
 /** The rows of `tasks` and `agents` by id, each task among them the only ones ever listed: for a name read once, where no task is deleted between reads. */
 export function listedRows(
@@ -28,14 +29,15 @@ export function listedRows(
   };
 }
 
-/** The tasks, agents, and agents' pull requests a test lists; none of the agents where it lists none. */
+/** The tasks, agents, and pull requests a test lists; none of the agents where it lists none. */
 interface ListedTasks {
   readonly tasks: TasksView["tasks"];
   readonly taskAgents?: TasksView["taskAgents"] | undefined;
+  readonly taskPullRequests?: TasksView["taskPullRequests"] | undefined;
   readonly agentPullRequests?: TasksView["agentPullRequests"] | undefined;
 }
 
-/** The window's task-list collections over what a test lists: `stand` writes its tasks and agents as the window's follow writes a document, and `provide` hands them to a tree. */
+/** The window's task-list collections over what a test lists: `stand` writes its tasks, agents, and pull requests as the window's follow writes a document, and `provide` hands them to a tree. */
 export interface StandingTaskList {
   readonly stand: (listed: ListedTasks) => void;
   readonly provide: (element: ReactNode) => ReactElement;
@@ -46,12 +48,13 @@ export function standingTaskList(initial: ListedTasks): StandingTaskList {
   const following = taskListFollowing();
   let version = 0;
 
-  const stand = ({ tasks, taskAgents, agentPullRequests }: ListedTasks) => {
+  const stand = ({ tasks, taskAgents, taskPullRequests, agentPullRequests }: ListedTasks) => {
     version += 1;
     following.write(version, {
       ...IDLE_TASKS_VIEW,
       tasks,
       ...(taskAgents === undefined ? undefined : { taskAgents }),
+      ...(taskPullRequests === undefined ? undefined : { taskPullRequests }),
       ...(agentPullRequests === undefined ? undefined : { agentPullRequests }),
     });
   };
@@ -66,4 +69,27 @@ export function standingTaskList(initial: ListedTasks): StandingTaskList {
         children: element,
       }),
   };
+}
+
+/** `children` over the window's task collections standing on every task `tasks` holds, written again as each draw hands another list, before the frame is painted. */
+function StandingEvery({
+  tasks,
+  children,
+}: {
+  tasks: readonly TaskSummary[];
+  children: ReactNode;
+}): ReactElement {
+  const [taskList] = useState(() => standingTaskList({ tasks }));
+
+  useLayoutEffect(() => taskList.stand({ tasks }), [taskList, tasks]);
+
+  return taskList.provide(children);
+}
+
+/** `element` over task collections holding every task `tasks` holds, as the window's root feeds them beside the tab it draws. */
+export function overEveryTask(
+  tasks: Pick<TasksControl, "tasks">,
+  element: ReactNode,
+): ReactElement {
+  return createElement(StandingEvery, { tasks: tasks.tasks, children: element });
 }
