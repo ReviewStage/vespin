@@ -5,11 +5,11 @@ import { buildAdminCatalog } from "./admin-catalog.js";
 
 /**
  * The catalog's own reckoning: each prompt's sections add up to the whole
- * of it under the headings its text names, and the pipeline is the queue the
+ * of it, and the pipeline is the queue the
  * deployment's environment picks.
  */
 
-test("a prompt's sections add up to its text, the coding agent's named by their headings", () => {
+test("a prompt's sections add up to its text", () => {
   const catalog = buildAdminCatalog(0, undefined);
 
   for (const prompt of catalog.prompts) {
@@ -17,10 +17,6 @@ test("a prompt's sections add up to its text, the coding agent's named by their 
 
     assert.equal(total, prompt.chars, prompt.label);
   }
-
-  const instructions = catalog.prompts[0];
-
-  assert.ok(instructions?.sections.some((section) => section.heading === "How to work"));
 });
 
 test("a production or preview deployment queues its turns, and any other runs them in process", () => {

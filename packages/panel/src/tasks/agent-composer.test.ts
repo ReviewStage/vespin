@@ -229,6 +229,7 @@ test("a paste past the box's cap and too large for a file is cut to the room lef
   const note = () => box.container.querySelector(".ui-composer-foot-note")?.textContent;
   assert.equal(note(), undefined);
 
+  // Note that this runs a few seconds, because only words past a text file's 3 MB bound stay words to be cut.
   pasteInComposer(box.container, "x".repeat(AGENT_BOUNDS.MAX_TEXT_BYTES + 1));
   assert.equal(box.shown().length, cap, "the box holds what fits");
   assert.equal(note()?.includes(pasteCutWords(cap)), true, "and says the rest was cut");
