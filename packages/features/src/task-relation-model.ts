@@ -96,11 +96,17 @@ const PARENT_REPOSITORY_NOTE =
   "A sub-task works in its parent's repository, so the two must share one.";
 
 /**
- * The task a menu relates: a list's row of it, or the open task, whose
- * blocks the list does not carry, so a row's menu judges only the tree's
- * kinds and leaves a block already standing to the service's refusal.
+ * The task a menu relates: a list's row of it, or the open task. Note that
+ * a row from a service before rows carried blocks names none, so a menu on
+ * it judges only the tree's kinds and leaves a block already standing to
+ * the service's refusal.
  */
 export type TaskRelationSubject = TaskSummary & Pick<Task, "blockedBy" | "blocks">;
+
+/** Whether a kind is a block, which only a task's lists of blocks judge. */
+function blockKind(kind: TaskRelationKind): boolean {
+  return kind === TASK_RELATION_KIND.BLOCKED_BY || kind === TASK_RELATION_KIND.BLOCKS;
+}
 
 /** The tasks standing above one whose parent is `parentId`, walking up by parents through the tasks the list holds and stopping at a loop. */
 function ancestors(
@@ -155,6 +161,32 @@ export function relationWhyNot(
 
       return sameRepository(task.repository, other.repository) ? undefined : OTHER_REPOSITORY;
   }
+}
+
+/**
+ * The task a relation of `kind` is judged against: its row of the list,
+ * whose blocks are the row's, since a row carries both lists whole, and the
+ * open task's description's (`opened`) only where the row names none, from
+ * a service before rows carried them. None while a block waits on that
+ * description, so its tasks are judged once it is read rather than against
+ * none.
+ */
+export function relationSubject(
+  row: TaskSummary,
+  opened: Pick<Task, "blockedBy" | "blocks"> | undefined,
+  kind: TaskRelationKind,
+): TaskRelationSubject | undefined {
+  const rowBlocks = row.blockedBy !== undefined && row.blocks !== undefined;
+
+  if (blockKind(kind) && !rowBlocks && opened === undefined) return undefined;
+  const blockedBy = row.blockedBy ?? opened?.blockedBy;
+  const blocks = row.blocks ?? opened?.blocks;
+
+  return {
+    ...row,
+    ...(blockedBy === undefined ? undefined : { blockedBy }),
+    ...(blocks === undefined ? undefined : { blocks }),
+  };
 }
 
 /** What a relation write's refusal says: its own reason where the service named one, and a plain refusal otherwise. */

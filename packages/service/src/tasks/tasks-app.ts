@@ -33,7 +33,7 @@ import { ANY_METHOD, type WebRoutes } from "../route.js";
 
 const TASKS_PATH = {
   /** GET serves one attachment of the description as its bytes; the rewrite moves the path's ids into the `id` and `attachment` queries. */
-  ATTACHMENT: "/api/plans/attachment",
+  ATTACHMENT: "/api/tasks/attachment",
 } as const;
 
 const TASK_ID_QUERY = "id";

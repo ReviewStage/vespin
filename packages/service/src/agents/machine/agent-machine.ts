@@ -39,10 +39,10 @@ import type { CheckoutDiffRange } from "@repo/agent-runner/checkout-diff";
 import type { LaunchPath } from "@repo/agent-runner/protocol";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
-import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
+import type { CheckoutRestoreSnapshot } from "@repo/features/checkout-restore";
 import type { CommandExit, SandboxError, SandboxFile } from "@repo/sandbox";
 import {
   type Brand,
@@ -116,15 +116,6 @@ export interface MachineLayout {
    * release bundled.
    */
   readonly linesRead: boolean;
-  /**
-   * Whether the runner keeps the CLI's transcript at the service
-   * (`@repo/agent-runner`'s `RUNNER_TRANSCRIPTS`), as a sandbox's does, so
-   * a place made anew still resumes the CLI's session, and a continue or
-   * fork elsewhere carries it; a Mac's whose release bundles a runner that
-   * keeps it (`MAC_MACHINE.TRANSCRIPTS_SINCE`), and none on an older Mac,
-   * whose CLI keeps its own files on the Mac alone.
-   */
-  readonly transcriptsKept: boolean;
   /**
    * Whether a session the store does not hold whole still resumes from the
    * CLI's own files where the place was not made anew, the store left out
@@ -513,7 +504,7 @@ export interface AgentMachineService {
    */
   readonly restoreCheckout: (
     session: string,
-    snapshot: TurnCheckoutSnapshot,
+    snapshot: CheckoutRestoreSnapshot,
   ) => Effect.Effect<RestoreOutcome, SandboxError | LaunchRefused, DatabaseServices | AgentSandbox>;
   /**
    * The diff of the session's checkout between two snapshots its runner

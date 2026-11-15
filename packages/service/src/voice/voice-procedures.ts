@@ -1,5 +1,5 @@
 /**
- * voice-procedures.ts -- a voice call into an agent: its GPT-Live session opened on the caller's own OpenAI key, and its seconds kept once it ends.
+ * voice-procedures.ts -- a voice call into an agent: its GPT-Live session opened on the caller's own OpenAI key, and its first lease published.
  *
  * `POST /api/voice/session` takes the panel's SDP offer, the agent the call
  * speaks for, and the voice (`@repo/features/voice-wire`). The caller must
@@ -8,37 +8,38 @@
  * have a harness to answer it. The session is created on GPT-Live with the
  * caller's own OpenAI API key, as dictation's clip is
  * (`accounts/openai-key-middleware.ts`), never ours, and with the agent's
- * recent context in its instructions (`voice-instructions.ts`); the answer is
- * the SDP answer alone, so the key never leaves the service. Nothing of the
+ * recent context in its instructions (`voice-instructions.ts`). The call
+ * then gets its one row (`@repo/database/models/voice-calls`) at lease epoch
+ * 1, and its first lease is published, whose holder attaches to the session
+ * and holds the call from there to its close (`voice-call-lease.ts`); the
+ * answer is the call's id and the SDP answer alone, so neither the key nor
+ * the session's id leaves the service. A lease the queue did not take
+ * leaves the call unheld, so its row is deleted and the call refused as
+ * unavailable before the panel ever joins the session. Nothing of the
  * offer, the instructions, or the answer is stored, logged, or traced.
  *
- * `POST /api/voice/calls` reports a finished call's seconds, as the panel
- * timed them, since the call ran between the panel and OpenAI and never
- * through here: they are added to the member's day beside dictation's
- * (`@repo/database/models/quota`), and the call is counted once, by its
- * length and the agent's harness alone. As with dictation, nothing is
- * refused on the meter, and a meter the database refused is logged and the
- * report still answered.
+ * The call ends when its session closes, which the panel asks of GPT-Live
+ * itself; its seconds are kept by the lease that hears the close.
  */
 
 import { readAgentRouting, readVisibleAgent } from "@repo/database/models/agent-store";
 import { listRecentMessages } from "@repo/database/models/message-reads";
-import { spendVoiceMeter } from "@repo/database/models/quota";
 import { readTaskHeader } from "@repo/database/models/task-store";
+import { deleteVoiceCall, insertVoiceCall } from "@repo/database/models/voice-calls";
 import { Clock, Effect, Option } from "effect";
 import { openAiKeyMiddleware } from "../accounts/openai-key-middleware.js";
 import { admitsPlanWriter, controlsAgent } from "../agents/agent-reach.js";
 import { harnessOf } from "../agents/coder-host/native-runtime.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
-import { recordServerEvent, SERVER_EVENT, voiceCallDurationOf } from "../events/server-events.js";
 import {
   HOSTED_REFUSAL,
   hostedStoreOrUnavailable,
   type UserIdResolver,
 } from "../http/http-effect.js";
-import { logStoreFailure } from "../http/store-failure.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import { createLiveSession } from "./live-session.js";
+import { VOICE_CALL_LEASE } from "./voice-call-bounds.js";
+import { VoiceCallLeases } from "./voice-call-lease.js";
 import { VOICE_CONTEXT, voiceInstructions } from "./voice-instructions.js";
 
 const MS_PER_SECOND = 1_000;
@@ -59,7 +60,7 @@ const reachedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string
   return { agent: agent.value, harness: harnessOf(routing.value.runtime) };
 });
 
-/** The voice resource: a call's session opened, and a finished call's seconds kept, each to a signed-in caller. */
+/** The voice resource: a call's session opened to a signed-in caller, and its first lease published. */
 export function voiceProcedures(seams: VoiceProcedureSeams) {
   const signedIn = hosted.voice.use(accountMiddleware(seams.resolveUserId));
 
@@ -90,7 +91,7 @@ export function voiceProcedures(seams: VoiceProcedureSeams) {
         messages: recent.ok ? recent.value.map((record) => record.message) : [],
       });
 
-      const sdp = yield* createLiveSession({
+      const created = yield* createLiveSession({
         key: context.openAiKey,
         offer: input.sdp,
         voice: input.voice,
@@ -102,27 +103,36 @@ export function voiceProcedures(seams: VoiceProcedureSeams) {
         Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
       );
 
-      return { sdp };
-    }),
-
-    ended: signedIn.ended.effect(function* ({ input, context }) {
-      const { agent, harness } = yield* reachedAgent(context.userId, input.agentId);
       const now = yield* Clock.currentTimeMillis;
 
-      yield* spendVoiceMeter({ userId: context.userId, seconds: input.seconds, now }).pipe(
-        Effect.catch(logStoreFailure),
+      const call = yield* hostedStoreOrUnavailable(
+        insertVoiceCall({
+          liveSessionId: created.sessionId,
+          callerId: context.userId,
+          agentId: agent.id,
+          voice: input.voice,
+          startedAt: new Date(now),
+          leaseUntil: new Date(now + VOICE_CALL_LEASE.MAX_DURATION_SECONDS * MS_PER_SECOND),
+        }),
       );
 
-      // Note that a call whose agent ended for good while it ran is metered but not counted, since it has no harness to count it by.
-      if (harness !== undefined) {
-        yield* recordServerEvent(
-          SERVER_EVENT.VOICE_CALL,
-          { userId: context.userId, workspaceId: agent.organizationId },
-          { duration: voiceCallDurationOf(input.seconds * MS_PER_SECOND), harness },
-        );
-      }
+      const leases = yield* VoiceCallLeases;
 
-      return { done: true } as const;
+      yield* leases
+        .publish({ callId: call.id, callerId: call.callerId, epoch: call.leaseEpoch })
+        .pipe(
+          Effect.tapError((failed) =>
+            Effect.logWarning(`A voice call's first lease was not published: ${failed.reason}`),
+          ),
+          Effect.catch(() =>
+            Effect.andThen(
+              hostedStoreOrUnavailable(deleteVoiceCall(call.callerId, call.id)),
+              Effect.fail(HOSTED_REFUSAL.UNAVAILABLE),
+            ),
+          ),
+        );
+
+      return { callId: call.id, sdp: created.sdp };
     }),
   };
 }

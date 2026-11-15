@@ -10,7 +10,7 @@ import {
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   DESCRIPTION_ACTOR,
-  type DescriptionDocument,
+  type Description,
   type DescriptionRevisionLine,
   type DescriptionRevisionsAnswer,
   TASK_PRIORITY,
@@ -20,6 +20,7 @@ import {
 } from "@repo/features/task-wire";
 import {
   COMMENT_SUBJECT,
+  type ListedTasksView,
   TASK_CALL_FAILURE,
   TASKS_READ,
   type TasksView,
@@ -32,8 +33,8 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppDescriptionComments,
-  type AppDescriptionDocuments,
   type AppHeldById,
+  type AppHeldTasks,
   type AppHistories,
   type AppRepositoryLists,
   type AppStateSnapshot,
@@ -204,14 +205,14 @@ const FIXTURE_TASK: Task = {
   status: TASK_STATUS.IN_PROGRESS,
   priority: TASK_PRIORITY.HIGH,
   number: 42,
-  document: { body: `${FIXTURE_TEXT}\n`, assumptions: [] },
+  description: { body: `${FIXTURE_TEXT}\n`, assumptions: [] },
 };
 
 /**
  * The fixture task's description as it stood after its first `sections` sections,
  * each a heading and its words, as a revision partway through drafting saved it.
  */
-function draftOf(sections: number): DescriptionDocument {
+function draftOf(sections: number): Description {
   return { body: `${FIXTURE_SECTIONS.slice(0, sections * 2).join("\n\n")}\n`, assumptions: [] };
 }
 
@@ -226,7 +227,7 @@ function draftOf(sections: number): DescriptionDocument {
  */
 const FIXTURE_HISTORY: readonly {
   readonly line: DescriptionRevisionLine;
-  readonly document: DescriptionDocument;
+  readonly description: Description;
 }[] = [
   {
     line: {
@@ -240,7 +241,7 @@ const FIXTURE_HISTORY: readonly {
       startedAt: CALL_AT - 20 * 60_000,
       changes: 3,
     },
-    document: FIXTURE_TASK.document,
+    description: FIXTURE_TASK.description,
   },
   {
     line: {
@@ -254,7 +255,7 @@ const FIXTURE_HISTORY: readonly {
       startedAt: CALL_AT - 2 * HOUR - 10 * 60_000,
       changes: 2,
     },
-    document: draftOf(10),
+    description: draftOf(10),
   },
   {
     line: {
@@ -268,7 +269,7 @@ const FIXTURE_HISTORY: readonly {
       startedAt: CALL_AT - 5 * HOUR - 25 * 60_000,
       changes: 9,
     },
-    document: draftOf(7),
+    description: draftOf(7),
   },
   {
     line: {
@@ -282,7 +283,7 @@ const FIXTURE_HISTORY: readonly {
       startedAt: CALL_AT - DAY - 30 * 60_000,
       changes: 4,
     },
-    document: draftOf(4),
+    description: draftOf(4),
   },
   {
     line: {
@@ -296,7 +297,7 @@ const FIXTURE_HISTORY: readonly {
       startedAt: FIXTURE_TASK.createdAt,
       changes: 1,
     },
-    document: draftOf(2),
+    description: draftOf(2),
   },
 ];
 
@@ -344,8 +345,8 @@ function historyActAnswer(
 
   const revision = {
     seq,
-    document: FIXTURE_HISTORY[at]?.document ?? draftOf(0),
-    previous: FIXTURE_HISTORY[at + 1]?.document ?? null,
+    description: FIXTURE_HISTORY[at]?.description ?? draftOf(0),
+    previous: FIXTURE_HISTORY[at + 1]?.description ?? null,
   };
 
   // SAFETY: a revision is what this kind answers.
@@ -424,7 +425,7 @@ function repositoriesAppState(state: AppStateSnapshot): AppStateSnapshot {
   return { ...state, [LIVE_READ.REPOSITORY_LISTS]: staged };
 }
 
-const FIXTURE_TASK_LIST: TasksView = {
+const FIXTURE_TASK_LIST: ListedTasksView = {
   tasks: [
     {
       id: FIXTURE_TASK.id,
@@ -445,10 +446,11 @@ const FIXTURE_TASK_LIST: TasksView = {
   github: { connected: true, login: null },
   // Every task's agents as the list followed live carries them: none, where no profile stages one.
   taskAgents: [],
+  listed: true,
 };
 
 /** The open task, whose description main's document holds as read (`fixtureAppState`). */
-const FIXTURE_OPEN_TASK: TasksView = {
+const FIXTURE_OPEN_TASK: ListedTasksView = {
   ...FIXTURE_TASK_LIST,
   activeTaskId: FIXTURE_TASK.id,
 };
@@ -483,7 +485,7 @@ function thread(input: {
   readonly status: DescriptionCommentThread["status"];
   readonly entries: readonly DescriptionCommentEntry[];
 }): DescriptionCommentThread {
-  const from = FIXTURE_TASK.document.body.indexOf(input.quote);
+  const from = FIXTURE_TASK.description.body.indexOf(input.quote);
 
   if (from < 0) throw new Error(`The fixture's description holds no "${input.quote}"`);
   const times = input.entries.map((entry) => entry.at);
@@ -641,7 +643,7 @@ const FIXTURE_CLOSED_PANEL: SidePanelState = { ...FIXTURE_OPEN_PANEL, open: fals
 export function fixtureTasksView(run: {
   readonly fixtureMode: boolean;
   readonly profile: string;
-}): TasksView | undefined {
+}): ListedTasksView | undefined {
   if (!run.fixtureMode) return undefined;
   const agent = agentTasksView(run.profile, FIXTURE_OPEN_TASK);
 
@@ -720,7 +722,7 @@ export function fixtureActAnswer(
 }
 
 /** Main's held descriptions with the fixture's task's description held, one object for each of main's. */
-const STAGED_DESCRIPTIONS = new WeakMap<AppDescriptionDocuments, AppDescriptionDocuments>();
+const STAGED_DESCRIPTIONS = new WeakMap<AppHeldTasks, AppHeldTasks>();
 
 /** Main's held histories with the fixture's task's history held, one object for each of main's. */
 const STAGED_HISTORIES = new WeakMap<AppHistories, AppHistories>();
@@ -742,7 +744,7 @@ function stagedOn<Rows>(
 
 /**
  * Main's document with the fixture's task's description and its history held as the
- * window's reads of them hold them (`LIVE_READ.DESCRIPTION_DOCUMENT`,
+ * window's reads of them hold them (`LIVE_READ.HELD_TASK`,
  * `LIVE_READ.HISTORY`), under the profiles that open the task
  * (`fixtureTasksView`), so it opens on its description and its version history on
  * its versions; the very document under any other.
@@ -752,13 +754,9 @@ function plannedAppState(state: AppStateSnapshot): AppStateSnapshot {
 
   return {
     ...state,
-    [LIVE_READ.DESCRIPTION_DOCUMENT]: stagedOn(
-      STAGED_DESCRIPTIONS,
-      state[LIVE_READ.DESCRIPTION_DOCUMENT],
-      {
-        task: FIXTURE_TASK,
-      },
-    ),
+    [LIVE_READ.HELD_TASK]: stagedOn(STAGED_DESCRIPTIONS, state[LIVE_READ.HELD_TASK], {
+      task: FIXTURE_TASK,
+    }),
     [LIVE_READ.HISTORY]: stagedOn(
       STAGED_HISTORIES,
       state[LIVE_READ.HISTORY],

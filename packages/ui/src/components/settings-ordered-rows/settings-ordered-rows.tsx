@@ -13,8 +13,10 @@ import { GLYPH } from "../../icons/glyph-registry.js";
  * press. A row's grip names nothing and is hidden from assistive
  * technology, since a drag is the pointer's alone: a row's own menu moves
  * it up or down from the keyboard. A run of one row draws no grip, since it
- * has nowhere to go; it keeps the grips' gutter where asked (`gutter`), so a
- * page of several runs lines every card's marks up in one column.
+ * has nowhere to go. A run with grips insets its rows under the card's head,
+ * each row's mark where the head's words start, its grips in that room; a
+ * run without keeps the inset where asked (`gutter`), so a page of several
+ * runs lines every card's marks up in one column.
  *
  * Each row slides aside on its own `transform` while another is dragged
  * past it, timed from the motion tokens (`settings-ordered-rows.css`), so

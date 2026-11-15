@@ -3,7 +3,6 @@
 import { Button, ContextMenu, RNHostView } from "@expo/ui/swift-ui";
 import type { DraftCopy } from "@repo/features/draft-text";
 import {
-  type ComponentRef,
   createContext,
   type ReactElement,
   type ReactNode,
@@ -12,7 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { StyleSheet, View } from "react-native";
+import { type HostInstance, StyleSheet, View } from "react-native";
 import type { Glyph } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { InlineHost } from "./inline-host.js";
@@ -86,7 +85,7 @@ export function useKeptActs(kept: Kept | undefined): readonly HeldAct[] {
 
 /** A thumbnail's callback ref, which marks where it stands, and its press, which opens what it shows in Quick Look; no press where nothing is held yet or no app answers it. */
 interface QuickLook {
-  readonly mark: (view: ComponentRef<typeof View> | null) => void;
+  readonly mark: (view: HostInstance | null) => void;
   readonly open: (() => void) | undefined;
 }
 
@@ -99,9 +98,9 @@ interface QuickLook {
  */
 export function useQuickLook(kept: Kept | undefined): QuickLook {
   const keeping = useContext(KeepingDoor);
-  const thumbnail = useRef<ComponentRef<typeof View>>(null);
+  const thumbnail = useRef<HostInstance>(null);
 
-  const mark = useCallback((view: ComponentRef<typeof View> | null) => {
+  const mark = useCallback((view: HostInstance | null) => {
     thumbnail.current = view;
   }, []);
 

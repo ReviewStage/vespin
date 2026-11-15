@@ -17,13 +17,17 @@ import {
 } from "@repo/features/integration-wire";
 import { noNetwork } from "@repo/wire/testing";
 import { Effect, Layer, Option, Result } from "effect";
-import { GitHubApp } from "../../github/github-app.js";
 import {
   beginIntegrationSignIn,
   completeIntegrationSignIn,
   renameIntegrationConnection,
 } from "../../integrations/integration-store.js";
-import { GITHUB_APP_SETTINGS, openGithubUser } from "../../testing/github-app-fake.js";
+import {
+  fixtureGitHubApp,
+  GITHUB_APP_SETTINGS,
+  openGithubUser,
+  overNoGitHub,
+} from "../../testing/github-app-fake.js";
 import {
   CONNECTOR_ASKED_NOTHING,
   integrationConnectOf,
@@ -118,7 +122,7 @@ function allOn(account: string): ServerStanding {
 const EVERY_CONNECTOR = integrationConnectOf(() => CONNECTOR_ASKED_NOTHING);
 
 /** A deployment that holds the GitHub App, which is what offers GitHub. */
-const GITHUB_APP = GitHubApp.layer(GITHUB_APP_SETTINGS);
+const GITHUB_APP = overNoGitHub(fixtureGitHubApp(GITHUB_APP_SETTINGS));
 
 it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
   "an agent's MCP servers",
@@ -223,7 +227,11 @@ it.layer(Layer.mergeAll(getTestDB(), noNetwork, EVERY_CONNECTOR, GITHUB_APP))(
 
           const withApp = yield* handed;
           assert.ok(withApp.on && withApp.connections.some(({ provider }) => provider === GITHUB));
-          const withoutApp = yield* handed.pipe(Effect.provide(GitHubApp.layer(undefined)));
+
+          const withoutApp = yield* handed.pipe(
+            Effect.provide(overNoGitHub(fixtureGitHubApp(undefined))),
+          );
+
           assert.ok(
             withoutApp.on && !withoutApp.connections.some(({ provider }) => provider === GITHUB),
           );

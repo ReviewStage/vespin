@@ -10,7 +10,7 @@ import {
 import { pageFrameUrl } from "@repo/features/page-frame";
 import type { PageLine } from "@repo/features/page-wire";
 import { TASK_STATUS, type Task, type TaskSummary } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import {
@@ -34,9 +34,10 @@ import { fakeAppPlatform } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, handCapabilities, withExperiments } from "../testing/app-state.js";
 import { editorBundleLanded } from "../testing/composer.js";
 import { restOn } from "../testing/hint-rest.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { agentsControl, listedTasksOf, tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 import { taskCardOf } from "./task-card.js";
@@ -57,7 +58,7 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: "acme/relay",
-  document: { body: "", assumptions: [] },
+  description: { body: "", assumptions: [] },
 };
 
 const SUMMARY: TaskSummary = {
@@ -79,7 +80,7 @@ const SUMMARY: TaskSummary = {
 function agent(id: string, title: string, status: AgentSummary["status"]): AgentSummary {
   return {
     id,
-    planId: TASK.id,
+    taskId: TASK.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title,
@@ -160,12 +161,15 @@ function taskDrawn(shown: Shown) {
   const base = tasksControl();
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     tasks: [shown.listed ?? SUMMARY],
     activeTaskId: TASK.id,
     region: {
-      kind: DOCUMENT_REGION.READY,
-      task: { ...TASK, document: { ...TASK.document, body: shown.body ?? TASK.document.body } },
+      kind: TASK_REGION.READY,
+      task: {
+        ...TASK,
+        description: { ...TASK.description, body: shown.body ?? TASK.description.body },
+      },
     },
     mainTabs: {
       ...base.mainTabs,
@@ -207,7 +211,7 @@ function taskDrawn(shown: Shown) {
   // The window's tasks' cards, as the shell hands them to everything it holds.
   const chipCards = {
     taskCard: (taskId: string, now: number) => {
-      const task = tasks.tasks.find((each) => each.id === taskId);
+      const task = listedTasksOf(tasks).find((each) => each.id === taskId);
 
       return task === undefined ? undefined : taskCardOf(tasks, task, now);
     },
@@ -219,7 +223,7 @@ function taskDrawn(shown: Shown) {
       createElement(
         ChipCards,
         { value: chipCards },
-        createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
+        overEveryTask(tasks, createElement(DesktopTasks, { looks: NO_LOOKS, tasks })),
       ),
     ),
   );

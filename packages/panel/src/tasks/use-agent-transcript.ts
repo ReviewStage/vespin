@@ -14,6 +14,7 @@ import {
   type AgentContext,
   type AgentFailure,
   type AgentPayer,
+  type AgentStandingCall,
   type AgentStatus,
   type AgentSubagentStanding,
   type AgentTranscriptMessage,
@@ -118,6 +119,8 @@ export interface AgentTranscriptControl {
   delegations: ReadonlyMap<string, number>;
   /** Where each of the agent's workers stands, by the call that started it, as its own session reads and the last page said; none on a worker's, and from a service older than it. */
   subagents: ReadonlyMap<string, AgentSubagentStanding>;
+  /** The voice calls standing on the agent, oldest first, as the last page said; none while none stands, and on a worker's. */
+  calls: readonly AgentStandingCall[];
   /** The messages queued behind the agent's turn and the queue's pause, as the last page said; none while none is queued, and on a worker's. */
   queue: AgentQueue | undefined;
   /** The member's messages on their way and those the service refused, as the host draws them until each one's row lands; none while none is, and on a worker's. */
@@ -142,6 +145,9 @@ const NO_MESSAGES: readonly AgentTranscriptMessage[] = [];
 
 /** No message on its way, as a transcript stands before the member sends one. */
 const NO_SENDING: readonly SendingMessage[] = [];
+
+/** No call stands on the agent. */
+const NO_CALLS: readonly AgentStandingCall[] = [];
 
 /**
  * One hold, as it is timed: when it was taken, the pages the transcript had
@@ -349,6 +355,7 @@ export function useAgentTranscript(input: {
     subagentTitles,
     delegations,
     subagents,
+    calls: word?.calls ?? NO_CALLS,
     queue: word?.queue,
     sending: held?.sending ?? NO_SENDING,
     boot: word?.boot,

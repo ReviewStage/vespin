@@ -1,0 +1,31 @@
+{
+  "name": "@repo/github",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Every request to GitHub's API, on Octokit over the Effect HttpClient: identities, throttling, rate-limit holds, the members' reserve, and conditional requests",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "types": "./src/index.ts",
+  "scripts": {
+    "test:vitest": "vitest run",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@octokit/auth-app": "8.3.1",
+    "@octokit/core": "7.0.8",
+    "@octokit/plugin-paginate-rest": "16.0.0",
+    "@octokit/plugin-throttling": "11.0.5",
+    "@octokit/types": "18.0.0",
+    "bottleneck": "2.19.5",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@repo/wire": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

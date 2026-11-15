@@ -44,13 +44,13 @@ import {
   type PullRequestActionRequest,
   type PullRequestViewedAnswer,
 } from "@repo/features/pull-request-write-wire";
-import { Effect, Option, type Redacted } from "effect";
-import type { HttpClient } from "effect/http";
+import { Effect, Option } from "effect";
 import {
   recordServerEvent,
   SERVER_EVENT,
   SERVER_PULL_REQUEST_ACTION,
 } from "../events/server-events.js";
+import type { GitHubBearer } from "../github/github-app.js";
 import {
   namedOverviewConversation,
   namedOverviewPullRequest,
@@ -157,7 +157,7 @@ const reachedAndAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /** One of the overview's reads of a pull request, on the token minted for its repository; null where GitHub holds no such pull request. */
 export type OverviewRead<A, R> = (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   subject: PullRequestSubject,
   pullRequest: AgentPullRequest,
   /** The member reading, whose own reads mark what is theirs. */
@@ -181,9 +181,9 @@ export const overviewPart = <A, R>(
     if (pullRequest === null || !hasRepository(agent)) return { pullRequest: null };
 
     const part = yield* Effect.gen(function* () {
-      const { token } = yield* agentPullRequestReach(userId, agent);
+      const { bearer } = yield* agentPullRequestReach(userId, agent);
 
-      return yield* read(token, agent, pullRequest, userId);
+      return yield* read(bearer, agent, pullRequest, userId);
     }).pipe(githubReadRefusal);
 
     // Note that a part may carry what is the reader's own, such as the reactions they gave or the review they hold pending, which every hosted answer's `private, no-store` keeps from anyone else.
@@ -202,8 +202,8 @@ function stackable(pullRequest: AgentPullRequest): boolean {
  * would not say, logged by its kind, since the header it rides with stands
  * without it.
  */
-const mergingOrNone = (token: Redacted.Redacted, repository: string, number: number) =>
-  pullRequestMerging(token, repository, number).pipe(
+const mergingOrNone = (bearer: GitHubBearer, repository: string, number: number) =>
+  pullRequestMerging(bearer, repository, number).pipe(
     Effect.catch((failure) =>
       Effect.as(logGitHubReadFailure(failure), Option.none<PullRequestMerging>()),
     ),
@@ -211,10 +211,10 @@ const mergingOrNone = (token: Redacted.Redacted, repository: string, number: num
 
 /** What the member may do to the pull request, read on their own token: edit its description, and merge it past its base's rules; nothing where they hold no sign-in GitHub takes. */
 const memberRights = (userId: string, repository: string, number: number) =>
-  Effect.flatMap(memberReadToken(userId), (token) =>
-    token === undefined
+  Effect.flatMap(memberReadToken(userId), (bearer) =>
+    bearer === undefined
       ? Effect.succeed(NO_VIEWER_RIGHTS)
-      : viewerRightsOf(token, repository, number),
+      : viewerRightsOf(bearer, repository, number),
   );
 
 /**
@@ -227,7 +227,7 @@ const memberRights = (userId: string, repository: string, number: number) =>
  * base's rules. None where the repository no longer holds it.
  */
 export const overviewPullRequestRead = (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   subject: PullRequestSubject,
   pullRequest: AgentPullRequest,
   userId: string,
@@ -237,8 +237,8 @@ export const overviewPullRequestRead = (
 
     const [read, merging, rights] = yield* Effect.all(
       [
-        pullRequestOverview(token, repository, pullRequest.number, stackable(pullRequest)),
-        mergingOrNone(token, repository, pullRequest.number),
+        pullRequestOverview(bearer, repository, pullRequest.number, stackable(pullRequest)),
+        mergingOrNone(bearer, repository, pullRequest.number),
         memberRights(userId, repository, pullRequest.number),
       ],
       { concurrency: "unbounded" },
@@ -257,15 +257,15 @@ export const overviewPullRequestRead = (
  * deployments.
  */
 export const overviewChecksRead = (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   subject: PullRequestSubject,
   pullRequest: AgentPullRequest,
 ) =>
   Effect.map(
     Effect.all(
       [
-        pullRequestChecks(token, subject.repository, pullRequest.number),
-        pullRequestDeployments(token, subject.repository, pullRequest.number),
+        pullRequestChecks(bearer, subject.repository, pullRequest.number),
+        pullRequestDeployments(bearer, subject.repository, pullRequest.number),
       ],
       { concurrency: "unbounded" },
     ),
@@ -274,14 +274,16 @@ export const overviewChecksRead = (
 
 /** Which reactions the member gave on the pull request, read on their own token; none where they hold none GitHub takes. */
 const memberReactions = (userId: string, repository: string, number: number) =>
-  Effect.flatMap(memberReadToken(userId), (token) =>
-    token === undefined ? Effect.succeed(undefined) : viewerReactionsOf(token, repository, number),
+  Effect.flatMap(memberReadToken(userId), (bearer) =>
+    bearer === undefined
+      ? Effect.succeed(undefined)
+      : viewerReactionsOf(bearer, repository, number),
   );
 
 /** The review the member holds pending on the pull request, read on their own token; none where they hold none, or no sign-in GitHub takes. */
 const memberPendingReview = (userId: string, repository: string, number: number) =>
-  Effect.flatMap(memberReadToken(userId), (token) =>
-    token === undefined ? Effect.succeed(null) : viewerPendingReviewOf(token, repository, number),
+  Effect.flatMap(memberReadToken(userId), (bearer) =>
+    bearer === undefined ? Effect.succeed(null) : viewerPendingReviewOf(bearer, repository, number),
   );
 
 /**
@@ -291,7 +293,7 @@ const memberPendingReview = (userId: string, repository: string, number: number)
  * member's own token, which reactions are theirs.
  */
 export const overviewConversationRead = (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   subject: PullRequestSubject,
   pullRequest: AgentPullRequest,
   userId: string,
@@ -301,7 +303,7 @@ export const overviewConversationRead = (
       [
         Effect.flatMap(
           pullRequestConversation(
-            token,
+            bearer,
             subject.repository,
             pullRequest,
             memberReactions(userId, subject.repository, pullRequest.number),
@@ -333,47 +335,47 @@ type RestActionRequest = Extract<
 /** The write a change makes on the pull request, on the member's token, by the pull request's GraphQL id. */
 function writeOf(
   request: Exclude<PullRequestActionRequest, RestActionRequest>,
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   id: string,
-): Effect.Effect<void, GitHubWriteFailure, HttpClient.HttpClient> {
+): Effect.Effect<void, GitHubWriteFailure> {
   switch (request.action) {
     case PULL_REQUEST_ACTION.READY_FOR_REVIEW:
-      return setPullRequestDraft(token, id, false);
+      return setPullRequestDraft(bearer, id, false);
     case PULL_REQUEST_ACTION.CONVERT_TO_DRAFT:
-      return setPullRequestDraft(token, id, true);
+      return setPullRequestDraft(bearer, id, true);
     case PULL_REQUEST_ACTION.MERGE:
-      return mergePullRequest(token, id, request.method, request.headSha);
+      return mergePullRequest(bearer, id, request.method, request.headSha);
     case PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE:
-      return setAutoMerge(token, id, { method: request.method, headSha: request.headSha });
+      return setAutoMerge(bearer, id, { method: request.method, headSha: request.headSha });
     case PULL_REQUEST_ACTION.DISABLE_AUTO_MERGE:
-      return setAutoMerge(token, id, undefined);
+      return setAutoMerge(bearer, id, undefined);
     case PULL_REQUEST_ACTION.DEQUEUE:
-      return takeOutOfMergeQueue(token, id);
+      return takeOutOfMergeQueue(bearer, id);
     case PULL_REQUEST_ACTION.CLOSE:
-      return setPullRequestOpen(token, id, false);
+      return setPullRequestOpen(bearer, id, false);
     case PULL_REQUEST_ACTION.REOPEN:
-      return setPullRequestOpen(token, id, true);
+      return setPullRequestOpen(bearer, id, true);
     case PULL_REQUEST_ACTION.EDIT_TITLE:
-      return setPullRequestTitle(token, id, request.title);
+      return setPullRequestTitle(bearer, id, request.title);
     case PULL_REQUEST_ACTION.EDIT_DESCRIPTION:
-      return setPullRequestDescription(token, id, request);
+      return setPullRequestDescription(bearer, id, request);
     case PULL_REQUEST_ACTION.SUBMIT_REVIEW:
-      return submitPullRequestReview(token, id, request);
+      return submitPullRequestReview(bearer, id, request);
     case PULL_REQUEST_ACTION.REPLY_TO_THREAD:
-      return replyToReviewThread(token, id, request);
+      return replyToReviewThread(bearer, id, request);
     case PULL_REQUEST_ACTION.RESOLVE_THREAD:
     case PULL_REQUEST_ACTION.UNRESOLVE_THREAD:
       return setReviewThreadResolved(
-        token,
+        bearer,
         id,
         request.threadId,
         request.action === PULL_REQUEST_ACTION.RESOLVE_THREAD,
       );
     case PULL_REQUEST_ACTION.COMMENT:
-      return commentOnPullRequest(token, id, request.body);
+      return commentOnPullRequest(bearer, id, request.body);
     case PULL_REQUEST_ACTION.ADD_REACTION:
     case PULL_REQUEST_ACTION.REMOVE_REACTION:
-      return reactOnPullRequest(token, id, {
+      return reactOnPullRequest(bearer, id, {
         subject: request.subject,
         content: GRAPHQL_REACTION_OF[request.content],
         add: request.action === PULL_REQUEST_ACTION.ADD_REACTION,
@@ -381,25 +383,25 @@ function writeOf(
     case PULL_REQUEST_ACTION.ADD_REVIEW_COMMENT: {
       const { action: _action, ...comment } = request;
 
-      return addLineComment(token, id, comment);
+      return addLineComment(bearer, id, comment);
     }
 
     case PULL_REQUEST_ACTION.DISCARD_REVIEW:
-      return discardPendingReview(token, id);
+      return discardPendingReview(bearer, id);
     case PULL_REQUEST_ACTION.EDIT_REVIEW_COMMENT:
-      return editPendingComment(token, id, request);
+      return editPendingComment(bearer, id, request);
     case PULL_REQUEST_ACTION.DELETE_REVIEW_COMMENT:
-      return deletePendingComment(token, id, request.commentId);
+      return deletePendingComment(bearer, id, request.commentId);
     case PULL_REQUEST_ACTION.MARK_FILE_VIEWED:
     case PULL_REQUEST_ACTION.UNMARK_FILE_VIEWED:
       return setFileViewed(
-        token,
+        bearer,
         id,
         request.path,
         request.action === PULL_REQUEST_ACTION.MARK_FILE_VIEWED,
       );
     case PULL_REQUEST_ACTION.TICK_TASK:
-      return tickTask(token, id, request);
+      return tickTask(bearer, id, request);
   }
 }
 
@@ -422,15 +424,13 @@ function countedAction(request: PullRequestActionRequest) {
 /** The write a change makes on the pull request, on the member's token. */
 export function actionWrite(
   request: PullRequestActionRequest,
-): (
-  pullRequest: MemberPullRequest,
-) => Effect.Effect<void, GitHubWriteFailure, HttpClient.HttpClient> {
-  return ({ token, repository, number }) => {
+): (pullRequest: MemberPullRequest) => Effect.Effect<void, GitHubWriteFailure> {
+  return ({ bearer, repository, number }) => {
     switch (request.action) {
       case PULL_REQUEST_ACTION.REQUEST_REVIEW:
       case PULL_REQUEST_ACTION.REMOVE_REVIEW_REQUEST:
         return setReviewRequested(
-          token,
+          bearer,
           repository,
           number,
           request.reviewer,
@@ -439,15 +439,15 @@ export function actionWrite(
       case PULL_REQUEST_ACTION.ADD_LABEL:
       case PULL_REQUEST_ACTION.REMOVE_LABEL:
         return setLabeled(
-          token,
+          bearer,
           repository,
           number,
           request.label,
           request.action === PULL_REQUEST_ACTION.ADD_LABEL,
         );
       default:
-        return Effect.flatMap(pullRequestNodeId(token, repository, number), (id) =>
-          writeOf(request, token, id),
+        return Effect.flatMap(pullRequestNodeId(bearer, repository, number), (id) =>
+          writeOf(request, bearer, id),
         );
     }
   };
@@ -515,7 +515,7 @@ export const actionOnAgentPullRequest = /* @__PURE__ */ Effect.fnUntraced(functi
 
 /** Which of the pull request's files the member marked viewed, read as a write is made, on their own token. */
 export const viewedRead = (member: MemberPullRequest) =>
-  pullRequestViewedStates(member.token, member.repository, member.number);
+  pullRequestViewedStates(member.bearer, member.repository, member.number);
 
 /** How the read of the viewed marks went, as the wire answers it. */
 export function viewedAnswerOf(

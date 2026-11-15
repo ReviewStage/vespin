@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
 import { it } from "@effect/vitest";
 import {
   AGENT_CALL_FAILURE,
@@ -9,19 +10,25 @@ import {
 import {
   AGENT_STATUS,
   type AgentPullRequest,
+  type AgentStatus,
   CHECK_SUMMARY,
+  type ListedAgent,
   MERGE_STATE,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
+import { listedAgentOf } from "@repo/features/task-list-live";
 import { Effect, PubSub, Stream } from "effect";
 import { type AppPullRequestParts, OWN_PULL_REQUEST } from "./app-state.js";
+import type { ListMove } from "./list-moves.js";
 import {
+  type ListDrawing,
   type PullRequestKey,
   type PullRequestListing,
   pullRequestParts,
 } from "./pull-request-parts.js";
+import { agentListRow } from "./testing/task-list-rows.js";
 import { windowFocus } from "./window-focus.js";
 
 /**
@@ -73,20 +80,55 @@ function overview(url: string, number: number): AgentOverviewPullRequestAnswerVi
   };
 }
 
+/** An agent of the list as it lists it, in `status`. */
+function agent(id: string, status: AgentStatus): ListedAgent {
+  return { ...listedAgentOf(agentListRow(TASK, 1_000), true, undefined), id, status };
+}
+
 /** The list with the agent working on its own pull request, and the reviewer's pull request beside it. */
 function listing(
   moved: { own?: Partial<AgentPullRequest>; other?: Partial<AgentPullRequest> } = {},
-  status: (typeof AGENT_STATUS)[keyof typeof AGENT_STATUS] = AGENT_STATUS.RUNNING,
-): PullRequestListing {
+  status: AgentStatus = AGENT_STATUS.RUNNING,
+): ListDrawing {
   return {
-    statuses: new Map([
-      [AGENT, status],
-      [REVIEWER, AGENT_STATUS.COMPLETED],
-    ]),
-    pullRequests: [
+    taskAgents: [agent(AGENT, status), agent(REVIEWER, AGENT_STATUS.COMPLETED)],
+    agentPullRequests: [
       { agentId: AGENT, taskId: TASK, pullRequest: line(OWN, 42, moved.own) },
       { agentId: REVIEWER, taskId: TASK, pullRequest: line(OTHER, 7, moved.other) },
     ],
+  };
+}
+
+/** Each row of `after` that is not equal to the one of `before` keyed alike, and each of `before` that `after` lets go, as the list's live queries tell them. */
+function movesOf<Row>(
+  before: readonly Row[],
+  after: readonly Row[],
+  keyOf: (row: Row) => string,
+): ListMove<Row>[] {
+  const was = new Map(before.map((row) => [keyOf(row), row]));
+  const now = new Map(after.map((row) => [keyOf(row), row]));
+
+  return [...new Set([...was.keys(), ...now.keys()])].flatMap((key) => {
+    const move = { was: was.get(key), now: now.get(key) };
+
+    return isDeepStrictEqual(move.was, move.now) ? [] : [move];
+  });
+}
+
+/** The listing of the drawing `after`, told what moved since `before`, or whole where it is the first. */
+function listingOf(before: ListDrawing | undefined, after: ListDrawing): PullRequestListing {
+  if (before === undefined) {
+    return {
+      whole: true,
+      agents: [],
+      pullRequests: after.agentPullRequests.map((now) => ({ was: undefined, now })),
+    };
+  }
+
+  return {
+    whole: false,
+    agents: movesOf(before.taskAgents, after.taskAgents, (row) => row.id),
+    pullRequests: movesOf(before.agentPullRequests, after.agentPullRequests, (row) => row.agentId),
   };
 }
 
@@ -160,11 +202,19 @@ function subject(failing: Set<PullRequestPart> = new Set()) {
       },
     });
 
+    let drawnBefore: ListDrawing | undefined;
+
     return {
       parts,
       asked,
       told,
-      draw: (drawn: PullRequestListing) => Effect.andThen(PubSub.publish(drawings, drawn), settled),
+      draw: (drawn: ListDrawing) =>
+        Effect.suspend(() => {
+          const told = listingOf(drawnBefore, drawn);
+          drawnBefore = drawn;
+
+          return Effect.andThen(PubSub.publish(drawings, told), settled);
+        }),
       /** Holds every part of the agent's own pull request, and of the reviewer's that its tab names by number, for the caller's scope. */
       holdBoth: Effect.andThen(
         Effect.forEach(PARTS, (part) =>
@@ -232,7 +282,7 @@ it.effect(
       const listed = listing();
       yield* draw({
         ...listed,
-        pullRequests: listed.pullRequests.filter((each) => each.agentId !== AGENT),
+        agentPullRequests: listed.agentPullRequests.filter((each) => each.agentId !== AGENT),
       });
       asked.length = 0;
 

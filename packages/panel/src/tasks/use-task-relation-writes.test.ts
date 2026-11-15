@@ -37,7 +37,7 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: null,
-  document: { body: "# Teammate invitations", assumptions: [] },
+  description: { body: "# Teammate invitations", assumptions: [] },
 };
 
 let root: Root | undefined;
@@ -62,7 +62,7 @@ test("Connect GitHub under a task opens Settings on its workspace's GitHub, read
         workspaces: [ACME],
         activeTaskId: TASK.id,
       },
-      [LIVE_READ.DESCRIPTION_DOCUMENT]: { [TASK.id]: { rows: { task: TASK } } },
+      [LIVE_READ.HELD_TASK]: { [TASK.id]: { rows: { task: TASK } } },
     },
   );
   await writeHandedAppState();

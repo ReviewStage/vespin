@@ -10,8 +10,8 @@ import {
   type ListedAgent,
 } from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
-import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
+import type { TaskSummary } from "@repo/features/task-wire";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import type {
   AppHostRead,
   AppInboxSlice,
@@ -305,7 +305,7 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     onDraftChange: ignore,
     onHandDraft: ignore,
     onTaskStarted: ignore,
-    onDraftAttachments: ignore,
+    onDraftHeld: ignore,
     onDiscardDraft: ignore,
     startPrompt: () => Promise.resolve(undefined),
     startFork: () => Promise.resolve(undefined),
@@ -475,29 +475,42 @@ export function newTaskControl(overrides: Partial<NewTask> = {}): NewTask {
     modelsRead: { state: MODELS_READ.UNREAD, generation: 0 },
     readModels: ignore,
     onClose: ignore,
-    tasks: [],
+    typedNames: new Map(),
     onShowMention: ignore,
     ...overrides,
   };
+}
+
+/** What a test sets of a Tasks tab, and the tasks its window's task list holds (`tasks`), which the tab itself never carries. */
+export type TasksControlOverrides = Partial<TasksControl> & {
+  readonly tasks?: readonly TaskSummary[];
+};
+
+/** A Tasks tab a test draws, and the tasks its window's task list holds, which `overEveryTask` stands the window's collections on. */
+export type ListingTasksControl = TasksControl & { readonly listedTasks: readonly TaskSummary[] };
+
+/** No task listed: what a tab built otherwise than by `tasksControl` lists. */
+const NO_LISTED: readonly TaskSummary[] = [];
+
+/** The tasks a test's tab lists (`tasksControl`'s `tasks`), carried along any copy spread from it; none for a tab built otherwise. */
+export function listedTasksOf(tasks: TasksControl): readonly TaskSummary[] {
+  return "listedTasks" in tasks && Array.isArray(tasks.listedTasks) ? tasks.listedTasks : NO_LISTED;
 }
 
 /**
  * A signed-in Tasks tab on screen on Home with no tasks, every
  * press ignored, bound for whichever task it is given as open.
  */
-export function tasksControl(overrides: Partial<TasksControl> = {}): TasksControl {
-  const onMoveTask: TasksControl["onMoveTask"] =
-    overrides.onMoveTask ?? (() => Promise.resolve(false));
+export function tasksControl(overrides: TasksControlOverrides = {}): ListingTasksControl {
+  const { tasks: listedTasks = [], ...set } = overrides;
+  const onMoveTask: TasksControl["onMoveTask"] = set.onMoveTask ?? (() => Promise.resolve(false));
 
   return {
     page: TASKS_PAGE.HOME,
     shown: true,
     signedIn: true,
     me: undefined,
-    tasks: [],
-    listed: {
-      tasks: overrides.tasks ?? [],
-    },
+    typedNames: new Map(),
     workspaces: [],
     workspace: undefined,
     onChooseWorkspace: ignore,
@@ -508,11 +521,11 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
       onMoveTask(taskId, workspaceId, { quiet }),
     ),
     activeTaskId: undefined,
-    boundFor: overrides.activeTaskId,
+    boundFor: set.activeTaskId,
     onPointTask: () => {},
     listFailed: false,
     listRead: true,
-    region: { kind: DOCUMENT_REGION.NONE },
+    region: { kind: TASK_REGION.NONE },
     copy: { onPress: ignore },
     mainTabs: {
       tabs: [MAIN_TAB.OVERVIEW],
@@ -641,12 +654,14 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     onGoHome: ignore,
     onLeaveRouted: ignore,
     onUnbindTask: ignore,
-    drawnTasks: () => ({ ...IDLE_TASKS_VIEW, tasks: overrides.tasks ?? [] }),
+    typedNamesNow: () => set.typedNames ?? new Map(),
     onDraftName: ignore,
     liveAgents: [],
     listedPullRequests: undefined,
     back: () => false,
     placeLeave: NO_LEAVE_ASK,
-    ...overrides,
+    ...set,
+    // Note that the tasks given are laid last, over those a tab spread into `overrides` listed.
+    listedTasks,
   };
 }

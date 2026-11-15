@@ -129,7 +129,7 @@ export function taskTreeQueryOptions(
         : () =>
             askAct(ACT_KIND.TASKS_TREE, {
               // Note that a task's tree is asked for by its plan, and a repository's by its workspace.
-              ...("taskId" in place ? { planId: place.taskId } : place),
+              ...("taskId" in place ? { taskId: place.taskId } : place),
               path,
               ...(recursive ? { recursive } : undefined),
             }).then(landedTree),

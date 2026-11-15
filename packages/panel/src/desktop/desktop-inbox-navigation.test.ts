@@ -104,7 +104,7 @@ test("the Inbox draws each task held whole by the account's feed from it, follow
 
   for (const task of [BILLING, INVITES]) {
     assert.equal(
-      world.main.isFollowed({ kind: INBOX_SCOPE_KIND.PLAN, id: task.id }),
+      world.main.isFollowed({ kind: INBOX_SCOPE_KIND.TASK, id: task.id }),
       false,
       `${task.name} is drawn from the feed alone`,
     );
@@ -345,7 +345,7 @@ test("an item opened at its address alone, as a reloaded window opens it, gives 
       request.kind === ACT_KIND.AGENTS_INBOX_ITEM_HOME
         ? Promise.resolve({
             status: FAKE_ANSWER.DONE,
-            value: { planId: BILLING.id, agentId: AGENT.id, workspaceId: ACME.id },
+            value: { taskId: BILLING.id, agentId: AGENT.id, workspaceId: ACME.id },
           })
         : previous(request),
   });

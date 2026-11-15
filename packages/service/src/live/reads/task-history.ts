@@ -6,7 +6,7 @@
  * page stands, with the member and the agent as their rows name them now,
  * and the revision a restore brought back, under the same account and rule
  * of who may read it, so a task the account does not reach is no rows. It
- * reads no clock, as Realtime requires. Older pages are read through
+ * reads no clock, as a live read must (`live-statement.ts`). Older pages are read through
  * `listRevisions`.
  *
  * It is woken by a revision written or moved on, and by the task and its

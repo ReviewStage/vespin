@@ -88,6 +88,8 @@ import {
   COMPLETED_WINDOW,
   LIST_COLUMN,
   type ListColumn,
+  mayHoldSettled,
+  settledRowsDrawn,
   TASK_PROPERTY,
   TASKS_GROUP,
   TASKS_GROUPING,
@@ -112,6 +114,7 @@ import {
   memo,
   type ReactNode,
   type RefObject,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -127,6 +130,7 @@ import { useBoardDoor } from "../places/routed-doors.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
 import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
@@ -538,10 +542,13 @@ interface ListDrops {
  * leaves Pinned or its section where it came from one, as the sidebar keeps
  * a task in one place. Each lands at once; a status, priority, or assignee
  * the service refuses goes back, and so does the row, to Pinned or its
- * section, as the tab reads when the refusal comes (`latest`).
+ * section, as the tab reads when the refusal comes (`latest`). A row put
+ * back in Pinned is placed among every pin of `listed`, the listed
+ * workspace's tasks.
  */
 function listDrops(
   tasks: ListTasks,
+  listed: readonly TaskSummary[],
   latest: () => ListTasks,
   groups: readonly TasksGroup[],
   setStanding: (task: TaskSummary, standing: TaskStanding, onRefused?: () => void) => void,
@@ -596,7 +603,7 @@ function listDrops(
     const before = tasks.taskSections;
 
     const allPins = inPinOrder(
-      tasks.listed.tasks.filter((each) => each.pinnedAt !== undefined),
+      listed.filter((each) => each.pinnedAt !== undefined),
       pinPlaceOf,
     );
 
@@ -790,6 +797,7 @@ function TasksListGroup({
   drops,
   draggable,
   onShowOlder,
+  onSettledEnd,
   tasks,
   properties,
   place,
@@ -805,6 +813,8 @@ function TasksListGroup({
   draggable: boolean;
   /** Shows every settled task, as the group's "+ N older" line asks. */
   onShowOlder: () => void;
+  /** Hears the list come to its end, where the group may hold settled tasks, which reads the next page of them (`use-settled-pages.ts`). */
+  onSettledEnd: ((atEnd: boolean) => void) | undefined;
   tasks: TasksControl;
   /** The cells the rows draw, which a quick add's line stands its own on. */
   properties: readonly TaskRowCell[];
@@ -881,6 +891,7 @@ function TasksListGroup({
             handle={run}
             measurements={measured?.get(runKey)}
             onMeasurements={(rows) => measured?.set(runKey, rows)}
+            onAtEnd={onSettledEnd}
           >
             {(index, at) => {
               const entry = drawn[index];
@@ -957,7 +968,7 @@ export function TasksList({
   frame: TasksViewFrame;
 }): React.JSX.Element {
   // The tab with the pins and sections beside it, which the List's groups and drops read; its rows read the tab alone.
-  const pins = usePins(tasks.drawnTasks);
+  const pins = usePins(tasks.typedNamesNow);
   const listTasks: ListTasks = { ...tasks, ...pins };
   const pictures = useRepositoryPictures();
   useAppCommand(APP_COMMAND.EXIT_BOARD, useBoardDoor(tasks).close);
@@ -970,7 +981,8 @@ export function TasksList({
   // Note that a finger's rows draw no ⋯, as a phone's mail list draws none, so their names keep the room: a long press opens a row's menu.
   const more = !useCoarsePointer();
   const [listElement, setListElement] = useState<HTMLDivElement | null>(null);
-  const subTaskCounts = useMemo(() => childTaskCounts(tasks.listed.tasks), [tasks.listed.tasks]);
+  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
+  const subTaskCounts = useMemo(() => childTaskCounts(listed), [listed]);
 
   // The columns its display chose, and the sub-tasks' count beside them where any task has sub-tasks, folded for its own width (`fitted-columns.ts`).
   const chosen = useMemo(
@@ -980,7 +992,6 @@ export function TasksList({
   );
 
   const properties = useFittedColumns<ListColumn>(listElement, chosen, { narrow });
-  const listed = tasks.listed.tasks;
 
   const pinned = inPinOrder(
     listed.filter((task) => task.pinnedAt !== undefined),
@@ -1008,6 +1019,7 @@ export function TasksList({
   // While the page is shown each task keeps the group and the place it was first drawn in, so one a teammate's change would move stays under the reader's eye.
   const groups = useHeldTasks(
     tasks,
+    listed,
     { workspaceId: tasks.workspace?.id, filter, display },
     (standing) =>
       tasksListGroups(standing, {
@@ -1022,6 +1034,14 @@ export function TasksList({
         now,
       }),
   );
+
+  // Note that a view drawing no row a settled task may stand in has no run to come to its end, so it tells the paging so, which reads on until one draws or the last is read (`use-settled-pages.ts`).
+  const drawsSettled = settledRowsDrawn(groups);
+  const onDrawn = frame.settledPages?.onDrawn;
+
+  useEffect(() => {
+    onDrawn?.(drawsSettled);
+  }, [drawsSettled, groups, onDrawn]);
 
   // Note that every door a row is handed stands across draws, so a row held while what it is handed does (`memo`) holds.
   const standingDoor = useStandingDoor(tasks);
@@ -1061,7 +1081,7 @@ export function TasksList({
   // The tab as it stands, which an Undo pressed or a refusal answered renders after its act reads.
   const latest = useRef(listTasks);
   latest.current = listTasks;
-  const drops = listDrops(listTasks, () => latest.current, groups, setStanding);
+  const drops = listDrops(listTasks, listed, () => latest.current, groups, setStanding);
   const list = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement | null>(null);
 
@@ -1197,6 +1217,9 @@ export function TasksList({
                     draggable={!narrow}
                     onShowOlder={() =>
                       frame.onDisplay({ ...display, completed: COMPLETED_WINDOW.ALL })
+                    }
+                    onSettledEnd={
+                      mayHoldSettled(group.head) ? frame.settledPages?.onRunEnd : undefined
                     }
                     tasks={tasks}
                     properties={properties}
