@@ -20,7 +20,8 @@ onFlowComplete:
           text: "Recorded the invite flow"
           retryTapIfNoChange: false
           label: "T:inbox-row"
-      - assertVisible: ".*walked the invite flow.*"
+      # Note that a re-picked thread opens scrolled to its newest message, so the assert reads a line at its foot.
+      - assertVisible: "The test plan I followed:"
       - waitForAnimationToEnd:
           timeout: 3000
       - tapOn:
