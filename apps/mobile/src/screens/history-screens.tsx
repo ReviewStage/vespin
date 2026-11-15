@@ -288,10 +288,19 @@ export function Version({
   const answer = version.data;
   const read = answer === undefined || "failure" in answer ? undefined : answer.revision;
 
-  // A version struck a picture as well as wrote one in, so both texts name the pictures it draws.
-  const { pictureSource, videoAt } = useDescriptionPictures(
-    read === undefined ? undefined : `${read.description.body}\n${read.previous?.body ?? ""}`,
-  );
+  // Note that the version and the one before it are each read for their pictures on their own, since a section struck from the one before draws through that version's own reference definitions, which share names with the version's.
+  const shownPictures = useDescriptionPictures(read?.description.body);
+  const struckPictures = useDescriptionPictures(read?.previous?.body);
+
+  // Note that a picture the version itself names keeps what its own read says, `null` where it cannot be drawn among it, and only one it never named is asked of the version before.
+  const pictureSource = (written: string) => {
+    const shown = shownPictures.pictureSource(written);
+
+    return shown === undefined ? struckPictures.pictureSource(written) : shown;
+  };
+
+  const videoAt = (written: string) =>
+    shownPictures.videoAt(written) ?? struckPictures.videoAt(written);
 
   const restore = () => {
     if (restoring) return;

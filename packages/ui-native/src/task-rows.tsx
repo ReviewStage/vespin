@@ -560,8 +560,13 @@ const CHANGE_BAR = {
   { readonly color: keyof BrandColors; readonly dimmed: boolean }
 >;
 
-/** How far a struck section's words fade, as the panel draws them in its quiet ink. */
-const STRUCK_OPACITY = 0.55;
+/**
+ * How far a struck section's words fade, as the panel draws them in its quiet
+ * ink. Note that it fades no further than keeps the body's ink at WCAG's
+ * 4.5:1 on the ground, in the light theme and the dark: about 5:1 on white
+ * and 6.7:1 on near-black.
+ */
+const STRUCK_OPACITY = 0.62;
 
 /** How wide a changed section's bar stands, in points. */
 const CHANGE_BAR_WIDTH = 3;
