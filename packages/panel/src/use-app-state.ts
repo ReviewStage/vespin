@@ -51,6 +51,7 @@ export {
   selectSettingsHeld,
   selectSignedIn,
   selectStoredExperimentChoices,
+  selectTaskListStanding,
   selectTaskSendRefused,
   selectTasks,
   selectVoiceCall,
@@ -251,6 +252,28 @@ export const selectListedTasks = (state: AppStateSnapshot): TasksView =>
 /** Whether a fixture run's synthetic tasks stand in for the account's, so its writes go nowhere. */
 export const selectFixtureStaged = (state: AppStateSnapshot): boolean =>
   loadedTasksFixture()?.fixtureTasksView(state.run) !== undefined;
+
+/** Where the task list stands on its agents: carried, which it is only once followed live, failed before it was, or still being read. */
+export const AGENTS_LISTED = {
+  CARRIED: "carried",
+  FAILED: "failed",
+  READING: "reading",
+} as const;
+
+export type AgentsListed = (typeof AGENTS_LISTED)[keyof typeof AGENTS_LISTED];
+
+/**
+ * Where the task list the window lists from stands on its agents, which the
+ * collections (`task-list-collections.tsx`) cannot say, since they hold a
+ * list not yet carried as one with no rows.
+ */
+export const selectAgentsListed = (state: AppStateSnapshot): AgentsListed => {
+  const listed = selectListedTasks(state);
+
+  if (listed.taskAgents !== undefined) return AGENTS_LISTED.CARRIED;
+
+  return listed.listStatus === TASKS_READ.FAILED ? AGENTS_LISTED.FAILED : AGENTS_LISTED.READING;
+};
 
 /** Whether the last read of the workspaces the window lists did not land, those held still drawn. */
 export const selectWorkspacesFailed = (state: AppStateSnapshot): boolean =>

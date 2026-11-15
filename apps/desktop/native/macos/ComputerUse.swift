@@ -28,7 +28,10 @@ import UniformTypeIdentifiers
 ///   quality. Its numbers stand until the next `get_app_state` of that app.
 /// - `click`, `type_text`, `press_key`, `scroll`, `drag`, `set_value`,
 ///   `perform_secondary_action`: act on the app by an element's number or by
-///   a point in the first screenshot's pixels.
+///   a point in the first screenshot's pixels. Where the request asks for a
+///   `shot {edge, quality}`, the answer carries the read's window as the
+///   action left it, once it settled, for the people watching the agent; an
+///   action whose window can't be captured so answers without it.
 /// - `record {app, max_seconds, max_bytes}`: starts recording the app's
 ///   window as an H.264 MP4, the agent's cursor drawn over it, until
 ///   `stop_recording` or `max_seconds`, whichever comes first.
@@ -1354,6 +1357,53 @@ private func performSecondaryAction(_ request: [String: Any]) async throws -> [S
     return actedAnswer("performed", cursorAt: cursorAt, on: current)
 }
 
+// MARK: - The window after an action
+
+/// How long an action is given to settle before its window is captured: a quarter second is macOS's standard
+/// animation (`NSAnimationContext`'s default duration), so a pressed button's highlight, a menu opening, or a sheet
+/// sliding in has drawn by then, with a few frames to spare, while the agent waits no longer than a glance.
+private let SETTLE_SECONDS = 0.3
+
+/**
+ The window an action acted on as it settled, at the edge and quality the
+ request's `shot` asks for; nothing where it asks for none, or where the
+ window the read captured can't be captured again as it stood, as when the
+ action closed it, moved it, or sent it to another Space. Note that a moved
+ window is passed over, because the agent's cursor is answered as a share of
+ the read's window, and over a picture of another frame it would land on the
+ wrong spot; the next read catches the preview up.
+ */
+private func settledShot(_ request: [String: Any], on current: AppSession) async -> [String: Any]? {
+    guard let asked = request["shot"] as? [String: Any] else { return nil }
+    try? await Task.sleep(nanoseconds: UInt64(SETTLE_SECONDS * 1_000_000_000))
+    guard
+        CGPreflightScreenCaptureAccess(),
+        let content = try? await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true),
+        let window = content.windows.first(where: { $0.windowID == current.windowID }),
+        sameFrame(window.frame, current.windowFrame),
+        let image = try? await capture(window)
+    else { return nil }
+    return jpegBase64(
+        image, edge: min(max(integer(asked, "edge") ?? 2560, MIN_SHOT_EDGE), 4096),
+        quality: min(max(number(asked, "quality") ?? 0.8, 0.1), 1))
+}
+
+/// An action that can change its app's window, its answer carrying the window as it settled where the request asks
+/// for it. Note that the picture never fails the action, which has already landed: one that can't be taken is left out.
+private func settling(
+    _ action: @escaping ([String: Any]) async throws -> [String: Any]
+) -> ([String: Any]) async throws -> [String: Any] {
+    { request in
+        var answer = try await action(request)
+        guard
+            let app = try? actedApp(request), let current = sessions[app.processIdentifier],
+            let shot = await settledShot(request, on: current)
+        else { return answer }
+        answer["shot"] = shot
+        return answer
+    }
+}
+
 // MARK: - Recording
 
 /// The most frames a second a recording keeps, as the window draws them: a still window draws none, and its last frame holds.
@@ -1847,13 +1897,13 @@ private let OPERATIONS: [String: ([String: Any]) async throws -> [String: Any]] 
     "list_installed_apps": { _ in listInstalledApps() },
     "describe_app": describeApp,
     "get_app_state": getAppState,
-    "click": click,
-    "type_text": typeText,
-    "press_key": pressKey,
-    "scroll": scroll,
-    "drag": drag,
-    "set_value": setValue,
-    "perform_secondary_action": performSecondaryAction,
+    "click": settling(click),
+    "type_text": settling(typeText),
+    "press_key": settling(pressKey),
+    "scroll": settling(scroll),
+    "drag": settling(drag),
+    "set_value": settling(setValue),
+    "perform_secondary_action": settling(performSecondaryAction),
     "record": record,
     "stop_recording": stopRecording,
     "release_cursor": { _ in

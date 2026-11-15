@@ -2,6 +2,7 @@
 
 import {
   Divider,
+  HStack,
   Menu,
   NavigationDestination,
   NavigationSplitView,
@@ -23,16 +24,18 @@ import {
   disabled,
   frame,
   hidden,
+  ignoreSafeArea,
   type ModifierConfig,
   menuIndicator,
   menuStyle,
   navigationSplitViewStyle,
   navigationTitle,
+  overlay,
   searchable,
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { type ReactElement, type ReactNode, useEffect } from "react";
+import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { BarContent } from "./bar-content.js";
 import type { Scope } from "./button.js";
@@ -127,8 +130,8 @@ export type BarPath = {
  * What a column's bar holds: its title, small and inline as every screen's
  * stands, which the back button and the reader name it by; what leads it
  * (a SwiftUI view such as the workspace switcher), a page's path in its
- * middle, its menu and its act at its trailing edge, such as a list's
- * New task, a search field over its list, and the acts at its foot, in its
+ * middle, its menu and its act at its trailing edge, such as Select mode's
+ * Done, a search field over its list, and the acts at its foot, in its
  * bottom bar.
  */
 export type ColumnBar = {
@@ -184,6 +187,9 @@ type SplitViewProps = {
 
 /** One page pushed over a split view's detail, by the key its stack's path names it by, drawn by its `DetailPage`. */
 export type DetailStackPage = { readonly key: string; readonly view: ReactNode };
+
+/** How long a detail's stack stands after its last page is popped, a little past UIKit's own pop, before the plain column takes its place. */
+const POP_SETTLE_MS = 500;
 
 /**
  * The pages pushed over a split view's detail, oldest first: the path of
@@ -375,6 +381,8 @@ function Column({
 }) {
   const colors = useColors();
   const text = useSearchWords(bar.search, searchKey);
+  // Note that a list standing first, as a portrait iPad's, ends in a hairline beside the detail, as Mail's message list does, because both columns paint one ground and the system's sidebar column draws no edge of its own.
+  const ruled = sidebar && !clear;
 
   const stacked = (
     <ZStack
@@ -388,7 +396,7 @@ function Column({
             ]),
         // Note that a page in the detail's own stack paints the stack's ground too, because a navigation stack stands the system's own color behind each of its pages.
         ...(inStack ? [containerBackground(colors.GROUND, "navigation")] : []),
-        // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, compose, ⋯ and the sidebar button, and a leading title folds them into an overflow. A page pushed over the detail names itself small and inline, as a stack's page does. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
+        // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A page pushed over the detail names itself small and inline, as a stack's page does. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title !== undefined
           ? [
               navigationTitle(bar.title),
@@ -399,7 +407,20 @@ function Column({
             : [toolbarTitleDisplayMode("inline")]),
       ]}
     >
-      {view}
+      {ruled ? (
+        <HStack spacing={0}>
+          <ZStack>{view}</ZStack>
+          {/* Note that the rule runs the column's whole height, under its bar and over the home indicator, as the column's ground does and Mail's rule does. */}
+          <Divider
+            modifiers={[
+              overlay({ color: colors.CHIP_EDGE }),
+              ignoreSafeArea({ edges: "vertical" }),
+            ]}
+          />
+        </HStack>
+      ) : (
+        view
+      )}
     </ZStack>
   );
 
@@ -486,11 +507,30 @@ function DetailStackColumn({
   readonly rootBar: ColumnBar | undefined;
 }) {
   const { pages, onPathChange } = stack;
+  const empty = pages.length === 0;
+  // The pages last pushed, kept mounted while the stack finishes popping them.
+  const [held, hold] = useState(pages);
+  // Whether the last pop has had time to finish, so the plain column may take the stack's place.
+  const [settled, settle] = useState(empty);
+
+  if (!empty && held !== pages) hold(pages);
+
+  if (!empty && settled) settle(false);
+
+  useEffect(() => {
+    if (!empty) return;
+    const timer = setTimeout(() => settle(true), POP_SETTLE_MS);
+
+    return () => clearTimeout(timer);
+  }, [empty]);
+
+  // Note that a detail with nothing pushed over it stands as a plain column, since a thread's React Native hosts drew no words as a stack's root; the stack stands on through a pop, its pages still mounted, because SwiftUI writes the emptied path as the pop starts, and taking the stack out then left the column on the popped page's bar with no root.
+  if (empty && settled) return <Column view={root} bar={rootBar} />;
 
   return (
     <NavigationStack path={pages.map((page) => page.key)} onPathChange={onPathChange}>
       <Column view={root} bar={rootBar} stacked />
-      {pages.map((page) => (
+      {(empty ? held : pages).map((page) => (
         <NavigationDestination key={page.key} value={page.key}>
           {page.view}
         </NavigationDestination>
