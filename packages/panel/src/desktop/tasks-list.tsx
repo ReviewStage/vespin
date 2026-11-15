@@ -130,6 +130,7 @@ import { useBoardDoor } from "../places/routed-doors.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
+import { useListedTasks } from "../task-list-collections.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
 import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
@@ -541,10 +542,13 @@ interface ListDrops {
  * leaves Pinned or its section where it came from one, as the sidebar keeps
  * a task in one place. Each lands at once; a status, priority, or assignee
  * the service refuses goes back, and so does the row, to Pinned or its
- * section, as the tab reads when the refusal comes (`latest`).
+ * section, as the tab reads when the refusal comes (`latest`). A row put
+ * back in Pinned is placed among every pin of `listed`, the listed
+ * workspace's tasks.
  */
 function listDrops(
   tasks: ListTasks,
+  listed: readonly TaskSummary[],
   latest: () => ListTasks,
   groups: readonly TasksGroup[],
   setStanding: (task: TaskSummary, standing: TaskStanding, onRefused?: () => void) => void,
@@ -599,7 +603,7 @@ function listDrops(
     const before = tasks.taskSections;
 
     const allPins = inPinOrder(
-      tasks.listed.tasks.filter((each) => each.pinnedAt !== undefined),
+      listed.filter((each) => each.pinnedAt !== undefined),
       pinPlaceOf,
     );
 
@@ -977,7 +981,8 @@ export function TasksList({
   // Note that a finger's rows draw no ⋯, as a phone's mail list draws none, so their names keep the room: a long press opens a row's menu.
   const more = !useCoarsePointer();
   const [listElement, setListElement] = useState<HTMLDivElement | null>(null);
-  const subTaskCounts = useMemo(() => childTaskCounts(tasks.listed.tasks), [tasks.listed.tasks]);
+  const listed = useListedTasks(tasks.workspace?.id, tasks.typedNames);
+  const subTaskCounts = useMemo(() => childTaskCounts(listed), [listed]);
 
   // The columns its display chose, and the sub-tasks' count beside them where any task has sub-tasks, folded for its own width (`fitted-columns.ts`).
   const chosen = useMemo(
@@ -987,7 +992,6 @@ export function TasksList({
   );
 
   const properties = useFittedColumns<ListColumn>(listElement, chosen, { narrow });
-  const listed = tasks.listed.tasks;
 
   const pinned = inPinOrder(
     listed.filter((task) => task.pinnedAt !== undefined),
@@ -1015,6 +1019,7 @@ export function TasksList({
   // While the page is shown each task keeps the group and the place it was first drawn in, so one a teammate's change would move stays under the reader's eye.
   const groups = useHeldTasks(
     tasks,
+    listed,
     { workspaceId: tasks.workspace?.id, filter, display },
     (standing) =>
       tasksListGroups(standing, {
@@ -1076,7 +1081,7 @@ export function TasksList({
   // The tab as it stands, which an Undo pressed or a refusal answered renders after its act reads.
   const latest = useRef(listTasks);
   latest.current = listTasks;
-  const drops = listDrops(listTasks, () => latest.current, groups, setStanding);
+  const drops = listDrops(listTasks, listed, () => latest.current, groups, setStanding);
   const list = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement | null>(null);
 

@@ -19,6 +19,7 @@ import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { standingTaskList } from "../testing/history-rows.js";
 import {
   AGENT_AWAY,
   HOME_AWAY,
@@ -130,7 +131,11 @@ async function mount() {
 
   const container = document.body.appendChild(document.createElement("div"));
   const root: Root = createRoot(container);
-  act(() => root.render(windowRouter().provide(withQueryClient(createElement(Page)))));
+  // The window's task collections over the same tasks, as its follow writes them beside the tab.
+  const listed = standingTaskList({ tasks: TASKS });
+  act(() =>
+    root.render(windowRouter().provide(withQueryClient(listed.provide(createElement(Page))))),
+  );
   // Note that the members and the list land after the first paint.
   await act(async () => undefined);
   await act(async () => undefined);
