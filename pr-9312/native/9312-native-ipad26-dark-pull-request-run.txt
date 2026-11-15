@@ -1,0 +1,67 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow pull-request
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Scrolling UP until "Merge" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-card... COMPLETED
+Tap on "Merge"... COMPLETED
+Assert that "Merge this pull request?" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-card-merge... COMPLETED
+Tap on "Cancel"... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "#128 Invite a teammate by email.*"... COMPLETED
+Assert that "Ready to merge" is visible... COMPLETED
+Assert that "grace" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-ready... COMPLETED
+Tap on "Squash and merge"... COMPLETED
+Assert that "Merged" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-merged... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Tap on "Tasks"... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Agents" is visible... COMPLETED
+Tap on "#128"... COMPLETED
+Assert that "Ready to merge" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-from-agent-row... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Tap on "Tasks"... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Scrolling DOWN until ".*#128 Invite a teammate by email" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on ".*#128 Invite a teammate by email"... COMPLETED
+Assert that "Ready to merge" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-from-chip... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5, pullRequest=127})... COMPLETED
+Assert that "Expire an invite after seven days.*" is visible... COMPLETED
+Assert that "Changes requested" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-failing... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5, pullRequest=126})... COMPLETED
+Assert that "Queued #2" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-queued... COMPLETED
+Tap on "Remove from queue"... COMPLETED
+Assert that "Remove from the merge queue?" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-dequeue... COMPLETED
+Tap on "Remove from queue", Below "Remove from the merge queue?"... COMPLETED
+Assert that "Queued #2" is not visible... COMPLETED
+Assert that "Merge when ready" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-dequeued... COMPLETED
+Scrolling UP until "Send the invite email from the workspace.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "More", Index: -1... COMPLETED
+Assert that "Open on GitHub" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-menu... COMPLETED
+Tap on "Open on GitHub"... COMPLETED
+Assert that "Send the invite email from the workspace.*" is not visible... COMPLETED
+Take screenshot pull-request-github... COMPLETED

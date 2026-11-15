@@ -1,0 +1,7 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "composedMessage CONTAINS "VDOCK""
+Timestamp               Ty Process[PID:TID]
+2026-11-14 18:27:04.575 Df Vespin[59521:14898e4] (Foundation) VDOCK t=174030.029 minY=874.0 overlap=0.0
+2026-11-14 18:27:04.601 Df Vespin[59521:14898e4] (Foundation) VDOCK t=174030.056 minY=874.0 overlap=0.0
+2026-11-14 18:27:05.207 Df Vespin[59521:14898e4] (Foundation) VDOCK t=174030.662 minY=874.0 overlap=0.0
+Child process terminated with signal 9: Killed
