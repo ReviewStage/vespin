@@ -180,7 +180,11 @@ import {
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
 import { BOOT_FAILURE, type BootFailure } from "@repo/features/agent-boot";
-import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
+import {
+  AGENT_ATTACHMENT_TYPE,
+  AGENT_MACHINE,
+  type AgentMachineKind,
+} from "@repo/features/agent-wire";
 import { leadingCommand } from "@repo/features/slash-command";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
@@ -223,6 +227,7 @@ import { AfterResponse, afterResponse } from "../../http/after-response.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { agentSpanAttributes, sentryRunnerTrace } from "../../observability/sentry.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
+import { writtenTextLine } from "../attached-files.js";
 import {
   AgentMachine,
   type AgentMachineService,
@@ -555,8 +560,10 @@ type RunnerContentResult = {
 /**
  * A message's content as the runner's lines carry it, and the files it
  * names: words as text, an image as an image block, and any other file,
- * such as a PDF, written into the machine under the line's own folder of
- * the attachments folder given and named by its path. A file whose bytes
+ * such as a PDF or a text file too large to inline, written into the
+ * machine under the line's own folder of the attachments folder given and
+ * named by its path, a text file's first lines inlined after it
+ * (`writtenTextLine`). A file whose bytes
  * are not in the message, a URL
  * elsewhere, is named as not passed.
  */
@@ -602,16 +609,17 @@ function runnerContent(
     }
 
     const path = `${attachments}/${lineId}/${attachmentFileName(name, at)}`;
-    files.push({
-      path,
-      contents: new Uint8Array(Buffer.from(base64, "base64")),
-      mode: ATTACHMENT_FILE_MODE,
-    });
+    const contents = new Uint8Array(Buffer.from(base64, "base64"));
+    files.push({ path, contents, mode: ATTACHMENT_FILE_MODE });
 
     return [
       {
         type: "text" as const,
-        text: `[${name} (${mediaType}) was attached: it is at ${path}, read it from there]`,
+        // A text file reaches here only where it was too large to inline, so its line inlines its first lines.
+        text:
+          mediaType === AGENT_ATTACHMENT_TYPE.TEXT
+            ? writtenTextLine(name, path, contents)
+            : `[${name} (${mediaType}) was attached: it is at ${path}, read it from there]`,
       },
     ];
   });
@@ -1183,7 +1191,7 @@ export const runnerSessions = <
                 eventsUrl: named(config.eventsUrl),
                 ...("tokenUrl" in config ? { tokenUrl: named(config.tokenUrl) } : undefined),
                 ...(layout.linesRead ? { linesUrl: named(options.linesUrl) } : undefined),
-                ...(layout.transcriptsKept && resumed.fromDisk !== true
+                ...(resumed.fromDisk !== true
                   ? { transcriptsUrl: named(options.transcriptsUrl) }
                   : undefined),
                 ...(resumed.fork === true ? { fork: true } : undefined),
@@ -1735,8 +1743,7 @@ export const runnerSessions = <
 
     /**
      * The session a launch resumes, the one decision every launch, the line
-     * a send queues for one, and a warm call ask. On a machine that keeps the
-     * CLI's transcript (`MachineLayout`'s `transcriptsKept`), the harness
+     * a send queues for one, and a warm call ask. The harness
      * resumes from the store whenever it holds any entry of the session, and
      * from those alone, whatever the disk holds, so a session resumes from
      * the store only where it holds it from its first entry
@@ -1745,9 +1752,7 @@ export const runnerSessions = <
      * session that opens in its place is handed the agent's steps so far
      * (`replay`); on a Mac, whose disk keeps it (`diskSessions`), it resumes
      * from the disk with the store left out of the launch (`fromDisk`), so
-     * the store never comes to hold a tail it would load alone. On a machine
-     * that keeps none, the session resumes from the disk alone, so not in a
-     * place made anew (`created`), whose disk is gone. A continued or forked agent with
+     * the store never comes to hold a tail it would load alone. A continued or forked agent with
      * no session of its own yet forks its source's in a new place, where the
      * Start copied a transcript the store holds from its first entry, cut
      * where the Start cut it.
@@ -1770,18 +1775,18 @@ export const runnerSessions = <
         const { conversationId } = agent;
 
         if (own !== undefined) {
-          if (layout.transcriptsKept && (yield* holdsSession(userId, conversationId, own))) {
+          if (yield* holdsSession(userId, conversationId, own)) {
             return { resume: own } satisfies ResumedSession;
           }
 
-          const fromDisk = (!layout.transcriptsKept || layout.diskSessions) && !(yield* created);
+          const fromDisk = layout.diskSessions && !(yield* created);
 
           return (fromDisk ? { resume: own, fromDisk } : { replay: true }) satisfies ResumedSession;
         }
 
         const source = agent.startedFrom?.session;
 
-        if (!layout.transcriptsKept || source === undefined || !(yield* created)) return {};
+        if (source === undefined || !(yield* created)) return {};
 
         // A session let go (`/clear`) leaves the agent a fresh one of its own, never its source's again.
         if (yield* holdsSessionClearedMark({ userId, conversationId })) return {};

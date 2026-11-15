@@ -78,16 +78,21 @@ appId: dev.vespin.ios
     file: subflows/open-row.yaml
     env:
       ROW: "Invite limits"
-- assertVisible: "Choose"
+- assertVisible: "None"
 - waitForAnimationToEnd
 - takeScreenshot: answer-fields
-- tapOn: "Choose"
+- tapOn: "None"
 - tapOn: "Every member \\(recommended\\)"
 - tapOn: "Email the sender when an invite is accepted.*"
 # The number comes last, since the decimal pad has no key that puts it away:
 # the composer rides above it, so Send is pressed with the pad still up.
 # Words that read as no number hold the answer back, rather than send it
-# without them.
+# without them. At accessibility sizes the card runs taller than the screen and
+# stands scrolled to its foot after the toggle, so the field is scrolled back to first.
+- scrollUntilVisible:
+    element:
+      id: "answer-field-Invites a member may send a day"
+    direction: UP
 - tapOn:
     id: "answer-field-Invites a member may send a day"
 - waitForAnimationToEnd
@@ -96,7 +101,16 @@ appId: dev.vespin.ios
     text: "Send"
     enabled: true
 - tapOn: "Send"
-- assertVisible: "Write a number in Invites a member may send a day."
+# Note that at accessibility sizes the refusal stands under the tall card, below the keyboard, so it is scrolled to, and the field back to, which a person at that size does too; at the default size both already show.
+- scrollUntilVisible:
+    element: "Write a number in Invites a member may send a day."
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "answer-field-Invites a member may send a day"
+    direction: UP
+- tapOn:
+    id: "answer-field-Invites a member may send a day"
 - eraseText: 1
 - inputText: "20"
 - assertVisible:
@@ -110,7 +124,7 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Submitted"
     timeout: 5000
-- assertNotVisible: "Choose"
+- assertNotVisible: "None"
 
 # A do: its steps as checkbox rows, one ticked by hand, then Mark done, which
 # sends at once with every step ticked.

@@ -69,7 +69,7 @@ import {
 import { skillWord } from "@repo/features/skill-word";
 import { GOAL_LINE } from "@repo/features/slash-command";
 import { sentOf } from "@repo/features/suggestion-model";
-import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { workingTime } from "@repo/features/time-format";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
@@ -224,6 +224,7 @@ import { useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
@@ -773,6 +774,8 @@ function ToolCallView({
         provider={view.provider}
         appIcon={appIcon}
         server={server}
+        connection={view.connection}
+        account={view.account}
         machine={view.machine}
         subject={view.subject}
         description={view.description}
@@ -985,9 +988,6 @@ function TodosDock({
   );
 }
 
-/** Every task's pull requests the window's task list carries. */
-const selectTaskPullRequests = (state: AppStateSnapshot) => state.tasks.taskPullRequests;
-
 /** Every pull request the agent opened, pinned over the box under the to-do list for as long as one stands, whether the agent works or has ended: the one it stands on as its tab read it, and the others its task's list names it as having opened (`dockedPullRequests`); nothing before it opened one. */
 function PublishedDock({
   published,
@@ -1000,16 +1000,11 @@ function PublishedDock({
   taskId: string | null;
   doors: PublishedDoors;
 }): ReactNode {
-  const listed = useQuery({ ...appStateQuery, select: selectTaskPullRequests }).data;
+  const listed = useTaskListRow(useTaskListCollections().taskPullRequests, taskId ?? undefined);
 
   const docked = useMemo(
-    () =>
-      dockedPullRequests(
-        published,
-        taskId === null ? [] : pullRequestsOfTask(listed, taskId),
-        agentId,
-      ),
-    [published, listed, taskId, agentId],
+    () => dockedPullRequests(published, listed?.pullRequests ?? [], agentId),
+    [published, listed, agentId],
   );
 
   // Note that one pull request is drawn only as the row of the branch the agent stands on, so the dock stands only where that row or the split bar draws.
@@ -2710,17 +2705,21 @@ function transcriptPlacing(
   replayed: boolean,
   voiceShown: boolean,
   standingCalls: readonly AgentStandingCall[],
+  fromStart: boolean,
 ) {
   // Note that the voice's lines on a call are drawn only where the Voice experiment is on, the caller's standing as any line of theirs where it is off.
   const messages = voiceShown ? held : held.filter((message) => !isVoiceLine(message));
   const todos = todosPlace(messages, working);
 
-  const first = messages.find(
-    (message) =>
-      message.role === MESSAGE_ROLE.USER &&
-      agentMessageOf(message) === undefined &&
-      !undelivered.has(message.id),
-  );
+  // Note that the opening is read only where the transcript's start is held, because a window of its newest messages, or a line still on its way before any page, would take a teammate's line for the brief and name its starter over it.
+  const first = !fromStart
+    ? undefined
+    : messages.find(
+        (message) =>
+          message.role === MESSAGE_ROLE.USER &&
+          agentMessageOf(message) === undefined &&
+          !undelivered.has(message.id),
+      );
 
   // An agent started from another opens on the brief as its source's did, then the replay's card, then the note.
   const opening = !replayed || first === undefined ? undefined : replayOpening(first);
@@ -2759,6 +2758,7 @@ function AgentTranscriptView({
   onRetry,
   onOlder,
   olderFailed = false,
+  fromStart,
   overComposer = false,
   overEnd,
   earlierOmitted = false,
@@ -2827,6 +2827,8 @@ function AgentTranscriptView({
   onOlder?: (() => void) | undefined;
   /** Whether the last read of older messages did not answer, which a line over the log says with Retry. */
   olderFailed?: boolean;
+  /** Whether the messages begin at the transcript's start, a page landed with none older, so its first line is the opening the brief draws. */
+  fromStart: boolean;
   /** Whether the composer stands right under the log, which the log's foot then fades into. */
   overComposer?: boolean;
   /** The room, in pixels, what floats over the log's end takes, as the apps' windows the agent is using do (`ComputerDock`). */
@@ -2908,8 +2910,9 @@ function AgentTranscriptView({
         replayed,
         voiceShown,
         standingCalls,
+        fromStart,
       ),
-    [messages, working, undelivered, unsent, replayed, voiceShown, standingCalls],
+    [messages, working, undelivered, unsent, replayed, voiceShown, standingCalls, fromStart],
   );
 
   // Each line that reached a turn, with who sent it, kept from draw to draw while neither moved.
@@ -3574,7 +3577,7 @@ function AgentTabView({
       <AgentBootLine
         line={bootLine}
         machine={agent.machine ?? AGENT_MACHINE.VERCEL}
-        host={agent.mac?.name}
+        host={agent.mac}
         retry={startedByReader ? agent.id : undefined}
       />
     );
@@ -3585,7 +3588,7 @@ function AgentTabView({
   const signIn: GitHubSignInDoors | undefined =
     onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined
       ? {
-          host: agent.mac?.name,
+          host: agent.mac,
           repository: published?.repository ?? undefined,
           onRetry,
           onMoveToCloud: onMoveToCloud === undefined ? undefined : () => onMoveToCloud(),
@@ -3808,6 +3811,7 @@ function AgentTabView({
                                 onRetry={transcript.onRetry}
                                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                                 olderFailed={transcript.olderFailed}
+                                fromStart={transcript.pages > 0 && !transcript.hasOlder}
                                 overComposer
                                 overEnd={appsRoom}
                                 bringIn={bringIn}
@@ -4491,6 +4495,8 @@ export function AgentSubagentTab({
                 onRetry={transcript.onRetry}
                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                 olderFailed={transcript.olderFailed}
+                // Note that a worker's lines always open on the task it was handed (`workerLines`), so its start is always held.
+                fromStart
               />
             </WholePartsProvider>
           </ComputerAppsProvider>

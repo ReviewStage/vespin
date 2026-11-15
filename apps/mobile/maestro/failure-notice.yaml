@@ -1,11 +1,12 @@
-# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice sliding down with the refusal's words and Try again, Try again refused once more, and the notice swiped away.
+# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice sliding down with the refusal's words and Try again, Try again refused once more, the notice swiped away, and a refusal inside Add a follower's sheet and inside Settings standing over that sheet.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
 ---
 # Launched on the host's Inbox fixture with `-refuseWrites true`, so the
-# fixture refuses a task's status and its pin as the service would
+# fixture refuses a task's status, its pin, a follower added and a memory
+# deleted as the service would
 # (`src/host/fixture-host.ts`), and no server is reached.
 # Note that the value is quoted, as every launch argument's is, because
 # Maestro hands a YAML boolean to the app without its dash, which iOS then
@@ -22,18 +23,18 @@ appId: dev.vespin.ios
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd
 # Unpin from the row's long press menu is refused: the row stays pinned and
-# the notice says why, with Try again.
+# the notice says why, with Try again. Note that a notice offering Try again
+# says it as its button, not in its words (`failure-notice-model.ts`), so
+# each refusal is matched by its first sentence, and that the notice is
+# checked at once, since it stands six seconds.
 - runFlow:
     file: subflows/row-menu.yaml
     env:
       ROW: Weekly digest email
       ITEM: Unpin
 - tapOn: "Unpin"
-# Note that the notice's words drop their closing "Try again." where its own
-# Try again button stands (`failure-notice-model.ts`, #9218), and that the
-# notice is checked at once, since it stands six seconds.
 - extendedWaitUntil:
-    visible: "The task could not be unpinned."
+    visible: "The task could not be unpinned\\..*"
     timeout: 5000
 - assertVisible:
     id: "failure-notice-retry"
@@ -51,7 +52,7 @@ appId: dev.vespin.ios
       id: "failure-notice"
     direction: UP
 - waitForAnimationToEnd
-- assertNotVisible: "The task could not be unpinned."
+- assertNotVisible: "The task could not be unpinned\\..*"
 - assertVisible: "Pinned"
 # Mark done from the same menu asks first in the system's alert, since the
 # task's agent is at work and only the person can decide to stop it; once
@@ -63,9 +64,53 @@ appId: dev.vespin.ios
       ROW: Weekly digest email
       ITEM: Mark done
 - tapOn: "Mark done"
-- tapOn: "Stop agents"
+- tapOn: "Stop agent"
 - extendedWaitUntil:
-    visible: "The task could not be marked done."
+    visible: "The task could not be marked done\\..*"
     timeout: 5000
 - assertVisible: "Weekly digest email"
 - takeScreenshot: failure-notice-mark-done
+# A refusal inside a sheet draws in that sheet, over its backdrop, not
+# behind it: Add a follower stands over Billing export's Followers sheet,
+# and the fixture leaves the add unanswered, so the sheet stays and the
+# notice stands at its top edge.
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: Billing export
+- tapOn:
+    id: "following-chip"
+- tapOn: "Add a follower"
+- tapOn: "Alan Turing.*"
+- assertVisible: "Following could not be changed\\..*"
+- waitForAnimationToEnd
+- takeScreenshot: failure-notice-add-follower
+# Settings is a sheet with a stack of its own: a memory's Delete there is
+# refused, and the notice says so over Settings rather than under it.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      refuseWrites: "true"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Memory"
+- tapOn: "Memory"
+- waitForAnimationToEnd
+- longPressOn: "The staging database is reset every Sunday night."
+- tapOn: "Delete"
+- assertVisible: "Delete this memory?"
+- tapOn: "Delete memory"
+- assertVisible: "The memory could not be deleted\\..*"
+- waitForAnimationToEnd
+- takeScreenshot: failure-notice-settings

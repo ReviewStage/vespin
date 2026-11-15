@@ -29,6 +29,8 @@ desktop app's tests on a Mac: the release job (`release.yml`'s `macos-15` job,
 run on a `v*` tag push or a manual dispatch) only builds, signs, notarizes,
 and verifies the app. A green PR says nothing about either app on a device.
 
+No push builds a Vercel Preview; run `vercel deploy` if one is needed.
+
 A release is dated in Eastern time (America/New_York), never UTC or the
 author's own zone: its `CHANGELOG.md` heading carries the day its tag is
 pushed there (`TZ=America/New_York date +%F`), and `.github/RELEASE.md` is
@@ -213,8 +215,7 @@ component, or add the component or variant there.
   an unmasked attribute or a new way of drawing words is what would change
   that.
 - Never push PR media to a branch but `pr-assets`, under `pr-<number>/`, if
-  you add any; a fresh `pr-assets-<topic>` branch mails a failed Vercel Preview
-  on every push. PR media is not required.
+  you add any. PR media is not required.
 - Never add to this file (`AGENTS.md`, which `CLAUDE.md` links to) unless the
   user explicitly approved the addition.
 
@@ -226,6 +227,26 @@ Vercel's cron calls `/api/maintenance/sweep` once a minute (the root `vercel.jso
 answers unavailable and sweeps nothing. A turn past the deadline its row holds
 (`packages/database/src/models/turn-state.ts`) is the sweep's: it fails it with
 why (`packages/service/src/agents/coder-host/reconcile.ts`); no read settles one.
+
+## Breaking the hosted wire
+
+The service deploys from `main` on merge, but the desktop, the host daemon,
+the CLI, and the iOS app ship only on their releases, and stay installed for
+weeks. So a change a released client cannot read lands in three steps, never
+one:
+
+1. Clients read the old shape and the new, and send the next
+   `HOSTED_API_VERSION` (`packages/features/src/client-identity.ts`), while
+   the service still serves the old shape; for a rename, it sends both keys.
+2. Every client is released from a commit after that step.
+3. The service drops the old shape and raises `HOSTED_API_FLOOR`
+   (`packages/service/src/orpc/handler.ts`), which refuses older builds as
+   needing an update they can now take.
+
+`[check: scripts/repository-checks.sh]` The floor may not pass the version
+the newest `v*`, `host-v*`, `cli-v*`, or `ios-v*` tag sends. `[review]` Before
+step 3, see each tag's release published and a TestFlight build from after
+step 1 in testers' hands: a dispatched Release iOS run has no tag to check.
 
 ## Testing
 

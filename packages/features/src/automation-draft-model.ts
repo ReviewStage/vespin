@@ -439,7 +439,7 @@ function scheduleSpelling(schedule: ScheduleDraft): string {
 }
 
 /** The schedule a trigger reads as in the picker's terms: its date and time where it runs once, its cron read as `scheduleDraftOf` reads one otherwise. */
-export function scheduleDraftOfTrigger(trigger: ScheduleTrigger): ScheduleDraft {
+function scheduleDraftOfTrigger(trigger: ScheduleTrigger): ScheduleDraft {
   if (!scheduleRunsOnce(trigger)) return scheduleDraftOf(trigger.cron);
   const spelled = ONCE_AT.exec(trigger.at);
 

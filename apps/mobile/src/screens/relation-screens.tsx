@@ -17,20 +17,24 @@ import {
   type TaskRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { readingWords } from "@repo/features/words";
+import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
+  BUTTON_LOOK,
   EmptyState,
   GLYPH,
   type Glyph,
   LIST_LOOK,
   LinkRow,
   ListSection,
+  PUSH_ROW_GOES,
+  PushRow,
   RelationRow,
   RowList,
   Screen,
+  SettingsForm,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -70,6 +74,12 @@ export function useOpenRelation(): OpenRelation {
 
 /** What the sheet says while the task's document, which holds its blocks where its row names none, is first read. */
 const READING_TASK = readingWords("the task");
+
+/** What the page says where the task's blocks could not be read, beside Try again. */
+const TASK_UNREAD = readFailedWords("the task");
+
+/** What a failed read offers. */
+const TRY_AGAIN = "Try again";
 
 /** Whether a route's word names one of the four kinds. */
 export function isRelationKind(word: string | undefined): word is TaskRelationKind {
@@ -115,21 +125,22 @@ function candidatesFor(
     }));
 }
 
-/** The kinds the sheet opens on where none is named, each by its glyph and what choosing it does. */
+/** The kinds the sheet opens on where none is named, each by its glyph and what choosing it does, as one grouped card of the form's own rows, each going on to its tasks, as a sheet that picks stands (the Move sheet's form). */
 function KindRows({ onKind }: { readonly onKind: (kind: TaskRelationKind) => void }) {
   return (
-    <RowList look={LIST_LOOK.PLAIN}>
+    <SettingsForm>
       <ListSection>
         {TASK_RELATION_ORDER.map((kind) => (
-          <LinkRow
+          <PushRow
             key={kind}
             symbol={RELATION_KIND_SYMBOL[kind]}
             label={TASK_RELATION_VERBS[kind].choose}
+            goes={PUSH_ROW_GOES.PAGE}
             onPress={() => onKind(kind)}
           />
         ))}
       </ListSection>
-    </RowList>
+    </SettingsForm>
   );
 }
 
@@ -166,7 +177,8 @@ export function TaskRelationScreen({
           headerShown: true,
           headerTintColor: colors.TEXT,
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.SIDEBAR },
+          // Note that the kinds stand as a grouped card on the form's ground, and the tasks to pick from as a plain list on the sheet's.
+          contentStyle: { backgroundColor: kind === undefined ? colors.GROUPED : colors.SIDEBAR },
         }}
       >
         {/* Note that the title is the bar's own (`Stack.Title`), as its search and Cancel are, since the root stack's title for the sheet stood over one set in the options. */}
@@ -214,11 +226,22 @@ export function TaskRelationScreen({
   const subject = relationSubject(overview.task, overview.document, kind);
 
   if (subject === undefined) {
+    const retry = overview.documentRetry;
+
+    // Note that a read that failed says so with Try again, rather than a spinner that would wait on nothing.
     return (
       <>
         {bar}
         <Screen>
-          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
+          {retry === undefined ? (
+            <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
+          ) : (
+            <EmptyState
+              title={TASK_UNREAD}
+              symbol={GLYPH.TASK}
+              action={{ label: TRY_AGAIN, onPress: retry, look: BUTTON_LOOK.BORDERED }}
+            />
+          )}
         </Screen>
       </>
     );

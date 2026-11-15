@@ -627,7 +627,7 @@ export interface CopiedFile {
 }
 
 /** The words a copy wrote to the clipboard: its HTML, and its plain text. */
-export interface CopiedWords {
+interface CopiedWords {
   readonly html: string;
   readonly text: string;
 }

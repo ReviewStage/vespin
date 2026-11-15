@@ -169,7 +169,7 @@ env:
     timeout: 5000
 - takeScreenshot: agent-menu
 - tapOn: "Options"
-- assertVisible: "Takes effect from the agent's next step."
+- assertVisible: "Model"
 - assertVisible: ".*Opus 5.5.*"
 - assertVisible: "Fast"
 - assertVisible: "Ask for approval"
@@ -264,7 +264,7 @@ env:
     env:
       ACT: Archive
 - tapOn: "Archive"
-- tapOn: "Stop agents"
+- tapOn: "Stop agent"
 - assertNotVisible: "Archive agent?"
 - assertNotVisible:
     id: "ask-note"

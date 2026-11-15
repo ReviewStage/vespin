@@ -27,9 +27,7 @@ appId: dev.vespin.ios
         id: "BackButton"
     commands:
       # The ⋯ menu leads with the thread's path: Open task, then Open agent.
-      - tapOn:
-          text: "More"
-          index: -1
+      - tapOn: "More"
       - tapOn: "Open task"
       - assertVisible: "Agents"
       - waitForAnimationToEnd
@@ -39,9 +37,7 @@ appId: dev.vespin.ios
       - assertVisible: ".*walked the invite flow.*"
       - waitForAnimationToEnd
       - takeScreenshot: related-task-back
-      - tapOn:
-          text: "More"
-          index: -1
+      - tapOn: "More"
       - tapOn: "Open agent"
       - extendedWaitUntil:
           visible: "Add a way to resend an invite that expired."

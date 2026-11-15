@@ -8,7 +8,6 @@ import {
   ADMIN_ATTENTION_AGENT_DAYS,
   ADMIN_ATTENTION_KIND,
   ADMIN_RELIABILITY_WINDOWS,
-  type AdminMetricsWindow,
 } from "@repo/features/admin-wire";
 import { AUTOMATION_RUN_REASON, type AutomationRunReason } from "@repo/features/automation-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
@@ -45,7 +44,12 @@ import { useMemo } from "react";
 import { AccountCell, AccountCellSkeleton } from "../accounts-table/accounts-table.js";
 import { useAdminDoors } from "../admin-doors.js";
 import { adminReliabilityQuery, useAdminSignOut } from "../admin-queries.js";
-import { adminReadView } from "../admin-read-view.js";
+import {
+  type AdminRosterChoice,
+  type AdminScreenShell,
+  type AdminWindowChoice,
+  adminReadView,
+} from "../admin-read-view.js";
 import { AGENT_FAILURES_SERIES, agentFailureRows, retiredLast } from "../charts/agent-failures.js";
 import {
   BreakdownChart,
@@ -67,7 +71,7 @@ import {
 import { AdminViewOptions, windowWords } from "../chrome/controls.js";
 import { useExternalPress } from "../chrome/external-links.js";
 import { AppTurnsNote, retiredTitle } from "../chrome/notes.js";
-import { AdminPage, type ViewerAccount } from "../chrome/page-header.js";
+import { AdminPage } from "../chrome/page-header.js";
 import { PageSkeleton } from "../chrome/page-skeleton.js";
 import { reliabilityWindow, windowedReadQuery } from "../routing.js";
 import { connectionWord, INSTALLATION_LABEL } from "../status-words.js";
@@ -541,17 +545,11 @@ export function ReliabilityScreen({
   onSignOut,
   onOpenAccount,
   frame,
-}: {
-  hideAdmins: boolean;
-  onHideAdminsChange: (hide: boolean) => void;
-  windowDays: AdminMetricsWindow;
-  onWindowDaysChange: (windowDays: AdminMetricsWindow) => void;
-  account: ViewerAccount | undefined;
-  onSignOut: () => Promise<void>;
-  onOpenAccount: (id: string) => void;
-  /** Applied around every answer but the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
-}): React.JSX.Element {
+}: AdminScreenShell &
+  AdminRosterChoice &
+  AdminWindowChoice & {
+    onOpenAccount: (id: string) => void;
+  }): React.JSX.Element {
   const shownWindow = reliabilityWindow(windowDays);
   const { reads, gate } = useAdminDoors();
   const query = windowedReadQuery(hideAdmins, shownWindow);
