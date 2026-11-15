@@ -1,4 +1,4 @@
-// failure-notice-model.test.ts -- the offline notice said once a stretch however many writes fail under it, a refusal always said anew, and nothing left standing for an account that is gone.
+// failure-notice-model.test.ts -- the offline notice said once a stretch however many writes fail under it, a refusal always said anew, its Try again said once, and nothing left standing for an account that is gone.
 
 import { describe, expect, it } from "vitest";
 import {
@@ -31,6 +31,12 @@ describe("the failure notice", () => {
     const again = noticeAsked(first, REFUSED);
     expect(again.shown).not.toBe(first.shown);
     expect(again.shown?.words).toBe(REFUSED.words);
+  });
+
+  it("says Try again once where the notice offers it as a button, and keeps the words' own where it offers none", () => {
+    const pressed = noticeAsked(NO_NOTICE, { ...REFUSED, retry: () => undefined });
+    expect(pressed.shown?.words).toBe("The task could not be pinned.");
+    expect(noticeAsked(NO_NOTICE, REFUSED).shown?.words).toBe(REFUSED.words);
   });
 
   it("lets a refusal and its Try again go once the account is gone, and says the next one", () => {

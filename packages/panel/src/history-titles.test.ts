@@ -8,7 +8,7 @@ import { ROUTED_PLACE } from "./places/routed-places.js";
 import { MAIN_TAB, SIDE_PANEL_TAB } from "./tasks/task-tab-model.js";
 import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
 import { listedRows } from "./testing/history-rows.js";
-import { tasksControl, VIEWS_AWAY } from "./testing/tasks-control.js";
+import { listedTasksOf, tasksControl, VIEWS_AWAY } from "./testing/tasks-control.js";
 import type { RoutedViews } from "./workspace-routes.js";
 
 /**
@@ -28,7 +28,7 @@ const TASK = {
 
 /** What the step standing is called, its tasks read by id from those the tab lists. */
 function titleOf(place: RoutedPlace | undefined, tasks: TasksControl, views: RoutedViews) {
-  return stepTitle(place, tasks, listedRows(tasks.tasks), views);
+  return stepTitle(place, tasks, listedRows(listedTasksOf(tasks)), views);
 }
 
 /** The window on the task, its side panel open on the tab given or shut. */
@@ -38,7 +38,7 @@ function onTask(
   const base = tasksControl();
 
   return tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     tasks: [TASK],
     activeTaskId: TASK.id,
     boundFor: TASK.id,

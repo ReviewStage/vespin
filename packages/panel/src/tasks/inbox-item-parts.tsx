@@ -308,7 +308,7 @@ function HolderRef({ holder }: { holder: InboxHolder }): React.JSX.Element {
       onPress={
         openPlace === undefined
           ? undefined
-          : () => openPlace({ kind: LINK_DESTINATION.TASK, planId: task.id })
+          : () => openPlace({ kind: LINK_DESTINATION.TASK, taskId: task.id })
       }
       data-holder-ref=""
     />

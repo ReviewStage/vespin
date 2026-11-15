@@ -407,7 +407,7 @@ test("once the item's heading scrolls out of the thread's view, its title joins 
 
 test("an image that lands before its item's own read does is drawn all the same", async () => {
   const shot = inboxAttachmentAddress(
-    { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+    { kind: LINK_DESTINATION.INBOX_ITEM, taskId: BILLING.id, itemId: THRESHOLD.id },
     "5e8d2c1a-7b3f-4a6e-9c2d-1f4b6a8e3c71",
     "acme",
   );
@@ -436,7 +436,7 @@ test("an item's Markdown draws its own pictures, read once its item's own read l
 
   const picture = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, taskId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -520,7 +520,7 @@ test("a picture of an item opens a viewer the arrow keys walk across every pictu
 
   const picture = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, taskId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -579,7 +579,7 @@ test("a recording an agent's words draw plays where it stands, and its Expand op
 
   const address = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, taskId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -712,7 +712,7 @@ test("a thread draws a comment's files over its words: an agent's pictures stand
 
   const picture = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, taskId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -1239,7 +1239,7 @@ test("files whose reads land together both stand in the box", async () => {
 test("files still being read as the agent posts on the item again land in its box", async () => {
   // Main pushes the chosen task's inbox again as the test says it changed.
   const deliver = (outcome: ReadOutcome) =>
-    world.main.push({ kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id }, pushedOf(outcome.value));
+    world.main.push({ kind: INBOX_SCOPE_KIND.TASK, id: BILLING.id }, pushedOf(outcome.value));
 
   const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
@@ -2032,7 +2032,7 @@ test("a thread read cut to its latest messages says the earlier ones are in the 
 
 test("what an item's box holds unsent, its words and its files, outlasts every message landing on the item: a teammate's answer settling it, then the agent asking on it again", async () => {
   const deliver = (items: readonly InboxItem[], cursor: string) =>
-    world.main.push({ kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id }, pushedOf({ items, cursor }));
+    world.main.push({ kind: INBOX_SCOPE_KIND.TASK, id: BILLING.id }, pushedOf({ items, cursor }));
 
   const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
@@ -2868,7 +2868,7 @@ test("Edit on an answer that did not go puts no pick back once the agent asked a
 
   await act(async () =>
     world.main.push(
-      { kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id },
+      { kind: INBOX_SCOPE_KIND.TASK, id: BILLING.id },
       { items: [askedAgain, RETRY] },
     ),
   );
@@ -2993,7 +2993,7 @@ test("a plain reply stands at the thread's end marked Sending the moment it is s
   // The push holding the reply lands before the reply's own answer does.
   const held = landed[0] ?? assert.fail("the reply is answered");
   await act(async () =>
-    world.main.push({ kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id }, { items: [held, RETRY] }),
+    world.main.push({ kind: INBOX_SCOPE_KIND.TASK, id: BILLING.id }, { items: [held, RETRY] }),
   );
   await settle();
   await act(async () => lands[0]?.(false));

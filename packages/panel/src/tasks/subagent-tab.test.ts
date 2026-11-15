@@ -28,7 +28,7 @@ import { AgentSubagentTab } from "./agent-tab.js";
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+  taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "CSV export",
@@ -158,7 +158,7 @@ test("a worker still working draws its run of calls under one line, open on its 
   assert.ok(group !== null);
   assert.equal(heardWords(group), "2 tool calls");
   assert.equal(group?.getAttribute("aria-expanded"), "true");
-  assert.deepEqual(callRows(container), ["Searched toCsv", "Ran pnpm test"]);
+  assert.deepEqual(callRows(container), ["Searched for toCsv", "Ran pnpm test"]);
 });
 
 test("a worker that finished folds its lead under one line, its last words standing after it", async () => {
@@ -173,7 +173,7 @@ test("a worker that finished folds its lead under one line, its last words stand
   assert.equal(fold?.getAttribute("aria-expanded"), "false");
   assert.ok(container.textContent?.includes("Both writers quote fields the same way."));
   act(() => fold?.click());
-  assert.deepEqual(callRows(container), ["Searched toCsv", "Read src/csv.ts"]);
+  assert.deepEqual(callRows(container), ["Searched for toCsv", "Read src/csv.ts"]);
 });
 
 test("in a worker's transcript, a call about an agent opens its tab, and an agent's chip hangs its card", async () => {
