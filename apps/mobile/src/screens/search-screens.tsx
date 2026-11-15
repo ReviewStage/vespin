@@ -31,7 +31,7 @@ import {
   Screen,
   UNDER_SPLIT_SCREEN,
 } from "@repo/ui-native";
-import { Stack, useFocusEffect, useIsFocused, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
 import {
   type Dispatch,
   type ReactNode,
@@ -560,7 +560,6 @@ function usePickToRoute(threeColumns: boolean, { picked, choose }: SearchPicking
   const router = useRouter();
   const onTab = useOnTab();
   const stack = useDetailStack(SIDEBAR_PLACE.SEARCH);
-  const focused = useIsFocused();
   const was = useRef(threeColumns);
   // Note that the pick and its stack are read through a ref the commit writes, before the layout lets the stack go.
   const held = useRef({ picked, stacked: false });
@@ -568,17 +567,18 @@ function usePickToRoute(threeColumns: boolean, { picked, choose }: SearchPicking
     held.current = { picked, stacked: stack.pages.length > 0 };
   }, [picked, stack]);
 
-  // Note that only a focused Search hands its pick on, so a rotation while another tab shows leaves the pick for Search's return.
-  useEffect(() => {
-    if (!focused) return;
-    const before = was.current;
-    was.current = threeColumns;
-    const { picked: shown, stacked } = held.current;
+  // Note that only a focused Search hands its pick on, so a rotation while another tab shows leaves the pick for Search's return; focus is heard through an effect, because a read would draw Search's root again on every tab switch.
+  useFocusEffect(
+    useCallback(() => {
+      const before = was.current;
+      was.current = threeColumns;
+      const { picked: shown, stacked } = held.current;
 
-    if (!before || threeColumns || stacked || shown?.route === undefined) return;
-    router.push(onTab(shown.route));
-    choose(undefined);
-  }, [focused, threeColumns, router, onTab, choose]);
+      if (!before || threeColumns || stacked || shown?.route === undefined) return;
+      router.push(onTab(shown.route));
+      choose(undefined);
+    }, [threeColumns, router, onTab, choose]),
+  );
 }
 
 /** The Search tab's root screen: beside the app sidebar in a window wide enough for three columns, under the Stack's bar otherwise, the query and its scope held here so a rotation across the line keeps them. */
