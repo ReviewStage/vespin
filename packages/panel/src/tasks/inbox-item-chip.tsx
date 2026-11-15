@@ -7,7 +7,8 @@ import { GLYPH } from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo } from "react";
 import { inboxItemsQuery } from "../live-reads.js";
-import { appStateQuery, selectInbox, selectTasks } from "../use-app-state.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import { appStateQuery, selectInbox } from "../use-app-state.js";
 import { InboxItemCard, inboxItemGlyph } from "./inbox-item-parts.js";
 import { useMentionedPlace } from "./mentioned-place.js";
 
@@ -79,7 +80,6 @@ function useLinkedItem(place: InboxItemPlace): InboxListed | undefined {
   const namedAgent = "agentId" in place ? place.agentId : undefined;
   const { itemId } = place;
   const fed = useQuery(inboxItemsQuery()).data;
-  const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
   const inbox = useQuery({ ...appStateQuery, select: selectInbox }).data;
 
   const found = useMemo(() => {
@@ -90,13 +90,13 @@ function useLinkedItem(place: InboxItemPlace): InboxListed | undefined {
 
   const item = found?.item;
   const taskId = namedTask ?? found?.taskId ?? waitingTaskOf(inbox, itemId);
+  const task = useTaskListRow(useTaskListCollections().tasks, taskId);
 
   return useMemo(() => {
-    if (item === undefined || taskId === undefined) return undefined;
-    const task = tasks?.tasks.find((each) => each.id === taskId);
+    if (item === undefined || task === undefined) return undefined;
 
-    return task === undefined ? undefined : { holder: taskHolder(task), item };
-  }, [item, taskId, tasks]);
+    return { holder: taskHolder(task), item };
+  }, [item, task]);
 }
 
 /** The brief main holds of an item that waits on the reader, by its id; none for one settled or unknown. */

@@ -7,14 +7,16 @@ import {
   BAR_TITLE,
   type BrandColors,
   ElevatedGround,
+  FailureNoticeLayer,
   FailureNoticeProvider,
   KeepingProvider,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
-import { type ReactElement, useMemo } from "react";
+import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
+import { MachineAsks } from "../agents/machine-asks.js";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -81,6 +83,71 @@ const SHEET_ROUTE = {
 /** The sheets, each drawn on the lifted ground in dark. */
 const LIFTED_SHEETS: ReadonlySet<string> = new Set(Object.values(SHEET_ROUTE));
 
+/** The presentations that stand a screen in a sheet over the root, which would hide a notice drawn there. */
+const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set(["modal", "formSheet"]);
+
+/** What a root screen's layout is told of its screen's place in the stack: whether it is the one in front, and when that changes. */
+interface ScreenFocus {
+  readonly isFocused: () => boolean;
+  readonly addListener: (event: "focus" | "blur", listener: () => void) => () => void;
+}
+
+/** Whether the screen `navigation` names is the one in front, followed as it comes forward and goes behind. */
+function useScreenInFront(navigation: ScreenFocus): boolean {
+  const [inFront, setInFront] = useState(() => navigation.isFocused());
+
+  useEffect(() => {
+    const comes = navigation.addListener("focus", () => setInFront(true));
+    const goes = navigation.addListener("blur", () => setInFront(false));
+
+    return () => {
+      comes();
+      goes();
+    };
+  }, [navigation]);
+
+  return inFront;
+}
+
+/** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. */
+function SheetNoticeLayer({
+  navigation,
+  children,
+}: {
+  readonly navigation: ScreenFocus;
+  readonly children: ReactNode;
+}) {
+  return <FailureNoticeLayer inFront={useScreenInFront(navigation)}>{children}</FailureNoticeLayer>;
+}
+
+/**
+ * A root screen, wrapped in a place of its own for the failure notice where it
+ * stands as a sheet, so a notice shows over the sheet rather than behind it,
+ * and drawn on the lifted ground where it is one of the app's sheets, since
+ * every sheet stands over the window it was opened from, as a card on an
+ * iPhone and a form sheet on an iPad, and iOS lifts what it presents in dark;
+ * the app's own pages keep the plain ground.
+ */
+function screenLayout({
+  route,
+  options,
+  navigation,
+  children,
+}: {
+  readonly route: { readonly name: string };
+  readonly options: { readonly presentation?: string | undefined };
+  readonly navigation: ScreenFocus;
+  readonly children: ReactElement;
+}): ReactElement {
+  const placed = SHEET_PRESENTATIONS.has(options.presentation) ? (
+    <SheetNoticeLayer navigation={navigation}>{children}</SheetNoticeLayer>
+  ) : (
+    children
+  );
+
+  return LIFTED_SHEETS.has(route.name) ? <ElevatedGround>{placed}</ElevatedGround> : placed;
+}
+
 /**
  * The screens, each behind the account's standing: the tabs, Settings, and
  * the sheets that start a task or an agent or change an agent's model while an account is signed in, and the sign-in screen otherwise, so a
@@ -105,7 +172,8 @@ const LIFTED_SHEETS: ReadonlySet<string> = new Set(Object.values(SHEET_ROUTE));
  * (`host-connect-link.ts`).
  * Over every screen stands the one notice of a write that did not go
  * (`use-write.ts`), which lets its offline word go once the service answers,
- * and every word with its Try again once the account it was said for is gone.
+ * and every word with its Try again once the account it was said for is gone;
+ * while a sheet stands, it stands in the sheet on top (`screenLayout`).
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -143,19 +211,11 @@ function GuardedScreens() {
         sheetGrabberVisible: true,
       };
 
-  // Note that every sheet stands over the window it was opened from, as a card on an iPhone and a form sheet on an iPad, so in dark it draws on the lifted ground, as iOS lifts what it presents; the app's own pages keep the plain ground.
-  const sheetLayout = ({
-    route,
-    children,
-  }: {
-    route: { name: string };
-    children: ReactElement;
-  }): ReactElement =>
-    LIFTED_SHEETS.has(route.name) ? <ElevatedGround>{children}</ElevatedGround> : children;
-
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
+      {/* An ask one of the developer's machines holds for an agent, over whatever screen stands. */}
+      <MachineAsks signedIn={signedIn && !updateNeeded} />
       {/* Note that every sheet's bar takes the ink here as its default, so a sheet that sets no ink of its own never stands its title in the system's black on the dark ground; a sheet's own options still win, key by key. */}
       <Stack
         screenOptions={{
@@ -164,7 +224,7 @@ function GuardedScreens() {
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
         }}
-        screenLayout={sheetLayout}
+        screenLayout={screenLayout}
       >
         <Stack.Protected guard={signedIn && !updateNeeded}>
           <Stack.Screen name="index" />

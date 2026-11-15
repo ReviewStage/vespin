@@ -22,8 +22,8 @@ import {
   REPOSITORY_PIN_FAILED_NOTES,
   TASK_MARK,
   type TaskMark,
+  type TaskNames,
 } from "@repo/features/tasks-model";
-import type { TasksView } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { STATUS_TONE } from "@repo/ui";
@@ -202,17 +202,17 @@ export function useSectionWrites(): PinWrites["onWriteSections"] {
 
 /**
  * The pin and section writes, a task's and an agent's pin each ⌘Z's to take
- * back once kept, their rows read off `drawn`, the tasks the Tasks tab
- * draws as they stand at the call (`TasksControl`'s `drawnTasks`). A pin
+ * back once kept, their rows read off the task list as it stands at the
+ * call (`task-row-doors.ts`). A pin
  * says nothing once it lands, since the row it moves is in sight, and a
  * refusal says so in a toast, since the menu that asked has closed.
  */
-export function usePinWrites(drawn: () => TasksView): PinWrites {
+export function usePinWrites(typedNames: () => TaskNames): PinWrites {
   const client = useQueryClient();
   const toast = useToast();
   const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
-  const taskPinDoors = useTaskRowDoors(ROW_WRITE.TASK_PIN.kind, drawn);
-  const agentPinDoors = useTaskRowDoors(ROW_WRITE.AGENT_PIN.kind, drawn);
+  const taskPinDoors = useTaskRowDoors(ROW_WRITE.TASK_PIN.kind, typedNames);
+  const agentPinDoors = useTaskRowDoors(ROW_WRITE.AGENT_PIN.kind, typedNames);
   const sendTaskPin = taskPinDoors.send;
   const sendAgentPin = agentPinDoors.send;
 
@@ -374,6 +374,6 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
 }
 
 /** The pins and sections a surface draws and writes (`usePinViews`, `usePinWrites`). */
-export function usePins(drawn: () => TasksView): Pins {
-  return { ...usePinViews(), ...usePinWrites(drawn) };
+export function usePins(typedNames: () => TaskNames): Pins {
+  return { ...usePinViews(), ...usePinWrites(typedNames) };
 }
