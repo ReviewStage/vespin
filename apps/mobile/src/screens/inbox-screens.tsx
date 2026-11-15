@@ -32,16 +32,11 @@ import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
+import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { CHOOSE_AN_ITEM_WORDS, SELECTION_WORDS, selectedWords } from "@repo/features/words";
-import {
-  INBOX_FEED,
-  type InboxFeed,
-  selectAgentHarnesses,
-  selectAgentNames,
-  selectWorkspaces,
-} from "@repo/host/app-state-reads";
+import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
   type BarAction,
@@ -56,6 +51,7 @@ import {
   LIST_LOOK,
   type ListLook,
   ListRow,
+  type ListScopes,
   type MarkdownVideo,
   menuWithout,
   NoSelection,
@@ -82,11 +78,12 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
-import { PUSHED_PAGE, useDetailPush } from "../detail-stack.js";
+import { PUSHED_PAGE, useDetailPush, useStackRoot, useStandDetailFront } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
   useInboxActs,
@@ -111,7 +108,8 @@ import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, useListColumn } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, useListColumn, usePortraitDetailBar } from "./app-sidebar.js";
+import { useDetailStackColumn } from "./detail-stack-column.js";
 import {
   NO_THREAD_ACTS,
   OpenAskCard,
@@ -149,9 +147,6 @@ const SELECT_DONE = "Done";
 /** What a video the words draw in place is heard as, its file's name being the words' own alt. */
 const VIDEO_LABEL = "Video";
 
-/** No agent's name held. */
-const NO_NAMES: ReadonlyMap<string, string> = new Map();
-
 /** What an agent is called where the task list does not hold it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
 
@@ -175,6 +170,8 @@ type InboxRowsProps = {
   readonly onResolve: (item: InboxItem) => void;
   /** The list's Select mode, while it stands in one. */
   readonly choosing?: RowChoosing | undefined;
+  /** The Inbox's scopes, standing as the list's first row; none beside the app sidebar, where they stand as the bar's filter. */
+  readonly scopes?: ListScopes | undefined;
   /** Starts Select mode with the threads the system ticked at once, such as by a two-finger drag. */
   readonly onChooseStart: (ids: readonly string[]) => void;
 };
@@ -198,6 +195,7 @@ function InboxRows({
   remindMenu,
   onResolve,
   choosing,
+  scopes,
   onChooseStart,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
@@ -210,6 +208,7 @@ function InboxRows({
       onSelect={onSelect}
       onRefresh={onRefresh}
       choosing={choosing}
+      scopes={scopes}
       onChooseStart={onChooseStart}
     >
       <InboxItemRows
@@ -272,8 +271,7 @@ function InboxRow({
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
-  const agentName = useAgentNames().get(item.agentId) ?? UNLISTED_AGENT;
-  const harness = useAgentHarness(item.agentId);
+  const { name: agentName, harness } = useAgentLabel(item.agentId);
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspaceStep = linkWorkspaceStep(holder.task.workspaceId, workspaces);
@@ -496,18 +494,16 @@ function toolbarMenuActions(menu: BarMenu) {
   ));
 }
 
-/** Every agent's name the document holds, by the agent's id, as the panel names it. */
-function useAgentNames(): ReadonlyMap<string, string> {
-  const { data = NO_NAMES } = useQuery({ ...appStateQuery, select: selectAgentNames });
+/** The name an agent is called by, as the panel names it, and the harness its model runs in, whose mark its tile wears, as the task list's collections hold it; the unlisted name and no harness before the agent is listed. */
+function useAgentLabel(agentId: string): {
+  readonly name: string;
+  readonly harness: ModelProvider | undefined;
+} {
+  const agent = useTaskListRow(useTaskListCollections().agents, agentId);
 
-  return data;
-}
-
-/** The harness an agent runs in, as the document holds its model, whose mark its tile wears; none before the agent is listed. */
-function useAgentHarness(agentId: string): ModelProvider | undefined {
-  const { data } = useQuery({ ...appStateQuery, select: selectAgentHarnesses });
-
-  return data?.get(agentId);
+  return agent === undefined
+    ? { name: UNLISTED_AGENT, harness: undefined }
+    : { name: agentNameOf(agent), harness: providerOf(agent.model) };
 }
 
 /**
@@ -550,8 +546,7 @@ function ThreadDetail({
   const colors = useColors();
   const { holder, item } = listed;
   const openLink = useOpenLink();
-  const agentName = useAgentNames().get(item.agentId) ?? UNLISTED_AGENT;
-  const harness = useAgentHarness(item.agentId);
+  const { name: agentName, harness } = useAgentLabel(item.agentId);
   const pictureOf = useMemberPictures();
 
   const messages = useMemo(
@@ -693,6 +688,7 @@ function ThreadDetail({
     ...message,
     writer: {
       ...message.writer,
+      id: message.writer.agent ? undefined : message.writer.userId,
       picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
       harness: message.writer.agent ? harness : undefined,
     },
@@ -1023,33 +1019,34 @@ function InboxStackList(words: InboxSearch) {
         </Stack.Toolbar>
       )}
       <Screen>
-        <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-          {listing.listed.length === 0 ? (
+        {listing.listed.length === 0 ? (
+          <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
             <InboxEmpty
               show={show}
               search={search}
               feed={listing.feed}
               onRetry={() => void acts.refresh()}
             />
-          ) : (
-            <InboxRows
-              look={LIST_LOOK.PLAIN}
-              listed={listing.listed}
-              readerId={listing.readerId}
-              onSelect={(id) =>
-                router.push(
-                  onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
-                )
-              }
-              onRefresh={acts.refresh}
-              onMark={acts.mark}
-              remindMenu={(item) => remind.menu([item])}
-              onResolve={acts.resolve}
-              choosing={choosing?.rows}
-              onChooseStart={chooseStart}
-            />
-          )}
-        </ScopePicker>
+          </ScopePicker>
+        ) : (
+          <InboxRows
+            scopes={{ label: SCOPE_LABEL, scopes }}
+            look={LIST_LOOK.PLAIN}
+            listed={listing.listed}
+            readerId={listing.readerId}
+            onSelect={(id) =>
+              router.push(
+                onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
+              )
+            }
+            onRefresh={acts.refresh}
+            onMark={acts.mark}
+            remindMenu={(item) => remind.menu([item])}
+            onResolve={acts.resolve}
+            choosing={choosing?.rows}
+            onChooseStart={chooseStart}
+          />
+        )}
       </Screen>
       {remind.sheet}
     </>
@@ -1078,6 +1075,7 @@ function InboxSplitScreen({
     useInboxScreen(words, selected);
 
   const threeColumns = useThreeColumns();
+  const focused = useIsFocused();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
   const rows =
@@ -1090,6 +1088,7 @@ function InboxSplitScreen({
       />
     ) : (
       <InboxRows
+        scopes={threeColumns ? undefined : { label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
         look={LIST_LOOK.PLAIN}
         listed={listing.listed}
         readerId={listing.readerId}
@@ -1106,20 +1105,22 @@ function InboxSplitScreen({
 
   // Note that beside the app sidebar the scopes leave the list for Mail's filter button in its bar, so the list starts at its first thread; a two-column window keeps the menu picker over the list.
   const list = {
-    view: threeColumns ? (
-      rows
-    ) : (
-      <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
-        {rows}
-      </ScopePicker>
-    ),
+    // Note that a list with rows stands its scopes as its first row, so they scroll away with the rows, and one listing nothing keeps them over its empty state.
+    view:
+      threeColumns || listing.listed.length > 0 ? (
+        rows
+      ) : (
+        <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
+          {rows}
+        </ScopePicker>
+      ),
     // Note that Select mode names how many are chosen in the column's title, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
     bar:
       choosing === undefined
         ? {
             title: INBOX_TITLE,
             // Note that beside the app sidebar the scope leaves the list for the filter button, so the bar names a narrowing one under its title, as Mail's "Filtered by: Unread"; elsewhere the scopes stand over the list and say it themselves.
-            subtitle: threeColumns ? scopeSubtitle(scopes, show !== INBOX_SHOW.OPEN) : undefined,
+            titleLine: threeColumns ? scopeSubtitle(scopes, show !== INBOX_SHOW.OPEN) : undefined,
             filter: threeColumns
               ? scopeMenu(SCOPE_LABEL, scopes, show !== INBOX_SHOW.OPEN)
               : undefined,
@@ -1145,6 +1146,12 @@ function InboxSplitScreen({
   const detailBar = selected === undefined ? { acts: NO_THREAD_ACTS } : undefined;
 
   const first = useListColumn(list);
+  useStackRoot(SIDEBAR_PLACE.INBOX, selected);
+  // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
+  const stack = useDetailStackColumn(SIDEBAR_PLACE.INBOX, { id: selected }, true);
+  // Note that the menu bar's Back pops the pages over this two-column detail while it's shown; three columns name theirs in `AppSplit`.
+  useStandDetailFront(SIDEBAR_PLACE.INBOX, focused && !threeColumns);
+  const firstDetailBar = usePortraitDetailBar(detailBar);
   useHandColumns(
     SIDEBAR_PLACE.INBOX,
     threeColumns
@@ -1157,7 +1164,12 @@ function InboxSplitScreen({
       <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
       {threeColumns ? null : (
         <Screen>
-          <SplitView {...first} detail={detail} detailBar={detailBar} />
+          <SplitView
+            {...first}
+            detail={stack.wrap(detail)}
+            detailBar={firstDetailBar}
+            detailStack={stack.detailStack}
+          />
         </Screen>
       )}
       {remind.sheet}

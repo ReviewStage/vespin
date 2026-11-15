@@ -48,11 +48,13 @@ const SOMEONE = "Someone";
 /**
  * A new thread's draft kept beside its block: the words typed, the start
  * sent under them and not yet answered as posted, so the same words sent
- * again after a lost answer go under the same key, and how often the words
- * have changed, so a send answered late lets the draft go only while it
+ * again after a lost answer go under the same key, and which edit of the
+ * words it holds, so a send answered late lets the draft go only while it
  * still holds the words that send carried.
  */
 type StartDraft = {
+  /** The block's words as the draft was typed on it, since an edited description can stand another block at the same offsets. */
+  readonly quote: string | undefined;
   readonly words: string;
   readonly sent: SentStart | undefined;
   readonly revision: number;
@@ -66,11 +68,28 @@ type StartDraft = {
  */
 const startDrafts = new Map<string, Map<number, Map<number, StartDraft>>>();
 
-/** The draft kept toward a new thread on one block of a task; none kept, or no block yet read. */
-function startDraftOf(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
+/** The last edit numbered, across every draft, so a draft let go and typed again never takes an edit's number a send still waits to compare. */
+let lastEdit = 0;
+
+/** The next edit's number, never one given before. */
+function nextEdit(): number {
+  lastEdit += 1;
+
+  return lastEdit;
+}
+
+/** The draft kept at one block's offsets of a task, whatever block it was typed on; none kept, or no block yet read. */
+function heldDraftAt(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
   if (block === undefined) return undefined;
 
   return startDrafts.get(taskId)?.get(block.from)?.get(block.to);
+}
+
+/** The draft kept toward a new thread on one block of a task, typed on these same words; none kept, or no block yet read. */
+function startDraftOf(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
+  const draft = heldDraftAt(taskId, block);
+
+  return draft?.quote === block?.quote ? draft : undefined;
 }
 
 /** Keeps a new thread's draft on one block of a task, or lets it go at none. */
@@ -204,6 +223,24 @@ export interface CommentReply {
   readonly note: string | undefined;
 }
 
+/**
+ * Each thread's reply typed and not yet sent, by the task, then the thread,
+ * so it outlives the screen that drew it, as a widening window hands a
+ * thread from its tab's stack to a split view's detail.
+ */
+const unsentReplies = new Map<string, Map<string, string>>();
+
+/** Keeps a thread's unsent reply, or lets it go once empty. */
+function keepUnsentReply(taskId: string, threadId: string, words: string): void {
+  const threads = unsentReplies.get(taskId) ?? new Map<string, string>();
+
+  if (words === "") threads.delete(threadId);
+  else threads.set(threadId, words);
+
+  if (threads.size === 0) unsentReplies.delete(taskId);
+  else unsentReplies.set(taskId, threads);
+}
+
 /** A reply sent and not yet answered as posted: its words, and the key it went under. */
 interface SentReply {
   readonly words: string;
@@ -223,7 +260,9 @@ interface SentReply {
 export function useCommentReply(taskId: string, threadId: string): CommentReply {
   const acts = useHostActs();
   const write = useWrite();
-  const [words, setWords] = useState("");
+  const [words, setWords] = useState(() => unsentReplies.get(taskId)?.get(threadId) ?? "");
+  // Note that the reply is kept beside its thread as it changes, so a screen drawn anew for the thread opens on it.
+  useEffect(() => keepUnsentReply(taskId, threadId, words), [taskId, threadId, words]);
   // Note that the last reply sent is held outside render, so a second tap before the next render reuses its key and the service takes the reply once.
   const sent = useRef<SentReply | undefined>(undefined);
   const [note, setNote] = useState<string | undefined>(undefined);
@@ -352,7 +391,7 @@ export function useCommentStart(
         block,
         next === "" && was?.sent === undefined
           ? undefined
-          : { words: next, sent: was?.sent, revision: (was?.revision ?? 0) + 1 },
+          : { quote: block.quote, words: next, sent: was?.sent, revision: nextEdit() },
       );
     },
     [taskId, block],
@@ -375,7 +414,12 @@ export function useCommentStart(
       // Note that the start is kept with the draft, so a screen drawn anew by a rotation sends the same words again under the same key.
       const held = startDraftOf(taskId, block);
       const revision = held?.revision ?? 0;
-      keepStartDraft(taskId, block, { words: held?.words ?? words, sent: start, revision });
+      keepStartDraft(taskId, block, {
+        quote: block.quote,
+        words: held?.words ?? words,
+        sent: start,
+        revision,
+      });
       setSending(true);
       setNote(undefined);
 
@@ -411,16 +455,20 @@ export function useCommentStart(
       });
 
       if (!went) return undefined;
-      const now = startDraftOf(taskId, block);
+      const now = heldDraftAt(taskId, block);
       // Note that a newer send's key, kept by a screen a rotation drew, stays with the draft until that send settles.
       const pending = now?.sent?.threadId === threadId ? undefined : now?.sent;
-      setSentLocal(pending);
 
-      // Note that the draft goes only while it still holds the words this send carried, so words typed meanwhile, on this screen or one a rotation drew, stay in the field and kept.
+      // Note that the draft goes only while it still holds the words this send carried, so words typed meanwhile, on this screen or one a rotation drew, stay in the field and kept; and a draft another block's words now stand under at these offsets is left as it is.
       if (now === undefined || now.revision === revision) {
+        setSentLocal(pending);
         setLocal("");
         keepStartDraft(taskId, block, undefined);
+      } else if (now.quote !== block.quote) {
+        setSentLocal(undefined);
+        setLocal("");
       } else {
+        setSentLocal(pending);
         setLocal(now.words);
         keepStartDraft(taskId, block, { ...now, sent: pending });
       }

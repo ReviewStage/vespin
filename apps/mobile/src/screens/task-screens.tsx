@@ -51,6 +51,7 @@ import {
   taskTreeCollections,
 } from "@repo/features/task-tree-model";
 import {
+  TASK_PRIORITY,
   TASK_PRIORITY_ORDER,
   TASK_RELATION_KIND,
   TASK_STATUS,
@@ -80,6 +81,8 @@ import {
   BAR_TITLE,
   type BarAction,
   type BarMenu,
+  BUZZ,
+  buzz,
   type ColumnBar,
   ConfirmAsk,
   DetailPage,
@@ -96,6 +99,8 @@ import {
   menuWithout,
   NoSelection,
   PATH_PART,
+  PRIORITY_MARK_SYMBOL,
+  PRIORITY_MARK_TONE,
   RelationRow,
   ROW_ACTION_TONE,
   type RowAction,
@@ -108,7 +113,6 @@ import {
   STATUS_MARK_SYMBOL,
   type StandingMenus,
   sectionGlyph,
-  shareLink,
   type TaskFold,
   TaskHead,
   TaskPreview,
@@ -118,14 +122,22 @@ import {
   WordsRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { setStringAsync } from "expo-clipboard";
+import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
-import { PUSHED_PAGE, useDetailLeave, useDetailPush } from "../detail-stack.js";
+import {
+  PUSHED_PAGE,
+  useDetailLeave,
+  useDetailPush,
+  useStackRoot,
+  useStandDetailFront,
+} from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
+import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
 import { useRefilledSearchField } from "../search-field.js";
@@ -165,7 +177,14 @@ import {
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, type SidebarTasks, useListColumn } from "./app-sidebar.js";
+import {
+  SIDEBAR_PLACE,
+  type SidebarPlace,
+  type SidebarTasks,
+  useListColumn,
+  usePortraitDetailBar,
+} from "./app-sidebar.js";
+import { useDetailStackColumn } from "./detail-stack-column.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -239,15 +258,20 @@ function openOnWeb(destination: LinkDestination, workspace: Workspace | undefine
   openInSafari(linkOf(destination, workspace.slug ?? workspace.id));
 }
 
-/** A task's address on vespin.dev, as the panel's Copy link copies it, raised in the share sheet whose first row copies it. */
-function shareTaskLink(task: TaskSummary, workspace: Workspace | undefined): void {
+/** Copies a task's address on vespin.dev to the pasteboard at once, as the panel's Copy link and Safari's and Notes' do, with the system's tap of success, or says on the console why it could not. */
+function copyTaskLink(task: TaskSummary, workspace: Workspace | undefined): void {
   if (workspace === undefined) return;
-  shareLink(
+  setStringAsync(
     linkOf(
       { kind: LINK_DESTINATION.TASK, taskId: taskLinkStep(task) },
       workspace.slug ?? workspace.id,
     ),
-  );
+  )
+    .then(() => buzz(BUZZ.SUCCESS))
+    .catch((cause: unknown) => {
+      console.error("The task's link could not be copied.", cause);
+      buzz(BUZZ.ERROR);
+    });
 }
 
 /** Asks for a task's new name in the system's alert, opened on the name it has, and renames it to the name typed. */
@@ -462,7 +486,7 @@ function rowActs(
         label: WORDS.COPY_LINK,
         symbol: GLYPH.LINK,
         tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => shareTaskLink(task, listing.workspace),
+        onPress: () => copyTaskLink(task, listing.workspace),
       },
       {
         label: WORDS.RENAME,
@@ -573,6 +597,7 @@ export function TaskListRow({
       id={task.id}
       name={task.name}
       status={task.status ?? TASK_STATUS.TODO}
+      priority={task.priority ?? TASK_PRIORITY.NONE}
       unread={look.unread}
       finished={taskFinished(task)}
       needsYou={look.needsYou}
@@ -988,7 +1013,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
       {
         label: WORDS.COPY_LINK,
         symbol: GLYPH.LINK,
-        onPress: () => shareTaskLink(task, overview.workspace),
+        onPress: () => copyTaskLink(task, overview.workspace),
       },
       {
         label: WORDS.RENAME,
@@ -1067,9 +1092,10 @@ function useNewAgent(): (task: TaskSummary) => void {
 /** Opens a task's version history where its workspace's descriptions stand on, as the panel's Version history opens it; none where they stand off. */
 function useHistoryDoor(
   workspaceId: string | undefined,
+  place?: SidebarPlace | undefined,
 ): ((task: TaskSummary) => void) | undefined {
   const router = useRouter();
-  const toDetail = useDetailPush();
+  const toDetail = useDetailPush(place);
   const onOwnTab = useOnOwnTab();
 
   const { data: descriptions = false } = useQuery({
@@ -1106,7 +1132,11 @@ function agentState(status: AgentStatus): AgentRowState {
  * most pressing first; and its assignee, the workspace's members, the reader
  * first, then No assignee; each with the one it holds checked.
  */
-function standingMenus(overview: TaskOverview, members: readonly ListedMember[]): StandingMenus {
+function standingMenus(
+  overview: TaskOverview,
+  members: readonly ListedMember[],
+  photoOf: (userId: string) => string | undefined,
+): StandingMenus {
   const { task } = overview;
   const assigneeId = task.assignee?.userId;
 
@@ -1116,6 +1146,8 @@ function standingMenus(overview: TaskOverview, members: readonly ListedMember[])
       label: WORDS.PRIORITY,
       choices: TASK_PRIORITY_ORDER.map((priority) => ({
         label: TASK_PRIORITY_WORDS[priority],
+        symbol: PRIORITY_MARK_SYMBOL[priority],
+        tone: PRIORITY_MARK_TONE[priority],
         on: task.priority === priority,
         onPress: () => overview.setPriority(task.id, priority),
       })),
@@ -1125,6 +1157,8 @@ function standingMenus(overview: TaskOverview, members: readonly ListedMember[])
       choices: [
         ...members.map((member) => ({
           label: member.name,
+          symbol: GLYPH.PERSON,
+          photo: photoOf(member.userId),
           on: member.userId === assigneeId,
           onPress: () => overview.setAssignee(task.id, member),
         })),
@@ -1146,22 +1180,28 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const following = useFollowingChip(task.id);
   const members = useListedMembers(task.workspaceId);
 
+  const photoOf = useMenuPhotos(
+    pictureOf,
+    useMemo(() => members.map(({ userId }) => userId), [members]),
+  );
+
   return (
     <TaskHead
       name={task.name}
       status={task.status}
-      priority={task.priority === undefined ? undefined : TASK_PRIORITY_WORDS[task.priority]}
+      priority={task.priority}
       assignee={
         task.assignee === undefined || task.assignee === null
           ? { name: NO_ASSIGNEE_WORDS, nobody: true }
           : {
               name: task.assignee.name,
+              id: task.assignee.userId,
               picture: pictureOf(task.assignee.userId),
               nobody: false,
             }
       }
       following={following}
-      menus={standingMenus(overview, members)}
+      menus={standingMenus(overview, members, photoOf)}
       createdBy={
         task.createdBy === undefined
           ? undefined
@@ -1719,6 +1759,7 @@ function ReadFailedRow({
  */
 function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
+  const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
   const { task } = overview;
   const open = useTaskComments(task.id).filter(threadOpen);
@@ -1742,12 +1783,16 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
           symbol={GLYPH.COMMENT}
           label={threadComments(thread)[0]?.words ?? thread.quote}
           detail={provenanceText(thread.updatedAt, Date.now())}
-          onPress={() =>
+          onPress={() => {
+            if (toDetail({ kind: PUSHED_PAGE.COMMENTS, threadId: thread.id, taskId: task.id })) {
+              return;
+            }
+
             router.push({
               pathname: onOwnTab("/tasks/comments/[id]"),
               params: { id: thread.id, task: task.id },
-            })
-          }
+            });
+          }}
         />
       ))}
     </ListSection>
@@ -1890,12 +1935,15 @@ const NO_STATUS_DOORS = { setStatus: () => undefined, workingAgents: () => 0 } a
  * none picked, and the reading state or Task not found for one not read.
  * Its status set and its delete ask through `doors` where a list beside it
  * asks for them, else through asks of its own, which `asks` draws with its
- * agents' Archive question, a delete going on to `onDeleted`.
+ * agents' Archive question, a delete going on to `onDeleted`. `place` names
+ * the detail its bar opens History over where the caller draws the bar from
+ * outside that detail, as a split view's root does.
  */
 export function useTaskDetail(
   selected: string | undefined,
   doors?: TaskDetailDoors | undefined,
   onDeleted?: (() => void) | undefined,
+  place?: SidebarPlace | undefined,
 ): TaskDetail {
   const newSubTask = useNewSubTask();
   const newAgent = useNewAgent();
@@ -1909,7 +1957,7 @@ export function useTaskDetail(
   const setStatus = doors?.setStatus ?? own.setStatus;
   const askDelete = doors?.askDelete ?? deletion.askDelete;
   const overview = held === undefined ? undefined : { ...held, setStatus };
-  const history = useHistoryDoor(overview?.task.workspaceId);
+  const history = useHistoryDoor(overview?.task.workspaceId, place);
   const read = useTasksRead();
   const archiveAsk = useAgentArchiveAsk();
   const { refreshTasks } = useInboxActs();
@@ -1994,8 +2042,15 @@ function TasksSplitScreen({
 }) {
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const threeColumns = useThreeColumns();
+  const focused = useIsFocused();
   const picked = useTasksCollection();
-  const { detail, detailBar, asks } = useTaskDetail(selected, listing);
+
+  const { detail, detailBar, asks } = useTaskDetail(
+    selected,
+    listing,
+    undefined,
+    SIDEBAR_PLACE.TASKS,
+  );
 
   // Note that a collection the sidebar picked fills the list only where the sidebar stands, and a portrait window's list keeps every group.
   const collection =
@@ -2020,6 +2075,12 @@ function TasksSplitScreen({
   };
 
   const first = useListColumn(list);
+  useStackRoot(SIDEBAR_PLACE.TASKS, selected);
+  // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
+  const stack = useDetailStackColumn(SIDEBAR_PLACE.TASKS, { id: selected }, true);
+  // Note that the menu bar's Back pops the pages over this two-column detail while it's shown; three columns name theirs in `AppSplit`.
+  useStandDetailFront(SIDEBAR_PLACE.TASKS, focused && !threeColumns);
+  const firstDetailBar = usePortraitDetailBar(detailBar);
   useHandColumns(
     SIDEBAR_PLACE.TASKS,
     threeColumns
@@ -2032,7 +2093,12 @@ function TasksSplitScreen({
       <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
       {threeColumns ? null : (
         <Screen>
-          <SplitView {...first} detail={detail} detailBar={detailBar} />
+          <SplitView
+            {...first}
+            detail={stack.wrap(detail)}
+            detailBar={firstDetailBar}
+            detailStack={stack.detailStack}
+          />
         </Screen>
       )}
       <StatusQuestionAsk question={status} />

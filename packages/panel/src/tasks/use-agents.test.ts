@@ -17,7 +17,7 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PULL_REQUEST_CHAPTERS_CALL_FAILURE } from "@repo/features/pull-request-chapters-view";
 import { PULL_REQUEST_CHAPTERS_STATE } from "@repo/features/pull-request-chapters-wire";
-import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, type ListedTasksView, TASKS_READ } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActKind, PortActPayload } from "@repo/host/contract";
@@ -60,7 +60,7 @@ interface Standing {
 }
 
 /** The task list as it stands for a test: the open task and the agents it carries, or neither where it carries none. */
-function standingView({ taskId, repository, listedAgents }: Standing): TasksView {
+function standingView({ taskId, repository, listedAgents }: Standing): ListedTasksView {
   const carried = taskId !== undefined && listedAgents !== undefined;
 
   return {
