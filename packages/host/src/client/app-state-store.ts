@@ -3,7 +3,7 @@
  */
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
-import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, NO_TASK_LIST, type TaskListParts } from "@repo/features/tasks-view";
 import type { HostCapability } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { NOTIFICATIONS_STATUS } from "@repo/settings/settings-controls";
@@ -21,7 +21,6 @@ import {
   NO_KEYS_HELD,
   NO_PAGES,
   NO_TRANSCRIPTS,
-  type TaskListParts,
   UNREAD,
 } from "../app-state.js";
 import type { HostBootstrap } from "../host-operator.js";
@@ -29,9 +28,6 @@ import type { RunMode } from "../run-mode.js";
 import { idleUpdateSnapshot } from "../update-service.js";
 
 type AppStateSlice = Exclude<keyof AppState, "version">;
-
-/** No task list drawn yet: what the store holds beside the document before the host tells it one. */
-const NO_TASK_LIST: TaskListParts = { tasks: [] };
 
 /**
  * Whether two drawings of the task list hold the very same lists. Note that
