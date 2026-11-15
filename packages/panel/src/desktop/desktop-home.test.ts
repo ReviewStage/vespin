@@ -33,6 +33,7 @@ import {
 } from "../testing/app-state.js";
 import { composerEditor, editorBundleLanded, installEditorLayout } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { tasksControl, waitingOf } from "../testing/tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
@@ -137,7 +138,10 @@ function home(
       createElement(
         OpenSettingsProvider,
         { value: onSettings },
-        createElement(DesktopHome, { tasks, room, accountName: DEAN.name, staged: true }),
+        overEveryTask(
+          tasks,
+          createElement(DesktopHome, { tasks, room, accountName: DEAN.name, staged: true }),
+        ),
       ),
     ),
   );

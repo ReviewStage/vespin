@@ -19,6 +19,7 @@ import { playCompletionSound } from "@repo/ui/completion-sound";
 import { isComposingKey } from "@repo/ui/composing-key";
 import { useLinkOpener } from "@repo/ui/held-link";
 import { LINK_ROUTE, linkRoute } from "@repo/ui/link-route";
+import { useLiveQuery } from "@tanstack/react-db";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -88,6 +89,7 @@ import { SHELL_ROOM } from "./shell-room.js";
 import { useSoundClipLoaded } from "./sound-clip.js";
 import { ShellRoomContext, useStageRoom } from "./stage-room.js";
 import { useSteadyDoor } from "./steady-door.js";
+import { useTaskListCollections } from "./task-list-collections.js";
 import { useTaskRoute } from "./task-route.js";
 import { MessageRevealProvider } from "./tasks/message-links.js";
 import { type RepositoryRemedyDoors, RepositoryRemedyProvider } from "./tasks/repository-remedy.js";
@@ -277,6 +279,7 @@ function AppWindow(): React.JSX.Element {
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const run = useQuery({ ...appStateQuery, select: selectRun }).data;
   const planning = useQuery({ ...appStateQuery, select: selectTasks }).data;
+  const taskListCollections = useTaskListCollections();
 
   const unseenAgents =
     useQuery({ ...appStateQuery, select: selectUnseenAgents }).data ?? NO_UNSEEN_AGENTS;
@@ -598,11 +601,15 @@ function AppWindow(): React.JSX.Element {
 
   // An app link, handed by the system or pressed in the window, opens where its place stands (`@repo/ui/link-route`).
   // A pull request a listed task's agent opened opens in that agent's Pull request tab wherever it is pressed (`use-open-link.ts`).
+  const { data: taskPullRequests } = useLiveQuery((q) =>
+    q.from({ listed: taskListCollections.taskPullRequests }),
+  );
+
   const listedTasks = useMemo(() => {
     const ids = new Set(tasks.tasks.map((task) => task.id));
 
-    return (planning?.taskPullRequests ?? []).filter((each) => ids.has(each.taskId));
-  }, [tasks.tasks, planning?.taskPullRequests]);
+    return taskPullRequests.filter((each) => ids.has(each.taskId));
+  }, [tasks.tasks, taskPullRequests]);
 
   // An Admin link opens while the account's access is still being read, the
   // place waiting on it, and never for an account that is no admin

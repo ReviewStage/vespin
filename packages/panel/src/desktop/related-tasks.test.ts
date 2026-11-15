@@ -7,16 +7,16 @@ import {
   type PullRequestState,
 } from "@repo/features/agent-wire";
 import { TASK_PRIORITY, TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
-import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { handMembers, stateWith } from "../testing/app-state.js";
-import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import { handMembers } from "../testing/app-state.js";
+import { withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
+import { type StandingTaskList, standingTaskList } from "../testing/history-rows.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { RelatedTasks } from "./related-tasks.js";
 
@@ -47,32 +47,28 @@ const ACME = {
 
 const roots: Root[] = [];
 
+/** The task list's collections the rows read their pull requests from. */
+let listed: StandingTaskList;
+
 beforeEach(() => {
   fakeAppPlatform(QUIET_PANEL);
   fakeAppBridge({});
   fakeActPort({});
   handMembers(() => ({ rows: { members: [] } }));
   // The task's pull requests, as the list followed live holds them.
-  writeAppState(
-    stateWith(
-      {},
+  listed = standingTaskList({
+    tasks: [],
+    taskPullRequests: [
       {
-        tasks: {
-          ...IDLE_TASKS_VIEW,
-          taskPullRequests: [
-            {
-              taskId: TASK.id,
-              pullRequests: [
-                pullRequest(612, PULL_REQUEST_STATE.OPEN),
-                pullRequest(611, PULL_REQUEST_STATE.DRAFT),
-                pullRequest(600, PULL_REQUEST_STATE.MERGED),
-              ],
-            },
-          ],
-        },
+        taskId: TASK.id,
+        pullRequests: [
+          pullRequest(612, PULL_REQUEST_STATE.OPEN),
+          pullRequest(611, PULL_REQUEST_STATE.DRAFT),
+          pullRequest(600, PULL_REQUEST_STATE.MERGED),
+        ],
       },
-    ),
-  );
+    ],
+  });
 });
 
 afterEach(() => {
@@ -127,13 +123,15 @@ test("a related task's row is led by its owner's relation and ends with its open
   act(() =>
     root.render(
       withQueryClient(
-        createElement(RelatedTasks, {
-          tasks,
-          room: { scroller: { current: container }, column: { current: container } },
-          label: "Related tasks",
-          rows: [{ task: TASK, relation: "Blocks" }],
-          onOpenTask: (taskId: string) => opened.push(taskId),
-        }),
+        listed.provide(
+          createElement(RelatedTasks, {
+            tasks,
+            room: { scroller: { current: container }, column: { current: container } },
+            label: "Related tasks",
+            rows: [{ task: TASK, relation: "Blocks" }],
+            onOpenTask: (taskId: string) => opened.push(taskId),
+          }),
+        ),
       ),
     ),
   );
@@ -181,13 +179,15 @@ test("a related task's row leads its trailing run with its stop sign and says ho
   act(() =>
     root.render(
       withQueryClient(
-        createElement(RelatedTasks, {
-          tasks,
-          room: { scroller: { current: container }, column: { current: container } },
-          label: "Sub-tasks",
-          rows: [{ task: blocked }],
-          onOpenTask: tasks.onSelect,
-        }),
+        listed.provide(
+          createElement(RelatedTasks, {
+            tasks,
+            room: { scroller: { current: container }, column: { current: container } },
+            label: "Sub-tasks",
+            rows: [{ task: blocked }],
+            onOpenTask: tasks.onSelect,
+          }),
+        ),
       ),
     ),
   );
@@ -218,13 +218,15 @@ test("under a finger, a related task's row draws no ⋯, and a long press on it 
   act(() =>
     root.render(
       withQueryClient(
-        createElement(RelatedTasks, {
-          tasks,
-          room: { scroller: { current: container }, column: { current: container } },
-          label: "Sub-tasks",
-          rows: [{ task: TASK }],
-          onOpenTask: () => undefined,
-        }),
+        listed.provide(
+          createElement(RelatedTasks, {
+            tasks,
+            room: { scroller: { current: container }, column: { current: container } },
+            label: "Sub-tasks",
+            rows: [{ task: TASK }],
+            onOpenTask: () => undefined,
+          }),
+        ),
       ),
     ),
   );

@@ -79,7 +79,7 @@ export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-m
 
 export { releaseFields } from "./field-focus.js";
 
-export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
+export { AttachRow, MenuPickRow, WORDS_LOOK, WordsField } from "./form-rows.js";
 
 export { GlassBar, GlassDock } from "./glass-bar.js";
 
@@ -274,7 +274,7 @@ export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
-export { askForName, type NameAsk, shareLink, shareWords } from "./system-asks.js";
+export { askForName, type NameAsk, shareWords } from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,

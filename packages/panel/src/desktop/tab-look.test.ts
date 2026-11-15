@@ -34,6 +34,7 @@ import { fakeAppPlatform } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, handCapabilities, withExperiments } from "../testing/app-state.js";
 import { editorBundleLanded } from "../testing/composer.js";
 import { restOn } from "../testing/hint-rest.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
@@ -222,7 +223,7 @@ function taskDrawn(shown: Shown) {
       createElement(
         ChipCards,
         { value: chipCards },
-        createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
+        overEveryTask(tasks, createElement(DesktopTasks, { looks: NO_LOOKS, tasks })),
       ),
     ),
   );
