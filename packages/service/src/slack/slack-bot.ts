@@ -322,6 +322,9 @@ const RepliesSchema = Schema.Struct({
       text: Schema.optional(Schema.String),
     }),
   ),
+  response_metadata: Schema.optional(
+    Schema.Struct({ next_cursor: Schema.optional(Schema.String) }),
+  ),
 });
 
 /** `conversations.members`' answer, as far as it is read. */
@@ -369,6 +372,12 @@ const CHANNEL_TYPES = "public_channel,private_channel";
 
 /** The most of a thread's messages read; a thread longer than this is read by its first page. */
 const THREAD_MESSAGES_READ = "200";
+
+/** How many of a thread's messages one page of a paged read asks for, Slack's own bound, so most threads take one read. */
+const THREAD_PAGE_READ = "1000";
+
+/** The most pages a paged read of one thread takes before it answers what it has. */
+const THREAD_PAGES_READ = 10;
 
 /** The most members of a channel read; a channel with more is read by its first page. */
 const CHANNEL_MEMBERS_READ = "1000";
@@ -436,6 +445,38 @@ function succeeded(what: string) {
       ),
     );
 }
+
+/**
+ * The thread's latest messages, at most `limit`, oldest first. Note that
+ * Slack answers a thread oldest first, a page at a time, so the read pages
+ * to its end by Slack's cursor and keeps the last; each page asks for as
+ * many as Slack gives, so a thread takes as few reads as it can.
+ */
+const latestInThread = Effect.fnUntraced(function* (
+  api: SlackWebApi,
+  channel: string,
+  threadTs: string,
+  limit: number,
+) {
+  let kept: readonly SlackThreadMessage[] = [];
+  let cursor: string | undefined;
+
+  for (let page = 0; page < THREAD_PAGES_READ; page += 1) {
+    const answer = yield* api(SLACK_METHOD.CONVERSATIONS_REPLIES, {
+      channel,
+      ts: threadTs,
+      limit: THREAD_PAGE_READ,
+      ...(cursor === undefined ? undefined : { cursor }),
+    }).pipe(Effect.flatMap(readAnswer(SLACK_METHOD.CONVERSATIONS_REPLIES, RepliesSchema)));
+
+    kept = [...kept, ...threadMessagesOf(answer)].slice(-limit);
+    cursor = answer.response_metadata?.next_cursor;
+
+    if (cursor === undefined || cursor === "") break;
+  }
+
+  return kept;
+});
 
 /** Logs a failure by its fixed line, and answers nothing. */
 function swallowed<A>(what: string) {
@@ -752,14 +793,7 @@ function slackWorkspaceBotOver(
           Effect.as(Effect.logWarning("The Slack bot could not read a thread", cause.message), []),
         ),
       ),
-    readThread: (channel, threadTs, limit) =>
-      api(SLACK_METHOD.CONVERSATIONS_REPLIES, { channel, ts: threadTs, limit: String(limit) }).pipe(
-        Effect.flatMap((answer) =>
-          readAnswer(SLACK_METHOD.CONVERSATIONS_REPLIES, RepliesSchema)(answer),
-        ),
-        // Note that Slack answers a thread's first page oldest first, its first message the thread's own.
-        Effect.map((answer) => threadMessagesOf(answer).slice(0, limit)),
-      ),
+    readThread: (channel, threadTs, limit) => latestInThread(api, channel, threadTs, limit),
     history: (channel, limit) =>
       api(SLACK_METHOD.CONVERSATIONS_HISTORY, { channel, limit: String(limit) }).pipe(
         Effect.flatMap((answer) =>

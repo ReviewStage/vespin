@@ -167,6 +167,32 @@ it.layer(getTestDB())("the Slack bot", (it) => {
     }),
   );
 
+  it.effect("reads a thread longer than one page by its latest messages, oldest first", () =>
+    Effect.gen(function* () {
+      // Slack answers a thread oldest first, a page at a time, the next page by its cursor.
+      const firstPage = {
+        ok: true,
+        messages: [{ ts: "1.000001" }, { ts: "1.000002" }, { ts: "1.000003" }],
+        response_metadata: { next_cursor: "next" },
+      };
+
+      const lastPage = { ok: true, messages: [{ ts: "1.000004" }, { ts: "1.000005" }] };
+
+      const bot = yield* slackBotOver((method, args) =>
+        method === "conversations.replies"
+          ? Effect.succeed(args.cursor === "next" ? lastPage : firstPage)
+          : Effect.fail(new SlackBotFailure({ method })),
+      ).forWorkspace(randomUUID());
+
+      const read = yield* bot.readThread("C0001", "1.000001", 3);
+
+      assert.deepEqual(
+        read.map((message) => message.ts),
+        ["1.000003", "1.000004", "1.000005"],
+      );
+    }),
+  );
+
   it.effect(
     "calls Slack for each workspace on its own token, and for one holding none not at all",
     () => {
