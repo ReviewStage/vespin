@@ -31,6 +31,9 @@
         old === null ||
         old.memoizedProps !== fiber.memoizedProps ||
         old.memoizedState !== fiber.memoizedState;
+      // Note that a memo component (fiber tags 14 and 15) that bailed out still takes a new props object from its parent, and keeps the last render's selfBaseDuration, so it would read as rendered at its old cost; one whose child React left in place did not render.
+      if (did && old !== null && (fiber.tag === 14 || fiber.tag === 15) && fiber.child === old.child)
+        did = false;
       if (did) {
         if (old === null) mounted += 1;
         var name = nameOf(fiber);
