@@ -16,6 +16,7 @@ import {
   needsYou,
 } from "@repo/features/inbox-list-model";
 import { useMemo } from "react";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { NO_HOLDINGS, taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
 import { useListedInbox } from "./use-inbox-slices.js";
 import type { TasksControl } from "./use-tasks-tab.js";
@@ -44,7 +45,7 @@ function searchOrder(groups: readonly InboxGroup[], readerId: string | undefined
 /** The listed workspace's Inbox, followed while `asked`; see the module's head. */
 export function useInboxSearch(tasks: TasksControl, asked: boolean): InboxSearch {
   const { inboxTasks } = useListedInbox(tasks);
-  const standing = tasks.listed.tasks;
+  const standing = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
 
   // Note that nothing is followed while no search asks.
   const holdings = useMemo(() => {

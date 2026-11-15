@@ -117,15 +117,6 @@ export interface MachineLayout {
    */
   readonly linesRead: boolean;
   /**
-   * Whether the runner keeps the CLI's transcript at the service
-   * (`@repo/agent-runner`'s `RUNNER_TRANSCRIPTS`), as a sandbox's does, so
-   * a place made anew still resumes the CLI's session, and a continue or
-   * fork elsewhere carries it; a Mac's whose release bundles a runner that
-   * keeps it (`MAC_MACHINE.TRANSCRIPTS_SINCE`), and none on an older Mac,
-   * whose CLI keeps its own files on the Mac alone.
-   */
-  readonly transcriptsKept: boolean;
-  /**
    * Whether a session the store does not hold whole still resumes from the
    * CLI's own files where the place was not made anew, the store left out
    * of that launch: a Mac's, whose sessions begun before it kept

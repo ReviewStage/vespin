@@ -6,6 +6,7 @@ import { IDLE_TASKS_VIEW, type TasksPinParams, type TasksView } from "@repo/feat
 import { ACT_KIND } from "@repo/host/acts";
 import { createElement } from "react";
 import { afterEach, test, vi } from "vitest";
+import { listedTaskRows } from "./testing/history-rows.js";
 import {
   forgetUndo,
   type LocalWrite,
@@ -75,7 +76,7 @@ function standWindow(): PinWindow {
     return Promise.resolve(true);
   };
 
-  return { doors: { rows: () => ({ tasks: drawn, held: undefined }), send }, sent, show };
+  return { doors: { rows: () => listedTaskRows(drawn.tasks), send }, sent, show };
 }
 
 /** Pins the task as its menu's Pin does: its row read as pressed, the pin sent, and kept for ⌘Z once the act keeps it. */
@@ -135,8 +136,12 @@ const PIN_WRITE = {
   read: (_rows, taskId) => taskId,
   act: (send, taskId) => send({ taskId, pinned: true }),
   undo: (send, taskId) => send({ taskId, pinned: false }),
-  holds: ({ tasks }, taskId) => tasks.tasks.some((task) => task.id === taskId && task.pinnedAt),
-  undone: ({ tasks }, taskId) => tasks.tasks.some((task) => task.id === taskId && !task.pinnedAt),
+  holds: (rows, taskId) => rows.listed(taskId)?.pinnedAt !== undefined,
+  undone: (rows, taskId) => {
+    const task = rows.listed(taskId);
+
+    return task !== undefined && task.pinnedAt === undefined;
+  },
   refused: (kept) => (kept ? undefined : "The task could not be pinned."),
   surface: FAILURE_SURFACE.TASK_MARK,
 } satisfies UndoWrite<TaskRows, string, string, typeof ACT_KIND.TASKS_PIN, boolean>;

@@ -15,13 +15,13 @@ import {
 } from "@repo/features/task-followers-model";
 import { FOLLOWER_CALL_FAILURE, type TasksFollowersAnswer } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { selectInboxReader, selectTasks } from "@repo/host/app-state-reads";
+import { selectInboxReader } from "@repo/host/app-state-reads";
 import { BUZZ } from "@repo/ui-native";
 import type { TaskFollowerWire } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { useMemberFaces } from "../member-pictures.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
@@ -68,8 +68,7 @@ export function useTaskFollowing(taskId: string): TaskFollowing | undefined {
   const acts = useHostActs();
   const write = useWrite();
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
-  const task = view?.tasks.find((each) => each.id === taskId);
+  const task = useTaskListRow(useTaskListCollections().tasks, taskId);
   const listed = task?.followers;
   const assignee = task?.assignee;
 
