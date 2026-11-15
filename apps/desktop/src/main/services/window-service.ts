@@ -342,7 +342,6 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
     panels.focusExpanded();
   };
 
-  // An app link's place opens in the panels, the window brought forward.
   const openAppLink = (link: ShownLink): void => {
     panels.focusExpanded();
     panels.broadcast(PUSH.SHOW_LINK, link);
@@ -426,11 +425,9 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
       await run(applyThemePreference(settings?.stored.theme).pipe(withNativeTheme));
       applyLoginItem(settings?.stored.openAtLogin ?? APP_SETTING_SCHEMA.openAtLogin.default);
 
-      // macOS is asked now, while the developer is here to answer, rather
-      // than as the first agent ends behind the window. Note that it is
-      // asked whatever the setting says, because asking posts nothing and
-      // macOS asks only once, and a switch turned on later would otherwise
-      // leave its first notification to ask, and be refused.
+      // Note that macOS is asked whatever the setting says, because asking
+      // posts nothing and macOS asks only once, so a switch turned on later
+      // would otherwise leave its first notification to ask, and be refused.
       if (runMode.observesProviders) askForNotifications();
       // A plan's pages are read through the host on the account's bearer, so the frame holds an address alone.
       session.defaultSession.protocol.handle(PAGE_SCHEME, (request) =>

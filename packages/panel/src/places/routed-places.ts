@@ -56,6 +56,7 @@ import {
   versionHistoryRouteStands,
   workspaceRouteStands,
 } from "../route-gates.js";
+import type { TaskListRows } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { stripTabSurface } from "../tasks/strip-tab-kinds.js";
 import { MAIN_TAB } from "../tasks/task-tab-model.js";
@@ -122,6 +123,8 @@ interface PlaceShown {
 /** What a declaration reads to offer its links: the Tasks tab, the Board, a person's page, and the Automations pages as their routes stand them, where the window stands, the workspace listed's address step, and the links of the place the window's state says under it. */
 interface PlaceLinks {
   readonly tasks: TasksControl;
+  /** The task list's rows read by id, as the collections hold them. */
+  readonly rows: TaskListRows;
   /** The Board, a person's page, and the Automations pages as their routes stand them. */
   readonly views: RoutedViews;
   readonly at: WindowAt;
@@ -627,7 +630,7 @@ export const ROUTED_PLACE = {
 
       return { kind: NAMED_STEP.INBOX, taskId: holder ?? narrowed };
     },
-    links: ({ tasks, views, at, listed, under }) => {
+    links: ({ tasks, rows, views, at, listed, under }) => {
       if (!views.inbox.open) return under();
 
       // An Inbox narrowed to a task is linked by it, so a copied link or a reload opens it narrowed again.
@@ -640,7 +643,7 @@ export const ROUTED_PLACE = {
 
       const chosen = listedInboxChoice(views.inbox.chosen, {
         workspace: tasks.workspace,
-        task: (taskId) => tasks.tasks.find((each) => each.id === taskId),
+        task: rows.task,
       });
 
       if (chosen === undefined) return [inbox];

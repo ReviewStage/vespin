@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 /**
- * task-list-collections.test.ts -- the task list's collections fill from the window's first read and take only the rows a delivery moved, and a surface reading them by id holds across a delivery moving another task.
+ * task-list-collections.test.ts -- the task list's collections fill from the window's first read and take only the rows a delivery carries beside the document as moved, and a surface reading them by id holds across a delivery moving another task.
  */
 
 import { AGENT_STATUS } from "@repo/features/agent-wire";
@@ -171,7 +171,7 @@ describe("the task list's collections", () => {
     expect(window.taskList.taskPullRequests.get(INVITES.id)?.pullRequests).toEqual([]);
   });
 
-  it("write only the row a delivery moved, and delete the row that went", async () => {
+  it("write only the row a delivery carries as moved beside the document, and delete the row that went", async () => {
     const first = documentAt(1, LISTED);
     const { window, push } = await following(first);
     stops.push(window.stop);
@@ -202,7 +202,13 @@ describe("the task list's collections", () => {
       tasks: [INVITES, { ...BILLING, name: "Billing" }, SEARCH],
     });
 
-    push(deliveryBetween(first, renamed));
+    const delivery = deliveryBetween(first, renamed);
+
+    expect(delivery.taskList).toEqual({
+      version: 2,
+      moved: [{ key: ["tasks"], rows: [{ ...BILLING, name: "Billing" }] }],
+    });
+    push(delivery);
 
     expect(told).toEqual([{ type: "update", key: BILLING.id }]);
     expect(window.taskList.tasks.get(BILLING.id)?.name).toBe("Billing");

@@ -229,6 +229,7 @@ function tasksView(): TasksView {
   return {
     ...IDLE_TASKS_VIEW,
     listStatus: TASKS_READ.READY,
+    listed: true,
     taskAgents: listed,
   };
 }

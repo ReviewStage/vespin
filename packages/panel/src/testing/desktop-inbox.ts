@@ -74,7 +74,7 @@ import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
 import type { InboxChoice } from "../tasks/use-tasks-tab.js";
 import { forgetToasts, ToastHost } from "../toast.js";
-import { appStateQuery, selectTasks } from "../use-app-state.js";
+import { appStateQuery, selectTaskListStanding } from "../use-app-state.js";
 import {
   type AnyAct,
   FAKE_ANSWER,
@@ -806,7 +806,7 @@ export function mount({
     );
 
     // Note that the list is laid only once the window read its own document, since the test's Query client may still hold an earlier test's.
-    const held = useQuery({ ...appStateQuery, select: selectTasks });
+    const held = useQuery({ ...appStateQuery, select: selectTaskListStanding });
     const heldList = held.isFetchedAfterMount ? held.data : undefined;
 
     // The tasks and agents last laid on the document, which the window's task-list collections are fed from, as the host lays the list it follows.
