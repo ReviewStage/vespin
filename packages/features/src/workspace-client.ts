@@ -55,6 +55,10 @@ import {
   workspaceRunActionsPutRequestSchema,
 } from "./workspace-sandbox-setup-wire.js";
 import {
+  type WorkspaceSandboxSizeAnswer,
+  workspaceSandboxSizePutRequestSchema,
+} from "./workspace-sandbox-size-wire.js";
+import {
   type Workspace,
   type WorkspaceMachinesAnswer,
   type WorkspaceMember,
@@ -610,6 +614,33 @@ export class HostedWorkspaceClient {
 
     return resultOf(
       hostedCall(this.#hosted.workspaceSandboxSetup.putRunActions, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** The workspace's cloud sandbox size, the vCPUs its agents' sandboxes open with, as any member reads it. */
+  sandboxSize(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSizeAnswer>, never, HttpClient.HttpClient> {
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSandboxSize.read, { workspaceId }),
+      (answer) => answer,
+    );
+  }
+
+  /** The workspace's cloud sandbox size chosen by an owner or admin, answering the size as it then stands; a size the service would refuse by shape never travels. */
+  putSandboxSize(
+    workspaceId: string,
+    vcpus: number,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSizeAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(workspaceSandboxSizePutRequestSchema)({ workspaceId, vcpus }),
+    );
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSandboxSize.put, admitted),
       (answer) => answer,
     );
   }
