@@ -27,3 +27,14 @@ test("a .env reads as the pairs it sets, in order", () => {
     { name: "DATABASE_URL", value: "postgres://localhost/acme?a=b#frag" },
   ]);
 });
+
+test("a quoted value running over several lines is read whole, its line breaks kept", () => {
+  const text = ['PRIVATE_KEY="-----BEGIN KEY-----', "abc", '-----END KEY-----"', "NEXT=1"].join(
+    "\n",
+  );
+
+  assert.deepEqual(parseDotenv(text), [
+    { name: "PRIVATE_KEY", value: "-----BEGIN KEY-----\nabc\n-----END KEY-----" },
+    { name: "NEXT", value: "1" },
+  ]);
+});

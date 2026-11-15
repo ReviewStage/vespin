@@ -99,7 +99,13 @@ import { showToast } from "../toast.js";
 import { parseDotenv } from "./dotenv.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
-import { type FiledUnder, filterPeople, PeopleFilter, PeopleFilterChips } from "./people-filter.js";
+import {
+  type FiledUnder,
+  FORMER_PEOPLE_KEY,
+  filterPeople,
+  PeopleFilter,
+  PeopleFilterChips,
+} from "./people-filter.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
 
 /**
@@ -192,7 +198,7 @@ const ORDER_SHOWN = {
   [ORDER.CREATED]: { label: "Created", icon: <CalendarPlusIcon /> },
 } as const satisfies Record<Order, { label: string; icon: React.JSX.Element }>;
 
-/** The key the filter files a variable no member is named for under: one from before who set it was kept, or whose member's account is gone. */
+/** The key the filter files a variable no member is named for under: one from before who set it was kept. */
 const NOBODY_KEY = "nobody";
 
 /**
@@ -595,7 +601,13 @@ function useEditDialog(
     </Dialog>
   );
 
-  return { ask: confirm.ask, dialog };
+  // Note that the draft is taken from the variable as it stands each time Edit opens, since a save from Add variables may have changed it while this row stood.
+  const ask = () => {
+    reset();
+    confirm.ask();
+  };
+
+  return { ask, dialog };
 }
 
 /** One line of Add variables while it is typed. */
@@ -875,7 +887,10 @@ function VariableList({
     if (changer === undefined) return { variable, actor: undefined, key: NOBODY_KEY };
     const actor = personActor(changer, members, readerId, former);
 
-    return { variable, actor, key: actor.kind === ACTOR_KIND.PERSON ? changer.userId : NOBODY_KEY };
+    // Note that everyone who left is filed under one key, which the filter names as former members together.
+    const key = actor.kind === ACTOR_KIND.PERSON ? changer.userId : FORMER_PEOPLE_KEY;
+
+    return { variable, actor, key };
   });
 
   const filed: FiledUnder[] = shown.flatMap(({ actor, key }) =>
