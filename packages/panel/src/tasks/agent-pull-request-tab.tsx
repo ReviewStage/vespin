@@ -14,7 +14,6 @@ import {
   CHECK_STATE,
   CHECK_SUMMARY,
   type CheckState,
-  type CheckSummary,
   CONVERSATION_ENTRY,
   type ConversationEntry,
   DEPLOYMENT_STATE,
@@ -38,7 +37,6 @@ import {
 import { type LinkStanding, PULL_REQUEST_MOMENT } from "@repo/features/link-standing-model";
 import { formatCount } from "@repo/features/number-format";
 import {
-  CHECK_SUMMARY_WORDS,
   CHECK_WORDS,
   checksCountOf,
   checksSummaryOf,
@@ -75,6 +73,7 @@ import {
   CornerDot,
   type CountPart,
   CountParts,
+  checksCount,
   DETAIL_PAGE_INSET,
   DetailPage,
   DISCLOSURE_SUMMARY,
@@ -115,7 +114,6 @@ import {
   SpinnerRing,
   STATUS_TONE,
   Stack,
-  type StatusTone,
   TEXT_ELEMENT,
   TEXT_FONT,
   TEXT_VARIANT,
@@ -130,7 +128,6 @@ import {
 import { actorName } from "@repo/ui/actor-model";
 import { renderingText } from "@repo/ui/github-html";
 import {
-  CheckIcon,
   ExternalLinkIcon,
   GLYPH,
   MessagesSquareIcon,
@@ -2464,40 +2461,6 @@ function HeaderTitle({
   return (
     <PullRequestTitle title={title.title} number={pullRequestNumberLabel(title)} writes={writes} />
   );
-}
-
-/** The glyph the Checks tab wears for how its checks went, as the pull request's mark tells it; none where there are none. */
-const SUMMARY_GLYPHS = {
-  [CHECK_SUMMARY.FAILING]: <XIcon />,
-  [CHECK_SUMMARY.PENDING]: <SpinnerRing size={SPINNER_SIZE.SMALL} />,
-  [CHECK_SUMMARY.PASSING]: <CheckIcon />,
-  [CHECK_SUMMARY.NONE]: null,
-} as const satisfies Record<CheckSummary, ReactNode>;
-
-/** The tone the Checks tab's count takes for how its checks went, as its glyph does: a wait quiet, under the ring every wait turns. */
-const SUMMARY_TONES = {
-  [CHECK_SUMMARY.FAILING]: STATUS_TONE.DANGER,
-  [CHECK_SUMMARY.PENDING]: STATUS_TONE.NEUTRAL,
-  [CHECK_SUMMARY.PASSING]: STATUS_TONE.COMPLETE,
-  [CHECK_SUMMARY.NONE]: STATUS_TONE.NEUTRAL,
-} as const satisfies Record<CheckSummary, StatusTone>;
-
-/** What the Checks tab counts: how they went in its color from the first frame, and how many once read; nothing where neither stands. */
-function checksCount(
-  summary: CheckSummary,
-  count: number | undefined,
-): readonly CountPart[] | undefined {
-  const glyph = SUMMARY_GLYPHS[summary];
-
-  if (glyph === null && count === undefined) return undefined;
-  const text = count === undefined ? "" : formatCount(count);
-  const tone = SUMMARY_TONES[summary];
-
-  return [
-    glyph === null
-      ? { text, tone }
-      : { text, tone, glyph, glyphLabel: CHECK_SUMMARY_WORDS[summary] },
-  ];
 }
 
 /** What the Chapters tab says of where they stand, beside its glyph, to a reader who cannot see it. */

@@ -6,18 +6,19 @@
  * the sidebar and the Tasks page do, its owner's picture and its name
  * (`repositoryLabel`), with how many it holds and a way to its queue on
  * GitHub (`OpenOnGitHubButton`), over its pull requests front first, each
- * one line as Home's and a person's page's rows stand (`home-row.ts`). A
- * row leads with where it stands in the queue, drawn with the glyphs the
- * Pull request tab already draws it with: waiting its turn, the queued
- * pull request's mark (`PullRequestMark`), as the sidebar's and the
- * composer's rows draw it; and once GitHub builds its merge group, the glyph
- * for how the group's checks stand (`CheckGlyph`), a running ring while it
- * is checked, a check once it merges next, a × once it fails. Its title is
- * its number and title as every pull request's row says them
- * (`pullRequestLabelOf`), and at its end stand how its checks stand in words,
+ * a `TaskRow` in a `TaskRows`, as a task's sub-tasks and agents, Home's
+ * Recent, and a person's page stand theirs, so its columns line up down the
+ * list; and every list takes one fit read from the whole page
+ * (`taskRowFit`), so they line up from list to list too. A row draws what
+ * the Pull request tab already draws: its number where a task's key stands;
+ * the queued pull request's mark where a task's status does
+ * (`PullRequestMark`), as the sidebar's and the composer's rows draw it; its
+ * title; how its merge group's checks stand, counted as its Checks tab
+ * counts them (`checksCount`), a red × and how many failed, the ring every
+ * wait turns and how many still run, or a green check and how many passed;
  * who opened it, by their mark as every surface draws a GitHub account
- * (`ActorMark`), and when GitHub estimates it merges. The stage the glyph
- * draws is spoken to a reader, whom the glyph, decoration, tells nothing. A
+ * (`ActorMark`); and when GitHub estimates it merges. Its stage, its checks
+ * in words, and its author are spoken to a reader after its name. A
  * row opens its pull request as the window opens a GitHub address
  * (`useOpenLink`): in its agent's Pull request tab where a listed task's
  * agent opened it, else on GitHub. The pull request the page was opened for,
@@ -32,12 +33,7 @@
  * queue.
  */
 
-import {
-  CHECK_STATE,
-  CHECK_SUMMARY,
-  type CheckState,
-  PULL_REQUEST_STATE,
-} from "@repo/features/agent-wire";
+import { CHECK_SUMMARY, type CheckSummary, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import type {
   MergeQueueAnswer,
   MergeQueueChecks,
@@ -56,7 +52,8 @@ import { TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   AVATAR_SIZE,
-  CheckGlyph,
+  CountParts,
+  checksCount,
   DetailPage,
   EmptyState,
   ErrorState,
@@ -66,7 +63,6 @@ import {
   GroupHeader,
   ListMotion,
   PAGE_FRAME,
-  ProgressCount,
   RepositoryPicture,
   Stack,
   TASK_ROW_CELL,
@@ -116,13 +112,13 @@ const WORDS = {
 /** How often the queues are read again while the page stands. */
 const READ_EVERY = Duration.seconds(30);
 
-/** How the merge group's checks stand at each stage once GitHub builds one, as the Pull request tab draws a check; none while the pull request waits its turn, which its queued mark says. */
-const STAGE_CHECK = {
-  [MERGE_QUEUE_STAGE.WAITING]: undefined,
-  [MERGE_QUEUE_STAGE.CHECKING]: CHECK_STATE.PENDING,
-  [MERGE_QUEUE_STAGE.MERGING]: CHECK_STATE.PASSED,
-  [MERGE_QUEUE_STAGE.FAILING]: CHECK_STATE.FAILED,
-} as const satisfies Record<MergeQueueStage, CheckState | undefined>;
+/** How the merge group's checks stand at each stage, as a pull request's checks are summed up, where GitHub has not yet counted them. */
+const STAGE_SUMMARY = {
+  [MERGE_QUEUE_STAGE.WAITING]: CHECK_SUMMARY.NONE,
+  [MERGE_QUEUE_STAGE.CHECKING]: CHECK_SUMMARY.PENDING,
+  [MERGE_QUEUE_STAGE.MERGING]: CHECK_SUMMARY.PASSING,
+  [MERGE_QUEUE_STAGE.FAILING]: CHECK_SUMMARY.FAILING,
+} as const satisfies Record<MergeQueueStage, CheckSummary>;
 
 /** The workspace's queues, read as the page opens and every half minute while it stands. */
 function mergeQueueQuery(workspaceId: string | undefined) {
@@ -164,30 +160,18 @@ function checksWords(checks: MergeQueueChecks | null | undefined): string | unde
   return `${checks.passed} of ${checks.total} ${checks.total === 1 ? "check" : "checks"} passed`;
 }
 
-/** Where a pull request stands in the queue, as its row's status column draws it (`TaskRowGlyph`): its queued mark while it waits its turn, else the glyph for how its merge group's checks stand. */
-function StageGlyph({
-  stage,
-  number,
-}: {
-  stage: MergeQueueStage;
-  number: number;
-}): React.JSX.Element {
-  const check = STAGE_CHECK[stage];
-
+/** A queued pull request's mark in its row's status column (`TaskRowGlyph`), as the sidebar's and the composer's rows draw one the merge queue holds. */
+function QueuedMark({ number }: { number: number }): React.JSX.Element {
   return (
     <TaskRowGlyph>
-      {check === undefined ? (
-        <PullRequestMark
-          pullRequest={{
-            number,
-            state: PULL_REQUEST_STATE.OPEN,
-            checks: CHECK_SUMMARY.NONE,
-            queued: true,
-          }}
-        />
-      ) : (
-        <CheckGlyph state={check} />
-      )}
+      <PullRequestMark
+        pullRequest={{
+          number,
+          state: PULL_REQUEST_STATE.OPEN,
+          checks: CHECK_SUMMARY.NONE,
+          queued: true,
+        }}
+      />
     </TaskRowGlyph>
   );
 }
@@ -212,23 +196,38 @@ function PullRequestKey({ number }: { number: number }): React.JSX.Element {
   );
 }
 
-/** How the merge group's checks stand, as a task's row counts its sub-tasks (`ProgressCount`); none before GitHub reports any. */
+/**
+ * How the merge group's checks stand, counted as a pull request's Checks tab
+ * counts them (`checksCount`): those that failed, in the danger ink by their
+ * ×; else those still running, by the ring every wait turns; else all of
+ * them, in the complete ink by their check; by its stage's glyph alone where
+ * GitHub has counted none yet, and nothing while it waits its turn.
+ */
 function ChecksCount({ entry }: { entry: MergeQueueEntry }): React.JSX.Element | null {
   const { checks } = entry;
-  const words = checksWords(checks);
+  const stage = mergeQueueStage(entry.state);
 
-  if (checks === null || checks === undefined || words === undefined) return null;
+  const counted =
+    checks === null || checks === undefined
+      ? checksCount(STAGE_SUMMARY[stage], undefined)
+      : checks.failedCount > 0
+        ? checksCount(CHECK_SUMMARY.FAILING, checks.failedCount)
+        : checks.passed < checks.total
+          ? checksCount(CHECK_SUMMARY.PENDING, checks.total - checks.passed)
+          : checksCount(CHECK_SUMMARY.PASSING, checks.total);
 
-  return <ProgressCount done={checks.passed} total={checks.total} label={words} />;
+  return counted === undefined ? null : <CountParts parts={counted} />;
 }
 
-/** What a reader hears after a row's name that the eye reads in its cells: its number, its stage, and who opened it. */
+/** What a reader hears after a row's name that the eye reads in its cells: its number, its stage, how its checks stand, and who opened it. */
 function RowSaid({ entry, author }: { entry: MergeQueueEntry; author: Actor }): React.JSX.Element {
   const stage = MERGE_QUEUE_STAGE_LABEL[mergeQueueStage(entry.state)];
+  const checks = checksWords(entry.checks);
+  const said = [`#${entry.pullRequest.number}`, stage, checks, actorName(author)];
 
   return (
     <VisuallyHidden>
-      <ReplayMask>{`, #${entry.pullRequest.number}, ${stage}, ${actorName(author)}`}</ReplayMask>
+      <ReplayMask>{`, ${said.filter((part) => part !== undefined).join(", ")}`}</ReplayMask>
     </VisuallyHidden>
   );
 }
@@ -242,8 +241,9 @@ function MergeEstimate({ entry }: { entry: MergeQueueEntry }): React.JSX.Element
 
 /**
  * The cells a pull request's row draws, in a task's row's order: its number
- * where a task's key stands, its stage where a task's status does, how its
- * merge group's checks stand where a task counts its sub-tasks, who opened
+ * where a task's key stands, its queued mark where a task's status does,
+ * how its merge group's checks stand, counted as its Checks tab counts them,
+ * in the trailing run's count, where a task counts its sub-tasks, who opened
  * it where a task's creator stands, and when it should merge where a task's
  * time does, so its columns line up as the rows of a task's Overview, Home,
  * and a person's page do.
@@ -318,12 +318,7 @@ function RepositoryQueue({
                 cells={QUEUE_ROW_CELLS}
                 content={{
                   [TASK_ROW_CELL.KEY]: <PullRequestKey number={entry.pullRequest.number} />,
-                  [TASK_ROW_CELL.STATUS]: (
-                    <StageGlyph
-                      stage={mergeQueueStage(entry.state)}
-                      number={entry.pullRequest.number}
-                    />
-                  ),
+                  [TASK_ROW_CELL.STATUS]: <QueuedMark number={entry.pullRequest.number} />,
                   [TASK_ROW_CELL.SUB_TASKS]: <ChecksCount entry={entry} />,
                   [TASK_ROW_CELL.CREATOR]: <ActorMark actor={author} size={ACTOR_SIZE.INLINE} />,
                   [TASK_ROW_CELL.UPDATED]: <MergeEstimate entry={entry} />,
