@@ -12,6 +12,7 @@ import {
   browserTabsPlaceId,
   browserTabsPlaceKind,
 } from "@repo/features/agent-browser-tab-wire";
+import type { ListedAgent } from "@repo/features/agent-wire";
 import {
   AGENT_BROWSER_TABS_READ,
   browserTabsOfLiveRows,
@@ -481,6 +482,8 @@ export interface TasksComposer extends Composer {
   queueable: readonly AnyWrite[];
   /** The task list as each drawing of it stands, each agent's status and every pull request it names, from the caller's listening until its scope closes, which the Pull request tabs' parts are asked again on (`pull-request-parts.ts`), and a terminal waiting on its agent's sandbox reads the list again on (`compose-host.ts`). */
   pullRequestListings: Effect.Effect<Stream.Stream<PullRequestListing>, never, Scope.Scope>;
+  /** Every agent on a task as the task list last drew it, the archived among them; none before it first drew. */
+  agentsListed: () => readonly ListedAgent[] | undefined;
   /** The task list as each drawing of it moves its tasks and agents, from the caller's listening until its scope closes, the list as last drawn told whole first where one was, which the client's notices follow (`client/client-notices.ts`). */
   taskListMoves: Effect.Effect<Stream.Stream<TaskListMoved>, never, Scope.Scope>;
   /** Reads the task or the agent `id` names into the list as a cold task where the list holds neither, behind the open that asked, which it answers at once; a second open reads nothing. */
@@ -3179,6 +3182,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       anyWrite(sidebarWritten.sectionsWritten),
     ],
     pullRequestListings: Effect.map(PubSub.subscribe(listings), Stream.fromSubscription),
+    agentsListed: () => listedBefore?.taskAgents,
     // Note that the follower subscribes before the list as last drawn is read, so a drawing between the two is never missed.
     taskListMoves: Effect.map(PubSub.subscribe(moves), (subscription) => {
       const drawn = listedBefore;
