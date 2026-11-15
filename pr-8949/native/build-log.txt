@@ -1,65 +1,75 @@
-== start 17:41:40 free 19 GB
--- readings start 17:41:40
-/dev/disk3s1s1       460   12        19    40%  484014 207095000    0%   /
-vm.swapusage: total = 3072.00M  used = 2370.69M  free = 701.31M  (encrypted)
+== start 01:12:41 free 20 GB
+-- readings start 01:12:41
+/dev/disk3s1s1       460   12        20    39%  484014 211724360    0%   /
+vm.swapusage: total = 3072.00M  used = 1666.25M  free = 1405.75M  (encrypted)
 #9312 head a6d1c8da31: 9312
-#8948 head 8e5935aadc vs #8949 1387ed0ccf: stale copy of #8949, left out
-  merged #9350 f73b985ec6
+#8948 head 8e5935aadc vs #8949 443d480611: stale copy of #8949, left out
+r8980 (widgets agent's build branch: #9039 with #8980 and the lockfile hash) 27348f7cfc
+Auto-merging PRIVACY.md
 Auto-merging apps/mobile/src/screens/task-screens.tsx
-Auto-merging packages/ui-native/src/button.tsx
-Auto-merging packages/ui-native/src/list-row.tsx
-CONFLICT (content): Merge conflict in packages/ui-native/src/list-row.tsx
-Auto-merging packages/ui-native/src/marks.tsx
-Auto-merging pnpm-lock.yaml
-Automatic merge failed; fix conflicts and then commit the result.
-MERGE SKIP #9024: packages/ui-native/src/list-row.tsx 
-Auto-merging apps/mobile/src/screens/task-screens.tsx
-Auto-merging packages/ui-native/src/button.tsx
-Auto-merging packages/ui-native/src/list-row.tsx
-CONFLICT (content): Merge conflict in packages/ui-native/src/list-row.tsx
-Auto-merging packages/ui-native/src/marks.tsx
-Auto-merging pnpm-lock.yaml
-Automatic merge failed; fix conflicts and then commit the result.
-MERGE SKIP #9039: packages/ui-native/src/list-row.tsx 
-Auto-merging apps/mobile/src/screens/inbox-screens.tsx
-Auto-merging apps/mobile/src/screens/task-screens.tsx
-  merged #9318 0e3b1c7dc7
-Auto-merging packages/ui-native/src/row-list.tsx
-Auto-merging pnpm-lock.yaml
-Auto-merging pnpm-workspace.yaml
-  merged #9312 a6d1c8da31
-Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging packages/brand/scripts/generate-surface-shared.mjs
+Auto-merging packages/host/src/fixture-inbox.ts
 Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/button.tsx
 Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/list-row.tsx
 Auto-merging packages/ui-native/src/split-view.tsx
-  merged #9346 16e9fbb1ca
-  merged #9344 4649b934a8
+Auto-merging pnpm-lock.yaml
+  merged #9024 7ea9e0915c
+Auto-merging apps/mobile/src/screens/start-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging apps/mobile/src/tasks/use-start.ts
+Auto-merging packages/brand/scripts/generate-surface-shared.mjs
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging pnpm-lock.yaml
+  merged #r8980 27348f7cfc
+  merged #9399 18d90673fa
+  merged #9458 7831ebf5a3
+Auto-merging packages/ui-native/src/glass-bar.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/glass-bar.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+MERGE SKIP #9452: packages/ui-native/src/glass-bar.tsx 
 Auto-merging apps/mobile/maestro/inbox.yaml
 Auto-merging packages/ui-native/src/index.ts
 Auto-merging packages/ui-native/src/markdown.tsx
   merged #8954 7304f91f2e
 Auto-merging apps/mobile/modules/native-interactions/ios/NativeInteractionsModule.swift
 CONFLICT (content): Merge conflict in apps/mobile/modules/native-interactions/ios/NativeInteractionsModule.swift
-Auto-merging apps/mobile/src/screens/search-screens.tsx
-CONFLICT (content): Merge conflict in apps/mobile/src/screens/search-screens.tsx
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/split-view.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/split-view.tsx
 Automatic merge failed; fix conflicts and then commit the result.
-MERGE SKIP #9399: apps/mobile/modules/native-interactions/ios/NativeInteractionsModule.swift apps/mobile/src/screens/search-screens.tsx 
-skipped: 9024 9039 9399
-heads: #9350 f73b985ec6 #9346 16e9fbb1ca #9344 4649b934a8
-VDOCK probe lines: 1
-built 04ebd8eed8 = main bc88e41a10 + #9024 (with #8949) + #8948 + #9318 (with #9221, #8961) + #9312? + #9346 + #9350 (with #9348) + #9344, skipped: 9024 9039 9399
+MERGE SKIP #9346: apps/mobile/modules/native-interactions/ios/NativeInteractionsModule.swift packages/ui-native/src/split-view.tsx 
+Auto-merging packages/ui-native/src/row-list.tsx
+Auto-merging patches/@expo__ui@58.0.27.patch
+CONFLICT (content): Merge conflict in patches/@expo__ui@58.0.27.patch
+Auto-merging pnpm-lock.yaml
+CONFLICT (content): Merge conflict in pnpm-lock.yaml
+Auto-merging pnpm-workspace.yaml
+CONFLICT (content): Merge conflict in pnpm-workspace.yaml
+Automatic merge failed; fix conflicts and then commit the result.
+MERGE SKIP #9312: patches/@expo__ui@58.0.27.patch pnpm-lock.yaml pnpm-workspace.yaml 
+skipped: 9350 9348 9318 9312 9346 9344 8954 8948 9452 9346 9312
+heads: #9350 9007cf2242 #9346 16e9fbb1ca #9344 4649b934a8
+built 23d24c8f25 = main ea01e00878 + #9024 (with #8949) + #8948 + #9318 (with #9221, #8961) + #9312? + #9346 + #9350 (with #9348) + #9344, skipped: 9350 9348 9318 9312 9346 9344 8954 8948 9452 9346 9312
 install 0
-patches: 0 failures; @expo/ui patch 4 patched dirs
+patches: 0 failures; @expo/ui patch 5 patched dirs
 build settings: 3 of 3 added
-curve 17:41:51 20205 MB
-curve 17:42:21 17887 MB
-curve 17:42:51 17279 MB
-curve 17:43:22 16883 MB
-curve 17:43:52 16398 MB
-curve 17:44:22 15510 MB
-curve 17:44:52 15013 MB
-curve 17:45:22 15003 MB
-BUILD EXIT 0 17:45:52 free 14 GB
+curve 01:12:54 20642 MB
+curve 01:13:24 18322 MB
+curve 01:13:55 18098 MB
+curve 01:14:25 18054 MB
+curve 01:14:55 17832 MB
+curve 01:15:25 17866 MB
+curve 01:15:55 17523 MB
+curve 01:16:25 17310 MB
+curve 01:16:56 16600 MB
+curve 01:17:26 16187 MB
+curve 01:17:56 15908 MB
+curve 01:18:26 15790 MB
+BUILD EXIT 0 01:18:56 free 15 GB
 actool warnings: 7
     /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/ShareExtension/ShareExtension.xcassets --compile /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Products/Release-iphonesimulator/ShareExtension.appex --output-format human-readable-text --notices --warnings --export-dependency-info /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/assetcatalog_dependencies --output-partial-info-plist /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/assetcatalog_generated_info.plist --accent-color AccentColor --compress-pngs --enable-on-demand-resources NO --standalone-icon-behavior all --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 26.0 --platform iphonesimulator --bundle-identifier dev.vespin.ios.ShareExtension --generate-swift-asset-symbol-extensions NO --generate-swift-asset-symbols /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/DerivedSources/GeneratedAssetSymbols.swift --generate-objc-asset-symbols /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/DerivedSources/GeneratedAssetSymbols.h --generate-asset-symbol-index /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/DerivedSources/GeneratedAssetSymbols-Index.plist
     /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/ShareExtension/ShareExtension.xcassets --compile /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/assetcatalog_output/thinned --output-format human-readable-text --notices --warnings --export-dependency-info /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/assetcatalog_dependencies_thinned --output-partial-info-plist /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/assetcatalog_generated_info.plist_thinned --accent-color AccentColor --compress-pngs --enable-on-demand-resources NO --standalone-icon-behavior all --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 26.0 --platform iphonesimulator
@@ -71,52 +81,35 @@ actool warnings: 7
 /Users/deanstratakos/vespin-ipad-agent/Vn3.app: replacing existing signature
 == audit26
 clean binaries: 15
-cold-ipad26 pid 77149 alive yes crashes 0
-cold-ipad27 pid 89158 alive yes crashes 0
-cold-iphone pid 1165 alive yes crashes 0
-9318-native-ipad26-light-r9318: fails 1 shots 2 Tap on "Invite a teammate by email"... FAILED
-9318-native-ipad27-light-r9318: fails 1 shots 2 Tap on "Invite a teammate by email"... FAILED
-9312-native-ipad26-light-r9312m: fails 1 shots 1 Tap on "Ledger rounding"... FAILED
-9312-native-ipad26-dark-r9312m: fails 1 shots 1 Tap on "Ledger rounding"... FAILED
-9312-native-ipad26-light-pull-request: fails 0 shots 12 
-9312-native-ipad26-dark-pull-request: fails 0 shots 12 
-9312-native-ipad26-light-r9312pr: fails 0 shots 5 
-9312-native-ipad26-dark-r9312pr: fails 0 shots 5 
-9312-native-ipad26p-light-r9312task: fails 1 shots 2 Tap on "Ledger rounding"... FAILED
-9312-native-iphone-light-r9312task: fails 1 shots 2 Tap on "Ledger rounding"... FAILED
-9312-native-duo-light-r9312task: fails 1 shots 2 Tap on "Ledger rounding"... FAILED
-9346-native-ipad26-light-r9346: fails 1 shots 2 Tap on "Questions"... FAILED
-9346-native-ipad26-dark-r9346: fails 1 shots 2 Tap on "Questions"... FAILED
-9346-native-ipad27-light-r9346: fails 1 shots 2 Tap on "Questions"... FAILED
-9346-native-iphone-light-r9346c: fails 0 shots 1 
-9348-native-ipad26-light-new-task:  
-9348-native-ipad26-dark-new-task: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
-9348-native-ipad26p-light-new-task: fails 1 shots 9 Assert that "Select up to .*" is visible... FAILED
-9348-native-ipad26p-dark-new-task: fails 1 shots 9 Assert that "Select up to .*" is visible... FAILED
-9348-native-iphone-light-new-task: fails 0 shots 10 
-9348-native-iphone-dark-new-task: fails 0 shots 10 
-9348-native-iphone-light-r9348glide: fails 1 shots 1 Assert that "Run pnpm test src/members" is visible... FAILED
-VDOCK r9348glide lines: 3
-9348-native-iphone-light-r9348back: fails 1 shots 1 Assert that "Run pnpm test src/members" is visible... FAILED
-VDOCK r9348back lines: 3
-9348-native-iphone-dark-r9348glide: fails 1 shots 1 Assert that "Run pnpm test src/members" is visible... FAILED
-9348-native-ipad26-light-r9348glide: fails 1 shots 1 Assert that "Run pnpm test src/members" is visible... FAILED
-9350-native-iphone-light-r9350fade: fails 1 shots 1 Assert that "Run pnpm test src/members" is visible... FAILED
-9350-native-iphone-dark-r9350fade: fails 1 shots 1 Assert that "Run pnpm test src/members" is visible... FAILED
-9350-native-iphone-light-wrap-agent: fails 2 shots 25   Tap on "Stop agents"... FAILED
-9350-native-duo-light-wrap-agent: fails 2 shots 6   Assert that "Invites sent in the staging workspace.*" is visible... FAILED
-9350-native-ipad27-light-grant-notif: fails 0 shots 1 
-9350-native-ipad27-light-wrap-agent: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
-9344-native-iphone-light-live-activity: fails 0 shots 3 
-9344-native-iphone-dark-live-activity: fails 0 shots 3 
-8954-native-ipad26-light-thread open: fails 1 shots 1
-8954-native-ipad26-light-thread Done: fails 1 shots 1 Assert that "Done" is visible... FAILED
-8954-native-ipad26-light-md open: fails 1 shots 1
-8954-native-ipad26-light-md Done: fails 1 shots 1 Assert that "Done" is visible... FAILED
-8954-native-ipad27-light-thread open: fails 1 shots 1
-8954-native-ipad27-light-thread Done: fails 1 shots 1 Assert that "Done" is visible... FAILED
-8954-native-ipad27-light-md open: fails 1 shots 1
-8954-native-ipad27-light-md Done: fails 1 shots 1 Assert that "Done" is visible... FAILED
-8954-native-iphone-light-inbox: fails 1 shots 5 Assert that "Done" is visible... FAILED
+cold-ipad26 pid 29597 alive yes crashes 0
+cold-ipad27 pid 45903 alive yes crashes 0
+cold-iphone pid 61589 alive yes crashes 0
+9024-native-iphone-light-r9024: fails 0 shots 5 
+9024-native-iphone-dark-r9024: fails 0 shots 5 
+9024-native-ipad26-light-r9024: fails 0 shots 6 
+9024-native-ipad26-dark-r9024: fails 0 shots 6 
+8949-native-iphone-light-m8949: fails 0 shots 2 
+8949-native-iphone-dark-m8949: fails 0 shots 2 
+9024-native-iphone-ax3-light-r9024: fails 1 shots 3 Tap on "Teammate invitations"... FAILED
+8949-native-ipad26-light-m8949: fails 0 shots 2 
+8949-native-ipad26-dark-m8949: fails 0 shots 2 
+9399-native-ipad26-light-r9399: fails 0 shots 2 
+9399-native-ipad27-light-r9399: fails 0 shots 3 
+9399-native-iphone-light-r9399: fails 0 shots 2 
+9039-native-iphone-light-r9039: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+8980-native-iphone-light-r8980: fails 0 shots 4 
+8980-native-iphone-dark-r8980: fails 0 shots 4 
+8980-native-ipad26-light-r8980: fails 1 shots 2 Tap on "Reminders"... FAILED
+8980-native-ipad26-dark-r8980: fails 1 shots 2 Tap on "Reminders"... FAILED
+8980-native-ipad26p-light-r8980: fails 1 shots 2 Tap on "Reminders"... FAILED
+9458-native-iphone-light-r9350fade: fails 0 shots 2 
+9458-native-iphone-dark-r9350fade: fails 0 shots 2 
+9458-native-iphone-light-r9458thread: fails 0 shots 3 
+9458-native-iphone-dark-r9458thread: fails 0 shots 3 
+9458-native-iphone-light-r9458back: fails 0 shots 3 
+9458-native-ipad26-light-rbis: fails 2 shots 7   Long press on id: markdown-picture... FAILED
+9458-native-ipad26-dark-rbis: fails 2 shots 7   Long press on id: markdown-picture... FAILED
+9458-native-ipad27-light-rbis: fails 0 shots 6 
+9458-native-ipad27-dark-rbis: fails 0 shots 5 
 9318-native-ipad26-light-pfind: fails 0 shots 4 
 9318-native-ipad27-light-pfind: fails 0 shots 5 
