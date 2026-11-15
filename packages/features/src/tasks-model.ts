@@ -47,7 +47,7 @@ export type TasksPage = (typeof TASKS_PAGE)[keyof typeof TASKS_PAGE];
  * With none open, the tab is the home page, which offers New task; the
  * task list is the sidebar's.
  */
-export function tasksPage(view: TasksView): TasksPage {
+export function tasksPage(view: Pick<TasksView, "activeTaskId">): TasksPage {
   return view.activeTaskId === undefined ? TASKS_PAGE.HOME : TASKS_PAGE.TASK;
 }
 

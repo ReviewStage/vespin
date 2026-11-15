@@ -51,6 +51,7 @@ export {
   selectSettingsHeld,
   selectSignedIn,
   selectStoredExperimentChoices,
+  selectTaskListStanding,
   selectTaskSendRefused,
   selectTasks,
   selectVoiceCall,

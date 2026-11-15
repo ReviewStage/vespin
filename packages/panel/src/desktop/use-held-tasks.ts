@@ -71,7 +71,7 @@ function sameTasksOrder(was: HeldTasksView, now: HeldTasksView): boolean {
 
 /**
  * The groups `group` lays `listed` out in, the listed workspace's tasks
- * as the sidebar orders them (`useListedTasks`), held still as the
+ * as the sidebar orders them (`useNamedTasks`), held still as the
  * module's head says while the page is shown, each task drawn as it is now.
  */
 export function useHeldTasks(
