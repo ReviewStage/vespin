@@ -77,7 +77,12 @@ import {
   Time,
   VisuallyHidden,
 } from "@repo/ui";
-import { type Actor, DELETED_ACCOUNT_ACTOR, githubLoginActor } from "@repo/ui/actor-model";
+import {
+  type Actor,
+  actorName,
+  DELETED_ACCOUNT_ACTOR,
+  githubLoginActor,
+} from "@repo/ui/actor-model";
 import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
@@ -188,19 +193,23 @@ function MergeEstimate({ entry }: { entry: MergeQueueEntry }): React.JSX.Element
   return at === null || at === undefined ? null : <Time at={at} look={TIME_LOOK.UNTIL} />;
 }
 
-/** What a row says at its end: its stage, spoken only, how its checks stand where it has any, who opened it, and when GitHub estimates it merges. */
+/** What a row says at its end: its stage, spoken only, how its checks stand where it has any, who opened it, by their mark and to a reader by their name, and when GitHub estimates it merges. */
 function RowMeta({ entry }: { entry: MergeQueueEntry }): React.JSX.Element {
   const checks = checksWords(entry.checks);
+  const author = authorActor(entry);
 
   return (
     <span className={HOME_ROW_META}>
-      <VisuallyHidden>{MERGE_QUEUE_STAGE_LABEL[mergeQueueStage(entry.state)]}</VisuallyHidden>
+      <VisuallyHidden>{`${MERGE_QUEUE_STAGE_LABEL[mergeQueueStage(entry.state)]}, `}</VisuallyHidden>
       {checks === undefined ? null : (
         <span className={HOME_ROW_CONTEXT}>
           <ReplayMask>{checks}</ReplayMask>
         </span>
       )}
-      <ActorMark actor={authorActor(entry)} size={ACTOR_SIZE.INLINE} />
+      <ActorMark actor={author} size={ACTOR_SIZE.INLINE} />
+      <VisuallyHidden>
+        <ReplayMask>{`, ${actorName(author)}, `}</ReplayMask>
+      </VisuallyHidden>
       <MergeEstimate entry={entry} />
     </span>
   );
