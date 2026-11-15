@@ -1025,7 +1025,7 @@ export function AgentConversation({
         foot={composerBar}
         asks={asks}
       >
-        <HostedFill>{transcriptView}</HostedFill>
+        <HostedFill softTop>{transcriptView}</HostedFill>
       </DetailPage>
     );
   }

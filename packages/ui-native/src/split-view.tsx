@@ -42,6 +42,7 @@ import { type BarSubtitle, ColumnBarTitle } from "./bar-title.js";
 import type { Scope } from "./button.js";
 import { GLYPH, type Glyph } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
+import { ScrollEdgeArea } from "./keyboard-dock.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 import { useColors } from "./tokens/colors.js";
@@ -604,10 +605,23 @@ export function DetailPage({
  * transcript or a page's web view, which size themselves to the space they
  * stand in rather than to what they hold.
  */
-export function HostedFill({ children }: { readonly children: ReactNode }) {
+export function HostedFill({
+  children,
+  softTop = false,
+}: {
+  readonly children: ReactNode;
+  /** Whether the list it holds fades softly under the column's bar, as a transcript scrolling under it does, where the native scroll edge stands (`ScrollEdgeArea`); SwiftUI's bar cannot see into React Native's list to soften it itself. */
+  readonly softTop?: boolean;
+}) {
+  const Edge = softTop ? ScrollEdgeArea : undefined;
+
   return (
     <RNHostView>
-      <View style={layers.fill}>{children}</View>
+      {Edge === undefined ? (
+        <View style={layers.fill}>{children}</View>
+      ) : (
+        <Edge style={layers.fill}>{children}</Edge>
+      )}
     </RNHostView>
   );
 }

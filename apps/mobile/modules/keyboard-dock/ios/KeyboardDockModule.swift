@@ -15,6 +15,9 @@
 // window, which it does before it goes. JavaScript
 // hears the same overlap, so the content under the bar leaves room for it.
 //
+// The module also holds `ScrollEdgeView`, which softens a list's top edge
+// where no dock stands, such as a page in a split view's detail column.
+//
 // The bar also stands as the content's bottom edge element, so iOS 26 draws
 // its soft scroll edge under the bar, as it does under its own bars: words
 // scrolling under the composer's glass fade rather than standing sharp behind
@@ -36,6 +39,9 @@ public final class KeyboardDockModule: Module {
     View(KeyboardDockView.self) {
       Events("onOverlap")
     }
+
+    // Note that the first view stays the module's own, which JavaScript asks for by the module's name; this one is asked for by its type's name.
+    View(ScrollEdgeView.self) {}
   }
 }
 
@@ -244,6 +250,62 @@ final class KeyboardDockView: ExpoView {
     if let was = told, abs(was - overlap) < overlapStep, (was == 0) == (overlap == 0) { return }
     told = overlap
     onOverlap(["overlap": overlap])
+  }
+}
+
+/// Softens the top scroll edge of the first scroll view its content holds, as iOS 26 fades a list under its own bars, where no dock stands to do it: a page in a split view's detail column, whose bar SwiftUI draws over a React Native list it cannot see into, so iPadOS 27 cut the list hard under the bar where 26 faded it. Note that it looks again as the dock does, while its content reads, and gives a scroll view it lets go the system's edge back.
+final class ScrollEdgeView: ExpoView {
+  /// The scroll view whose top edge it softened, while its content holds it.
+  private weak var held: UIScrollView?
+
+  /// How many more times the content's scroll view is looked for while none is found, and whether a look is on its way.
+  private var looksLeft = edgeLooks
+  private var lookPending = false
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    soften()
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    guard window != nil else { return }
+    looksLeft = edgeLooks
+    soften()
+  }
+
+  /// Softens the content's scroll view's top edge, or looks again a moment later where it holds none yet.
+  private func soften() {
+    guard window != nil else { return }
+    if let held, held.window != nil, held.isDescendant(of: self) { return }
+    letGo()
+
+    guard let scroller = subviews.lazy.compactMap({ firstScrollView(in: $0) }).first else {
+      lookAgainSoon()
+      return
+    }
+
+    scroller.topEdgeEffect.style = .soft
+    held = scroller
+    looksLeft = edgeLooks
+  }
+
+  /// Gives the scroll view it softened the system's edge back, since Fabric may draw it anew elsewhere.
+  private func letGo() {
+    held?.topEdgeEffect.style = .automatic
+    held = nil
+  }
+
+  /// Looks for the content's scroll view again a moment later, a bounded number of times, since a list mounted after its loading state asks for no layout pass of this view.
+  private func lookAgainSoon() {
+    guard looksLeft > 0, !lookPending, window != nil else { return }
+    looksLeft -= 1
+    lookPending = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + edgeLookPause) { [weak self] in
+      guard let self else { return }
+      self.lookPending = false
+      self.soften()
+    }
   }
 }
 
