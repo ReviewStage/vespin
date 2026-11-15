@@ -15,7 +15,11 @@ import { keepConversationPicture } from "@repo/database/models/conversation-pict
 import { COALESCED_LINE_SEPARATOR } from "@repo/database/models/message-reads";
 import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
-import { AGENT_ATTACHMENT_TYPE, type AgentAttachment } from "@repo/features/agent-wire";
+import {
+  AGENT_ATTACHMENT_TYPE,
+  type AgentAttachment,
+  isInlinedText,
+} from "@repo/features/agent-wire";
 import {
   CONVERSATION_PICTURE_BOUNDS,
   PICTURE_OMISSION,
@@ -34,7 +38,11 @@ import { Effect, Option } from "effect";
  * by its name and fenced, since no provider path takes a text file as a
  * file, then each image and PDF as a file part over a `data:` URL, which
  * the runner hands on as an image block or writes into the agent's machine
- * (`coder-host/runner-sessions.ts`). The journal keeps the words
+ * (`coder-host/runner-sessions.ts`). A text file too large to inline
+ * (`isInlinedText`) goes as a PDF does, a file part written into the
+ * machine, and the line naming its path inlines its first lines
+ * (`writtenTextLine`), so the model knows what it holds and reads the rest
+ * with its own tools. The journal keeps the words
  * as the row's first part, empty where there are none, and every file
  * after it as the SDK's file part over the same `data:` URL, a text file
  * under `text/plain`, so the transcript draws a thumbnail or a name for
@@ -62,6 +70,12 @@ import { Effect, Option } from "effect";
 
 /** A text file as a message inlines it and a receipt carries it: the heading's name, a fence, the file, and the same fence. */
 const INLINED_FILE = /^Attached file: ([^\n]+)\n(`{3,})\n([\s\S]*)\n\2$/u;
+
+/** The most lines of a written text file the line naming it inlines. */
+const WRITTEN_HEAD_LINES = 40;
+
+/** The most characters of a written text file the line naming it inlines, so a file of long lines inlines a few. */
+const WRITTEN_HEAD_CHARS = 4_000;
 
 /** One part of what a session is handed for a message. */
 type ContentPart = Exclude<UserContent, string>[number];
@@ -159,11 +173,40 @@ function handedFileParts(file: HandedFile): ContentPart[] {
   ];
 }
 
-/** Any file as a session is handed it: a text file inlined as its own text part, headed by its name and fenced, and an image or PDF as its file part. */
+/** Any file as a session is handed it: a text file small enough inlined as its own text part, headed by its name and fenced, and every other file as its file part. */
 function attachedFileParts(file: HandedFile): ContentPart[] {
-  return file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT
+  return isInlinedText(file)
     ? [{ type: "text" as const, text: inlinedFile(file.name, textOf(file.data)) }]
     : handedFileParts(file);
+}
+
+/** How many lines a text holds, a last newline closing its last line rather than opening another. */
+function lineCount(text: string): number {
+  return text.replace(/\n$/u, "").split("\n").length;
+}
+
+/** The start of a text: its first lines, held to a few thousand characters, cut by code point. */
+function headOf(text: string): string {
+  const lines = text.split("\n").slice(0, WRITTEN_HEAD_LINES).join("\n");
+
+  return Array.from(lines).slice(0, WRITTEN_HEAD_CHARS).join("");
+}
+
+/**
+ * The line a session is handed for a text file written into the agent's
+ * machine, too large to inline (`isInlinedText`): its name, its size, the
+ * path it was written to, and its first lines fenced, so the model knows
+ * what it holds before it reads the rest from the path.
+ */
+export function writtenTextLine(name: string, path: string, bytes: Uint8Array): string {
+  const text = Buffer.from(bytes).toString("utf8");
+  const head = headOf(text);
+  const lines = lineCount(text);
+  const shown = lineCount(head);
+  const size = `${bytes.byteLength.toLocaleString("en-US")} bytes, ${lines.toLocaleString("en-US")} lines`;
+  const intro = `[${name} (${AGENT_ATTACHMENT_TYPE.TEXT}, ${size}) was attached: it is at ${path}, too large to inline, so read it from there. Its first ${shown === 1 ? "line" : `${shown} lines`}:]`;
+
+  return `${intro}\n${inlinedFile(name, head)}`;
 }
 
 /**
@@ -224,8 +267,8 @@ export function turnContent(
   const placed = placedContent(text, attachments);
   // Note that the files no marker placed go where every file went before markers.
   const rest = placed?.rest ?? attachments;
-  const texts = rest.filter((file) => file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT);
-  const others = rest.filter((file) => file.mediaType !== AGENT_ATTACHMENT_TYPE.TEXT);
+  const texts = rest.filter(isInlinedText);
+  const others = rest.filter((file) => !isInlinedText(file));
 
   return [
     ...(sender === undefined ? [] : [{ type: "text" as const, text: sender }]),

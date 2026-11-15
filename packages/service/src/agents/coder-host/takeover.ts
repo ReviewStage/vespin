@@ -21,7 +21,6 @@ import {
   utf8Bytes,
 } from "@repo/features/agent-replay";
 import {
-  AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
   AGENT_MACHINE,
   type AgentAttachment,
@@ -30,6 +29,7 @@ import {
   type AgentRunsOnRequest,
   type AgentStartFrom,
   CONTEXT_WINDOW,
+  isInlinedText,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
@@ -244,9 +244,9 @@ function wordsOf(prompt: string | undefined, note: string | undefined): string |
   return words.length === 0 ? undefined : words.join("\n\n");
 }
 
-/** How many of the note's files are text files, which the harness is handed inlined, and how many images and PDFs. */
+/** How many of the note's files are text files the harness is handed inlined, and how many others: images, PDFs, and text files written into its machine. */
 function noteFilesOf(files: readonly AgentAttachment[]): NoteFiles {
-  const text = files.filter((file) => file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT).length;
+  const text = files.filter(isInlinedText).length;
 
   return { text, other: files.length - text };
 }

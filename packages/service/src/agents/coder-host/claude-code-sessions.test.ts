@@ -83,6 +83,8 @@ import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { BOOT_PHASE } from "@repo/features/agent-boot";
 import {
+  AGENT_ATTACHMENT_TYPE,
+  AGENT_BOUNDS,
   AGENT_CHAT,
   AGENT_FAILURE,
   AGENT_MACHINE,
@@ -179,6 +181,7 @@ import {
   SANDBOX_NAME,
   SESSION_TAG,
 } from "../agent-sandbox-open.js";
+import { turnContent } from "../attached-files.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { AgentMachine, type AgentMachineService } from "../machine/agent-machine.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
@@ -1910,6 +1913,54 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             ],
           ],
         );
+      }),
+  );
+
+  it.effect(
+    "a text file too large to inline is written into the sandbox and named by its path with its first lines, never inlined whole",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const lines = Array.from({ length: 8_000 }, (_, at) => `line ${at + 1} of the build log`);
+        const log = `${lines.join("\n")}\n`;
+        assert.ok(Buffer.byteLength(log) > AGENT_BOUNDS.MAX_INLINED_TEXT_BYTES);
+
+        const first = yield* writtenLine(agent, "Why did the build fail?");
+
+        const opened = yield* deliveredOpen(sessions, {
+          ...first,
+          message: turnContent("Why did the build fail?", [
+            {
+              name: "build.log",
+              mediaType: AGENT_ATTACHMENT_TYPE.TEXT,
+              data: Buffer.from(log).toString("base64"),
+            },
+          ]),
+        });
+
+        assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const path = `/workspace/.agent/attachments/${first.lineId}/2-build.log`;
+        const written = new Map(api.uploads.flatMap((upload) => [...upload]));
+        assert.equal(written.get(path), log);
+
+        const [handed] = (yield* launchRead(api.commands[0], readClaudeCodeConfig)).lines.filter(
+          (each) => each.type === INPUT_LINE.MESSAGE,
+        );
+
+        const [words, file, ...rest] = developerContent(handed);
+        assert.deepEqual(words, { type: "text", text: "Why did the build fail?" });
+        assert.deepEqual(rest, []);
+        assert.ok(file?.type === "text");
+        assert.ok(file.text.includes(path));
+        assert.ok(file.text.includes(lines.slice(0, 40).join("\n")));
+        assert.ok(!file.text.includes(lines[40] ?? ""));
       }),
   );
 
