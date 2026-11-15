@@ -35,13 +35,14 @@ export { SiteBarPages } from "./site-frame.js";
 
 export { LANDING_SCENE, type LandingScene };
 
-/** The field of copper dots behind each scene's stage. */
-const SCENE_FIELD: Readonly<Record<LandingScene, LandingFieldPattern>> = {
+/** The field of copper dots behind each scene's stage, or none where the scene draws a ground of its own. */
+const SCENE_FIELD: Readonly<Record<LandingScene, LandingFieldPattern | null>> = {
   [LANDING_SCENE.INBOX]: LANDING_FIELD.FLOW,
   [LANDING_SCENE.AGENTS]: LANDING_FIELD.WAVES,
   [LANDING_SCENE.AUTOMATIONS]: LANDING_FIELD.RINGS,
   [LANDING_SCENE.DEVICES]: LANDING_FIELD.FLOW,
-  [LANDING_SCENE.KEYS]: LANDING_FIELD.WAVES,
+  // Note that the keys scene stands on a glow of its own, since its tiles are lost among dots.
+  [LANDING_SCENE.KEYS]: null,
 };
 
 /** A feature: `title` over `lead`, its link to read `more`, and `aside` where given, beside its scene's stage, the two trading sides from one section to the next. */
@@ -64,10 +65,11 @@ export function LandingSection({
   codexArt?: CodexArt | undefined;
 }): React.JSX.Element {
   const titleId = `${useId()}title`;
+  const field = SCENE_FIELD[scene];
 
   const stage = (
     <div className="ui-landing-stage" data-scene={scene}>
-      <LandingField pattern={SCENE_FIELD[scene]} />
+      {field === null ? null : <LandingField pattern={field} />}
       <LandingSceneView scene={scene} codexArt={codexArt} />
     </div>
   );

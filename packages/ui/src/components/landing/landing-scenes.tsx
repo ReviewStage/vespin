@@ -1,5 +1,6 @@
 import { AUTOMATION_TRIGGER } from "@repo/features/automation-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
@@ -24,6 +25,7 @@ import {
 } from "../../icons/lucide-glyphs.js";
 import { FiringGlyph } from "../../marks/firing-glyph.js";
 import { type CodexArt, HarnessMark } from "../../marks/harness-mark.js";
+import { ProductMark } from "../../marks/product-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
 import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
@@ -62,11 +64,6 @@ import { MoreButton } from "../more-button/more-button.js";
 import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
 import { PROGRESS_COUNT_LOOK, ProgressCount } from "../progress-ring/progress-ring.js";
 import { SearchField } from "../search-field/search-field.js";
-import {
-  type MenuRow,
-  SEARCHABLE_MENU_LAYER,
-  SearchableMenu,
-} from "../searchable-menu/searchable-menu.js";
 import { SettingsRow } from "../settings-row/settings-row.js";
 import { SETTINGS_SECTION_FRAME, SettingsSection } from "../settings-section/settings-section.js";
 import { Shimmer } from "../shimmer/shimmer.js";
@@ -1390,60 +1387,54 @@ function DevicesScene(): React.JSX.Element {
 /** What a scene is handed: Codex's picture, where the page has one to draw its mark from. */
 type SceneProps = { readonly codexArt?: CodexArt | undefined };
 
-/** The models the composer's menu offers, by the harness each runs in. */
-const MENU_MODELS = [
-  { id: "opus", label: "Opus 5.5", provider: MODEL_PROVIDER.ANTHROPIC },
-  { id: "sonnet", label: "Sonnet 5.5", provider: MODEL_PROVIDER.ANTHROPIC },
-  { id: "haiku", label: "Haiku 5.5", provider: MODEL_PROVIDER.ANTHROPIC },
-  { id: "gpt", label: "GPT-5.5", provider: MODEL_PROVIDER.OPENAI },
-  { id: "gpt-mini", label: "GPT-5.5 mini", provider: MODEL_PROVIDER.OPENAI },
-] as const;
+/** How many tiles the keys scene's grid sets across, and how many rows. */
+const KEY_GRID = { COLUMNS: 7, ROWS: 3 } as const;
 
-/** The model chosen, which the menu checks and the chip names. */
-const MENU_CHOSEN = "opus";
+/** The tile at the grid's heart, where the product's mark stands between the two harnesses. */
+const KEY_HUB = KEY_GRID.COLUMNS + Math.floor(KEY_GRID.COLUMNS / 2);
+
+/** Every tile of the grid, by its place, row by row. */
+const KEY_TILES: readonly number[] = Array.from(
+  { length: KEY_GRID.COLUMNS * KEY_GRID.ROWS },
+  (_, place) => place,
+);
 
 /**
- * The composer's model menu as the app opens it over the model chip: the
- * models on the plans and keys connected, Claude's and Codex's together, the
- * chosen one checked with its effort. It stands still, open, and nothing in it is
- * pressed. Note that it stands in no device, so it is made a picture here as
- * a device makes its screen one: a reader is told what it shows, and it is
- * inert.
+ * The keys scene: a grid of tiles fading at its edges, the product's mark
+ * lit at its heart between Claude Code's and Codex's, the rest of the tiles
+ * empty. It names no plan or key of its own; the words beside it do, as a
+ * logo grid on a devtool's page does. A picture, inert.
  */
 function KeysScene({ codexArt }: SceneProps): React.JSX.Element {
-  const rows: MenuRow[] = MENU_MODELS.map((model) => ({
-    id: model.id,
-    label: model.label,
-    icon:
-      model.provider === MODEL_PROVIDER.ANTHROPIC ? (
-        <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />
-      ) : codexArt === undefined ? null : (
-        <HarnessMark provider={MODEL_PROVIDER.OPENAI} codexArt={codexArt} />
+  const marks = new Map<number, ReactNode>([
+    [KEY_HUB - 1, <HarnessMark key="claude" provider={MODEL_PROVIDER.ANTHROPIC} />],
+    [KEY_HUB, <ProductMark key="vespin" inherit />],
+    [
+      KEY_HUB + 1,
+      codexArt === undefined ? null : (
+        <HarnessMark key="codex" provider={MODEL_PROVIDER.OPENAI} codexArt={codexArt} />
       ),
-    terms: [model.label, model.provider],
-    detail: model.id === MENU_CHOSEN ? "High" : undefined,
-  }));
+    ],
+  ]);
 
   return (
     <div
       className="ui-landing-scene ui-landing-keys"
       role="img"
-      aria-label="The composer's model menu: Opus, Sonnet, and Haiku on a Claude plan, and GPT-5.5 on an OpenAI API key"
+      aria-label={`Claude Code's and Codex's marks lit either side of ${PRODUCT_NAME}'s`}
       {...DESKTOP_SURFACE}
     >
-      <div className="ui-landing-keys-menu" inert>
-        <SearchableMenu
-          layer={SEARCHABLE_MENU_LAYER.EMBEDDED}
-          id="landing-model-menu"
-          label="Model"
-          placeholder="Search models"
-          rows={rows}
-          value={MENU_CHOSEN}
-          noMatch="No models match"
-          onPick={still}
-          onClose={still}
-          onLeave={still}
-        />
+      <div className="ui-landing-key-grid" inert>
+        {KEY_TILES.map((tile) => (
+          <span
+            key={tile}
+            className="ui-landing-key-tile"
+            data-lit={marks.has(tile) || undefined}
+            data-hub={tile === KEY_HUB || undefined}
+          >
+            {marks.get(tile)}
+          </span>
+        ))}
       </div>
     </div>
   );

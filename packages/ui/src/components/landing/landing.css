@@ -1835,24 +1835,64 @@
     background: var(--ui-color-ground);
   }
 
-  /* The keys: the composer's model menu open at its own width over the
-     model chip it hangs from, the chip at the menu's trailing edge. */
+  /* The keys: a grid of tiles on a copper glow of its own, fading at its
+     edges, the product's mark lit at its heart between the two harnesses'.
+     The grid keeps its tiles' size and lets the stage clip its far columns,
+     which the fade hides. */
   .ui-landing-keys {
+    --ui-landing-key-tile: 84px;
+    --ui-landing-key-mark: 36px;
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: var(--ui-tight-gap);
-    width: min(100%, 340px);
-    margin: 0 auto;
-    background: transparent;
+    justify-content: center;
+    overflow: clip;
+    padding-block: 24px;
   }
 
-  .ui-landing-keys-menu {
-    width: 100%;
+  .ui-landing-keys::before {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      closest-side,
+      color-mix(in srgb, var(--ui-color-accent) 18%, transparent),
+      transparent
+    );
+    content: "";
+    pointer-events: none;
+  }
+
+  .ui-landing-key-grid {
+    display: grid;
+    grid-template-columns: repeat(7, var(--ui-landing-key-tile));
+    flex: none;
+    gap: 14px;
+    mask-image: radial-gradient(closest-side, black 55%, transparent);
+  }
+
+  .ui-landing-key-tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--ui-landing-key-tile);
+    height: var(--ui-landing-key-tile);
     border: 1px solid var(--ui-color-border);
     border-radius: var(--ui-radius-14);
     background: var(--ui-color-float-solid);
-    box-shadow: 0 24px 64px -16px var(--ui-color-shadow-deep);
+    color: var(--ui-color-accent);
+    opacity: 0.55;
+  }
+
+  .ui-landing-key-tile[data-lit] {
+    box-shadow: 0 0 60px -12px color-mix(in srgb, var(--ui-color-accent) 55%, transparent);
+    opacity: 1;
+  }
+
+  .ui-landing-key-tile[data-hub] {
+    border-color: color-mix(in srgb, var(--ui-color-accent) 60%, transparent);
+  }
+
+  .ui-landing-key-tile > * {
+    width: var(--ui-landing-key-mark);
+    height: var(--ui-landing-key-mark);
   }
 
   /* Under 640px of room the page keeps to one column: the live app under the
@@ -1948,6 +1988,14 @@
 
     .ui-landing-more-tile {
       padding: 20px 0 22px;
+    }
+
+    /* On a phone the stage is narrower than the grid, so its sides fade
+       rather than cut. */
+    .ui-landing-keys {
+      --ui-landing-key-tile: 60px;
+      --ui-landing-key-mark: 26px;
+      mask-image: linear-gradient(to right, transparent, black 25%, black 75%, transparent);
     }
 
     /* On a phone a close-up keeps its story's card alone, across the stage. */
