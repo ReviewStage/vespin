@@ -8,14 +8,13 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
+import type { TaskListParts } from "@repo/features/tasks-view";
 import { type EntityPool, entityPool } from "@repo/sync";
 import { TURN_STATUS } from "@repo/wire";
 import { Deferred, Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
-import { type AppStateSnapshot, appStateDelivery } from "./app-state.js";
-import { initialAppState } from "./client/app-state-store.js";
+import { taskListDelivery } from "./app-state.js";
 import { DRAW_TICK, rowWriteOn } from "./live-collection.js";
-import { runModeFor } from "./run-mode.js";
 import { AGENT, type LiveTaskList, PLAN, taskListCollections } from "./task-list-collections.js";
 import { agentListRow, planListRow } from "./testing/task-list-rows.js";
 
@@ -36,32 +35,13 @@ function openPullRequest(number: number): AgentPullRequest {
   };
 }
 
-/** The document a window is told, its task list drawn as `drawn`, at `version`. */
-function documentOf(drawn: LiveTaskList, version: number): AppStateSnapshot {
-  const idle = initialAppState(
-    {
-      launch: { profile: "idle", captureMode: false, fixtureMode: false },
-      runMode: runModeFor({ capture: false, fixture: false }),
-      appVersion: "1.2.3",
-      packaged: true,
-      platform: "darwin",
-    },
-    true,
-    [],
-  );
-
+/** The task list's lists as `drawn` holds them, as the store holds them beside the document. */
+function listsOf(drawn: LiveTaskList): TaskListParts {
   return {
-    ...idle,
-    tasks: {
-      ...idle.tasks,
-      tasks: drawn.list.tasks,
-      taskAgents: drawn.taskAgents,
-      taskPullRequests: drawn.taskPullRequests,
-      agentPullRequests: drawn.agentPullRequests,
-      taskAgentPins: drawn.taskAgentPins,
-    },
-    window: { fullScreen: false },
-    version,
+    tasks: drawn.list.tasks,
+    taskAgents: drawn.taskAgents,
+    taskPullRequests: drawn.taskPullRequests,
+    agentPullRequests: drawn.agentPullRequests,
   };
 }
 
@@ -200,14 +180,12 @@ it.effect(
           });
         }
 
-        const delivered = appStateDelivery(documentOf(before, 1), documentOf(after, 2));
+        const delivered = taskListDelivery(listsOf(before), listsOf(after), 2);
 
-        assert.deepEqual(delivered?.moved, {
-          tasks: [
-            { key: ["tasks"], rows: newTasks },
-            { key: ["taskAgents"], rows: newAgents },
-          ],
-        });
+        assert.deepEqual(delivered?.moved, [
+          { key: ["tasks"], rows: newTasks },
+          { key: ["taskAgents"], rows: newAgents },
+        ]);
         assert.equal(reads, 0);
 
         // The service binds the live set half its stretch later and answers no row: each Done task touched before then leaves, but one pinned through an agent.

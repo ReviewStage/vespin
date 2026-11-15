@@ -28,7 +28,12 @@ import type { IntegrationToolsAnswer } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { ModelsAnswer } from "@repo/features/models-wire";
 import { PAGE_OWNER, type PagePlace } from "@repo/features/page-wire";
-import { IDLE_TASKS_VIEW, type TASK_CALL_FAILURE, type TasksView } from "@repo/features/tasks-view";
+import {
+  IDLE_TASKS_VIEW,
+  type TASK_CALL_FAILURE,
+  type TaskListParts,
+  type TasksView,
+} from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import {
   type AppAllowedCommandList,
@@ -113,6 +118,16 @@ import {
   writeAppState,
 } from "./copy-feedback.js";
 import { onOutbox, resetOutbox, withOutbox } from "./outbox.js";
+
+/**
+ * Main's document as a test writes it, the task list's lists in its tasks
+ * slice, which the test's bridge hands the window beside the document, as
+ * the host holds them beside it (`app-bridge.ts`).
+ */
+export type ListedAppState = Omit<AppStateSnapshot, "tasks"> & { tasks: WrittenTasksView };
+
+/** A tasks slice as a test writes it: the document's, and any of the task list's lists beside it. */
+export type WrittenTasksView = TasksView & Partial<TaskListParts>;
 
 /** What the desktop offers: every capability there is. */
 export const DESKTOP_CAPABILITIES: readonly HostCapability[] = Object.values(HOST_CAPABILITY);
@@ -265,7 +280,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
 function inCaseWorkspaces(
   snapshot: AppStateSnapshot,
   experiments: ExperimentChoices,
-  patch: Partial<AppStateSnapshot>,
+  patch: Partial<ListedAppState>,
 ): AppStateSnapshot {
   const tasks = withWorkspaceExperiments(snapshot.tasks, experiments);
 
@@ -301,7 +316,7 @@ export function deliveryOf(snapshot: AppStateSnapshot): AppStateDelivery {
 /** Main's document with the account's experiments as given and the slices patched, the window's facts among them. */
 export function stateWith(
   experiments: ExperimentChoices,
-  patch: Partial<AppStateSnapshot>,
+  patch: Partial<ListedAppState>,
 ): AppStateSnapshot {
   return inCaseWorkspaces({ ...idleDocument(experiments), ...patch }, experiments, patch);
 }
@@ -312,7 +327,7 @@ export function stateWith(
  * pins and sections, which a surface reads off the list
  * (`use-pin-writes.ts`), standing in the first frame.
  */
-export function writeListedTasks(listed: Partial<TasksView>): void {
+export function writeListedTasks(listed: Partial<WrittenTasksView>): void {
   const patched = (snapshot: AppStateSnapshot): AppStateSnapshot => ({
     ...snapshot,
     tasks: { ...snapshot.tasks, ...listed },
@@ -339,7 +354,9 @@ export function writeListedTasks(listed: Partial<TasksView>): void {
  * its rows as the window's do. Answers how to hand the next list, patched
  * over the one held as main's push delivers it, inside the caller's `act`.
  */
-export function followListedTasks(listed: Partial<TasksView>): (next: Partial<TasksView>) => void {
+export function followListedTasks(
+  listed: Partial<WrittenTasksView>,
+): (next: Partial<WrittenTasksView>) => void {
   writeListedTasks(listed);
   const listeners = new Set<(delivery: AppStateDelivery) => void>();
   fakeAppBridge({
@@ -380,7 +397,7 @@ export function signedInAs(account: {
 /** Hands the window main's document with the account's experiments as given and the slices patched, beside whatever else the bridge already holds. */
 export function handState(
   experiments: ExperimentChoices,
-  patch: Partial<AppStateSnapshot> = {},
+  patch: Partial<ListedAppState> = {},
 ): void {
   const snapshot = stateWith(experiments, patch);
   fakeAppBridge({
@@ -410,7 +427,7 @@ export function readExperiments(experiments: ExperimentChoices): void {
  */
 export function writeExperiments(
   experiments: ExperimentChoices,
-  patch: Partial<AppStateSnapshot> = {},
+  patch: Partial<ListedAppState> = {},
 ): void {
   writeAppState(stateWith(experiments, patch));
 }
@@ -441,7 +458,7 @@ export function handCapabilities(
  */
 export function handSettings(
   settings: Partial<AppSettingsView> = {},
-  patch: Partial<AppStateSnapshot> = {},
+  patch: Partial<ListedAppState> = {},
 ): void {
   let view: AppSettingsView = Object.assign(settingsView(), settings);
   const listeners = new Set<(delivery: AppStateDelivery) => void>();
@@ -496,7 +513,7 @@ export interface HostReadsHanded {
   readonly deliverTokenRepositories: (next: AppTokenRepositories) => void;
   readonly deliverTranscripts: (next: AppTranscripts) => void;
   /** The account's task list, as the host lays it whole. */
-  readonly deliverTasks: (next: TasksView) => void;
+  readonly deliverTasks: (next: WrittenTasksView) => void;
   /** Main's read of the account's inbox, as the host lays it whole. */
   readonly deliverInbox: (next: AppInboxSlice) => void;
 }
@@ -1228,7 +1245,7 @@ export type AccountReadHeld = IntegrationsHeld;
  * is adopted at, so it never puts another helper's later delivery behind it.
  */
 function heldForAccount<Rows>(
-  sliceOf: (held: Readonly<Record<string, AppHostRead<Rows>>>) => Partial<AppStateSnapshot>,
+  sliceOf: (held: Readonly<Record<string, AppHostRead<Rows>>>) => Partial<ListedAppState>,
   readOf: () => AppHostRead<Rows> | undefined,
 ): () => void {
   const handed = fakeAppBridgeCalls().requestAppState;

@@ -34,7 +34,7 @@ import {
   type TasksPage,
   tasksPage,
 } from "@repo/features/tasks-model";
-import { TASK_CALL_FAILURE, TASKS_READ, type TaskListStanding } from "@repo/features/tasks-view";
+import { TASK_CALL_FAILURE, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxTask } from "@repo/host/app-state";
@@ -713,7 +713,7 @@ function readInboxItemHome(
 
 export function useTasksTab(input: {
   /** What main holds of the account's tasks but the list itself, which the window reads from its collections (`task-list-collections.tsx`); a fixture run's own stand in for them. */
-  tasks: TaskListStanding;
+  tasks: TasksView;
   run: { readonly fixtureMode: boolean; readonly profile: string };
   signedIn: boolean;
   /** The signed-in account's email, which the task last open is kept under; none while signed out. */
@@ -1063,8 +1063,8 @@ export function useTasksTab(input: {
   useEffect(() => {
     if (inboxElsewhere && listedStep !== undefined) turnInbox(listedStep);
   }, [inboxElsewhere, listedStep, turnInbox]);
-  // Every agent the list followed live carries, the archived ones among them; none while it is not, which the view alone says.
-  const agentsCarried = viewed.taskAgents !== undefined;
+  // Every agent the list followed live carries, the archived ones among them; none until it says its lists are drawn.
+  const agentsCarried = viewed.listed === true;
   const liveAgents = useListedAgents(agentsCarried);
   const inboxWaiting = useInboxWaitingTasks();
   const signedIn = fixture !== undefined || input.signedIn;
@@ -1115,7 +1115,6 @@ export function useTasksTab(input: {
     repository:
       openDocument?.id === viewed.activeTaskId ? (openDocument?.repository ?? null) : null,
     agentsFollowed: liveAgents !== undefined && openListed !== undefined,
-    staged: fixture,
     onOpenIntegrations: input.onOpenIntegrations,
     onOpenApiKeys: input.onOpenApiKeys,
     me: input.accountId,

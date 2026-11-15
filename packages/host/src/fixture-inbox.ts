@@ -34,6 +34,7 @@ import {
   type AgentTranscriptOlderAnswer,
   type AgentTranscriptOlderParams,
   INBOX_SCOPE_KIND,
+  MEMORY_SAVE_FAILURE,
 } from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
@@ -122,6 +123,8 @@ import {
 import {
   COMMENT_SUBJECT,
   DESCRIPTION_COMMENT_CALL_FAILURE,
+  type ListedTasksView,
+  type TaskListParts,
   type TasksView,
 } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -978,7 +981,10 @@ function listedTask(
  * in a second repository, so the list draws its repositories' headings,
  * one the account keeps in a section of its own, a teammate's it
  * follows, which the list draws under Following, and one filed for later
- * and one canceled, so the list draws every status's mark.
+ * and one canceled, so the list draws every status's mark. Note that those
+ * last two are named with Markdown's marks, and with letters beyond Latin
+ * and an emoji, so a search's bold title shows every mark as typed and
+ * lands on the right letters.
  */
 const LISTED_TASKS: readonly TaskSummary[] = [
   listedTask(LISTED.COPY, "Invite email copy", {
@@ -1019,14 +1025,14 @@ const LISTED_TASKS: readonly TaskSummary[] = [
       { userId: ADA.userId, assignee: false, machines: false },
     ],
   }),
-  listedTask(LISTED.EXPORT, "Ledger CSV export", {
+  listedTask(LISTED.EXPORT, "Ledger *CSV* export (v2_final)", {
     repository: "ada/ledger",
     status: TASK_STATUS.BACKLOG,
     number: 48,
     updatedAt: LANDED - 2 * DAY,
     priority: TASK_PRIORITY.LOW,
   }),
-  listedTask(LISTED.DIGEST_V1, "Daily digest email", {
+  listedTask(LISTED.DIGEST_V1, "Daily digest 日報 for Zoë 📬", {
     repository: "ada/relay",
     status: TASK_STATUS.CANCELED,
     number: 49,
@@ -1129,6 +1135,9 @@ const MEMBERS: WorkspaceMembersAnswer = {
     },
   ],
 };
+
+/** What a memory's save answers in a run that refuses writes, as the service answers one it refused: the workspace holds all it may. */
+export const MEMORY_SAVE_REFUSED = { failure: MEMORY_SAVE_FAILURE.MEMORY_FULL } as const;
 
 /** The id a memory the fixture is asked to keep anew is kept under. */
 export const NEW_MEMORY_ID = "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a64";
@@ -1472,7 +1481,7 @@ function ownInvites(task: TaskSummary): TaskSummary {
  * tasks after it, so every task holding an item is listed. The same list
  * under any other profile.
  */
-export function inboxTasksView(profile: string, list: TasksView): TasksView {
+export function inboxTasksView(profile: string, list: ListedTasksView): ListedTasksView {
   if (!STAGED_PROFILES.has(profile)) return list;
 
   const listed = list.tasks.some((task) => task.id === TASK.INVITES)
@@ -1509,6 +1518,7 @@ export function inboxTasksView(profile: string, list: TasksView): TasksView {
   return {
     ...list,
     tasks,
+    listed: true,
     taskAgents: [
       ...(list.taskAgents ?? []).filter((agent) => !followed.some(({ id }) => id === agent.id)),
       ...followed,
@@ -1658,37 +1668,33 @@ const INVITES_PAGES: readonly PageLine[] = [
   },
 ];
 
-/** A descriptions slice with the reference journey's laid over it, and the listed task it was laid from. */
-interface StagedDocuments {
-  readonly from: TaskSummary;
-  readonly laid: AppStateSnapshot[typeof LIVE_READ.HELD_TASK];
-}
-
 /**
  * Each held descriptions slice with the reference journey's laid over it, by
- * the slice, so a slice staged is never staged anew while the task it was
- * laid from stands as it was.
+ * the slice, so a slice staged is never staged anew.
  */
 const STAGED_DOCUMENTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.HELD_TASK],
-  StagedDocuments
+  AppStateSnapshot[typeof LIVE_READ.HELD_TASK]
 >();
 
 /**
  * The descriptions slice with the reference journey's laid over it, its
- * fields the task's as the list stands it (`ownInvites`), so its page and its
- * row say the same; the stand-in where the document lists none of it, as the
- * panel's fixture run, which lists its own on the window's side, does.
+ * fields the task's as these profiles list it (`ownInvites` of the
+ * stand-in, `inboxTasksView`), so its page and its row say the same.
  */
 function stagedDocuments(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.HELD_TASK] {
   const held = state[LIVE_READ.HELD_TASK];
-  const from = state.tasks.tasks.find((task) => task.id === TASK.INVITES) ?? INVITES_TASK;
   const staged = STAGED_DOCUMENTS.get(held);
 
-  if (staged !== undefined && staged.from === from) return staged.laid;
-  const laid = { ...held, [TASK.INVITES]: { rows: { task: invitesDocument(ownInvites(from)) } } };
-  STAGED_DOCUMENTS.set(held, { from, laid });
-  STAGED_DOCUMENTS.set(laid, { from, laid });
+  if (staged !== undefined) return staged;
+
+  const laid = {
+    ...held,
+    [TASK.INVITES]: { rows: { task: invitesDocument(ownInvites(INVITES_TASK)) } },
+  };
+
+  STAGED_DOCUMENTS.set(held, laid);
+  STAGED_DOCUMENTS.set(laid, laid);
 
   return laid;
 }
@@ -2321,7 +2327,7 @@ function standsOn(agent: AgentSummary, change: AgentChange): boolean {
 /** The reader's pins with each pin the run set or took off laid over, by the agent's task. */
 function pinnedAgents(
   pins: NonNullable<TasksView["taskAgentPins"]>,
-  agents: NonNullable<TasksView["taskAgents"]>,
+  agents: NonNullable<TaskListParts["taskAgents"]>,
   choices: AgentChoices,
 ): NonNullable<TasksView["taskAgentPins"]> {
   const kept = pins.filter(({ agentId }) => choices.get(agentId)?.pinned !== false);
@@ -2347,7 +2353,7 @@ function pinsStand(pins: NonNullable<TasksView["taskAgentPins"]>, choices: Agent
  * draws a change the moment it is asked; the list handed in where every
  * agent already stands so, so laying it again changes nothing.
  */
-export function chosenTasksView(list: TasksView, choices: AgentChoices): TasksView {
+export function chosenTasksView(list: ListedTasksView, choices: AgentChoices): ListedTasksView {
   const agents = list.taskAgents ?? [];
   const pins = list.taskAgentPins ?? [];
 
