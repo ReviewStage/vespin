@@ -1,0 +1,4 @@
+  SKIPPED #9370 type error: apps/mobile/src/use-attached-pictures.ts(19,10): error TS2724: '"@repo/features/file-marker"' has no exported member named 'nextPictureName'. Did you mean 'pictureName'?
+== bundle Z1b base cbf8b41b38
+  merged #9360 34f14994d9
+  built 23b2c36b9b
