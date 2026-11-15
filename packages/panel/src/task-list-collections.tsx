@@ -137,59 +137,53 @@ export function useNamedTask(
 
 /**
  * Every task the list holds, newest started first as the host lists them,
- * each name drawn as it is being typed where it is (`typedNames`). One live
- * query keeps them, so the list is the same array until a task moves; for a
+ * held to the workspace `workspaceId` names where it names one, each name
+ * drawn as it is being typed where it is (`typedNames`). One live query
+ * keeps them, so the list is the same array until one of them moves; for a
  * reader that walks the whole list, as the palette's task rows do. Note that
  * these rows are the live query's, never the same objects `.get` answers.
  */
-export function useNamedTasks(typedNames: TaskNames): readonly TaskSummary[] {
+export function useNamedTasks(
+  typedNames: TaskNames,
+  workspaceId?: string | undefined,
+): readonly TaskSummary[] {
   const collections = useTaskListCollections();
 
   const every = useLiveQuery({
-    query: (q) =>
-      q
+    query: (q) => {
+      const all = q
         .from({ task: collections.tasks })
         .orderBy(({ task }) => task.createdAt, "desc")
-        .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" }),
+        .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" });
+
+      return workspaceId === undefined
+        ? all
+        : all.where(({ task }) => eq(task.workspaceId, workspaceId));
+    },
   }).data;
 
   return useMemo(() => renamedTasks(every, typedNames), [every, typedNames]);
 }
 
 /**
- * The tasks the sidebar lists: those of the workspace `workspaceId` names,
- * every task while it names none, in the sidebar's order (the pinned ones
- * first, newest pinned first, then the rest newest started first as the host
- * lists them), each name drawn as it is being typed where it is
- * (`typedNames`). One live query keeps them, so the list is the same array
- * until one of the workspace's tasks or a typed name moves; for a reader that
- * walks the listed workspace's whole list, as the Tasks page and the Inbox's
- * counts do.
+ * The tasks the sidebar lists (`useNamedTasks` held to the workspace
+ * `workspaceId` names, every task while it names none) in the sidebar's
+ * order: the pinned ones first, newest pinned first, then the rest as the
+ * host lists them. The same array until one of them or a typed name moves;
+ * for a reader that walks the listed workspace's whole list, as the Tasks
+ * page and the Inbox's counts do.
  */
 export function useListedTasks(
   workspaceId: string | undefined,
   typedNames: TaskNames,
 ): readonly TaskSummary[] {
-  const collections = useTaskListCollections();
-
-  const listed = useLiveQuery({
-    query: (q) => {
-      const every = q
-        .from({ task: collections.tasks })
-        .orderBy(({ task }) => task.createdAt, "desc")
-        .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" });
-
-      return workspaceId === undefined
-        ? every
-        : every.where(({ task }) => eq(task.workspaceId, workspaceId));
-    },
-  }).data;
+  const named = useNamedTasks(typedNames, workspaceId);
 
   return useMemo(() => {
-    const { pinned, rest } = sidebarTasks(listed);
+    const { pinned, rest } = sidebarTasks(named);
 
-    return renamedTasks([...pinned, ...rest], typedNames);
-  }, [listed, typedNames]);
+    return [...pinned, ...rest];
+  }, [named]);
 }
 
 /** The task list's rows read by id, as the collections hold them now. */
