@@ -250,7 +250,7 @@ export interface TaskRowTab
     | "signedIn"
     | "me"
     | "workspaces"
-    | "drawnTasks"
+    | "typedNamesNow"
     | "onChangeRepository"
     | "onMoveTask"
     | "moveTask"
@@ -274,7 +274,7 @@ export function taskRowTab(
     signedIn: tasks.signedIn,
     me: tasks.me,
     workspaces: tasks.workspaces,
-    drawnTasks: tasks.drawnTasks,
+    typedNamesNow: tasks.typedNamesNow,
     onNewRelatedTask: tasks.newTask.onOpenRelated,
     onChangeRepository: tasks.onChangeRepository,
     onMoveTask: tasks.onMoveTask,
@@ -533,8 +533,8 @@ function SidebarTaskMarks({
   disabled: boolean;
 }): React.JSX.Element {
   const subject = shortcutSubject(SHORTCUT_SUBJECT.TASK, task.id);
-  const pins = usePinWrites(tasks.drawnTasks);
-  const standing = useStandingWrites(tasks.drawnTasks);
+  const pins = usePinWrites(tasks.typedNamesNow);
+  const standing = useStandingWrites(tasks.typedNamesNow);
 
   const marks = placeMarks(standing, pins, task).map(
     ({ key, item, onSelect }): RowMark => ({
@@ -973,7 +973,7 @@ export function useTaskMenuItems(
   const opened = openedAs(doors.opened, taskId);
   const task = rowTaskOf(tasks.tasksNow(), opened, taskId);
   const markRead = useReadMark();
-  const standingWrites = useStandingWrites(tasks.drawnTasks);
+  const standingWrites = useStandingWrites(tasks.typedNamesNow);
 
   // Note that a delete asked is drawn at once, which may take the row the question stands on with it.
   const heard = useRefusalHeard(task !== undefined && tasks.shown, {
@@ -1013,7 +1013,7 @@ export function useTaskMenuItems(
     task !== undefined ? moveToSectionEntry(task.id, task.workspaceId, sections, name) : undefined;
 
   const standingDoor = useStandingDoor(tasks);
-  const pins = usePinWrites(tasks.drawnTasks);
+  const pins = usePinWrites(tasks.typedNamesNow);
   const relationId = useId();
   const writes = useTaskRelationWrites();
   const descriptions = useWorkspaceExperiment(task?.workspaceId, EXPERIMENT.DESCRIPTIONS);
@@ -1271,8 +1271,8 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   childCount,
   onOpen,
 }: SidebarTaskProps): React.JSX.Element {
-  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
-  const pins = usePinWrites(tasks.drawnTasks);
+  const renaming = useMutation(useTaskRename(tasks.typedNamesNow));
+  const pins = usePinWrites(tasks.typedNamesNow);
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const reads = useReadMarks();

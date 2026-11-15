@@ -62,7 +62,7 @@ import { Settings } from "react-native";
 import { cachedFile, cachedVideo } from "../cached-media.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
@@ -418,14 +418,8 @@ function useHomeGroups(taskId: string | undefined): HomeGroups {
     [taskId],
   );
 
-  const taskOf = useCallback(
-    (state: AppStateSnapshot) =>
-      taskId === undefined ? undefined : state.tasks.tasks.find((task) => task.id === taskId),
-    [taskId],
-  );
-
   const { data: read } = useQuery({ ...appStateQuery, select: heldRead });
-  const { data: task } = useQuery({ ...appStateQuery, select: taskOf });
+  const task = useTaskListRow(useTaskListCollections().tasks, taskId);
   const rows = read?.rows;
 
   const groups = useMemo(

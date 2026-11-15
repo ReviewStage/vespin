@@ -186,7 +186,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { runningRuns } from "./automation-runs-tab.js";
-import { hadTasks } from "./desktop-welcome.js";
+import { hadTasks, useListsTask } from "./desktop-welcome.js";
 import { useFailedRunsMark } from "./failed-runs.js";
 import { withoutFinishedRunTasks } from "./finished-runs.js";
 import { type FoldedGroups, useFoldedGroups } from "./folded-groups.js";
@@ -2046,7 +2046,7 @@ function SidebarColumn({
   room = SHELL_ROOM.WIDE,
 }: DesktopSidebarProps): React.JSX.Element {
   // Note that the column's tasks stand while neither the window's nor the pins change, because every row is handed them, and a new one draws every row again.
-  const pins = useSteadyDoors(usePins(control.drawnTasks));
+  const pins = useSteadyDoors(usePins(control.typedNamesNow));
   const tasks: SidebarTasks = useMemo(() => ({ ...control, ...pins }), [control, pins]);
   const pictures = useRepositoryPictures();
   const connected = useConnected();
@@ -2372,7 +2372,8 @@ function SidebarColumn({
   // Note that an archived task, which the list does not show, counts for nothing here.
   const unlisted = listedTasks.pinned.length === 0 && listedTasks.unpinned.length === 0;
   // Note that a workspace listing none may still have had tasks the list does not hold, old and finished ones, so it says none match rather than that there are none yet.
-  const neverHadTasks = unlisted && !hadTasks(tasks, tasks.workspace?.id);
+  const listsTask = useListsTask(tasks.workspace?.id);
+  const neverHadTasks = unlisted && !hadTasks(tasks, tasks.workspace?.id, listsTask);
   // A row names its repository as its group's header would, its owner's picture and its name, owner and all where two share a name.
   const named = repositoriesOf(unpinnedTasks);
 
