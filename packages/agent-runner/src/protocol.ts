@@ -843,6 +843,7 @@ export const RUNNER_EVENT = {
   APPROVAL_REQUESTED: "vespin_runner_approval_requested",
   APPROVAL_RESOLVED: "vespin_runner_approval_resolved",
   GOAL: "vespin_runner_goal",
+  OUT_OF_MEMORY: "vespin_runner_out_of_memory",
 } as const;
 
 /** Why a launch ended. */
@@ -960,6 +961,21 @@ export interface RunnerWaiting {
  */
 export interface RunnerGoal extends GoalNotice {
   readonly type: typeof RUNNER_EVENT.GOAL;
+}
+
+/**
+ * The OUT_OF_MEMORY event: a command the kernel killed for want of memory
+ * (`out-of-memory.ts`), posted just ahead of the message carrying its
+ * answer, so the service marks the call it settles. `callId` is the call's
+ * `tool_use` block's id, or the id of the Codex item that ran it, and
+ * `memoryGb` the sandbox's memory as it ran, in whole GB. A command killed
+ * where the sandbox's memory could not be read is posted no event, only its
+ * transcript line.
+ */
+export interface RunnerOutOfMemory {
+  readonly type: typeof RUNNER_EVENT.OUT_OF_MEMORY;
+  readonly callId: string;
+  readonly memoryGb: number;
 }
 
 /** The CONNECTION_LOST event: the provider's host the launch could not reach and now probes. */
@@ -1157,7 +1173,8 @@ export type RunnerMessage =
   | RunnerEndEvent
   | RunnerApprovalRequested
   | RunnerApprovalResolved
-  | RunnerGoal;
+  | RunnerGoal
+  | RunnerOutOfMemory;
 
 /** One event as posted: its number and its message. */
 export interface RunnerEvent {
