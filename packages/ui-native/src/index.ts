@@ -31,6 +31,7 @@ export {
   FieldChip,
   FollowingChip,
   LabelChip,
+  type ListScopes,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -72,6 +73,7 @@ export {
 export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
 export {
+  FailureNoticeLayer,
   FailureNoticeProvider,
   type FailureNotices,
   useFailureNotices,
