@@ -9,7 +9,7 @@ import {
   SplitView,
 } from "@repo/ui-native";
 import { useEffect, useState } from "react";
-import { standDetailFront } from "../detail-stack.js";
+import { useStandDetailFront } from "../detail-stack.js";
 import { InFrontProvider, type PlaceColumns, usePlaceColumns } from "../place-columns.js";
 import {
   SIDEBAR_PLACE,
@@ -123,11 +123,7 @@ export function AppSplit({
   );
 
   // Note that the menu bar's Back pops this place's pages only while the split view stands in front, so it never acts on a detail the reader can't see.
-  useEffect(() => {
-    standDetailFront(front ? standing : undefined);
-
-    return () => standDetailFront(undefined);
-  }, [front, standing]);
+  useStandDetailFront(standing, front);
 
   return (
     <Screen>

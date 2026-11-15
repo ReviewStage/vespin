@@ -120,11 +120,17 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
-import { PUSHED_PAGE, useDetailLeave, useDetailPush, useStackRoot } from "../detail-stack.js";
+import {
+  PUSHED_PAGE,
+  useDetailLeave,
+  useDetailPush,
+  useStackRoot,
+  useStandDetailFront,
+} from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
@@ -2018,6 +2024,7 @@ function TasksSplitScreen({
 }) {
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const threeColumns = useThreeColumns();
+  const focused = useIsFocused();
   const picked = useTasksCollection();
 
   const { detail, detailBar, asks } = useTaskDetail(
@@ -2053,6 +2060,8 @@ function TasksSplitScreen({
   useStackRoot(SIDEBAR_PLACE.TASKS, selected);
   // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
   const stack = useDetailStackColumn(SIDEBAR_PLACE.TASKS, { id: selected }, true);
+  // Note that the menu bar's Back pops the pages over this two-column detail while it's shown; three columns name theirs in `AppSplit`.
+  useStandDetailFront(SIDEBAR_PLACE.TASKS, focused && !threeColumns);
   const firstDetailBar = usePortraitDetailBar(detailBar);
   useHandColumns(
     SIDEBAR_PLACE.TASKS,

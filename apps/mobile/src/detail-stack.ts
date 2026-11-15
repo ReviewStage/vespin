@@ -383,15 +383,33 @@ export function useDetailCovered(): boolean {
   });
 }
 
-/** The place whose detail a three-column window stands in front, as its split view says; none while no split view stands in front. */
+/** The place whose detail stands in front, as the split view showing it says: the three-column split, or a two-column tab root; none while no split view stands in front. */
 let front: SidebarPlace | undefined;
 
-/** Names the place whose detail stands in front, so the menu bar's Back pops its pages; none as the split view steps behind the tabs or leaves. */
-export function standDetailFront(place: SidebarPlace | undefined): void {
+/** Names the place whose detail stands in front, so the menu bar's Back pops its pages; none as its split view steps behind or leaves. */
+function standDetailFront(place: SidebarPlace | undefined): void {
   if (front === place) return;
   front = place;
 
   for (const listener of listeners) listener();
+}
+
+/**
+ * Stands a place's detail in front while its split view is shown, so the
+ * menu bar's Back pops the pages pushed over it. Note that stepping back
+ * clears the front only while this place still holds it, because another
+ * split view, such as the next tab's, may already have named its own in the
+ * same switch.
+ */
+export function useStandDetailFront(place: SidebarPlace, shown: boolean): void {
+  useEffect(() => {
+    if (!shown) return;
+    standDetailFront(place);
+
+    return () => {
+      if (front === place) standDetailFront(undefined);
+    };
+  }, [place, shown]);
 }
 
 /** How the detail in front stands, for the menu bar's Back: no split view in front, its own page alone, or a page pushed over it. */

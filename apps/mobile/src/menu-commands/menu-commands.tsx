@@ -35,7 +35,13 @@ import { BUZZ, ConfirmAsk } from "@repo/ui-native";
 import { and, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
-import { useGlobalSearchParams, usePathname, useRootNavigationState, useRouter } from "expo-router";
+import {
+  useGlobalSearchParams,
+  useNavigationContainerRef,
+  usePathname,
+  useRootNavigationState,
+  useRouter,
+} from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { useAgentPullRequests } from "../agents/use-agent.js";
 import {
@@ -314,6 +320,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   // Note that Back pops a page pushed over the detail in front, else a page the tab pushed over the window, as a stack's own Back does; never a sheet, which closes with its own Done or Cancel.
   const detailFront = useDetailFront();
   const root: NavigatorState = useRootNavigationState();
+  const navigation = useNavigationContainerRef();
   const tabs = tabsInFront(root);
 
   const backs =
@@ -422,11 +429,18 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         return router.navigate("/search");
       case MENU_COMMAND.SIDEBAR:
         return sidebar.toggle();
-      case MENU_COMMAND.BACK:
-        if (detailFront === DETAIL_FRONT.PUSHED) popDetailFront();
-        else router.back();
+      case MENU_COMMAND.BACK: {
+        if (detailFront === DETAIL_FRONT.PUSHED) return popDetailFront();
+
+        // Note that the tab's stack is read again at the press, because a held ⌘[ repeats before this render's enablement catches up, and a Back at the tab's root would go to the first tab.
+        const liveRoot: NavigatorState | undefined = navigation.getRootState();
+        const live = tabsInFront(liveRoot);
+
+        if (live !== undefined && tabStackBacks(live)) router.back();
 
         return;
+      }
+
       case MENU_COMMAND.MARK_DONE:
         if (working > 0) setAsking(ASK.MARK_DONE);
         else markDone();
