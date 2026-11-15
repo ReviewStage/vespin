@@ -394,6 +394,26 @@ export function startLanded(taskId: string, landed: StartLanded): void {
 }
 
 /**
+ * Keeps what a start came to for the next page of its task that stands in
+ * front, as a page still arriving, or handing itself to the iPad's split
+ * view, hears it before it can act on it.
+ */
+export function keepStartLanded(taskId: string, landed: StartLanded): void {
+  unheard.set(taskId, { landed, at: Date.now() });
+}
+
+/** What a start came to that waits for a page of its task in front, taken once; none once it has waited past `UNHEARD_FOR_MS`. */
+export function takeStartLanded(taskId: string | undefined): StartLanded | undefined {
+  if (taskId === undefined) return undefined;
+  const waiting = unheard.get(taskId);
+  unheard.delete(taskId);
+
+  return waiting !== undefined && Date.now() - waiting.at < UNHEARD_FOR_MS
+    ? waiting.landed
+    : undefined;
+}
+
+/**
  * Hears what the start of the task `taskId` came to while its page stands,
  * those of `kinds` alone, including an answer that landed a moment before
  * this piece mounted, as an answer to a start refused at once does, or one
