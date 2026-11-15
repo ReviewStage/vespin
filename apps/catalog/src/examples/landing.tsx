@@ -5,12 +5,15 @@ import {
   LANDING_SCENE,
   LandingBackedBy,
   LandingFacts,
+  LandingMore,
   LandingPage,
   LandingSection,
   LostPage,
   ScrollArea,
   SiteBarPages,
   SiteFootLinks,
+  TerminalIcon,
+  WaveformIcon,
 } from "@repo/ui";
 import codexOneX from "../../../../packages/panel/marks/codex-16.png";
 import codexTwoX from "../../../../packages/panel/marks/codex-32.png";
@@ -98,6 +101,23 @@ function Landing(): React.JSX.Element {
             ]}
           />
         }
+      />
+      <LandingMore
+        title="And much more."
+        items={[
+          {
+            id: "voice",
+            icon: <WaveformIcon />,
+            title: "Voice mode",
+            words: "Call an agent and talk a task through out loud.",
+          },
+          {
+            id: "cli",
+            icon: <TerminalIcon />,
+            title: "MCP and CLI",
+            words: "Work from Claude Code, Codex, Cursor, or your terminal.",
+          },
+        ]}
       />
     </LandingPage>
   );
