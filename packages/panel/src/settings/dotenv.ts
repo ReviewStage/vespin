@@ -8,7 +8,8 @@
  * lines, as a key's PEM does, read whole up to that quote, its line breaks
  * kept; one whose quote never closes sets nothing, rather than a value cut
  * short. A blank line, a `#` comment, and a line
- * with no `=` set nothing. A value is otherwise read as it stands, so a `#`
+ * with no `=` set nothing. A quote a backslash escapes is the value's own,
+ * never its close. A value is otherwise read as it stands, so a `#`
  * inside it and a quoted value's escapes are kept as written; whether a name
  * is one a variable may take is the form's to say.
  */
@@ -43,6 +44,20 @@ function openingQuote(value: string): string | undefined {
   return QUOTES.find((each) => value.startsWith(each));
 }
 
+/** Where `quote` closes a value in `text`, from `from` on, a quote a backslash escapes passed over as the value's own; -1 where it does not close. */
+function closingAt(text: string, quote: string, from: number): number {
+  for (let at = from; at < text.length; at += 1) {
+    if (text[at] === "\\") {
+      at += 1;
+      continue;
+    }
+
+    if (text[at] === quote) return at;
+  }
+
+  return -1;
+}
+
 /** The variables `text` sets, in the order its lines set them. */
 export function parseDotenv(text: string): readonly DotenvPair[] {
   const lines = text.split(/\r?\n/u);
@@ -62,7 +77,7 @@ export function parseDotenv(text: string): readonly DotenvPair[] {
     }
 
     // Note that a value closing on its own line ends at its quote, whatever follows it, a comment among it.
-    const closes = pair.value.indexOf(quote, 1);
+    const closes = closingAt(pair.value, quote, 1);
 
     if (closes > 0) {
       pairs.push({ name: pair.name, value: pair.value.slice(1, closes) });
@@ -72,7 +87,7 @@ export function parseDotenv(text: string): readonly DotenvPair[] {
     // Note that the value's next lines are read as they stand, its own line breaks, up to the line its quote closes on.
     const held = [pair.value.slice(1)];
 
-    while (at < lines.length && !(lines[at] ?? "").includes(quote)) {
+    while (at < lines.length && closingAt(lines[at] ?? "", quote, 0) < 0) {
       held.push(lines[at] ?? "");
       at += 1;
     }
@@ -80,7 +95,7 @@ export function parseDotenv(text: string): readonly DotenvPair[] {
     // A quote that never closes sets nothing, rather than a value cut short.
     if (at >= lines.length) break;
     const last = lines[at] ?? "";
-    held.push(last.slice(0, last.indexOf(quote)));
+    held.push(last.slice(0, closingAt(last, quote, 0)));
     at += 1;
     pairs.push({ name: pair.name, value: held.join("\n") });
   }

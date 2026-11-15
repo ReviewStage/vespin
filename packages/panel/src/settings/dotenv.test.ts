@@ -48,3 +48,13 @@ test("a quoted value closes at its quote, a comment after it left out", () => {
     { name: "EMPTY", value: "" },
   ]);
 });
+
+test("an escaped quote inside a quoted value is kept, and the value closes at the quote after it", () => {
+  const text = ['JSON="{\\"on\\":true}"', 'NOTE="say \\"hi\\"', 'twice"', "NEXT=1"].join("\n");
+
+  assert.deepEqual(parseDotenv(text), [
+    { name: "JSON", value: '{\\"on\\":true}' },
+    { name: "NOTE", value: 'say \\"hi\\"\ntwice' },
+    { name: "NEXT", value: "1" },
+  ]);
+});

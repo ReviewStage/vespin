@@ -526,6 +526,7 @@ function useEditDialog(
   const queries = useQueryClient();
   const wasSecret = variable.secret !== false;
   const [value, setValue] = useState(variable.value ?? "");
+  // Note that a secret's field opens empty, so only a value typed into it changes it, while a config may be cleared to an empty value.
   const valueChanged = wasSecret ? value !== "" : value !== (variable.value ?? "");
   const multiline = (variable.value ?? "").includes("\n");
 
@@ -562,7 +563,7 @@ function useEditDialog(
 
   const form = useFormDialog(
     confirm,
-    valueChanged && value !== "" && value.length <= WORKSPACE_ENVIRONMENT_BOUNDS.MAX_VALUE_CHARS,
+    valueChanged && value.length <= WORKSPACE_ENVIRONMENT_BOUNDS.MAX_VALUE_CHARS,
   );
 
   const reset = () => setValue(variable.value ?? "");
