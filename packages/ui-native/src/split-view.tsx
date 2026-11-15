@@ -35,6 +35,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { BarContent } from "./bar-content.js";
+import { type BarSubtitle, ColumnBarTitle } from "./bar-title.js";
 import type { Scope } from "./button.js";
 import { GLYPH, type Glyph } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
@@ -135,6 +136,8 @@ export type ColumnBar = {
   readonly title?: string | undefined;
   /** A pushed page's name, small and inline in the ink, as a compact window's stack names an agent's page; never with a `title`. */
   readonly name?: string | undefined;
+  /** A muted line under the page's `name`, such as an agent's state and model, standing with it in the bar's middle; never without a `name`. */
+  readonly subtitle?: BarSubtitle | undefined;
   readonly leading?: ReactNode | undefined;
   /** Glyph acts at the bar's leading edge, sharing one glass, as Mail's expand and compose stand over a message. */
   readonly lead?: readonly BarAction[] | undefined;
@@ -338,6 +341,7 @@ function barHolds(bar: ColumnBar): boolean {
     (bar.acts ?? []).length > 0 ||
     bar.filter !== undefined ||
     bar.path !== undefined ||
+    (bar.name !== undefined && bar.subtitle !== undefined) ||
     bar.menu !== undefined ||
     bar.action !== undefined ||
     (bar.foot ?? []).length > 0
@@ -423,6 +427,11 @@ function Column({
         {bar.path === undefined ? null : (
           <ToolbarItem placement="principal">
             <PathTitle path={bar.path.path} status={bar.path.status} />
+          </ToolbarItem>
+        )}
+        {bar.name === undefined || bar.subtitle === undefined ? null : (
+          <ToolbarItem placement="principal">
+            <ColumnBarTitle title={bar.name} subtitle={bar.subtitle} />
           </ToolbarItem>
         )}
         {barActItems(bar.acts ?? [])}
