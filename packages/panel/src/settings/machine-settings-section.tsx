@@ -7,7 +7,7 @@ import {
   type MachineCommandMode,
 } from "@repo/features/machine-command-wire";
 import type { MachineLine } from "@repo/features/machine-live";
-import type { ListedMachine } from "@repo/features/machine-name";
+import { type ListedMachine, machineName, type ThisMac } from "@repo/features/machine-name";
 import {
   MACHINE_SETTINGS_WORDS,
   MACHINES_WORDS,
@@ -36,6 +36,7 @@ import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { machinesQuery, machinesRetryMutation } from "../live-reads.js";
 import { useAllowedApps } from "../tasks/mac-apps.js";
+import { MachineGlyph } from "../tasks/workspace-machines.js";
 import { appStateQuery, selectAccount, selectExperiment } from "../use-app-state.js";
 import { type AllowedApp, AllowedAppList } from "./allowed-app-row.js";
 import { type MachineAgentFacts, MachineMark, MachineStandingLine } from "./machine-standing.js";
@@ -45,7 +46,7 @@ import { SelectRow } from "./select-row.js";
 import { SwitchRow } from "./switch-row.js";
 
 /**
- * machine-settings-section.tsx -- each of the member's machines' own say over agents, as Settings › Machines draws it under that machine's row: its terminal commands, whether agents may use its apps, and the apps they use unasked; and Remove for a machine that runs no agents.
+ * machine-settings-section.tsx -- each of the member's machines' own say over agents, as Settings › Machines draws it under that machine's row: its terminal commands, whether agents may use its apps, and the apps they use unasked; Remove for a machine that runs no agents; and which machine is the member's default.
  *
  * Every machine whose app joined holds these (`LIVE_READ.MACHINES`), changed
  * from any device or the web: each change is the machine's own, kept by the
@@ -234,6 +235,67 @@ export function MachineAgentRows({
         />
       )}
     </>
+  );
+}
+
+/** A machine picked by its id, among those offered; none for one the picker never offered. */
+function pickedOf(machines: readonly MachineLine[]) {
+  return (raw: string) => machines.find((machine) => machine.id === raw)?.id;
+}
+
+/**
+ * The member's default machine, atop the list of machines: where an agent's
+ * terminal commands and computer use go where neither the call nor the
+ * agent names a machine (`isDefaultMachine`). Offered among the machines
+ * whose app joined, since no other takes a call, each named as every list
+ * of machines names it, This Mac among them, and led by its glyph wearing
+ * whether its app listens now. A member with one such machine has it as
+ * their default on its own, and picks once they have more. Nothing where
+ * no machine of theirs has joined, or the read names no default yet.
+ */
+export function DefaultMachineRow({
+  machines,
+  thisMac,
+}: {
+  /** Every machine of the member's, as the machines read holds them. */
+  machines: readonly MachineLine[];
+  thisMac: ThisMac;
+}): React.JSX.Element | null {
+  const picking = useMutation(actMutation(ACT_KIND.MACHINES_CHANGE));
+  const offered = machines.filter((machine) => machine.settings !== undefined);
+  const chosen = offered.find((machine) => machine.isDefault);
+
+  if (chosen === undefined) return null;
+  const listed = offered.map(machineListedOf);
+
+  return (
+    <SelectRow
+      label={MACHINE_SETTINGS_WORDS.DEFAULT}
+      labelReplayUnmasked
+      detail={MACHINE_SETTINGS_WORDS.DEFAULT_DETAIL}
+      value={chosen.id}
+      options={offered.map((machine) => ({
+        value: machine.id,
+        label: machineName(machineListedOf(machine), listed, thisMac),
+        icon: (
+          <MachineGlyph
+            machine={{
+              online: machine.listening,
+              platform: machine.platform ?? DEVICE_PLATFORM.DARWIN,
+            }}
+          />
+        ),
+        // Note that a machine's name is the member's own words, kept masked in a screen recording.
+        masked: true,
+      }))}
+      parse={pickedOf(offered)}
+      write={rowWrite(picking, {
+        ask: (id: string): MachineChangeParams => ({ id, makeDefault: true }),
+        refused: (answer) =>
+          "failure" in answer ? MACHINE_SETTINGS_WORDS.DEFAULT_FAILED : undefined,
+        drawn: (asked) => asked.id,
+      })}
+    />
   );
 }
 

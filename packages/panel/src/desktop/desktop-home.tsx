@@ -19,6 +19,7 @@ import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { NOTICE_LOOK } from "../tasks/connect-agent-banner.js";
 import { InboxItemRows } from "../tasks/inbox-item-rows.js";
 import { MENTION_MENU_SIDE } from "../tasks/mention-picker.js";
@@ -26,7 +27,7 @@ import { NewTaskComposer } from "../tasks/new-task-composer.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems, type WaitingItems } from "../tasks/use-waiting-items.js";
-import { letGoOfFocus, useHomeNewTask, welcomed } from "./desktop-welcome.js";
+import { letGoOfFocus, useHomeNewTask, useListsTask, welcomed } from "./desktop-welcome.js";
 import { PERSON_SECTION_FOLD, PersonSectionFrame } from "./person-frame.js";
 import { RecentTasks } from "./recent-tasks.js";
 
@@ -192,7 +193,8 @@ function HomeRecent({
 }): React.JSX.Element | null {
   // A task's row is unread as its sidebar row is, so its weight and its menu's Mark as read agree with the sidebar's.
   const unread = useUnreadTasks({ staged });
-  const recent = recentTasks(tasks.listed.tasks, room);
+  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
+  const recent = recentTasks(listed, room);
 
   if (recent.length === 0 && !tasks.listFailed) return null;
 
@@ -292,7 +294,7 @@ export function DesktopHome({
   const now = useMinute();
   const waiting = read.items.filter(({ item }) => waitsOnReaderNow(item, tasks.me, now));
   const arriving = useArriving(tasks, read, waiting.length);
-  const fresh = welcomed(tasks);
+  const fresh = welcomed(tasks, useListsTask(undefined));
 
   return (
     // Note that the rows' links are written under the listed workspace, so their menus offer Copy link.

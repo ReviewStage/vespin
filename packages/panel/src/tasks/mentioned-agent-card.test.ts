@@ -18,7 +18,6 @@ import type { TaskSummary } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW, TASKS_READ } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import { ACTOR_KIND, ACTOR_STATE, APP_ACTOR } from "@repo/ui/actor-model";
 import { Effect } from "effect";
 import { act, createElement, type ReactElement } from "react";
@@ -26,7 +25,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test } from "vitest";
 import { ActorRef } from "../actor-ref.js";
 import { type AnyAct, FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
-import { signedInAs } from "../testing/app-state.js";
+import { type ListedAppState, signedInAs } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
@@ -77,7 +76,7 @@ const BILLING: TaskSummary = {
 function agentOf(id: string, overrides: Partial<AgentSummary>): AgentSummary {
   return {
     id,
-    planId: BILLING.id,
+    taskId: BILLING.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Prorate seat changes",
@@ -105,7 +104,7 @@ const AUDITOR = agentOf("2a1b0c9d-8e7f-4a6b-9c5d-4e3f2a1b0c9d", {
 });
 
 /** Main's document holding the billing task, by which an agent of it names where it works, before the task list first answers live. */
-const STATE: AppStateSnapshot = (() => {
+const STATE: ListedAppState = (() => {
   const snapshot = signedInAs({ id: ME, email: "dean@example.com", name: "Dean Stratakos" });
 
   return {
@@ -152,11 +151,12 @@ const OLDER_PULL_REQUEST = "https://github.com/acme/relay/pull/41";
  * pull request as its row keeps it, and the billing task's pull requests,
  * that one and an older one of the prorater's.
  */
-const LISTED_STATE: AppStateSnapshot = {
+const LISTED_STATE: ListedAppState = {
   ...STATE,
   tasks: {
     ...STATE.tasks,
     listStatus: TASKS_READ.READY,
+    listed: true,
     tasks: [
       {
         ...BILLING,
@@ -202,14 +202,14 @@ const LISTED_STATE: AppStateSnapshot = {
 };
 
 /** The words drawn as the Inbox draws them, off any task's page, in the workspace given, main's document being `state`. */
-function drawn(text: string, state: AppStateSnapshot = STATE): Promise<HTMLElement> {
+function drawn(text: string, state: ListedAppState = STATE): Promise<HTMLElement> {
   return drawnElement(createElement(TranscriptWords, { text }), state);
 }
 
 /** An element drawn where the Inbox draws words, in the workspace given, main's document being `state`. */
 async function drawnElement(
   element: ReactElement,
-  state: AppStateSnapshot = STATE,
+  state: ListedAppState = STATE,
 ): Promise<HTMLElement> {
   fakeActs({
     onAppState: () => () => undefined,

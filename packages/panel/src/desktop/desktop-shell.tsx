@@ -1,6 +1,6 @@
 import { ACCOUNT_STATUS, type AccountProvider } from "@repo/credentials/snapshot";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { readingWords, type SignInFailure } from "@repo/features/words";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -71,6 +71,7 @@ import type { NavigationHistory, WindowHistory } from "../places/window-history.
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { type HiddenColumns, hiddenColumns, SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SignInGate } from "../sign-in-gate.js";
+import { useNamedTask, useTaskListRows } from "../task-list-collections.js";
 import { ChipCards, type TaskFocus } from "../tasks/chip-cards.js";
 import { MentionedAgents } from "../tasks/mentioned-place.js";
 import { NewTaskDialog } from "../tasks/new-task-dialog.js";
@@ -916,7 +917,7 @@ export function DesktopShell({
     place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
 
   const shownTask =
-    tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READY
+    tab === PANEL_TAB.TASKS && !standingIn && region.kind === TASK_REGION.READY
       ? region.task
       : undefined;
 
@@ -937,22 +938,25 @@ export function DesktopShell({
   const agentShown = tab === PANEL_TAB.TASKS ? (tasks.agentView.agentId ?? columnAgent) : undefined;
 
   // Note that while the plan's description is read, the window is named by the task as the list holds it.
-  const namedTask =
-    shownTask ??
-    (tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READING
-      ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
-      : undefined);
+  const readingTask = useNamedTask(
+    tab === PANEL_TAB.TASKS && !standingIn && region.kind === TASK_REGION.READING
+      ? tasks.activeTaskId
+      : undefined,
+    tasks.typedNames,
+  );
+
+  const namedTask = shownTask ?? readingTask;
 
   useWindowTitle(titleSubject(tab, tasks, namedTask, place, inAutomations));
 
   // The plan is looked at the moment it is on screen, whichever of its column's tabs is chosen,
   // from the mark and the agents' activity its row in the list carries.
+  const listedShown = useNamedTask(shownTask?.id, tasks.typedNames);
+
   const looks = useTaskLooks(
     shownTask,
     tasks.me,
-    shownTask === undefined
-      ? undefined
-      : (tasks.tasks.find((row) => row.id === shownTask.id) ?? shownTask),
+    shownTask === undefined ? undefined : (listedShown ?? shownTask),
   );
 
   const mentionedAgents = useMemo(
@@ -964,15 +968,17 @@ export function DesktopShell({
   // Note that what the columns are handed is held across draws over the same
   // tasks, because each column holds while what it is handed does
   // (`DesktopSidebar`, `DesktopTasks`), and a chip reads its cards from here.
+  const taskRows = useTaskListRows(tasks.typedNames);
+
   const chipCards = useMemo(
     () => ({
       taskCard: (taskId: string, now: number, focus: TaskFocus | undefined) => {
-        const task = tasks.tasks.find((each) => each.id === taskId);
+        const task = taskRows.task(taskId);
 
         return task === undefined ? undefined : homeTaskCardOf(tasks, task, now, focus);
       },
     }),
-    [tasks],
+    [tasks, taskRows],
   );
 
   // New task asks over whatever stands, the tasks or a version history.
@@ -1001,7 +1007,7 @@ export function DesktopShell({
   // so while they stand there is no panel to toggle either; but a panel left
   // filling the window over them hides them too, and its toggle is the way out.
   const detailsShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
-  const descriptionToggle = tasks.page === TASKS_PAGE.DOCUMENT && !standingIn && !detailsShown;
+  const descriptionToggle = tasks.page === TASKS_PAGE.TASK && !standingIn && !detailsShown;
   // A phone's task leads its own row with the way back to the page it was opened from, named for it (`task-pane-switcher.tsx`).
   const awayLabel = awayBack(history.away, history.onLeave).label;
   const { onLeave } = history;
@@ -1255,13 +1261,13 @@ export function ShellPlaces(): React.JSX.Element {
       {panelToggle && room === SHELL_ROOM.NARROW ? (
         <SidePanelChord
           panel={tasks.sidePanel}
-          disabled={descriptionToggle && tasks.region.kind !== DOCUMENT_REGION.READY}
+          disabled={descriptionToggle && tasks.region.kind !== TASK_REGION.READY}
         />
       ) : panelToggle ? (
         <div ref={setToggleRoom} className="title-bar-controls" data-edge="end" inert={drawerOver}>
           <SidePanelToggle
             panel={tasks.sidePanel}
-            disabled={descriptionToggle && tasks.region.kind !== DOCUMENT_REGION.READY}
+            disabled={descriptionToggle && tasks.region.kind !== TASK_REGION.READY}
           />
         </div>
       ) : null}

@@ -1581,7 +1581,7 @@ test("an item marked read as it opened stays read once another plan's item is ch
   // The plan's inbox is pushed on the mark, as the host hears it, holding the item read.
   await act(async () =>
     world.main.push(
-      { kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id },
+      { kind: INBOX_SCOPE_KIND.TASK, id: BILLING.id },
       { items: [{ ...THRESHOLD, unread: false }, RETRY] },
     ),
   );
@@ -1607,7 +1607,7 @@ test("a mark another window makes later on the same item stands once the plan's 
   await vi.waitFor(() => assert.deepEqual(world.readMarks, [`read:${THRESHOLD.id}`]));
   assert.equal(unreadOf(page, "Alert at 80%?"), false);
   // The plan's inbox is pushed as the test says: its own mark heard, then another window's.
-  const billing = { kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id };
+  const billing = { kind: INBOX_SCOPE_KIND.TASK, id: BILLING.id };
   await act(async () =>
     world.main.push(billing, { items: [{ ...THRESHOLD, unread: false }, RETRY] }),
   );

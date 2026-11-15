@@ -75,10 +75,6 @@ import { TurnFilesSummarySchema } from "./turn-files-wire.js";
  * Every request refuses a key it does not name; an answer ignores one a
  * newer service added. Declared directly with Effect's `Schema.Struct` and
  * exported under its own name.
- *
- * Note that `planId` keep the wire's legacy spelling of a task, because a
- * released desktop sends and reads them; they are renamed with the wire in a
- * follow-up, with no alias.
  */
 
 export const AGENT_BOUNDS = {
@@ -1202,7 +1198,7 @@ export function agentOwnerOf(read: AgentOwnerRead): AgentOwner | undefined {
  */
 export const agentSummarySchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  planId: wireUuidSchema,
+  taskId: wireUuidSchema,
   /** AI Gateway's catalog id, such as `anthropic/claude-opus-5.5`. */
   model: EffectSchema.String,
   effort: EffectSchema.String,
