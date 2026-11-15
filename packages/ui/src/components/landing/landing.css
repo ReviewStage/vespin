@@ -827,6 +827,57 @@
     order: 2;
   }
 
+  /* The features the sections leave out: the heading over a grid of
+     squares, four across, each its glyph over its name and its line, ruled
+     in the page's hairline. */
+  .ui-landing-more-body {
+    display: flex;
+    flex-direction: column;
+    gap: 48px;
+    padding: 112px var(--ui-landing-gutter);
+  }
+
+  .ui-landing-more-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    list-style: none;
+  }
+
+  .ui-landing-more-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 24px 24px 28px;
+    border: 1px solid var(--ui-landing-hairline);
+    border-radius: var(--ui-radius-14);
+    background: var(--ui-color-sidebar);
+  }
+
+  /* off-scale: the glyph's own tile, a feature's mark */
+  .ui-landing-more-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin-bottom: 40px;
+    border: 1px solid var(--ui-landing-hairline);
+    border-radius: var(--ui-radius-10);
+    background: var(--ui-color-well);
+    color: var(--ui-color-accent);
+  }
+
+  .ui-landing-more-name {
+    font-size: var(--ui-type-section-size);
+    font-weight: var(--ui-type-section-weight);
+    line-height: var(--ui-type-section-leading);
+  }
+
+  .ui-landing-more-words {
+    color: var(--ui-color-text-muted);
+  }
+
   .ui-landing-section-title {
     max-width: 520px;
     font-family: var(--ui-display-landing-face);
@@ -1806,6 +1857,13 @@
 
   /* Under 640px of room the page keeps to one column: the live app under the
      words, and each stage under its heading. */
+  /* off-scale: 1000px, where four squares across would crowd their words */
+  @container (width < 1000px) {
+    .ui-landing-more-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
   /* off-scale: 640px, a phone's landing */
   @container (width < 640px) {
     .ui-landing-lost {
@@ -1870,6 +1928,28 @@
 
     .ui-landing-close {
       padding: 96px var(--ui-landing-gutter) 80px;
+    }
+
+    .ui-landing-more-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ui-landing-more-grid {
+      gap: 12px;
+    }
+
+    /* On a phone a square's glyph stands beside its words, so the list stays short. */
+    .ui-landing-more-tile {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+      gap: 4px 16px;
+      padding: 20px;
+    }
+
+    .ui-landing-more-icon {
+      grid-row: span 2;
+      margin-bottom: 0;
     }
 
     /* On a phone a close-up keeps its story's card alone, across the stage. */

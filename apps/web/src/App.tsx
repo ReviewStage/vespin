@@ -3,13 +3,19 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   BUTTON_VARIANT,
   ButtonLink,
+  ComputerUseIcon,
   LANDING_SCENE,
   LandingBackedBy,
+  LandingMore,
+  type LandingMoreItem,
   LandingPage,
   LandingSection,
   MARK_PROVIDER,
   ProviderMark,
+  TerminalIcon,
+  WaveformIcon,
 } from "@repo/ui";
+import { KanbanIcon, ServerIcon, TargetIcon, WorkflowIcon } from "@repo/ui/icons";
 import {
   DOCS_URL,
   REPOSITORY_URL,
@@ -33,6 +39,58 @@ const LANDING_CAST = {
   member: { name: "Charles Pan", picture: "/assets/charles-pan.jpeg" },
   teammate: { name: "Dean Stratakos", picture: "/assets/dean-stratakos.jpeg" },
 };
+
+/** The features the sections leave out, which the grid under them names in passing. */
+const MORE_FEATURES: readonly LandingMoreItem[] = [
+  {
+    id: "computer",
+    icon: <ComputerUseIcon />,
+    title: "Computer use",
+    words: "Agents can see and use the Mac apps you allow.",
+  },
+  {
+    id: "goal",
+    icon: <TargetIcon />,
+    title: "Goal mode",
+    words: "Set a goal with /goal and the agent keeps going until it's met.",
+  },
+  {
+    id: "voice",
+    icon: <WaveformIcon />,
+    title: "Voice mode",
+    words: "Call an agent and talk a task through out loud.",
+  },
+  {
+    id: "mcp",
+    icon: <TerminalIcon />,
+    title: "MCP and CLI",
+    words: `Work in ${PRODUCT_NAME} from Claude Code, Codex, Cursor, or your terminal.`,
+  },
+  {
+    id: "host",
+    icon: <ServerIcon />,
+    title: "Bring your own host",
+    words: "Run agents on your own Macs and Linux machines, or in our cloud.",
+  },
+  {
+    id: "tasks",
+    icon: <KanbanIcon />,
+    title: "Task management",
+    words: "Tasks with plans, sub-tasks, and statuses your agents keep current.",
+  },
+  {
+    id: "slack",
+    icon: <ProviderMark provider={MARK_PROVIDER.SLACK} />,
+    title: "Slack",
+    words: "Start agents and answer your Inbox without leaving Slack.",
+  },
+  {
+    id: "automations",
+    icon: <WorkflowIcon />,
+    title: "Automations",
+    words: "Start agents on a schedule, on GitHub and Sentry events, or from a webhook.",
+  },
+];
 
 /** Our page among Y Combinator's companies, which the hero's backing chip opens. */
 const Y_COMBINATOR_PAGE = "https://www.ycombinator.com/companies/vespin";
@@ -101,6 +159,7 @@ export function App(): React.JSX.Element {
         more={{ label: "Get the apps", href: `${DOCS_URL}/install` }}
         scene={LANDING_SCENE.DEVICES}
       />
+      <LandingMore title="And much more." items={MORE_FEATURES} />
     </LandingPage>
   );
 }

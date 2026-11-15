@@ -1,5 +1,7 @@
 import { type ReactNode, useId } from "react";
+import { ICON_SIZE } from "../../icons/icons.js";
 import type { CodexArt } from "../../marks/harness-mark.js";
+import { GLYPH_INK, GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { TEXT_LINK_HEIGHT, TextLink } from "../text-link/text-link.js";
 import { type LandingCast, LandingCastProvider } from "./landing-desktop.js";
 import { LANDING_FIELD, LandingField, type LandingFieldPattern } from "./landing-field.js";
@@ -136,6 +138,49 @@ export function LandingBackedBy({ href }: { href: string }): React.JSX.Element {
       <YCombinatorMark />
       <span className="ui-landing-backer-name">Combinator</span>
     </a>
+  );
+}
+
+/** A feature the landing names in passing: its glyph, its name, and a line on what it does. */
+export type LandingMoreItem = {
+  readonly id: string;
+  readonly icon: ReactNode;
+  readonly title: string;
+  readonly words: string;
+};
+
+/** The features the sections leave out: `title` over a grid of `items`, each a square of its glyph, its name, and its line. */
+export function LandingMore({
+  title,
+  items,
+}: {
+  title: ReactNode;
+  items: readonly LandingMoreItem[];
+}): React.JSX.Element {
+  const titleId = `${useId()}title`;
+
+  return (
+    <section className="ui-landing-more" aria-labelledby={titleId}>
+      <SiteRule />
+      <div className="ui-landing-more-body">
+        <h2 className="ui-landing-section-title" id={titleId}>
+          {title}
+        </h2>
+        <ul className="ui-landing-more-grid">
+          {items.map((item) => (
+            <li key={item.id} className="ui-landing-more-tile">
+              <span className="ui-landing-more-icon">
+                <GlyphSlot size={ICON_SIZE.LARGE} ink={GLYPH_INK.INHERIT}>
+                  {item.icon}
+                </GlyphSlot>
+              </span>
+              <h3 className="ui-landing-more-name">{item.title}</h3>
+              <p className="ui-landing-more-words">{item.words}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
 
