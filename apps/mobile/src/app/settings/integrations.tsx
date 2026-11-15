@@ -34,7 +34,7 @@ import {
   integrationAccountLabel,
   integrationConnectionOf,
 } from "@repo/features/integration-wire";
-import { readingWords, VERB } from "@repo/features/words";
+import { readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   askForName,
@@ -43,10 +43,13 @@ import {
   ConnectionRow,
   EmptyState,
   GLYPH,
+  INTEGRATION_MARK_ASSET,
   ListSection,
   type MemberRowAct,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
+  TRY_AGAIN_WORDS,
 } from "@repo/ui-native";
 import { Stack } from "expo-router";
 import { useState } from "react";
@@ -75,6 +78,11 @@ const UNREAD_HEALTH: ConnectionHealth = { kind: CONNECTION_HEALTH.CHECKING };
 /** No server switched off, since the page switches none for an agent. */
 const NONE_OFF: readonly string[] = [];
 
+/** A grant's words as the app says them: the panel's Retry after a sign-in that failed is the app's Try again. */
+function grantWords(label: string): string {
+  return label === SIGN_IN_ACTION.TRY_AGAIN ? TRY_AGAIN_WORDS : label;
+}
+
 /** What the rename alert asks, by the provider whose account it renames: "Rename Notion account". */
 function renameTitle(provider: IntegrationProvider): string {
   return `${INTEGRATION_ROW_WORDS.RENAME} ${INTEGRATION_NAME[provider]} account`;
@@ -100,31 +108,24 @@ function bySignIn(provider: IntegrationProvider): boolean {
   return INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN;
 }
 
-/** What a connected row says while its server's tools are read, and once they answered with tools, as the panel's row says it. */
-function connectedWords(health: ConnectionHealth): string {
-  return health.kind === CONNECTION_HEALTH.CHECKING
-    ? INTEGRATION_ROW_WORDS.CHECKING
-    : INTEGRATION_STATUS_WORDS[INTEGRATION_STATUS.CONNECTED];
-}
-
-/** A row's lines: where it stands or what it is for, the server's or the sign-in's own words under that, and why the last act on it did not go. */
-function rowLines(
-  row: ServerRow,
-  health: ConnectionHealth,
-  refusal: string | undefined,
-): readonly ConnectionLine[] {
+/**
+ * A row's lines: where it stands or what it is for, the server's or the
+ * sign-in's own words under that, and why the last act on it did not go.
+ * Note that a connection that works says nothing, while its tools are read
+ * or once they answer, because it stands under Connected already, as iOS
+ * Settings never repeats a section's header on its rows.
+ */
+function rowLines(row: ServerRow, refusal: string | undefined): readonly ConnectionLine[] {
   const standing: ConnectionLine | undefined =
     row.problem !== undefined
       ? { text: row.problem, problem: true }
       : row.note !== undefined
         ? { text: row.note }
-        : row.kind === SERVER_ROW.SWITCH
-          ? { text: connectedWords(health) }
-          : row.kind === SERVER_ROW.RECONNECT
-            ? { text: INTEGRATION_STATUS_WORDS[INTEGRATION_STATUS.EXPIRED], problem: true }
-            : row.kind === SERVER_ROW.CONNECT
-              ? { text: INTEGRATION_PURPOSE[row.provider] }
-              : undefined;
+        : row.kind === SERVER_ROW.RECONNECT
+          ? { text: INTEGRATION_STATUS_WORDS[INTEGRATION_STATUS.EXPIRED], problem: true }
+          : row.kind === SERVER_ROW.CONNECT
+            ? { text: INTEGRATION_PURPOSE[row.provider] }
+            : undefined;
 
   return [
     ...(standing === undefined ? [] : [standing]),
@@ -175,7 +176,7 @@ export default function IntegrationsScreen() {
         <EmptyState
           title={INTEGRATIONS_PAGE_WORDS.READ_FAILED}
           symbol={GLYPH.FAILED}
-          action={{ label: VERB.RETRY, onPress: page.retry }}
+          retry={page.retry}
         />
       ) : (
         <EmptyState title={READING} symbol={INTEGRATIONS_SYMBOL} loading />
@@ -192,7 +193,8 @@ export default function IntegrationsScreen() {
               <ConnectionRow
                 key={row.connection}
                 name={row.name}
-                lines={rowLines(row, healthOf(row.connection), page.refusals.get(row.connection))}
+                mark={INTEGRATION_MARK_ASSET[row.provider]}
+                lines={rowLines(row, page.refusals.get(row.connection))}
                 act={page.actOf(row)}
                 menu={page.menuOf(row)}
               />
@@ -219,7 +221,7 @@ export default function IntegrationsScreen() {
           onCancelButtonPress={() => setQuery("")}
         />
       </Stack.Screen>
-      <Screen>{body}</Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>{body}</Screen>
       <ConfirmAsk
         title={question?.title ?? ""}
         message={question?.body}
@@ -386,7 +388,11 @@ function useIntegrationActs(
       row.kind === SERVER_ROW.SWITCH &&
       healthOf(row.connection).kind === CONNECTION_HEALTH.FAILED
     ) {
-      return { label: VERB.RETRY, disabled: false, onPress: () => tools.retry(row.connection) };
+      return {
+        label: TRY_AGAIN_WORDS,
+        disabled: false,
+        onPress: () => tools.retry(row.connection),
+      };
     }
 
     if (bySignIn(row.provider)) return undefined;
@@ -397,9 +403,8 @@ function useIntegrationActs(
       case SERVER_ROW.RECONNECT:
       case SERVER_ROW.TRY_AGAIN:
         return {
-          label: grantLabel(
-            statuses.statusOf(row.connection),
-            statuses.signIns.get(row.connection),
+          label: grantWords(
+            grantLabel(statuses.statusOf(row.connection), statuses.signIns.get(row.connection)),
           ),
           disabled,
           onPress: () => connect(row),

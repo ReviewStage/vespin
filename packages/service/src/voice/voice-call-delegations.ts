@@ -87,7 +87,7 @@ import {
   type WireValue,
 } from "../core.js";
 import { Sync } from "../sync/watch.js";
-import type { VoiceCallHolder, VoiceCallObserver } from "./voice-call-lease.js";
+import type { VoiceCallHolder, VoiceCallObserver } from "./voice-call-holder.js";
 
 /** What a line of a call's key is minted under, apart from every other id the host mints. */
 const VOICE_LINE_KIND = "voice-line";

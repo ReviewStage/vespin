@@ -48,7 +48,7 @@ const DEFAULT_MACHINE_ROW = "default-machine";
 
 /** What the Default machine row and its submenu say. */
 const DEFAULT_MACHINE_WORDS = {
-  LABEL: "Default machine",
+  LABEL: "Terminal and computer use",
   HEADING: "Terminal commands and computer use go here",
   NONE: "None",
   REFUSED: "The default machine could not be changed.",

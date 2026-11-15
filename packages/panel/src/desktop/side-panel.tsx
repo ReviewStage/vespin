@@ -16,7 +16,7 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
 import type { PageLine, PagePlace } from "@repo/features/page-wire";
 import { cardTitle } from "@repo/features/plain-words";
-import type { TaskStatus } from "@repo/features/task-wire";
+import type { TaskNames } from "@repo/features/tasks-model";
 import { TERMINAL_ASK, TERMINAL_TARGET, terminalTarget } from "@repo/features/terminal-entry";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import {
@@ -120,6 +120,7 @@ import { ADDRESS, type Address } from "../places/pressed-address.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors } from "../steady-door.js";
+import { useNamedTask } from "../task-list-collections.js";
 import { agentName, subagentActor } from "../tasks/agent-model.js";
 import { AgentActorRef, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { AgentSubagentTab, type BriefTask, type TranscriptCards } from "../tasks/agent-tab.js";
@@ -302,6 +303,9 @@ type PanelLeaving = (typeof PANEL_LEAVING)[keyof typeof PANEL_LEAVING];
 /** A task with no page, the same array every render. */
 const NO_PAGES: readonly PageLine[] = [];
 
+/** No name typed: what a panel told of no other task draws its tabs' tasks under. */
+const NO_TYPED_NAMES: TaskNames = new Map();
+
 /**
  * What the panel stands beside: a plan's page, whose panel holds every kind
  * of tab, or the window's Inbox, where it stands for the
@@ -363,13 +367,9 @@ const BESIDE_WORDS = {
   PATH: "Tab's task",
 } as const;
 
-/** The tasks a tab of another task names, by its chip, and the door to that task, the tab still chosen in its panel. */
+/** The names being typed for tasks, which the task a tab of another task names is drawn under (`useNamedTask`), and the door to that task, the tab still chosen in its panel. */
 export interface TaskOfTab {
-  readonly tasks: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly status?: TaskStatus | undefined;
-  }[];
+  readonly typedNames: TaskNames;
   readonly onShowPanelTab: (taskId: string, tab: SidePanelTab) => void;
 }
 
@@ -3054,10 +3054,10 @@ export function SidePanel({
   const ownTask = taskId;
   const tabTask = tab === undefined ? undefined : tabTaskOf(tab, panel.pages, files);
 
-  const besideTask =
-    tabTask === undefined || tabTask === ownTask
-      ? undefined
-      : taskOfTab?.tasks.find((each) => each.id === tabTask);
+  const besideTask = useNamedTask(
+    tabTask === undefined || tabTask === ownTask || taskOfTab === undefined ? undefined : tabTask,
+    taskOfTab?.typedNames ?? NO_TYPED_NAMES,
+  );
 
   const keys = shown && leaving === PANEL_LEAVING.NONE;
   // An agent another place holds, pressed in the tab shown, opens in the middle as the window goes

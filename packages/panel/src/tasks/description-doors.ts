@@ -7,7 +7,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { sendAct } from "../act.js";
-import { descriptionDocumentRetryMutation } from "../live-reads.js";
+import { heldTaskRetryMutation } from "../live-reads.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import {
   type DescriptionEditMutation,
@@ -36,7 +36,7 @@ export function useDescriptionEdit(
 
 /** Reads `taskId`'s description again after its read failed; nothing with no task. */
 export function useDescriptionRetry(taskId: string | undefined): () => void {
-  const { mutate } = useMutation(descriptionDocumentRetryMutation());
+  const { mutate } = useMutation(heldTaskRetryMutation());
 
   return useCallback(() => {
     if (taskId !== undefined) mutate({ taskId });

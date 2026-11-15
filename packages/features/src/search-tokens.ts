@@ -31,18 +31,54 @@ export interface MatchRange {
 }
 
 /**
+ * A line lowercased, with where each of its code units came from in the line.
+ * Note that we lowercase the line whole, as `searchTokens` does a query,
+ * because a letter can lowercase by its place (a final `Σ` is `ς`), and we
+ * map each character's own lowering, because a letter can lowercase longer
+ * (`İ` becomes `i` and a combining dot), so an offset into the lowered line
+ * would otherwise fall short of the character it names. Where the two
+ * lowerings differ in length the map would drift, so the character-by-character
+ * lowering is matched instead.
+ */
+function loweredWithOrigins(text: string) {
+  let byCharacter = "";
+  const starts: number[] = [];
+  const ends: number[] = [];
+  let at = 0;
+
+  for (const character of text) {
+    const low = character.toLowerCase();
+    byCharacter += low;
+
+    for (let unit = 0; unit < low.length; unit += 1) {
+      starts.push(at);
+      ends.push(at + character.length);
+    }
+
+    at += character.length;
+  }
+
+  const whole = text.toLowerCase();
+
+  return { lowered: whole.length === byCharacter.length ? whole : byCharacter, starts, ends };
+}
+
+/**
  * Where a query's words sit in one drawn line, so the line can show why it
  * matched. Every occurrence of every word is taken and overlapping stretches
  * are merged, because two words landing on one stretch of text should read as
- * one mark rather than nested ones.
+ * one mark rather than nested ones. A stretch is given in the line's own
+ * offsets, whole characters, whatever lowercasing did to their length.
  */
 export function matchRanges(text: string, tokens: readonly string[]): readonly MatchRange[] {
-  const lowered = text.toLowerCase();
+  const { lowered, starts, ends } = loweredWithOrigins(text);
   const found: MatchRange[] = [];
 
   for (const token of tokens) {
+    if (token.length === 0) continue;
+
     for (let from = lowered.indexOf(token); from !== -1; from = lowered.indexOf(token, from + 1)) {
-      found.push({ start: from, end: from + token.length });
+      found.push({ start: starts[from] ?? 0, end: ends[from + token.length - 1] ?? text.length });
     }
   }
 

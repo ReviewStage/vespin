@@ -7,7 +7,7 @@ import {
 import type { UnparsedWireValue } from "@repo/wire";
 import { wireResult as result, type WireGuard } from "@repo/wire/wire-guard";
 import { Predicate } from "effect";
-import { type AppStateSnapshot, isAppStateSnapshot } from "./app-state.js";
+import { type AppStateRead, isAppStateSnapshot } from "./app-state.js";
 import type { PUSH_METHOD, PushMethod, PushPayload } from "./contract/pushes.js";
 
 /** The act port's handshake, which the page and the preload each take their half of. */
@@ -76,7 +76,7 @@ export const BRIDGE = {
     kind: "invoke",
     channel: "app:state-request",
     args: noArgs,
-    result: result<AppStateSnapshot>(isAppStateSnapshot),
+    result: result<AppStateRead>(isAppStateSnapshot),
   }),
   notifyReady: entry({ kind: "send", channel: "app:renderer-ready", args: noArgs }),
   /**

@@ -1,0 +1,147 @@
+---
+title: "Automations"
+description: "vespin automation"
+---
+
+Create, change, run, and delete automations. Every command also takes the global flags `--json`, `-q`, `-w`, and `--url`, described in [CLI](/cli#scripts-and-coding-agents).
+
+## vespin automation list
+
+List the workspace's automations you may read, newest first
+
+```sh
+vespin automation list [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--task string` | Only the automations made on this task, by its id, number, or key |
+
+```sh
+# Every automation of the workspace
+vespin automation list
+```
+
+## vespin automation view
+
+Show an automation: its trigger, prompt, and newest runs
+
+```sh
+vespin automation view [flags] <automation>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `automation string` | The automation's id, as automation list prints it |
+
+```sh
+# Read one whole
+vespin automation view <automation>
+```
+
+## vespin automation create
+
+Make an automation that starts an agent on its prompt each time it fires
+
+```sh
+vespin automation create [flags] <name>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `name string` | The automation's name |
+| `--task string` | Make it on a task, whose repository it takes, by its id, number, or key |
+| `--cron string` | Fire on a five-field cron schedule, such as '0 9 * * 1' |
+| `--at string` | Fire once at a date and time, as YYYY-MM-DDTHH:mm, such as 2026-11-27T09:00 |
+| `--timezone string` | The IANA time zone `--cron` or `--at` is read in (default: this machine's) |
+| `--github choice` | Fire on a GitHub event of the automation's repositories (choices: pull-request-opened, pull-request-labeled, pull-request-updated, issue-opened, issue-labeled, check-failed, push, pull-request-merged, release-published) |
+| `--label string` | With `--github`: only events with this label; repeat for more |
+| `--branch string` | With `--github`: only events on this branch; repeat for more |
+| `--sentry choice` | Fire on an event of the workspace's Sentry integration (choices: alert-triggered, issue-created) |
+| `--trigger string` | The whole trigger as JSON, for what the flags above do not name |
+| `--prompt string` | Each run's prompt, from a file or - for stdin |
+| `--model string` | The model runs take, by its catalog id, with `--effort` |
+| `--effort string` | The reasoning effort, with `--model` |
+| `--repository, -R string` | owner/name a run works in, the first where it starts; repeat for more |
+| `--scope choice` | Yours alone (personal) or the workspace's (choices: personal, workspace) |
+
+```sh
+# Every weekday at nine
+echo 'Triage the new issues.' | vespin automation create Triage --cron '0 9 * * 1-5' -R acme/app --prompt -
+
+# Once, on Nov 27 at nine, then paused
+vespin automation create 'Check adoption' --at 2026-11-27T09:00 -R acme/app --prompt check.md
+
+# On each pull request ready for review
+vespin automation create Review --github pull-request-updated -R acme/app --prompt review.md
+```
+
+## vespin automation update
+
+Change an automation: what you leave out stands
+
+```sh
+vespin automation update [flags] <automation>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `automation string` | The automation's id, as automation list prints it |
+| `--name string` | Its new name |
+| `--enable` | Resume it |
+| `--disable` | Pause it |
+| `--cron string` | Fire on a five-field cron schedule, such as '0 9 * * 1' |
+| `--at string` | Fire once at a date and time, as YYYY-MM-DDTHH:mm, such as 2026-11-27T09:00 |
+| `--timezone string` | The IANA time zone `--cron` or `--at` is read in (default: this machine's) |
+| `--github choice` | Fire on a GitHub event of the automation's repositories (choices: pull-request-opened, pull-request-labeled, pull-request-updated, issue-opened, issue-labeled, check-failed, push, pull-request-merged, release-published) |
+| `--label string` | With `--github`: only events with this label; repeat for more |
+| `--branch string` | With `--github`: only events on this branch; repeat for more |
+| `--sentry choice` | Fire on an event of the workspace's Sentry integration (choices: alert-triggered, issue-created) |
+| `--trigger string` | The whole trigger as JSON, for what the flags above do not name |
+| `--prompt string` | Each run's prompt, from a file or - for stdin |
+| `--model string` | The model runs take, by its catalog id, with `--effort` |
+| `--effort string` | The reasoning effort, with `--model` |
+| `--repository, -R string` | owner/name a run works in, the first where it starts; repeat for more |
+| `--scope choice` | Yours alone (personal) or the workspace's (choices: personal, workspace) |
+
+```sh
+# Pause it
+vespin automation update <automation> --disable
+
+# Move its schedule
+vespin automation update <automation> --cron '0 8 * * 1'
+```
+
+## vespin automation run
+
+Run an automation now, through the guards a firing takes
+
+```sh
+vespin automation run [flags] <automation>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `automation string` | The automation's id, as automation list prints it |
+
+```sh
+# Run it and wait on the agent it starts
+vespin agent wait $(vespin automation run <automation> -q)
+```
+
+## vespin automation delete
+
+Delete an automation and its runs' history; the agents it started stay
+
+```sh
+vespin automation delete [flags] <automation>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `automation string` | The automation's id, as automation list prints it |
+
+```sh
+# Delete one
+vespin automation delete <automation>
+```
