@@ -38,6 +38,7 @@ import {
   inboxAppState,
   inboxRemindersAppState,
   inboxTasksView,
+  MEMORY_SAVE_REFUSED,
   machineAskAppState,
   NEW_MEMORY_ID,
   olderPageAnswer,
@@ -281,6 +282,9 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
   PortActKind,
   () => PortActResult<PortActKind>
 >([
+  // Note that a memory's save and a version's restore are refused too, so their notices and Try again show.
+  [ACT_KIND.MEMORIES_SAVE, () => MEMORY_SAVE_REFUSED],
+  [ACT_KIND.TASKS_RESTORE, () => false],
   [ACT_KIND.TASKS_SET_STANDING, () => false],
   [ACT_KIND.TASKS_PIN, () => false],
   [ACT_KIND.TASKS_ADD_FOLLOWER, () => ({ failure: FOLLOWER_CALL_FAILURE.UNANSWERED })],
