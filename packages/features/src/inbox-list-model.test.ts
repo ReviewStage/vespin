@@ -167,6 +167,7 @@ describe("inboxAtNow and inboxCounts", () => {
       name: "Invite flow",
       createdAt: 1_000,
       updatedAt: 1_000,
+      repository: null,
     };
     const item: InboxItem = {
       id: ITEM,
@@ -178,7 +179,7 @@ describe("inboxAtNow and inboxCounts", () => {
       needsReply: false,
       status: INBOX_STATUS.OPEN,
       thread: [],
-      createdAt: 1_000,
+      postedAt: 1_000,
       updatedAt: 2_000,
       remindAt: 10_000,
     };

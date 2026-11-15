@@ -76,6 +76,7 @@ describe("inboxGroupsIn", () => {
       name: "Invite flow",
       createdAt: 1_000,
       updatedAt: 1_000,
+      repository: null,
     };
     const holdings: InboxHoldings = {
       read: new Map([[task.id, []]]),
