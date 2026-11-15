@@ -32,7 +32,7 @@ import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard, sinceText } from "@repo/features/time-format";
-import type { ReactNode } from "react";
+import { type ReactNode, useSyncExternalStore } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { BarContent } from "./bar-content.js";
@@ -158,8 +158,32 @@ type ThreadPageProps = {
 };
 
 /** A thread's heading under its bar: its title in 20 pt semibold, and how it ended under it, 13 pt muted, once it is settled. */
+// PROBE (never merge): each message host's last width and its words' width, by message, shown in the thread's title.
+const probeHosts = new Map<string, number>();
+const probeWords = new Map<string, number>();
+const probeListeners = new Set<() => void>();
+let probeText = "w=– n=0";
+
+function probeNote(): void {
+  const hosts = [...probeHosts.values()];
+  const words = [...probeWords.values()];
+  const w =
+    hosts.length === 0
+      ? "–"
+      : `${Math.round(Math.min(...hosts))}/${words.length === 0 ? "–" : Math.round(Math.min(...words))}`;
+  probeText = `w=${w} n=${hosts.length}`;
+  for (const listener of probeListeners) listener();
+}
+
+function probeSubscribe(listener: () => void): () => void {
+  probeListeners.add(listener);
+
+  return () => probeListeners.delete(listener);
+}
+
 function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standing">) {
   const colors = useColors();
+  const probe = useSyncExternalStore(probeSubscribe, () => probeText);
 
   return (
     <VStack
@@ -174,7 +198,7 @@ function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standi
           accessibilityAddTraits(["isHeader"]),
         ]}
       >
-        {title}
+        {`${title} [${probe}]`}
       </Text>
       {standing === undefined ? null : (
         <Text
@@ -415,8 +439,20 @@ function MessageView({
         </HStack>
         {message.stamp === undefined ? null : <AnswerStamp stamp={message.stamp} />}
         {message.values === undefined ? null : <AnswerValues values={message.values} />}
-        <RNHostView matchContents={{ vertical: true }}>
-          <View style={styles.words}>
+        <RNHostView
+          matchContents={{ vertical: true }}
+          onLayout={(event) => {
+            probeHosts.set(message.id, event.nativeEvent.layout.width);
+            probeNote();
+          }}
+        >
+          <View
+            style={styles.words}
+            onLayout={(event) => {
+              probeWords.set(message.id, event.nativeEvent.layout.width);
+              probeNote();
+            }}
+          >
             {message.words.trim() === "" ? null : (
               <Markdown
                 words={message.words}
