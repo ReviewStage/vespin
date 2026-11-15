@@ -275,6 +275,8 @@ export const LIVE_READ = {
   GITHUB_TOKEN: "githubToken",
   /** One agent's pull request's newest chapters, by the agent and the pull request's number: the service's `pullRequestChaptersLive` query. */
   PULL_REQUEST_CHAPTERS: "pullRequestChapters",
+  /** One pull request's newest chapters, by the workspace, its repository, and its number: the service's `repositoryPullRequestChapters` query. */
+  REPOSITORY_PULL_REQUEST_CHAPTERS: "repositoryPullRequestChapters",
   /** The checks on one agent's pull request's head, keyed and fetched as `PULL_REQUEST`. */
   PULL_REQUEST_CHECKS: "pullRequestChecks",
   /** One agent's pull request's conversation and where its reviewers stand, keyed and fetched as `PULL_REQUEST`. */

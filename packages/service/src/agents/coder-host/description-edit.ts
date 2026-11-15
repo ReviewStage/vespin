@@ -9,6 +9,7 @@ import { readTaskHeader } from "@repo/database/models/task-store";
 import { workspaceOf } from "@repo/database/models/workspace-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { isAudioType } from "@repo/features/conversation-picture-wire";
 import {
   descriptionAttachmentAddress,
   taskPictureMarkdown,
@@ -29,7 +30,6 @@ import {
 } from "@repo/features/description-notes";
 import { placeholderLinksIn } from "@repo/features/mention-link";
 import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
 import { trimmedText } from "@repo/features/text-schema";
 import { describeWire, readEither } from "@repo/wire/effect";
@@ -156,20 +156,14 @@ const EDIT_DESCRIPTION_INPUT = Schema.Struct({
 export const EDIT_DESCRIPTION_TOOL = {
   name: "edit_description",
   description:
-    "Take notes on the description of the task taskId names, your own task or any other of your " +
-    `workspace, which ${AGENT_TOOL.READ_TASK} reads first, as its notetaker does: add a point ` +
-    "under one of its headings, or replace text copied exactly from the saved description, as much as " +
-    "names one place, headings and whole sections included, with what it becomes, or with " +
-    "nothing to delete it. A note's text may open headings of its own, so you can rename, " +
-    "split, merge, move, and drop sections. Use it to record a question the description does not answer under its open " +
-    "questions together with the assumption you go on under, to correct a fact you verified in " +
-    "the code, to record a hard part you met, an interface you had to change, or a decision you " +
-    "made, each under the heading it belongs to. Write a file, a pull request, or an issue a note names as a mention, " +
-    "a Markdown link to its page whose words start with @, such as [@store.ts](https://github.com/<owner>/<name>/blob/HEAD/<path>), so the description draws it as a chip. " +
-    "To add a picture, such as a screenshot of what you built, name its file in your sandbox " +
-    "under pictures, with alt text saying what it shows; a PDF you wrote goes there too. " +
-    "Every save is recorded in the description as yours. The developer reads the description when they next " +
-    `open it in ${PRODUCT_NAME}; you do not wait for an answer. A call's notes and pictures land together ` +
+    "Take notes on the description of a task of your workspace, your own or another, which " +
+    `${AGENT_TOOL.READ_TASK} reads first, as its notetaker does: add a point under a heading, or replace ` +
+    "text copied exactly from it, headings and whole sections included, with what it becomes, or with " +
+    "nothing to delete it; a note may open headings of its own, to rename, split, merge, move, or drop sections. " +
+    "Write a file, a pull request, or an issue a note names as a mention, such as " +
+    "[@store.ts](https://github.com/<owner>/<name>/blob/HEAD/<path>). " +
+    "Add a picture, such as a screenshot of what you built, or a PDF you wrote, by its file in your sandbox under pictures. " +
+    "Every save is recorded in the description as yours, and you do not wait for an answer. A call's notes and pictures land together " +
     "or not at all: where one names text or a heading the description does not hold exactly once, " +
     "nothing is saved and the call answers the description as it stands, to retry from. " +
     `A turn may take at most ${DESCRIPTION_EDIT.MAX_NOTES_PER_TURN} notes, each picture one.`,
@@ -186,7 +180,6 @@ export const DESCRIPTION_EDIT_REFUSAL = {
   NO_TURN:
     "Not saved: your turn is not recorded yet, so its notes cannot be counted. Try again in a moment.",
   TOO_MANY_PICTURES: `Not saved: the description holds ${DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION} pictures, as many as a description may. Leave the pictures out.`,
-  TOO_MANY_VIDEOS: `Not saved: the description holds ${DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION} videos, as many as a description may. Leave the videos out, or show them with show_image instead.`,
   TASK_GONE:
     "Not saved: this task no longer exists, so no picture can be added to its description.",
 } as const;
@@ -325,7 +318,14 @@ function readPictureFiles(
       );
 
       if (Result.isFailure(file)) return Result.fail(file.failure);
-      read.push({ picture, file: file.success, name: posix.basename(path) || path });
+      const { contentType, bytes } = file.success;
+
+      // Note that a sound clip is no file a description keeps yet, so it is refused as any other file it does not keep.
+      if (isAudioType(contentType)) {
+        return Result.fail(`${TASK_PICTURE_FILE_REFUSAL.NOT_IMAGE} ${path}`);
+      }
+
+      read.push({ picture, file: { contentType, bytes }, name: posix.basename(path) || path });
     }
 
     return Result.succeed(read);
@@ -396,12 +396,6 @@ function keptAsNotes(
       if (kept.status === DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY) {
         return yield* new EditRefused({
           refusal: refused(DESCRIPTION_EDIT_REFUSAL.TOO_MANY_PICTURES),
-        });
-      }
-
-      if (kept.status === DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY_VIDEOS) {
-        return yield* new EditRefused({
-          refusal: refused(DESCRIPTION_EDIT_REFUSAL.TOO_MANY_VIDEOS),
         });
       }
 
