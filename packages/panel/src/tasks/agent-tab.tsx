@@ -2705,17 +2705,21 @@ function transcriptPlacing(
   replayed: boolean,
   voiceShown: boolean,
   standingCalls: readonly AgentStandingCall[],
+  fromStart: boolean,
 ) {
   // Note that the voice's lines on a call are drawn only where the Voice experiment is on, the caller's standing as any line of theirs where it is off.
   const messages = voiceShown ? held : held.filter((message) => !isVoiceLine(message));
   const todos = todosPlace(messages, working);
 
-  const first = messages.find(
-    (message) =>
-      message.role === MESSAGE_ROLE.USER &&
-      agentMessageOf(message) === undefined &&
-      !undelivered.has(message.id),
-  );
+  // Note that the opening is read only where the transcript's start is held, because a window of its newest messages, or a line still on its way before any page, would take a teammate's line for the brief and name its starter over it.
+  const first = !fromStart
+    ? undefined
+    : messages.find(
+        (message) =>
+          message.role === MESSAGE_ROLE.USER &&
+          agentMessageOf(message) === undefined &&
+          !undelivered.has(message.id),
+      );
 
   // An agent started from another opens on the brief as its source's did, then the replay's card, then the note.
   const opening = !replayed || first === undefined ? undefined : replayOpening(first);
@@ -2754,6 +2758,7 @@ function AgentTranscriptView({
   onRetry,
   onOlder,
   olderFailed = false,
+  fromStart,
   overComposer = false,
   overEnd,
   earlierOmitted = false,
@@ -2822,6 +2827,8 @@ function AgentTranscriptView({
   onOlder?: (() => void) | undefined;
   /** Whether the last read of older messages did not answer, which a line over the log says with Retry. */
   olderFailed?: boolean;
+  /** Whether the messages begin at the transcript's start, a page landed with none older, so its first line is the opening the brief draws. */
+  fromStart: boolean;
   /** Whether the composer stands right under the log, which the log's foot then fades into. */
   overComposer?: boolean;
   /** The room, in pixels, what floats over the log's end takes, as the apps' windows the agent is using do (`ComputerDock`). */
@@ -2903,8 +2910,9 @@ function AgentTranscriptView({
         replayed,
         voiceShown,
         standingCalls,
+        fromStart,
       ),
-    [messages, working, undelivered, unsent, replayed, voiceShown, standingCalls],
+    [messages, working, undelivered, unsent, replayed, voiceShown, standingCalls, fromStart],
   );
 
   // Each line that reached a turn, with who sent it, kept from draw to draw while neither moved.
@@ -3803,6 +3811,7 @@ function AgentTabView({
                                 onRetry={transcript.onRetry}
                                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                                 olderFailed={transcript.olderFailed}
+                                fromStart={transcript.pages > 0 && !transcript.hasOlder}
                                 overComposer
                                 overEnd={appsRoom}
                                 bringIn={bringIn}
@@ -4486,6 +4495,7 @@ export function AgentSubagentTab({
                 onRetry={transcript.onRetry}
                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                 olderFailed={transcript.olderFailed}
+                fromStart={transcript.pages > 0 && !transcript.hasOlder}
               />
             </WholePartsProvider>
           </ComputerAppsProvider>
