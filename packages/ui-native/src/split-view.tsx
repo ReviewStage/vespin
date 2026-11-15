@@ -308,7 +308,8 @@ export function scopeMenu(label: string, scopes: readonly Scope[], narrowed: boo
 export function scopeSubtitle(scopes: readonly Scope[], narrowed: boolean): string | undefined {
   const chosen = scopes.find((scope) => scope.selected);
 
-  return narrowed && chosen !== undefined ? `${FILTERED_BY} ${chosen.label}` : undefined;
+  // Probe only, never merged: a no-break space keeps a subtitle line standing on Open, to see whether the title then holds its size.
+  return narrowed && chosen !== undefined ? `${FILTERED_BY} ${chosen.label}` : "\u00A0";
 }
 
 /** A menu with the acts and menus a bar already stands as glyphs left out, so ⋯ holds only the rest. */
