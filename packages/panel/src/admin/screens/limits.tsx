@@ -303,6 +303,11 @@ const LIMIT_GROUPS: readonly LimitGroup[] = [
         formatBytes(AGENT_BOUNDS.MAX_TEXT_BYTES),
         "AGENT_BOUNDS.MAX_TEXT_BYTES",
       ),
+      limit(
+        "Text file inlined for the model",
+        formatBytes(AGENT_BOUNDS.MAX_INLINED_TEXT_BYTES),
+        "AGENT_BOUNDS.MAX_INLINED_TEXT_BYTES",
+      ),
       limit("Picture", formatBytes(PICTURE_BOUNDS.MAX_BYTES), "PICTURE_BOUNDS.MAX_BYTES"),
       limit(
         "Recording posted to a thread",
