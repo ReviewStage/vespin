@@ -23,7 +23,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { filedTaskOf } from "@repo/features/tasks-model";
-import { selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
   type BarMenu,
