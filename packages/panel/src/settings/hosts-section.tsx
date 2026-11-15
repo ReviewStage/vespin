@@ -37,7 +37,6 @@ import {
   SettingsBlock,
   SettingsLine,
   SettingsRow,
-  SettingsRowActSlot,
   type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowsFold,
@@ -328,7 +327,7 @@ function ThisMacRow({
 }: {
   /** What it lets agents do (`machineAgentFacts`). */
   facts: MachineAgentFacts | undefined;
-  /** The chevron of its settings' fold, after its switch. */
+  /** The chevron of its settings' fold, before its switch, as Computer use's stands before its own. */
   chevron: React.ReactNode;
   /** This Mac as the service lists it; none before it does. */
   host: HostLine | undefined;
@@ -372,10 +371,10 @@ function ThisMacRow({
         label={THIS_MAC}
         description={description}
         labelsControl
-        end={() => <SettingsRowActSlot />}
       >
         {(control) => (
           <>
+            {chevron}
             <Switch
               id={control.controlId}
               checked={on}
@@ -383,7 +382,6 @@ function ThisMacRow({
               describedBy={control["aria-describedby"]}
               onChange={(next) => onChange(next)}
             />
-            {chevron}
           </>
         )}
       </SettingsRow>
