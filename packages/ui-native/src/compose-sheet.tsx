@@ -168,6 +168,8 @@ export type ComposeWords = {
   readonly onWords: (words: string) => void;
   /** The name a flow finds the field by. */
   readonly testId: string;
+  /** Takes words pasted long enough to come as a file, answering whether it did; they paste as words where none is given. */
+  readonly onLongPaste?: ((words: string) => boolean) | undefined;
 };
 
 /** What the sheet's + adds: a menu of what it offers, or its one act, such as a picture, and the name a flow finds it by. */
@@ -246,6 +248,7 @@ function ComposePage(props: ComposeSheetProps) {
             placeholder={words.placeholder}
             words={words.words}
             onWords={words.onWords}
+            onLongPaste={words.onLongPaste}
             autoFocus
             testId={words.testId}
             look={WORDS_LOOK.PAGE}

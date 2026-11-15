@@ -1,4 +1,5 @@
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { base64Of } from "@repo/features/attached-files";
 import {
   descriptionAttachmentAddress,
   descriptionAttachmentOf,
@@ -63,7 +64,6 @@ import {
 } from "../picture-block.js";
 import { isPdfUpload } from "../picture-files.js";
 import { keepPictureRead, pictureQuery } from "../picture-query.js";
-import { base64Of } from "./attached-files.js";
 import {
   type DescriptionPicturesDoor,
   useDescriptionPicturesDoor,

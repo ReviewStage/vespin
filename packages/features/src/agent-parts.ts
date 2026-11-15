@@ -54,6 +54,7 @@ import {
 import type { KeptPicture } from "./conversation-picture-wire.js";
 import { drawnCall } from "./native-tool-calls.js";
 import { formatBytes } from "./number-format.js";
+import { type OutOfMemory, outOfMemoryOf } from "./out-of-memory-wire.js";
 import { TOOL_STATE, type ToolState } from "./tool-call-block.js";
 import {
   type CallMachine,
@@ -146,6 +147,8 @@ export type AgentPart =
       readonly output: WireValue | undefined;
       /** The error's own text, on a call that ended in one. */
       readonly errorText: string | undefined;
+      /** Where the kernel killed the call's command for want of memory, the sandbox's memory as it ran (`out-of-memory-wire.ts`). */
+      readonly outOfMemory?: OutOfMemory;
       readonly cut?: AgentPartCut;
     }
   | { readonly kind: typeof AGENT_PART.STEP_START }
@@ -215,12 +218,15 @@ export function agentPart(part: WireValue): AgentPart {
       output: part.output,
     });
 
+    const outOfMemory = outOfMemoryOf(part.resultProviderMetadata);
+
     return {
       kind: AGENT_PART.TOOL,
       ...call,
       callId: isWireString(part.toolCallId) ? part.toolCallId : "",
       state: toolState(part.state),
       errorText: isWireString(part.errorText) ? part.errorText : undefined,
+      ...(outOfMemory === undefined ? undefined : { outOfMemory }),
     };
   }
 

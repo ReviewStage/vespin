@@ -80,6 +80,8 @@ export * from "./components/card/card.js";
 
 export * from "./components/card-press/card-press.js";
 
+export * from "./components/check-glyph/check-glyph.js";
+
 export * from "./components/checkbox/checkbox.js";
 
 export * from "./components/chip/chip.js";
@@ -441,8 +443,6 @@ export * from "./components/toolbar/toolbar.js";
 export * from "./components/tooltip/hint.js";
 
 export * from "./components/tooltip/tooltip.js";
-
-export * from "./components/track-list/track-list.js";
 
 export * from "./components/transcript-rail/transcript-rail.js";
 

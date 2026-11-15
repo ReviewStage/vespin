@@ -22,6 +22,7 @@ import {
   GLYPH,
   glyphSymbol,
   LIST_LOOK,
+  type ListScopes,
   ListSection,
   NoSelection,
   RowList,
@@ -156,6 +157,7 @@ function FoundList({
   onOpen,
   remindMenu,
   onArchiveAgent,
+  scopes,
 }: {
   readonly found: SearchFound;
   /** What was typed, whose words each row's title sets in bold. */
@@ -170,6 +172,8 @@ function FoundList({
   readonly remindMenu: (item: InboxItem) => RowSubmenu;
   /** Asks to archive an agent found, once it rests, as a task's Agents do. */
   readonly onArchiveAgent: (agentId: string) => void;
+  /** The scopes the results list under, standing as the list's first row. */
+  readonly scopes: ListScopes;
 }) {
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const pictureOf = useMemberPictures();
@@ -181,6 +185,7 @@ function FoundList({
     <RowList
       look={LIST_LOOK.PLAIN}
       searched={query}
+      scopes={scopes}
       selected={selected}
       onSelect={onOpen}
       onRefresh={async () => {
@@ -280,24 +285,23 @@ function useSearchScreen(
     onPress: () => setScope(each),
   }));
 
-  // Note that the scopes stand over a scope that found nothing, so another is one tap away.
-  const results = (
+  // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away.
+  const results = none ? (
     <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-      {none ? (
-        <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
-      ) : (
-        <FoundList
-          found={found}
-          query={query}
-          scope={scope}
-          listing={listing}
-          selected={pick?.picked?.id}
-          onOpen={open}
-          remindMenu={(item) => remind.menu([item])}
-          onArchiveAgent={archiveAsk.archive}
-        />
-      )}
+      <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
     </ScopePicker>
+  ) : (
+    <FoundList
+      scopes={{ label: SCOPE_LABEL, scopes }}
+      found={found}
+      query={query}
+      scope={scope}
+      listing={listing}
+      selected={pick?.picked?.id}
+      onOpen={open}
+      remindMenu={(item) => remind.menu([item])}
+      onArchiveAgent={archiveAsk.archive}
+    />
   );
 
   return { listing, results, status, deletion, remind, archiveAsk };
