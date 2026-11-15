@@ -38,6 +38,10 @@ import {
   workspaceSandboxSetupAnswerSchema,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import {
+  workspaceSandboxSizeAnswerSchema,
+  workspaceSandboxSizePutRequestSchema,
+} from "@repo/features/workspace-sandbox-size-wire";
+import {
   workspaceMachinesAnswerSchema,
   workspaceMachinesRequestSchema,
   workspaceMemberSchema,
@@ -275,6 +279,20 @@ export const WORKSPACE_ACTS = declaredActs({
     input: workspaceRunActionsPutRequestSchema,
     output: workspaceSandboxSetupAnswerSchema,
     refusal: "Could not save those run actions on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+  }),
+  WORKSPACE_SANDBOX_SIZE_READ: hostAct({
+    input: tasksWorkspaceParamsSchema,
+    output: workspaceSandboxSizeAnswerSchema,
+    refusal: "Could not read that workspace's sandbox size on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+  }),
+  WORKSPACE_SANDBOX_SIZE_PUT: hostAct({
+    input: workspaceSandboxSizePutRequestSchema,
+    output: workspaceSandboxSizeAnswerSchema,
+    refusal: "Could not save that sandbox size on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
   }),
