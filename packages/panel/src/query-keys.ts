@@ -29,6 +29,8 @@ export const QUERY_ROOT = {
   WORKSPACE_ENVIRONMENT: "workspace-environment",
   /** Settings › Cloud environment's scripts: a workspace's install script and each repository's setup script (`settings/cloud-setup-sections.tsx`). */
   WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
+  /** A workspace's cloud sandbox size and the most it may choose (`workspace-sandbox-size.ts`). */
+  WORKSPACE_SANDBOX_SIZE: "workspace-sandbox-size",
   /** The Merge queue page: every pull request a workspace's merge queues hold (`desktop/merge-queue-page.tsx`). */
   MERGE_QUEUE: "merge-queue",
   /** The machines of a workspace's members, as the `@` list offers them and a machine's chip names its owner (`tasks/workspace-machines.tsx`). */
@@ -110,6 +112,7 @@ const ACCOUNT_SCOPED_ROOTS: ReadonlySet<unknown> = new Set<string>([
   QUERY_ROOT.HOST_PAIRING,
   QUERY_ROOT.WORKSPACE_ENVIRONMENT,
   QUERY_ROOT.WORKSPACE_SANDBOX_SETUP,
+  QUERY_ROOT.WORKSPACE_SANDBOX_SIZE,
   QUERY_ROOT.MERGE_QUEUE,
   QUERY_ROOT.MACHINE_ALLOWED_APPS,
   QUERY_ROOT.WORKSPACE_MACHINES,

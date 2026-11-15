@@ -97,6 +97,7 @@ import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import {
   PULL_REQUEST_CHAPTERS_READ,
   pullRequestChaptersOfLive,
+  REPOSITORY_PULL_REQUEST_CHAPTERS_READ,
 } from "@repo/features/pull-request-chapters-live";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import { SOUND_CLIP_SLOT, SOUND_CLIP_TYPE } from "@repo/features/sound-clip-wire";
@@ -464,6 +465,27 @@ it.layer(getTestDB())("the account's live reads", (it) => {
           rows.tasks.map((task) => task.id),
           [started.id],
         );
+      }),
+  );
+
+  it.effect(
+    "a read whose query names an id that spells none answers not found, as its contract declares",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+
+        for (const path of [
+          "/api/live/task-rows?id=not-a-task",
+          "/api/live/task-relations?id=not-a-task",
+          "/api/live/task-page?workspaceId=acme&beforeId=not-a-task",
+          "/api/live/mac-commands?device=not-a-device",
+        ]) {
+          assert.deepEqual(
+            yield* ask({ bearer: dana, path }),
+            { status: HOSTED_HTTP_STATUS.NOT_FOUND, body: { error: HOSTED_API_ERROR.NOT_FOUND } },
+            path,
+          );
+        }
       }),
   );
 });
@@ -2114,11 +2136,11 @@ const CHAPTERS_ENVIRONMENT: HostedEnvironmentValues = {
   previewApiKeys: {},
 };
 
-/** The procedures answering an agent's pull request's chapters as `bearer`, over the store and GitHub. */
+/** The procedures answering a pull request's chapters as `bearer`, over the store and GitHub: through an agent, or by the workspace, repository, and number. */
 const askChapters = (options: {
   readonly bearer: string;
-  readonly agentId: string;
-  readonly number: number;
+  readonly path: string;
+  readonly query: Readonly<Record<string, string>>;
   readonly github: FakeGitHub;
 }) =>
   Effect.gen(function* () {
@@ -2134,9 +2156,9 @@ const askChapters = (options: {
       workspaces: yield* fakeWorkspaceSeams,
     });
 
-    const url = new URL("/api/live/pull-request-chapters", ORIGIN);
-    url.searchParams.set("id", options.agentId);
-    url.searchParams.set("number", String(options.number));
+    const url = new URL(options.path, ORIGIN);
+
+    for (const [name, value] of Object.entries(options.query)) url.searchParams.set(name, value);
     url.searchParams.set(LIVE_USER_QUERY, options.bearer);
 
     const response = yield* hostedAnswer(
@@ -2198,9 +2220,9 @@ it.layer(getTestDB())("the account's integrations' live read", (it) => {
   );
 });
 
-it.layer(getTestDB())("an agent's pull request's chapters' live read", (it) => {
+it.layer(getTestDB())("a pull request's chapters' live read", (it) => {
   it.effect(
-    "a member is answered the agent's own workspace's newest chapters polled, with whether they can generate them, and an account outside it is not found though its own workspace keeps chapters of the same pull request",
+    "a member is answered the workspace's newest chapters polled, through the agent and by the repository and number alike, with whether they can generate them, and an account outside it is not found either way though its own workspace keeps chapters of the same pull request",
     () =>
       Effect.gen(function* () {
         const owner = yield* openUser;
@@ -2246,11 +2268,40 @@ it.layer(getTestDB())("an agent's pull request's chapters' live read", (it) => {
         yield* claimed(yield* openWorkspace(stranger), stranger, "dec0de2", 2_000);
         const github = githubReaching([RELAY_INSTALLATION]);
 
-        const polled = yield* askChapters({ bearer: teammate, agentId, number: 7, github });
+        const throughAgent = {
+          path: "/api/live/pull-request-chapters",
+          query: { id: agentId, number: "7" },
+          github,
+        };
+
+        const byRepository = {
+          path: "/api/live/repository-pull-request-chapters",
+          query: { workspaceId: task.workspaceId, repository: RELAY_FULL_NAME, number: "7" },
+          github,
+        };
+
+        const polled = yield* askChapters({ bearer: teammate, ...throughAgent });
         assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
         const answer = Schema.decodeUnknownSync(PULL_REQUEST_CHAPTERS_READ.answer)(polled.body);
         assert.equal(answer.url, LIVE_POLL_URL);
-        assert.deepEqual(pullRequestChaptersOfLive(answer.queries.chapters.rows ?? [], 7, answer), {
+        const read = pullRequestChaptersOfLive(answer.queries.chapters.rows ?? [], 7, answer);
+        // Read by the repository and number, the pull request answers the same chapters as through the agent.
+        const repositoryPolled = yield* askChapters({ bearer: teammate, ...byRepository });
+        assert.equal(repositoryPolled.status, HOSTED_HTTP_STATUS.OK);
+
+        const repositoryAnswer = Schema.decodeUnknownSync(
+          REPOSITORY_PULL_REQUEST_CHAPTERS_READ.answer,
+        )(repositoryPolled.body);
+
+        assert.deepEqual(
+          pullRequestChaptersOfLive(
+            repositoryAnswer.queries.chapters.rows ?? [],
+            7,
+            repositoryAnswer,
+          ),
+          read,
+        );
+        assert.deepEqual(read, {
           pullRequest: {
             number: 7,
             generatable: true,
@@ -2267,10 +2318,14 @@ it.layer(getTestDB())("an agent's pull request's chapters' live read", (it) => {
             },
           },
         });
-        assert.deepEqual(yield* askChapters({ bearer: stranger, agentId, number: 7, github }), {
+
+        const notFound = {
           status: HOSTED_HTTP_STATUS.NOT_FOUND,
           body: { error: HOSTED_API_ERROR.NOT_FOUND },
-        });
+        };
+
+        assert.deepEqual(yield* askChapters({ bearer: stranger, ...throughAgent }), notFound);
+        assert.deepEqual(yield* askChapters({ bearer: stranger, ...byRepository }), notFound);
       }),
   );
 });

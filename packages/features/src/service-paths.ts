@@ -226,6 +226,8 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_MACHINE_ASKS: "/api/live/machine-asks",
   /** One coding agent's pull request's newest chapters, the agent under `?id=` and the pull request under `&number=`, sealed for following over Neon Realtime (GET), with whether the reader can generate them, or `not-found`. `pull-request-chapters-live.ts` declares the answer. */
   LIVE_PULL_REQUEST_CHAPTERS: "/api/live/pull-request-chapters",
+  /** One pull request's newest chapters by the workspace under `?workspaceId=`, the repository under `&repository=`, and the number under `&number=`, sealed for following over Neon Realtime (GET), with whether the reader can generate them, or `not-found`. `pull-request-chapters-live.ts` declares the answer. */
+  LIVE_REPOSITORY_PULL_REQUEST_CHAPTERS: "/api/live/repository-pull-request-chapters",
   /** The skills the account sees in one workspace under `?workspaceId=`, the workspace's and its own, sealed for following over Neon Realtime (GET), each with whether the account may manage it, or `not-found`, or their rows inline where polled. `installed-skill-live.ts` declares the answer. */
   LIVE_INSTALLED_SKILLS: "/api/live/installed-skills",
   /** Every integration row the account holds and where each stands as stored, sealed for following over Neon Realtime (GET), with the providers it is offered and those that take several accounts. `integration-live.ts` declares the answer. */
@@ -487,10 +489,12 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_SENTRY_INSTALLATIONS: "/api/workspaces/sentry/installations",
   /** One of a workspace's Sentry installations disconnected by an owner or admin (POST), answering the installations as they then stand. */
   WORKSPACE_SENTRY_DISCONNECT: "/api/workspaces/sentry/disconnect",
-  /** A workspace's shared environment variables: their names to a member (GET, `WORKSPACE_ENVIRONMENT_QUERY`), or one set by an owner or admin (PUT), answering the names as they then stand (`workspace-environment-wire.ts`). */
+  /** A workspace's shared environment variables: listed to a member (GET, `WORKSPACE_ENVIRONMENT_QUERY`), or one set by an owner or admin (PUT), answering the variables as they then stand (`workspace-environment-wire.ts`). */
   WORKSPACE_ENVIRONMENT: "/api/workspaces/environment",
   /** One of a workspace's environment variables removed by an owner or admin (POST), answering the names as they then stand. */
   WORKSPACE_ENVIRONMENT_DELETE: "/api/workspaces/environment/delete",
+  /** Several of a workspace's environment variables set at once by an owner or admin (POST), all or none, answering the variables as they then stand. */
+  WORKSPACE_ENVIRONMENT_SAVE: "/api/workspaces/environment/save",
   /** Every pull request GitHub's merge queues hold across the repositories a workspace's tasks work in, to a member with the Merge queue experiment on (GET, `MERGE_QUEUE_QUERY`) (`merge-queue-wire.ts`). */
   WORKSPACE_MERGE_QUEUE: "/api/workspaces/merge-queue",
   /** A workspace's cloud sandbox setup, its install script and each repository's setup script, to a member (GET, `WORKSPACE_SANDBOX_SETUP_QUERY`) (`workspace-sandbox-setup-wire.ts`). */
@@ -503,6 +507,8 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_SANDBOX_SETUP_RUN_ACTIONS: "/api/workspaces/sandbox-setup/run-actions",
   /** One of a repository's run actions added, changed, moved, or removed, to an owner or admin (PATCH). */
   WORKSPACE_SANDBOX_SETUP_RUN_ACTION: "/api/workspaces/sandbox-setup/run-action",
+  /** A workspace's cloud sandbox size, its vCPUs, to a member (GET, `WORKSPACE_SANDBOX_SIZE_QUERY`), or its vCPUs chosen by an owner or admin (PUT), answering the size as it then stands (`workspace-sandbox-size-wire.ts`). */
+  WORKSPACE_SANDBOX_SIZE: "/api/workspaces/sandbox-size",
   /** Whether the deployment holds our Slack bot, and the Slack team a workspace's bot is connected to, to a member (GET, `WORKSPACE_SLACK_BOT_QUERY`). */
   WORKSPACE_SLACK_BOT: "/api/workspaces/slack-bot",
   /** A workspace's Slack bot connected by an owner or admin to the team its token answers for (POST), answering the bot as it then stands (`slack-bot-wire.ts`). */

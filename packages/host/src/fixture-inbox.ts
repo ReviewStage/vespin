@@ -2165,6 +2165,42 @@ export function inboxRemindersAppState(
   };
 }
 
+/** The read marks a fixture run made, by the item's id: whether each stands unread. */
+export type InboxReadMarks = ReadonlyMap<string, boolean>;
+
+/**
+ * The document with the read marks a fixture run made laid over the staged
+ * feed's items, as the host draws one the moment it is asked, so a fixture
+ * run's Inbox row turns read or unread under a flow's swipe. The very
+ * document where none was made, and every unmarked item kept as it was.
+ */
+export function inboxReadMarksAppState(
+  state: AppStateSnapshot,
+  marks: InboxReadMarks,
+): AppStateSnapshot {
+  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.TASK];
+
+  if (marks.size === 0 || fed === undefined) return state;
+
+  const marked = Object.fromEntries(
+    Object.entries(fed).map(([taskId, items]) => [
+      taskId,
+      items.map((item) => {
+        const unread = marks.get(item.id);
+
+        return unread === undefined || (item.unread === true) === unread
+          ? item
+          : { ...item, unread };
+      }),
+    ]),
+  );
+
+  return {
+    ...state,
+    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: marked } },
+  };
+}
+
 /** The words a fixture run saved, by the memory's id: one of its own corrected, or a new one under the id the save answered. */
 export type SavedMemoryWords = ReadonlyMap<string, string>;
 

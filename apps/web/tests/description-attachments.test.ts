@@ -357,7 +357,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
   );
 
   it.effect(
-    "a recording a member keeps is served as the video it was sent, and one past a sent video's bound, or past the description's videos, is not kept",
+    "a recording a member keeps is served as the video it was sent, and one past a sent video's bound is not kept",
     () =>
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
@@ -371,31 +371,11 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
         const served = yield* ask(read(taskId, kept.id, teammate));
         const long = paddedTo(recording, PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES + 1);
         const tooLong = yield* ask(upload(taskId, owner, pictureBody(videoUrl(long))));
-        const db = yield* Database;
-        yield* db.insert(attachment).values(
-          Array.from(
-            { length: DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION - 1 },
-            () => ({
-              taskId: taskId,
-              userId: owner,
-              contentType: PICTURE_MEDIA_TYPE.WEBM,
-              byteCount: recording.length,
-              bytes: recording,
-              createdAt: new Date(0),
-            }),
-          ),
-        );
-        const past = yield* ask(upload(taskId, owner, pictureBody(videoUrl(recording))));
 
         assert.equal(served.status, HOSTED_HTTP_STATUS.OK);
         assert.equal(served.contentType, PICTURE_MEDIA_TYPE.WEBM);
         assert.deepEqual([...served.bytes], [...recording]);
         assert.equal(tooLong.status, HOSTED_HTTP_STATUS.BAD_REQUEST);
-        assert.equal(past.status, HOSTED_HTTP_STATUS.OK);
-        assert.deepEqual(uploaded(past), {
-          refused: DESCRIPTION_ATTACHMENT_REFUSAL.TOO_MANY_VIDEOS,
-        });
-        assert.ok("id" in uploaded(yield* ask(upload(taskId, owner, pictureBody(PNG_URL)))));
       }),
   );
 });

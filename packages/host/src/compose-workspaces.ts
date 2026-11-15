@@ -193,6 +193,7 @@ export interface WorkspacesClient {
     | "setTokenRepository"
     | "environment"
     | "putVariable"
+    | "saveVariables"
     | "deleteVariable"
     | "sandboxSetup"
     | "mergeQueue"
@@ -200,6 +201,8 @@ export interface WorkspacesClient {
     | "putInstallScript"
     | "putRepositorySetup"
     | "putRunActions"
+    | "sandboxSize"
+    | "putSandboxSize"
     | "changeRole"
     | "transfer"
     | "leave"
@@ -1486,23 +1489,28 @@ function workspaceAsked<Answer>(
   });
 }
 
-/** A workspace's environment's acts: its variables' names listed, and one put or deleted. */
+/** A workspace's environment's acts: its variables listed, one put, several saved, or one deleted. */
 function workspaceEnvironmentActs(
   reach: WorkspacesReach,
 ): Pick<
   HostActTable<typeof WORKSPACE_ACTS>,
-  "WORKSPACE_ENVIRONMENT_LIST" | "WORKSPACE_ENVIRONMENT_PUT" | "WORKSPACE_ENVIRONMENT_DELETE"
+  | "WORKSPACE_ENVIRONMENT_LIST"
+  | "WORKSPACE_ENVIRONMENT_PUT"
+  | "WORKSPACE_ENVIRONMENT_SAVE"
+  | "WORKSPACE_ENVIRONMENT_DELETE"
 > {
   const { client } = reach.dependencies;
 
   // Note that the environment is asked of the service on each act and held
-  // nowhere here, because no answer carries a value and Settings reads the
-  // names again after each write.
+  // nowhere here, because a config's value is in its answers and Settings
+  // reads the variables again after each write.
   return {
     WORKSPACE_ENVIRONMENT_LIST: ({ workspaceId }) =>
       workspaceAsked(reach, client.workspaces.environment(workspaceId)),
     WORKSPACE_ENVIRONMENT_PUT: ({ workspaceId, name, value }) =>
       workspaceAsked(reach, client.workspaces.putVariable(workspaceId, name, value)),
+    WORKSPACE_ENVIRONMENT_SAVE: (request) =>
+      workspaceAsked(reach, client.workspaces.saveVariables(request)),
     WORKSPACE_ENVIRONMENT_DELETE: ({ workspaceId, name }) =>
       workspaceAsked(reach, client.workspaces.deleteVariable(workspaceId, name)),
   };
@@ -1557,6 +1565,25 @@ function workspaceSandboxSetupActs(
       workspaceAsked(reach, client.workspaces.putRepositorySetup(workspaceId, repository, script)),
     WORKSPACE_RUN_ACTIONS_PUT: ({ workspaceId, repository, actions }) =>
       workspaceAsked(reach, client.workspaces.putRunActions(workspaceId, repository, actions)),
+  };
+}
+
+/** A workspace's cloud sandbox size's acts: read, and chosen by an owner or admin. */
+function workspaceSandboxSizeActs(
+  reach: WorkspacesReach,
+): Pick<
+  HostActTable<typeof WORKSPACE_ACTS>,
+  "WORKSPACE_SANDBOX_SIZE_READ" | "WORKSPACE_SANDBOX_SIZE_PUT"
+> {
+  const { client } = reach.dependencies;
+
+  // Note that the size is asked of the service on each act and held nowhere
+  // here, because Settings reads it as it opens and lays each choice's answer.
+  return {
+    WORKSPACE_SANDBOX_SIZE_READ: ({ workspaceId }) =>
+      workspaceAsked(reach, client.workspaces.sandboxSize(workspaceId)),
+    WORKSPACE_SANDBOX_SIZE_PUT: ({ workspaceId, vcpus }) =>
+      workspaceAsked(reach, client.workspaces.putSandboxSize(workspaceId, vcpus)),
   };
 }
 
@@ -1650,6 +1677,7 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       ...workspaceSettingActs(reach, parts),
       ...workspaceEnvironmentActs(reach),
       ...workspaceSandboxSetupActs(reach),
+      ...workspaceSandboxSizeActs(reach),
       ...workspaceMergeQueueActs(reach),
       ...workspaceMachinesActs(reach),
       ...github.acts,

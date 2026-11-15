@@ -69,23 +69,15 @@ const SHOW_IMAGE_INPUT = Schema.Struct({
 export const SHOW_IMAGE_TOOL = {
   name: AGENT_TOOL.SHOW_IMAGE,
   description:
-    "Show the developer pictures from your sandbox in your transcript, such as screenshots of a UI " +
-    "you changed, after a change to anything they can see. Take the screenshot first, for instance " +
-    "with Playwright's `playwright screenshot <url> <file>`, installed in a cloud sandbox, or on the " +
-    "developer's Mac whatever the repository or the Mac has, " +
-    "then name each file by its path with a one-line caption saying what it shows. Show the pictures " +
+    "Show the developer pictures from your sandbox in your transcript after a change to anything " +
+    "they can see, such as screenshots of a UI you changed, taken first with the installed " +
+    "`playwright screenshot <url> <file>`, each named by its path with a one-line caption saying " +
+    "what it shows. Show the pictures " +
     "that belong together in one call, as one set: before and after, or each screen a change touches. " +
-    "To show a flow rather than a screen, such as clicking through a form you built, record it as a " +
-    "WebM video, for instance with Playwright's `page.screencast.start({ path })` once the page has " +
-    "drawn, so the video opens on it rather than on its loading, and show that file the same way; the " +
-    "transcript plays it. " +
+    "A flow, such as clicking through a form, is shown as a WebM recording, such as Playwright's `page.screencast.start({ path })` once the page has drawn, which the transcript plays. " +
     `Each is a PNG, JPEG, or WebP, or a WebM or MP4 video, of at most ${CONVERSATION_PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB. ` +
-    `Never show a picture of a secret. Never show pictures of a page you showed with \`${AGENT_TOOL.SHOW_PAGE}\`, ` +
-    "or the page beside pictures of it: choose one, the page where it says what you mean, or " +
-    "pictures where they say it better, such as parts of a page set side by side. " +
-    "A Markdown image in your reply shows nothing; this is the one " +
-    "way to show a picture in your transcript. Answers `accepted` with each picture's id, or `rejected` and why nothing " +
-    "was shown.",
+    "Never show a picture of a secret. A Markdown image in your reply shows nothing; this is the one " +
+    "way to show a picture in your transcript.",
   inputSchema: SHOW_IMAGE_INPUT,
 } as const;
 

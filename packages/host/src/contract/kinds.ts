@@ -891,11 +891,15 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_ENVIRONMENT_LIST: "workspace.environmentList",
   WORKSPACE_ENVIRONMENT_PUT: "workspace.environmentPut",
   WORKSPACE_ENVIRONMENT_DELETE: "workspace.environmentDelete",
+  WORKSPACE_ENVIRONMENT_SAVE: "workspace.environmentSave",
   /** A workspace's cloud sandbox setup, its install script and each repository's setup script, read once as Settings › Cloud environment opens; a save answers the setup as it then stands. */
   WORKSPACE_SANDBOX_SETUP_READ: "workspace.sandboxSetupRead",
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
   WORKSPACE_REPOSITORY_SETUP_PUT: "workspace.repositorySetupPut",
   WORKSPACE_RUN_ACTIONS_PUT: "workspace.runActionsPut",
+  /** A workspace's cloud sandbox size, read once as Settings › Cloud environment opens; a choice by an owner or admin answers the size as it then stands. */
+  WORKSPACE_SANDBOX_SIZE_READ: "workspace.sandboxSizeRead",
+  WORKSPACE_SANDBOX_SIZE_PUT: "workspace.sandboxSizePut",
   /** Every pull request GitHub's merge queues hold across a workspace's repositories, read as the Merge queue page opens and again while it stands; refused while the account's Merge queue experiment is off. */
   WORKSPACE_MERGE_QUEUE_READ: "workspace.mergeQueueRead",
   /** The machines of a workspace's members, as the @ list offers them and a machine's chip names its owner, read as a place drawing them opens. */
@@ -1352,10 +1356,13 @@ export const PORT_ACT_USE = {
   WORKSPACE_ENVIRONMENT_LIST: ACT_USE.FETCH,
   WORKSPACE_ENVIRONMENT_PUT: ACT_USE.WRITE,
   WORKSPACE_ENVIRONMENT_DELETE: ACT_USE.WRITE,
+  WORKSPACE_ENVIRONMENT_SAVE: ACT_USE.WRITE,
   WORKSPACE_SANDBOX_SETUP_READ: ACT_USE.FETCH,
   WORKSPACE_INSTALL_SCRIPT_PUT: ACT_USE.WRITE,
   WORKSPACE_REPOSITORY_SETUP_PUT: ACT_USE.WRITE,
   WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
+  WORKSPACE_SANDBOX_SIZE_READ: ACT_USE.FETCH,
+  WORKSPACE_SANDBOX_SIZE_PUT: ACT_USE.WRITE,
   WORKSPACE_MERGE_QUEUE_READ: ACT_USE.FETCH,
   WORKSPACE_MACHINES_READ: ACT_USE.FETCH,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
