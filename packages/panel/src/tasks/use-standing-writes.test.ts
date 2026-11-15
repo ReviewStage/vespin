@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { TASK_PRIORITY, TASK_STATUS } from "@repo/features/task-wire";
-import { SETTLED_STATUS } from "@repo/features/tasks-model";
+import { SETTLED_STATUS, type TaskNames } from "@repo/features/tasks-model";
 import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { Option, Schema } from "effect";
@@ -11,6 +11,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
 import { KEPT, type Kept } from "../act.js";
 import { type FakeActPort, fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
+import { writeListedTasks } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { newestToastAction } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
@@ -35,6 +36,9 @@ const readStanding = Schema.decodeUnknownOption(
   Schema.Struct({ taskId: Schema.String, status: Schema.optionalKey(Schema.String) }),
 );
 
+/** No name being typed. */
+const NO_NAMES_TYPED: TaskNames = new Map();
+
 const roots: Root[] = [];
 
 afterEach(() => {
@@ -47,18 +51,26 @@ const WORKING_VIEW: TasksView = {
   tasks: [{ ...NOTES, agents: { total: 1, working: 1, pullRequestTotal: 0 } }],
 };
 
+/** Lets every promise settled so far run its continuations. */
+async function settle(): Promise<void> {
+  await act(async () => {
+    for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
+  });
+}
+
 type MountWritesResult = {
   writes: () => StandingWrites;
   payloads: unknown[];
 };
 
-/** The standing writes over `view`, drawn with their question under the window's toasts, the act port answering `standing` and writing down each payload. */
-function mountWrites(
+/** The standing writes over `view`, drawn with their question under the window's toasts once the window's first read of it has landed, the act port answering `standing` and writing down each payload. */
+async function mountWrites(
   standing: FakeActPort[typeof ACT_KIND.TASKS_SET_STANDING],
   view: TasksView = VIEW,
-): MountWritesResult {
+): Promise<MountWritesResult> {
   const payloads: unknown[] = [];
-  fakeAppBridge({});
+  fakeAppBridge({ onAppState: () => () => undefined });
+  writeListedTasks(view);
   fakeActPort({
     [ACT_KIND.TASKS_SET_STANDING]: (payload, ...rest) => {
       payloads.push(payload);
@@ -69,7 +81,7 @@ function mountWrites(
   let writes: StandingWrites | undefined;
 
   const Probe = () => {
-    writes = useStandingWrites(() => view);
+    writes = useStandingWrites(() => NO_NAMES_TYPED);
 
     return writes.dialog;
   };
@@ -84,18 +96,13 @@ function mountWrites(
     ),
   );
 
+  await settle();
+
   return { writes: () => writes ?? assert.fail("the writes are drawn"), payloads };
 }
 
-/** Lets every promise settled so far run its continuations. */
-async function settle(): Promise<void> {
-  await act(async () => {
-    for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
-  });
-}
-
 test("a member assigned from a chip goes to main with the name the reader knows them by, and a refusal answers so", async () => {
-  const { writes, payloads } = mountWrites(() => Promise.resolve(false));
+  const { writes, payloads } = await mountWrites(() => Promise.resolve(false));
   let kept: Promise<Kept> = Promise.resolve(KEPT);
 
   await act(async () => {
@@ -121,7 +128,7 @@ test("Mark done's Undo leaves a status chosen since alone, though that choice is
   let answered = 0;
 
   // The Mark done is kept, and the status chosen after it waits on the service.
-  const { writes, payloads } = mountWrites(() => {
+  const { writes, payloads } = await mountWrites(() => {
     answered += 1;
 
     return answered === 1 ? Promise.resolve(true) : new Promise(() => undefined);
@@ -141,7 +148,7 @@ test("Mark done's Undo leaves a status chosen since alone, though that choice is
 });
 
 test("Mark done on a task whose agent runs sends nothing until confirmed, then asks the service to stop its agents", async () => {
-  const { writes, payloads } = mountWrites(() => Promise.resolve(true), WORKING_VIEW);
+  const { writes, payloads } = await mountWrites(() => Promise.resolve(true), WORKING_VIEW);
 
   act(() => writes().onSettleTasks([NOTES.id], SETTLED_STATUS.DONE));
   await settle();
