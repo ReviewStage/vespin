@@ -1,4 +1,5 @@
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
 import { ChevronDownIcon, GLYPH, InboxIcon, ListTodoIcon, ZapIcon } from "../../icons/icons.js";
@@ -37,8 +38,8 @@ import { MINUTE, STORY_NOW, still } from "./landing-story.js";
  * The sidebar is the desktop's own: the title bar's sidebar toggle and way
  * back and forward over the workspace, the places, and My tasks under each
  * task's repository, with the hidden statuses' line and the account's foot
- * with its settings. Its tasks and the workspace are one made-up team's,
- * acme, building teammate invitations. Every part is a `@repo/ui` component
+ * with its settings. The workspace and its member are our own team's,
+ * building teammate invitations. Every part is a `@repo/ui` component
  * placed as the panel places it (`packages/panel/src/desktop/desktop-sidebar.tsx`).
  */
 
@@ -65,7 +66,7 @@ type SidebarTask = {
 const MY_TASKS: readonly { readonly repository: string; readonly tasks: readonly SidebarTask[] }[] =
   [
     {
-      repository: "relay",
+      repository: "vespin",
       tasks: [
         {
           id: "invites",
@@ -84,7 +85,7 @@ const MY_TASKS: readonly { readonly repository: string; readonly tasks: readonly
       ],
     },
     {
-      repository: "ledger",
+      repository: "stage-cli",
       tasks: [
         {
           id: "export",
@@ -97,8 +98,19 @@ const MY_TASKS: readonly { readonly repository: string; readonly tasks: readonly
     },
   ];
 
-/** The member at the account's foot. */
-export const MEMBER = "Sam Reyes";
+/** A GitHub account's picture at `size` pixels, as the panel's faces take it. */
+function githubPicture(id: number, size: number): string {
+  return `https://avatars.githubusercontent.com/u/${id}?s=${size}`;
+}
+
+/** The member at the account's foot, who writes the answers: our own. */
+export const MEMBER = { name: "Charles Pan", picture: githubPicture(30245070, 96) } as const;
+
+/** The workspace the app opens on, under its own logo: our own. */
+export const WORKSPACE = { name: PRODUCT_NAME, picture: githubPicture(251784045, 96) } as const;
+
+/** The repository the tasks work in, as its chip names it. */
+export const REPOSITORY = "ReviewStage/vespin";
 
 /** An agent's face: its name on the square of the harness it runs in. */
 export function agentFace(
@@ -199,9 +211,15 @@ export function DesktopSidebar({
       <div className="ui-landing-workspace">
         <NavItem variant={NAV_ITEM_VARIANT.IDENTITY} mark={<ChevronDownIcon />}>
           <span className="ui-landing-workspace-ref">
-            <Avatar name="acme" size={AVATAR_SIZE.CARD} outline={AVATAR_OUTLINE.TILE} decorative />
+            <Avatar
+              name={WORKSPACE.name}
+              src={WORKSPACE.picture}
+              size={AVATAR_SIZE.CARD}
+              outline={AVATAR_OUTLINE.TILE}
+              decorative
+            />
             <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.SECTION}>
-              acme
+              {WORKSPACE.name}
             </Text>
           </span>
         </NavItem>
@@ -243,9 +261,11 @@ export function DesktopSidebar({
       <div className="ui-landing-sidebar-foot">
         <NavItem
           variant={NAV_ITEM_VARIANT.IDENTITY}
-          icon={<Avatar name={MEMBER} size={AVATAR_SIZE.ACCOUNT} decorative />}
+          icon={
+            <Avatar name={MEMBER.name} src={MEMBER.picture} size={AVATAR_SIZE.ACCOUNT} decorative />
+          }
         >
-          {MEMBER}
+          {MEMBER.name}
         </NavItem>
         <IconButton icon={<GearIcon />} label="Settings" onClick={still} />
       </div>

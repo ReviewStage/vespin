@@ -84,6 +84,7 @@ import {
   DESKTOP_PLACE,
   DesktopSidebar,
   MEMBER,
+  REPOSITORY,
   SidePanelToggle,
 } from "./landing-desktop.js";
 import { LandingPhone, LandingWindow } from "./landing-devices.js";
@@ -466,14 +467,14 @@ function QuestionThread({ step }: { step: number }): React.JSX.Element {
         </li>
         {sent ? (
           <li className="ui-landing-comment ui-landing-enter">
-            <Comment author={{ name: MEMBER }} at={STORY_NOW} now={STORY_NOW}>
+            <Comment author={MEMBER} at={STORY_NOW} now={STORY_NOW}>
               <AskChoices picked readOnly />
               <Text>{QUESTION.NOTE}</Text>
             </Comment>
           </li>
         ) : null}
         <li className="ui-landing-comment">
-          <Comment author={{ name: MEMBER }} nameRef="You">
+          <Comment author={MEMBER} nameRef="You">
             {sent ? (
               <ReplyComposer placeholder="Reply" sendable={false} />
             ) : (
@@ -690,15 +691,15 @@ function subTasks(step: number): readonly SubTask[] {
     step >= to ? TASK_STATUS.DONE : step >= from ? TASK_STATUS.IN_PROGRESS : TASK_STATUS.TODO;
 
   return [
-    { id: "schema", name: "Pending memberships schema", status: TASK_STATUS.DONE, key: "ACME-54" },
+    { id: "schema", name: "Pending memberships schema", status: TASK_STATUS.DONE, key: "VES-54" },
     {
       id: "endpoints",
       name: "Invite and accept endpoints",
       status: TASK_STATUS.DONE,
-      key: "ACME-55",
+      key: "VES-55",
     },
-    { id: "accept", name: ACCEPT_PAGE, status: at(1, 4), key: "ACME-56" },
-    { id: "emails", name: "Invite emails through Postmark", status: at(0, 9), key: "ACME-57" },
+    { id: "accept", name: ACCEPT_PAGE, status: at(1, 4), key: "VES-56" },
+    { id: "emails", name: "Invite emails through Postmark", status: at(0, 9), key: "VES-57" },
   ];
 }
 
@@ -989,7 +990,7 @@ function AutomationSettings(): React.JSX.Element {
         />
       </SettingsSection>
       <SettingsSection title="Where it runs">
-        <SettingsRow label="Repository">{() => <FieldChip>acme/relay</FieldChip>}</SettingsRow>
+        <SettingsRow label="Repository">{() => <FieldChip>{REPOSITORY}</FieldChip>}</SettingsRow>
         <SettingsRow label="Model">
           {() => (
             <FieldChip>

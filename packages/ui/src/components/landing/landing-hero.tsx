@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
@@ -76,7 +77,7 @@ import { Toolbar } from "../toolbar/toolbar.js";
 import { TOOLBAR_INSET } from "../toolbar/toolbar-frame.js";
 import { UnreadMark } from "../unread-mark/unread-mark.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
-import { DESKTOP_PLACE, DesktopPlaces } from "./landing-desktop.js";
+import { DESKTOP_PLACE, DesktopPlaces, MEMBER, REPOSITORY, WORKSPACE } from "./landing-desktop.js";
 import { PullRequestCard } from "./landing-scenes.js";
 import { MINUTE, STORY_NOW, still } from "./landing-story.js";
 
@@ -102,8 +103,6 @@ const APP_SURFACE = surfaceAttributes(PROFILE.DESKTOP, THEME.DARK);
 /** The least width the app lays itself out at; a narrower stage scales it down whole. */
 const LEAST_WIDTH = 1040;
 
-const WORKSPACE = "acme";
-const MEMBER = "Sam Reyes";
 const FIRST_NAME = "Sam";
 
 type View =
@@ -496,7 +495,7 @@ const ITEMS: readonly Item[] = [
     task: "digest",
     agent: "Digest template",
     title: "Verify the digest's sender domain",
-    line: "3 steps left · Open the mail provider's Domains page and add relay.example.com.",
+    line: "3 steps left · Open the mail provider's Domains page and add mail.vespin.dev.",
     ask: ASK.DO,
     ago: 25,
     words:
@@ -521,7 +520,7 @@ const ITEMS: readonly Item[] = [
     line: "Answered",
     ask: ASK.SETTLED,
     ago: 62,
-    words: "Going with “Your week at acme” as the subject, as you said.",
+    words: `Going with “Your week at ${PRODUCT_NAME}” as the subject, as you said.`,
   },
 ];
 
@@ -790,12 +789,13 @@ function Sidebar({
         <NavItem variant={NAV_ITEM_VARIANT.IDENTITY} mark={<ChevronDownIcon />}>
           <span className="ui-hero-workspace-ref">
             <Avatar
-              name={WORKSPACE}
+              name={WORKSPACE.name}
+              src={WORKSPACE.picture}
               size={AVATAR_SIZE.ROW}
               outline={AVATAR_OUTLINE.TILE}
               decorative
             />
-            {WORKSPACE}
+            {WORKSPACE.name}
           </span>
         </NavItem>
         <IconButton
@@ -842,9 +842,16 @@ function Sidebar({
         <SidebarAccountRow>
           <NavItem
             variant={NAV_ITEM_VARIANT.IDENTITY}
-            icon={<Avatar name={MEMBER} size={AVATAR_SIZE.ACCOUNT} decorative />}
+            icon={
+              <Avatar
+                name={MEMBER.name}
+                src={MEMBER.picture}
+                size={AVATAR_SIZE.ACCOUNT}
+                decorative
+              />
+            }
           >
-            {MEMBER}
+            {MEMBER.name}
           </NavItem>
           <IconButton icon={<CommentsIcon />} label="Send feedback" onClick={still} />
           <IconButton icon={<GearIcon />} label="Settings" onClick={still} />
@@ -980,7 +987,7 @@ function InboxThread({
         </li>
         {question && answer.sent ? (
           <li className="ui-hero-comment ui-hero-enter">
-            <Comment author={{ name: MEMBER }} at={STORY_NOW} now={STORY_NOW}>
+            <Comment author={MEMBER} at={STORY_NOW} now={STORY_NOW}>
               <QuestionChoices pick={answer.pick} readOnly />
               {answer.note === "" ? null : <Text>{answer.note}</Text>}
             </Comment>
@@ -988,13 +995,13 @@ function InboxThread({
         ) : null}
         {replies.map((said) => (
           <li key={said.id} className="ui-hero-comment ui-hero-enter">
-            <Comment author={{ name: MEMBER }} at={STORY_NOW} now={STORY_NOW}>
+            <Comment author={MEMBER} at={STORY_NOW} now={STORY_NOW}>
               <Text>{said.words}</Text>
             </Comment>
           </li>
         ))}
         <li className="ui-hero-comment">
-          <Comment author={{ name: MEMBER }} nameRef="You">
+          <Comment author={MEMBER} nameRef="You">
             {asking ? (
               <AgentComposer
                 label="Add a note"
@@ -1278,7 +1285,7 @@ function HomePage({
                 <ChipName>
                   <span className="ui-hero-chip-words">
                     <GLYPH.REPOSITORY />
-                    acme/relay
+                    {REPOSITORY}
                   </span>
                 </ChipName>
               </Chip>
