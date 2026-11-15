@@ -116,16 +116,29 @@ export function WorkedFor({
 export function WorkingLine({
   startedAt,
   words = WORKING_LINE,
+  after,
+  heard,
 }: {
   startedAt: number | undefined;
   /** What the agent is doing, as far as its transcript shows it: "Working…" unless said otherwise. */
   words?: string;
+  /** What stands after the words without their light, as the chip of the machine they name; none where nothing does. */
+  after?: ReactNode;
+  /** What is said aloud where `after` says more than the words: the whole line in words; the words themselves where none. */
+  heard?: string;
 }): ReactNode {
-  useAnnounce(ANNOUNCE.POLITE, words);
+  useAnnounce(ANNOUNCE.POLITE, heard ?? words);
 
   return (
     <NoteLine look={NOTE_LINE_LOOK.INSET} selectable data-working="">
-      <Shimmer>{words}</Shimmer>
+      {after === undefined ? (
+        <Shimmer>{words}</Shimmer>
+      ) : (
+        // Note that the words and what follows them share one run of text, so the space between them stands as a sentence's does.
+        <span>
+          <Shimmer>{words.trimEnd()}</Shimmer> {after}
+        </span>
+      )}
       {startedAt === undefined ? null : <WorkingTime startedAt={startedAt} />}
     </NoteLine>
   );
