@@ -1,0 +1,12 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow open
+Swipe from (30%, 0%) to (30%, 70%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Swiping in RIGHT direction on ".*Who can withdraw an invite.*"... COMPLETED
+Tap on (Optional) id: swipe-action-button-identifier... COMPLETED
+Assert that "The member who sent it" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot notification-thread... COMPLETED
