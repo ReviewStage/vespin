@@ -32,7 +32,7 @@ import {
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { type ReactElement, type ReactNode, useEffect } from "react";
+import { type ReactElement, type ReactNode, useEffect, useLayoutEffect, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { BarContent } from "./bar-content.js";
 import type { Scope } from "./button.js";
@@ -563,6 +563,42 @@ export function HostedFill({ children }: { readonly children: ReactNode }) {
   );
 }
 
+/** How long after the page stops standing alone the system's reports of the columns it passes through are its own, a little past its column slide. */
+const LEAVE_SETTLE_MS = 700;
+
+/**
+ * Marks the stretch after a split view's detail stops standing alone, while
+ * the system slides the columns back and reports the ones it passes through,
+ * such as two columns on the way to three. Note that the mark is set before
+ * the system answers the change, as the commit lays out, and goes once the
+ * columns asked for are reported or the slide has had time to end, so a
+ * later press on the sidebar button still counts.
+ */
+function useLeavingDetailOnly(detailOnly: boolean) {
+  const leaving = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const was = useRef(detailOnly);
+
+  useLayoutEffect(() => {
+    const left = was.current && !detailOnly;
+
+    was.current = detailOnly;
+
+    if (!left) return;
+
+    clearTimeout(leaving.current);
+
+    const timer = setTimeout(() => {
+      if (leaving.current === timer) leaving.current = undefined;
+    }, LEAVE_SETTLE_MS);
+
+    leaving.current = timer;
+  }, [detailOnly]);
+
+  useEffect(() => () => clearTimeout(leaving.current), []);
+
+  return leaving;
+}
+
 /**
  * The app's columns for a regular-width window, such as an iPad's or the
  * unfolded iPhone Duo's, as Mail and Files stand theirs: the app's sidebar,
@@ -589,10 +625,12 @@ export function SplitView({
   detailStack,
 }: SplitViewProps) {
   const hidden = content === undefined ? "detailOnly" : "doubleColumn";
+  const shown = detailOnly ? "detailOnly" : sidebarShown ? "all" : hidden;
+  const leaving = useLeavingDetailOnly(detailOnly);
 
   return (
     <NavigationSplitView
-      columnVisibility={detailOnly ? "detailOnly" : sidebarShown ? "all" : hidden}
+      columnVisibility={shown}
       onColumnVisibilityChange={(visibility) => {
         // Note that a two-column split view names both columns standing "doubleColumn", which is its "all".
         if (visibility === "automatic") return;
@@ -600,6 +638,13 @@ export function SplitView({
         // Note that the detail standing alone leaves the sidebar's own choice as it was, and columns brought back by the system's button end it.
         if (detailOnly) {
           if (visibility !== "detailOnly") onDetailOnlyChange?.(false);
+
+          return;
+        }
+
+        // Note that the columns the system passes through as the page stops standing alone are its way back to the columns left, never the reader hiding the sidebar.
+        if (leaving.current !== undefined) {
+          if (visibility === shown) leaving.current = undefined;
 
           return;
         }
