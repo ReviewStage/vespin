@@ -1,11 +1,12 @@
 // chip-marks.ts -- what the app holds of the entities a chip in a line of words can name, read once for every chip: a task's status, an agent's model, a member's face, a thread's ask, a workspace's tile.
 
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
-import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { type ChipMarkOf, chipMarkOf } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useListedAgents, useListedTasks } from "../host/host-provider.js";
 import { useChosenInbox } from "../inbox/use-inbox.js";
 import { useMemberFaces } from "../member-pictures.js";
 import { selectPhotos, switcherWorkspace } from "../workspace-switcher.js";
@@ -18,15 +19,16 @@ import { selectPhotos, switcherWorkspace } from "../workspace-switcher.js";
  * keeps its kind's glyph.
  */
 export function useChipMarks(): ChipMarkOf {
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const tasks = useListedTasks();
+  const agents = useListedAgents();
   const { data: workspaces } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const { groups } = useChosenInbox();
   const member = useMemberFaces();
 
   return useMemo(() => {
-    const statuses = new Map((view?.tasks ?? []).map((task) => [task.id, task.status]));
-    const models = new Map((view?.taskAgents ?? []).map((agent) => [agent.id, agent.model]));
+    const statuses = new Map(tasks.map((task) => [task.id, task.status]));
+    const models = new Map(agents.map((agent) => [agent.id, agent.model]));
     const items = new Map(groups.flatMap((group) => group.items.map((item) => [item.id, item])));
 
     return (entity) =>
@@ -41,5 +43,5 @@ export function useChipMarks(): ChipMarkOf {
           return listed === undefined ? undefined : switcherWorkspace(listed, false, photos);
         },
       });
-  }, [view, workspaces, photos, groups, member]);
+  }, [tasks, agents, workspaces, photos, groups, member]);
 }
