@@ -469,6 +469,7 @@ export function NewAgentScreen({
           placeholder: WORDS.AGENT_PLACEHOLDER,
           words: prompt,
           onWords: setPrompt,
+          onLongPaste: pictures.pasteText,
           testId: TEST_IDS.NEW_AGENT.WORDS,
         }}
         skills={offered(skills)}
@@ -749,6 +750,7 @@ export function NewTaskScreen({
           placeholder: WORDS.TASK_PLACEHOLDER,
           words: prompt,
           onWords: setPrompt,
+          onLongPaste: pictures.pasteText,
           testId: TEST_IDS.NEW_TASK.WORDS,
         }}
         skills={offered(skills)}

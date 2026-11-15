@@ -275,6 +275,8 @@
     "./task-standing-words": "./src/task-standing-words.js",
     "./task-tree-model": "./src/task-tree-model.js",
     "./attachment-model": "./src/attachment-model.js",
+    "./attached-files": "./src/attached-files.js",
+    "./long-paste": "./src/long-paste.js",
     "./file-marker": "./src/file-marker.js",
     "./turn-rows": "./src/turn-rows.js",
     "./description-diff": "./src/description-diff.js",
