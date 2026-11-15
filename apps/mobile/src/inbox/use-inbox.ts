@@ -4,7 +4,7 @@
  * What the list holds, in what order, and what each row says are the list
  * model's (`@repo/features/inbox-list-model`), which the panel's Inbox reads
  * too, over the holders the host's document groups
- * (`@repo/host/app-state-reads`' `selectInboxGroupsIn`); this only reads them
+ * (`inbox-groups.ts`); this only reads them
  * into the app's Query client and sends the panel's acts on the host's port,
  * each thread drawn with the reader's sends still out (`use-thread-answer.ts`).
  */
@@ -48,7 +48,6 @@ import {
   type InboxFeed,
   inboxFeedHolds,
   selectInboxFeed,
-  selectInboxGroupsIn,
   selectInboxReader,
   selectTaskListStatus,
   selectWorkspaces,
@@ -66,6 +65,7 @@ import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/hos
 import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
+import { useInboxGroupsIn } from "./inbox-groups.js";
 import {
   refusedWords,
   SETTLE,
@@ -90,11 +90,8 @@ const CLOSE_WENT = {
   UNREACHED: "unreached",
 } as const;
 
-/** No holder read yet. */
-const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
-
 type UseChosenInboxResult = {
-  readonly groups: ReturnType<ReturnType<typeof selectInboxGroupsIn>>;
+  readonly groups: readonly InboxGroup[];
   readonly chosen: Workspace | undefined;
   readonly workspaces: number;
 };
@@ -110,16 +107,13 @@ export function useChosenInbox(): UseChosenInboxResult {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
 
-  const { data: groups = NO_GROUPS } = useQuery({
-    ...appStateQuery,
-    select: selectInboxGroupsIn(chosen?.id),
-  });
+  const groups = useInboxGroupsIn(chosen?.id);
 
   return { groups: useSendsDrawn(groups), chosen, workspaces: workspaces.length };
 }
 
 /** The holders of the chosen workspace's Inbox items alone (`useChosenInbox`). */
-function useInboxGroups(): ReturnType<ReturnType<typeof selectInboxGroupsIn>> {
+function useInboxGroups(): readonly InboxGroup[] {
   return useChosenInbox().groups;
 }
 
@@ -246,10 +240,7 @@ type UseInboxThreadResult = {
 export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   const acts = useHostActs();
 
-  const { data: read = NO_GROUPS } = useQuery({
-    ...appStateQuery,
-    select: selectInboxGroupsIn(undefined),
-  });
+  const read = useInboxGroupsIn(undefined);
 
   const groups = useSendsDrawn(read);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });

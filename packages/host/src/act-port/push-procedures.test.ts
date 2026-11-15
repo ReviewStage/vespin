@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { it } from "vitest";
-import type { AppStateDelivery, AppStateSnapshot } from "../app-state.js";
+import type { AppStateDelivery, AppStateSnapshot, TaskListDelivery } from "../app-state.js";
 import { initialAppState } from "../client/app-state-store.js";
 import { PUSH, type PushEvent } from "../contract/index.js";
 import { runModeFor } from "../run-mode.js";
@@ -37,12 +37,43 @@ function documentAt(version: number): AppStateSnapshot {
   };
 }
 
+/** The task list's rows one read of a stream carried beside its document; none where it carried no document. */
+function taskListOf(read: IteratorResult<PushEvent>): TaskListDelivery | undefined {
+  return read.done || read.value.push !== PUSH.APP_STATE ? undefined : read.value.payload.taskList;
+}
+
 /** What one read of a stream carried, a document by its version. */
 function heard(read: IteratorResult<PushEvent>): number | string | undefined {
   if (read.done) return undefined;
 
   return read.value.push === PUSH.APP_STATE ? read.value.payload.version : read.value.push;
 }
+
+it("a stream's first document carries the task list whole beside it, and each after it the rows that moved", async () => {
+  const pushes = new WindowPushes();
+  const stream = pushes.stream(WINDOW, undefined);
+  const first = documentAt(1);
+  pushes.pushState(WINDOW, first);
+  const opening = await stream.next();
+
+  const task = {
+    id: "task-1",
+    workspaceId: "workspace-1",
+    name: "Invites",
+    createdAt: 1,
+    updatedAt: 1,
+    repository: null,
+  };
+
+  pushes.pushState(WINDOW, { ...documentAt(2), tasks: { ...first.tasks, tasks: [task] } });
+  const moved = await stream.next();
+
+  assert.deepEqual(taskListOf(opening), { version: 1, whole: { tasks: [] } });
+  assert.deepEqual(taskListOf(moved), {
+    version: 2,
+    moved: [{ key: ["tasks"], rows: [task], ids: ["task-1"] }],
+  });
+});
 
 it("three documents pushed before a slow reader reads are one delivery, the third", async () => {
   const pushes = new WindowPushes();

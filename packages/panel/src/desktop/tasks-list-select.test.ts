@@ -25,6 +25,7 @@ import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { followListedTasks, handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
+import { standingTaskList } from "../testing/history-rows.js";
 import {
   AGENT_AWAY,
   HOME_AWAY,
@@ -245,6 +246,8 @@ async function mountPage(held?: TasksPageHeld): Promise<{
 
   // Note that the tasks and sections are read off main's document, as the window's surfaces read them (`task-row-doors.ts`, `use-pin-writes.ts`).
   const deliver = followListedTasks(viewOf(TASKS));
+  // The window's task collections, which stand on the list before this mount's own follow first reads, as the window's root holds them across the page's visits.
+  const listed = standingTaskList({ tasks: TASKS });
   const page = document.createElement("div");
   document.body.append(page);
   const root = createRoot(page);
@@ -253,7 +256,9 @@ async function mountPage(held?: TasksPageHeld): Promise<{
     root.render(
       windowRouter().provide(
         withQueryClient(
-          createElement(Fragment, null, createElement(Page), createElement(ToastHost)),
+          listed.provide(
+            createElement(Fragment, null, createElement(Page), createElement(ToastHost)),
+          ),
         ),
       ),
     ),
@@ -264,6 +269,7 @@ async function mountPage(held?: TasksPageHeld): Promise<{
     page,
     hold: (tasks, taskSections = sectionsHolding([])) =>
       act(() => {
+        listed.stand({ tasks });
         restand?.(viewOf(tasks, taskSections));
         deliver(viewOf(tasks, taskSections));
       }),
