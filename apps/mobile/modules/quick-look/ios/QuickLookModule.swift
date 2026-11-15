@@ -91,7 +91,7 @@ public final class QuickLookModule: Module {
         let presenter = topmost(window)
       else { return false }
 
-      // Note that an iPad opened the preview grown from its thumbnail in Quick Look's immersive mode, its bar and Done hidden with no tap bringing them back, so there it opens from no frame, inside a navigation controller of its own whose bar always holds Done.
+      // Note that an iPad opened the preview grown from its thumbnail in Quick Look's immersive mode, its bar and Done hidden with no tap bringing them back, so there it opens from no frame, full screen. It's presented itself rather than inside a navigation controller of the app's, since Quick Look draws its own Done only where it finds itself presented; pushed into another's stack it has none, and a Done added to its bar showed in some runs and not others on the iOS 26.5 iPad.
       let pad = UIDevice.current.userInterfaceIdiom == .pad
       let frame = pad ? nil : from.flatMap { rect in
         rect.count == 4 ? CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]) : nil
@@ -102,26 +102,9 @@ public final class QuickLookModule: Module {
       let controller = QLPreviewController()
       controller.dataSource = preview
       controller.delegate = preview
+      if pad { controller.modalPresentationStyle = .fullScreen }
       shown.append(preview)
-
-      guard pad else {
-        presenter.present(controller, animated: true)
-        return true
-      }
-
-      let navigation = UINavigationController(rootViewController: controller)
-      navigation.modalPresentationStyle = .fullScreen
-      presenter.present(navigation, animated: true) {
-        // Quick Look sets its own Done where it finds itself presented; one it left out is added, closing the whole preview.
-        guard controller.navigationItem.leftBarButtonItem == nil else { return }
-        controller.navigationItem.leftBarButtonItem = UIBarButtonItem(
-          systemItem: .done,
-          primaryAction: UIAction { [weak navigation, weak preview] _ in
-            navigation?.dismiss(animated: true)
-            if let preview { preview.onDismiss(preview) }
-          }
-        )
-      }
+      presenter.present(controller, animated: true)
       return true
     }.runOnQueue(.main)
   }
