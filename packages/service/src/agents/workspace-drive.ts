@@ -57,6 +57,7 @@ import {
   baseDriveWorkspaceOfInstallation,
   workspaceDriveOwner,
 } from "@repo/database/models/base-drive-repositories";
+import { recordSandboxOwner } from "@repo/database/models/sandbox-owners";
 import {
   forgetWorkspaceDriveRepositories,
   recordWorkspaceDriveRepositories,
@@ -86,6 +87,7 @@ import {
 } from "effect";
 import { GitHubApp } from "../github/github-app.js";
 import { afterResponse } from "../http/after-response.js";
+import { ORGANIZATION_TAG } from "./agent-sandbox-open.js";
 import { AgentImage } from "./coder-host/agent-image.js";
 import {
   firewallSessionOf,
@@ -361,8 +363,24 @@ const lockedFill = <E, R, E2, R2>(
     const context = yield* Effect.context<DatabaseServices>();
     let cutOff = false;
 
+    // Note that the owner is recorded before the fill's sandbox is created, so none stands unbilled.
+    yield* recordSandboxOwner({
+      sandboxName: name,
+      organizationId: workspace.workspaceId,
+      agentId: null,
+      userId: workspace.userId,
+      createdAt: yield* DateTime.nowAsDate,
+    });
+
     const filled = yield* filledDrive(
-      { name, drive: name, at: WORKSPACE_DRIVE.MOUNT, image, vcpus: SANDBOX_SIZE.VCPUS },
+      {
+        name,
+        drive: name,
+        at: WORKSPACE_DRIVE.MOUNT,
+        image,
+        vcpus: SANDBOX_SIZE.VCPUS,
+        tags: { [ORGANIZATION_TAG]: workspace.workspaceId },
+      },
       (running) =>
         steps(
           repositorySandboxOver(

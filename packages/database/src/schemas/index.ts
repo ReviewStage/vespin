@@ -108,6 +108,8 @@ export * from "./runner-line.js";
 
 export * from "./sandbox-firewall.js";
 
+export * from "./sandbox-owner.js";
+
 export * from "./sandbox-terminal-lease.js";
 
 export * from "./slack-installation.js";

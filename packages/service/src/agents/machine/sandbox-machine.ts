@@ -101,6 +101,7 @@ import {
   writeAgentRunnerRecord,
 } from "@repo/database/models/agent-runner-record";
 import { type Agent, hasRepository, type WithRepository } from "@repo/database/models/agent-store";
+import { recordSandboxOwner } from "@repo/database/models/sandbox-owners";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { sandboxVcpus } from "@repo/features/sandbox-size";
@@ -461,6 +462,9 @@ function setupExits(
 
 /** Why the sandbox could not be readied for the agent's runner. */
 const NOT_READIED = "the sandbox could not be readied for the agent's runner";
+
+/** Why the sandbox was not opened where the workspace it is billed to could not be recorded first. */
+const OWNER_NOT_RECORDED = "the sandbox's workspace could not be recorded";
 
 /** How the read exits where the path is no regular file the sandbox's user may read. */
 const READ_EXIT = { NO_FILE: 3 } as const;
@@ -1120,10 +1124,23 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       const later = yield* Effect.serviceOption(AfterResponse);
       let refused: CheckoutRefused | undefined;
 
+      // Note that the owner is recorded before the open, so no sandbox we create stands unbilled.
+      yield* recordSandboxOwner({
+        sandboxName: agentSandboxName(sessionId),
+        organizationId: agent.organizationId,
+        agentId: agent.id,
+        userId: agent.userId,
+        createdAt: yield* DateTime.nowAsDate,
+      }).pipe(
+        Effect.mapError(
+          () => new SandboxUnavailable({ retryable: true, detail: OWNER_NOT_RECORDED }),
+        ),
+      );
+
       const { sandbox, created, driveKept } = yield* openAgentSandbox(
         {
           sessionId,
-          tags: agentSandboxTags(sessionId, agent.id),
+          tags: agentSandboxTags(sessionId, agent),
           vcpus: sandboxVcpus(agent.repository),
           ...(attempt.snapshot === undefined ? undefined : { snapshot: attempt.snapshot }),
           ...(attempt.drive === undefined ? undefined : { drive: attempt.drive }),
