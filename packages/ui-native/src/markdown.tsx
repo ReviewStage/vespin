@@ -93,7 +93,7 @@ const ENTITY_SYMBOL: Readonly<Record<EntityKind, Glyph>> = {
   [ENTITY_KIND.DATE]: GLYPH.DATE,
   // Note that an app on a Mac is never read from the phone, so it wears an app's shape rather than its icon.
   [ENTITY_KIND.MAC_APP]: GLYPH.APP,
-  [ENTITY_KIND.COMPUTER]: GLYPH.COMPUTER,
+  [ENTITY_KIND.COMPUTER]: GLYPH.COMPUTER_USE,
   // Note that a machine's link names its id alone, and the phone reads no machine for its platform, so it wears a Mac's shape.
   [ENTITY_KIND.MACHINE]: GLYPH.MAC,
 };

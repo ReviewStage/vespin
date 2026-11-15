@@ -1,10 +1,5 @@
-import { AGENT_STATUS } from "@repo/features/agent-wire";
-import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { describe, expect, it } from "vitest";
-import type { AppStateSnapshot } from "./app-state.js";
-import { answerKeeper, selectAgentNames, shareAppState } from "./app-state-reads.js";
-import { initialAppState } from "./client/app-state-store.js";
-import { runModeFor } from "./run-mode.js";
+import { answerKeeper, shareAppState } from "./app-state-reads.js";
 
 describe("shareAppState", () => {
   it("answers a reader's changed slice with the document's own nodes, not copies of them", () => {
@@ -31,6 +26,27 @@ describe("shareAppState", () => {
     expect(shared.tasks[0]).toBe(kept);
     expect(shared.tasks[1]).toBe(changed);
   });
+
+  it("answers a list a row joined at its head with the document's own rows, not each row laid over its neighbor", () => {
+    const by = { userId: "user-ada", name: "Ada" };
+    const first = { id: "first", title: "First", sentBy: { ...by }, files: [] };
+    const second = { id: "second", title: "Second", sentBy: { ...by }, files: [] };
+    const joined = { id: "joined", title: "Joined", sentBy: { ...by }, files: [] };
+    const document = { threads: [joined, first, second] };
+
+    const shared = shareAppState({ threads: [first, second] }, document);
+
+    expect(shared).toBe(document);
+  });
+
+  it("keeps a held row whose id repeats an earlier row's while another row changes", () => {
+    const repeated = { id: "a", value: 2 };
+    const held = [{ id: "a", value: 1 }, repeated, { id: "b" }];
+
+    const shared = shareAppState(held, [{ id: "a", value: 1 }, { id: "a", value: 2 }, { id: "c" }]);
+
+    expect(shared[1]).toBe(repeated);
+  });
 });
 
 describe("answerKeeper", () => {
@@ -43,62 +59,5 @@ describe("answerKeeper", () => {
     expect(same).toBe(first);
     expect(moved.rows.map(({ id }) => id)).toEqual(["a", "c"]);
     expect(moved.rows[0]).toBe(first.rows[0]);
-  });
-});
-
-/** The fixture's document with `taskAgents` as the task list's agents. */
-function withAgents(
-  taskAgents: NonNullable<AppStateSnapshot["tasks"]["taskAgents"]>,
-): AppStateSnapshot {
-  return {
-    ...initialAppState(
-      {
-        launch: { profile: "inbox", captureMode: false, fixtureMode: true },
-        runMode: runModeFor({ capture: false, fixture: true }),
-        appVersion: "1.2.3",
-        packaged: true,
-        platform: "ios",
-      },
-      false,
-      [],
-    ),
-    version: 1,
-    window: { fullScreen: false },
-    tasks: { ...IDLE_TASKS_VIEW, taskAgents },
-  };
-}
-
-const AGENT_ID = "a1b2c3d4-0000-4000-8000-0000000000aa";
-
-const UNTITLED_AGENT = {
-  id: AGENT_ID,
-  planId: "a1b2c3d4-0000-4000-8000-0000000000bb",
-  model: "anthropic/claude-opus-5.5",
-  effort: "high",
-  title: null,
-  createdAt: 1,
-  status: AGENT_STATUS.RUNNING,
-  turnId: null,
-  workspaceId: "workspace-personal",
-  repository: null,
-  automationName: "Morning triage",
-} as const;
-
-describe("selectAgentNames", () => {
-  it("names an agent with no title yet by the automation whose run started it, as the panel does", () => {
-    expect(selectAgentNames(withAgents([UNTITLED_AGENT])).get(AGENT_ID)).toBe("Morning triage");
-  });
-
-  it("answers the same names while an agent moves without its name moving, so its readers draw nothing anew", () => {
-    const running = selectAgentNames(withAgents([UNTITLED_AGENT]));
-
-    const done = selectAgentNames(
-      withAgents([{ ...UNTITLED_AGENT, status: AGENT_STATUS.COMPLETED }]),
-    );
-
-    const named = selectAgentNames(withAgents([{ ...UNTITLED_AGENT, title: "Triage the queue" }]));
-
-    expect(done).toBe(running);
-    expect(named.get(AGENT_ID)).toBe("Triage the queue");
   });
 });

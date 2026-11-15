@@ -2,7 +2,12 @@ import { taskFollowerSchema } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { browserTabsPlaceSchema } from "./agent-browser-tab-wire.js";
 import { agentAgentAnswerSchema } from "./agent-view.js";
-import { AGENT_STATUS, listedAgentSchema, localAgentRefusalSchema } from "./agent-wire.js";
+import {
+  AGENT_STATUS,
+  type ListedAgent,
+  listedAgentSchema,
+  localAgentRefusalSchema,
+} from "./agent-wire.js";
 import { agentBrowserTabsContract } from "./contract/agent-browser-tabs.js";
 import { descriptionCommentsContract } from "./contract/description-comments.js";
 import { githubContract } from "./contract/github.js";
@@ -148,10 +153,10 @@ export type HostLive = (typeof HOST_LIVE)[keyof typeof HOST_LIVE];
 
 /**
  * One task's description as the host holds it for the windows that opened it
- * (`LIVE_READ.DESCRIPTION_DOCUMENT`): the task with its text as last read or
+ * (`LIVE_READ.HELD_TASK`): the task with its text as last read or
  * written, or that the account no longer reaches it.
  */
-export type HeldDescriptionDocument = { readonly task: Task } | { readonly gone: true };
+export type HeldTask = { readonly task: Task } | { readonly gone: true };
 
 /** One run of a line in one color per appearance, as the host's highlighter split it. */
 const codeTokenSchema = EffectSchema.Struct({
@@ -209,6 +214,13 @@ export const tasksViewSchema = EffectSchema.Struct({
   pendingTasks: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   listStatus: tasksReadSchema,
   /**
+   * Whether the task list's lists have been drawn, as they are from the
+   * list's first drawing, from disk or followed live: what a reader waiting
+   * on the list's agents or pull requests reads, since the lists themselves
+   * reach a window on their own channel. Absent before the first drawing.
+   */
+  listed: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /**
    * The workspaces in which the account reaches any task, as the list's
    * last answer said, whatever the list holds of them: whether it has ever
    * had a task there. Absent before an answer says, as one drawn from disk
@@ -227,11 +239,14 @@ export const tasksViewSchema = EffectSchema.Struct({
   repositoryPins: EffectSchema.optionalKey(EffectSchema.Array(repositoryPinSchema)),
   /** The sections the account made in its sidebars and the tasks it keeps in them, as last read or written; absent before the first read lands. */
   taskSections: EffectSchema.optionalKey(taskSectionsAnswerSchema),
-  /** The one active task, absent while the window has none open; its plan is held apart (`LIVE_READ.DESCRIPTION_DOCUMENT`). */
+  /** The one active task, absent while the window has none open; its plan is held apart (`LIVE_READ.HELD_TASK`). */
   activeTaskId: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 export type TasksView = typeof tasksViewSchema.Type;
+
+/** What a tasks view holds but the list itself, which a window reads from its task list's collections rather than the document. */
+export type TaskListStanding = Omit<TasksView, "tasks">;
 
 /** The view before anything is asked: no tasks read, none active. */
 export const IDLE_TASKS_VIEW: TasksView = {
@@ -241,12 +256,12 @@ export const IDLE_TASKS_VIEW: TasksView = {
 };
 
 /**
- * How many of the agents the view lists are working, starting or running a
- * turn. Note that the agents are listed only while the list is followed
- * live, so before then this counts none.
+ * How many of `agents` are working, starting or running a turn. Note that
+ * the agents are listed only while the list is followed live, so before
+ * then this counts none.
  */
-export function workingAgentCount(view: TasksView): number {
-  return (view.taskAgents ?? []).filter(
+export function workingAgentCount(agents: readonly ListedAgent[] | undefined): number {
+  return (agents ?? []).filter(
     (agent) => agent.status === AGENT_STATUS.STARTING || agent.status === AGENT_STATUS.RUNNING,
   ).length;
 }
@@ -499,7 +514,7 @@ export type StartCallFailure = (typeof START_CALL_FAILURES)[number];
  */
 export const tasksStartAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({
-    planId: EffectSchema.String,
+    taskId: EffectSchema.String,
     agentStart: EffectSchema.optionalKey(agentAgentAnswerSchema),
   }),
   EffectSchema.Struct({
@@ -675,7 +690,7 @@ export type TasksFileAnswer = typeof tasksFileAnswerSchema.Type;
  * the repository where no plan names it, and the folder's path from the root.
  */
 export const tasksTreeParamsSchema = EffectSchema.Union([
-  EffectSchema.Struct({ planId: EffectSchema.NonEmptyString, ...taskTreeRequestSchema.fields }),
+  EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString, ...taskTreeRequestSchema.fields }),
   EffectSchema.Struct({ ...repositoryPlaceFields, ...taskTreeRequestSchema.fields }),
 ]);
 
@@ -690,7 +705,7 @@ export type TasksTreeAnswer = typeof tasksTreeAnswerSchema.Type;
 
 /** The skills a developer may choose, as the window asks the host for them: the plan they are chosen on, or the workspace and the repository where no plan names it, or the workspace alone for an agent with no repository, which is offered its installed skills alone. */
 export const tasksSkillsParamsSchema = EffectSchema.Union([
-  EffectSchema.Struct({ planId: EffectSchema.NonEmptyString }),
+  EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString }),
   EffectSchema.Struct({
     workspaceId: repositoryPlaceFields.workspaceId,
     repository: EffectSchema.optionalKey(repositoryPlaceFields.repository),
@@ -775,7 +790,7 @@ export const tasksFindAnswerSchema = EffectSchema.Union([
 ]);
 
 /** The most characters a task search sends the service. */
-export const TASK_SEARCH_QUERY_MAX_CHARS = 200;
+const TASK_SEARCH_QUERY_MAX_CHARS = 200;
 
 /** How long typing pauses before a task search's words are asked of the host, so a word typed out reads once rather than once a letter. */
 export const TASK_SEARCH_PAUSE_MILLIS = 250;
@@ -842,8 +857,8 @@ export const tasksRevisionsAnswerSchema = EffectSchema.Union([
 
 export type TasksRevisionsAnswer = typeof tasksRevisionsAnswerSchema.Type;
 
-/** One task's description, held by a window while it has the task open (`LIVE_READ.DESCRIPTION_DOCUMENT`), and read again at once on its Try again. */
-export const taskDocumentFollowSchema = EffectSchema.Struct({
+/** One task's description, held by a window while it has the task open (`LIVE_READ.HELD_TASK`), and read again at once on its Try again. */
+export const heldTaskFollowSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
 });
 
@@ -866,7 +881,7 @@ export type TasksRevisionAnswer = typeof tasksRevisionAnswerSchema.Type;
 
 /** One attachment of a description, as the window drawing it names it: the plan, and the id its text or a comment's file names. */
 export const tasksPictureParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   attachmentId: EffectSchema.NonEmptyString,
 });
 
@@ -892,7 +907,7 @@ export type TasksPictureAnswer = typeof tasksPictureAnswerSchema.Type;
 
 /** A picture kept on a description, as the editor that took it asks: the plan, and the picture, video, or PDF as a `data:` URL. */
 export const tasksPictureKeepParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   picture: descriptionFileDataUrlSchema,
 });
 
@@ -1115,7 +1130,7 @@ export type TasksCommentsFollow = typeof tasksCommentsFollowSchema.Type;
 
 /** A thread started on a description, as the window asks it. */
 export const tasksCommentStartParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   start: descriptionCommentStartRequestSchema,
 });
 
@@ -1123,7 +1138,7 @@ export type TasksCommentStartParams = typeof tasksCommentStartParamsSchema.Type;
 
 /** One thing done to one thread of a description, as the window asks it. */
 export const tasksCommentActParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   threadId: EffectSchema.NonEmptyString,
   action: descriptionCommentActionRequestSchema,
 });
