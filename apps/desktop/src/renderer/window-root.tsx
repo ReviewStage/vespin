@@ -8,6 +8,7 @@
  */
 
 import { ACT_PORT, type PreloadBridge } from "@repo/host/bridge";
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import { actPort, installActPort, installAppBridge, openPushStream } from "@repo/panel/app-bridge";
 import { installAppPlatform } from "@repo/panel/app-platform";
 import { installShownFailureReporter } from "@repo/panel/failure-report";
@@ -21,10 +22,7 @@ import {
 } from "@repo/panel/panel-spans";
 import { QueryProvider, queryClient } from "@repo/panel/query-client";
 import { installSendTracer } from "@repo/panel/send-traces";
-import {
-  type TaskListCollections,
-  TaskListCollectionsProvider,
-} from "@repo/panel/task-list-collections";
+import { TaskListCollectionsProvider } from "@repo/panel/task-list-collections";
 import { followAppState } from "@repo/panel/use-app-state";
 import { RELOAD_ROOM, ReloadState } from "@repo/ui/error-boundary";
 import type { ReactNode } from "react";

@@ -1,5 +1,10 @@
 import { MemoryPublisher } from "@orpc/publisher/memory";
-import { type AppStateSnapshot, appStateDelivery } from "../app-state.js";
+import {
+  type AppStateSnapshot,
+  appStateDelivery,
+  type TaskListParts,
+  taskListDelivery,
+} from "../app-state.js";
 import {
   type EventPushName,
   PUSH,
@@ -63,12 +68,18 @@ type EventPush = Exclude<PushEvent, { readonly push: typeof PUSH.APP_STATE }>;
 
 type Queued = PushEvent | typeof LATEST_STATE;
 
+/** The document as a window is handed it, and the task list's lists beside it rather than in it. */
+interface Handed {
+  readonly document: AppStateSnapshot;
+  readonly taskList: TaskListParts;
+}
+
 interface WindowStream {
   readonly publisher: MemoryPublisher<{ [PUSHED]: Queued }>;
-  /** The newest document pushed since this stream last sent one. */
-  unsent: AppStateSnapshot | undefined;
-  /** The document this stream last sent what moved in, none before its first. */
-  sent: AppStateSnapshot | undefined;
+  /** The newest document pushed since this stream last sent one, and the task list's lists beside it. */
+  unsent: Handed | undefined;
+  /** The document this stream last sent what moved in, and the task list's lists beside it; none before its first. */
+  sent: Handed | undefined;
   /** Whether a marker is in the queue, which there is whenever a document is unsent and the window's document is not held. */
   marked: boolean;
   /** Whether the window's document is held, so a marker read now leaves the unsent document for the release. */
@@ -93,7 +104,9 @@ function takeUnsent(stream: WindowStream): PushEvent | undefined {
   stream.unsent = undefined;
 
   if (latest === undefined) return undefined;
-  const delivery = appStateDelivery(stream.sent, latest);
+  const { document, taskList } = latest;
+  const rows = taskListDelivery(stream.sent?.taskList, taskList, document.version);
+  const delivery = appStateDelivery(stream.sent?.document, document, rows);
   stream.sent = latest;
 
   return delivery === undefined ? undefined : { push: PUSH.APP_STATE, payload: delivery };
@@ -111,7 +124,7 @@ function offerEvent(stream: WindowStream, event: EventPush): void {
 }
 
 /** One document queued on one stream, in its unsent one's place, queued only while the window's document is not held. */
-function offerDocument(stream: WindowStream, document: AppStateSnapshot): void {
+function offerDocument(stream: WindowStream, document: Handed): void {
   stream.unsent = document;
 
   if (!stream.held) mark(stream);
@@ -149,12 +162,12 @@ export class WindowPushes<Sender = unknown> {
    * window's document is; each stream sends what moved in it. Whether any
    * stood to hear it.
    */
-  pushState(sender: Sender, document: AppStateSnapshot): boolean {
+  pushState(sender: Sender, document: AppStateSnapshot, taskList: TaskListParts): boolean {
     const streams = this.#windows.get(sender);
 
     if (streams === undefined) return false;
 
-    for (const stream of streams) offerDocument(stream, document);
+    for (const stream of streams) offerDocument(stream, { document, taskList });
 
     return true;
   }

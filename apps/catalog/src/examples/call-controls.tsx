@@ -1,5 +1,5 @@
 /**
- * call-controls.tsx -- Talk at rest and with no OpenAI API key; each mute round and square, off and on, and ringed as its voice speaks, Stop, and the one red End call; a box's call status connecting, live, muted, and ending; a call bar at a card's width and at its narrowest, connecting, idle, while the agent thinks and works, and muted; and the call card at the sidebar's foot, narrow, and in the floating window, its agent's chip over its task.
+ * call-controls.tsx -- Talk at rest and with no OpenAI API key; each mute round and square, off and on, and ringed as its voice speaks, and the one red End call; a call bar at a card's width and at its narrowest, connecting, idle, while the agent thinks and works, and muted; and the call card at the sidebar's foot, narrow, and in the floating window, its agent's chip over its task.
  */
 
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -11,12 +11,10 @@ import {
   type ButtonCorners,
   CALL_CARD_SURFACE,
   CALL_DEVICE,
-  CALL_STAGE,
   CallBar,
   CallCard,
   type CallDevice,
   type CallLevels,
-  CallLive,
   CallMute,
   type CallStatus,
   EndCallButton,
@@ -24,17 +22,12 @@ import {
   HarnessMark,
   Inline,
   Stack,
-  StopAgentButton,
   TalkButton,
   WorkingMark,
 } from "@repo/ui";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
-
-/** When the catalog's call started, and the moment its count stands still at: 4m 12s in. */
-const CALL_STARTED_AT = Date.UTC(2026, 9, 24, 15, 0, 0);
-const CALL_NOW = CALL_STARTED_AT + 252_000;
 
 /** The task the catalog's card is about, and the agent it is with. */
 const TASK_NAME = "Voice mode for agents";
@@ -79,7 +72,7 @@ function OwnedBar({
 
   return (
     <div style={{ width }}>
-      <CallBar status={status} {...mutes} onStop={stay} onEnd={stay} />
+      <CallBar status={status} {...mutes} onEnd={stay} />
     </div>
   );
 }
@@ -121,7 +114,6 @@ function OwnedCard({
         {...mutes}
         surface={surface}
         onReturn={stay}
-        onStop={stay}
         onEnd={stay}
       />
     </div>
@@ -169,10 +161,7 @@ function CallControls(): React.JSX.Element {
           <TalkButton keyMissing onPress={stay} />
         </Inline>
       </CatalogSection>
-      <CatalogSection
-        id="call-controls"
-        title="Mutes round and square, both muted, Stop, and End call"
-      >
+      <CatalogSection id="call-controls" title="Mutes round and square, both muted, and End call">
         <Inline gap={GAP.CONTROL}>
           <OwnedMute device={CALL_DEVICE.SPEAKER} corners={BUTTON_CORNERS.ROUND} />
           <OwnedMute device={CALL_DEVICE.MICROPHONE} corners={BUTTON_CORNERS.ROUND} />
@@ -180,7 +169,6 @@ function CallControls(): React.JSX.Element {
           <OwnedMute device={CALL_DEVICE.MICROPHONE} corners={BUTTON_CORNERS.SQUARE} />
           <OwnedMute device={CALL_DEVICE.SPEAKER} corners={BUTTON_CORNERS.ROUND} on />
           <OwnedMute device={CALL_DEVICE.MICROPHONE} corners={BUTTON_CORNERS.ROUND} on />
-          <StopAgentButton onPress={stay} />
           <EndCallButton onPress={stay} />
         </Inline>
       </CatalogSection>
@@ -215,22 +203,6 @@ function CallControls(): React.JSX.Element {
             levels={SPEAKING}
             on
           />
-        </Inline>
-      </CatalogSection>
-      <CatalogSection
-        id="call-live"
-        title="A call's status in a box's foot: connecting, live, muted, and ending"
-      >
-        <Inline gap={GAP.SECTION}>
-          <CallLive stage={CALL_STAGE.CONNECTING} />
-          <CallLive
-            stage={CALL_STAGE.LIVE}
-            startedAt={CALL_STARTED_AT}
-            muted={false}
-            now={CALL_NOW}
-          />
-          <CallLive stage={CALL_STAGE.LIVE} startedAt={CALL_STARTED_AT} muted now={CALL_NOW} />
-          <CallLive stage={CALL_STAGE.ENDING} />
         </Inline>
       </CatalogSection>
       <CatalogSection

@@ -71,11 +71,11 @@ export const githubThroughModuleRule = defineRule({
         context.report({ node, messageId: "apiOutsideModule", data: { name } });
     };
 
-    const checkSource = (node: ESTree.Node, source: string): void => {
+    const checkSource = (node: ESTree.Node, source: string, typeOnly: boolean): void => {
       if (!apiAllowed && source.startsWith(OCTOKIT_SCOPE)) {
         context.report({ node, messageId: "octokitOutsideModule", data: { name: source } });
       }
-      if (!tokenAllowed && isMemberTokensModule(file, source)) {
+      if (!tokenAllowed && !typeOnly && isMemberTokensModule(file, source)) {
         context.report({ node, messageId: "tokenOpenedOutsideModule", data: { name: source } });
       }
     };
@@ -105,7 +105,7 @@ export const githubThroughModuleRule = defineRule({
       },
       ImportDeclaration(node) {
         const source = node.source.value;
-        checkSource(node, source);
+        checkSource(node, source, node.importKind === "type");
         if (tokenAllowed || node.importKind === "type" || !isOpenerModule(source)) return;
         for (const specifier of node.specifiers) {
           // A namespace import reaches the opener too, so it is refused like the name.
@@ -118,14 +118,14 @@ export const githubThroughModuleRule = defineRule({
         }
       },
       ExportAllDeclaration(node) {
-        checkSource(node, node.source.value);
+        checkSource(node, node.source.value, node.exportKind === "type");
         if (!tokenAllowed && node.exportKind !== "type" && isOpenerModule(node.source.value)) {
           reportOpener(node);
         }
       },
       ExportNamedDeclaration(node) {
         if (node.source === null) return;
-        checkSource(node, node.source.value);
+        checkSource(node, node.source.value, node.exportKind === "type");
         if (tokenAllowed || node.exportKind === "type" || !isOpenerModule(node.source.value)) {
           return;
         }
@@ -137,7 +137,7 @@ export const githubThroughModuleRule = defineRule({
       },
       ImportExpression(node) {
         if (node.source.type !== "Literal" || typeof node.source.value !== "string") return;
-        checkSource(node, node.source.value);
+        checkSource(node, node.source.value, false);
         if (!tokenAllowed && isOpenerModule(node.source.value)) reportOpener(node);
       },
     };

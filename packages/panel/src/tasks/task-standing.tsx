@@ -65,16 +65,15 @@ import { TaskRelationAsked, type TaskRelationsDoor } from "./task-relation-menu.
  * window's own menu (`picker-row.tsx`): the status, each of the five with
  * its mark, the priority, each with its bars, and the assignee, each member
  * of the workspace by face and name, the reader first, and No assignee on
- * the dashed unassigned mark; then, while the workspace has Following on,
- * the task's followers (`following-chip.tsx`); then, where the page hands their door, the
+ * the dashed unassigned mark; then the task's followers (`following-chip.tsx`); then, where the page hands their door, the
  * box the add menu hangs from when the task's menus or ⌘K ask for it
  * (`task-relation-menu.tsx`). The task's sub-tasks and relations stand as
- * groups of their own under the byline (`plan-relations.tsx`). A pick
+ * groups of their own under the byline (`overview-relations.tsx`). A pick
  * is handed back for the page to send; without a door to send it, as on an
  * archived task, the chips only say. S, pressed while not typing, opens the
  * status chip's menu, as Linear's S does, and a task row's menu lists what
  * each chip lists (`standing-submenus.tsx`). Where its agents run is said
- * on each agent's row instead (`plan-agents.tsx`).
+ * on each agent's row instead (`overview-agents.tsx`).
  * A task from a service before statuses has no key and no chips.
  */
 

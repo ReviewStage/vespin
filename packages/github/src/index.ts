@@ -9,5 +9,3 @@ export * from "./github-hold-store.js";
 export * from "./github-identity.js";
 
 export * from "./github-member.js";
-
-export { GitHubPriority, type GitHubPriorityValue, PRIORITY } from "./github-rate.js";

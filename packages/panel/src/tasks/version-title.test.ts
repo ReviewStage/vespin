@@ -54,7 +54,7 @@ function Version(): ReactNode {
       current: false,
       read: {
         kind: HISTORY_READ.READY,
-        document: { ...DOCUMENT_TASK.document, body: "## Rollout\n\nShip it." },
+        description: { ...DOCUMENT_TASK.description, body: "## Rollout\n\nShip it." },
         previous: null,
       },
     },

@@ -246,7 +246,7 @@ function VersionContent({
     );
   }
 
-  const diff = versionDiff(read.previous, read.document);
+  const diff = versionDiff(read.previous, read.description);
   // Note that the first version is compared with nothing, so it is never said to have changed nothing.
   const unchanged = read.previous !== null && !diff.changed;
 
@@ -259,7 +259,7 @@ function VersionContent({
         // A version struck a picture as well as wrote one in, so both texts name the pictures it draws.
         <DescriptionPictures
           taskId={task.taskId}
-          text={`${read.document.body}\n${read.previous?.body ?? ""}`}
+          text={`${read.description.body}\n${read.previous?.body ?? ""}`}
         >
           <VersionBody diff={diff} title={title} section={section} task={task} />
         </DescriptionPictures>

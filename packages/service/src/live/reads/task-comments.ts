@@ -5,8 +5,8 @@
  * subject: the threads, their entries with each member's name as their
  * account holds it now, and the files the comments carry without their
  * bytes, under the same account and rule of who may read the task, so a
- * task the account does not reach is no rows. They read no clock, as
- * Realtime requires.
+ * task the account does not reach is no rows. They read no clock, as a
+ * live read must (`live-statement.ts`).
  *
  * It is woken by a thread or an entry written, a file kept on a comment,
  * and the task itself, all of which name the task. Note that a writer's own

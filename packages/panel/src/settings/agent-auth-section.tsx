@@ -76,7 +76,7 @@ import {
   useConfirmDialog,
   useMenu,
 } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
+import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useAsyncAction } from "@repo/ui/use-async-action";
 import { type InlineRename, type RenameWrite, useInlineRename } from "@repo/ui/use-inline-rename";
@@ -234,7 +234,7 @@ const CREDENTIAL_ROW_SKELETON: SettingsRowSkeletonLayout = {
 const WORDS = {
   READ_FAILED: "Your keys could not be read.",
   SIGNED_OUT: SIGNED_OUT_WORDS,
-  ADD: "Add",
+  ADD: "Add plan or key",
   AT_LIMIT: "At its limit",
   BACK_AT: "back at",
   RENAME: "Rename",
@@ -1039,6 +1039,7 @@ function AddPress({
       <Button
         ref={press}
         variant={BUTTON_VARIANT.OUTLINE}
+        icon={<PlusIcon />}
         label={`${WORDS.ADD} to ${harness.name}`}
         {...menu.trigger()}
       >

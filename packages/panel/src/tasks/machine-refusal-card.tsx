@@ -32,8 +32,9 @@ import { workspaceToolsQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { showToast } from "../toast.js";
-import { MachineGlyph } from "./agent-machines.js";
 import { TranscriptAgent } from "./line-cards.js";
+import { OnMachine } from "./transcript-blocks.js";
+import { MachineGlyph } from "./workspace-machines.js";
 
 /**
  * machine-refusal-card.tsx -- why a terminal command or an action on an app reached no machine, said under its row, with each machine that could take it offered as the agent's new default.
@@ -42,7 +43,8 @@ import { TranscriptAgent } from "./line-cards.js";
  * it elsewhere without a word (`machine-routing.ts`), and its answer says
  * why as data (`why`) and names the machines that could take it now
  * (`others`), beside the words the model reads (`machineRefusalOf`). The
- * card says why in its own words, as a failure note does (`Banner`'s
+ * card says why in its own words, the machine named by its chip as the
+ * call's row ends in it (`OnMachine`), as a failure note does (`Banner`'s
  * card, its mark in the danger ink), and offers each other machine as the
  * Default machine menu lists it: its glyph wearing the dot of whether it
  * listens now, a teammate's face, then its name, the line above saying
@@ -76,7 +78,7 @@ function tryAgainLine(machine: CallMachine): string {
   return `Try again on ${machine.name}, now your default machine (id "${machine.id}").`;
 }
 
-/** Why the call reached no machine, in the reader's words: the machine by what every list calls it, and whose it is where that is why. */
+/** Why the call reached no machine, in the reader's words: the machine as its chip, as the call's row ends in it, and whose it is where that is why. */
 function WhyWords({
   why,
   machine,
@@ -84,15 +86,8 @@ function WhyWords({
   why: MachineUnreached;
   machine: CallMachine | undefined;
 }): ReactNode {
-  const thisMac = useThisMac();
   const { members, readerId, former } = useMemberDirectory();
-
-  const name =
-    machine === undefined ? undefined : (
-      <ReplayWords masked>
-        {machineName({ deviceId: machine.id, name: machine.name }, [], thisMac)}
-      </ReplayWords>
-    );
+  const name = machine === undefined ? undefined : <OnMachine machine={machine} />;
 
   switch (why) {
     case MACHINE_UNREACHED.OFFLINE:
@@ -119,12 +114,21 @@ function WhyWords({
       );
     case MACHINE_UNREACHED.COMMANDS_NEVER:
       return <>{name ?? "The machine"} doesn't let agents run terminal commands.</>;
+    case MACHINE_UNREACHED.APPS_OFF:
+      return <>{name ?? "The machine"} doesn't let agents use apps.</>;
     case MACHINE_UNREACHED.DEFAULT_GONE:
       return "This agent's default machine was removed, or its owner no longer lets this task's agents use it.";
     case MACHINE_UNREACHED.UNKNOWN_MACHINE:
       return "The agent named a machine this task's agents can't use.";
     case MACHINE_UNREACHED.NO_MACHINE:
       return "None of the machines this agent may use could take it.";
+    case MACHINE_UNREACHED.OWN_SHELL:
+      return (
+        <>
+          This agent runs on {name ?? "that machine"} itself, so it runs commands there in its own
+          shell.
+        </>
+      );
   }
 }
 
@@ -235,7 +239,9 @@ export function MachineRefusalCard({
             variant={BUTTON_VARIANT.OUTLINE}
             icon={
               <MachineGlyph
-                online={listing?.find((listed) => listed.id === machine.id)?.online ?? true}
+                machine={{
+                  online: listing?.find((listed) => listed.id === machine.id)?.online ?? true,
+                }}
               />
             }
             {...(pressed?.id === machine.id && !pressed.moved

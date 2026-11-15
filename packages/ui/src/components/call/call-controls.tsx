@@ -1,5 +1,5 @@
 /**
- * call-controls.tsx -- a call's controls: Talk, which starts one; its two mutes; Stop, while the agent works; the one red End call; the status a message box's foot shows while a call stands; the composer's row of them; and the bar that lays the mutes and End call out beside the call's status.
+ * call-controls.tsx -- a call's controls: Talk, which starts one; its two mutes; the one red End call; the composer's row of them; and the bar that lays the mutes and End call out beside the call's status.
  *
  * Every place a call is steered from draws these, so a mute and the way to
  * hang up wear the same words, glyphs, and colors wherever they stand. Each
@@ -8,13 +8,14 @@
  * voice are the owner's. End call is the one red control, on the danger fill
  * with the hang-up glyph (`GLYPH.END_CALL`), because ending a call cannot be
  * undone; a mute is quiet while off and lit in neutral gray while on, its
- * glyph struck through, since muting is no failure. Stop, which stops the
- * agent's turn and leaves the call up, is quiet, wearing Stop's glyph as the
- * composer's Stop does. A live call wears the working blue. No mute names a
- * chord, since the app has no chord for one.
+ * glyph struck through, since muting is no failure. No call control stops
+ * the agent's turn: End call hangs up and leaves the agent working, and the
+ * agent's own Stop stops it. No mute names a chord, since the app has no
+ * chord for one.
  */
 
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { CALL_AGENT_WORD, CALL_CONTROL_LABEL, TALK_LABEL } from "@repo/features/voice-call-words";
 import { useEffect, useRef } from "react";
 import { GLYPH } from "../../icons/glyph-registry.js";
 import {
@@ -24,7 +25,6 @@ import {
   SpeakerOffIcon,
   WaveformIcon,
 } from "../../icons/lucide-glyphs.js";
-import { STATUS_TONE } from "../../status-tone.js";
 import { useMotionHeld } from "../../use-motion-held.js";
 import {
   BUTTON_CORNERS,
@@ -33,7 +33,6 @@ import {
   IconButton,
 } from "../button/button.js";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
-import { TIME_LOOK, Time } from "../time/time.js";
 import { Tooltip } from "../tooltip/hint.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 
@@ -42,43 +41,6 @@ const AGENT_WORKING_LABEL = `${PRODUCT_NAME} is working on it`;
 
 /** What the group of a call's controls in a message box is named for a reader, since no line there names the call. */
 const CALL_CONTROLS_LABEL = `Call with ${PRODUCT_NAME}`;
-
-/** The agent's line's words, subject-free like the voice's: what it says with no command pending, and what leads the command it runs. */
-const AGENT_THINKING = "Thinking";
-const AGENT_WORKING = "Working";
-
-/** Talk's name for a reader and its hover: what it does, or, with no OpenAI API key saved, what a call needs first. */
-export const TALK_LABEL = {
-  TALK: "Talk",
-  KEY_MISSING: "Add an OpenAI API key",
-} as const;
-
-/** Each call control's name for a reader and its hover, by whether it is on. */
-export const CALL_CONTROL_LABEL = {
-  MUTE_MICROPHONE: "Mute microphone",
-  UNMUTE_MICROPHONE: "Unmute microphone",
-  MUTE_SPEAKER: "Mute speaker",
-  UNMUTE_SPEAKER: "Unmute speaker",
-  STOP_AGENT: "Stop",
-  END_CALL: "End call",
-} as const;
-
-/** Where a call stands, as its status in a message box's foot says it: coming up, up, or on its way down. */
-export const CALL_STAGE = {
-  CONNECTING: "connecting",
-  LIVE: "live",
-  ENDING: "ending",
-} as const;
-
-export type CallStage = (typeof CALL_STAGE)[keyof typeof CALL_STAGE];
-
-/** What a call's status in a message box's foot says: coming up, live, muted, or on its way down. */
-export const CALL_LIVE_WORD = {
-  CONNECTING: "Connecting…",
-  LIVE: "On call",
-  MUTED: "Muted",
-  ENDING: "Ending…",
-} as const;
 
 /** What a mute silences: the caller's microphone, or the voice on this device alone. */
 export const CALL_DEVICE = {
@@ -244,25 +206,6 @@ export function CallMute({
   );
 }
 
-/**
- * Stop: stops the agent's turn, the call staying up; quiet and round,
- * wearing Stop's glyph. Only the call bar draws it, since an agent's
- * composer has its own Stop in Send's place.
- */
-export function StopAgentButton({ onPress }: { onPress: () => void }): React.JSX.Element {
-  return (
-    <Tooltip label={CALL_CONTROL_LABEL.STOP_AGENT}>
-      <IconButton
-        variant={BUTTON_VARIANT.QUIET}
-        corners={BUTTON_CORNERS.ROUND}
-        icon={<GLYPH.STOP />}
-        label={CALL_CONTROL_LABEL.STOP_AGENT}
-        onClick={onPress}
-      />
-    </Tooltip>
-  );
-}
-
 /** End call: the one red control, round, wearing the hang-up glyph, wherever a call is steered from. */
 export function EndCallButton({ onPress }: { onPress: () => void }): React.JSX.Element {
   return (
@@ -278,119 +221,19 @@ export function EndCallButton({ onPress }: { onPress: () => void }): React.JSX.E
   );
 }
 
-/** What a call's status is drawn from: a call coming up or going down, which has no count yet or any more, or one that is up. */
-export type CallLiveProps =
-  | { stage: typeof CALL_STAGE.CONNECTING | typeof CALL_STAGE.ENDING }
-  | {
-      stage: typeof CALL_STAGE.LIVE;
-      /** Epoch milliseconds the call started, which its count runs from. */
-      startedAt: number;
-      /** Whether the call's microphone is muted. */
-      muted: boolean;
-      /** The moment the count stands still at; none counts each second. */
-      now?: number | undefined;
-    };
-
-/**
- * A call's status in a message box's foot, on one line in the caption's
- * type. In a narrow box's foot it gives way before the call's controls or
- * the send do: first a live call's word (`liveWordClass`), the mark and the
- * count saying the call is up, while "Connecting…" and "Ending…", which
- * have no count to say it and are narrower for it, keep theirs; and then the
- * whole, where the box folds its own presses into its ⋯, the mutes' struck
- * glyphs and End call still saying a call stands (`ComposerFoot`'s
- * container). Note that each width is off-scale: 496px, where the foot's
- * live word stops fitting, and 376px, where its live mark does.
- */
-const LIVE =
-  "ui-call-live flex flex-none items-center gap-ui-6 text-caption whitespace-nowrap text-muted-foreground @max-[376px]/ui-composer-foot:hidden";
-
-/** The word, in the text's ink while live, and quiet while muted, never red, or while the call comes up or goes down. */
-function liveWordClass(props: CallLiveProps): string {
-  if (props.stage !== CALL_STAGE.LIVE) return "ui-call-live-word text-muted-foreground";
-  const ink = props.muted ? "text-muted-foreground" : "text-foreground";
-
-  return `ui-call-live-word ${ink} @max-[496px]/ui-composer-foot:hidden`;
-}
-
-/** The mark a call's status leads with: the live tone while up, the struck microphone while muted, and the quiet tone either side of it. */
-function CallLiveMark({ props }: { props: CallLiveProps }): React.JSX.Element {
-  if (props.stage === CALL_STAGE.LIVE && props.muted) {
-    return (
-      <span className="ui-call-live-muted flex flex-none [&>svg]:size-icon-12" aria-hidden="true">
-        <MicrophoneOffIcon />
-      </span>
-    );
-  }
-
-  const tone = props.stage === CALL_STAGE.LIVE ? STATUS_TONE.WORKING : STATUS_TONE.NEUTRAL;
-
-  return (
-    <span
-      className="ui-call-live-mark size-ui-6 flex-none rounded-ui-full bg-tone-ink"
-      data-tone={tone}
-      aria-hidden="true"
-    />
-  );
-}
-
-/** The word a call's status says, by its stage and, while it is up, whether it is muted. */
-function callLiveWord(props: CallLiveProps): string {
-  if (props.stage !== CALL_STAGE.LIVE) {
-    return props.stage === CALL_STAGE.CONNECTING
-      ? CALL_LIVE_WORD.CONNECTING
-      : CALL_LIVE_WORD.ENDING;
-  }
-
-  return props.muted ? CALL_LIVE_WORD.MUTED : CALL_LIVE_WORD.LIVE;
-}
-
-/**
- * A call's status where a message box steers it. While the call is up it
- * is a live mark and "On call", or while the microphone is muted the
- * struck microphone and "Muted" in the quiet ink, since muting is no
- * failure and red is for danger alone, and how long the call has run,
- * counted each second. While it comes up or goes down it is the quiet
- * mark and "Connecting…" or "Ending…", with no count, since no call runs
- * yet or any more. Given a `now` the count stands still at it.
- */
-export function CallLive(props: CallLiveProps): React.JSX.Element {
-  return (
-    <span
-      className={LIVE}
-      data-stage={props.stage}
-      data-muted={String(props.stage === CALL_STAGE.LIVE && props.muted)}
-    >
-      <CallLiveMark props={props} />
-      <span className={liveWordClass(props)}>{callLiveWord(props)}</span>
-      {props.stage === CALL_STAGE.LIVE ? (
-        <Time
-          at={props.startedAt}
-          look={TIME_LOOK.DURATION}
-          now={props.now}
-          className="ui-call-live-time"
-        />
-      ) : null}
-    </span>
-  );
-}
-
 /**
  * The call's place in an agent's composer row, beside Send, while a call
- * into the agent stands: its status where `live` is given, then the
- * speaker and the microphone, square, each struck through and lit while
+ * into the agent stands, with no status beside it, so the row stays
+ * uncrowded: the speaker and the microphone, square, each struck through and lit while
  * muted, and End call apart from them on its red disc, so muting never
  * hangs up.
  */
 export function CallComposerControls({
-  live,
   microphone,
   speaker,
   levels,
   onEnd,
 }: {
-  /** The call's status; none draws the three presses alone, as an agent's composer does, which keeps its row uncrowded. */
-  live?: CallLiveProps | undefined;
   microphone: CallMuteState;
   speaker: CallMuteState;
   /** The call's levels, which ring the mutes as each voice speaks; none draws them still. */
@@ -402,7 +245,6 @@ export function CallComposerControls({
       className="ui-call-composer-controls m-0 flex min-w-0 flex-none items-center gap-tight-gap border-0 p-0"
       aria-label={CALL_CONTROLS_LABEL}
     >
-      {live === undefined ? null : <CallLive {...live} />}
       <CallMute
         device={CALL_DEVICE.SPEAKER}
         corners={BUTTON_CORNERS.SQUARE}
@@ -492,10 +334,10 @@ function CallStatusLine({
         title={titled ? agent.action : undefined}
       >
         {agent.action === undefined ? (
-          AGENT_THINKING
+          CALL_AGENT_WORD.THINKING
         ) : (
           <>
-            {AGENT_WORKING} · <span className={AGENT_ACTION}>{agent.action}</span>
+            {CALL_AGENT_WORD.WORKING} · <span className={AGENT_ACTION}>{agent.action}</span>
           </>
         )}
       </Text>
@@ -506,8 +348,8 @@ function CallStatusLine({
 
 /**
  * The strip of a call's controls, laid out the way a composer's own are:
- * the call's line at the left, and at the right Stop while the agent works,
- * then the speaker and microphone mutes, round, each struck through and lit
+ * the call's line at the left, and at the right the speaker and
+ * microphone mutes, round, each struck through and lit
  * while on, and End call beside them, apart from both so muting never hangs
  * up. A narrow bar stacks its line over its controls (`STATUS`).
  */
@@ -516,7 +358,6 @@ export function CallBar({
   microphone,
   speaker,
   levels,
-  onStop,
   onEnd,
   titled = false,
 }: {
@@ -526,8 +367,6 @@ export function CallBar({
   speaker: CallMuteState;
   /** The call's levels, which ring the mutes as each voice speaks; none draws them still. */
   levels?: CallLevels | undefined;
-  /** Stops the agent's turn; drawn only while the status says the agent works. */
-  onStop: () => void;
   onEnd: () => void;
   /** Whether the agent's command carries its whole words as the system's hint, where no tooltip fits. */
   titled?: boolean | undefined;
@@ -536,7 +375,6 @@ export function CallBar({
     <footer className={BAR}>
       <CallStatusLine status={status} titled={titled} />
       <div className={CONTROLS}>
-        {status?.agent === undefined ? null : <StopAgentButton onPress={onStop} />}
         <div className={MUTES}>
           <CallMute
             device={CALL_DEVICE.SPEAKER}

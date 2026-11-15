@@ -60,7 +60,7 @@ import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { Predicate } from "effect";
-import { act, createElement, Fragment, useEffect, useMemo, useState } from "react";
+import { act, createElement, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, assert, beforeEach, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
@@ -74,7 +74,7 @@ import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
 import type { InboxChoice } from "../tasks/use-tasks-tab.js";
 import { forgetToasts, ToastHost } from "../toast.js";
-import { appStateQuery, selectTasks } from "../use-app-state.js";
+import { appStateQuery, selectTaskListStanding } from "../use-app-state.js";
 import {
   type AnyAct,
   FAKE_ANSWER,
@@ -121,7 +121,7 @@ export const WHOSE_KEY = "app.inboxWhose";
 
 export const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: TASK_ID,
+  taskId: TASK_ID,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Alerts",
@@ -468,7 +468,7 @@ function answerTask(taskId: string): Pushed | undefined {
 
   if (held === undefined) return { items: world.inboxes.get(taskId) ?? [] };
   void held.then((outcome) =>
-    world.main.push({ kind: INBOX_SCOPE_KIND.PLAN, id: taskId }, pushedOf(outcome.value)),
+    world.main.push({ kind: INBOX_SCOPE_KIND.TASK, id: taskId }, pushedOf(outcome.value)),
   );
 
   return undefined;
@@ -485,7 +485,7 @@ function drawnByHost(drawn: (item: InboxItem) => InboxItem | undefined): void {
     if (!items.some((item) => drawn(item) !== undefined)) continue;
     const next = items.map((item) => drawn(item) ?? item);
     world.inboxes.set(id, next);
-    const scope = { kind: INBOX_SCOPE_KIND.PLAN, id };
+    const scope = { kind: INBOX_SCOPE_KIND.TASK, id };
 
     if (world.main.isHeld(scope)) world.main.push(scope, { items: next });
   }
@@ -519,7 +519,7 @@ function feedNow(): AppHostRead<AppInboxItems> {
     [...world.inboxes].filter(([id, items]) => items.length > 0 && !world.feedLeavesOut.has(id)),
   );
 
-  return { rows: { [INBOX_SCOPE_KIND.PLAN]: holding } };
+  return { rows: { [INBOX_SCOPE_KIND.TASK]: holding } };
 }
 
 /** The account's feed delivered to the window as it now stands, as main delivers a move of it. */
@@ -794,14 +794,6 @@ export function mount({
 
     // Note that the agents on a task are laid on the document too, over whatever else it holds of the list, as the host lays the list it follows, which an item's agent is read from (`useTaskAgent`).
     const onTasks = world.agentListHeld ? undefined : liveAgents;
-    // Note that the list is laid only once the window read its own document, since the test's Query client may still hold an earlier test's.
-    const held = useQuery({ ...appStateQuery, select: selectTasks });
-    const heldList = held.isFetchedAfterMount ? held.data : undefined;
-    useEffect(() => {
-      if (heldList === undefined || heldList.taskAgents === onTasks) return;
-      const { taskAgents: _held, ...rest } = heldList;
-      reads.deliverTasks(onTasks === undefined ? rest : { ...rest, taskAgents: onTasks });
-    }, [heldList, onTasks]);
     // Note that the tasks stand in the workspace listed, where one is, as the window lists that workspace's tasks, and its Inbox their items alone.
     const { listedWorkspace } = world;
 
@@ -812,6 +804,26 @@ export function mount({
           : listed.map((task) => ({ ...task, workspaceId: listedWorkspace.id })),
       [listed, listedWorkspace],
     );
+
+    // Note that the list is laid only once the window read its own document, since the test's Query client may still hold an earlier test's.
+    const held = useQuery({ ...appStateQuery, select: selectTaskListStanding });
+    const heldList = held.isFetchedAfterMount ? held.data : undefined;
+
+    // The tasks and agents last laid on the document, which the window's task-list collections are fed from, as the host lays the list it follows.
+    const laid = useRef<{ tasks: readonly TaskSummary[]; agents: typeof onTasks } | undefined>(
+      undefined,
+    );
+
+    useEffect(() => {
+      if (heldList === undefined) return;
+
+      if (laid.current?.tasks === inListed && laid.current.agents === onTasks) return;
+
+      laid.current = { tasks: inListed, agents: onTasks };
+      const { taskAgents: _held, ...rest } = heldList;
+      const tasks = { ...rest, tasks: inListed };
+      reads.deliverTasks(onTasks === undefined ? tasks : { ...tasks, taskAgents: onTasks });
+    }, [heldList, inListed, onTasks]);
 
     const control = tasksControl({
       ...(readerKnown && { me: READER.userId }),

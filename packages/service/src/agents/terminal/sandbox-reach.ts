@@ -12,7 +12,7 @@ import type { Agent } from "@repo/database/models/agent-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import type { SandboxError } from "@repo/sandbox";
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import {
   HOSTED_REFUSAL,
   type HostedRefusal,
@@ -97,3 +97,28 @@ export const listedShells = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   return yield* sandboxOrUpstream(sandbox.terminals(sessionId));
 });
+
+/**
+ * A shell started in the agent's sandbox, the sandbox resumed first where it
+ * stopped, as the developer coming back to it expects: a Terminal tab or a
+ * run action opened on a sandbox stopped as nothing held it starts it again
+ * and opens into a live shell, by the one resume the sandbox's own Resume
+ * takes (`AgentSandbox`'s `resume`). A sandbox the resume leaves starting,
+ * as one made again on an image still being prepared, is refused as that.
+ */
+export const startedWaking = <A, R>(
+  sessionId: string,
+  start: Effect.Effect<Result.Result<A, ShellRefusal>, SandboxError, R>,
+) =>
+  Effect.gen(function* () {
+    const first = yield* start;
+
+    if (Result.isSuccess(first) || first.failure.kind !== SHELL_REFUSAL.NOT_RUNNING) return first;
+    const resumed = yield* (yield* AgentSandbox).resume(sessionId);
+
+    if (resumed !== SANDBOX_STATE.RUNNING) {
+      return Result.fail<ShellRefusal>({ kind: SHELL_REFUSAL.NOT_RUNNING, sandbox: resumed });
+    }
+
+    return yield* start;
+  });

@@ -1,5 +1,5 @@
 import { type ReactNode, type Ref, useState } from "react";
-import { AspectRatio } from "../../shadcn/aspect-ratio.js";
+import { CARD_CORNER, CARD_ELEMENT, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
 import { EDGE_CLIP_ELEMENT, EDGE_CLIP_LAYOUT, EdgeClip } from "../edge-clip/edge-clip.js";
 import { useBlobUrl } from "../video-player/video-player.js";
 
@@ -23,8 +23,7 @@ import { useBlobUrl } from "../video-player/video-player.js";
  * cut to its shape, or, `contain`ed, stands whole on the ground and never
  * past its own size, so a tall phone screenshot or a wide banner shown as
  * evidence keeps every edge, and a small icon stays sharp. It takes no class or style: its outer layout
- * is its container's. It is drawn by shadcn/ui's aspect ratio
- * (`../../shadcn/aspect-ratio.tsx`) in Tailwind utilities over the theme.
+ * is its container's.
  */
 
 /** How big a thumb is: as wide as the card it stands in, or a row's small tile. */
@@ -49,10 +48,7 @@ const FIT_CLASS: Record<PageThumbFit, string> = {
   [PAGE_THUMB_FIT.CONTAIN]: "object-scale-down",
 };
 
-/** A thumb's shape: a window's, 16 by 10. */
-const THUMB_RATIO = 16 / 10;
-
-/** Each size's box: a block as wide as its card, or a row's tile; either's glyph stands at its middle (`EdgeClip`'s `FILL`). */
+/** Each size's box (every thumb is a window's shape, 16 by 10): a block as wide as its card, or a row's tile; either's glyph stands at its middle (`EdgeClip`'s `FILL`). */
 const SIZE_CLASS: Record<PageThumbSize, string> = {
   [PAGE_THUMB_SIZE.CARD]: "block",
   [PAGE_THUMB_SIZE.ROW]: "inline-block h-page-thumb-row",
@@ -119,11 +115,13 @@ export function PageThumb({
   const [loadedFrom, setLoadedFrom] = useState<string | undefined>(undefined);
 
   return (
-    <AspectRatio
-      as="span"
-      ratio={THUMB_RATIO}
+    <Card
+      as={CARD_ELEMENT.SPAN}
+      look={CARD_LOOK.TINT}
+      corner={CARD_CORNER.CONTROL}
+      padding={CARD_PADDING.FLUSH}
       className={[
-        "ui-page-thumb group/page-thumb flex-none rounded-control border border-border bg-muted text-muted-foreground",
+        "ui-page-thumb group/page-thumb relative aspect-[16/10] flex-none text-muted-foreground",
         SIZE_CLASS[size],
         glyph === undefined ? "" : "[&_svg]:size-control-icon",
       ]
@@ -161,6 +159,6 @@ export function PageThumb({
         )}
         {glyph}
       </EdgeClip>
-    </AspectRatio>
+    </Card>
   );
 }

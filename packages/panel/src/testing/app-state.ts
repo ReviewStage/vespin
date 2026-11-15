@@ -226,6 +226,8 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.REVIEW_OPTIONS]: NO_KEYS_HELD,
     [LIVE_READ.DEVICE_PRESENCE]: NO_KEYS_HELD,
     [LIVE_READ.HOSTS]: NO_KEYS_HELD,
+    [LIVE_READ.MACHINES]: NO_KEYS_HELD,
+    [LIVE_READ.MACHINE_ASKS]: NO_KEYS_HELD,
     [LIVE_READ.WORKSPACE_INVITATIONS]: NO_KEYS_HELD,
     [LIVE_READ.THIS_MAC_HOST]: NO_KEYS_HELD,
     [LIVE_READ.TRANSCRIPT]: NO_TRANSCRIPTS,
@@ -241,7 +243,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.AUTOMATION_RUNS]: NO_KEYS_HELD,
     [LIVE_READ.DESCRIPTION_COMMENTS]: NO_DESCRIPTION_COMMENTS,
     [LIVE_READ.HISTORY]: NO_KEYS_HELD,
-    [LIVE_READ.DESCRIPTION_DOCUMENT]: NO_KEYS_HELD,
+    [LIVE_READ.HELD_TASK]: NO_KEYS_HELD,
     machineCommands: { asks: [] },
     notifications: { status: NOTIFICATIONS_STATUS.UNKNOWN },
     sessionReplay: { permitted: false, halted: false },
@@ -275,7 +277,7 @@ function inCaseWorkspaces(
     tasks,
     ...(patch[LIVE_READ.INBOX_ITEMS] === undefined
       ? {
-          [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: {} } },
+          [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: {} } },
         }
       : undefined),
     ...(patch[LIVE_READ.AUTOMATIONS] === undefined
@@ -329,6 +331,39 @@ export function writeListedTasks(listed: Partial<TasksView>): void {
         stateWith({}, {}),
     ),
   );
+}
+
+/**
+ * Patches the task list of main's document as `writeListedTasks` does, and
+ * has the window's follow hear it, so the task list's collections stand on
+ * its rows as the window's do. Answers how to hand the next list, patched
+ * over the one held as main's push delivers it, inside the caller's `act`.
+ */
+export function followListedTasks(listed: Partial<TasksView>): (next: Partial<TasksView>) => void {
+  writeListedTasks(listed);
+  const listeners = new Set<(delivery: AppStateDelivery) => void>();
+  fakeAppBridge({
+    ...fakeAppBridgeCalls(),
+    onAppState: (heard) => {
+      listeners.add(heard);
+
+      return () => listeners.delete(heard);
+    },
+  });
+
+  return (next) => {
+    const held =
+      testQueryClientNow().getQueryData<AppStateSnapshot>(appStateQuery.queryKey) ??
+      stateWith({}, {});
+
+    const delivered = deliveryOf({
+      ...held,
+      version: held.version + 1,
+      tasks: { ...held.tasks, ...next },
+    });
+
+    for (const heard of listeners) heard(delivered);
+  };
 }
 
 /** Main's document for the account signed in as given, no experiment on. */

@@ -28,6 +28,7 @@
 
 import type { LinkPlatform } from "@repo/features/link-open";
 import type { DuplicateGatewayMethod, DuplicateHostAct, HostTag } from "@repo/host/effect";
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import { installActPort, installAppBridge } from "@repo/panel/app-bridge";
 import { installAppPlatform } from "@repo/panel/app-platform";
 import { installShownFailureReporter } from "@repo/panel/failure-report";
@@ -35,10 +36,7 @@ import { LiveReadSubscription } from "@repo/panel/live-reads";
 import { createPanelRouter, PanelRouterProvider } from "@repo/panel/panel-router";
 import { QueryProvider, queryClient } from "@repo/panel/query-client";
 import { installSendTracer } from "@repo/panel/send-traces";
-import {
-  type TaskListCollections,
-  TaskListCollectionsProvider,
-} from "@repo/panel/task-list-collections";
+import { TaskListCollectionsProvider } from "@repo/panel/task-list-collections";
 import { followAppState } from "@repo/panel/use-app-state";
 import { ErrorBoundary, RELOAD_ROOM, ReloadState } from "@repo/ui/error-boundary";
 import { createBrowserHistory } from "@tanstack/react-router";

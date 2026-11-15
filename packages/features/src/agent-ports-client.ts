@@ -6,17 +6,11 @@
  * failed (`hostedCall`); the host reads any failure as no new look.
  */
 
-import type { CallCredential } from "./account-call.js";
+import type { HostedServiceTarget } from "./account-call.js";
+import type { AgentPortsForwarding } from "./contract/agent-ports.js";
 import { hostedCall } from "./hosted-call.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
 import { SANDBOX_TUNNEL, TUNNEL_KIND } from "./sandbox-tunnel-wire.js";
-
-export interface HostedAgentPortsClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-}
 
 /** The tunnel address one forwarded port's socket opens on, at the service's socket origin. */
 export function portForwardAddress(
@@ -35,16 +29,19 @@ export function portForwardAddress(
 export class HostedAgentPortsClient {
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedAgentPortsClientOptions) {
+  constructor(options: HostedServiceTarget) {
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
       credential: options.credential,
     });
   }
 
-  /** The ports listened on in the agent's sandbox, and whether it runs; a stopped sandbox is never woken by it. */
-  list(agentId: string) {
-    return hostedCall(this.#hosted.agentPorts.list, { id: agentId });
+  /** The ports listened on in the agent's sandbox, and whether it runs; a stopped sandbox is never woken by it. A read that says the Mac `forwarder` names forwards them holds the running sandbox up, and one that says it stopped lets go of that hold. */
+  list(
+    agentId: string,
+    forward?: { readonly forwarding: AgentPortsForwarding; readonly forwarder: string },
+  ) {
+    return hostedCall(this.#hosted.agentPorts.list, { id: agentId, ...forward });
   }
 
   /** The port shared by a public link, replacing any shared before, answering the link; a sandbox not running is refused as stopped and never woken. */

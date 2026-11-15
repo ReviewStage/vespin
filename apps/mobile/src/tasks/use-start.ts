@@ -58,14 +58,13 @@ import {
   selectAgentDefault,
   selectModels,
   selectRepositoryList,
-  selectTasks,
 } from "@repo/host/app-state-reads";
 import type { PickOption } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import { useHostActs, useListedTasks } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import type { HeldPicture } from "../use-attached-pictures.js";
 
@@ -291,9 +290,9 @@ export function useRepositoryPick(
   drafted?: string | undefined,
 ): RepositoryPick {
   const { listed, read, failed, retry } = useWorkspaceRepositories(workspace?.id);
-  const { data: tasks } = useQuery({ ...appStateQuery, select: selectTasks });
+  const tasks = useListedTasks();
   const [picked, setPicked] = useState<string | undefined>(drafted);
-  const recent = useMemo(() => recentRepositories(tasks?.tasks ?? []), [tasks]);
+  const recent = useMemo(() => recentRepositories(tasks), [tasks]);
 
   const reached = (repository: string) =>
     workspace !== undefined &&
@@ -525,13 +524,13 @@ export function useStartTask(
     if ("failure" in answer) return { refused: startFailureNote(answer.failure) };
     const started = answer.agentStart;
 
-    if (started === undefined) return { taskId: answer.planId };
+    if (started === undefined) return { taskId: answer.taskId };
 
     if ("failure" in started) {
-      return { taskId: answer.planId, note: startRefusalWords(started) };
+      return { taskId: answer.taskId, note: startRefusalWords(started) };
     }
 
-    return { agentId: started.agent.id, taskId: answer.planId };
+    return { agentId: started.agent.id, taskId: answer.taskId };
   };
 }
 
@@ -558,6 +557,6 @@ export function useFileTask(
 
     if ("failure" in answer) return { refused: startFailureNote(answer.failure) };
 
-    return { taskId: answer.planId };
+    return { taskId: answer.taskId };
   };
 }

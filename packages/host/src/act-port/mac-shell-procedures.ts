@@ -223,8 +223,8 @@ function heard(held: Held, message: WireBoundaryInput): void {
     return;
   }
 
-  // Note that a shell that exited takes nothing more, because its terminal is closed; one on this Mac holds nothing a shown tab need keep.
-  if (held.exitCode !== undefined || inbound.type === TERMINAL_PORT_MESSAGE.SHOWN) return;
+  // Note that a shell that exited takes nothing more, because its terminal is closed.
+  if (held.exitCode !== undefined) return;
 
   if (inbound.type === TERMINAL_PORT_MESSAGE.INPUT) {
     // Note that a run action's tab takes nothing typed, because nothing typed belongs in its process.

@@ -26,8 +26,8 @@ import {
   type Task,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
-import { IDLE_TASKS_VIEW, type TasksTreeAnswer } from "@repo/features/tasks-view";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import type { TasksTreeAnswer } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppHostRead, AppInboxItems } from "@repo/host/app-state";
@@ -72,11 +72,12 @@ import {
   withExperiments,
   writeExperiments,
 } from "../testing/app-state.js";
-import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { keyPressed, reportEventTiming } from "../testing/event-timing.js";
 import { restOn } from "../testing/hint-rest.js";
+import { overEveryTask, type StandingTaskList, standingTaskList } from "../testing/history-rows.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { openTaskMenu } from "../testing/task-menu.js";
 import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
@@ -99,12 +100,16 @@ interface Sent {
 
 const roots: Root[] = [];
 
+/** The task list's collections a case stands rows on, the window's own where it stands none. */
+let listed: StandingTaskList | undefined;
+
 /** The router of the window each palette opened by `openPalette` stands under, the latest last. */
 const windows: TestWindowRouter[] = [];
 
 beforeEach(installScrollIntoView);
 
 afterEach(() => {
+  listed = undefined;
   act(() => {
     for (const root of roots.splice(0)) root.unmount();
   });
@@ -117,11 +122,14 @@ type WindowPaletteProps = Omit<Parameters<typeof CommandPalette>[0], "links"> & 
   place?: RoutedPlace | undefined;
 };
 
-/** The palette offering the links at hand through the window's own Copy link. */
+/** The palette offering the links at hand through the window's own Copy link, over task collections holding every task its tab holds, or what a case stood on them (`listed`). */
 function LinkedPalette({ place, ...props }: WindowPaletteProps): React.JSX.Element {
   const links = useCopyLink(props.tasks, undefined, true, SHELL_ROOM.WIDE, undefined, place);
 
-  return createElement(CommandPalette, { ...props, links });
+  const palette = createElement(CommandPalette, { ...props, links });
+
+  // The window's task collections hold every task the tab holds, as its root feeds them beside the tab, or what a case stood on them.
+  return listed === undefined ? overEveryTask(props.tasks, palette) : listed.provide(palette);
 }
 
 /** The palette as the window draws it, under a window's router standing at `at`, `/app` unless said, whose place its links read, an Inbox item there standing where `held` says. */
@@ -189,9 +197,9 @@ function openPalette(
   // The repository's files are read whole through the act port, by the plan they stand on.
   fakeActPort({
     ...fakeActPortCalls(),
-    [ACT_KIND.TASKS_TREE]: (payload) => readFiles("planId" in payload ? payload.planId : ""),
+    [ACT_KIND.TASKS_TREE]: (payload) => readFiles("taskId" in payload ? payload.taskId : ""),
   });
-  act(() => root.render(withQueryClient(palette)));
+  act(() => root.render(withQueryClient(listed === undefined ? palette : listed.provide(palette))));
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.COMMAND_PALETTE), "⌘K is offered");
   });
@@ -216,7 +224,7 @@ function paletteOverTask(): (
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
 
   const tasks = tasksControl({
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     activeTaskId: DOCUMENT_TASK.id,
   });
 
@@ -367,9 +375,9 @@ const SETTINGS_PAGES = [
   "Vespin MCP & CLI",
   "Appearance",
   "This Mac",
-  "Experimental",
   "About",
   "Keyboard shortcuts",
+  "Experimental",
 ];
 
 test("the Settings filter lists every Settings page by its name, ahead of the settings", () => {
@@ -810,7 +818,7 @@ test("an agent's row hangs its tab's card beside it while the pointer rests on i
         agents: [
           {
             id: "agent-7",
-            planId: "plan-1",
+            taskId: "plan-1",
             model: "anthropic/claude-opus-5.5",
             effort: "high",
             title: "Invoice export",
@@ -849,7 +857,7 @@ test("an archived agent of the open task is still found, after the standing ones
 
   const agent = (id: string, title: string) => ({
     id,
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title,
@@ -896,8 +904,8 @@ test("an archived agent of the open task is still found, after the standing ones
 test("an agent's card in ⌘K names the automation that started it, the listed workspace's automations read once around the window", async () => {
   const automation = {
     id: "3f0e6f5c-7d1a-4f6e-9a55-000000000001",
-    planId: null,
-    planName: null,
+    taskId: null,
+    taskName: null,
     workspaceId: "workspace-acme",
     name: "Morning Sentry triage",
     enabled: true,
@@ -940,7 +948,7 @@ test("an agent's card in ⌘K names the automation that started it, the listed w
       agents: [
         {
           id: "agent-7",
-          planId: "plan-1",
+          taskId: "plan-1",
           model: "anthropic/claude-opus-5.5",
           effort: "high",
           title: "Invoice export",
@@ -1027,7 +1035,7 @@ test("an agent's card in ⌘K names the automation that started it, the listed w
 test("an agent's Pull request row is named as its tab is, by its pull request's number and title, with the agent beside it, and is found by that number, that title, and the agent's name", () => {
   const agent = {
     id: "agent-7",
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Invoice export",
@@ -1082,7 +1090,7 @@ test("an agent's Pull request row is named as its tab is, by its pull request's 
 test("while an agent's page holds the side panel, ⌘K offers none of the open plan's panel tabs, workers, Changes, or files, which would open beside the agent", () => {
   const agent = {
     id: "agent-7",
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Invoice export",
@@ -1106,7 +1114,7 @@ test("while an agent's page holds the side panel, ⌘K offers none of the open p
           repository: "acme/relay",
         },
       ],
-      region: { kind: DOCUMENT_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
+      region: { kind: TASK_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
       agentView: { ...control.agentView, agentId: "agent-page-1" },
       agents: agentsControl({
         agents: [agent],
@@ -1153,7 +1161,7 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
 }> {
   const agent = {
     id: "agent-7",
-    planId: DOCUMENT_TASK.id,
+    taskId: DOCUMENT_TASK.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Invoice export",
@@ -1177,7 +1185,7 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
         repository: "acme/relay",
       },
     ],
-    region: { kind: DOCUMENT_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
+    region: { kind: TASK_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
     sidePanel: { ...base.sidePanel, onOpenFile: (ref) => opened.push(ref.path) },
     agents: agentsControl({
       agents: [agent],
@@ -1378,47 +1386,41 @@ test("a task's row ends as its sidebar row does, who is on it then an agent at w
 
 test("an agent pressed on a task's card in ⌘K over Settings leaves the palette for the tasks and opens the agent's tab, as a row does", () => {
   const shown: [string, string][] = [];
-  // The task's agent, as the list followed live holds it.
-  writeAppState(
-    stateWith(
-      {},
-      {
-        tasks: {
-          ...IDLE_TASKS_VIEW,
-          taskAgents: [
-            listedAgent({
-              id: "agent-7",
-              planId: "plan-1",
-              title: "Invoice export",
-              model: "anthropic/claude-opus-5.5",
-              effort: "high",
-              status: AGENT_STATUS.RUNNING,
-              createdAt: 1,
-              turnId: null,
-            }),
-          ],
-        },
-      },
-    ),
-  );
+
+  const task = {
+    id: "plan-1",
+    workspaceId: "workspace-personal",
+    name: "Billing usage alerts",
+    createdAt: 1,
+    updatedAt: 2,
+    repository: null,
+    agents: {
+      total: 1,
+      working: 1,
+      pullRequestTotal: 0,
+    },
+  };
+
+  // The task and its agent, as the list followed live holds them.
+  listed = standingTaskList({
+    tasks: [task],
+    taskAgents: [
+      listedAgent({
+        id: "agent-7",
+        taskId: "plan-1",
+        title: "Invoice export",
+        model: "anthropic/claude-opus-5.5",
+        effort: "high",
+        status: AGENT_STATUS.RUNNING,
+        createdAt: 1,
+        turnId: null,
+      }),
+    ],
+  });
 
   const sent = openPalette(
     tasksControl({
-      tasks: [
-        {
-          id: "plan-1",
-          workspaceId: "workspace-personal",
-          name: "Billing usage alerts",
-          createdAt: 1,
-          updatedAt: 2,
-          repository: null,
-          agents: {
-            total: 1,
-            working: 1,
-            pullRequestTotal: 0,
-          },
-        },
-      ],
+      tasks: [task],
       onShowAgent: (taskId, agentId) => shown.push([taskId, agentId]),
     }),
     undefined,
@@ -1442,7 +1444,7 @@ test("an agent pressed on a task's card in ⌘K over Settings leaves the palette
   assert.equal(paletteShown(), false, "the palette is put away");
 });
 
-test("Search lists the listed workspace's plans first, then every other workspace's, each naming its workspace by its tile and name and found by it", () => {
+test("Search lists the listed workspace's tasks first, then every other workspace's, each naming its workspace by its tile and name and found by it", () => {
   const personal = {
     id: "workspace-personal",
     name: "Personal",
@@ -1685,14 +1687,45 @@ test("a task whose assignee and creator share a first name says the one the whol
   assert.deepEqual(rows(), ["Audit trail · relay · Charles Ward"]);
 });
 
-test("a task Vespin or a coding agent made says who in its detail and is found by it, but wears who is on it rather than its maker", () => {
-  const dean = { userId: "user-dean", name: "Dean Stratakos" };
-
-  const task = (id: string, origin?: TaskSummary["origin"]) => ({
+test("Search lists the pinned tasks first, the newest pinned first whenever each was started, then the rest", () => {
+  const task = (id: string, createdAt: number, pinnedAt?: number) => ({
     id,
     workspaceId: "workspace-personal",
     name: id,
-    createdAt: 1,
+    createdAt,
+    updatedAt: createdAt,
+    repository: "acme/relay",
+    ...(pinnedAt === undefined ? undefined : { pinnedAt }),
+  });
+
+  // Note that the task pinned last was started first, so the order the list was started in would stand it second.
+  openPalette(
+    tasksControl({
+      tasks: [
+        task("Rate limits", 3),
+        task("Invite emails", 2, 20),
+        task("Audit log export", 1, 30),
+      ],
+    }),
+  );
+  chooseFilter("Tasks");
+
+  assert.deepEqual(rows(), [
+    "Audit log export · relay",
+    "Invite emails · relay",
+    "Rate limits · relay",
+  ]);
+});
+
+test("a task Vespin or a coding agent made says who in its detail and is found by it, but wears who is on it rather than its maker", () => {
+  const dean = { userId: "user-dean", name: "Dean Stratakos" };
+
+  // Note that each is started after the next, as the list the host hands lists them newest started first.
+  const task = (id: string, createdAt: number, origin?: TaskSummary["origin"]) => ({
+    id,
+    workspaceId: "workspace-personal",
+    name: id,
+    createdAt,
     updatedAt: 1,
     repository: "acme/relay",
     ownerId: dean.userId,
@@ -1705,9 +1738,9 @@ test("a task Vespin or a coding agent made says who in its detail and is found b
     tasksControl({
       me: dean.userId,
       tasks: [
-        task("Invite emails", { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" }),
-        task("Audit log export", { actor: DESCRIPTION_ACTOR.NOTETAKER }),
-        task("Rate limits"),
+        task("Invite emails", 3, { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" }),
+        task("Audit log export", 2, { actor: DESCRIPTION_ACTOR.NOTETAKER }),
+        task("Rate limits", 1),
       ],
     }),
   );
@@ -1806,9 +1839,9 @@ test("a task's command wears the same chord in ⌘K as in the open task's Plan t
   const tasks = tasksControl({
     workspaces: [listed],
     workspace: listed,
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: DOCUMENT_TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     sidePanel: { ...tasksControl().sidePanel, open: true, tab: SIDE_PANEL_TAB.DESCRIPTION },
   });
 
@@ -1915,10 +1948,10 @@ const LINKED_AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 
 /** A task drawn in Acme, its agent's tab chosen in the work column and the agent named. */
 const ON_AGENT_TAB: TasksControl = tasksControl({
-  page: TASKS_PAGE.DOCUMENT,
+  page: TASKS_PAGE.TASK,
   activeTaskId: DOCUMENT_TASK.id,
   region: {
-    kind: DOCUMENT_REGION.READY,
+    kind: TASK_REGION.READY,
     task: { ...DOCUMENT_TASK, workspaceId: "workspace-acme" },
   },
   workspaces: [
@@ -1929,7 +1962,7 @@ const ON_AGENT_TAB: TasksControl = tasksControl({
     agents: [
       {
         id: LINKED_AGENT,
-        planId: DOCUMENT_TASK.id,
+        taskId: DOCUMENT_TASK.id,
         model: "anthropic/claude-opus-5.5",
         effort: "high",
         title: "Expire old invites",
@@ -2359,7 +2392,7 @@ function PinnableTask(): React.JSX.Element {
 
   const tasks = tasksControl({
     tasks: [listed],
-    region: { kind: DOCUMENT_REGION.READY, task: listed },
+    region: { kind: TASK_REGION.READY, task: listed },
     activeTaskId: listed.id,
   });
 
@@ -2497,7 +2530,7 @@ async function paletteUnderState(
 test('with a task open, ⌘K\'s "This task" lists its pages and a terminal for each agent, as the side panel\'s "+" offers them, and each opens as the "+" opens it', async () => {
   const agent = {
     id: "agent-7",
-    planId: DOCUMENT_TASK.id,
+    taskId: DOCUMENT_TASK.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Invoice export",
@@ -2521,7 +2554,7 @@ test('with a task open, ⌘K\'s "This task" lists its pages and a terminal for e
         repository: null,
       },
     ],
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     pages: [{ id: "page-1", title: "Invite funnel", version: 1, at: 1 }],
     sidePanel: { ...base.sidePanel, onChoose: (tab) => chosen.push(tab) },
     agents: agentsControl({ agents: [agent], agentIds: [agent.id] }),
@@ -2564,7 +2597,7 @@ test('over an Inbox item of the open task, ⌘K\'s "This task" lists the pages t
         repository: null,
       },
     ],
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     pages: [],
     inboxView: {
       ...base.inboxView,
@@ -2596,7 +2629,7 @@ test("with a task on screen, ⌘K offers its Version history, Cancel task, and C
 
   const tasks = tasksControl({
     tasks: [task],
-    region: { kind: DOCUMENT_REGION.READY, task },
+    region: { kind: TASK_REGION.READY, task },
     activeTaskId: task.id,
     onOpenHistory: (taskId) => ran.push(`history:${taskId}`),
     onChangeRepository: (taskId) => ran.push(`repository:${taskId}`),
@@ -2656,9 +2689,9 @@ function paletteBesideTask(room: ShellRoom): HTMLElement {
   const base = tasksControl();
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: DOCUMENT_TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     sidePanel: {
       ...base.sidePanel,
       open: true,
@@ -2762,7 +2795,7 @@ test("⌘K's \"This task\" offers the task's Inbox while an item waits on it and
         repository: null,
       },
     ],
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
   });
 
   await paletteUnderState(tasks);
@@ -2792,8 +2825,8 @@ test("with no task open, ⌘K draws no This task filter, which would list nothin
 test("⌘K's Automations lists the workspace's automations by name and what fires them, found by their task's name too, and one chosen opens its page", async () => {
   const automation = {
     id: "3f0e6f5c-7d1a-4f6e-9a55-000000000002",
-    planId: "7e4f0a9b-0000-4000-8000-0000000000c3",
-    planName: "Billing usage alerts",
+    taskId: "7e4f0a9b-0000-4000-8000-0000000000c3",
+    taskName: "Billing usage alerts",
     workspaceId: ACME.id,
     name: "Deploy notes",
     enabled: true,
@@ -2901,7 +2934,7 @@ function fedOf(inbox: FedInbox): AppHostRead<AppInboxItems> {
   if ("failure" in inbox) return { failed: true };
 
   return {
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [ROTATION.id]: inbox.items } },
+    rows: { [INBOX_SCOPE_KIND.TASK]: { [ROTATION.id]: inbox.items } },
   };
 }
 

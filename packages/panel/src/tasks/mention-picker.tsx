@@ -1,4 +1,4 @@
-import type { ComputerAppKept } from "@repo/features/agent-parts";
+import { type ComputerApps, computerAppNamed } from "@repo/features/agent-parts";
 import type { NamedServer } from "@repo/features/agent-servers-model";
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
@@ -13,12 +13,14 @@ import {
   readerZone,
   suggestedDates,
 } from "@repo/features/date-mention";
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
+import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { ENTITY_KIND, type EntityKind, entityOfMention } from "@repo/features/entity-kind";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { machineName, THIS_MAC, type ThisMac } from "@repo/features/machine-name";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import {
   encodeMention,
@@ -50,11 +52,12 @@ import {
 import { namesTaskKey, taskKey } from "@repo/features/workspace-key";
 import {
   type Workspace,
+  type WorkspaceMachine,
   type WorkspaceMember,
   workspaceOfSlug,
 } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppInboxItems, AppStateSnapshot } from "@repo/host/app-state";
+import type { AppInboxItems } from "@repo/host/app-state";
 import type { MacApp } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
@@ -87,6 +90,7 @@ import {
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
+import { eq, useLiveQuery } from "@tanstack/react-db";
 import {
   queryOptions,
   skipToken,
@@ -97,8 +101,8 @@ import {
 import { useCreateStore, useSelector } from "@tanstack/react-store";
 import { Duration, Effect, Predicate } from "effect";
 import { UsersIcon } from "lucide-react";
-import { type RefObject, useEffect, useId, useMemo, useState } from "react";
-import { askAct } from "../act.js";
+import { type RefObject, useEffect, useId, useMemo, useRef, useState } from "react";
+import { askAct, tellAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, actorCard, automationActor } from "../actor-ref.js";
 import {
   type ComposerTrigger,
@@ -113,14 +117,16 @@ import { entityMark } from "../entities/entity-mark.js";
 import { unreadShown } from "../failure-report.js";
 import { type IntegrationToolsReads, useIntegrationTools } from "../integration-tools.js";
 import { inboxItemsQuery, inboxItemsRetryMutation } from "../live-reads.js";
+import { useThisMac } from "../machine-name.js";
 import { useWorkspaceDirectory } from "../member-directory.js";
 import { memberRows, YOU_WORD } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { Highlighted } from "../search-field.js";
-import { appStateQuery } from "../use-app-state.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import { appStateQuery, selectMachineCommandDevice, selectWorkspaces } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { type AgentRowPlace, agentMenuRow, useAgentRowPlace } from "./agent-menu-row.js";
-import { useKeptApps } from "./agent-pictures.js";
+import { useComputerApps } from "./agent-pictures.js";
 import { useOnThatMac } from "./computer-permission-note.js";
 import {
   DATE_PICKER_CLOSE,
@@ -143,6 +149,8 @@ import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
 import { TaskKey } from "./task-standing.js";
 import { useKnownNames } from "./use-known-names.js";
+import { useServiceTaskSearch } from "./use-service-task-search.js";
+import { MachineGlyph, MachineOwnerFace, useWorkspaceMachines } from "./workspace-machines.js";
 
 /**
  * mention-picker.tsx -- the list an `@` opens: the workspace's agents, tasks, and people, the description and its sections, and the repository's files and folders, grouped by kind, narrowed as the word is typed, the pick written as its mention.
@@ -216,6 +224,15 @@ import { useKnownNames } from "./use-known-names.js";
  * words go to is handed who they are in the workspace. Nobody is notified
  * of a mention.
  *
+ * Wherever the words stand in a workspace, the list offers its machines
+ * too, its members' Macs and hosts, read while the list stands open
+ * (`workspace-machines.tsx`): the reader's own first as You, then the
+ * task's followers', then everyone else's, each by its name and its
+ * platform's glyph, a teammate's wearing their face. A mention of one names
+ * it by its id, which the agent the words go to is handed to pass as
+ * `run_on_mac`'s and `computer`'s `machine`; it makes no machine reachable
+ * that routing would refuse.
+ *
  * Wherever the words stand in a workspace, the list offers its Inbox
  * threads too once a word is typed, as the account's feed holds them
  * (`../live-reads.ts`), the plan's own first, each by its title and
@@ -276,6 +293,8 @@ const MENTION_GROUP = {
   SKILLS: "Skills",
   /** The apps on the developer's Mac, which an agent uses through `computer`. */
   APPS: "Apps",
+  /** The machines of the workspace's members, which an agent's commands and computer use may be sent to by id. */
+  MACHINES: "Machines",
   SERVERS: MCP_SERVER_LABEL.many,
   FROM: "Browse",
 } as const;
@@ -294,6 +313,7 @@ const MENTION_FROM = {
   SKILLS: "skills",
   DATES: "dates",
   APPS: "apps",
+  MACHINES: "machines",
   SERVERS: "servers",
   SERVER: "server",
 } as const;
@@ -312,6 +332,7 @@ const KIND_ENTITY = {
   [MENTION_FROM.SKILLS]: ENTITY_KIND.SKILL,
   [MENTION_FROM.DATES]: ENTITY_KIND.DATE,
   [MENTION_FROM.APPS]: ENTITY_KIND.MAC_APP,
+  [MENTION_FROM.MACHINES]: ENTITY_KIND.MACHINE,
   [MENTION_FROM.SERVERS]: ENTITY_KIND.SERVER,
 } as const satisfies Record<
   Exclude<
@@ -407,19 +428,8 @@ const PER_KIND = 50;
 /** How long the typing rests before the service is searched for the agents the words name. */
 const SEARCH_PAUSE = Duration.millis(250);
 
-/** The window's tasks and workspaces, which tell their readers only when one is a new list, so a patch to the open plan draws no list again. */
-interface ListedTasks {
-  readonly tasks: readonly TaskSummary[];
-  readonly workspaces: readonly Workspace[];
-}
-
-/** The lists before the first document arrives. */
-const NO_LISTED_TASKS: ListedTasks = { tasks: [], workspaces: [] };
-
-const selectListedTasks = (state: AppStateSnapshot): ListedTasks => ({
-  tasks: state.tasks.tasks,
-  workspaces: state.tasks.workspaces,
-});
+/** No workspaces, before the first document arrives. */
+const NO_WORKSPACES: readonly Workspace[] = [];
 
 /** The list's own name, which its listbox is read by. */
 const MENU_LABEL = "Mention";
@@ -454,7 +464,7 @@ type MentionRow = {
   /** A person's picture, which their row wears; none for any other row. */
   readonly actor?: Actor | undefined;
   /** An agent's row as every agent menu draws it (`agent-menu-row.tsx`), or a skill's as the `/` list does (`skill-ref.tsx`): its glyph, its end, and its card; none for any other row. */
-  readonly look?: Pick<MenuRow, "icon" | "end" | "card"> | undefined;
+  readonly look?: Pick<MenuRow, "icon" | "before" | "end" | "card"> | undefined;
   /** The card a page's, a person's, a thread's, or an automation's row hangs beside it; none for any other row, whose chip's card is drawn as its row is (`comboboxGroups`). */
   readonly card?: React.ReactNode | undefined;
   /** A pull request, whose mark its row wears for where it stands; none for any other row. */
@@ -777,6 +787,16 @@ function threadRow(place: InboxItemPlace, item: InboxItem, holder: string): Ment
   };
 }
 
+/** The ids of the tasks the feed holds threads of that the window lists not. */
+function unlistedThreadTasks(
+  feed: AppInboxItems | undefined,
+  listed: (taskId: string) => boolean,
+): readonly string[] {
+  if (feed === undefined) return [];
+
+  return Object.keys(feed[INBOX_SCOPE_KIND.TASK]).filter((taskId) => !listed(taskId));
+}
+
 /**
  * Each of the workspace's Inbox threads' rows as the account's feed holds
  * them, the plan's own first, then the newest changed first: a task's under
@@ -792,16 +812,21 @@ function threadRows(
   if (feed === undefined || workspace === undefined) return [];
   const held: { readonly row: MentionRow; readonly own: boolean; readonly at: number }[] = [];
 
-  for (const [planId, items] of Object.entries(feed[INBOX_SCOPE_KIND.PLAN])) {
-    const task = tasks.find((each) => each.id === planId && each.workspaceId === workspace.id);
+  for (const [itemTaskId, items] of Object.entries(feed[INBOX_SCOPE_KIND.TASK])) {
+    const task = tasks.find((each) => each.id === itemTaskId && each.workspaceId === workspace.id);
 
     if (task === undefined) continue;
 
     for (const item of items) {
-      const place: InboxItemPlace = { kind: LINK_DESTINATION.INBOX_ITEM, planId, itemId: item.id };
+      const place: InboxItemPlace = {
+        kind: LINK_DESTINATION.INBOX_ITEM,
+        taskId: itemTaskId,
+        itemId: item.id,
+      };
+
       held.push({
         row: threadRow(place, item, task.name),
-        own: planId === taskId,
+        own: itemTaskId === taskId,
         at: item.updatedAt,
       });
     }
@@ -855,8 +880,13 @@ function pullRequestRows(pullRequests: readonly MentionablePullRequest[]): Menti
   });
 }
 
-/** What an app's row says after its name: that the developer always allows it, or that it runs now. */
-const APP_DETAIL = { ALLOWED: "Always allowed", RUNNING: "Running" } as const;
+/** What an app's row says after its name: the machine it is on, where the list offers more than one machine's apps; else that the developer always allows it, or that it runs now. */
+const APP_DETAIL = {
+  ALLOWED: "Always allowed",
+  RUNNING: "Running",
+  /** The name a pick writes for an app the list offers on more than one machine. */
+  WRITTEN: (name: string, machine: string) => `${name} on ${machine}`,
+} as const;
 
 /** The row that names the Mac itself, any app on it, found by the words a person says it with. */
 const COMPUTER_ROW: MentionRow = {
@@ -865,31 +895,6 @@ const COMPUTER_ROW: MentionRow = {
   detail: undefined,
   terms: "Computer Mac screen",
 };
-
-/**
- * The Mac's own row, then each app on this Mac's row, as the host lists
- * them, those running first; none where it lists none, as while agents use
- * no apps here. A pick names an app by its bundle id, or by its name where
- * it has none, and it is found by either. Note that routing's R3 adds the
- * Mac each row stands on once a command can name one; until then a row
- * names the app alone.
- */
-function appRows(apps: readonly MacApp[]): MentionRow[] {
-  if (apps.length === 0) return [];
-
-  const rows = apps.map(({ name, bundleId, running, allowed }): MentionRow => {
-    const detail = allowed ? APP_DETAIL.ALLOWED : running ? APP_DETAIL.RUNNING : undefined;
-
-    return {
-      mention: { kind: MENTION_KIND.MAC_APP, app: bundleId ?? name },
-      name,
-      detail,
-      terms: bundleId === undefined ? name : `${name} ${bundleId}`,
-    };
-  });
-
-  return [COMPUTER_ROW, ...rows];
-}
 
 /**
  * The name an app is called by where no call named it: a bundle id's last
@@ -903,46 +908,199 @@ function allowedAppName(app: string): string {
   return last === "" ? app : `${last.charAt(0).toUpperCase()}${last.slice(1)}`;
 }
 
+/** One app on one machine as the `@` list offers it. */
+interface MachineApp {
+  /** The app by its bundle id, or by its name where it has none. */
+  readonly app: string;
+  readonly name: string;
+  /** The machine it is on, by its device id; none for this Mac's apps where the window knows no device. */
+  readonly machine: string | undefined;
+  /** What the list calls the machine: This Mac, or its name. */
+  readonly machineName: string;
+  /** The machine's own name, which a pick writes, since This Mac means another Mac to every other reader; none where no read names it. */
+  readonly ownName: string | undefined;
+  readonly allowed: boolean;
+  readonly running: boolean;
+}
+
+/** Where the `@` list reads apps from: this Mac's own, where the window is the Mac the agent uses, and those the reader's machines always allow. */
+interface AppSources {
+  readonly onMac: readonly MacApp[];
+  readonly allowed: readonly MachineAllowedApps[];
+  readonly kept: ComputerApps;
+  /** This Mac's device, which this Mac's apps are on. */
+  readonly thisDevice: string | undefined;
+  readonly thisMac: ThisMac;
+  /** A machine's own name by its device id, as the workspace's machines read it; none where it names none. */
+  readonly ownNameOf: (deviceId: string | undefined) => string | undefined;
+}
+
 /**
- * The Mac's own row, then a row for each app the reader's own machines
- * always allow, by name, as the list offers them where it stands off the
- * Mac the agent uses; none where no machine allows one. An app is named as
- * a machine that allows it posted it, else as a `computer` call in the
- * conversation named it, else by its bundle id, and is found by either. Where the reader has more than one
- * machine that allows an app, each row names the machines it is allowed on.
+ * Every app the list offers, one per app on each machine, grouped by
+ * machine: this Mac's own as its host lists them, those running first and
+ * then by name, then each other machine of the reader's by its name, its
+ * always-allowed apps by name. An app a machine allows is named as that
+ * machine posted it, else as a `computer` call in the conversation named it,
+ * else by its bundle id. This Mac's allowed apps are its host's rows, which
+ * already say so.
  */
-function allowedAppRows(
-  machines: readonly MachineAllowedApps[],
-  kept: ReadonlyMap<string, ComputerAppKept>,
-): MentionRow[] {
-  const allowedOn = new Map<string, string[]>();
-  const posted = new Map<string, string>();
+function machineAppsOf({
+  onMac,
+  allowed,
+  kept,
+  thisDevice,
+  thisMac,
+  ownNameOf,
+}: AppSources): MachineApp[] {
+  const ownRows = onMac.map(
+    ({ name, bundleId, running, allowed: always }): MachineApp => ({
+      app: bundleId ?? name,
+      name,
+      machine: thisDevice,
+      machineName: THIS_MAC,
+      ownName: ownNameOf(thisDevice),
+      allowed: always,
+      running,
+    }),
+  );
 
-  for (const machine of machines) {
-    for (const app of machine.apps) {
-      allowedOn.set(app, [...(allowedOn.get(app) ?? []), machine.name]);
-    }
+  const listedHere = onMac.length > 0;
 
-    for (const look of machine.looks ?? []) {
-      if (!posted.has(look.app)) posted.set(look.app, look.name);
-    }
-  }
+  const others = allowed.flatMap((machine) => {
+    if (listedHere && machine.deviceId === thisDevice) return [];
+    const posted = new Map((machine.looks ?? []).map((look) => [look.app, look.name]));
+    const machineName = nameOfMachine(machine, thisMac);
 
-  if (allowedOn.size === 0) return [];
-  const named = machines.length > 1;
+    return machine.apps.map(
+      (app): MachineApp => ({
+        app,
+        name:
+          posted.get(app) ??
+          computerAppNamed(kept, app, machine.deviceId)?.name ??
+          allowedAppName(app),
+        machine: machine.deviceId,
+        machineName,
+        ownName: ownNameOf(machine.deviceId) ?? machine.name,
+        allowed: true,
+        running: false,
+      }),
+    );
+  });
 
-  const rows = [...allowedOn].map(([app, on]): MentionRow => {
-    const name = posted.get(app) ?? kept.get(app)?.name ?? allowedAppName(app);
+  // Note that rows are grouped by machine: This Mac's first, its running apps leading, then each other machine by name, its apps by name.
+  const here = (each: MachineApp) => (each.machine === thisDevice ? 0 : 1);
+
+  return [
+    ...ownRows.toSorted(
+      (one, other) => Number(other.running) - Number(one.running) || byName(one, other),
+    ),
+    ...others.toSorted(
+      (one, other) =>
+        here(one) - here(other) ||
+        one.machineName.localeCompare(other.machineName) ||
+        (one.machine ?? "").localeCompare(other.machine ?? "") ||
+        byName(one, other),
+    ),
+  ];
+}
+
+/** Two apps in name order. */
+function byName(one: MachineApp, other: MachineApp): number {
+  return one.name.localeCompare(other.name);
+}
+
+/** What the list calls one of the reader's machines that allows apps: This Mac, or its name. */
+function nameOfMachine(machine: MachineAllowedApps, thisMac: ThisMac): string {
+  return machineName({ deviceId: machine.deviceId, name: machine.name }, [], thisMac);
+}
+
+/**
+ * The Mac's own row, then a row for each app on each machine the list
+ * offers (`machineAppsOf`); none where it offers none, as while agents use no
+ * apps anywhere. A pick names the app by its bundle id, or by its name where
+ * it has none, and the machine it is on, so a call on it goes there. Where
+ * the list offers more than one machine's apps, each row says the machine
+ * it is on in place of whether it runs or is always allowed, and a pick of an app the list offers on more than one machine
+ * writes that machine's own name beside the app's ("Simulator on Mac
+ * mini"), so two chips of it never read alike, and never This Mac, which
+ * names another Mac to every other reader.
+ */
+function appRows(sources: AppSources): MentionRow[] {
+  const offered = machineAppsOf(sources);
+
+  if (offered.length === 0) return [];
+  // Note that machines are counted by their ids, so two of the same name still count as two.
+  const machines = new Set(offered.map((each) => each.machine ?? each.machineName));
+  const named = machines.size > 1;
+  const onHowMany = new Map<string, number>();
+
+  for (const each of offered) onHowMany.set(each.app, (onHowMany.get(each.app) ?? 0) + 1);
+
+  const rows = offered.map((each): MentionRow => {
+    const state = each.allowed ? APP_DETAIL.ALLOWED : each.running ? APP_DETAIL.RUNNING : undefined;
+    const twinned = (onHowMany.get(each.app) ?? 0) > 1;
 
     return {
-      mention: { kind: MENTION_KIND.MAC_APP, app },
-      name,
-      detail: named ? `${APP_DETAIL.ALLOWED} on ${on.join(", ")}` : APP_DETAIL.ALLOWED,
-      terms: `${name} ${app}`,
+      mention: {
+        kind: MENTION_KIND.MAC_APP,
+        app: each.app,
+        ...(each.machine === undefined ? undefined : { machine: each.machine }),
+      },
+      name: each.name,
+      detail: named ? each.machineName : state,
+      written:
+        twinned && each.ownName !== undefined
+          ? APP_DETAIL.WRITTEN(each.name, each.ownName)
+          : undefined,
+      terms: `${each.name} ${each.app} ${each.machineName}`,
     };
   });
 
-  return [COMPUTER_ROW, ...rows.toSorted((one, other) => one.name.localeCompare(other.name))];
+  return [COMPUTER_ROW, ...rows];
+}
+
+/**
+ * Each of the workspace's machines' rows, the reader's own first, then
+ * the task's followers', then everyone else's, each by name as read, drawn
+ * as the agent's Default machine menu draws a machine
+ * (`agent-machines.tsx`): its platform's glyph wearing its online dot, a
+ * teammate's face before its name, and its name as every list of machines
+ * calls it (`machineName`, This Mac for the one the window runs on), found
+ * by its name and its owner's. A pick is written with the machine's own
+ * name and names it by its id, which an agent passes as `run_on_mac`'s and
+ * `computer`'s `machine`.
+ */
+function machineRows(
+  machines: readonly WorkspaceMachine[],
+  readerId: string | undefined,
+  followerIds: ReadonlySet<string>,
+  people: readonly MentionablePerson[],
+  thisMac: ThisMac,
+): MentionRow[] {
+  const rank = (machine: WorkspaceMachine) =>
+    machine.userId === readerId ? 0 : followerIds.has(machine.userId) ? 1 : 2;
+
+  const listed = machines.map((machine) => ({ deviceId: machine.id, name: machine.name }));
+
+  return machines
+    .map((machine, at) => ({ machine, at }))
+    .sort((one, other) => rank(one.machine) - rank(other.machine) || one.at - other.at)
+    .map(({ machine }): MentionRow => {
+      const owner = people.find((person) => person.userId === machine.userId)?.name ?? "";
+      const yours = machine.userId === readerId;
+
+      return {
+        mention: { kind: MENTION_KIND.MACHINE, machineId: machine.id },
+        name: machineName({ deviceId: machine.id, name: machine.name }, listed, thisMac),
+        written: machine.name,
+        detail: undefined,
+        terms: `${machine.name} ${owner} ${DEVICE_PLATFORM_NAME[machine.platform]}`,
+        look: {
+          icon: <MachineGlyph machine={machine} />,
+          before: yours ? undefined : <MachineOwnerFace userId={machine.userId} />,
+        },
+      };
+    });
 }
 
 /** Each connected server's row, and where asked each of its tools' rows as far as its read answered, found by the server's name and the tool's. */
@@ -1213,6 +1371,8 @@ interface KindRows {
   readonly dates: readonly MentionRow[];
   /** The apps on this Mac, those running first. */
   readonly apps: readonly MentionRow[];
+  /** The workspace's machines, the reader's own first, then the followers'. */
+  readonly machines: readonly MentionRow[];
   /** The connected servers' rows, or the one server's the list is narrowed to. */
   readonly servers: readonly MentionRow[];
 }
@@ -1250,6 +1410,8 @@ function narrowedRows(
       return rows.dates;
     case MENTION_FROM.APPS:
       return best(rows.apps, term, PER_KIND);
+    case MENTION_FROM.MACHINES:
+      return best(rows.machines, term, PER_KIND);
     case MENTION_FROM.SERVERS:
     case MENTION_FROM.SERVER:
       return best(rows.servers, term, PER_KIND);
@@ -1363,6 +1525,7 @@ function groupsFor(
     group(MENTION_GROUP.AUTOMATIONS, rows.automations, MENTION_FROM.AUTOMATIONS),
     group(MENTION_GROUP.PULL_REQUESTS, rows.pullRequests, MENTION_FROM.PULL_REQUESTS),
     group(MENTION_GROUP.SKILLS, rows.skills, MENTION_FROM.SKILLS),
+    group(MENTION_GROUP.MACHINES, rows.machines, MENTION_FROM.MACHINES),
     group(MENTION_GROUP.APPS, rows.apps, MENTION_FROM.APPS),
     group(MENTION_GROUP.SERVERS, rows.servers, MENTION_FROM.SERVERS),
   ].filter((each) => each.rows.length > 0);
@@ -1511,6 +1674,7 @@ function comboboxGroups(
       words: row.name,
       // A group's foot keeps the glyph's room empty, so its words stand in line with the rows above.
       icon: isShowMore(row) ? null : (row.look?.icon ?? rowGlyph(row)),
+      before: row.look?.before,
       hint:
         row === highlighted && opens(row) && !("from" in row)
           ? WALK_INTO_HINT
@@ -1583,6 +1747,7 @@ const MENTION_READ = {
   AUTOMATIONS: "automations",
   APPS: "the apps on this Mac",
   ALLOWED_APPS: "the apps your machines allow",
+  MACHINES: "machines",
 } as const;
 
 type MentionRead = (typeof MENTION_READ)[keyof typeof MENTION_READ];
@@ -1769,8 +1934,8 @@ function treeKey(
   taskId: string | undefined,
   workspaceId: string | undefined,
   repository: string | null,
-): { planId: string } | { workspaceId: string; repository: string } | undefined {
-  if (taskId !== undefined) return { planId: taskId };
+): { taskId: string } | { workspaceId: string; repository: string } | undefined {
+  if (taskId !== undefined) return { taskId: taskId };
 
   if (workspaceId === undefined || repository === null) return undefined;
 
@@ -1837,6 +2002,7 @@ function kindsOf(
   inbox: { readonly threads: number; readonly automations: number },
   descriptionsOn: boolean,
   apps: number,
+  machines: number,
 ): readonly MentionKind[] {
   const { holder, repository } = source;
   const taskId = holder?.taskId;
@@ -1866,6 +2032,7 @@ function kindsOf(
     [MENTION_FROM.PULL_REQUESTS, MENTION_GROUP.PULL_REQUESTS, pullRequests > 0],
     [MENTION_FROM.SKILLS, MENTION_GROUP.SKILLS, (skills?.known ?? []).length > 0],
     [MENTION_FROM.DATES, MENTION_GROUP.DATES, true],
+    [MENTION_FROM.MACHINES, MENTION_GROUP.MACHINES, machines > 0],
     [MENTION_FROM.APPS, MENTION_GROUP.APPS, apps > 0],
     [MENTION_FROM.SERVERS, MENTION_GROUP.SERVERS, servers.length > 0],
   ];
@@ -2009,14 +2176,28 @@ export function useMentionPicker({
   }, [askedAt, askSkills]);
 
   // The tasks offered are the workspace's the words stand in: the one that names it, else the plan's, else the one its slug names.
-  const listed = useQuery({ ...appStateQuery, select: selectListedTasks }).data ?? NO_LISTED_TASKS;
+  const collections = useTaskListCollections();
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
+  const ownTask = useTaskListRow(collections.tasks, taskId ?? undefined);
 
   const tasksWorkspaceId =
     workspaceId ??
-    listed.tasks.find((task) => task.id === taskId)?.workspaceId ??
-    (source === undefined ? undefined : workspaceOfSlug(listed.workspaces, source.workspace))?.id;
+    ownTask?.workspaceId ??
+    (source === undefined ? undefined : workspaceOfSlug(workspaces, source.workspace))?.id;
 
-  const tasksWorkspace = listed.workspaces.find((each) => each.id === tasksWorkspaceId);
+  const tasksWorkspace = workspaces.find((each) => each.id === tasksWorkspaceId);
+
+  // The workspace's tasks, newest started first as the list holds them, read only while the list stands open.
+  const { data: workspaceTasks } = useLiveQuery((q) =>
+    !open || tasksWorkspaceId === undefined
+      ? undefined
+      : q
+          .from({ task: collections.tasks })
+          .where(({ task }) => eq(task.workspaceId, tasksWorkspaceId))
+          .orderBy(({ task }) => task.createdAt, "desc")
+          .orderBy(({ task }) => task.id, "desc"),
+  );
+
   // The people offered are the members of that workspace, read while the list stands open wherever the words stand, so every box offers the same people.
   const directory = useWorkspaceDirectory(open ? tasksWorkspace : undefined);
   const { readerId } = directory;
@@ -2028,7 +2209,7 @@ export function useMentionPicker({
   const descriptionsOn = useWorkspaceExperiment(tasksWorkspaceId, EXPERIMENT.DESCRIPTIONS);
 
   const taskRowsOffered = open
-    ? workspaceTaskRows(descriptionsOn ? taskId : undefined, tasksWorkspace, listed.tasks)
+    ? workspaceTaskRows(descriptionsOn ? taskId : undefined, tasksWorkspace, workspaceTasks ?? [])
     : [];
 
   // The threads offered are the workspace's as the account's feed holds them, which the host holds for the session.
@@ -2037,8 +2218,24 @@ export function useMentionPicker({
   const threadsAsked = open && tasksWorkspace !== undefined;
 
   const threadRowsOffered = threadsAsked
-    ? threadRows(feed.data, taskId, tasksWorkspace, listed.tasks)
+    ? threadRows(feed.data, taskId, tasksWorkspace, workspaceTasks ?? [])
     : [];
+
+  // Note that a thread of a task the window lists not is offered once the task is read into its list, each asked once while the list stands open and again once it opens anew.
+  const threadTasksOutside = threadsAsked
+    ? unlistedThreadTasks(feed.data, (each) => collections.tasks.has(each))
+    : [];
+
+  const threadTasksAsked = useRef(new Set<string>());
+  useEffect(() => {
+    if (!threadsAsked) threadTasksAsked.current.clear();
+
+    for (const outside of threadTasksOutside) {
+      if (threadTasksAsked.current.has(outside)) continue;
+      threadTasksAsked.current.add(outside);
+      tellAct(ACT_KIND.TASKS_LOAD, { taskId: outside });
+    }
+  });
 
   // The automations offered are the workspace's, followed only while the list stands open.
   const automationsAsked = open && tasksWorkspace !== undefined;
@@ -2051,28 +2248,47 @@ export function useMentionPicker({
       : [];
 
   // The plan's own key, which finds the description's row as another task's finds its.
-  const planNumber = listed.tasks.find((task) => task.id === taskId)?.number;
+  const planNumber = ownTask?.number;
 
   const planKey =
     tasksWorkspace === undefined || planNumber === undefined
       ? undefined
       : taskKey(tasksWorkspace.name, planNumber);
 
-  // The apps offered are this Mac's where the window is the Mac the agent uses, else those the reader's own machines always allow, each read while the list stands open (`mac-apps.ts`), and none until it is known which.
+  // The apps offered are this Mac's where the window is the Mac the agent uses, and those the reader's own machines always allow, each read while the list stands open (`mac-apps.ts`), and none until it is known which.
   // Note that the agent's machine is read only where this Mac's apps could be offered, so a list with Computer use off waits on nothing.
   const appsReadable = useMacAppsReadable();
   const appsAsked = open && macApps && appsReadable;
   const onThatMac = useOnThatMac(appsAsked ? self : undefined);
   const apps = useMacApps(open && macApps && onThatMac === true);
-  const allowedApps = useAllowedApps(open && macApps && onThatMac === false);
-  const keptApps = useKeptApps();
+  // Note that the apps the reader's other machines allow are offered beside this Mac's own, each row naming its machine.
+  const allowedApps = useAllowedApps(open && macApps && onThatMac !== undefined);
+  const keptApps = useComputerApps();
+  const thisDevice = useQuery({ ...appStateQuery, select: selectMachineCommandDevice }).data;
+  const thisMac = useThisMac();
+
+  // The machines offered are the workspace's members', read while the list stands open, the task's followers' after the reader's own.
+  const machinesAsked = open && tasksWorkspace !== undefined;
+  const machines = useWorkspaceMachines(tasksWorkspace?.id, machinesAsked);
 
   const appRowsOffered =
     !open || onThatMac === undefined
       ? []
-      : onThatMac
-        ? appRows(apps.apps)
-        : allowedAppRows(allowedApps.machines, keptApps);
+      : appRows({
+          onMac: onThatMac ? apps.apps : [],
+          allowed: allowedApps.machines,
+          kept: keptApps,
+          thisDevice,
+          thisMac,
+          ownNameOf: (deviceId) => machines.machines.find((each) => each.id === deviceId)?.name,
+        });
+
+  const followers = ownTask?.followers;
+  const followerIds = new Set((followers ?? []).map((follower) => follower.userId));
+
+  const machineRowsOffered = machinesAsked
+    ? machineRows(machines.machines, readerId, followerIds, people, thisMac)
+    : [];
 
   // The list is narrowed to the kind a key opened or whose word was typed, and searched by the words after it.
   const kinds = open
@@ -2089,11 +2305,20 @@ export function useMentionPicker({
         },
         descriptionsOn,
         appRowsOffered.length,
+        machineRowsOffered.length,
       )
     : [];
 
   const scope = open ? scopeOf(trigger, narrowing, kinds) : undefined;
   const term = scope?.term ?? "";
+
+  // Note that the workspace's tasks the window lists not are asked of the service as the typing pauses, as ⌘K asks them, and join the list the task rows above are built from, one row each.
+  const tasksSought =
+    open &&
+    tasksWorkspace !== undefined &&
+    (scope?.kind === undefined || scope.kind.narrow.from === MENTION_FROM.TASKS);
+
+  useServiceTaskSearch(term, tasksSought);
 
   // The workspace's newest agents are read as each `@` word opens the list, and once a word is
   // typed and the typing rests the service finds those it names, archived ones among them, however many the workspace
@@ -2158,7 +2383,7 @@ export function useMentionPicker({
                 ? []
                 : agentRows(taskId, source.agents ?? NO_AGENTS, NO_AGENTS, self, "", agentPlace)),
               ...threadRowsOffered.filter(
-                (row) => "thread" in row && "planId" in row.thread && row.thread.planId === taskId,
+                (row) => "thread" in row && "taskId" in row.thread && row.thread.taskId === taskId,
               ),
               ...pullRequestRows(source.pullRequests ?? NO_PULL_REQUESTS),
               ...pageRows(holder, source.pages ?? NO_PAGES, now),
@@ -2183,6 +2408,7 @@ export function useMentionPicker({
             skills: skillRows(skills?.known ?? []),
             dates: dateRows(term, narrow?.from === MENTION_FROM.DATES, now, readerZone()),
             apps: appRowsOffered,
+            machines: machineRowsOffered,
             // A list narrowed to one server offers its tools before a word is typed.
             servers:
               narrow?.from === MENTION_FROM.SERVER
@@ -2211,7 +2437,8 @@ export function useMentionPicker({
       (automationsAsked && automationsRead === undefined) ||
       (appsAsked && onThatMac === undefined) ||
       apps.reading ||
-      allowedApps.reading);
+      allowedApps.reading ||
+      machines.reading);
 
   // The list says a read could not be read, never that nothing matches, and Retry reads it again.
   const failures: readonly MentionReadFailure[] = open
@@ -2231,6 +2458,9 @@ export function useMentionPicker({
         ...(apps.failed ? [{ read: MENTION_READ.APPS, retry: apps.retry }] : []),
         ...(allowedApps.failed
           ? [{ read: MENTION_READ.ALLOWED_APPS, retry: allowedApps.retry }]
+          : []),
+        ...(machinesAsked && machines.failed
+          ? [{ read: MENTION_READ.MACHINES, retry: machines.retry }]
           : []),
       ]
     : [];

@@ -41,7 +41,7 @@ export const LISTED_TASK = {
 /** The rows each part of the task list delivers: the listed task, owned by the signed-in user, no agent, and no linked issue. */
 const LIVE_ROWS: ReadonlyMap<string, readonly WireValue[]> = new Map<string, readonly WireValue[]>([
   [
-    "plans",
+    "tasks",
     [
       {
         ...LISTED_TASK,
@@ -106,7 +106,7 @@ function polledTaskList(unchanged: boolean): WireValue {
 
   return {
     url: LIVE_POLL_URL,
-    queries: { plans: part("plans"), agents: part("agents"), issues: part("issues") },
+    queries: { tasks: part("tasks"), agents: part("agents"), issues: part("issues") },
   };
 }
 
@@ -238,7 +238,7 @@ export function fakeService(options: FakeServiceOptions): FakeService {
     }
 
     if (pathname === "/api/tasks" && method === "GET") {
-      return signedIn ? json({ plans: [LISTED_TASK] }) : json({ error: "unauthorized" }, 401);
+      return signedIn ? json({ tasks: [LISTED_TASK] }) : json({ error: "unauthorized" }, 401);
     }
 
     return json({ error: "not_found" }, 404);

@@ -51,7 +51,10 @@
     display: none;
   }
 
-  .ui-settings-section-card > .ui-settings-rows-fold {
+  /* A fold opened under a row of another fold, as a machine's apps under its
+     Computer use, draws no rule of its own: its rows rule themselves, inset. */
+  .ui-settings-section-card > .ui-settings-rows-fold,
+  .ui-settings-rows-fold > .ui-settings-rows-fold {
     border-top: none;
   }
 
@@ -59,11 +62,14 @@
     border-top: 1px solid var(--ui-color-border);
   }
 
-  .ui-settings-rows-fold > *:not(.ui-settings-row):has(> .ui-settings-row[data-indent="mark"]) {
+  .ui-settings-rows-fold > *:not(.ui-settings-row):has(> .ui-settings-row[data-indent="mark"]),
+  .ui-settings-rows-fold
+    > *:not(.ui-settings-row):has(> .ui-settings-row[data-indent="mark-twice"]) {
     border-top: none;
   }
 
-  .ui-settings-rows-fold > * > .ui-settings-row[data-indent="mark"] {
+  .ui-settings-rows-fold > * > .ui-settings-row[data-indent="mark"],
+  .ui-settings-rows-fold > * > .ui-settings-row[data-indent="mark-twice"] {
     border-top: 1px solid var(--ui-color-border);
   }
 

@@ -4,7 +4,7 @@ import { hasWordsOrFiles } from "@repo/features/agent-wire";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
-import { agentName } from "@repo/features/model-label";
+import { agentName, providerOf } from "@repo/features/model-label";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
@@ -19,7 +19,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { filedTaskOf } from "@repo/features/tasks-model";
-import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
   type BarMenu,
@@ -45,7 +45,9 @@ import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
+import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useListedTasks } from "../host/host-provider.js";
 import { useOnTab } from "../tab-route.js";
 import {
   awaitStart,
@@ -137,7 +139,7 @@ function SheetBar({
   readonly kept: KeptWords;
 }) {
   const colors = useColors();
-  const router = useRouter();
+  const close = useCloseSheet(kept);
 
   return (
     <>
@@ -153,7 +155,7 @@ function SheetBar({
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button onPress={close}>{WORDS.CANCEL}</Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         {file === undefined ? null : (
@@ -240,6 +242,7 @@ function ModelChip({ pick }: { readonly pick: ModelPick }) {
   return (
     <MenuChip
       label={effort === undefined ? model : `${model}${JOINED}${effort}`}
+      harness={pick.shown === undefined ? undefined : providerOf(pick.shown.model)}
       menu={{ groups }}
     />
   );
@@ -438,7 +441,7 @@ function useSheetStart(
         kept.release();
         router.dismiss();
         router.navigate(
-          onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: answer.taskId })),
+          onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })),
         );
 
         if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
@@ -480,14 +483,14 @@ export function NewAgentScreen({
   const sendSuggestion = useSuggestionSender();
   const suggester = useShownAgent(opened?.suggestion.agentId ?? "");
   // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
-  const suggestedTask = suggester?.planId;
+  const suggestedTask = suggester?.taskId;
   const placed = opened === undefined || suggestedTask !== undefined;
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
-  const skills = useSkillOffer(prompt, setPrompt, { planId: taskId });
+  const skills = useSkillOffer(prompt, setPrompt, { taskId: taskId });
 
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
   const startSuggested = async (
@@ -573,7 +576,6 @@ export interface NewTaskDraft {
 }
 
 /** No task list read yet. */
-const NO_TASKS: readonly TaskSummary[] = [];
 
 /** The kinds New task's relation offers, in the panel's order: a sub-task of another, or one waiting on or holding up another. */
 const RELATION_ORDER: readonly TaskCreateRelationKind[] = [
@@ -750,8 +752,7 @@ export function NewTaskScreen({
   const [prompt, setPrompt] = useState(again?.prompt ?? draft?.prompt ?? "");
   const [runsOn, setRunsOn] = useState(again?.runsOn ?? CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
-  const listed = view?.tasks ?? NO_TASKS;
+  const listed = useListedTasks();
   const chosen = useChosenWorkspace(workspaces).chosen;
   const openedIn = again?.workspaceId ?? draft?.workspaceId;
   const own = workspaces.find(({ id }) => id === openedIn) ?? chosen;

@@ -6,6 +6,13 @@ import { ORPCError } from "@orpc/client";
 import type { AgentChangesAnswerView } from "@repo/features/agent-view";
 import type { TaskFileRequest } from "@repo/features/task-wire";
 import type { TasksFileAnswer } from "@repo/features/tasks-view";
+import {
+  type AppStateDelivery,
+  type AppStateRead,
+  TASK_LIST_PARTS,
+  type TaskListDelivery,
+  taskListPartsOf,
+} from "@repo/host/app-state";
 import type { AppBridge } from "@repo/host/bridge";
 import {
   ACCOUNT_ASK_ACT_KIND,
@@ -30,11 +37,65 @@ import { installActPortClient, installAppBridge } from "../app-bridge.js";
 let answering: Partial<AppBridge> = {};
 let answeringPort: Partial<FakeActPort> = {};
 
+/**
+ * The task list's rows the host carries beside `delivery`, read off the task
+ * list it carries: its lists whole where it carries the slice whole or gone,
+ * its parts that moved where it carries them moved, none otherwise.
+ */
+function taskListOf(delivery: AppStateDelivery): TaskListDelivery | undefined {
+  const { version } = delivery;
+  const whole = delivery.entries.tasks;
+
+  if (whole !== undefined) return { version, whole };
+
+  if (delivery.gone?.includes("tasks") === true) return { version, whole: { tasks: [] } };
+
+  const moved = delivery.moved?.tasks?.filter((move) =>
+    TASK_LIST_PARTS.some((part) => part === move.key[0]),
+  );
+
+  return moved === undefined || moved.length === 0 ? undefined : { version, moved };
+}
+
+/** `read` with the task list's lists beside it, as the host answers a whole read, where a fake answered it without them. */
+function withListsBeside(read: AppStateRead): AppStateRead {
+  return read.taskList === undefined ? { ...read, taskList: taskListPartsOf(read.tasks) } : read;
+}
+
+/**
+ * The document's whole read and deliveries with the task list's lists and
+ * rows beside them, where a fake hands a document or a delivery it built by
+ * hand without them, as the host carries the two in one (`AppStateRead`,
+ * `appStateDelivery`).
+ */
+function withTaskLists(calls: Partial<AppBridge>): Partial<AppBridge> {
+  const { onAppState, requestAppState } = calls;
+
+  return {
+    ...calls,
+    ...(requestAppState === undefined
+      ? undefined
+      : {
+          requestAppState: () => requestAppState().then(withListsBeside),
+        }),
+    ...(onAppState === undefined
+      ? undefined
+      : {
+          onAppState: (listener) =>
+            onAppState((delivery) => {
+              const taskList = delivery.taskList ?? taskListOf(delivery);
+
+              listener(taskList === undefined ? delivery : { ...delivery, taskList });
+            }),
+        }),
+  };
+}
+
 /** Installs a bridge answering only the calls given, in place of whatever the window held. */
 export function fakeAppBridge(calls: Partial<AppBridge>): void {
   answering = calls;
   // SAFETY: a test's window makes only the calls its test answers, and any other is undefined and throws where it is made.
-  installAppBridge(calls as AppBridge);
+  installAppBridge(withTaskLists(calls) as AppBridge);
 }
 
 /** The calls the fake bridge answers now, for a test that answers one more beside them or puts them back. */
@@ -42,7 +103,7 @@ export function fakeAppBridgeCalls(): Partial<AppBridge> {
   return answering;
 }
 
-/** The holds a window keeps on a read the host lays on app state: a task's inbox, its pages and cloud Browser tabs, an agent's or a worker's transcript, a pull request's chapters and parts, the account's beats, hosts, models, integrations, provider keys, and GitHub token, an agent's or a server's tools, the outside MCP clients, a workspace's memories, skills, and repositories, a link's standing, the automations' lists and histories, a description's or a page's comments, a task's description history, the run that started an agent, a workspace's people, token repositories, invitations, own integrations, and Slack channels, and a task's description. */
+/** The holds a window keeps on a read the host lays on app state: a task's inbox, its pages and cloud Browser tabs, an agent's or a worker's transcript, a pull request's chapters and parts, the account's beats, hosts, machines, models, integrations, provider keys, and GitHub token, an agent's or a server's tools, the outside MCP clients, a workspace's memories, skills, and repositories, a link's standing, the automations' lists and histories, a description's or a page's comments, a task's description history, the run that started an agent, a workspace's people, token repositories, invitations, own integrations, and Slack channels, and a task's description. */
 type HoldKind =
   | typeof AGENT_ACT_KIND.AGENTS_ORIGIN_FOLLOW
   | typeof AGENT_ACT_KIND.AGENTS_TRANSCRIPT
@@ -53,6 +114,7 @@ type HoldKind =
   | typeof CHAPTERS_ACT_KIND.CHAPTERS_FOLLOW
   | typeof AGENT_ACT_KIND.HOSTS_PRESENCE_FOLLOW
   | typeof AGENT_ACT_KIND.HOSTS_FOLLOW
+  | typeof AGENT_ACT_KIND.MACHINES_FOLLOW
   | typeof AGENT_ACT_KIND.AGENTS_MODELS_FOLLOW
   | typeof AGENT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW
   | typeof AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW
@@ -73,7 +135,7 @@ type HoldKind =
   | typeof WORKSPACE_ACT_KIND.WORKSPACE_SLACK_CHANNELS_FOLLOW
   | typeof WORKSPACE_ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW
   | typeof WORKSPACE_ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_FOLLOW
-  | typeof TASKS_ACT_KIND.TASKS_DOCUMENT_FOLLOW;
+  | typeof TASKS_ACT_KIND.TASKS_HELD_FOLLOW;
 
 /** Every hold a window keeps on a read the host lays on app state, which a test's port holds quietly unless it answers it. */
 const QUIET_HOLDS: ReadonlySet<PortActKind> = new Set<HoldKind>([
@@ -86,6 +148,7 @@ const QUIET_HOLDS: ReadonlySet<PortActKind> = new Set<HoldKind>([
   CHAPTERS_ACT_KIND.CHAPTERS_FOLLOW,
   AGENT_ACT_KIND.HOSTS_PRESENCE_FOLLOW,
   AGENT_ACT_KIND.HOSTS_FOLLOW,
+  AGENT_ACT_KIND.MACHINES_FOLLOW,
   AGENT_ACT_KIND.AGENTS_MODELS_FOLLOW,
   AGENT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW,
   AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW,
@@ -106,7 +169,7 @@ const QUIET_HOLDS: ReadonlySet<PortActKind> = new Set<HoldKind>([
   WORKSPACE_ACT_KIND.WORKSPACE_SLACK_CHANNELS_FOLLOW,
   WORKSPACE_ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW,
   WORKSPACE_ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_FOLLOW,
-  TASKS_ACT_KIND.TASKS_DOCUMENT_FOLLOW,
+  TASKS_ACT_KIND.TASKS_HELD_FOLLOW,
 ]);
 
 /** A hold as the host answers it: a stream carrying nothing, standing until the window closes it. */

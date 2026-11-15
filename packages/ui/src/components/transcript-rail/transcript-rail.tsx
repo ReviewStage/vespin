@@ -1,10 +1,20 @@
-import { type ReactNode, type RefObject, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  memo,
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "../../cn.js";
-import { useDisclosure } from "../../use-disclosure.js";
-import { ComboboxList, type ComboboxOption, comboboxOptionId } from "../combobox/combobox.js";
+import { comboboxOptionId } from "../combobox/combobox.js";
 import { useComboboxField } from "../combobox/use-combobox-field.js";
 import { dropBelowStart, MENU_DETAIL, Menu, type MenuEntry, useMenu } from "../menu/menu.js";
-import { MENU_SURFACE_INSET, MenuSurface } from "../menu/menu-surface.js";
+import { MENU_SURFACE_FLOW, MenuSurface } from "../menu/menu-surface.js";
+import { OneLine } from "../one-line/one-line.js";
 
 /**
  * transcript-rail.tsx -- a map of the lines sent into a conversation, down its leading edge: a line for each, a bubble round those in view, and a list of them on the pointer's rest.
@@ -19,13 +29,29 @@ import { MENU_SURFACE_INSET, MenuSurface } from "../menu/menu-surface.js";
  * the view, gliding as the conversation scrolls, so the rail says where the
  * reader is.
  *
- * The pointer on the rail opens it into a list of its lines on a menu's
- * surface (`MenuSurface`), each under its sender's face and name with its
- * words after them, the line under the pointer active; a press asks the
- * caller to go to that line (`onJump`). The list is the app's own
- * (`ComboboxList`), steered from the rail as a field steers a menu's
- * (`useComboboxField`): the rail is one Tab stop, opening the list as the
- * keyboard reaches it, its arrows walking the lines and Enter going to one.
+ * The pointer on the rail stacks the lines round the one under it beside
+ * the rail, each its own pill (`MenuSurface`'s toolbar): its sender's face,
+ * name, and words, the line under the pointer in front and the words of
+ * those either side fainter on pills that stay solid, so none shows the
+ * conversation through it, the stack gliding on the app's spring as the
+ * pointer moves; a press asks the caller to go to the line under it
+ * (`onJump`). The pointer may cross onto the stack, which then holds still,
+ * and press any pill shown in it. The rail is one Tab stop, steering the stack as a field
+ * steers a menu (`useComboboxField`): it opens as the keyboard reaches it,
+ * its arrows walking the lines and Enter going to one.
+ *
+ * Note that the pointer moving draws nothing and adds no element. Every
+ * line's pill is drawn, hidden, once the rail is first pointed at or
+ * focused, so a long transcript opens without them, and stands drawn from
+ * then on; the
+ * pointer crossing a line writes the transform and opacity of the few pills
+ * near it and near where the stack stood (`placeStack`), outside
+ * React. An element added or taken away anywhere in the app restyles most
+ * of the page under its stylesheet, as does a change to `aria-selected`,
+ * which it reads under a `:has()`, so the rail names an option selected only
+ * while the keys steer it. The lines' places are read as the pointer comes,
+ * the focus comes, or the column changes size, never as it moves, so a move
+ * forces no layout either.
  *
  * A phone has no pointer to rest and no gutter to hover in, so there the
  * rail is one press, its lines a glance at where the reader stands, that
@@ -65,36 +91,42 @@ const FEWEST = 2;
 /** How far the bubble stands out past the lines it wraps, above the first and below the last, in pixels. */
 const BUBBLE_PAD = 2;
 
-/** The rail's column at the conversation's leading edge, taking the pointer only on its lines and its open list. */
+/** The rail's column at the conversation's leading edge, inside the log's leading inset so it never meets the words however narrow the log stands, taking the pointer only on its lines and its open stack; a phone's rail stands in the same column. */
 const COLUMN =
-  "ui-transcript-rail pointer-events-none absolute inset-y-0 left-0 z-1 flex w-ui-24 items-center";
+  "ui-transcript-rail pointer-events-none absolute inset-y-0 left-0 z-1 flex w-ui-16 items-center";
 
 /** The rail's one press: its lines, centered down the column, each at most a pitch tall and shrinking to a hairline's pitch where more stand than its height holds. */
 const PRESS =
   "pointer-events-auto flex max-h-full w-full cursor-default appearance-none flex-col border-0 bg-transparent p-0 py-ui-12";
 
-const LINE_SLOT = "flex h-ui-8 min-h-ui-2 w-full shrink items-center pl-ui-6";
+const LINE_SLOT = "flex h-ui-8 min-h-ui-2 w-full shrink items-center pl-ui-4";
 
-const LINE = "block h-ui-2 w-ui-12 rounded-ui-full bg-muted-foreground opacity-60";
+/** A line, as both rails draw it. */
+const LINE = "block h-ui-2 w-ui-8 rounded-ui-full bg-muted-foreground opacity-60";
 
 /** The bubble round the lines in view: the column's whole height, clipped to them, so it glides on its clip rather than its size. */
 const BUBBLE =
-  "pointer-events-none absolute inset-y-0 bg-secondary transition-[clip-path,opacity] duration-(--ui-duration-pane) ease-pane";
+  "pointer-events-none absolute inset-y-0 left-0 w-ui-16 bg-secondary transition-[clip-path,opacity] duration-(--ui-duration-pane) ease-pane";
 
-/** Where the open list stands: over the rail, centered down the column. */
-const LIST_PLACE = "pointer-events-none absolute inset-y-0 left-ui-4 flex items-center";
+/** How many pills stand either side of the line in front. */
+const STACK_REACH = 3;
 
-const LIST_SURFACE = "pointer-events-auto w-popover-wide";
+/** The stack beside the rail, its middle moved to the line in front; only its shown pills take the pointer. */
+const STACK =
+  "pointer-events-none absolute top-0 left-ui-16 transition-transform duration-(--ui-duration-pane) ease-spring";
 
-/** A phone's rail: one press down the gutter, its lines a glance, opening the list of lines. */
-const NARROW_COLUMN =
-  "ui-transcript-rail pointer-events-none absolute inset-y-0 left-0 z-1 flex w-ui-16 items-center";
+/** A pill's place in the stack, gliding on the app's spring, shown or hidden at once; its padding is the gap to the next pill and to the rail, so the pointer crosses from the rail to a pill and from one pill to the next without leaving the stack, and the pill stands at the words' edge. */
+const PILL_PLACE =
+  "group/pill pointer-events-none absolute top-0 left-0 cursor-press py-ui-2 pl-ui-4 transition-transform duration-(--ui-duration-pane) ease-spring";
+
+/** A pill's face, name, and words, fainter by its line's distance from the one in front (`data-far`) on a pill that stays solid, so no pill shows the words behind it, and at full strength under the pointer. Note that the pointer's rule is marked important, since the fade's rules weigh the same and stand after it in the sheet. */
+const PILL_WORDS =
+  "flex max-w-popover-wide items-center gap-ui-6 px-ui-4 text-caption group-data-[far=1]/pill:opacity-80 group-data-[far=2]/pill:opacity-60 group-data-[far=3]/pill:opacity-40 group-hover/pill:opacity-100!";
 
 const NARROW_PRESS =
   "pointer-events-auto flex max-h-full w-full cursor-press appearance-none flex-col items-start overflow-hidden border-0 bg-transparent p-0 py-ui-8 pl-ui-4";
 
 const NARROW_SLOT = "flex h-ui-6 min-h-ui-2 shrink items-center";
-const NARROW_LINE = "block h-ui-2 w-ui-8 rounded-ui-full bg-muted-foreground opacity-60";
 
 /** Where the bubble stands down the column, in pixels from its top and its bottom. */
 interface BubbleClip {
@@ -106,6 +138,13 @@ interface BubbleClip {
 interface BubbleState {
   readonly clip: BubbleClip | undefined;
   readonly shown: boolean;
+}
+
+/** Where the lines stand down the column as laid out: their middles, and the column's height and top on the screen, read once a hover or a focus begins. */
+interface RailLayout {
+  readonly middles: readonly number[];
+  readonly room: number;
+  readonly top: number;
 }
 
 /** Every line as a phone's sheet lists it: its sender's face, name, and tag over its words. */
@@ -126,21 +165,24 @@ function sheetEntries(
   ];
 }
 
-/** Every line as the rail's list names it: its sender's face and name, its words after them. */
-function listOptions(marks: readonly TranscriptRailMark[]): ComboboxOption[] {
-  return marks.map((mark) => ({
-    id: mark.key,
-    label: mark.sender,
-    icon: mark.face ?? null,
-    detail: mark.words,
-  }));
+/** The rail's lines as laid out, read off their slots. */
+function readLayout(box: HTMLElement, slots: readonly (HTMLElement | null)[]): RailLayout {
+  return {
+    middles: slots.map((slot) => (slot === null ? 0 : slot.offsetTop + slot.offsetHeight / 2)),
+    room: box.clientHeight,
+    top: box.getBoundingClientRect().top,
+  };
 }
 
-/** The line whose slot stands at `y` on the screen, or the last where `y` is past them all. */
-function lineAt(slots: readonly (HTMLElement | null)[], y: number): number {
-  const at = slots.findIndex((slot) => slot !== null && y < slot.getBoundingClientRect().bottom);
+/** The line whose middle stands nearest `y`, in the column's own pixels. */
+function nearestLine(middles: readonly number[], y: number): number {
+  let best = 0;
 
-  return at === -1 ? slots.length - 1 : at;
+  for (let index = 1; index < middles.length; index++) {
+    if (Math.abs((middles[index] ?? 0) - y) < Math.abs((middles[best] ?? 0) - y)) best = index;
+  }
+
+  return best;
 }
 
 /** The last line standing in the view, or the last line where none does: where the keyboard opens the list. */
@@ -193,18 +235,14 @@ function useBubble(
   return { clip, shown: first !== undefined };
 }
 
-/** The bubble round the lines in view, placed across its column by `inset`, its corners a small round's. */
-function Bubble({ bubble, inset }: { bubble: BubbleState; inset: string }): React.JSX.Element {
+/** The bubble round the lines in view, its corners a small round's. */
+function Bubble({ bubble }: { bubble: BubbleState }): React.JSX.Element {
   const { clip } = bubble;
 
   return (
     <span
       aria-hidden
-      className={cn(
-        BUBBLE,
-        inset,
-        bubble.shown && clip !== undefined ? "opacity-100" : "opacity-0",
-      )}
+      className={cn(BUBBLE, bubble.shown && clip !== undefined ? "opacity-100" : "opacity-0")}
       style={
         clip === undefined
           ? undefined
@@ -228,8 +266,8 @@ function NarrowRail({
   const bubble = useBubble(column, slots, marks);
 
   return (
-    <div ref={column} className={NARROW_COLUMN}>
-      <Bubble bubble={bubble} inset="left-0 w-ui-16" />
+    <div ref={column} className={COLUMN}>
+      <Bubble bubble={bubble} />
       <button
         type="button"
         aria-label={RAIL_LABEL}
@@ -244,7 +282,7 @@ function NarrowRail({
             }}
             className={NARROW_SLOT}
           >
-            <span className={NARROW_LINE} />
+            <span className={LINE} />
           </span>
         ))}
       </button>
@@ -260,7 +298,132 @@ function NarrowRail({
   );
 }
 
-/** The rail beside a conversation wide enough for a gutter: its lines, the bubble, and the list it opens into. */
+/** A line as its pill: its sender's face and name, and its words, on the app's floating toolbar; it draws once. */
+const StackPill = memo(function StackPill({
+  mark,
+}: {
+  mark: TranscriptRailMark;
+}): React.JSX.Element {
+  return (
+    <MenuSurface flow={MENU_SURFACE_FLOW.TOOLBAR}>
+      <span className={PILL_WORDS}>
+        {mark.face === undefined ? null : <span className="flex flex-none">{mark.face}</span>}
+        <OneLine className="min-w-0 flex-none" words={mark.sender}>
+          {mark.sender}
+        </OneLine>
+        <OneLine className="min-w-0 text-muted-foreground" words={mark.words}>
+          {mark.words}
+        </OneLine>
+      </span>
+    </MenuSurface>
+  );
+});
+
+/** How many lines from the one in front a line stands, held to just past the stack's ends, so a pill past the stack waits there and slides in from there rather than across the column. */
+function stackPlace(index: number, active: number): number {
+  return Math.max(-STACK_REACH - 1, Math.min(index - active, STACK_REACH + 1));
+}
+
+/**
+ * Moves the pills near the line in front, and those near where it was, to
+ * where it stands now: each to its place in the stack, its words fainter by
+ * its distance, shown and taking the pointer only within the stack's reach.
+ * Note that only these are written, as their own transform, opacity,
+ * pointer, and distance, so the pointer crossing a line restyles a few pills
+ * rather than the rail.
+ */
+function placeStack(
+  pills: readonly (HTMLElement | null)[],
+  from: number,
+  to: number,
+  open: boolean,
+  pill: number,
+): void {
+  const reach = STACK_REACH + 1;
+  const first = Math.max(0, Math.min(from, to) - reach);
+  const last = Math.min(pills.length - 1, Math.max(from, to) + reach);
+
+  for (let index = first; index <= last; index++) {
+    const at = stackPlace(index, to);
+    const element = pills[index];
+
+    if (element == null) continue;
+    const shown = open && Math.abs(index - to) <= STACK_REACH;
+
+    element.style.transform = `translateY(${at * pill - pill / 2}px)`;
+    element.style.opacity = shown ? "1" : "0";
+    element.style.pointerEvents = shown ? "auto" : "none";
+    element.dataset.far = String(Math.abs(index - to));
+  }
+}
+
+/** One of the rail's lines; it draws once. */
+const RailLine = memo(function RailLine({
+  index,
+  slots,
+}: {
+  index: number;
+  slots: RefObject<(HTMLElement | null)[]>;
+}): React.JSX.Element {
+  const hold = useCallback(
+    (slot: HTMLElement | null) => {
+      slots.current[index] = slot;
+    },
+    [index, slots],
+  );
+
+  return (
+    <span ref={hold} className={LINE_SLOT}>
+      <span className={LINE} />
+    </span>
+  );
+});
+
+/** A pill before the stack first opens: below the stack's end, and gone. */
+const PILL_WAITING: React.CSSProperties = { opacity: 0, transform: "translateY(0px)" };
+
+/** A line's pill as an option of the stack, pressed to go to its line; it draws once, and draws again only as the keys name it selected or not; the line in front moves it (`placeStack`). */
+const StackOption = memo(function StackOption({
+  mark,
+  index,
+  id,
+  selected,
+  pills,
+  onChoose,
+}: {
+  mark: TranscriptRailMark;
+  index: number;
+  id: string;
+  selected: boolean;
+  pills: RefObject<(HTMLElement | null)[]>;
+  onChoose: (index: number) => void;
+}): React.JSX.Element {
+  const hold = useCallback(
+    (element: HTMLElement | null) => {
+      pills.current[index] = element;
+    },
+    [index, pills],
+  );
+
+  return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the rail's press reads the keys and names this option active, as a field steers a menu.
+    <div
+      ref={hold}
+      id={id}
+      role="option"
+      tabIndex={-1}
+      // Note that an option is named selected only while the keys steer the rail: the app's stylesheet reads `aria-selected` under a `:has()`, so each change restyles most of the page, and the pointer would change it at every line it crossed.
+      aria-selected={selected}
+      className={PILL_PLACE}
+      style={PILL_WAITING}
+      onClick={() => onChoose(index)}
+    >
+      <StackPill mark={mark} />
+    </div>
+  );
+});
+
+/** The rail beside a conversation wide enough for a gutter: its lines, the bubble, and the stack of pills it opens into. */
 function WideRail({
   marks,
   onJump,
@@ -270,39 +433,148 @@ function WideRail({
 }): React.JSX.Element {
   const [pointed, setPointed] = useState(false);
   const [focused, setFocused] = useState(false);
-  // Whether a line was gone to, or Escape pressed, since the rail last opened: the list stands shut until the pointer comes again or a key asks for it.
+  // Whether a line was gone to, or Escape pressed, since the rail last opened: the stack stands shut until the pointer comes again or a key asks for it.
   const [shut, setShut] = useState(false);
+  // The line the keys hold, which the rail names to a reader; the pointer moves the stack without it (`moveTo`).
   const [active, setActive] = useState(-1);
   const column = useRef<HTMLElement | null>(null);
   const slots = useRef<(HTMLElement | null)[]>([]);
+  const pills = useRef<(HTMLElement | null)[]>([]);
+  const stack = useRef<HTMLDivElement | null>(null);
+  // Where the stack stands and what it is read against, held outside React so the pointer moving draws nothing.
+  const inFront = useRef(-1);
+  const layout = useRef<RailLayout | undefined>(undefined);
+  const pillHeight = useRef(0);
+  const opened = useRef(false);
+  // Whether the rail has been pointed at or focused yet, which draws its pills.
+  const [armed, setArmed] = useState(false);
   const listId = useId();
   const bubble = useBubble(column, slots, marks);
   const open = (pointed || focused) && !shut;
-  const drawn = useDisclosure(open);
 
-  const choose = (index: number) => {
-    const mark = marks[index];
+  // Note that the lines' places are read as a hover or a focus begins, and again only once the column changes size, never as the pointer moves over them.
+  const measure = (): RailLayout | undefined => {
+    const box = column.current;
 
-    if (mark === undefined) return;
-    setShut(true);
-    onJump(mark.key);
+    if (box === null) return undefined;
+    layout.current = readLayout(box, slots.current);
+
+    return layout.current;
   };
+
+  // Puts the stack at line `to`: the pills and lines near it and near where it stood, and the stack's middle at the line, held off the column's ends.
+  const moveTo = (to: number) => {
+    const read = layout.current ?? measure();
+    const box = stack.current;
+
+    if (read === undefined || box === null || to < 0) return;
+
+    // Note that the pills are drawn with the first hover or focus, so their height is read once they stand.
+    if (pillHeight.current === 0) pillHeight.current = pills.current[0]?.offsetHeight ?? 0;
+
+    const pill = pillHeight.current;
+    const span = STACK_REACH * pill + pill;
+    const center = Math.max(span, Math.min(read.middles[to] ?? 0, read.room - span));
+    placeStack(pills.current, inFront.current < 0 ? to : inFront.current, to, opened.current, pill);
+    box.style.transform = `translateY(${center}px)`;
+    inFront.current = to;
+  };
+
+  useLayoutEffect(() => {
+    const box = column.current;
+
+    if (box === null) return;
+
+    const sized = new ResizeObserver(() => {
+      layout.current = undefined;
+    });
+
+    sized.observe(box);
+
+    return () => sized.disconnect();
+  }, []);
+
+  // Note that lines arriving or going move every line's place without the column changing size, so they are read again, the line held kept to those still drawn, and an open stack put back at its line.
+  useLayoutEffect(() => {
+    const last = marks.length - 1;
+
+    layout.current = undefined;
+    inFront.current = Math.min(inFront.current, last);
+    setActive((was) => Math.min(was, last));
+
+    if (opened.current) moveTo(inFront.current);
+  }, [marks]);
+
+  // The stack opens and shuts where it stands. Note that `moveTo` reads refs alone, so it is the same move on every draw.
+  useLayoutEffect(() => {
+    opened.current = open;
+    moveTo(inFront.current);
+  }, [open]);
+
+  const choose = useCallback(
+    (index: number) => {
+      const mark = marks[index];
+
+      if (mark === undefined) return;
+      setShut(true);
+      onJump(mark.key);
+    },
+    [marks, onJump],
+  );
 
   const field = useComboboxField({
     open,
     active,
     count: marks.length,
     controls: open ? listId : undefined,
-    activeId: open && active >= 0 ? comboboxOptionId(listId, active) : undefined,
-    onActiveChange: setActive,
+    activeId: open && focused && active >= 0 ? comboboxOptionId(listId, active) : undefined,
+    // Note that the stack moves with the key that moved it, never as `active` changes, so a line held by the keys and kept among the lines still drawn moves no stack the pointer holds.
+    onActiveChange: (to) => {
+      moveTo(to);
+      setActive(to);
+    },
     onChoose: choose,
     onEnter: () => setShut(false),
     onEscape: () => setShut(true),
-    // Note that an arrow pressed with the list shut opens it again, on the line it last stood on.
+    // Note that an arrow pressed with the stack shut opens it again, on the line it last stood on.
     onKey: (event) => {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") setShut(false);
     },
   });
+
+  const selected = open && focused ? active : -1;
+
+  const lines = useMemo(
+    () => marks.map((mark, index) => <RailLine key={mark.key} index={index} slots={slots} />),
+    [marks],
+  );
+
+  const options = useMemo(
+    () =>
+      armed &&
+      marks.map((mark, index) => (
+        <StackOption
+          key={mark.key}
+          mark={mark}
+          index={index}
+          id={comboboxOptionId(listId, index)}
+          selected={index === selected}
+          pills={pills}
+          onChoose={choose}
+        />
+      )),
+    [armed, marks, listId, selected, choose],
+  );
+
+  // The line under the pointer, read off where the lines were laid out as the hover began.
+  const point = (clientY: number) => {
+    const read = layout.current ?? measure();
+
+    if (read === undefined) return;
+    const at = nearestLine(read.middles, clientY - read.top);
+
+    if (at !== inFront.current) moveTo(at);
+  };
 
   return (
     <nav
@@ -310,13 +582,20 @@ function WideRail({
       aria-label={RAIL_LABEL}
       className={COLUMN}
       onPointerEnter={(event) => {
-        setActive(lineAt(slots.current, event.clientY));
+        setArmed(true);
+        measure();
+        point(event.clientY);
         setShut(false);
         setPointed(true);
       }}
+      // Note that the stack holds still while the pointer stands on it, so a pill can be reached and pressed.
+      onPointerMove={(event) => {
+        if (event.target instanceof Node && stack.current?.contains(event.target)) return;
+        point(event.clientY);
+      }}
       onPointerLeave={() => setPointed(false)}
     >
-      <Bubble bubble={bubble} inset="left-ui-2 w-ui-20" />
+      <Bubble bubble={bubble} />
       <button
         type="button"
         aria-label={PRESS_LABEL}
@@ -324,44 +603,34 @@ function WideRail({
         {...field.field}
         onKeyDown={(event) => field.onKeyDown(event)}
         onFocus={() => {
-          if (!pointed) setActive(lastShown(marks));
+          setArmed(true);
+          measure();
+          // Note that the stack is put at the focus's line here, since the keys may hold that line already, which no draw would move it to.
+          const target = pointed ? inFront.current : lastShown(marks);
+
+          moveTo(target);
+          setActive(target);
           setShut(false);
           setFocused(true);
         }}
         onBlur={() => setFocused(false)}
+        onClick={() => {
+          if (open) choose(inFront.current);
+        }}
       >
-        {marks.map((mark, index) => (
-          <span
-            key={mark.key}
-            ref={(slot) => {
-              slots.current[index] = slot;
-            }}
-            className={LINE_SLOT}
-          >
-            <span className={LINE} />
-          </span>
-        ))}
+        {lines}
       </button>
-      {drawn.mounted ? (
-        <div className={LIST_PLACE}>
-          <MenuSurface
-            ref={drawn.ref}
-            className={LIST_SURFACE}
-            inset={MENU_SURFACE_INSET.NONE}
-            leaving={drawn.leaving}
-          >
-            <ComboboxList
-              id={listId}
-              label={RAIL_LABEL}
-              groups={[{ label: RAIL_LABEL, options: listOptions(marks) }]}
-              headed={false}
-              active={active}
-              onActiveChange={setActive}
-              onChoose={choose}
-            />
-          </MenuSurface>
-        </div>
-      ) : null}
+      <div
+        ref={stack}
+        id={listId}
+        role="listbox"
+        aria-label={RAIL_LABEL}
+        // Note that the stack stands drawn while it is shut, so a reader is kept from it until it opens.
+        aria-hidden={!open}
+        className={STACK}
+      >
+        {options}
+      </div>
     </nav>
   );
 }

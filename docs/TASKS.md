@@ -264,7 +264,7 @@ Dictate, and Start.
   Markdown, and nothing else: the text has no title line, its assumptions
   are a section of it, and nothing stands in for a section it leaves empty.
   The text is cut into sections as the service cuts it (`descriptionSections` in
-  `packages/features/src/description-document.ts`): what stands before the first
+  `packages/features/src/description-sections.ts`): what stands before the first
   heading, then each `#` or `##` heading with what stands under it, a
   heading inside a code fence being code. The `assumptions` list beside the
   body, always empty now, is not drawn.
@@ -646,8 +646,8 @@ leaving redraws no other section.
 
 ### The description's text
 
-A description is one free Markdown document (`packages/features/src/description-document.ts`,
-the row's `task.document`), with no title line, since the task's name is its
+A description is one free Markdown text (`packages/features/src/description-sections.ts`,
+the row's `task.description`), with no title line, since the task's name is its
 own, and its assumptions an ordinary section of the text. Every description starts
 empty, and its sections are whatever headings the developer and the agents
 write into it.

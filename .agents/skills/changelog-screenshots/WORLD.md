@@ -81,6 +81,14 @@ workspace" on acme/ledger), "Retry failed webhook deliveries" (Webhook retries,
 Claude Opus 5.5; PR #209, merged), and "Build the onboarding checklist"
 (Onboarding checklist, GPT-6.1 Sol; PR #131 on acme/web).
 
+Since 0.35.0 Usage-based billing (ACME-40, urgent, in progress) is Theo's,
+followed by Dean and Dana, with sub-tasks Daily usage rollup (Theo),
+Projected invoice in Settings › Billing (Dana), and 30-day notice email for
+plan changes (Priya), and agents Meter API calls per workspace and Show
+usage on the invoice. Dean also follows Rotate webhook signing secrets
+(Dana's) and Onboarding checklist (Priya's), so the three stand under the
+sidebar's Following group.
+
 Subagents: "Find unfiltered membership reads" (Claude Sonnet 5.5, medium),
 and Vespin's own "Invite link expiry". The next pull request in this world is
 #217. Model ids come from the release's own model catalog, never invented.
@@ -196,3 +204,10 @@ a finished one ran minutes. Yesterday's call ran 12 minutes 41 seconds.
 - **Approvals** (0.32.0, 0.33.0): the Add teammate invitations agent runs on Claude Code under Ask for approval. After #214, Dean asked it to migrate his local database (held on `pnpm drizzle-kit migrate`), and later for a test of an expired link (held on `pnpm test src/members`, whose Always allow keeps `pnpm test *`).
 - **Dean's machines** (`machines.ts`, 0.33.0): This Mac (Dean's MacBook Pro, running agents), Dean's Mac mini, and the Linux servers `acme-build` and `relay-staging`, all online.
 - **Dana's `member-roles.pdf`** (`member-roles-pdf.ts`, rendered from `staging/releases/v0.33.0-member-roles.html`): two pages of who may invite, withdraw, resend, remove, and change roles in a Relay workspace, in acme's teal, which Dean attached to a message asking whether #214 lets a member resend their own invites.
+
+## Added in 0.34.0
+
+- **acme's automations**: Morning Sentry triage (weekdays at 9:00), Update docs after a merge (on a pull request merged into acme/relay's default branch), Dana's Write release notes (on a release published in acme/relay or acme/web), and Dean's own Check Postmark's domain verification, once, a week out at 9:00 (`automations.ts`).
+- **acme/relay's run actions**: Dev server (`pnpm dev`, the default), Members tests (`pnpm test src/members`), Seed pending invites (`pnpm db:seed --invites`), and Email previews (`pnpm email:dev`).
+- **Issue #231 "Expired invite link shows a 404"** (acme/relay): Dana asked the `vespin-agent` bot to take it, and its agent opened #232 "Show an expired invite link as no longer valid", adding Ask for a new invite (`v0.34.0-github-mention.html`).
+- **The Add teammate invitations agent's later lines** (`mention-transcript.ts`): Dean asked it to seed two pending invites on staging, the Update docs after a merge automation sent it #213's rename, Theo's Handle Postmark bounces agent (#222) asked it to keep the state names, and Dana's `@vespin` comment on #214 sent it back to work on the expired link.

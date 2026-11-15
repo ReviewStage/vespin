@@ -46,7 +46,7 @@ import { logStoreFailure } from "../../http/store-failure.js";
 import {
   DESCRIPTION_SAVE_REFUSAL,
   DESCRIPTION_SAVE_STATUS,
-  type DescriptionDocumentBinding,
+  type DescriptionBinding,
   type DescriptionNoteAuthor,
   saveNotes,
 } from "../../tasks/description-notes.js";
@@ -357,7 +357,7 @@ class EditRefused extends Data.TaggedError("EditRefused")<{
  * description's id alone.
  */
 function picturesInSandbox(
-  binding: DescriptionDocumentBinding,
+  binding: DescriptionBinding,
   pictures: readonly TaskPicture[],
   sandbox: InboxSandboxDoor,
 ): Effect.Effect<Result.Result<PicturesRead, string>, StoreFailure, DatabaseServices> {
@@ -384,7 +384,7 @@ function picturesInSandbox(
  * runs inside the call's transaction, so a refusal keeps none of them.
  */
 function keptAsNotes(
-  binding: DescriptionDocumentBinding,
+  binding: DescriptionBinding,
   read: PicturesRead,
 ): Effect.Effect<readonly DescriptionNote[], EditRefused | StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
@@ -433,7 +433,7 @@ function keptAsNotes(
  * place in the description's bound.
  */
 function savedEdit(
-  binding: DescriptionDocumentBinding,
+  binding: DescriptionBinding,
   writer: DescriptionWriter,
   notes: readonly DescriptionNote[],
   read: PicturesRead,
@@ -479,7 +479,7 @@ function savedEdit(
  * (`reserveTurnDescriptionNotes`).
  */
 export function recordDescriptionEdit(
-  binding: DescriptionDocumentBinding,
+  binding: DescriptionBinding,
   author: DescriptionNoteAuthor,
   input: UnparsedWireValue,
   takenInTurn: number,
@@ -527,7 +527,7 @@ export function recordDescriptionEdit(
  * notes' schema bounds one call's, which the server checks before it runs.
  */
 export function recordMemberDescriptionNotes(
-  binding: DescriptionDocumentBinding,
+  binding: DescriptionBinding,
   input: UnparsedWireValue,
 ): Effect.Effect<DescriptionEditResult, never, DatabaseServices> {
   const notes = notesOf(input);

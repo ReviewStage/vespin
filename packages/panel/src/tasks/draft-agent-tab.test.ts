@@ -498,7 +498,7 @@ test("a fork's draft names its source and the message over the box, starts on th
 
   const source: AgentSummary = {
     id: SOURCE,
-    planId: TASK_ID,
+    taskId: TASK_ID,
     model: "openai/gpt-6.1-sol",
     effort: "xhigh",
     title: "Queue the invite email",
@@ -560,7 +560,7 @@ test("a suggestion's draft names the agent that suggested it over the box, sends
 
   const source: AgentSummary = {
     id: SOURCE,
-    planId: TASK_ID,
+    taskId: TASK_ID,
     model: "openai/gpt-6.1-sol",
     effort: "xhigh",
     title: "Add teammate invitations",
@@ -622,7 +622,7 @@ test("a continue's draft names its source alone over the box, stands on a workin
 
   const source: AgentSummary = {
     id: SOURCE,
-    planId: TASK_ID,
+    taskId: TASK_ID,
     model: "openai/gpt-6.1-sol",
     effort: "xhigh",
     title: "Queue the invite email",

@@ -10,6 +10,14 @@
  */
 
 import type { AnimationEvent, ReactNode } from "react";
+import {
+  CARD_CORNER,
+  CARD_ELEMENT,
+  CARD_LOOK,
+  CARD_PADDING,
+  CARD_SHADOW,
+  Card,
+} from "../card/card.js";
 import { INLINE_REF_LOOK, InlineRef } from "../inline-ref/inline-ref.js";
 import { KeepFocus } from "../keep-focus/keep-focus.js";
 import { OneLine } from "../one-line/one-line.js";
@@ -47,10 +55,12 @@ export interface CallAgent {
  * press on its way out. Alone in the floating window, which shows and hides
  * it whole, it neither rises nor leaves, its shadow keeps within the room
  * the window leaves it, and on the Mac the whole card drags the window but
- * its buttons, which each answer their press.
+ * its buttons, which each answer their press. Its ground, edge, corner,
+ * and shadow are a raised `Card`'s, at a dialog's corner on a menu's
+ * shadow.
  */
 const CARD =
-  "ui-call-card flex flex-col gap-ui-4 rounded-ui-14 border border-border-strong bg-popover px-ui-12 py-ui-8 text-label text-foreground shadow-menu animate-call-card-in data-[surface=sidebar]:mb-ui-8 data-[leaving=true]:pointer-events-none data-[leaving=true]:animate-call-card-out data-[surface=window]:w-call-window-card data-[surface=window]:animate-none data-[surface=window]:shadow-toast-dismiss in-data-[ui-profile=desktop]:data-[surface=window]:[-webkit-app-region:drag] in-data-[ui-profile=desktop]:data-[surface=window]:[&_button]:[-webkit-app-region:no-drag]";
+  "ui-call-card flex flex-col gap-ui-4 px-ui-12 py-ui-8 text-label text-foreground animate-call-card-in data-[surface=sidebar]:mb-ui-8 data-[leaving=true]:pointer-events-none data-[leaving=true]:animate-call-card-out data-[surface=window]:w-call-window-card data-[surface=window]:animate-none data-[surface=window]:shadow-toast-dismiss in-data-[ui-profile=desktop]:data-[surface=window]:[-webkit-app-region:drag] in-data-[ui-profile=desktop]:data-[surface=window]:[&_button]:[-webkit-app-region:no-drag]";
 
 /**
  * The card's head, read as a row of the agents' list: the agent's chip, its
@@ -93,8 +103,8 @@ function CallCardHead({
 /**
  * The card as drawn from what it is handed: the agent's chip, which is the
  * way back to it, over the call's task by name, over the call bar: the
- * agent's line or the call's stage at the left, and Stop while the agent
- * works, the mutes, and End call at the right. There is no ×: End call is the way to put a call away, and a live
+ * agent's line or the call's stage at the left, and the mutes and End
+ * call at the right. There is no ×: End call is the way to put a call away, and a live
  * call nobody can see is what the card is for. In the floating window a
  * press acts without taking the focus (`KeepFocus`), so the next drag never
  * finds a button holding it. A card `leaving` slides out, and says so
@@ -109,7 +119,6 @@ export function CallCard({
   levels,
   surface,
   onReturn,
-  onStop,
   onEnd,
   leaving = false,
   onLeft,
@@ -126,8 +135,6 @@ export function CallCard({
   surface: CallCardSurface;
   /** Opens the call's agent, the chip's press. */
   onReturn: () => void;
-  /** Stops the agent's turn, which the bar offers while the agent works. */
-  onStop: () => void;
   onEnd: () => void;
   /** Whether the card is on its way out, which it slides through before it is gone. */
   leaving?: boolean | undefined;
@@ -149,7 +156,6 @@ export function CallCard({
           microphone={microphone}
           speaker={speaker}
           levels={levels}
-          onStop={onStop}
           onEnd={onEnd}
           titled={inWindow}
         />
@@ -158,7 +164,12 @@ export function CallCard({
   );
 
   return (
-    <section
+    <Card
+      as={CARD_ELEMENT.SECTION}
+      look={CARD_LOOK.RAISED}
+      corner={CARD_CORNER.DIALOG}
+      padding={CARD_PADDING.NONE}
+      shadow={CARD_SHADOW.MENU}
       className={CARD}
       aria-label={CALL_CARD_LABEL}
       data-surface={surface}
@@ -167,6 +178,6 @@ export function CallCard({
     >
       {/* Note that the box is drawn as its children alone, so the card lays them out either way. */}
       {inWindow ? <KeepFocus className="contents">{body}</KeepFocus> : body}
-    </section>
+    </Card>
   );
 }

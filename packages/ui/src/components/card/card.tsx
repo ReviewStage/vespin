@@ -121,10 +121,14 @@ export type CardHover = (typeof CARD_HOVER)[keyof typeof CARD_HOVER];
 /** What a card a dragged row is carried over wears while it is, set by the drag on the element itself. */
 export const CARD_DROP_TARGET = "data-drop-target";
 
-/** Each padding's room inside the edge. */
+/**
+ * Each padding's room inside the edge. Note that none sets no class at all,
+ * because a utility outranks the owner's own room in `@layer components`
+ * (the auth page's card), and the frame sets no padding to undo.
+ */
 const PADDING_CLASS: Record<CardPadding, string> = {
   [CARD_PADDING.FLUSH]: "p-0",
-  [CARD_PADDING.NONE]: "p-0",
+  [CARD_PADDING.NONE]: "",
   [CARD_PADDING.SNUG]: "px-card py-card-snug",
   [CARD_PADDING.COMPACT]: "px-card py-card-compact",
   [CARD_PADDING.REGULAR]: "p-card",

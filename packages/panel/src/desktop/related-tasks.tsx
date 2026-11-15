@@ -14,6 +14,7 @@ import { LIST_COLUMN, type ListColumn, TASK_PROPERTY } from "@repo/ui/tasks-page
 import { type ReactNode, useMemo, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useFindOpen } from "../find-in-tab.js";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import type { DescriptionRoom } from "../tasks/description-body.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -142,7 +143,15 @@ export function RelatedTasks({
   const workspaceName = tasks.workspace?.name ?? "";
   const rowTab = taskRowTab(tasks);
   const opened = openedTaskOf(tasks);
-  const subTasks = useMemo(() => childTaskCounts(tasks.tasks), [tasks.tasks]);
+
+  // Note that the rows are the open task's relations, all of its own workspace, whose tasks alone hold their sub-tasks.
+  const ofWorkspace = useNamedTasks(
+    tasks.typedNames,
+    NAMED_ORDER.PINNED_FIRST,
+    rows[0]?.task.workspaceId,
+  );
+
+  const subTasks = useMemo(() => childTaskCounts(ofWorkspace), [ofWorkspace]);
   const [list, setList] = useState<HTMLDivElement | null>(null);
   const pullRequests = useListedTaskPullRequests();
   const filled = drawnCells(rows, subTasks, pullRequests);

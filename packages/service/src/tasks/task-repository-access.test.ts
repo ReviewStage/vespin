@@ -178,7 +178,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
         });
 
         assert.equal(made.status, 201, JSON.stringify(made.body));
-        const child = Option.getOrThrow(yield* readTask(owner, made.body.plan.id));
+        const child = Option.getOrThrow(yield* readTask(owner, made.body.task.id));
         assert.deepEqual(
           {
             parentTaskId: child.task.parentTaskId,

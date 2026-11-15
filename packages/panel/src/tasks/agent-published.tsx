@@ -160,6 +160,32 @@ function pullRequestPlaces(
       };
 }
 
+/** The card the pointer resting on a pull request's row or segment hangs: the one its chip hangs (`mention-chip.tsx`), which names it whole, the published title where GitHub answered nothing. */
+function usePullRequestCard(pullRequest: Pick<AgentPullRequest, "url" | "title">): ReactNode {
+  const mentionDoors = useMentionDoors();
+
+  const mention = {
+    kind: MENTION_KIND.LINK,
+    provider: INTEGRATION_PROVIDER.GITHUB,
+    url: pullRequest.url,
+  } as const;
+
+  const standing = useLinkStanding(mention, {
+    taskId: mentionDoors.holder?.taskId,
+    workspace: mentionDoors.place.workspace,
+  });
+
+  return (
+    <MentionChipCard
+      mention={mention}
+      target={pullRequest.url}
+      name={pullRequest.title}
+      doors={mentionDoors}
+      standing={standing}
+    />
+  );
+}
+
 /** The lines a change adds and removes, as GitHub counts them: green, then red. */
 export function LinesChanged({
   additions,
@@ -197,28 +223,7 @@ export function PublishedRow({
   );
 
   const actions = branchActions(branch, doors, pullRequest.url, places.other);
-  const mentionDoors = useMentionDoors();
-
-  const mention = {
-    kind: MENTION_KIND.LINK,
-    provider: INTEGRATION_PROVIDER.GITHUB,
-    url: pullRequest.url,
-  } as const;
-
-  const standing = useLinkStanding(mention, {
-    taskId: mentionDoors.holder?.taskId,
-    workspace: mentionDoors.place.workspace,
-  });
-
-  const card = (
-    <MentionChipCard
-      mention={mention}
-      target={pullRequest.url}
-      name={pullRequest.title}
-      doors={mentionDoors}
-      standing={standing}
-    />
-  );
+  const card = usePullRequestCard(pullRequest);
 
   return (
     <div className="agent-published">
@@ -266,7 +271,7 @@ function dockedPlaces(docked: DockedPullRequest, doors: PublishedDoors, onGitHub
   return pullRequestPlaces(docked.pullRequest.url, dockedInApp(docked, doors), onGitHub, doors);
 }
 
-/** One pull request's segment of the split bar: its mark and number and title, its line counts where the segment has room, a press opening it, and a right-click offering its page and its link. */
+/** One pull request's segment of the split bar: its mark and number and title, its line counts where the segment has room, a press opening it, a right-click offering its page and its link, and the pointer resting on it hanging the pull request's chip's card, as the one row does. */
 function PublishedSegment({
   docked,
   roomy,
@@ -279,21 +284,24 @@ function PublishedSegment({
   const { pullRequest, branch } = docked;
   const places = dockedPlaces(docked, doors, usePullRequestsOnGitHub());
   const actions = branchActions(branch, doors, pullRequest.url, places.other);
+  const card = usePullRequestCard(pullRequest);
 
   return (
-    <ListRow
-      leading={<PullRequestMark pullRequest={pullRequest} />}
-      title={pullRequestLabelOf(pullRequest)}
-      meta={
-        roomy ? (
-          <LinesChanged additions={pullRequest.additions} deletions={pullRequest.deletions} />
-        ) : undefined
-      }
-      hint={{ Hint: RowHint, label: pullRequest.title }}
-      onPress={places.press}
-      menu={rowMenu(PUBLISHED_THING, actions, undefined, true)}
-      more={false}
-    />
+    <RowHintOptions card={card}>
+      <ListRow
+        leading={<PullRequestMark pullRequest={pullRequest} />}
+        title={pullRequestLabelOf(pullRequest)}
+        meta={
+          roomy ? (
+            <LinesChanged additions={pullRequest.additions} deletions={pullRequest.deletions} />
+          ) : undefined
+        }
+        hint={{ Hint: RowHint, label: pullRequest.title }}
+        onPress={places.press}
+        menu={rowMenu(PUBLISHED_THING, actions, undefined, true)}
+        more={false}
+      />
+    </RowHintOptions>
   );
 }
 
@@ -303,7 +311,7 @@ function PublishedSegment({
  * (`PublishedRow`), and where it opened more, one
  * bar split into an equal segment for each (`SplitBar`), those that do not
  * fit its width folded into a last segment whose press lists them; nothing
- * before it opened one.
+ * before it opened one. Each segment hangs the card the one row hangs.
  */
 export function PublishedBar({
   published,
