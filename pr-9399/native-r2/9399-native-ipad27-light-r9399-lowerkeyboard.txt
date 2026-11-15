@@ -1,0 +1,6 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "composedMessage CONTAINS "lowerKeyboard ended editing""
+Timestamp               Ty Process[PID:TID]
+2026-11-15 17:56:30.366 Df Vespin[13737:5ffb3f8] (Foundation) [Vespin] lowerKeyboard ended editing: yes
+2026-11-15 17:56:30.778 Df Vespin[13737:5ffb3f8] (Foundation) [Vespin] lowerKeyboard ended editing: yes
+Child process terminated with signal 9: Killed

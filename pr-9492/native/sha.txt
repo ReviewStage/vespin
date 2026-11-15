@@ -1,0 +1,13 @@
+  merged #9370 00265e0958
+  #9492 rides in #9370 (pr/9492 at c70c077e5c is in the build)
+built a3ac872df4 = main 1ceabf3acf + #9470 7bfe3aaf60 + #8954 12d0147ddf
+BUILD EXIT 0 17:26:28 free 24 GB
+clean binaries: 18
+cold-ipad26 pid 81241 alive yes crashes 0
+cold-ipad27 pid 87515 alive yes crashes 0
+cold-iphone pid 91445 alive yes crashes 0
+9492-native-iphone-light-r9370b: fails 1 shots 1 Scrolling DOWN until "acceptInvite can add a member twice" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering enabled... FAILED
+9492-native-iphone-dark-r9370b: fails 1 shots 4 Assert that "Select up to .*" is not visible... FAILED
+9492-native-ipad26-light-r9370ip: fails 1 shots 7 Tap on point (77%,19.5%)... FAILED
+9492-native-iphone-light-r9492m: fails 1 shots 1 Assert that "Select up to .*" is visible... FAILED
+9492-native-iphone-light-r9492m memory warnings: 0
