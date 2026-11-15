@@ -25,6 +25,8 @@ export interface MobileHostStartOptions {
   readonly fixture: RunProfile | undefined;
   /** Whether a fixture run stands as the service's refusal of an old build leaves it; never in a live run. */
   readonly fixtureUpdateNeeded?: boolean | undefined;
+  /** Whether a fixture run holds a machine's ask for an agent's command; never in a live run. */
+  readonly fixtureMachineAsk?: boolean | undefined;
   /** Whether a fixture run refuses the writes a flow presses; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
   /** This build's version, as the app's config names it. */
@@ -75,6 +77,7 @@ export async function startMobileHost(
         fork,
         fixture: options.fixture,
         fixtureUpdateNeeded: options.fixtureUpdateNeeded,
+        fixtureMachineAsk: options.fixtureMachineAsk,
         fixtureRefusesWrites: options.fixtureRefusesWrites,
         appVersion: options.appVersion,
         stateRoot: options.stateRoot,
