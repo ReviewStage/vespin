@@ -177,7 +177,11 @@ import {
 } from "./use-side-panel.js";
 import { useEndTerminalTab, useHeldTerminalTabs } from "./use-terminal-session.js";
 import { useWarmAgent } from "./use-warm-agent.js";
-import { listedAgentIn } from "./use-workspace-agents.js";
+import {
+  listedAgentIn,
+  useListedAgentPullRequests,
+  useListedAgents,
+} from "./use-workspace-agents.js";
 import { sayRestored } from "./version-view.js";
 
 /**
@@ -1059,8 +1063,9 @@ export function useTasksTab(input: {
   useEffect(() => {
     if (inboxElsewhere && listedStep !== undefined) turnInbox(listedStep);
   }, [inboxElsewhere, listedStep, turnInbox]);
-  // Every agent the list followed live carries, the archived ones among them; none while it is not.
-  const liveAgents = viewed.taskAgents;
+  // Every agent the list followed live carries, the archived ones among them; none while it is not, which the view alone says.
+  const agentsCarried = viewed.taskAgents !== undefined;
+  const liveAgents = useListedAgents(agentsCarried);
   const inboxWaiting = useInboxWaitingTasks();
   const signedIn = fixture !== undefined || input.signedIn;
   const page = tasksPage(viewed);
@@ -2217,7 +2222,7 @@ export function useTasksTab(input: {
     const narrow = input.room === SHELL_ROOM.NARROW;
 
     if (narrow) sidePanel.onSetOpen(false);
-    const agentId = resumingAgentOf(taskId, viewed.taskAgents, inboxWaiting);
+    const agentId = resumingAgentOf(taskId, liveAgents, inboxWaiting);
 
     if (agentId !== undefined) mainTabs.onShow(taskId, agentTab(agentId));
     else if (narrow) mainTabs.onShow(taskId, MAIN_TAB.OVERVIEW);
@@ -2647,7 +2652,7 @@ export function useTasksTab(input: {
       );
     };
 
-    const listed = listedAgentIn(viewed, agentId);
+    const listed = listedAgentIn(listCollections, agentId);
 
     if (listed !== undefined) {
       onAgent(listed);
@@ -2664,7 +2669,7 @@ export function useTasksTab(input: {
 
   const openAgentPlace = (place: AgentPlace, home: string) => {
     const open = viewed.activeTaskId;
-    const listed = listedAgentIn(viewed, place.agentId);
+    const listed = listedAgentIn(listCollections, place.agentId);
 
     if (place.taskId !== undefined) openOnTask(place.taskId, place);
     else if (open !== undefined && agents.agentIds?.includes(place.agentId))
@@ -2772,7 +2777,7 @@ export function useTasksTab(input: {
    */
   const openInboxItem = (workspace: string, place: InboxItemPlace) => {
     const open = viewed.activeTaskId;
-    const listed = "agentId" in place ? listedAgentIn(viewed, place.agentId) : undefined;
+    const listed = "agentId" in place ? listedAgentIn(listCollections, place.agentId) : undefined;
 
     if ("taskId" in place) openInboxItemOn(workspace, place, place.taskId);
     else if (!("agentId" in place)) openInboxItemById(place);
@@ -3657,7 +3662,7 @@ export function useTasksTab(input: {
     placeLeave,
   });
 
-  const listedPullRequests = viewed.agentPullRequests;
+  const listedPullRequests = useListedAgentPullRequests(agentsCarried);
 
   // Note that the list's own rows are handed on past the steadying, as the
   // document keeps them, since it already keeps a list's identity while no
