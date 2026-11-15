@@ -332,8 +332,8 @@ export type StartLanded =
   | { readonly kind: typeof START_LANDED.AGENT; readonly agentId: string }
   | { readonly kind: typeof START_LANDED.REFUSED };
 
-/** The page of each task that stands, by its task, which hears what its start came to. */
-const hearing = new Map<string, (landed: StartLanded) => void>();
+/** The pages of each task that stand, by its task, the newest last, which hears what its start came to. */
+const hearing = new Map<string, readonly ((landed: StartLanded) => void)[]>();
 
 /** The tasks a start opened whose answer is still on its way. */
 const awaiting = new Set<string>();
@@ -362,7 +362,7 @@ export function awaitStart(taskId: string): void {
  */
 export function startLanded(taskId: string, landed: StartLanded): void {
   if (!awaiting.delete(taskId)) return;
-  const hear = hearing.get(taskId);
+  const hear = hearing.get(taskId)?.at(-1);
 
   if (hear === undefined) unheard.set(taskId, { landed, at: Date.now() });
   else hear(landed);
@@ -383,15 +383,18 @@ export function useStartLanded(
   useEffect(() => {
     if (taskId === undefined) return;
     const listener = (landed: StartLanded) => heard(landed);
-    hearing.set(taskId, listener);
+    hearing.set(taskId, [...(hearing.get(taskId) ?? []), listener]);
     const waiting = unheard.get(taskId);
     unheard.delete(taskId);
 
     if (waiting !== undefined && Date.now() - waiting.at < UNHEARD_FOR_MS) listener(waiting.landed);
 
-    // Note that a page leaving leaves its start awaited, so a page standing again in its place, as the split view's detail does, still hears it.
+    // Note that a page leaving leaves its start awaited, so a page standing again in its place, as the split view's detail does, still hears it, and only the newest page of the task still standing hears it.
     return () => {
-      if (hearing.get(taskId) === listener) hearing.delete(taskId);
+      const left = (hearing.get(taskId) ?? []).filter((each) => each !== listener);
+
+      if (left.length === 0) hearing.delete(taskId);
+      else hearing.set(taskId, left);
     };
   }, [taskId]);
 }

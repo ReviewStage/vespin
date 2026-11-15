@@ -365,7 +365,7 @@ function useSheetStart(
     kept.release();
     awaitStart(taskId);
     router.dismiss();
-    router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: taskId })));
+    router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
 
     void write(
       () =>

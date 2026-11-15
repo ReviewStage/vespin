@@ -2014,6 +2014,28 @@ export function TaskColumnPage({ taskId }: { readonly taskId: string }) {
   );
 }
 
+/**
+ * Hears what a New task start came to for the task a regular window's split
+ * view shows, since the task's own page hands itself to the split view and
+ * leaves: its agent opens beside it while the Tasks tab stands in front, and
+ * a refused start, whose task was never made, leaves the detail empty, as
+ * New task opens again over it.
+ */
+function useSplitStartLanded(selected: string | undefined, focused: boolean): void {
+  const router = useRouter();
+  const onTab = useOnTab();
+
+  useStartLanded(selected, (landed) => {
+    if (landed.kind === START_LANDED.AGENT) {
+      if (focused) router.push(onTab(iosAgentRoute(landed.agentId)));
+
+      return;
+    }
+
+    router.setParams({ selected: undefined });
+  });
+}
+
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the tree
 // and the picked task side by side. Where the window is wide enough for three
 // columns, the two are handed to the tabs' one split view, which stands them
@@ -2065,6 +2087,7 @@ function TasksSplitScreen({
   };
 
   const first = useListColumn(list);
+  useSplitStartLanded(selected, focused);
   useStackRoot(SIDEBAR_PLACE.TASKS, selected);
   // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
   const stack = useDetailStackColumn(SIDEBAR_PLACE.TASKS, { id: selected }, true);
