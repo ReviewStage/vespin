@@ -210,6 +210,9 @@ const TASK_NOT_FOUND = "Task not found";
 /** What a pushed task's screen says while the list that holds it is first read. */
 const READING_TASK = readingWords("the task");
 
+/** How long a started agent that landed before its task's page first stood in front is held for that moment: the page's arrival, no longer. */
+const HELD_AGENT_MS = 3000;
+
 /** What the list's search field says before anything is typed. */
 const SEARCH_TASKS = "Search tasks";
 
@@ -1825,7 +1828,10 @@ function OverviewPage({
 
   // Note that an agent landing while the page still slides in, before it first stands in front, waits for that moment rather than being let go, since a start the service answers at once lands then.
   const [arriving, setArriving] = useState(true);
-  const [waitingAgent, setWaitingAgent] = useState<string | undefined>(undefined);
+
+  const [waitingAgent, setWaitingAgent] = useState<
+    { readonly agentId: string; readonly at: number } | undefined
+  >(undefined);
 
   // Note that New task and New agent sheets give way to this page before the service answers, so the overview every layout draws, the iPad's split detail among them, opens the started agent while the page stands in front, and opens New agent again on the words of one refused.
   useStartLanded(task.id, OVERVIEW_HEARS, (landed) => {
@@ -1833,7 +1839,7 @@ function OverviewPage({
 
     if (landed.kind === START_LANDED.AGENT) {
       if (shown && !covered) router.push(onTab(iosAgentRoute(landed.agentId)));
-      else if (!shown && arriving) setWaitingAgent(landed.agentId);
+      else if (!shown && arriving) setWaitingAgent({ agentId: landed.agentId, at: Date.now() });
     } else if (shown) router.push({ pathname: "/start-agent", params: { task: task.id } });
   });
 
@@ -1844,7 +1850,11 @@ function OverviewPage({
       if (waitingAgent === undefined) return;
 
       setWaitingAgent(undefined);
-      router.push(onTab(iosAgentRoute(waitingAgent)));
+
+      // Note that a held agent opens only while the page is still arriving, so a page first reached later, after the person went elsewhere, never jumps to it.
+      if (Date.now() - waitingAgent.at < HELD_AGENT_MS) {
+        router.push(onTab(iosAgentRoute(waitingAgent.agentId)));
+      }
     }, [waitingAgent, router, onTab]),
   );
 
