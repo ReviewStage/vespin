@@ -41,7 +41,7 @@ import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
-import { GoesMark, PUSH_ROW_GOES, type PushRowGoes } from "./settings-form.js";
+import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -248,12 +248,27 @@ type MarkRowProps = {
   readonly standing?: string | undefined;
   /** Whose row it is, by their face, where the panel draws one: a reviewer, or the App that runs a check. */
   readonly face?: { readonly of: Face; readonly stands: MarkFace } | undefined;
-  /** Where a press on it goes, marked at its end, such as out to GitHub; none where it takes no press. */
-  readonly goes?: PushRowGoes | undefined;
+  /** The address a press on it opens out of the app, such as a check's run, marked at its end by the arrow out; none where it takes no press. */
+  readonly opens?: string | undefined;
 };
 
-/** What a row that opens GitHub is heard to do, in the arrow's place. */
-const OPENS_ON_GITHUB = "Opens on GitHub";
+/** What a row that opens an address out of the app is heard to do, in the arrow's place: GitHub by name where the address is GitHub's, since a check's run may be another CI's page. */
+const OPENS_HEARD = {
+  GITHUB: "Opens on GitHub",
+  WEB: "Opens on the web",
+} as const;
+
+/** GitHub's own host, which a pull request's page and most checks' runs stand on. */
+const GITHUB_HOST = "github.com";
+
+/** What a press on a row opening `address` is heard to do. */
+function opensHeard(address: string): string {
+  const host = URL.canParse(address) ? new URL(address).hostname : "";
+
+  return host === GITHUB_HOST || host.endsWith(`.${GITHUB_HOST}`)
+    ? OPENS_HEARD.GITHUB
+    : OPENS_HEARD.WEB;
+}
 
 /**
  * A row of a pull request's page, such as a check or a reviewer: its mark
@@ -262,10 +277,10 @@ const OPENS_ON_GITHUB = "Opens on GitHub";
  * hairline under the words. A reviewer's face takes the lead column, its
  * mark moving to the line's end before its words, as the panel's facepile
  * wears where each stands; a check's App stands by its avatar beside the
- * mark. A row that opens GitHub ends in its arrow. The row is heard as one
+ * mark. A row that opens an address out of the app ends in its arrow. The row is heard as one
  * element: its name, where it stands, its words, and where a press goes.
  */
-export function MarkRow({ id, mark, title, detail, standing, face, goes }: MarkRowProps) {
+export function MarkRow({ id, mark, title, detail, standing, face, opens }: MarkRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(MARK_SIZE.FACE);
   const glyph = <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={TYPE_ROLE.ROW_TITLE} />;
@@ -308,7 +323,7 @@ export function MarkRow({ id, mark, title, detail, standing, face, goes }: MarkR
           words
         )
       }
-      trail={goes === undefined ? null : <GoesMark goes={goes} />}
+      trail={opens === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.OUT} />}
     />
   );
 
@@ -318,11 +333,7 @@ export function MarkRow({ id, mark, title, detail, standing, face, goes }: MarkR
       row={row}
       heard={{
         label: title,
-        value: [
-          standing !== detail && standing,
-          detail,
-          goes === PUSH_ROW_GOES.OUT && OPENS_ON_GITHUB,
-        ],
+        value: [standing !== detail && standing, detail, opens !== undefined && opensHeard(opens)],
       }}
     />
   );
