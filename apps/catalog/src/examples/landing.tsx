@@ -64,8 +64,8 @@ function Landing(): React.JSX.Element {
     <LandingPage
       bar={<Bar />}
       badge={<LandingBackedBy href="https://www.ycombinator.com/companies" />}
-      title="An inbox for all your coding agents."
-      lead="Agents work in cloud sandboxes, open pull requests, and post to your Inbox when they need you."
+      title="The unified workspace for teams and agents."
+      lead="Designed to keep every task moving, day and night."
       actions={<Button variant={BUTTON_VARIANT.PRIMARY}>Download for macOS</Button>}
       close={{
         title: "Free and open source.",

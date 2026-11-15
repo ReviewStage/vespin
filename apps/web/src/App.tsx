@@ -42,7 +42,7 @@ export function App(): React.JSX.Element {
       bar={<SiteNavigation current={{ page: SITE_PAGE.HOME }} />}
       barCall={<SiteBarDownload />}
       badge={<LandingBackedBy href={Y_COMBINATOR_PAGE} />}
-      title="The unified workspace for engineering teams and agents."
+      title="The unified workspace for teams and agents."
       lead="Designed to keep every task moving, day and night."
       actions={
         <>
