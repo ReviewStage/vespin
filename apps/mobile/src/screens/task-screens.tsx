@@ -2174,6 +2174,7 @@ export function TaskScreen() {
   const [gone, setGone] = useState(false);
   // Note that an agent landing while the page still slides in, before it first stands in front, waits for that moment rather than being let go, since a start the service answers at once lands then.
   const [arriving, setArriving] = useState(true);
+
   const [waitingAgent, setWaitingAgent] = useState<
     { readonly agentId: string; readonly at: number } | undefined
   >(undefined);
