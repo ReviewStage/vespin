@@ -200,6 +200,8 @@ export interface WorkspacesClient {
     | "putInstallScript"
     | "putRepositorySetup"
     | "putRunActions"
+    | "sandboxSize"
+    | "putSandboxSize"
     | "changeRole"
     | "transfer"
     | "leave"
@@ -1560,6 +1562,25 @@ function workspaceSandboxSetupActs(
   };
 }
 
+/** A workspace's cloud sandbox size's acts: read, and chosen by an owner or admin. */
+function workspaceSandboxSizeActs(
+  reach: WorkspacesReach,
+): Pick<
+  HostActTable<typeof WORKSPACE_ACTS>,
+  "WORKSPACE_SANDBOX_SIZE_READ" | "WORKSPACE_SANDBOX_SIZE_PUT"
+> {
+  const { client } = reach.dependencies;
+
+  // Note that the size is asked of the service on each act and held nowhere
+  // here, because Settings reads it as it opens and lays each choice's answer.
+  return {
+    WORKSPACE_SANDBOX_SIZE_READ: ({ workspaceId }) =>
+      workspaceAsked(reach, client.workspaces.sandboxSize(workspaceId)),
+    WORKSPACE_SANDBOX_SIZE_PUT: ({ workspaceId, vcpus }) =>
+      workspaceAsked(reach, client.workspaces.putSandboxSize(workspaceId, vcpus)),
+  };
+}
+
 /** The per-workspace reads the windows hold (`WORKSPACE_FOLLOWS`), each by the workspace its key names. */
 function workspaceFollowActs({
   people,
@@ -1650,6 +1671,7 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       ...workspaceSettingActs(reach, parts),
       ...workspaceEnvironmentActs(reach),
       ...workspaceSandboxSetupActs(reach),
+      ...workspaceSandboxSizeActs(reach),
       ...workspaceMergeQueueActs(reach),
       ...workspaceMachinesActs(reach),
       ...github.acts,
