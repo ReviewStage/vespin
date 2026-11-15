@@ -226,8 +226,12 @@ type TaskRowProps = RowActs & {
   readonly depth?: number | undefined;
 };
 
-/** A row's act as a button of its long press menu or its swipe: red where it takes something away, and in the muted ink otherwise. */
-export function actionButton(action: RowAction, colors: BrandColors) {
+/** A row's act as a button of its long press menu or its swipe: red where it takes something away, and otherwise in `ink`, the muted ink a menu's glyph takes unless a swipe asks for its fill. */
+export function actionButton(
+  action: RowAction,
+  colors: BrandColors,
+  ink: string = colors.TEXT_MUTED,
+) {
   const destructive = action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
 
   return (
@@ -236,7 +240,7 @@ export function actionButton(action: RowAction, colors: BrandColors) {
       {...menuActContent(action.label, action.symbol, action.detail)}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
-      modifiers={destructive ? [] : [tint(colors.TEXT_MUTED)]}
+      modifiers={destructive ? [] : [tint(ink)]}
     />
   );
 }
@@ -397,11 +401,14 @@ function fullSwipes(swipes: readonly RowSwipe[]): boolean {
   return first !== undefined && !isSubmenu(first) && first.tone !== ROW_ACTION_TONE.DESTRUCTIVE;
 }
 
-/** A swipe's piece as SwiftUI draws it behind the row: an act's button, or a menu's, in the muted ink. */
-function swipeButton(swipe: RowSwipe, colors: BrandColors) {
-  return isSubmenu(swipe)
-    ? rowSubmenu(swipe, colors, colors.TEXT_MUTED)
-    : actionButton(swipe, colors);
+/**
+ * A swipe's piece: an act's button, or a menu's, in `ink`. Behind the row
+ * it fills with the action gray, which holds 4.5:1 under the swipe's white
+ * words in both themes where the muted ink, light in dark, did not; in the
+ * long press menu it stands in the muted ink a menu's glyph takes.
+ */
+function swipeButton(swipe: RowSwipe, colors: BrandColors, ink: string) {
+  return isSubmenu(swipe) ? rowSubmenu(swipe, colors, ink) : actionButton(swipe, colors, ink);
 }
 
 /**
@@ -486,7 +493,7 @@ export function RowFrame({
     <ContextMenu>
       <ContextMenu.Items>
         {opening.map((action) => actionButton(action, colors))}
-        {swiped.map((swipe) => swipeButton(swipe, colors))}
+        {swiped.map((swipe) => swipeButton(swipe, colors, colors.TEXT_MUTED))}
         {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
         {menuActions.map((action) => actionButton(action, colors))}
       </ContextMenu.Items>
@@ -503,12 +510,12 @@ export function RowFrame({
       {menu}
       {trailingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="trailing" allowsFullSwipe={fullSwipes(trailingActions)}>
-          {trailingActions.map((swipe) => swipeButton(swipe, colors))}
+          {trailingActions.map((swipe) => swipeButton(swipe, colors, colors.ACTION_FILL))}
         </SwipeActions.Actions>
       )}
       {leadingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="leading" allowsFullSwipe={fullSwipes(leadingActions)}>
-          {leadingActions.map((swipe) => swipeButton(swipe, colors))}
+          {leadingActions.map((swipe) => swipeButton(swipe, colors, colors.ACTION_FILL))}
         </SwipeActions.Actions>
       )}
     </SwipeActions>
