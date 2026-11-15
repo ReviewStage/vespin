@@ -17,6 +17,7 @@ import { REMOVE_RELATION, TASK_RELATION_MENU } from "@repo/features/task-relatio
 import { TASK_CREATE_RELATION_WORDS, TASK_STATUS_TONE } from "@repo/features/task-standing-words";
 import {
   isTaskSettled,
+  TASK_BOUNDS,
   TASK_CREATE_RELATION_KIND,
   TASK_STATUS,
   type TaskCreateRelation,
@@ -388,7 +389,7 @@ function useSheetStart(
  * holds: none while it holds a picture, which goes only with an agent's
  * start. Note that a long paste held as a text file is filed as words after
  * the words typed, since a task filed for later carries no file, so a pasted
- * description can still be filed.
+ * description can still be filed, while it fits in a brief.
  */
 function filedOf(
   prompt: string,
@@ -398,8 +399,12 @@ function filedOf(
 
   if (held.some((file) => file.mediaType !== AGENT_ATTACHMENT_TYPE.TEXT)) return undefined;
   const words = [prompt.trim(), ...held.map((file) => attachmentText(file.data).trim())];
+  const kept = words.filter((each) => each !== "").join("\n\n");
 
-  return filedTaskOf(words.filter((each) => each !== "").join("\n\n"));
+  // Note that pasted text a brief would cut holds File for later back rather than being filed short, since a paste may run far past a brief's bound.
+  if (held.length > 0 && kept.length > TASK_BOUNDS.MAX_BRIEF_CHARS) return undefined;
+
+  return filedTaskOf(kept);
 }
 
 /** The skills a `/` offers, as the compose sheet takes them. */
