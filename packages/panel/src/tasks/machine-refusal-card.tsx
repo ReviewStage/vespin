@@ -33,6 +33,7 @@ import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { showToast } from "../toast.js";
 import { TranscriptAgent } from "./line-cards.js";
+import { OnMachine } from "./transcript-blocks.js";
 import { MachineGlyph } from "./workspace-machines.js";
 
 /**
@@ -42,7 +43,8 @@ import { MachineGlyph } from "./workspace-machines.js";
  * it elsewhere without a word (`machine-routing.ts`), and its answer says
  * why as data (`why`) and names the machines that could take it now
  * (`others`), beside the words the model reads (`machineRefusalOf`). The
- * card says why in its own words, as a failure note does (`Banner`'s
+ * card says why in its own words, the machine named by its chip as the
+ * call's row ends in it (`OnMachine`), as a failure note does (`Banner`'s
  * card, its mark in the danger ink), and offers each other machine as the
  * Default machine menu lists it: its glyph wearing the dot of whether it
  * listens now, a teammate's face, then its name, the line above saying
@@ -76,7 +78,7 @@ function tryAgainLine(machine: CallMachine): string {
   return `Try again on ${machine.name}, now your default machine (id "${machine.id}").`;
 }
 
-/** Why the call reached no machine, in the reader's words: the machine by what every list calls it, and whose it is where that is why. */
+/** Why the call reached no machine, in the reader's words: the machine as its chip, as the call's row ends in it, and whose it is where that is why. */
 function WhyWords({
   why,
   machine,
@@ -84,15 +86,8 @@ function WhyWords({
   why: MachineUnreached;
   machine: CallMachine | undefined;
 }): ReactNode {
-  const thisMac = useThisMac();
   const { members, readerId, former } = useMemberDirectory();
-
-  const name =
-    machine === undefined ? undefined : (
-      <ReplayWords masked>
-        {machineName({ deviceId: machine.id, name: machine.name }, [], thisMac)}
-      </ReplayWords>
-    );
+  const name = machine === undefined ? undefined : <OnMachine machine={machine} />;
 
   switch (why) {
     case MACHINE_UNREACHED.OFFLINE:

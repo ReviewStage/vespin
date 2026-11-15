@@ -34,9 +34,10 @@ import { fakeAppPlatform } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, handCapabilities, withExperiments } from "../testing/app-state.js";
 import { editorBundleLanded } from "../testing/composer.js";
 import { restOn } from "../testing/hint-rest.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { agentsControl, listedTasksOf, tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 import { taskCardOf } from "./task-card.js";
@@ -210,7 +211,7 @@ function taskDrawn(shown: Shown) {
   // The window's tasks' cards, as the shell hands them to everything it holds.
   const chipCards = {
     taskCard: (taskId: string, now: number) => {
-      const task = tasks.tasks.find((each) => each.id === taskId);
+      const task = listedTasksOf(tasks).find((each) => each.id === taskId);
 
       return task === undefined ? undefined : taskCardOf(tasks, task, now);
     },
@@ -222,7 +223,7 @@ function taskDrawn(shown: Shown) {
       createElement(
         ChipCards,
         { value: chipCards },
-        createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
+        overEveryTask(tasks, createElement(DesktopTasks, { looks: NO_LOOKS, tasks })),
       ),
     ),
   );
