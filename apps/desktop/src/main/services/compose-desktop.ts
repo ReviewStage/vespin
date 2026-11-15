@@ -266,7 +266,7 @@ export function composeDesktop(
         recordEvent: (name, properties) => {
           void run(operator.host.recordEvent(name, properties));
         },
-        workingAgents: () => workingAgentCount(state.snapshot().tasks),
+        workingAgents: () => workingAgentCount(host.agentsListed()),
       });
 
       const windows = createWindowService({

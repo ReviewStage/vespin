@@ -2,6 +2,7 @@
 
 import {
   Divider,
+  HStack,
   Menu,
   NavigationDestination,
   NavigationSplitView,
@@ -23,11 +24,13 @@ import {
   disabled,
   frame,
   hidden,
+  ignoreSafeArea,
   type ModifierConfig,
   menuIndicator,
   menuStyle,
   navigationSplitViewStyle,
   navigationTitle,
+  overlay,
   searchable,
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
@@ -127,8 +130,8 @@ export type BarPath = {
  * What a column's bar holds: its title, small and inline as every screen's
  * stands, which the back button and the reader name it by; what leads it
  * (a SwiftUI view such as the workspace switcher), a page's path in its
- * middle, its menu and its act at its trailing edge, such as a list's
- * New task, a search field over its list, and the acts at its foot, in its
+ * middle, its menu and its act at its trailing edge, such as Select mode's
+ * Done, a search field over its list, and the acts at its foot, in its
  * bottom bar.
  */
 export type ColumnBar = {
@@ -378,6 +381,8 @@ function Column({
 }) {
   const colors = useColors();
   const text = useSearchWords(bar.search, searchKey);
+  // Note that a list standing first, as a portrait iPad's, ends in a hairline beside the detail, as Mail's message list does, because both columns paint one ground and the system's sidebar column draws no edge of its own.
+  const ruled = sidebar && !clear;
 
   const stacked = (
     <ZStack
@@ -391,7 +396,7 @@ function Column({
             ]),
         // Note that a page in the detail's own stack paints the stack's ground too, because a navigation stack stands the system's own color behind each of its pages.
         ...(inStack ? [containerBackground(colors.GROUND, "navigation")] : []),
-        // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, compose, ⋯ and the sidebar button, and a leading title folds them into an overflow. A page pushed over the detail names itself small and inline, as a stack's page does. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
+        // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A page pushed over the detail names itself small and inline, as a stack's page does. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title !== undefined
           ? [
               navigationTitle(bar.title),
@@ -402,7 +407,20 @@ function Column({
             : [toolbarTitleDisplayMode("inline")]),
       ]}
     >
-      {view}
+      {ruled ? (
+        <HStack spacing={0}>
+          <ZStack>{view}</ZStack>
+          {/* Note that the rule runs the column's whole height, under its bar and over the home indicator, as the column's ground does and Mail's rule does. */}
+          <Divider
+            modifiers={[
+              overlay({ color: colors.CHIP_EDGE }),
+              ignoreSafeArea({ edges: "vertical" }),
+            ]}
+          />
+        </HStack>
+      ) : (
+        view
+      )}
     </ZStack>
   );
 
