@@ -248,7 +248,7 @@ import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { useForwardToast } from "./agent-forward.js";
 import { GoalConditions, GoalDock, GoalNoticeView } from "./agent-goal.js";
-import { useRoutedMachine } from "./agent-machines.js";
+import { useCallRoute } from "./agent-machines.js";
 import {
   agentLines,
   agentName,
@@ -778,6 +778,7 @@ function ToolCallView({
         connection={view.connection}
         account={view.account}
         machine={view.machine}
+        namedMachine={view.namedMachine}
         subject={view.subject}
         description={view.description}
         files={view.files}
@@ -3682,7 +3683,7 @@ function AgentTabView({
     !composer.sending;
 
   const macOwner = useKept(macOwnerOf(agent.startedBy, members, readerId, former), sameFields);
-  const routedMachine = useRoutedMachine(agent.id);
+  const callRoute = useCallRoute(agent.id);
   const disabledServers = servers.disabled;
 
   const mentioned = useMemo(
@@ -3729,7 +3730,7 @@ function AgentTabView({
 
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+      <CallPlaceProvider owner={macOwner} route={callRoute}>
         <AgentPicturesProvider value={pictures}>
           <ComputerAppsProvider value={computerApps}>
             <WholePartsProvider value={wholeParts}>
@@ -3859,7 +3860,7 @@ function AgentTabView({
         />
         <AgentPicturesProvider value={pictures}>
           {/* Note that the dock reads whose Mac the agent uses, as the transcript above it does, to offer Show only on that Mac. */}
-          <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+          <CallPlaceProvider owner={macOwner} route={callRoute}>
             <ComputerDock
               agentId={agent.id}
               messages={dockLines}
@@ -3903,7 +3904,7 @@ function AgentTabView({
               />
             )}
             {/* Note that the box's `@` reads whose Mac the agent uses, to list that Mac's apps or else the ones the reader's machines allow, named and drawn as the agent's calls kept them. */}
-            <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+            <CallPlaceProvider owner={macOwner} route={callRoute}>
               <AgentPicturesProvider value={pictures}>
                 <ComputerAppsProvider value={computerApps}>
                   <AgentComposer
@@ -4449,7 +4450,7 @@ export function AgentSubagentTab({
   const wholeParts = useWholePartDoor(agentId, callId);
   const { members, former } = useMemberDirectory();
   const macOwner = useKept(macOwnerOf(owner?.startedBy, members, control.me, former), sameFields);
-  const routedMachine = useRoutedMachine(agentId);
+  const callRoute = useCallRoute(agentId);
   // The worker's lines, its task first, and what its rows draw from, kept from draw to draw while none of it moved.
   const lines = useMemo(() => workerLines(task, transcript.messages), [task, transcript.messages]);
   const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
@@ -4476,7 +4477,7 @@ export function AgentSubagentTab({
 
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+      <CallPlaceProvider owner={macOwner} route={callRoute}>
         <AgentPicturesProvider value={pictures}>
           <ComputerAppsProvider value={computerApps}>
             <WholePartsProvider value={wholeParts}>
