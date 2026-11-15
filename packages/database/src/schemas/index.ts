@@ -146,6 +146,8 @@ export * from "./workspace-sandbox-script.js";
 
 export * from "./workspace-sandbox-script-run.js";
 
+export * from "./workspace-sandbox-size.js";
+
 export * from "./workspace-token-repository.js";
 
 export * from "./write-receipt.js";
