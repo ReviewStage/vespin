@@ -3,7 +3,7 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
-import { ACT_UNREACHED_WORDS } from "@repo/features/words";
+import { ACT_UNREACHED_WORDS, readingWords } from "@repo/features/words";
 import {
   INVITATION_ROLE,
   type WorkspaceInvitation,
@@ -33,9 +33,11 @@ import {
   ConfirmAsk,
   GLYPH,
   ListSection,
+  LoadingRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   useAsyncAction,
@@ -50,7 +52,7 @@ import { useChosenWorkspace } from "../../chosen-workspace.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
-import { refusalOf, useWrite } from "../../use-write.js";
+import { refusalOf, useLatestWrites, useWrite } from "../../use-write.js";
 import { pickWorkspacePhoto } from "../../workspace-photo.js";
 import { selectPhotos, switcherWorkspace } from "../../workspace-switcher.js";
 
@@ -145,8 +147,9 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
   // Note that each refusal says why in place, in the host's words through the one write door, never an error's own text.
   const write = useWrite();
   const rename = useAsyncAction(() => ACT_UNREACHED_WORDS);
-  const people = useAsyncAction(() => ACT_UNREACHED_WORDS);
-  const invite = useAsyncAction(() => ACT_UNREACHED_WORDS);
+  // Note that a member's role or removal, and an invitation sent or canceled, each go at once and say a refusal by their own row (a member's id, an invite's address or id), since the host draws them as they go and one row must not wait on, or hide, another's.
+  const people = useLatestWrites(() => ACT_UNREACHED_WORDS);
+  const invite = useLatestWrites(() => ACT_UNREACHED_WORDS);
   const leave = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const transfer = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const photo = useAsyncAction(() => ACT_UNREACHED_WORDS);
@@ -182,7 +185,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
     const may = memberActs(workspace, member, member.userId === readerId);
 
     const role = (next: typeof ASSIGNABLE_ROLE.ADMIN | typeof ASSIGNABLE_ROLE.MEMBER) => () =>
-      void people.run(() =>
+      void people.run(member.userId, undefined, () =>
         refusalOf(write, () =>
           acts[ACT_KIND.WORKSPACE_MEMBER_ROLE]({
             workspaceId,
@@ -221,14 +224,14 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
 
   const sendInvite = (role: (typeof INVITATION_ROLES)[number]) => (email: string) => {
     dismiss();
-    void invite.run(() =>
+    void invite.run(email, undefined, () =>
       refusalOf(write, () => acts[ACT_KIND.WORKSPACE_INVITE]({ workspaceId, email, role })),
     );
   };
 
   return (
     <>
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <SettingsForm>
           <ListSection
             footer={
@@ -244,6 +247,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             {manages && !personal ? (
               <ActionRow
                 label={RENAME_WORDS.ROW}
+                symbol={GLYPH.RENAME}
                 onPress={() => setAsking({ kind: ASKING.RENAME })}
               />
             ) : null}
@@ -281,9 +285,12 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             footer={
               held?.members?.failed === true
                 ? WORKSPACE_READ_FAILED.MEMBERS
-                : (people.refusal ?? (ownerAlone ? LEAVE_WORDS.OWNER_NO_ADMIN : undefined))
+                : people.said.join(" ") || (ownerAlone ? LEAVE_WORDS.OWNER_NO_ADMIN : undefined)
             }
           >
+            {members === undefined && held?.members?.failed !== true ? (
+              <LoadingRow words={readingWords("the members")} />
+            ) : null}
             {(members ?? []).map((member) => (
               <MemberRow
                 key={member.userId}
@@ -303,13 +310,17 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
               footer={
                 held?.invitations?.failed === true
                   ? WORKSPACE_READ_FAILED.INVITATIONS
-                  : invite.refusal
+                  : invite.said.join(" ") || undefined
               }
             >
               <ActionRow
                 label={INVITATION_WORDS.INVITE}
+                symbol={GLYPH.ADD}
                 onPress={() => setAsking({ kind: ASKING.INVITE })}
               />
+              {invitations === undefined && held?.invitations?.failed !== true ? (
+                <LoadingRow words={readingWords("the invitations")} />
+              ) : null}
               {(invitations ?? []).map((invitation) => (
                 <MemberRow
                   key={invitation.id}
@@ -396,7 +407,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           if (asking?.kind !== ASKING.REMOVE) return;
           const { userId } = asking.member;
           dismiss();
-          void people.run(() =>
+          void people.run(userId, undefined, () =>
             refusalOf(write, () => acts[ACT_KIND.WORKSPACE_MEMBER_REMOVE]({ workspaceId, userId })),
           );
         }}
@@ -415,7 +426,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           if (asking?.kind !== ASKING.CANCEL) return;
           const invitationId = asking.invitation.id;
           dismiss();
-          void invite.run(() =>
+          void invite.run(invitationId, undefined, () =>
             refusalOf(write, () =>
               acts[ACT_KIND.WORKSPACE_INVITATION_CANCEL]({ workspaceId, invitationId }),
             ),

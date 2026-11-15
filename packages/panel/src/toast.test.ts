@@ -9,7 +9,8 @@ import {
   type ShownFailureSentry,
   sendShownFailure,
 } from "@repo/features/shown-failure";
-import { IDLE_TASKS_VIEW, type TasksPinParams, type TasksView } from "@repo/features/tasks-view";
+import type { TaskSummary } from "@repo/features/task-wire";
+import type { TasksPinParams } from "@repo/features/tasks-view";
 import { STATUS_TONE, TOAST_HOLD } from "@repo/ui";
 import { Duration, Effect } from "effect";
 import { act, createElement, Fragment } from "react";
@@ -19,6 +20,7 @@ import { installShownFailureReporter } from "./failure-report.js";
 import { copyingInto, fakeAppPlatform } from "./testing/app-platform.js";
 import { handState } from "./testing/app-state.js";
 import { readAppState, testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
+import { listedTaskRows } from "./testing/history-rows.js";
 import { STANDING_TOAST, standingToastWords } from "./testing/toast.js";
 import { ToastHost, type ToastNotice, useToast, useToastsOwner, useWorkingToast } from "./toast.js";
 import { forgetUndo, type PressedRows, pressRows, ROW_WRITE, undoLast } from "./undo-stack.js";
@@ -168,7 +170,7 @@ const PINNED_TASK = {
 
 /** A pin of the task pressed as its menu presses it and drawn as the host draws it once kept, each undo it is sent kept in `sent`. */
 function pinPressed(sent: TasksPinParams[] = []): PressedRows {
-  let drawn: TasksView = { ...IDLE_TASKS_VIEW, tasks: [PINNED_TASK] };
+  let drawn: readonly TaskSummary[] = [PINNED_TASK];
 
   const sendPin = (payload: TasksPinParams) => {
     sent.push(payload);
@@ -178,11 +180,11 @@ function pinPressed(sent: TasksPinParams[] = []): PressedRows {
 
   const pressed = pressRows(
     ROW_WRITE.TASK_PIN,
-    { rows: () => ({ tasks: drawn, held: undefined }), send: sendPin },
+    { rows: () => listedTaskRows(drawn), send: sendPin },
     [{ id: PINNED_TASK.id, after: { pinned: true, position: null } }],
   );
 
-  drawn = { ...IDLE_TASKS_VIEW, tasks: [{ ...PINNED_TASK, pinnedAt: 3 }] };
+  drawn = [{ ...PINNED_TASK, pinnedAt: 3 }];
 
   return pressed;
 }

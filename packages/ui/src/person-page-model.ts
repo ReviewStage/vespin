@@ -83,7 +83,7 @@ function agentsOf(
   const byId = new Map(tasks.map((task) => [task.id, task]));
 
   return agents.flatMap((agent) => {
-    const task = byId.get(agent.planId);
+    const task = byId.get(agent.taskId);
 
     if (task === undefined || agent.archivedAt !== undefined) return [];
 
@@ -141,7 +141,7 @@ export function personRef(
 
   const listed = new Set(tasks.map((task) => task.id));
 
-  return agents?.find((agent) => listed.has(agent.planId) && agent.startedBy?.userId === userId)
+  return agents?.find((agent) => listed.has(agent.taskId) && agent.startedBy?.userId === userId)
     ?.startedBy;
 }
 
