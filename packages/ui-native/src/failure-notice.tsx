@@ -54,7 +54,7 @@ import {
 import { useBarGlass, useKeyboardHeight } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";
-import { LiftBarsProvider, type NoticeLift, useLiftBars } from "./notice-lift.js";
+import { FootRoomProvider, LiftBarsProvider, type NoticeLift, useLiftBars } from "./notice-lift.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -397,15 +397,10 @@ function NoticeBanner({
  * and in the sheet on top while one does (`FailureNoticeLayer`), since a
  * sheet is a view of its own over the root, which would hide it.
  */
-export function FailureNoticeProvider({
-  children,
-  footRoom = 0,
-}: {
-  readonly children: ReactNode;
-  /** The room the window's own bar takes at its foot, such as a compact window's tab bar, which the notice stands over where no screen pins a bar of its own. */
-  readonly footRoom?: number;
-}) {
+export function FailureNoticeProvider({ children }: { readonly children: ReactNode }) {
   const [state, setState] = useState(NO_NOTICE);
+  // The room the window's own bar takes at its foot, which the layout holding the bar sets (`useNoticeFootRoom`).
+  const [footRoom, setFootRoom] = useState(0);
   const [layers, setLayers] = useState<readonly string[]>([]);
   const { bars, lift } = useLiftBars();
 
@@ -437,16 +432,18 @@ export function FailureNoticeProvider({
   return (
     <Notices.Provider value={notices}>
       <LiftBarsProvider value={bars}>
-        <Stage.Provider value={stage}>
-          {children}
-          <NoticeBanner
-            notice={top === undefined ? state.shown : undefined}
-            onGone={gone}
-            lift={lift}
-            footRoom={footRoom}
-            placeFoot={0}
-          />
-        </Stage.Provider>
+        <FootRoomProvider value={setFootRoom}>
+          <Stage.Provider value={stage}>
+            {children}
+            <NoticeBanner
+              notice={top === undefined ? state.shown : undefined}
+              onGone={gone}
+              lift={lift}
+              footRoom={footRoom}
+              placeFoot={0}
+            />
+          </Stage.Provider>
+        </FootRoomProvider>
       </LiftBarsProvider>
     </Notices.Provider>
   );
