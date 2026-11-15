@@ -375,18 +375,27 @@ const taskStatusSymbols = Object.entries(TASK_STATUS_MARK).map(([key, parts]) =>
   }),
 }));
 
-// The priority marks' symbols, named for the priority: "URGENT" as "TaskPriorityUrgent", their unlit bars a second layer.
-const taskPrioritySymbols = Object.entries(TASK_PRIORITY_MARK).map(([key, parts]) => ({
-  key,
-  name: `TaskPriority${assetName(key.toLowerCase())}`,
-  svg: markTemplate(parts, {
+// A priority mark's parts as one symbol, each in one ink.
+const priorityTemplate = (parts) =>
+  markTemplate(parts, {
     box: TASK_MARK_BOX,
     lineWidth: TASK_MARK_LINE_WIDTH,
     roles: TASK_MARK_ROLE,
     elements: TASK_MARK_ELEMENT,
-    layers: TASK_MARK_LAYER,
-  }),
+  });
+
+// The priority marks' symbols, named for the priority: "URGENT" as "TaskPriorityUrgent", each its lit parts alone. Note that a priority's unlit bars stand in a symbol of their own, which the app draws faint beneath it, rather than as a second layer, since a palette of the two drew the whole symbol black on iOS.
+const taskPrioritySymbols = Object.entries(TASK_PRIORITY_MARK).map(([key, parts]) => ({
+  key,
+  name: `TaskPriority${assetName(key.toLowerCase())}`,
+  svg: priorityTemplate(parts.filter(({ layer }) => layer !== TASK_MARK_LAYER.UNLIT)),
 }));
+
+// Every bar a priority can light, the faint ground a priority's lit bars stand on.
+const taskPriorityBars = {
+  name: "TaskPriorityBars",
+  svg: priorityTemplate(TASK_PRIORITY_MARK.HIGH),
+};
 
 // ---------- Emission ----------
 const CHECK_ONLY = process.argv.includes("--check");
@@ -590,8 +599,8 @@ function taskStatusSymbolsTs() {
 // the tables in task-status-marks.mjs and re-run it.
 //
 // A task's status and priority marks as SF Symbols custom symbol templates,
-// each one outline whose cuts are holes, a priority's unlit bars a second
-// layer, in three weights iOS interpolates (scripts/lucide-symbols.mjs),
+// each one outline whose cuts are holes, a priority's lit bars apart from
+// every bar it can light, in three weights iOS interpolates (scripts/lucide-symbols.mjs),
 // which the iOS app's config writes into its asset catalog as symbol sets.
 
 export const TASK_STATUS_SYMBOL_TEMPLATES: readonly { name: string; svg: string }[] = [
@@ -599,7 +608,7 @@ ${tsTemplates(taskStatusSymbols)}
 ];
 
 export const TASK_PRIORITY_SYMBOL_TEMPLATES: readonly { name: string; svg: string }[] = [
-${tsTemplates(taskPrioritySymbols)}
+${tsTemplates([...taskPrioritySymbols, taskPriorityBars])}
 ];
 `;
 }
@@ -610,7 +619,8 @@ function nativeTaskStatusSymbolsTs() {
 //
 // The names the iOS app's asset catalog holds a task's status and priority
 // marks under, as symbol sets the app's config writes from @repo/brand's
-// templates, and how strongly a priority's unlit bars are drawn.
+// templates, the bars a priority's lit ones stand on, and how strongly those
+// unlit bars are drawn.
 
 export const TASK_STATUS_SYMBOL = {
 ${tsRecord(taskStatusSymbols.map(({ key, name }) => [key, `"${name}"`]))}
@@ -619,6 +629,8 @@ ${tsRecord(taskStatusSymbols.map(({ key, name }) => [key, `"${name}"`]))}
 export const TASK_PRIORITY_SYMBOL = {
 ${tsRecord(taskPrioritySymbols.map(({ key, name }) => [key, `"${name}"`]))}
 } as const;
+
+export const TASK_PRIORITY_BARS_SYMBOL = "${taskPriorityBars.name}";
 
 export const TASK_PRIORITY_UNLIT_OPACITY = ${TASK_PRIORITY_UNLIT_OPACITY};
 `;
