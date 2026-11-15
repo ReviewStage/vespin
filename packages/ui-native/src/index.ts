@@ -31,6 +31,7 @@ export {
   FieldChip,
   FollowingChip,
   LabelChip,
+  type ListScopes,
   PriorityChip,
   SCOPE_LOOK,
   type Scope,
