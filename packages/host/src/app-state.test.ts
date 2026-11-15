@@ -180,23 +180,15 @@ describe("a delivery that crosses the wire", () => {
     repository: null,
   });
 
-  const [invites, billing] = [
-    {
-      ...summary("invites", "Teammate invitations"),
-      agents: { total: 0, working: 0, pullRequestTotal: 0 },
-    },
-    summary("billing", "Billing usage alerts"),
-  ];
+  const invites = {
+    ...summary("invites", "Teammate invitations"),
+    agents: { total: 0, working: 0, pullRequestTotal: 0 },
+  };
 
   const openDescription: Task = {
     ...invites,
     description: { body: "# Billing alerts fire at ninety percent", assumptions: [] },
   };
-
-  const taskList = (tasks: readonly TaskSummary[]): AppStateSnapshot => ({
-    ...document,
-    tasks: { ...document.tasks, tasks, activeTaskId: openDescription.id },
-  });
 
   const descriptions = (held: AppHeldTasks): AppStateSnapshot => ({
     ...document,
@@ -281,20 +273,6 @@ describe("a delivery that crosses the wire", () => {
         ),
       ],
       quiet: [alpha.title],
-    },
-    {
-      name: "the task list, one task renamed and one come at the head, and the rest kept",
-      sent: taskList([invites, billing]),
-      next: taskList([
-        summary("delta", "Quarterly review"),
-        { ...invites, name: "Invites now" },
-        billing,
-      ]),
-      kept: (state: AppStateSnapshot) => [
-        state.tasks.tasks.find((row) => row.id === billing.id),
-        state.tasks.tasks.find((row) => row.id === invites.id)?.agents,
-      ],
-      quiet: [billing.name],
     },
     {
       name: "the held descriptions, a task's saved, one let go, and one kept",

@@ -42,9 +42,9 @@ import {
 } from "@tanstack/db";
 import { Effect, type Scope } from "effect";
 import { listedOf, type QueryCollection } from "./drawn-rows.js";
-import type { AgentRow, PastGrace, PlanRow } from "./task-list-collections.js";
 import type { Continued } from "./task-list-continuations.js";
 import type { PlanAgents, PlanPullRequests } from "./task-list-pull-requests.js";
+import type { AgentRow, PastGrace, PlanRow } from "./task-list-rows.js";
 
 /** What the list's plans and agents are derived from: the rows as it draws them, and what it derives beside them. */
 export interface TaskListSources {

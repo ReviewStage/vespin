@@ -54,7 +54,7 @@ export interface RoutedMemory {
 }
 
 /** How many times the window opened a person's page, which only grows, so no ask is ever numbered twice, and the machine the last opened it at, none where it named none. */
-export interface PersonLandings {
+interface PersonLandings {
   readonly asks: number;
   readonly at: PersonLanding | undefined;
 }

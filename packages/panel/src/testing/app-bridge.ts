@@ -5,7 +5,14 @@
 import { ORPCError } from "@orpc/client";
 import type { AgentChangesAnswerView } from "@repo/features/agent-view";
 import type { TaskFileRequest } from "@repo/features/task-wire";
-import type { TasksFileAnswer } from "@repo/features/tasks-view";
+import {
+  type ListedApart,
+  type ListedTasksView,
+  listedApart,
+  type TasksFileAnswer,
+  type TasksView,
+} from "@repo/features/tasks-view";
+import type { AppStateDelivery, AppStateRead } from "@repo/host/app-state";
 import type { AppBridge } from "@repo/host/bridge";
 import {
   ACCOUNT_ASK_ACT_KIND,
@@ -30,11 +37,64 @@ import { installActPortClient, installAppBridge } from "../app-bridge.js";
 let answering: Partial<AppBridge> = {};
 let answeringPort: Partial<FakeActPort> = {};
 
+/** A tasks slice a test wrote, held apart as the host holds it: the slice the document carries, and the task list's lists beside it (`ListedAppState`). */
+function heldApart(written: TasksView): ListedApart {
+  // SAFETY: a test writes the task list's lists into its documents' tasks slice (`ListedAppState`), which this is where it does.
+  const listed = written as Partial<ListedTasksView> & TasksView;
+
+  return listedApart({ ...listed, tasks: listed.tasks ?? [] });
+}
+
+/** `read` with the task list's lists a test wrote into it handed beside it, as the host answers a whole read. */
+function withListsBeside(read: AppStateRead): AppStateRead {
+  if (read.taskList !== undefined) return read;
+  const { tasks, lists } = heldApart(read.tasks);
+
+  return { ...read, tasks, taskList: lists };
+}
+
+/** `delivery` with the task list's lists a test wrote into its tasks slice handed beside it, as the host carries them. */
+function withRowsBeside(delivery: AppStateDelivery): AppStateDelivery {
+  const whole = delivery.entries.tasks;
+
+  if (delivery.taskList !== undefined || whole === undefined) return delivery;
+  const { tasks, lists } = heldApart(whole);
+
+  return {
+    ...delivery,
+    entries: { ...delivery.entries, tasks },
+    taskList: { version: delivery.version, whole: lists },
+  };
+}
+
+/**
+ * The document's whole read and deliveries with the task list's lists a
+ * test wrote into them handed beside them, as the host holds the two apart
+ * (`AppStateRead`, `appStateDelivery`).
+ */
+function withTaskLists(calls: Partial<AppBridge>): Partial<AppBridge> {
+  const { onAppState, requestAppState } = calls;
+
+  return {
+    ...calls,
+    ...(requestAppState === undefined
+      ? undefined
+      : {
+          requestAppState: () => requestAppState().then(withListsBeside),
+        }),
+    ...(onAppState === undefined
+      ? undefined
+      : {
+          onAppState: (listener) => onAppState((delivery) => listener(withRowsBeside(delivery))),
+        }),
+  };
+}
+
 /** Installs a bridge answering only the calls given, in place of whatever the window held. */
 export function fakeAppBridge(calls: Partial<AppBridge>): void {
   answering = calls;
   // SAFETY: a test's window makes only the calls its test answers, and any other is undefined and throws where it is made.
-  installAppBridge(calls as AppBridge);
+  installAppBridge(withTaskLists(calls) as AppBridge);
 }
 
 /** The calls the fake bridge answers now, for a test that answers one more beside them or puts them back. */
