@@ -1,0 +1,9 @@
+== iphone 02:13:02
+  ax none on iphone: contrast disabled transparency-key 
+9434-iphone-light r9434b.yaml: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+remote: 
+remote: GitHub found 5 vulnerabilities on ReviewStage/vespin's default branch (2 moderate, 3 low). To find out more, visit:        
+remote:      https://github.com/ReviewStage/vespin/security/dependabot        
+remote: 
+pushed 9434        1 files 02:21:54
+ALLDONE
