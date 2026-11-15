@@ -54,6 +54,7 @@ import {
   holdMembers,
 } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
 import { playListMotions } from "../testing/pane-motion.js";
@@ -459,7 +460,7 @@ function mountWith(
               OpenSettingsProvider,
               { value: (link: SettingsLink) => opened.settings.push(link) },
               createElement(HoldsPersonRoute),
-              createElement(PersonPage, { tasks, userId, name, away }),
+              overListedTasks(tasks, createElement(PersonPage, { tasks, userId, name, away })),
             ),
           ),
         ),

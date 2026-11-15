@@ -5,6 +5,7 @@ import {
   openItems,
 } from "@repo/features/inbox-list-model";
 import { useMemo } from "react";
+import { useListedTasks } from "../task-list-collections.js";
 import {
   type HolderInboxItems,
   taskHoldings,
@@ -47,7 +48,7 @@ type UseListedInboxGroupsResult = {
  */
 function useListedInboxGroups(tasks: TasksControl): UseListedInboxGroupsResult {
   const { inboxTasks } = useListedInbox(tasks);
-  const listed = tasks.listed.tasks;
+  const listed = useListedTasks(tasks.workspace?.id, tasks.typedNames);
 
   // Note that every plan holding an item is read, not only those main counts as waiting on the
   // account, because those are its own agents' alone, and the Inbox lists every member's.

@@ -136,6 +136,7 @@ import { renameWrite } from "../rename-write.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
+import { useListedTasks } from "../task-list-collections.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
 import { openTaskInTab } from "../tasks/task-menu-items.js";
 import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
@@ -985,7 +986,7 @@ export function TasksBoard({
   const columnStore = frame.column ?? ownColumn;
   const chosen = useSelector(columnStore) ?? FIRST_SHOWN;
   const setChosen = (next: string) => columnStore.setState(() => next);
-  const listed = tasks.listed.tasks;
+  const listed = useListedTasks(tasks.workspace?.id, tasks.typedNames);
   // Note that a card counts every sub-task listed, as the List's row does, whatever the filter leaves on the board.
   const subTasksOf = useMemo(() => childTaskCounts(listed), [listed]);
   const { filter, display } = frame;
@@ -1001,6 +1002,7 @@ export function TasksBoard({
   // While the page is shown each card keeps the column and the place it was first drawn in, so one a teammate's change would move stays under the reader's eye.
   const columns = useHeldTasks(
     tasks,
+    listed,
     { workspaceId: tasks.workspace?.id, filter, display },
     (standing) =>
       tasksBoardColumns(standing, {
