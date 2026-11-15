@@ -9,14 +9,15 @@ import {
   VARIABLE_ROW_SKELETON,
 } from "./environment-variables-section.js";
 import { ReadFailed } from "./marks.js";
+import { SandboxSizeSection } from "./sandbox-size-section.js";
 import { shownWorkspace } from "./settings-rows.js";
 import type { WorkspaceSettingsControl } from "./workspace-page.js";
 
 /**
- * cloud-environment-page.tsx -- Settings › Cloud environment: what the workspace's cloud agents start with, its variables and then its scripts, on one page since both exist only for those agents.
+ * cloud-environment-page.tsx -- Settings › Cloud environment: what the workspace's cloud agents start with, their sandbox's size, its variables and then its scripts, on one page since all exist only for those agents.
  *
- * Variables comes first, Add variable on its heading, then Install
- * software and Setup scripts, each section reading and
+ * Sandbox comes first, then Variables, Add variable on its heading, then
+ * Install software and Setup scripts, each section reading and
  * saving its own as it did on a page of its own.
  */
 
@@ -50,9 +51,10 @@ export function CloudEnvironmentPage({
     );
   }
 
-  // Keyed to the workspace, so another one listed reads its own variables and scripts and asks nothing left over.
+  // Keyed to the workspace, so another one listed reads its own size, variables, and scripts and asks nothing left over.
   return (
     <Fragment key={workspace.id}>
+      <SandboxSizeSection workspace={workspace} />
       <EnvironmentVariablesSection workspace={workspace} />
       <CloudSetupSections workspace={workspace} view={view} />
     </Fragment>

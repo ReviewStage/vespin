@@ -43,7 +43,7 @@ import { MACHINE_COMMAND_BOUNDS } from "@repo/features/machine-command-wire";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
 import { formatBytes, formatCount } from "@repo/features/number-format";
 import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
-import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
+import { SANDBOX_SIZE, SANDBOX_VCPU_SIZES } from "@repo/features/sandbox-size";
 import { TASK_BOUNDS } from "@repo/features/task-wire";
 import { workingTime } from "@repo/features/time-format";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
@@ -96,12 +96,6 @@ const limit = (label: string, figure: string, constant: string): Limit => ({
   figure,
   constant,
 });
-
-/** The vCPUs a repository's sandbox is given over the default, one row each. */
-const SANDBOX_OVERRIDES: readonly Limit[] = [...SANDBOX_SIZE.VCPUS_BY_REPOSITORY].map(
-  ([repository, vcpus]) =>
-    limit(`Sandbox vCPUs for ${repository}`, `${vcpus} vCPU`, "SANDBOX_SIZE.VCPUS_BY_REPOSITORY"),
-);
 
 /** Every limit the page draws, by area, in the order it draws them. */
 const LIMIT_GROUPS: readonly LimitGroup[] = [
@@ -231,13 +225,17 @@ const LIMIT_GROUPS: readonly LimitGroup[] = [
   {
     title: "Machines",
     limits: [
-      limit("Sandbox vCPUs", `${SANDBOX_SIZE.VCPUS} vCPU`, "SANDBOX_SIZE.VCPUS"),
+      limit("Sandbox vCPUs, by default", `${SANDBOX_SIZE.VCPUS} vCPU`, "SANDBOX_SIZE.VCPUS"),
+      limit(
+        "Sandbox vCPUs a workspace may choose",
+        `${SANDBOX_VCPU_SIZES.join(", ")} vCPU`,
+        "SANDBOX_VCPUS",
+      ),
       limit(
         "Sandbox memory per vCPU",
         `${SANDBOX_SIZE.MEMORY_GB_PER_VCPU} GB`,
         "SANDBOX_SIZE.MEMORY_GB_PER_VCPU",
       ),
-      ...SANDBOX_OVERRIDES,
       limit(
         "Command on a Mac, by default",
         seconds(MACHINE_COMMAND_BOUNDS.DEFAULT_TIMEOUT_SECONDS),

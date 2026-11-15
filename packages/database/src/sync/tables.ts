@@ -69,6 +69,7 @@ import { taskSection, taskSectionEntry } from "../schemas/task-section.js";
 import { voiceCallTable } from "../schemas/voice-call.js";
 import { workspaceExperiment } from "../schemas/workspace-experiment.js";
 import { workspaceFormerSlug } from "../schemas/workspace-former-slug.js";
+import { workspaceSandboxSize } from "../schemas/workspace-sandbox-size.js";
 import { TOPIC } from "./notification.js";
 import { defineSyncTable, LOG, type SyncTable } from "./sync-table.js";
 
@@ -888,6 +889,16 @@ export const agentDelegationSync = defineSyncTable(agentDelegationTable, {
   ],
 });
 
+/**
+ * A workspace's sandbox size, on the workspace's topic, so every member's
+ * task list reads its agents' size again as it changes; logged, since the
+ * list's delta read takes the agents of a moved size.
+ */
+export const workspaceSandboxSizeSync = defineSyncTable(workspaceSandboxSize, {
+  topics: [{ kind: TOPIC.WORKSPACE, column: workspaceSandboxSize.organizationId }],
+  log: LOG.EVERY,
+});
+
 export const SYNC_TABLES: readonly SyncTable[] = [
   taskSync,
   taskBlockSync,
@@ -904,6 +915,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   personalWorkspaceSync,
   workspaceFormerSlugSync,
   workspaceExperimentSync,
+  workspaceSandboxSizeSync,
   githubInstallationSync,
   githubPersonalTokenSync,
   githubRepositoryReadSync,

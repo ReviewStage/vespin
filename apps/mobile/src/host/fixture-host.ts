@@ -35,9 +35,11 @@ import {
   type AgentChoices,
   agentChangeOf,
   chosenTasksView,
+  type InboxReadMarks,
   type InboxReminders,
   inboxActAnswer,
   inboxAppState,
+  inboxReadMarksAppState,
   inboxRemindersAppState,
   inboxTasksView,
   MEMORY_SAVE_REFUSED,
@@ -109,6 +111,12 @@ const REMINDERS = new WeakMap<object, InboxReminders>();
 
 /** No reminder set yet. */
 const NO_REMINDERS: InboxReminders = new Map();
+
+/** The Inbox read marks each fixture run made, by its store. */
+const INBOX_READ_MARKS = new WeakMap<object, InboxReadMarks>();
+
+/** No Inbox read mark made. */
+const NO_INBOX_READ_MARKS: InboxReadMarks = new Map();
 
 /** The runs that hold a machine's ask, as `-machineAsk true` asks, by the store each stages, since a stage after a press is asked with none of the launch's own. */
 const MACHINE_ASKED = new WeakSet<object>();
@@ -189,7 +197,10 @@ export function stageFixture(
   );
 
   const saved = savedMemoriesAppState(
-    inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS),
+    inboxReadMarksAppState(
+      inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS),
+      INBOX_READ_MARKS.get(state) ?? NO_INBOX_READ_MARKS,
+    ),
     MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
   );
 
@@ -247,6 +258,22 @@ function keepReadMark(
   stageFixture(state);
 
   return true;
+}
+
+/** Keeps an Inbox read mark the fixture took and lays it over the document at once, as the host draws one; nothing for any other act. */
+function keepInboxReadMark(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  if (kind !== ACT_KIND.AGENTS_INBOX_READ_STATE) return;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { itemId, unread } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_READ_STATE>;
+  INBOX_READ_MARKS.set(
+    state,
+    new Map(INBOX_READ_MARKS.get(state) ?? NO_INBOX_READ_MARKS).set(itemId, unread),
+  );
+  stageFixture(state);
 }
 
 /** Keeps a machine's ask the fixture answered and takes it off the document at once, as the service's read drops it (`machineAskAppState`); nothing for any other act. */
@@ -346,6 +373,8 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
   [ACT_KIND.TASKS_PIN, () => false],
   [ACT_KIND.TASKS_ADD_FOLLOWER, () => ({ failure: FOLLOWER_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.MEMORIES_FORGET, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
+  // Note that a note to the people who make the app is refused too, so its footer's failure tone shows.
+  [ACT_KIND.FEEDBACK_SEND, () => ({ delivered: false })],
 ]);
 
 /** A member of `members` by a key known only at run time, as the fixture reads each one of the port before it answers or forwards it. */
@@ -364,9 +393,9 @@ function memberAt<Member>(
  * window's side, and every other act sent to the host. The invitations
  * agent's older page is read as the service would read it, though its first
  * read is not heard back, so a flow sees Try again, and the next lays the
- * page before the transcript's first message. Note that a thread's mark is
- * echoed and moves no dot, as on the panel's, while a task's read mark
- * moves its row's dot (`keepReadMark`), and a change to one of the
+ * page before the transcript's first message. Note that a thread's read
+ * mark and a task's each move their row's dot (`keepInboxReadMark`,
+ * `keepReadMark`), and a change to one of the
  * fixture's pull requests moves it on the document of `state`, as GitHub
  * would, so a screen draws it merged or out of the queue, and a reminder
  * set or cleared moves its item there, as the host draws one, so the Inbox
@@ -409,6 +438,8 @@ export function fixtureActs(
         keepMove(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepReminder(state, kind as PortActKind, payload);
+        // SAFETY: as above.
+        keepInboxReadMark(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepChoice(state, kind as PortActKind, payload);
         // SAFETY: as above.

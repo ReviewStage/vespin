@@ -357,6 +357,7 @@ function AgentComposerBar({
     onSend: composer.send,
     addMenu,
     onDropPictures: composer.dropPictures,
+    onLongPaste: composer.pasteText,
     onStop: composer.stop,
     stopping: composer.stopping,
     call,

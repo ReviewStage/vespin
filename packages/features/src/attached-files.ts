@@ -1,8 +1,8 @@
 /**
  * attached-files.ts -- a file's bytes as the wire spells them.
  *
- * Reading them, which come and why one cannot, is `useAttachedFiles`' own
- * (`../use-attached-files.ts`).
+ * Reading them, which come and why one cannot, is each box's own: the
+ * panel's `useAttachedFiles` and the iOS app's `useAttachedPictures`.
  */
 
 /** Bytes as base64, a chunk at a time, since one call's arguments cannot hold a file. */
