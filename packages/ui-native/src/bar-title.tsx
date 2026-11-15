@@ -3,6 +3,7 @@
 import { Button, HStack, Image, Text as SwiftUIText, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
+  accessibilityIdentifier,
   accessibilityLabel,
   buttonStyle,
   font,
@@ -24,6 +25,9 @@ export type BarSubtitle = {
   /** What a press on the line says it does, to VoiceOver, before its words, such as "Change model". */
   readonly label?: string | undefined;
 };
+
+/** What the line's press is found by in the app's flows, in either bar. */
+const BAR_SUBTITLE_ID = "bar-subtitle";
 
 const styles = StyleSheet.create({
   stack: { alignItems: "center" },
@@ -90,7 +94,7 @@ export function StackBarTitle({
           accessibilityRole="button"
           accessibilityLabel={spokenLine(subtitle)}
           hitSlop={8}
-          testID="bar-subtitle"
+          testID={BAR_SUBTITLE_ID}
         >
           {words}
         </Press>
@@ -156,7 +160,11 @@ export function ColumnBarTitle({
   return (
     <Button
       onPress={subtitle.onPress}
-      modifiers={[buttonStyle("plain"), accessibilityLabel(`${title}, ${spokenLine(subtitle)}`)]}
+      modifiers={[
+        buttonStyle("plain"),
+        accessibilityLabel(`${title}, ${spokenLine(subtitle)}`),
+        accessibilityIdentifier(BAR_SUBTITLE_ID),
+      ]}
     >
       {stack}
     </Button>
