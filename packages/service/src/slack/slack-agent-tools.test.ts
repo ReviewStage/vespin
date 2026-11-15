@@ -29,36 +29,32 @@ const TEAM = "T0001";
 /** The Slack user the agent's member is, found by their email. */
 const MEMBER_SLACK_ID = "U0001";
 
-/** A private channel the bot is in. */
-const PRIVATE_CHANNEL = "G0001";
+/** A channel the bot is in. */
+const CHANNEL = "C0001";
 
-/** A Slack whose team holds one private channel the bot is in, whose members are those given. */
-function slackWithPrivateChannel(members: readonly string[]): SlackWebApi {
-  return (method) => {
-    switch (method) {
-      case "auth.test":
-        return Effect.succeed({ ok: true, team_id: TEAM, team: "Team", user_id: "UBOT" });
-      case "users.lookupByEmail":
-        return Effect.succeed({ ok: true, user: { id: MEMBER_SLACK_ID } });
-      case "conversations.list":
-        return Effect.succeed({
-          ok: true,
-          channels: [{ id: PRIVATE_CHANNEL, name: "secret", is_private: true, is_member: true }],
-        });
-      case "conversations.members":
-        return Effect.succeed({ ok: true, members });
-      case "conversations.history":
-        return Effect.succeed({
-          ok: true,
-          messages: [{ ts: "1700000000.000001", user: "U0002", text: "Ship it <tonight>." }],
-        });
-      case "users.info":
-        return Effect.succeed({ ok: true, user: { profile: { display_name: "Robin" } } });
-      default:
-        return Effect.fail(new SlackBotFailure({ method }));
-    }
-  };
-}
+/** A Slack whose team holds one channel the bot is in, with one message from another member. */
+const slackWithChannel: SlackWebApi = (method) => {
+  switch (method) {
+    case "auth.test":
+      return Effect.succeed({ ok: true, team_id: TEAM, team: "Team", user_id: "UBOT" });
+    case "users.lookupByEmail":
+      return Effect.succeed({ ok: true, user: { id: MEMBER_SLACK_ID } });
+    case "conversations.list":
+      return Effect.succeed({
+        ok: true,
+        channels: [{ id: CHANNEL, name: "release", is_member: true }],
+      });
+    case "conversations.history":
+      return Effect.succeed({
+        ok: true,
+        messages: [{ ts: "1700000000.000001", user: "U0002", text: "Ship it <tonight>." }],
+      });
+    case "users.info":
+      return Effect.succeed({ ok: true, user: { profile: { display_name: "Robin" } } });
+    default:
+      return Effect.fail(new SlackBotFailure({ method }));
+  }
+};
 
 /** A member of a fresh workspace, connected to the Slack team where `connected`, and an agent of theirs, as the agent calls its tools. */
 const openAgent = (connected: boolean) =>
@@ -104,10 +100,8 @@ it.layer(getTestDB())("an agent's Slack tools as the bot", (it) => {
 
       const sent = yield* runSendSlackMessage(
         { caller },
-        { text: "Hello.", channel: PRIVATE_CHANNEL },
-      ).pipe(
-        Effect.provideService(SlackBot, slackBotOver(slackWithPrivateChannel([MEMBER_SLACK_ID]))),
-      );
+        { text: "Hello.", channel: CHANNEL },
+      ).pipe(Effect.provideService(SlackBot, slackBotOver(slackWithChannel)));
 
       assert.deepEqual(sent, {
         status: ACTION_RESULT_STATUS.REJECTED,
@@ -116,34 +110,24 @@ it.layer(getTestDB())("an agent's Slack tools as the bot", (it) => {
     }),
   );
 
-  it.effect(
-    "a private channel is read only where the agent's member is in it, its words fenced and marked outside",
-    () =>
-      Effect.gen(function* () {
-        const caller = yield* openAgent(true);
+  it.effect("a channel's messages are read with others' words fenced and marked outside", () =>
+    Effect.gen(function* () {
+      const caller = yield* openAgent(true);
 
-        const read = (members: readonly string[]) =>
-          runReadSlack({ caller }, { channel: "#secret" }).pipe(
-            Effect.provideService(SlackBot, slackBotOver(slackWithPrivateChannel(members))),
-          );
+      const read = yield* runReadSlack({ caller }, { channel: "#release" }).pipe(
+        Effect.provideService(SlackBot, slackBotOver(slackWithChannel)),
+      );
 
-        const outsider = yield* read(["U0002"]);
-        const insider = yield* read(["U0002", MEMBER_SLACK_ID]);
-
-        assert.deepEqual(outsider, {
-          status: ACTION_RESULT_STATUS.REJECTED,
-          reason: SLACK_REACH_REFUSAL.PRIVATE,
-        });
-        assert.equal(insider.status, ACTION_RESULT_STATUS.ACCEPTED);
-        assert.deepEqual(insider.messages, [
-          {
-            ts: "1700000000.000001",
-            author: "Robin",
-            bot: false,
-            outside: true,
-            text: "Ship it &lt;tonight&gt;.",
-          },
-        ]);
-      }),
+      assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED);
+      assert.deepEqual(read.messages, [
+        {
+          ts: "1700000000.000001",
+          author: "Robin",
+          bot: false,
+          outside: true,
+          text: "Ship it &lt;tonight&gt;.",
+        },
+      ]);
+    }),
   );
 });

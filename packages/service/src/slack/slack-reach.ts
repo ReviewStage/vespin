@@ -1,5 +1,5 @@
 /**
- * slack-reach.ts -- where a coding agent may act in Slack as the bot: its own workspace's team, and the channels the bot is in that the agent's member may read.
+ * slack-reach.ts -- where a coding agent may act in Slack as the bot: its own workspace's team, and the channels the bot is in.
  *
  * Every Slack tool an agent is offered (`send_slack_message`,
  * `list_slack_channels`, `read_slack`, `react_slack`) asks here first.
@@ -7,11 +7,9 @@
  * - The deployment must hold the bot, and the agent's workspace must have
  *   connected it to the team the bot's token answers for (`auth.test`), so
  *   one workspace's agent never acts in another's Slack.
- * - A channel is one the bot is in (`conversations.list`, `member`).
- * - A private channel is one the member the agent works for is in too
- *   (`conversations.members` against their Slack id), since whatever the
- *   agent reads there reaches its transcript, which anyone who can open the
- *   task reads.
+ * - A channel is one the bot is in (`conversations.list`, `member`),
+ *   private or not. Note that what an agent reads in a private channel
+ *   lands in its transcript, which anyone who can open the task reads.
  * - The agent's current thread (`currentSlackThread`) is where it was
  *   addressed, so a post or a reaction in its channel, and a read of the
  *   thread itself, need no lookup.
@@ -37,7 +35,6 @@ export const SLACK_REACH_REFUSAL = {
     "Refused: your workspace connected the Slack bot to another Slack team than the one it now answers for; an owner or admin connects it again under Settings.",
   UNREACHABLE: "Refused: Slack did not answer; try again in a minute.",
   NOT_IN_CHANNEL: `Refused: the Slack bot is not in that channel. ${AGENT_TOOL.LIST_SLACK_CHANNELS} lists where it is; ask a person to add the bot to the channel.`,
-  PRIVATE: `Refused: that private channel is one the member you work for is not in, so you may not read or post there.`,
 } as const;
 
 export type SlackReachRefusal = (typeof SLACK_REACH_REFUSAL)[keyof typeof SLACK_REACH_REFUSAL];
@@ -67,23 +64,6 @@ function channelNamed(channels: readonly SlackChannel[], named: string): SlackCh
 
   return channels.find((channel) => channel.id === named || channel.name === name);
 }
-
-/** Whether the member the agent works for is in the private channel, by their Slack id; false where either could not be read. */
-export const memberInChannel = Effect.fn("web/slackMemberInChannel")(function* (
-  reach: SlackReach,
-  channelId: string,
-) {
-  const slackId = yield* reach.bot.memberSlackId(reach.agent.organizationId, reach.agent.userId);
-
-  if (Option.isNone(slackId)) return false;
-
-  const members = yield* reach.bot.channelMembers(channelId).pipe(
-    Effect.map(Option.some),
-    Effect.catch(() => Effect.succeedNone),
-  );
-
-  return Option.isSome(members) && members.value.includes(slackId.value);
-});
 
 /**
  * The agent's workspace reached in Slack: the bot held, the workspace's
@@ -126,8 +106,7 @@ export const reachSlack = Effect.fn("web/reachSlack")(function* (
 /**
  * The channel an agent named, where it may act there for the use given:
  * the current thread's channel for a post, or the current thread itself
- * for a read, as it stands; otherwise a channel the bot is in, and, where
- * it is private, one the agent's member is in too.
+ * for a read, as it stands; otherwise a channel the bot is in.
  */
 export const reachChannel = Effect.fn("web/reachSlackChannel")(function* (
   reach: SlackReach,
@@ -150,10 +129,6 @@ export const reachChannel = Effect.fn("web/reachSlackChannel")(function* (
 
   if (channel === undefined || !channel.member)
     return Result.fail(SLACK_REACH_REFUSAL.NOT_IN_CHANNEL);
-
-  if (channel.private && !(yield* memberInChannel(reach, channel.id))) {
-    return Result.fail(SLACK_REACH_REFUSAL.PRIVATE);
-  }
 
   return Result.succeed({ id: channel.id, name: channel.name });
 });

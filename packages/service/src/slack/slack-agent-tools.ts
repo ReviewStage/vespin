@@ -2,13 +2,10 @@
  * slack-agent-tools.ts -- `list_slack_channels`, `read_slack`, and `react_slack`: where a coding agent may act in Slack as the bot, what it reads there, and its reactions.
  *
  * Each is reached through `slack-reach.ts`: the agent's own workspace's
- * team, the channels the bot is in, and a private one only where the
- * member the agent works for is in it too, so nothing reaches the
- * transcript that member could not read in Slack themselves.
+ * team, and the channels the bot is in, private ones among them.
  *
  * - `list_slack_channels` answers the channels the bot is in, each with
- *   its topic, the private ones its member is not in left out, and the
- *   agent's own current thread where it has one.
+ *   its topic, and the agent's own current thread where it has one.
  * - `read_slack` answers a channel's latest messages
  *   (`conversations.history`) or one thread's (`conversations.replies`),
  *   few at a time, since Slack bounds those reads hard; each message by
@@ -35,7 +32,6 @@ import { ACTION_RESULT_STATUS, type UnparsedWireValue } from "../core.js";
 import type { SlackBot, SlackThreadMessage } from "./slack-bot.js";
 import { SLACK_MANNERS } from "./slack-message-tool.js";
 import {
-  memberInChannel,
   reachChannel,
   reachSlack,
   SLACK_REACH_REFUSAL,
@@ -114,8 +110,8 @@ export const LIST_SLACK_CHANNELS_TOOL = {
   name: AGENT_TOOL.LIST_SLACK_CHANNELS,
   description:
     "List the Slack channels the Slack bot is in, where you may post and read as it: each " +
-    "with its `id`, `name`, whether it is `private`, and its `topic`, a private one only where " +
-    "the member you work for is in it, and your own current Slack thread where you have one. A " +
+    "with its `id`, `name`, whether it is `private`, and its `topic`, and your own current " +
+    "Slack thread where you have one. A " +
     "channel not listed is one the bot is not in; ask a person to add the bot there. Answers " +
     "`accepted` with them, or `rejected` and why.",
   inputSchema: LIST_SLACK_CHANNELS_INPUT,
@@ -143,7 +139,7 @@ export const REACT_SLACK_TOOL = {
   inputSchema: REACT_SLACK_INPUT,
 } as const;
 
-/** The channels the bot is in that the agent may read, each with its topic; the refusal's words where Slack could not be read. */
+/** The channels the bot is in, each with its topic; the refusal's words where Slack could not be read. */
 const listedChannels = Effect.fn("web/slackAgentChannels")(function* (reach: SlackReach) {
   const listed = yield* reach.bot.channels;
 
@@ -153,8 +149,6 @@ const listedChannels = Effect.fn("web/slackAgentChannels")(function* (reach: Sla
   for (const channel of listed.value) {
     if (!channel.member) continue;
 
-    // Note that a private channel's name and topic are its own words, so one the member is not in stays unlisted.
-    if (channel.private && !(yield* memberInChannel(reach, channel.id))) continue;
     channels.push({
       id: channel.id,
       name: channel.name,

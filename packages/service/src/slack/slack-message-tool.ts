@@ -6,8 +6,7 @@
  * `channel` posts there, at its top level or under `thread`; a `member`
  * DMs that member of the workspace (`SlackBot.dm`), or replies under
  * `thread` in that DM. Every call is reached through `slack-reach.ts`:
- * the agent's own workspace's team, a channel the bot is in, and a
- * private one only where the agent's member is in it too.
+ * the agent's own workspace's team, and a channel the bot is in.
  *
  * Each message is a `markdown` block, which Slack draws as standard
  * Markdown; a workspace member's mention in it becomes a real Slack
@@ -105,8 +104,8 @@ export const SEND_SLACK_MESSAGE_TOOL = {
   description:
     "Send one message as the Slack bot: in the Slack thread you were started from or last " +
     "written in where you name no place, in a channel the bot is in, or to a workspace member " +
-    "as a DM, at the top level or under `thread`. A private channel takes only a message where " +
-    `the member you work for is in it too. ${SLACK_MANNERS} Answers \`accepted\` with the ` +
+    "as a DM, at the top level or under `thread`. " +
+    `${SLACK_MANNERS} Answers \`accepted\` with the ` +
     "message's `channelId`, `ts`, `threadTs`, and `link`, or `rejected` and why.",
   inputSchema: SEND_SLACK_MESSAGE_INPUT,
 } as const;

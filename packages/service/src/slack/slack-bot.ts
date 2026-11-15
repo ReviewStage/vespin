@@ -95,7 +95,6 @@ const SLACK_METHOD = {
   CHAT_GET_PERMALINK: "chat.getPermalink",
   CONVERSATIONS_REPLIES: "conversations.replies",
   CONVERSATIONS_HISTORY: "conversations.history",
-  CONVERSATIONS_MEMBERS: "conversations.members",
   USERS_INFO: "users.info",
   CONVERSATIONS_LIST: "conversations.list",
   CONVERSATIONS_JOIN: "conversations.join",
@@ -251,8 +250,6 @@ export interface SlackWorkspaceBot {
     channel: string,
     limit: number,
   ) => Effect.Effect<readonly SlackThreadMessage[], SlackBotFailure>;
-  /** The Slack user ids of the conversation's members, as far as Slack's first page holds them; fails where the read failed. */
-  readonly channelMembers: (channel: string) => Effect.Effect<readonly string[], SlackBotFailure>;
   /** The member's Slack user id in the workspace's connected team, kept or looked up as `dm` finds it; nothing where none is known or anything failed. */
   readonly memberSlackId: (
     organizationId: string,
@@ -327,9 +324,6 @@ const RepliesSchema = Schema.Struct({
   ),
 });
 
-/** `conversations.members`' answer, as far as it is read. */
-const MembersSchema = Schema.Struct({ members: Schema.Array(Schema.String) });
-
 /** `chat.getPermalink`'s answer, as far as it is read. */
 const PermalinkSchema = Schema.Struct({ permalink: Schema.String });
 
@@ -378,9 +372,6 @@ const THREAD_PAGE_READ = "1000";
 
 /** The most pages a paged read of one thread takes before it answers what it has. */
 const THREAD_PAGES_READ = 10;
-
-/** The most members of a channel read; a channel with more is read by its first page. */
-const CHANNEL_MEMBERS_READ = "1000";
 
 /** Any Web API answer: whether Slack did it, and its code where it did not. */
 const AnswerSchema = Schema.Struct({ ok: Schema.Boolean, error: Schema.optional(Schema.String) });
@@ -693,8 +684,6 @@ function slackWorkspaceBotOver(
         Effect.fail(new SlackBotFailure({ method: SLACK_METHOD.CONVERSATIONS_REPLIES })),
       history: () =>
         Effect.fail(new SlackBotFailure({ method: SLACK_METHOD.CONVERSATIONS_HISTORY })),
-      channelMembers: () =>
-        Effect.fail(new SlackBotFailure({ method: SLACK_METHOD.CONVERSATIONS_MEMBERS })),
       memberSlackId: () => Effect.succeedNone,
       userName: () => Effect.succeedNone,
       permalink: () => Effect.succeedNone,
@@ -801,13 +790,6 @@ function slackWorkspaceBotOver(
         ),
         // Note that Slack answers a channel's history newest first, so it is turned to read in order.
         Effect.map((answer) => threadMessagesOf(answer).slice(0, limit).toReversed()),
-      ),
-    channelMembers: (channel) =>
-      api(SLACK_METHOD.CONVERSATIONS_MEMBERS, { channel, limit: CHANNEL_MEMBERS_READ }).pipe(
-        Effect.flatMap((answer) =>
-          readAnswer(SLACK_METHOD.CONVERSATIONS_MEMBERS, MembersSchema)(answer),
-        ),
-        Effect.map((answer) => answer.members),
       ),
     memberSlackId: (organizationId, userId) =>
       Effect.gen(function* () {
