@@ -1163,9 +1163,10 @@ private final class AgentCursor {
             stack()
         } else {
             stack()
+            // Note that the window glides by its whole frame, because a window's animator moves it by its frame alone and drops a bare origin.
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = CURSOR_GLIDE_SECONDS
-                panel.animator().setFrameOrigin(origin)
+                panel.animator().setFrame(NSRect(origin: origin, size: box), display: false)
             }
         }
         if swaying == nil {
