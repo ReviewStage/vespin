@@ -54,8 +54,10 @@ export default function MemoryEditScreen() {
 
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
-  // Note that a refused save reopens in the workspace it was for, even where another has been chosen since.
-  const target = workspaces.find((each) => each.id === workspace) ?? chosen;
+
+  // Note that a refused save reopens in the workspace it was for, even where another has been chosen since, and opens nowhere once that workspace is gone, so its words are never saved into another.
+  const target =
+    workspace === undefined ? chosen : workspaces.find((each) => each.id === workspace);
 
   if (target === undefined) return null;
 
