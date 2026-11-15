@@ -403,6 +403,7 @@ const composedMobile = (options: MobileHostOptions) =>
       const notices = yield* linkClientNotices({
         state,
         host: operator.host,
+        taskList: assembly.taskListMoves,
         presenter: { openMachineCommandAsk: () => undefined, openPlace: () => undefined },
         onPanelFocusChanged: device.onAppActiveChanged,
         report,

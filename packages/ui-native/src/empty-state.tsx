@@ -1,6 +1,6 @@
 // empty-state.tsx -- what a screen or a column says when it has nothing to show, laid out as the system's own ContentUnavailableView lays it out, or the system's spinner over its words while what it shows is still read.
 
-import { Image, ProgressView, Text, VStack } from "@expo/ui/swift-ui";
+import { Image, ProgressView, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
   font,
@@ -8,25 +8,45 @@ import {
   frame,
   multilineTextAlignment,
   padding,
+  scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { Fragment } from "react";
+import { useAccessibilitySize } from "./accessibility.js";
 import { BUTTON_LOOK, Button, type ButtonLook } from "./button.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
+/** What a press to read or send again says, as the app says it everywhere: the panel's Retry in the phone's words. */
+export const TRY_AGAIN_WORDS = "Try again";
+
 /** The room between the glyph, the title, the line, and the act, as the system's view stands them. */
 const EMPTY_SPACING = 12;
 
-export type EmptyStateProps = {
+/** The one act an empty screen offers: its own, or the Try again a read that failed offers; never both, since one would stand in the other's place. */
+type EmptyStateAct =
+  | {
+      /** The one act that fills the screen, such as Sign in, filled unless it names a quieter look. */
+      readonly action?:
+        | { readonly label: string; readonly onPress: () => void; readonly look?: ButtonLook }
+        | undefined;
+      readonly retry?: undefined;
+    }
+  | {
+      readonly action?: undefined;
+      /**
+       * Reads what failed again: the bordered Try again in the act's place,
+       * quiet rather than filled, since a failure is no screen's main act, as
+       * every read that failed offers it.
+       */
+      readonly retry: () => void;
+    };
+
+export type EmptyStateProps = EmptyStateAct & {
   readonly title: string;
   readonly symbol: Glyph;
   readonly description?: string | undefined;
-  /** The one act that fills the screen, such as Sign in, filled unless it names a quieter look, as a failure's Try again does. */
-  readonly action?:
-    | { readonly label: string; readonly onPress: () => void; readonly look?: ButtonLook }
-    | undefined;
   /** Whether what the screen shows is still read, which stands the system's spinner over the title in the symbol's place, so a read under way never looks like nothing to show. */
   readonly loading?: boolean | undefined;
 };
@@ -65,57 +85,70 @@ export function EmptyState({
   title,
   symbol,
   description,
-  action,
+  action: given,
+  retry,
   loading = false,
 }: EmptyStateProps) {
   const colors = useColors();
+  const large = useAccessibilitySize();
 
   if (loading) return <LoadingState title={title} />;
+
+  const action =
+    retry === undefined
+      ? given
+      : { label: TRY_AGAIN_WORDS, onPress: retry, look: BUTTON_LOOK.BORDERED };
+
   const centered = multilineTextAlignment("center");
 
-  return (
-    <Fragment key={description ?? ""}>
-      <VStack
-        key={title}
-        spacing={EMPTY_SPACING}
+  const stack = (
+    <VStack
+      key={title}
+      spacing={EMPTY_SPACING}
+      modifiers={[
+        padding({ all: EMPTY_SPACING * 2 }),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+      ]}
+    >
+      <Image
+        {...glyphImage(symbol)}
+        color={colors.TEXT_MUTED}
+        modifiers={[font({ textStyle: "largeTitle", weight: "regular" }), accessibilityHidden()]}
+      />
+      <Text
         modifiers={[
-          padding({ all: EMPTY_SPACING * 2 }),
-          frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+          font({ textStyle: "title2", weight: "bold" }),
+          foregroundStyle(colors.TEXT),
+          centered,
         ]}
       >
-        <Image
-          {...glyphImage(symbol)}
-          color={colors.TEXT_MUTED}
-          modifiers={[font({ textStyle: "largeTitle", weight: "regular" }), accessibilityHidden()]}
-        />
+        {title}
+      </Text>
+      {description === undefined ? null : (
         <Text
-          modifiers={[
-            font({ textStyle: "title2", weight: "bold" }),
-            foregroundStyle(colors.TEXT),
-            centered,
-          ]}
+          modifiers={[font({ textStyle: "callout" }), foregroundStyle(colors.TEXT_MUTED), centered]}
         >
-          {title}
+          {description}
         </Text>
-        {description === undefined ? null : (
-          <Text
-            modifiers={[
-              font({ textStyle: "callout" }),
-              foregroundStyle(colors.TEXT_MUTED),
-              centered,
-            ]}
-          >
-            {description}
-          </Text>
-        )}
-        {action === undefined ? null : (
-          <Button
-            label={action.label}
-            onPress={action.onPress}
-            look={action.look ?? BUTTON_LOOK.PROMINENT}
-          />
-        )}
-      </VStack>
+      )}
+      {action === undefined ? null : (
+        <Button
+          label={action.label}
+          onPress={action.onPress}
+          look={action.look ?? BUTTON_LOOK.PROMINENT}
+        />
+      )}
+    </VStack>
+  );
+
+  // Note that at an accessibility size the words outgrow a short screen, such as Search's over its keyboard, so they scroll there rather than stand cut short with "…".
+  return (
+    <Fragment key={description ?? ""}>
+      {large ? (
+        <ScrollView modifiers={[scrollDismissesKeyboard("immediately")]}>{stack}</ScrollView>
+      ) : (
+        stack
+      )}
     </Fragment>
   );
 }

@@ -480,9 +480,6 @@ importers:
       '@formatjs/intl-segmenter':
         specifier: 12.3.2
         version: 12.3.2
-      '@noble/ciphers':
-        specifier: 2.3.0
-        version: 2.3.0
       '@orpc/client':
         specifier: 'catalog:'
         version: 2.0.0-beta.44
@@ -1070,6 +1067,9 @@ importers:
       '@effect/platform-node':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(redis@6.2.1)
+      '@noble/ciphers':
+        specifier: 2.3.0
+        version: 2.3.0
       '@orpc/client':
         specifier: 'catalog:'
         version: 2.0.0-beta.44
@@ -1669,6 +1669,9 @@ importers:
       effect:
         specifier: 'catalog:'
         version: 4.0.4
+      expo:
+        specifier: 58.0.23
+        version: 58.0.23(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.17)(expo-router@58.0.30)(react-dom@19.2.8)(react-native-webview@14.0.1)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
       expo-glass-effect:
         specifier: 58.0.5
         version: 58.0.5(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)

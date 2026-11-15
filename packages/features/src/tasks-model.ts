@@ -263,7 +263,10 @@ export const ASSIGNEE_FAILED_NOTE = "The task could not be assigned. Try again."
 export type TaskNames = ReadonlyMap<string, string>;
 
 /** `task` with the name given for it drawn in place of its own, the very task where none is given. */
-function named<Named extends { id: string; name: string }>(task: Named, renames: TaskNames): Named {
+export function renamedTask<Named extends { id: string; name: string }>(
+  task: Named,
+  renames: TaskNames,
+): Named {
   const name = renames.get(task.id);
 
   return name === undefined ? task : { ...task, name };
@@ -274,7 +277,7 @@ export function renamedTasks<Named extends { id: string; name: string }>(
   tasks: readonly Named[],
   renames: TaskNames,
 ): readonly Named[] {
-  return renames.size === 0 ? tasks : tasks.map((task) => named(task, renames));
+  return renames.size === 0 ? tasks : tasks.map((task) => renamedTask(task, renames));
 }
 
 /** The view with each name given drawn in place of the one it replaces in the list. */
@@ -287,7 +290,7 @@ export function renamedView(view: TasksView, renames: TaskNames): TasksView {
 /** The region with the name given for its task drawn in place of the one it replaces, as the list draws it. */
 export function renamedRegion(region: TaskRegion, renames: TaskNames): TaskRegion {
   if (region.kind !== TASK_REGION.READY) return region;
-  const task = named(region.task, renames);
+  const task = renamedTask(region.task, renames);
 
   return task === region.task ? region : { ...region, task };
 }
@@ -321,10 +324,22 @@ export interface StopAgentsWords {
   readonly verb: string;
 }
 
-/** What every question that stops running agents says beneath its title, and its act's word, whatever was pressed. */
+/** What a question that stops several running agents says beneath its title, and its act's word. */
 const STOP_AGENTS = {
   body: "Agents are still running. This will stop them and any work they're in the middle of doing.",
   verb: "Stop agents",
+} as const;
+
+/** What a question that stops one running agent says beneath its title, and its act's word, in the singular. */
+const STOP_RUNNING_AGENT = {
+  body: "An agent is still running. This will stop it and any work it's in the middle of doing.",
+  verb: "Stop agent",
+} as const;
+
+/** What archiving one running agent says beneath its title, and its act's word, in the singular. */
+const STOP_AGENT = {
+  body: "This agent is still running. Archiving stops it and any work it's in the middle of.",
+  verb: "Stop agent",
 } as const;
 
 /** What a settle's question is titled, by the status it settles at. */
@@ -333,14 +348,19 @@ const SETTLE_STOP_TITLES = {
   [SETTLED_STATUS.CANCELED]: "Mark as Canceled?",
 } as const satisfies Record<SettledStatus, string>;
 
-/** What setting a task, or several, at Done or Canceled asks while their agents are running. */
-export function settleStopWords(status: SettledStatus): StopAgentsWords {
-  return { title: SETTLE_STOP_TITLES[status], ...STOP_AGENTS };
+/** What setting a task, or several, at Done or Canceled asks while `working` of their agents are running, in the singular for one. */
+export function settleStopWords(status: SettledStatus, working: number): StopAgentsWords {
+  return {
+    title: SETTLE_STOP_TITLES[status],
+    ...(working === 1 ? STOP_RUNNING_AGENT : STOP_AGENTS),
+  };
 }
 
-/** What archiving a running agent asks, or several at once. */
+/** What archiving a running agent asks, or several at once, each in its own number. */
 export function archiveStopWords(several: boolean): StopAgentsWords {
-  return { title: several ? "Archive agents?" : "Archive agent?", ...STOP_AGENTS };
+  return several
+    ? { title: "Archive agents?", ...STOP_AGENTS }
+    : { title: "Archive agent?", ...STOP_AGENT };
 }
 
 /**
