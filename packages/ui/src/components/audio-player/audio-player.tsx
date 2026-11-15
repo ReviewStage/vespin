@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ExpandIcon, PauseIcon, PlayIcon } from "../../icons/lucide-glyphs.js";
 import { motionHeld } from "../../motion-timing.js";
 import { notePictureOrigin } from "../../picture-expand.js";
+import { usePlayingFrames } from "../../playing-frames.js";
 import { WAVEFORM_FLOOR, waveformPeaks } from "../../waveform.js";
 import { BUTTON_VARIANT, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, Card } from "../card/card.js";
@@ -306,6 +307,11 @@ export function AudioPlayer({
     const duration = Number.isFinite(shown.duration) ? shown.duration : 0;
     setPlayback({ playing: !shown.paused, at: Math.min(shown.currentTime, duration), duration });
   };
+
+  // While it plays, its place is read on every frame, so the scrubber and the waveform's played bars glide rather than step at each `timeupdate`.
+  usePlayingFrames(playback.playing, () => {
+    if (audio.current !== null) read(audio.current);
+  });
 
   const time = `${playheadText(playback.at * MS_PER_SECOND)} / ${playheadText(playback.duration * MS_PER_SECOND)}`;
   const played = playback.duration === 0 ? 0 : playback.at / playback.duration;
