@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { MinimizeIcon } from "../../icons/lucide-glyphs.js";
 import { PICTURE_STATE, type PictureState } from "../../picture-read.js";
 import { AgentPointer, type AgentPointerKind } from "../agent-pointer/agent-pointer.js";
@@ -30,9 +30,13 @@ import { WorkingMark } from "../working-mark/working-mark.js";
  * centered on a quiet ground, so the stack keeps still as the apps change,
  * and the picture runs to the card's edge, the card's corner rounding it. A
  * press on the picture opens it full size, where the caller lets the viewer
- * walk the other apps' windows too. A window not read yet holds the frame
- * with a spinner, one whose read did not land holds it with Retry and is no
- * press, and an app whose window the agent never read stands as its icon.
+ * walk the other apps' windows too. As the agent reads the window again, the
+ * last picture stands until the next has landed and decoded, then gives way
+ * to it in place, so the window never blanks between them; one whose next
+ * read does not land keeps the last. A window with no picture yet holds the
+ * frame with a spinner while it is read, or with Retry, and as no press,
+ * where its read did not land, and an app whose window the agent never read
+ * stands as its icon.
  * Where the agent's cursor stands over the window in front, its pointer
  * (`AgentPointer`) is drawn over the picture at that spot, gliding as the
  * agent moves it, as its cursor does on the Mac; the picture may lag a press
@@ -106,6 +110,64 @@ export interface StackedApp {
   readonly mark?: WordsMark | undefined;
 }
 
+/** A picture of an app's window that landed: its address, and the window's size as it was read. */
+interface LandedWindow {
+  readonly url: string;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Each app's last landed picture, by its id, with `app` landing at `picture`. */
+function landedWith(
+  landed: ReadonlyMap<string, LandedWindow>,
+  app: string,
+  picture: LandedWindow,
+): ReadonlyMap<string, LandedWindow> {
+  return new Map(landed).set(app, picture);
+}
+
+/**
+ * The picture of the front app's window to draw: the last one of that app
+ * that landed, held while the next is read, and given up for it only once it
+ * has decoded, so swapping the two draws no blank frame; none until one of
+ * this app's lands. Note that each app keeps its own, so an app brought back
+ * to the front shows its last while its next is read, that the first lands
+ * at once, with nothing to hold, and that a next picture that does not land,
+ * or does not decode, keeps the last.
+ */
+function useLandedWindow(app: StackedApp): LandedWindow | undefined {
+  const window = app.window;
+  const [landed, setLanded] = useState<ReadonlyMap<string, LandedWindow>>(new Map());
+  const held = landed.get(app.id);
+
+  const next =
+    window?.state.kind === PICTURE_STATE.READY
+      ? { url: window.state.url, width: window.width, height: window.height }
+      : undefined;
+
+  if (held === undefined && next !== undefined) setLanded(landedWith(landed, app.id, next));
+  const swap = held === undefined || next === undefined || held.url === next.url ? undefined : next;
+
+  useEffect(() => {
+    if (swap === undefined) return;
+    let stands = true;
+    const image = new Image();
+    image.src = swap.url;
+    image.decode().then(
+      () => {
+        if (stands) setLanded((was) => landedWith(was, app.id, swap));
+      },
+      () => undefined,
+    );
+
+    return () => {
+      stands = false;
+    };
+  }, [app.id, swap?.url, swap?.width, swap?.height]);
+
+  return held ?? next;
+}
+
 /** Apps as a pile of their icons, at most four, each overlapping the one before it, the first on top. */
 function IconPile({ apps }: { apps: readonly StackedApp[] }): React.JSX.Element {
   return (
@@ -119,21 +181,27 @@ function IconPile({ apps }: { apps: readonly StackedApp[] }): React.JSX.Element 
   );
 }
 
-/** The window in front, in its frame: its picture, a spinner while it is read, Retry where the read did not land, or the app's icon where none was read. */
-function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
+/** The window in front, in its frame: the last picture of it that landed, a spinner while its first is read, Retry where that read did not land, or the app's icon where none was read. */
+function WindowFace({
+  app,
+  landed,
+}: {
+  app: StackedApp;
+  landed: LandedWindow | undefined;
+}): React.JSX.Element {
   const window = app.window;
 
-  if (window?.state.kind === PICTURE_STATE.READY) {
-    const pointer = window.pointer;
+  if (landed !== undefined) {
+    const pointer = window?.pointer;
 
     // Note that the pointer stands over the picture alone, which the tile's face hugs and positions.
     return (
       <>
         <img
           className="ui-app-window block h-auto max-h-app-window-tall w-auto max-w-full"
-          src={window.state.url}
-          width={window.width}
-          height={window.height}
+          src={landed.url}
+          width={landed.width}
+          height={landed.height}
           alt=""
         />
         {pointer === undefined ? null : (
@@ -162,6 +230,25 @@ function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
         />
       ) : (
         <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.CARD} />
+      )}
+    </span>
+  );
+}
+
+/** The window in front on its quiet ground: a press on its picture opens it, but where its first read did not land. */
+function FrontWindow({ app, onOpen }: { app: StackedApp; onOpen: () => void }): React.JSX.Element {
+  const landed = useLandedWindow(app);
+  // Note that a window whose read did not land is no press, since its Retry stands on it and the viewer holds no window it could not read.
+  const failed = landed === undefined && app.window?.state.kind === PICTURE_STATE.FAILED;
+
+  return (
+    <span className="ui-app-window-ground flex h-app-window-tall items-center justify-center bg-muted">
+      {failed ? (
+        <WindowFace app={app} landed={landed} />
+      ) : (
+        <PictureTile name={app.name} face={PICTURE_TILE_FACE.FLUSH} onOpen={onOpen}>
+          <WindowFace app={app} landed={landed} />
+        </PictureTile>
       )}
     </span>
   );
@@ -340,8 +427,6 @@ export function AppWindowStack({
   // Note that past two apps behind, the nearest keeps its title and the rest pile into the deepest card.
   const titled = others.length > MOST_BEHIND ? others.slice(0, MOST_BEHIND - 1) : others;
   const piled = others.slice(titled.length);
-  // Note that a window whose read did not land is no press, since its Retry stands on it and the viewer holds no window it could not read.
-  const failed = front.window?.state.kind === PICTURE_STATE.FAILED;
 
   return (
     <section
@@ -378,15 +463,7 @@ export function AppWindowStack({
             onClick={onMinimize}
           />
         </div>
-        <span className="ui-app-window-ground flex h-app-window-tall items-center justify-center bg-muted">
-          {failed ? (
-            <WindowFace app={front} />
-          ) : (
-            <PictureTile name={front.name} face={PICTURE_TILE_FACE.FLUSH} onOpen={onOpen}>
-              <WindowFace app={front} />
-            </PictureTile>
-          )}
-        </span>
+        <FrontWindow app={front} onOpen={onOpen} />
       </Card>
     </section>
   );
