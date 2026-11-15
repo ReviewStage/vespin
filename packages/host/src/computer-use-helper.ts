@@ -93,15 +93,29 @@ export interface ComputerAppPin {
   readonly pin_pid?: number;
 }
 
+/**
+ * The agent whose cursor an action moves, which the helper draws one of for
+ * each agent: by its id, and by the name its cursor's tag shows while
+ * another agent's cursor shows too. A conversation that is no agent's names
+ * none, and moves the one cursor kept for those.
+ */
+export interface ComputerCursorOwner {
+  readonly cursor_agent?: string;
+  readonly cursor_name?: string;
+}
+
 export type ComputerHelperRequest =
-  | (MacComputerAction & ComputerAppPin)
+  | (MacComputerAction & ComputerAppPin & ComputerCursorOwner)
   | { readonly op: typeof COMPUTER_HELPER_OP.DESCRIBE_APP; readonly app: string }
+  | {
+      readonly op: typeof COMPUTER_HELPER_OP.RELEASE_CURSOR;
+      readonly cursor_agent?: string;
+    }
   | {
       readonly op:
         | typeof COMPUTER_HELPER_OP.LIST_INSTALLED_APPS
         | typeof COMPUTER_HELPER_OP.PERMISSIONS
-        | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS
-        | typeof COMPUTER_HELPER_OP.RELEASE_CURSOR;
+        | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS;
     };
 
 /** Whether macOS lets the helper capture other apps' windows and post input to them. */

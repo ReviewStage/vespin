@@ -1,5 +1,6 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
+import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -25,6 +26,7 @@ import {
   useReduceTransparency,
   useScaledSize,
 } from "./accessibility.js";
+import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { DOCK_FOLLOWS_KEYBOARD, useDockKeyboard, useDockRoom } from "./glass-bar.js";
@@ -33,6 +35,7 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
+import { IntegrationMark } from "./marks.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
@@ -44,6 +47,8 @@ import {
   CALL_STANDING,
   type CallStanding,
   type OriginPart,
+  SHOWN_MEDIA,
+  type ShownMedia,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptPlace,
@@ -246,18 +251,35 @@ function BodyBlock({
   );
 }
 
-/** A call's glyph at a row mark's size, the panel's own for its kind, through the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's row costs no SwiftUI host. */
-function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
+/**
+ * A call's glyph at a row mark's size, the panel's own for its kind, through
+ * the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's
+ * row costs no SwiftUI host; or, for a call of an integration's tool, the
+ * integration's mark, as the panel's row leads with it. Note that the mark
+ * alone takes a SwiftUI host, because the symbol view tints whatever it draws
+ * in one ink, which would flatten a mark in its brand's own colors.
+ */
+function CallGlyph({
+  callKind,
+  provider,
+}: {
+  readonly callKind: CallKind;
+  readonly provider: IntegrationProvider | undefined;
+}) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
 
-  return (
+  return provider === undefined ? (
     <SymbolView
       name={glyphSymbol(CALL_SYMBOL[callKind])}
       size={size}
       tintColor={colors.TEXT_MUTED}
       accessibilityElementsHidden
     />
+  ) : (
+    <InlineHost style={{ width: size, height: size }}>
+      <IntegrationMark provider={provider} size={size} ink={colors.TEXT_MUTED} />
+    </InlineHost>
   );
 }
 
@@ -288,6 +310,8 @@ function CallRow({
   const lines = large ? undefined : 1;
   const { line, chip } = item;
   const subject = line.subject === undefined || line.subject === "" ? undefined : line.subject;
+  // Note that the integration's mark is hidden from VoiceOver, so its name is heard in the mark's place.
+  const mark = item.provider === undefined ? undefined : INTEGRATION_NAME[item.provider];
   const standing = held?.waiting === true ? HELD_HEARD : CALL_STANDING_HEARD[item.standing];
 
   return (
@@ -297,7 +321,7 @@ function CallRow({
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
-        accessibilityLabel={[line.verb, chip, subject, item.runOn].filter(Boolean).join(" ")}
+        accessibilityLabel={[line.verb, chip, subject, mark, item.runOn].filter(Boolean).join(" ")}
         accessibilityValue={{
           text: item.open ? standing : `${standing}, ${COLLAPSED_HEARD}`,
         }}
@@ -305,7 +329,7 @@ function CallRow({
         hitSlop={LINE_REACH}
         style={styles.callLine}
       >
-        <CallGlyph callKind={item.callKind} />
+        <CallGlyph callKind={item.callKind} provider={item.provider} />
         <View style={[styles.callWords, large ? styles.wrapped : null]}>
           <Text
             numberOfLines={lines}
@@ -450,6 +474,8 @@ function OriginFrom({
 /** A webhook call's body under the prompt it rode in with, folded under its own line, as the caller sent it. */
 function OriginBody({ body }: { readonly body: string }) {
   const colors = useColors();
+  const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const column = useScaledSize(MARK_SIZE.GLYPH);
   const [open, setOpen] = useState(false);
 
   return (
@@ -464,9 +490,9 @@ function OriginBody({ body }: { readonly body: string }) {
       >
         <SymbolView
           name={glyphSymbol(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
-          size={MARK_SIZE.GLYPH - 3}
+          size={chevron}
           tintColor={colors.TEXT_MUTED}
-          style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
+          style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
         <Text style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
@@ -487,6 +513,8 @@ function FoldRow({
   readonly onToggle: (item: TranscriptItem) => void;
 }) {
   const colors = useColors();
+  const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const column = useScaledSize(MARK_SIZE.GLYPH);
   const large = useAccessibilitySize();
 
   const heard = [
@@ -508,9 +536,9 @@ function FoldRow({
       >
         <SymbolView
           name={glyphSymbol(item.open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
-          size={MARK_SIZE.GLYPH - 3}
+          size={chevron}
           tintColor={colors.TEXT_MUTED}
-          style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
+          style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
         <Text
@@ -559,6 +587,26 @@ interface RowDrawing {
 /** A pull request an agent opened, as the transcript lists it. */
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
 
+/** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip. */
+function ShownMediaView({
+  shown,
+  source,
+  onOpenElsewhere,
+}: {
+  readonly shown: ShownMedia;
+  readonly source: string | undefined;
+  readonly onOpenElsewhere: (() => void) | undefined;
+}) {
+  switch (shown.kind) {
+    case SHOWN_MEDIA.VIDEO:
+      return <Video source={source} label={shown.label} onOpenElsewhere={onOpenElsewhere} />;
+    case SHOWN_MEDIA.AUDIO:
+      return <AudioClip source={source} label={shown.label} />;
+    case SHOWN_MEDIA.PICTURE:
+      return <Picture source={source} alt={shown.label} />;
+  }
+}
+
 /** One of the transcript's rows, as its kind draws it. */
 function TranscriptRow({
   item,
@@ -569,6 +617,8 @@ function TranscriptRow({
 }) {
   const colors = useColors();
   const large = useAccessibilitySize();
+  const pageMark = useScaledSize(MARK_SIZE.WRITER);
+  const pageChevron = useScaledSize(MARK_SIZE.GLYPH - 3);
 
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID:
@@ -661,15 +711,11 @@ function TranscriptRow({
         <View style={[styles.row, inset(item.depth), styles.media]}>
           {item.media.map((shown) => (
             <View key={shown.id} style={{ gap: SPACE.TIGHT }}>
-              {shown.video ? (
-                <Video
-                  source={drawing.mediaSource(shown.id)}
-                  label={shown.label}
-                  onOpenElsewhere={drawing.onOpenElsewhere}
-                />
-              ) : (
-                <Picture source={drawing.mediaSource(shown.id)} alt={shown.label} />
-              )}
+              <ShownMediaView
+                shown={shown}
+                source={drawing.mediaSource(shown.id)}
+                onOpenElsewhere={drawing.onOpenElsewhere}
+              />
               {shown.caption === "" ? null : (
                 <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
                   {shown.caption}
@@ -694,7 +740,7 @@ function TranscriptRow({
           >
             <SymbolView
               name={glyphSymbol(GLYPH.PAGE)}
-              size={MARK_SIZE.WRITER}
+              size={pageMark}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
@@ -711,7 +757,7 @@ function TranscriptRow({
             </View>
             <SymbolView
               name={glyphSymbol(GLYPH.FOLDED)}
-              size={MARK_SIZE.GLYPH - 3}
+              size={pageChevron}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />

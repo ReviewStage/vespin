@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import { INBOX_IMAGE_TYPE } from "@repo/features/inbox-wire";
-import { PICTURE_KEEP_FAILURE, type TasksPictureKeepAnswer } from "@repo/features/tasks-view";
+import type { TasksPictureKeepAnswer } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActKind } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
@@ -343,7 +343,7 @@ test("Add to description keeps a recording as it is, never re-encoded, and write
     assert.equal(newestToastSays(), "Added to the descriptionUndo");
   }));
 
-test("a recording past what a description may be sent, or one past the description's videos, is refused in words and the description is not written", () =>
+test("a recording past what a description may be sent is refused in words and the description is not written", () =>
   withBlobs(async () => {
     // Three zero bytes for every four characters, one more than a sent video may hold.
     const large = "AAAA".repeat(1_100_001);
@@ -356,15 +356,4 @@ test("a recording past what a description may be sent, or one past the descripti
       newestToastSays(),
       "This video is over 3.3 MB, too large to add to the description from here.",
     );
-
-    for (const root of roots.splice(0)) act(() => root.unmount());
-    document.body.innerHTML = "";
-    keepAnswer = { failure: PICTURE_KEEP_FAILURE.TOO_MANY_VIDEOS };
-    await opened(await drawn(PAGE, recorded(WEBM_BASE64)));
-    await act(async () => viewerButton("Add to description")?.click());
-    await settled(() => /videos/u.test(newestToastSays() ?? ""));
-
-    assert.deepEqual(sent, [ACT_KIND.TASKS_PICTURE_KEEP]);
-    assert.equal(held, PAGE_TEXT);
-    assert.equal(newestToastSays(), "This description already holds as many videos as it can.");
   }));

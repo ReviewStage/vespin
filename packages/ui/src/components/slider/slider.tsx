@@ -29,6 +29,25 @@ const LENGTH = {
   fill: "flex-[1_1_auto] data-horizontal:w-auto min-w-0",
 } as const satisfies Record<SliderLength, string>;
 
+/**
+ * How a slider is drawn: on its own track, or bare over a drawing its
+ * holder makes of what it moves along, as a sound clip's waveform, its
+ * thumb riding across the whole of the room it stands in with no track
+ * under it.
+ */
+export const SLIDER_LOOK = {
+  TRACK: "track",
+  BARE: "bare",
+} as const;
+
+export type SliderLook = (typeof SLIDER_LOOK)[keyof typeof SLIDER_LOOK];
+
+/** Each look's box: the track as it stands, or the room its holder gives it, track and range clear. */
+const LOOK = {
+  track: "",
+  bare: "absolute inset-0 [&>*]:h-full [&_[data-slot=slider-track]]:bg-transparent [&_[data-slot=slider-range]]:bg-transparent",
+} as const satisfies Record<SliderLook, string>;
+
 /** A range at `value` between `min` and `max`, named by `label`, told of each change. */
 export function Slider({
   value,
@@ -38,6 +57,7 @@ export function Slider({
   max = 100,
   step,
   length = SLIDER_LENGTH.COMFORTABLE,
+  look = SLIDER_LOOK.TRACK,
   valueText,
 }: {
   value: number;
@@ -50,12 +70,14 @@ export function Slider({
   step?: number | undefined;
   /** How long it stands. */
   length?: SliderLength | undefined;
+  /** How it is drawn: on its own track, or bare over its holder's drawing. */
+  look?: SliderLook | undefined;
   /** Its value as a reader is told it ("0:04 of 0:25"), where the number alone says too little. */
   valueText?: string | undefined;
 }): React.JSX.Element {
   return (
     <ShadcnSlider
-      className={cn("ui-slider", LENGTH[length])}
+      className={cn("ui-slider", LENGTH[length], LOOK[look])}
       data-length={length}
       min={min}
       max={max}

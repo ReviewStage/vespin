@@ -1,6 +1,7 @@
 import {
   CONVERSATION_MEDIA_TYPE,
   type ConversationMediaType,
+  isAudioType,
 } from "./conversation-picture-wire.js";
 import { imageDimensions, sniffImageType } from "./image-signature.js";
 import { INBOX_FILE_TYPE } from "./inbox-wire.js";
@@ -47,11 +48,13 @@ export function sniffPostedFileType(head: Uint8Array): PostedFileType | undefine
   return sniffMediaType(head) ?? (startsLikePdf(head) ? INBOX_FILE_TYPE.PDF : undefined);
 }
 
-/** The size a file of the given type states: a recording's video track's, or a picture's header's; nothing where it states none. */
+/** The size a file of the given type states: a recording's video track's, or a picture's header's; nothing where it states none, as a sound clip never does. */
 export function mediaDimensions(bytes: Uint8Array, type: ConversationMediaType) {
   if (type === CONVERSATION_MEDIA_TYPE.WEBM) return webmDimensions(bytes);
 
   if (type === CONVERSATION_MEDIA_TYPE.MP4) return mp4Dimensions(bytes);
+
+  if (isAudioType(type)) return undefined;
 
   return imageDimensions(bytes, type);
 }
