@@ -12,6 +12,7 @@ import {
   browserTabsPlaceId,
   browserTabsPlaceKind,
 } from "@repo/features/agent-browser-tab-wire";
+import type { ListedAgent } from "@repo/features/agent-wire";
 import {
   AGENT_BROWSER_TABS_READ,
   browserTabsOfLiveRows,
@@ -140,6 +141,7 @@ import {
   NO_BROWSER_TABS,
   NO_KEYS_HELD,
   NO_PAGES,
+  TASK_LIST_PARTS,
 } from "./app-state.js";
 import type { AccountComposer } from "./compose-account.js";
 import type {
@@ -214,14 +216,6 @@ import { followSidebarRows } from "./workspaces-follow.js";
  * connected, are carried on the view beside the tasks, drawn there by the
  * workspaces' own concern (`compose-workspaces.ts`).
  */
-
-/** The view's lists each a live query of the task list draws, which cross as what moved in them (`list-moves.ts`). */
-const LISTED_PARTS = [
-  "tasks",
-  "taskAgents",
-  "taskPullRequests",
-  "agentPullRequests",
-] as const satisfies readonly (keyof TasksView)[];
 
 /** A task's pin and where it stands as the list carries them, each only where it stands. */
 type TaskMarkStamps = Pick<Task, "pinnedAt" | "pinPosition">;
@@ -481,6 +475,8 @@ export interface TasksComposer extends Composer {
   queueable: readonly AnyWrite[];
   /** The task list as each drawing of it stands, each agent's status and every pull request it names, from the caller's listening until its scope closes, which the Pull request tabs' parts are asked again on (`pull-request-parts.ts`), and a terminal waiting on its agent's sandbox reads the list again on (`compose-host.ts`). */
   pullRequestListings: Effect.Effect<Stream.Stream<PullRequestListing>, never, Scope.Scope>;
+  /** Every agent on a task as the task list last drew it, the archived among them; none before it first drew. */
+  agentsListed: () => readonly ListedAgent[] | undefined;
   /** The task list as each drawing of it moves its tasks and agents, from the caller's listening until its scope closes, the list as last drawn told whole first where one was, which the client's notices follow (`client/client-notices.ts`). */
   taskListMoves: Effect.Effect<Stream.Stream<TaskListMoved>, never, Scope.Scope>;
   /** Reads the task or the agent `id` names into the list as a cold task where the list holds neither, behind the open that asked, which it answers at once; a second open reads nothing. */
@@ -906,7 +902,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     view = keepIdentity(published, view);
 
     // Note that a list laid anew over the one told is the drawing it was laid from, so its delivery is told what moved in it rather than walking it (`list-moves.ts`).
-    for (const part of LISTED_PARTS) drawnAs(view[part], drawn[part]);
+    for (const part of TASK_LIST_PARTS) drawnAs(view[part], drawn[part]);
 
     if (view === published) return;
     published = view;
@@ -1237,6 +1233,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
             taskPullRequests,
             agentPullRequests,
             taskAgentPins,
+            listed: true,
           });
           documents.relisted();
           const listing = { taskAgents, agentPullRequests };
@@ -3179,6 +3176,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       anyWrite(sidebarWritten.sectionsWritten),
     ],
     pullRequestListings: Effect.map(PubSub.subscribe(listings), Stream.fromSubscription),
+    agentsListed: () => listedBefore?.taskAgents,
     // Note that the follower subscribes before the list as last drawn is read, so a drawing between the two is never missed.
     taskListMoves: Effect.map(PubSub.subscribe(moves), (subscription) => {
       const drawn = listedBefore;

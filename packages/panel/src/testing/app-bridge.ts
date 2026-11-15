@@ -6,6 +6,11 @@ import { ORPCError } from "@orpc/client";
 import type { AgentChangesAnswerView } from "@repo/features/agent-view";
 import type { TaskFileRequest } from "@repo/features/task-wire";
 import type { TasksFileAnswer } from "@repo/features/tasks-view";
+import {
+  type AppStateDelivery,
+  TASK_LIST_PARTS,
+  type TaskListDelivery,
+} from "@repo/host/app-state";
 import type { AppBridge } from "@repo/host/bridge";
 import {
   ACCOUNT_ASK_ACT_KIND,
@@ -30,11 +35,52 @@ import { installActPortClient, installAppBridge } from "../app-bridge.js";
 let answering: Partial<AppBridge> = {};
 let answeringPort: Partial<FakeActPort> = {};
 
+/**
+ * The task list's rows the host carries beside `delivery`, read off the task
+ * list it carries: its lists whole where it carries the slice whole or gone,
+ * its parts that moved where it carries them moved, none otherwise.
+ */
+function taskListOf(delivery: AppStateDelivery): TaskListDelivery | undefined {
+  const { version } = delivery;
+  const whole = delivery.entries.tasks;
+
+  if (whole !== undefined) return { version, whole };
+
+  if (delivery.gone?.includes("tasks") === true) return { version, whole: { tasks: [] } };
+
+  const moved = delivery.moved?.tasks?.filter((move) =>
+    TASK_LIST_PARTS.some((part) => part === move.key[0]),
+  );
+
+  return moved === undefined || moved.length === 0 ? undefined : { version, moved };
+}
+
+/**
+ * The document's deliveries with the task list's rows beside them, where a
+ * fake hands a delivery it built by hand without them, as the host carries
+ * the two in one (`appStateDelivery`).
+ */
+function withTaskLists(calls: Partial<AppBridge>): Partial<AppBridge> {
+  const { onAppState } = calls;
+
+  if (onAppState === undefined) return calls;
+
+  return {
+    ...calls,
+    onAppState: (listener) =>
+      onAppState((delivery) => {
+        const taskList = delivery.taskList ?? taskListOf(delivery);
+
+        listener(taskList === undefined ? delivery : { ...delivery, taskList });
+      }),
+  };
+}
+
 /** Installs a bridge answering only the calls given, in place of whatever the window held. */
 export function fakeAppBridge(calls: Partial<AppBridge>): void {
   answering = calls;
   // SAFETY: a test's window makes only the calls its test answers, and any other is undefined and throws where it is made.
-  installAppBridge(calls as AppBridge);
+  installAppBridge(withTaskLists(calls) as AppBridge);
 }
 
 /** The calls the fake bridge answers now, for a test that answers one more beside them or puts them back. */

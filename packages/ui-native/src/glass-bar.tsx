@@ -1,6 +1,7 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
 import { GlassEffectContainer, Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { frame, type ModifierConfig, onGeometryChange, padding } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
@@ -17,7 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useReduceTransparency } from "./accessibility.js";
 import { KeyboardDockArea } from "./keyboard-dock.js";
 import { useColors } from "./tokens/colors.js";
-import { READING_WIDTH, SPACE } from "./tokens/space.js";
+import { PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 
 /** The room a docked bar takes above the screen's bottom safe area before it is measured, in points: a bare field's, with its gap. */
 const DOCK_ROOM_UNMEASURED = 72;
@@ -139,6 +140,18 @@ function SolidBar({ children }: { readonly children: ReactNode }) {
   );
 }
 
+/** The filled ground a field's row and what heads it stand on inside the glass, so their words read over a bright picture scrolling under the bar. */
+function useFieldGround(radius: number): readonly ModifierConfig[] {
+  const colors = useColors();
+
+  return [
+    SwiftModifiers.background(
+      colors.RAISED,
+      SwiftModifiers.shapes.roundedRectangle({ cornerRadius: radius }),
+    ),
+  ];
+}
+
 /**
  * What heads a bar inside its glass, such as a composer's held call and
  * queued messages, inset as the row's marks are. Note that it scrolls in
@@ -146,22 +159,42 @@ function SolidBar({ children }: { readonly children: ReactNode }) {
  * (`HEAD_SHARE`), because at the largest text sizes a held call's words and
  * its Deny and Allow alone grew the bar over the whole screen it docks on.
  */
-export function BarHead({ children }: { readonly children: ReactNode }) {
+export function BarHead({
+  children,
+  filled = false,
+}: {
+  readonly children: ReactNode;
+  /** Whether it stands on the field's filled ground, as the field's row does inside the glass, so its words read over a bright picture scrolling under the bar. */
+  readonly filled?: boolean;
+}) {
   const { height: window } = useWindowDimensions();
   const [tall, setTall] = useState(0);
   const most = Math.round(window * HEAD_SHARE);
+  const ground = useFieldGround(BAR_RADIUS - BAR_EDGE);
+
+  // Note that a filled head spans the bar's width, as the field's pill under it does, rather than hugging its words.
+  const fill = filled
+    ? [frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }), ...ground]
+    : [];
+
+  const scrolls = tall > most;
 
   const stack = (
     <VStack
       alignment="leading"
-      modifiers={[padding(BAR_HEAD_INSET), onGeometryChange(({ height }) => setTall(height))]}
+      modifiers={[
+        padding(BAR_HEAD_INSET),
+        onGeometryChange(({ height }) => setTall(height)),
+        ...(scrolls ? [] : fill),
+      ]}
     >
       {children}
     </VStack>
   );
 
-  return tall > most ? (
-    <ScrollView modifiers={[frame({ height: most })]}>{stack}</ScrollView>
+  // Note that a head that scrolls takes its ground on the scroll's frame, so the fill stands still while its words scroll over it.
+  return scrolls ? (
+    <ScrollView modifiers={[frame({ height: most }), ...fill]}>{stack}</ScrollView>
   ) : (
     stack
   );
@@ -210,20 +243,28 @@ export function GlassBar({
   children,
   head,
   modifiers = [],
+  field = false,
 }: {
   readonly children: ReactNode;
+  /** Whether the row is a field with its presses, which stands on a filled pill inside the glass, as Messages stands its field, so its placeholder and glyphs read over a bright picture scrolling under the bar. */
+  readonly field?: boolean;
   /** What stands over the row inside the same glass, such as a composer's queued messages and attached pictures; nothing where none is given. */
   readonly head?: ReactNode;
   /** What the bar's SwiftUI takes over its whole glass, such as a drop of pictures. */
   readonly modifiers?: readonly ModifierConfig[];
 }) {
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
+  const ground = useFieldGround(PRESS_SIZE / 2);
+
+  // Note that a solid bar already stands on that fill, so only the glass takes the pill, and its head the same ground.
+  const filled = field && !solid;
+  const pill = filled ? ground : [];
 
   const row = (
     <HStack
       alignment="bottom"
       spacing={BAR_ROW_SPACING}
-      modifiers={head === undefined ? [...modifiers] : []}
+      modifiers={head === undefined ? [...modifiers, ...pill] : [...pill]}
     >
       {children}
     </HStack>
@@ -235,7 +276,7 @@ export function GlassBar({
         row
       ) : (
         <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers]}>
-          <BarHead>{head}</BarHead>
+          <BarHead filled={filled}>{head}</BarHead>
           {row}
         </VStack>
       )}

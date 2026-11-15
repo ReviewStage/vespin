@@ -22,7 +22,13 @@ import { afterPaint } from "../after-paint.js";
 import { useInboxViewChoices } from "../desktop/folded-groups.js";
 import { useInboxView } from "../inbox-route.js";
 import { useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
-import { useNamedTask, useNamedTasks } from "../task-list-collections.js";
+import {
+  NAMED_ORDER,
+  type TaskListRows,
+  useNamedTask,
+  useNamedTasks,
+  useTaskListRows,
+} from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { useInboxResolver } from "./inbox-close.js";
 import { useAgents } from "./use-agents.js";
@@ -86,11 +92,9 @@ const TASK_LISTS = {
  */
 function listedHoldings(
   holdings: readonly AppInboxTaskHolding[],
-  listed: TasksControl["tasks"],
+  listed: Pick<TaskListRows, "task">,
 ): readonly AppInboxTaskHolding[] {
-  const ids = new Set(listed.map((task) => task.id));
-
-  return holdings.filter((holding) => ids.has(holding.taskId));
+  return holdings.filter((holding) => listed.task(holding.taskId) !== undefined);
 }
 
 /** The choice that opens a listed item: by its task, and its agent, which its link names. */
@@ -229,7 +233,8 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   );
 
   const { inboxTasks } = useListedInbox(tasks);
-  const listedTasks = tasks.listed.tasks;
+  // The tasks the list holds, read by id, so only a move of a task holding an item lists them again.
+  const listedTasks = useTaskListRows();
   const inboxWaiting = useInboxWaitingTasks();
 
   const holdings = useMemo(
@@ -303,7 +308,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   );
 
   // Note that every read here draws the window's own marks, answers, and messages already, as the host draws them into each (`@repo/host`'s `inbox-collections.ts`).
-  const everyTask = useNamedTasks(tasks.typedNames);
+  const everyTask = useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED);
 
   const everyItem: readonly InboxGroup[] = useMemo(
     () => inboxGroups(held, { tasks: holdings, listed: everyTask }),

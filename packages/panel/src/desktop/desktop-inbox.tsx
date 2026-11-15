@@ -37,7 +37,12 @@ import { HERE, placeAddress, ROUTE, THING } from "../places/pressed-address.js";
 import { useInboxDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
-import { useNamedTask, useNamedTasks, useTaskListCollections } from "../task-list-collections.js";
+import {
+  NAMED_ORDER,
+  useNamedTask,
+  useNamedTasks,
+  useTaskListCollections,
+} from "../task-list-collections.js";
 import { agentName } from "../tasks/agent-model.js";
 import {
   INBOX_COLUMNS,
@@ -285,7 +290,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   // What the chosen item's box offers an `@`, read under that workspace and repository.
   const readMentionAgents = useMentionAgentsReader(
     place?.workspaceId,
-    useNamedTasks(tasks.typedNames),
+    useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED),
     named.models,
   );
 

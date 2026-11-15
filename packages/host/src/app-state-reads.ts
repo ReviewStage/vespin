@@ -20,10 +20,10 @@ import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositorie
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
-import { agentName, providerOf } from "@repo/features/model-label";
 import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { HOST_LIVE } from "@repo/features/tasks-view";
+import type { TaskSummary } from "@repo/features/task-wire";
+import { HOST_LIVE, type TaskListStanding } from "@repo/features/tasks-view";
 import { formatInstant } from "@repo/features/time-format";
 import {
   type AccountExperiment,
@@ -39,7 +39,7 @@ import {
   workspaceExperimentChoicesFrom,
 } from "@repo/settings";
 import { type AppSettingsView, appSettingsView } from "@repo/settings/wire";
-import { Predicate } from "effect";
+import { Predicate, Struct } from "effect";
 import type { ReadonlyRecord } from "effect/Record";
 import {
   type AppHistories,
@@ -102,11 +102,17 @@ export interface FollowedAppState {
  * on, such as an older read or another account's; the refusal is said
  * through `report`. Note that the read is asked after the subscription
  * stands, so a delivery sent while it is in flight is heard.
+ *
+ * Each delivery is handed to `heard` the moment it arrives, before it is
+ * laid and whether or not a whole read stands to lay it over, for a reader
+ * of what it carries beside the document (its `taskList`) that keeps its
+ * own order (`task-list-following.ts`).
  */
 export function followAppStateOver(
   bridge: AppStateBridgeReads,
   write: (state: AppStateSnapshot, delivery?: AppStateDelivery) => Promise<void> | undefined,
   report: (message: string, cause: unknown) => void,
+  heard?: (delivery: AppStateDelivery) => void,
 ): FollowedAppState {
   let following = true;
   let held: AppStateSnapshot | undefined;
@@ -134,6 +140,8 @@ export function followAppStateOver(
   };
 
   const stopHearing = bridge.onAppState((delivered) => {
+    heard?.(delivered);
+
     if (held === undefined) {
       early.push(delivered);
 
@@ -206,6 +214,11 @@ export function sameAccount(
 export const selectAccess = (state: AppStateSnapshot) => state.access;
 export const selectAudio = (state: AppStateSnapshot) => state.audio;
 export const selectTasks = (state: AppStateSnapshot) => state.tasks;
+
+/** What main holds of the account's tasks but the list itself, which a window reads from its task list's collections; the same object across a delivery moving only the list, as the document's sharing keeps it (`shareAppState`). */
+export const selectTaskListStanding = (state: AppStateSnapshot): TaskListStanding =>
+  Struct.omit(state.tasks, ["tasks"]);
+
 export const selectInbox = (state: AppStateSnapshot) => state.inbox;
 export const selectInboxWaiting = (state: AppStateSnapshot) => state.inbox.waiting;
 export const selectInboxTasks = (state: AppStateSnapshot) => state.inbox.tasks;
@@ -264,6 +277,10 @@ export const selectLiveMark = (state: AppStateSnapshot): LiveMark | undefined =>
 
 /** Where the task list's read stands: not yet asked, on its way, read, or refused. */
 export const selectTaskListStatus = (state: AppStateSnapshot) => state.tasks.listStatus;
+
+/** Whether the task list's lists have been drawn, so a reader of its agents or pull requests can tell none from none read yet. */
+export const selectTaskListListed = (state: AppStateSnapshot): boolean =>
+  state.tasks.listed === true;
 
 /** The account's workspaces, which tell their readers only as the list moves, not as the tasks beside it do. */
 export const selectWorkspaces = (state: AppStateSnapshot) => state.tasks.workspaces;
@@ -555,103 +572,45 @@ function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxR
   return rows === undefined ? NO_INBOX_READS : new Map(Object.entries(rows[INBOX_SCOPE_KIND.TASK]));
 }
 
-/** Each workspace's select of its Inbox's holders as last made (`selectInboxGroupsIn`), by the workspace's id. */
-const inboxGroupSelects = new Map<
-  string | undefined,
-  (state: AppStateSnapshot) => readonly InboxGroup[]
->();
+/** What the Inbox groups its holders by of the document: the account's feed, each task's items by the task's id, and the tasks the host says hold items. */
+export interface InboxHoldings {
+  readonly read: InboxReads;
+  readonly tasks: AppStateSnapshot["inbox"]["tasks"];
+}
+
+/** What the Inbox groups its holders by (`InboxHoldings`), as a `select`, made anew only as the feed or the host's read of what waits moves. */
+export const selectInboxHoldings = memoizedSelect(
+  (state: AppStateSnapshot) => [state[LIVE_READ.INBOX_ITEMS], state.inbox.tasks],
+  (feed, tasks): InboxHoldings => ({ read: feedReads(feed), tasks }),
+);
 
 /**
  * Every holder of Inbox items in one workspace as the window's Inbox groups
- * them (`@repo/features/inbox-list-model`'s `inboxGroups`), as a `select`:
- * each task of the workspace the host says holds items, with every item of
- * theirs the account's feed holds,
- * settled ones too, so a scope of the list model reads them as the panel's
- * Inbox, which lists the chosen workspace's alone, does. No workspace named
- * groups every workspace's. One select per workspace, made once and kept,
- * each made anew only as the feed, the host's read of what waits, or the
- * task list moves.
+ * them (`@repo/features/inbox-list-model`'s `inboxGroups`): each task of the
+ * workspace the host says holds items (`holdings`) that `listed`, the task
+ * list as the window's collections hold it, holds, with every item of
+ * theirs the account's feed holds, settled ones too, so a scope of the list
+ * model reads them as the panel's Inbox, which lists the chosen workspace's
+ * alone, does. No workspace named groups every workspace's.
  */
-export function selectInboxGroupsIn(
+export function inboxGroupsIn(
+  holdings: InboxHoldings,
+  listed: readonly TaskSummary[],
   workspaceId: string | undefined,
-): (state: AppStateSnapshot) => readonly InboxGroup[] {
-  const held = inboxGroupSelects.get(workspaceId);
-
-  if (held !== undefined) return held;
-
-  const select = memoizedSelect(
-    (state: AppStateSnapshot) => [state[LIVE_READ.INBOX_ITEMS], state.inbox, state.tasks.tasks],
-    (feed, inbox, listed): readonly InboxGroup[] =>
-      inboxGroups(feedReads(feed), {
-        tasks: inbox.tasks,
-        listed:
-          workspaceId === undefined
-            ? listed
-            : listed.filter((task) => task.workspaceId === workspaceId),
-      }),
-  );
-
-  inboxGroupSelects.set(workspaceId, select);
-
-  return select;
+): readonly InboxGroup[] {
+  return inboxGroups(holdings.read, {
+    tasks: holdings.tasks,
+    listed:
+      workspaceId === undefined
+        ? listed
+        : listed.filter((task) => task.workspaceId === workspaceId),
+  });
 }
 
 /** The signed-in account's id, whose own open items alone need them, as `inboxList` reads its reader; none while nobody is signed in. */
 export function selectInboxReader(state: AppStateSnapshot): string | undefined {
   return state.account.status === ACCOUNT_STATUS.SIGNED_IN ? state.account.id : undefined;
 }
-
-/** Whether two maps hold the same values under the same keys. */
-function sameEntries<K, V>(held: ReadonlyMap<K, V>, next: ReadonlyMap<K, V>): boolean {
-  if (held.size !== next.size) return false;
-
-  for (const [key, value] of next) {
-    if (held.get(key) !== value || !held.has(key)) return false;
-  }
-
-  return true;
-}
-
-/**
- * A `select` answering a map read off the task list's agents, made anew
- * only as they move, and kept as the map it last answered while every
- * entry stays the same. Note that it is kept, because Query hands a map on
- * as it is (`shareAppState` shares plain objects alone), so a new map equal
- * to the last re-renders every reader, each Inbox row among them, on every
- * change of an agent's status.
- */
-function agentMapSelect<V>(
-  entries: (
-    agents: NonNullable<AppStateSnapshot["tasks"]["taskAgents"]>,
-  ) => Iterable<readonly [string, V]>,
-): (state: AppStateSnapshot) => ReadonlyMap<string, V> {
-  let answered: ReadonlyMap<string, V> | undefined;
-
-  return memoizedSelect(
-    (state: AppStateSnapshot) => [state.tasks.taskAgents],
-    (agents): ReadonlyMap<string, V> => {
-      const next = new Map(entries(agents ?? []));
-
-      if (answered === undefined || !sameEntries(answered, next)) answered = next;
-
-      return answered;
-    },
-  );
-}
-
-/** Every agent's name the task list holds, by the agent's id, as a `select`: the agents on its tasks, each named as the panel names it (`agentName`). Made anew only as a name moves. */
-export const selectAgentNames = agentMapSelect((agents) =>
-  agents.map((agent) => [agent.id, agentName(agent)] as const),
-);
-
-/** The provider whose harness each agent on the task list runs in, by the agent's id, as a `select`: read off its model's catalog id, an agent on a provider we run no agent on left out. Made anew only as a harness moves. */
-export const selectAgentHarnesses = agentMapSelect((agents) =>
-  agents.flatMap(({ id, model }) => {
-    const harness = providerOf(model);
-
-    return harness === undefined ? [] : [[id, harness] as const];
-  }),
-);
 
 /** Where the account's feed of Inbox threads stands: still on its first read, refused, or answered. */
 export const INBOX_FEED = {
@@ -731,13 +690,6 @@ export function selectWorkspaceExperiment(
 
 /** One agent as the task list follows it. */
 export type FollowedAgent = ListedAgent;
-
-/** One agent as the task list follows it, by its id, as a `select`; none where the list holds no such agent. */
-export function selectFollowedAgent(
-  agentId: string,
-): (state: AppStateSnapshot) => FollowedAgent | undefined {
-  return (state) => state.tasks.taskAgents?.find(({ id }) => id === agentId);
-}
 
 /** One transcript as the host holds it, the agent's own or its worker's by the call that started it, as a `select`; none where no window holds it. */
 export function selectTranscript(
