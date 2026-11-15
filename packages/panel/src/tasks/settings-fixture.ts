@@ -64,13 +64,14 @@ import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { PROVIDER_KEY_KIND, PROVIDER_KEY_STATUS } from "@repo/features/provider-key-wire";
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
-import type { TasksView } from "@repo/features/tasks-view";
+import type { ListedTasksView } from "@repo/features/tasks-view";
 import type { WorkspaceVariable } from "@repo/features/workspace-environment-wire";
 import {
   RUN_ACTION_AVAILABILITY,
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
+import type { WorkspaceSandboxSizeAnswer } from "@repo/features/workspace-sandbox-size-wire";
 import {
   WORKSPACE_ROLE,
   type WorkspaceMachine,
@@ -246,7 +247,10 @@ const MEMBERS: ReadonlyMap<string, readonly WorkspaceMember[]> = new Map([
  * The workspaces as the Settings profiles list them, from the list the tasks
  * profiles draw: each counting its members.
  */
-export function settingsTasksView(profile: string, list: TasksView): TasksView | undefined {
+export function settingsTasksView(
+  profile: string,
+  list: ListedTasksView,
+): ListedTasksView | undefined {
   if (!SETTINGS_LINKS.has(profile)) return undefined;
 
   return {
@@ -826,6 +830,9 @@ const SETUP_RUN_AGENT = {
   },
 } as const;
 
+/** Acme's sandbox size, as a choice leaves it: four vCPUs. */
+let acmeSandboxSize: WorkspaceSandboxSizeAnswer = { vcpus: 4 };
+
 /**
  * Acme's sandbox setup, as a save leaves it: an install script, setup
  * scripts for two of its repositories, and run actions for one, each script
@@ -1022,6 +1029,12 @@ const ANSWERS: StagedAnswers = {
     ),
   }),
   [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
+  [ACT_KIND.WORKSPACE_SANDBOX_SIZE_READ]: () => acmeSandboxSize,
+  [ACT_KIND.WORKSPACE_SANDBOX_SIZE_PUT]: ({ vcpus }) => {
+    acmeSandboxSize = { ...acmeSandboxSize, vcpus };
+
+    return acmeSandboxSize;
+  },
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
   [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script }) =>
     sandboxSetupAnswer(repository, script),

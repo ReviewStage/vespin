@@ -20,6 +20,8 @@
  * before it touches anything.
  */
 
+import { Schema as EffectSchema } from "effect";
+
 /** The variables the script reads the snapshot from: the commit, `HEAD` then (empty in a repository that had none), and the branch then (empty on a detached `HEAD`). */
 export const CHECKOUT_RESTORE_VARIABLE = {
   COMMIT: "APP_SNAPSHOT_COMMIT",
@@ -60,12 +62,14 @@ export const CHECKOUT_RESTORE_SCRIPT = [
   "if git rev-parse --verify --quiet HEAD >/dev/null 2>&1; then git reset -q; else git rm -r -q --cached -- . >/dev/null 2>&1 || true; fi",
 ].join("\n");
 
-/** The snapshot a restore puts the checkout back to, as the turn's row keeps it. */
-export interface CheckoutRestoreSnapshot {
-  readonly commit: string;
-  readonly head: string | null;
-  readonly branch: string | null;
-}
+/** The snapshot a restore puts the checkout back to, as the turn's row keeps it (`turns.snapshot_*`) and a Mac's restore line carries it. */
+export const checkoutRestoreSnapshotSchema = EffectSchema.Struct({
+  commit: EffectSchema.String,
+  head: EffectSchema.NullOr(EffectSchema.String),
+  branch: EffectSchema.NullOr(EffectSchema.String),
+});
+
+export type CheckoutRestoreSnapshot = typeof checkoutRestoreSnapshotSchema.Type;
 
 /** The script's variables for the snapshot given. */
 export function checkoutRestoreEnv(snapshot: CheckoutRestoreSnapshot) {

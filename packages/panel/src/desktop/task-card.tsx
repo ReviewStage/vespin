@@ -13,7 +13,7 @@ import {
   type TaskRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { repositoryPageUrl } from "@repo/features/tasks-model";
+import { renamedTasks, repositoryPageUrl, type TaskNames } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -42,11 +42,18 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, actorName, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
+import { eq, useLiveQuery } from "@tanstack/react-db";
 import { Fragment, useEffect } from "react";
 import { tellAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, actorCard, UnassignedMark } from "../actor-ref.js";
 import { useCreator, useMemberDirectory, usePerson } from "../member-directory.js";
 import { useActorDoor } from "../person-door.js";
+import {
+  type TaskListRows,
+  useNamedTask,
+  useTaskListCollections,
+  useTaskListRows,
+} from "../task-list-collections.js";
 import { agentName, pullRequestNumberLabel } from "../tasks/agent-model.js";
 import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
@@ -269,8 +276,11 @@ export function PullRequestLine({
   );
 }
 
-/** The tasks a card reads its relations from where none are handed. */
-const NO_TASKS: readonly TaskSummary[] = [];
+/** The live query's key: the sub-tasks of the task a card hangs for. */
+const SUB_TASKS_KEY = "task-card-sub-tasks";
+
+/** No name typed: what a card handed none draws its relations' names as. */
+const NO_NAMES_TYPED: TaskNames = new Map();
 
 /** One task of the card's relations, as a row: its status's mark, its name, and its key, which opens it. */
 function RelatedTaskLine({
@@ -341,11 +351,8 @@ function RelatedTaskGroup({
 }
 
 /** The tasks `ids` names that the window holds, in their order; one it does not hold is left out. */
-function heldTasks(
-  ids: readonly string[] | undefined,
-  related: readonly TaskSummary[],
-): readonly TaskSummary[] {
-  return (ids ?? []).flatMap((id) => related.filter((each) => each.id === id));
+function heldTasks(ids: readonly string[] | undefined, rows: TaskListRows): readonly TaskSummary[] {
+  return (ids ?? []).flatMap((id) => rows.task(id) ?? []);
 }
 
 /**
@@ -453,7 +460,7 @@ export function TaskCard({
   readerId,
   focus,
   workspaceName,
-  related = NO_TASKS,
+  typedNames = NO_NAMES_TYPED,
   onOpenTask,
 }: {
   task: TaskSummary;
@@ -475,8 +482,8 @@ export function TaskCard({
   now: number | undefined;
   /** Opens the task on one of its agents' tabs. */
   onShowAgent: (agentId: string) => void;
-  /** Every task the window holds, which the card reads its parent and its sub-tasks from (`parentTaskId`). */
-  related?: readonly TaskSummary[];
+  /** The names being typed for tasks, which the card's parent, sub-tasks, and blocks are drawn with; none typed where none is handed. */
+  typedNames?: TaskNames;
   /** Opens a task the card names, its parent or one of its sub-tasks; where none is handed they stand as text. */
   onOpenTask?: ((taskId: string) => void) | undefined;
   /** The workspace the task's repository belongs to, where the reader may move it there, which the card names at its foot. */
@@ -488,14 +495,25 @@ export function TaskCard({
   // Note that the tasks related to the task are read past the list the window holds as its card hangs, so a finished sub-task or an old blocker stands in it.
   useEffect(() => tellAct(ACT_KIND.TASKS_RELATIONS_READ, { taskId: task.id }), [task.id]);
 
-  const parent =
+  // The tasks related to it are read from the window's task list: its parent and blocks by id, and its sub-tasks by a live query of their own.
+  const parentId =
     task.parentTaskId === undefined || task.parentTaskId === task.id
       ? undefined
-      : related.find((each) => each.id === task.parentTaskId);
+      : task.parentTaskId;
 
-  const subTasks = subTasksOf(related, task.id);
-  const blockedBy = heldTasks(task.blockedBy, related);
-  const blocks = heldTasks(task.blocks, related);
+  const parent = useNamedTask(parentId, typedNames);
+  const rows = useTaskListRows(typedNames);
+  const { tasks: listed } = useTaskListCollections();
+
+  const children = useLiveQuery({
+    queryKey: [SUB_TASKS_KEY, task.id],
+    query: (q) =>
+      q.from({ subTask: listed }).where(({ subTask }) => eq(subTask.parentTaskId, task.id)),
+  }).data;
+
+  const subTasks = subTasksOf(renamedTasks(children, typedNames), task.id);
+  const blockedBy = heldTasks(task.blockedBy, rows);
+  const blocks = heldTasks(task.blocks, rows);
 
   const placed =
     parent !== undefined ||
@@ -699,7 +717,7 @@ function sharedWorkspace(
  * Inbox's crumb. An agent's line opens the task on that agent's tab.
  */
 export function taskCardOf(
-  tasks: Pick<TasksControl, "onShowAgent" | "onSelect" | "me" | "workspaces" | "tasks"> & {
+  tasks: Pick<TasksControl, "onShowAgent" | "onSelect" | "me" | "workspaces" | "typedNames"> & {
     readonly agents: Pick<TasksControl["agents"], "models">;
   },
   task: TaskSummary,
@@ -717,7 +735,7 @@ export function taskCardOf(
       models={tasks.agents.models ?? []}
       now={now}
       onShowAgent={(agentId) => tasks.onShowAgent(task.id, agentId)}
-      related={tasks.tasks}
+      typedNames={tasks.typedNames}
       onOpenTask={tasks.onSelect}
     />
   );

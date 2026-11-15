@@ -594,13 +594,6 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   transcriptsUrl: Schema.optionalKey(Schema.String),
   /** The integrations the agent is handed, one MCP server each; none in a config written before them. */
   integrations: Schema.optionalKey(Schema.Array(IntegrationServerSchema)),
-  /**
-   * Read by no runner since Claude Code's command sandbox went: written empty
-   * for a host whose release bundles a runner from before, which refuses a
-   * config without it, and dropped once the service's host version floor
-   * (`HOST_VERSION.FLOOR`) passes that release.
-   */
-  allowedDomains: Schema.optionalKey(Schema.Array(Schema.String)),
   /** Where the member's installed skills are (`INSTALLED_SKILLS`), loaded as a local plugin where the folder holds one. */
   installedSkills: Schema.optionalKey(Schema.String),
   /** Whether the launch stays warm while no turn of it runs (`RUNNER_WARM`): from its start until a message comes, and once the agent's turn is over, posting IDLE rather than ending; it ends there where absent. */
@@ -850,6 +843,7 @@ export const RUNNER_EVENT = {
   APPROVAL_REQUESTED: "vespin_runner_approval_requested",
   APPROVAL_RESOLVED: "vespin_runner_approval_resolved",
   GOAL: "vespin_runner_goal",
+  OUT_OF_MEMORY: "vespin_runner_out_of_memory",
 } as const;
 
 /** Why a launch ended. */
@@ -967,6 +961,21 @@ export interface RunnerWaiting {
  */
 export interface RunnerGoal extends GoalNotice {
   readonly type: typeof RUNNER_EVENT.GOAL;
+}
+
+/**
+ * The OUT_OF_MEMORY event: a command the kernel killed for want of memory
+ * (`out-of-memory.ts`), posted just ahead of the message carrying its
+ * answer, so the service marks the call it settles. `callId` is the call's
+ * `tool_use` block's id, or the id of the Codex item that ran it, and
+ * `memoryGb` the sandbox's memory as it ran, in whole GB. A command killed
+ * where the sandbox's memory could not be read is posted no event, only its
+ * transcript line.
+ */
+export interface RunnerOutOfMemory {
+  readonly type: typeof RUNNER_EVENT.OUT_OF_MEMORY;
+  readonly callId: string;
+  readonly memoryGb: number;
 }
 
 /** The CONNECTION_LOST event: the provider's host the launch could not reach and now probes. */
@@ -1164,7 +1173,8 @@ export type RunnerMessage =
   | RunnerEndEvent
   | RunnerApprovalRequested
   | RunnerApprovalResolved
-  | RunnerGoal;
+  | RunnerGoal
+  | RunnerOutOfMemory;
 
 /** One event as posted: its number and its message. */
 export interface RunnerEvent {

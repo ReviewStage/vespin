@@ -13,7 +13,7 @@ import {
 } from "@repo/ui";
 import type { AwayStep } from "../places/window-steps.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
-import { PhoneHead } from "./phone-head.js";
+import { PhoneHead, type TaskHeadBack } from "./phone-head.js";
 
 /**
  * task-pane-switcher.tsx -- how a phone heads a task: one row of the way
@@ -68,13 +68,6 @@ export function taskPaneOf(input: {
   if (input.open) return TASK_PANE.PANEL;
 
   return isOverviewTab(input.column) ? TASK_PANE.OVERVIEW : TASK_PANE.AGENT;
-}
-
-/** Where the way back goes, what it is called there, and what a reader is told it does where its glyph stands alone. */
-export interface TaskHeadBack {
-  readonly label: string;
-  readonly name?: string | undefined;
-  readonly onPress: () => void;
 }
 
 /** The way back a screen to `label`, named for it as its hint names it ("Back to Overview"). */

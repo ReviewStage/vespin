@@ -101,9 +101,10 @@ import {
   writeAgentRunnerRecord,
 } from "@repo/database/models/agent-runner-record";
 import { type Agent, hasRepository, type WithRepository } from "@repo/database/models/agent-store";
+import { readWorkspaceSandboxVcpus } from "@repo/database/models/workspace-sandbox-size-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
-import { sandboxVcpus } from "@repo/features/sandbox-size";
+import type { SandboxVcpus } from "@repo/features/sandbox-size";
 import {
   CLOUD_SETUP_SCRIPT,
   type CloudSetupScript,
@@ -261,7 +262,6 @@ const SANDBOX_LAYOUT: MachineLayout = {
   codexExecutable: CODEX_PIN.LINK,
   codexHome: CODEX_PIN.HOME,
   linesRead: true,
-  transcriptsKept: true,
   diskSessions: false,
   permissionModes: true,
 };
@@ -459,6 +459,24 @@ function setupExits(
       : [],
   );
 }
+
+/**
+ * The vCPUs an agent's sandbox opens with: its workspace's size. Note that a
+ * size that could not be read is none, logged, so the open asks for no
+ * size: a create opens at Vercel's default and a standing sandbox resumes
+ * at its own, never resized on a read that failed.
+ */
+const workspaceVcpusOf = (
+  agent: Agent,
+): Effect.Effect<SandboxVcpus | undefined, never, DatabaseServices> =>
+  readWorkspaceSandboxVcpus(agent.organizationId).pipe(
+    Effect.catch((failure) =>
+      Effect.as(
+        Effect.logWarning(`an agent's sandbox size was not read: ${failure._tag}`),
+        undefined,
+      ),
+    ),
+  );
 
 /** Why the sandbox could not be readied for the agent's runner. */
 const NOT_READIED = "the sandbox could not be readied for the agent's runner";
@@ -1097,8 +1115,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
 
   /**
    * The session's sandbox opened through `getOrCreate`
-   * (`../agent-sandbox-open.ts`) at the size the agent's repository asks
-   * for, created as the attempt says where none stands, with whether it was
+   * (`../agent-sandbox-open.ts`) at its workspace's size
+   * (`workspaceVcpusOf`), a stopped one resized to it before it resumes,
+   * created as the attempt says where none stands, with whether it was
    * created, its checkout made in its `onCreate` where the agent has a
    * repository and the sandbox was created (`checkedOutIn`), and the open
    * recorded as its use (`../sandbox-use.ts`), on a fresh disk where it was
@@ -1120,12 +1139,13 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       // Note that the create's own setup runs on the edge's runner, so what waits past the answer is handed to it from here.
       const later = yield* Effect.serviceOption(AfterResponse);
       let refused: CheckoutRefused | undefined;
+      const vcpus = yield* workspaceVcpusOf(agent);
 
       const { sandbox, created, driveKept } = yield* openAgentSandbox(
         {
           sessionId,
           tags: agentSandboxTags(sessionId, agent.id),
-          vcpus: sandboxVcpus(agent.repository),
+          vcpus,
           ...(attempt.snapshot === undefined ? undefined : { snapshot: attempt.snapshot }),
           ...(attempt.drive === undefined ? undefined : { drive: attempt.drive }),
         },

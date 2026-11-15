@@ -95,7 +95,7 @@ function addressPath(address: string): string {
 }
 
 /** The query a task's route carries the workspace its link names it under by, where it names the task by number. */
-export const IOS_TASK_WORKSPACE_PARAM = "workspace";
+const IOS_TASK_WORKSPACE_PARAM = "workspace";
 
 /** A task's route as its link names it: by id, or by number with the workspace the number counts in, for the task's screen to find. */
 function taskRoute(taskId: string, workspace: string | undefined): string {
@@ -221,6 +221,19 @@ export function iosRouteHidesTabs(pathname: string): boolean {
   if (`${route}/${first ?? ""}` !== IOS_ROUTE.AGENT || second === undefined) return false;
 
   return third === undefined || third === IOS_ROUTE.PULL_REQUEST;
+}
+
+/**
+ * The agent whose own page the route is, whose composer holds a voice
+ * call's presses while the call is into it; none on any other route,
+ * a page under the agent's included, such as a pull request it opened.
+ */
+export function iosRouteAgent(pathname: string): string | undefined {
+  const [tab, first, agentId, under] = pathname.split("/").filter((segment) => segment !== "");
+
+  if (`/${tab ?? ""}/${first ?? ""}` !== IOS_ROUTE.AGENT || under !== undefined) return undefined;
+
+  return agentId;
 }
 
 /**
