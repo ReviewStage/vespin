@@ -507,7 +507,6 @@ export function AgentComposer({
       update: (next) =>
         composer.updateHeld((now) => ({ ...now, attachments: next(now.attachments) })),
     },
-    pastesTextAsFile: true,
     self: agentId,
     skills,
     // Note that an edit of a queued message runs no command, chosen as typed, since it saves back into its place.

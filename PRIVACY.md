@@ -117,7 +117,12 @@ A workspace's owners and admins can save environment variables for the
 workspace, which we store sealed the same way. Each of the workspace's cloud
 agents is handed them as environment variables in its sandbox as it starts a
 turn, so the agent can read them, and a value it reads or prints may reach its
-model and its transcript. Agents on your Mac are never handed them.
+model and its transcript. Agents on your Mac are never handed them. A variable
+is a secret unless the one who saves it marks it otherwise: a secret's value is
+never shown to anyone once saved, while one saved as a config, such as
+`NODE_ENV`, is shown to every member of the workspace in Settings. We keep who
+added each variable and who last changed it, and show both to the workspace's
+members.
 
 ### Integrations and connected apps
 

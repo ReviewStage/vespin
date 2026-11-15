@@ -47,8 +47,6 @@ export const CODER = {
    * reviews, comments, and checks must still wake their agents.
    */
   LEGACY_BRANCH_PREFIX: "luke/",
-  /** The most times an agent fixes a failing check on its pull request and pushes again before it stops and says so; an instruction to the model, enforced by nothing. */
-  CI_FIX_ROUNDS: 3,
   /** How long a transcript read is held open for a new message while the agent runs, inside the function's own duration. */
   MESSAGES_HOLD: Duration.seconds(20),
   /** How often a held transcript read looks for a new message. */

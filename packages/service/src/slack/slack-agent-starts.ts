@@ -123,7 +123,7 @@ import { type SettledAgentTurn, storeWriter } from "@repo/database/models/writer
 import { MESSAGE_SENDER, SLACK_THREAD_ORIGIN } from "@repo/database/storage-vocabulary";
 import { LIMIT_REACHED_WORDS } from "@repo/features/agent-failure-words";
 import { shownPicturesOf } from "@repo/features/agent-pictures-model";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { isShowMediaTool } from "@repo/features/agent-tools";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
@@ -241,6 +241,11 @@ const MEDIA_EXTENSION = {
   [CONVERSATION_MEDIA_TYPE.WEBP]: "webp",
   [CONVERSATION_MEDIA_TYPE.WEBM]: "webm",
   [CONVERSATION_MEDIA_TYPE.MP4]: "mp4",
+  [CONVERSATION_MEDIA_TYPE.WAV]: "wav",
+  [CONVERSATION_MEDIA_TYPE.MP3]: "mp3",
+  [CONVERSATION_MEDIA_TYPE.M4A]: "m4a",
+  [CONVERSATION_MEDIA_TYPE.AAC]: "aac",
+  [CONVERSATION_MEDIA_TYPE.OGG]: "ogg",
 } as const satisfies Record<ConversationMediaType, string>;
 
 /** The emoji the bot reacts with to a message it acted on: 👀, as Slack names it. */
@@ -1131,7 +1136,7 @@ function turnOutcome(turn: SettledAgentTurn, words: string | undefined): SlackMe
   return { text: slackClipped(words, NOTIFICATION_CHARS), blocks: [slackMarkdownBlock(words)] };
 }
 
-/** The pictures and recordings the turn's `show_image` calls kept beside the transcript, in the order shown, each under its caption; one not kept is left out. */
+/** The pictures and recordings the turn's `show_media` and `show_image` calls kept beside the transcript, in the order shown, each under its caption; one not kept is left out. */
 const shownUploads = Effect.fnUntraced(function* (
   conversationId: string,
   journal: StoredUIMessage,
@@ -1139,7 +1144,7 @@ const shownUploads = Effect.fnUntraced(function* (
   // SAFETY: a stored part's input and output are the JSON the row carried, which `shownPicturesOf` parses.
   const shown = journal.parts.flatMap((part) =>
     isStoredToolPart(part) &&
-    storedToolName(part) === AGENT_TOOL.SHOW_IMAGE &&
+    isShowMediaTool(storedToolName(part)) &&
     part.state === TOOL_PART_STATE.OUTPUT_AVAILABLE
       ? shownPicturesOf(part.input as UnparsedWireValue, part.output as UnparsedWireValue)
       : [],

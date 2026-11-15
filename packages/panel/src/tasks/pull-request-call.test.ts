@@ -80,13 +80,14 @@ function drawn(output: WireRecord | undefined) {
   return { container, links };
 }
 
-test("a refused pull request is a fold that says it opened none and shows the reason", () => {
+test("a refused pull request is a fold that says it opened none, marked as failed, and shows the reason", () => {
   const reason = "A pull request already exists for feat/export.";
   const { container, links } = drawn({ status: "rejected", reason });
   assert.equal(container.querySelector("button[data-opens]"), null, "no row opens a tab");
   const row = container.querySelector("summary");
   assert.ok(row, "the row is a fold's line");
   assert.equal(row.textContent?.trim(), `Could not open pull request ${OPEN.title}`);
+  assert.ok(row.querySelector('[role="img"][aria-label="Failed"]'), "the row is marked failed");
   act(() => row.click());
   assert.ok(container.textContent?.includes(reason), "the body shows the reason");
   assert.deepEqual(links, []);
