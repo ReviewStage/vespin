@@ -168,9 +168,8 @@ export const MESSAGE_AGENT_TOOL = {
   description:
     "Send another agent of your workspace a message, by its id, on any task. It lands in that agent's " +
     "conversation under your name, opening with your mention link and closing with how to answer you, and " +
-    "only the two of you see it: a running agent reads it at its next step, and an idle one starts a turn on it. " +
-    "Answers `accepted` once that agent's session has taken it, without waiting for it to act or reply, or " +
-    "`rejected` and why nothing was sent; an archived agent is brought back and takes it.",
+    "only the two of you see it: a running agent reads it at its next step, and an idle one starts a turn on it; " +
+    "an archived agent is brought back and takes it. The call answers once its session took it, without waiting for a reply.",
   inputSchema: MESSAGE_AGENT_INPUT,
 } as const;
 

@@ -50,7 +50,7 @@ import {
 } from "@repo/features/agent-wire";
 import { fileName } from "@repo/features/code-ref-words";
 import { isVideoType } from "@repo/features/conversation-picture-wire";
-import { INTEGRATION_NAME } from "@repo/features/integration-wire";
+import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { SUGGESTION_LEAD, suggestionWords } from "@repo/features/reply-button-wire";
 import { callHeading, WORKING_LINE, workedForText } from "@repo/features/time-format";
@@ -69,6 +69,7 @@ import { shownPageVersion, type ToolCallView, toolCallView } from "@repo/feature
 import { suggestedByOf, suggestionStartOf } from "@repo/features/transcript-lines";
 import {
   CALL_KIND,
+  CALL_MARK,
   type CallKind,
   type CallLine,
   calledFile,
@@ -191,6 +192,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       /** The call's id, which opens and closes it. */
       readonly callId: string;
       readonly callKind: CallKind;
+      /** For a call of an integration's tool, the integration, whose mark leads its row in its kind's glyph's place. */
+      readonly provider: IntegrationProvider | undefined;
       readonly line: CallLine;
       /** What the call made or is about, named after the line's verb as the panel's chip names it. */
       readonly chip: string | undefined;
@@ -345,9 +348,9 @@ function callBody(
   ];
 }
 
-/** Where a call stands by its state. */
-function standingOf(state: ToolState): CallStanding {
-  if (state === TOOL_STATE.OUTPUT_ERROR) return CALL_STANDING.FAILED;
+/** Where a call stands by its state, a call the service answered without doing it (`refused`) standing as failed. */
+function standingOf(state: ToolState, refused: boolean): CallStanding {
+  if (state === TOOL_STATE.OUTPUT_ERROR || refused) return CALL_STANDING.FAILED;
 
   return state === TOOL_STATE.OUTPUT_AVAILABLE ? CALL_STANDING.DONE : CALL_STANDING.RUNNING;
 }
@@ -680,9 +683,11 @@ function callItems(
     kind: TRANSCRIPT_ITEM.CALL,
     callId: part.callId,
     callKind: view.kind,
+    provider: view.provider,
     ...callNaming(view),
-    runOn: callPlace(view.kind, view.server),
-    standing: standingOf(part.state),
+    // Note that the row leads with the integration's mark, so it names only what the mark does not: the account among several, or a server of no integration's.
+    runOn: callPlace(view, CALL_MARK.LEADS),
+    standing: standingOf(part.state, view.refused === true),
     open,
     body: open
       ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)

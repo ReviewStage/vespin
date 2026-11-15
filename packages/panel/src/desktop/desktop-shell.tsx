@@ -71,6 +71,7 @@ import type { NavigationHistory, WindowHistory } from "../places/window-history.
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { type HiddenColumns, hiddenColumns, SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SignInGate } from "../sign-in-gate.js";
+import { useNamedTask, useTaskListRows } from "../task-list-collections.js";
 import { ChipCards, type TaskFocus } from "../tasks/chip-cards.js";
 import { MentionedAgents } from "../tasks/mentioned-place.js";
 import { NewTaskDialog } from "../tasks/new-task-dialog.js";
@@ -107,6 +108,7 @@ import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
 import { homeTaskCardOf } from "./task-card.js";
 import { awayBack } from "./task-pane-switcher.js";
 import { TasksPagesHeld } from "./tasks-page-held.js";
+import { UpdateNeeded, useUpdateNeeded } from "./update-needed.js";
 import { useWindowTitle } from "./window-title.js";
 
 /** What stands while the Tasks page's chunk loads: its frame and title over quiet blocks, and its own way out, so Escape closes the page rather than reaching the plan behind it. */
@@ -853,7 +855,13 @@ export function DesktopShell({
 }): React.JSX.Element {
   const { account } = settings;
   const shell = useRef<HTMLDivElement>(null);
-  const gated = gates.accountRequired && account.status !== ACCOUNT_STATUS.SIGNED_IN;
+  // While the service refuses this build, the update screen takes the whole window, the sign-in, setup, and New workspace
+  // among what it stands over, since every call any of them would make is refused until the build is updated.
+  const updateNeeded = useUpdateNeeded();
+
+  const gated =
+    !updateNeeded && gates.accountRequired && account.status !== ACCOUNT_STATUS.SIGNED_IN;
+
   // A new account is set up once, in the window before the app, until it finishes on any machine.
   const signedInId = account.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined;
   const [finishedHere, setFinishedHere] = useState<string>();
@@ -885,9 +893,10 @@ export function DesktopShell({
   const setToggleRoom = usePanelToggleRoom();
   // Note that setup standing before the app holds the places' chords too, so none lands behind it, as New workspace's cards do.
   const newWorkspace = useNewWorkspace(tasks.placeLeave);
-  const founding = !gated && newWorkspace.open;
+  const founding = !gated && !updateNeeded && newWorkspace.open;
+  // Note that setup the update screen stands in place of holds no chords, so Settings stays a key away.
   usePlaceCommands(
-    !gated && setup === SETUP_GATE.NONE && !founding,
+    !gated && (updateNeeded || setup === SETUP_GATE.NONE) && !founding,
     tab,
     onTabChange,
     tasks,
@@ -937,22 +946,25 @@ export function DesktopShell({
   const agentShown = tab === PANEL_TAB.TASKS ? (tasks.agentView.agentId ?? columnAgent) : undefined;
 
   // Note that while the plan's description is read, the window is named by the task as the list holds it.
-  const namedTask =
-    shownTask ??
-    (tab === PANEL_TAB.TASKS && !standingIn && region.kind === TASK_REGION.READING
-      ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
-      : undefined);
+  const readingTask = useNamedTask(
+    tab === PANEL_TAB.TASKS && !standingIn && region.kind === TASK_REGION.READING
+      ? tasks.activeTaskId
+      : undefined,
+    tasks.typedNames,
+  );
+
+  const namedTask = shownTask ?? readingTask;
 
   useWindowTitle(titleSubject(tab, tasks, namedTask, place, inAutomations));
 
   // The plan is looked at the moment it is on screen, whichever of its column's tabs is chosen,
-  // from the mark and the agents' activity its row in the list carries.
+  // from the mark and the agents' activity its row in the list carries; not while the update screen stands over the window.
+  const listedShown = useNamedTask(shownTask?.id, tasks.typedNames);
+
   const looks = useTaskLooks(
-    shownTask,
+    updateNeeded ? undefined : shownTask,
     tasks.me,
-    shownTask === undefined
-      ? undefined
-      : (tasks.tasks.find((row) => row.id === shownTask.id) ?? shownTask),
+    shownTask === undefined ? undefined : (listedShown ?? shownTask),
   );
 
   const mentionedAgents = useMemo(
@@ -964,15 +976,17 @@ export function DesktopShell({
   // Note that what the columns are handed is held across draws over the same
   // tasks, because each column holds while what it is handed does
   // (`DesktopSidebar`, `DesktopTasks`), and a chip reads its cards from here.
+  const taskRows = useTaskListRows(tasks.typedNames);
+
   const chipCards = useMemo(
     () => ({
       taskCard: (taskId: string, now: number, focus: TaskFocus | undefined) => {
-        const task = tasks.tasks.find((each) => each.id === taskId);
+        const task = taskRows.task(taskId);
 
         return task === undefined ? undefined : homeTaskCardOf(tasks, task, now, focus);
       },
     }),
-    [tasks],
+    [tasks, taskRows],
   );
 
   // New task asks over whatever stands, the tasks or a version history.
@@ -1010,7 +1024,7 @@ export function DesktopShell({
   // Note that the onboarding column's drag strip stands over its top rather
   // than in flow, because the AuthPage beneath is already a whole window tall
   // and a strip above it would overflow the window by the strip's height.
-  if (setup !== SETUP_GATE.NONE && signedInId !== undefined) {
+  if (!updateNeeded && setup !== SETUP_GATE.NONE && signedInId !== undefined) {
     // While a new account's agent is still read, the window waits on setup's own ground rather than glimpsing the app.
     return (
       <ScrollArea>
@@ -1060,6 +1074,10 @@ export function DesktopShell({
       </ScrollArea>
     );
   }
+
+  // The update screen takes the whole window but for Settings, which stays to reach the account and the build.
+  if (updateNeeded && tab !== PANEL_TAB.SETTINGS)
+    return <UpdateNeeded updates={settings.updates} />;
 
   // New workspace takes the whole window on setup's own ground, its cards being setup's.
   if (founding) {

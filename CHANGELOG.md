@@ -72,6 +72,70 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.36.0 — 2026-11-15
+
+### Cloud sandbox size
+
+Settings › Cloud environment › Sandbox sets how large every cloud agent's
+sandbox is in your workspace: 2 vCPUs and 4 GB, 4 vCPUs and 8 GB, or 8 vCPUs
+and 16 GB. Owners and admins choose it. New agents get the new size right
+away, and running ones get it the next time they start. When a command runs out
+of memory, an owner or admin sees an offer under it to move up a size, and on
+its next turn the agent is told that its sandbox grew.
+
+[#9481](https://github.com/ReviewStage/vespin/pull/9481),
+[#9488](https://github.com/ReviewStage/vespin/pull/9488),
+[#9489](https://github.com/ReviewStage/vespin/pull/9489)
+
+### Improvements
+
+- When the service no longer takes your build of Vespin, an Update required
+  screen fills the window. It says where the update stands and offers Open in
+  browser so you can keep working meanwhile
+  ([#9426](https://github.com/ReviewStage/vespin/pull/9426))
+- This Mac's row in Settings › Machines reads Won't start when its host quits
+  each time it starts, so you can see why local agents can't run there
+  ([#9185](https://github.com/ReviewStage/vespin/pull/9185))
+- A workspace variable you change reaches each running cloud agent on its next
+  message, and every new Terminal tab starts with the workspace's variables
+  ([#9304](https://github.com/ReviewStage/vespin/pull/9304))
+- An agent running on one of your Macs can run commands on your other machines
+  too, and its chip opens Where this agent works with a Default machine row
+  ([#9096](https://github.com/ReviewStage/vespin/pull/9096))
+- When a machine refuses an agent's call, the agent is told what to do next and
+  keeps working instead of stopping to ask
+  ([#9191](https://github.com/ReviewStage/vespin/pull/9191))
+- A sentence that names a machine, such as Starting on or a refused call's
+  card, shows the machine's chip with its card
+  ([#9305](https://github.com/ReviewStage/vespin/pull/9305))
+- A failed call shows its failed mark at the end of its line, where its working
+  mark stood, and a pull request the service refused now reads as failed
+  ([#9289](https://github.com/ReviewStage/vespin/pull/9289))
+- An integration call's row ends in its account's chip only when that tells
+  you more: you have several accounts with that provider, or the server is a
+  custom one ([#9301](https://github.com/ReviewStage/vespin/pull/9301))
+- Punctuation typed right after a mention or attachment chip replaces the space
+  the box added after it, and one undo brings the space back
+  ([#9484](https://github.com/ReviewStage/vespin/pull/9484))
+- A text file over 100 KB attached to a message reaches the agent as a file on
+  its machine, up to about 3 MB, rather than being refused
+  ([#9486](https://github.com/ReviewStage/vespin/pull/9486))
+- Vespin uses much less of your Mac's CPU and memory when it saves its local
+  copy of your tasks ([#9493](https://github.com/ReviewStage/vespin/pull/9493))
+
+### Fixes
+
+- Fixed a teammate's message to an agent showing under the name of the person
+  who started the agent until the start of the transcript came into view
+  ([#9496](https://github.com/ReviewStage/vespin/pull/9496))
+- Fixed setup's team step losing the invitations it sent when you came back to
+  it ([#9501](https://github.com/ReviewStage/vespin/pull/9501))
+- Fixed archiving one running agent, or marking done a task with one running
+  agent, asking you to stop agents in the plural
+  ([#9410](https://github.com/ReviewStage/vespin/pull/9410))
+- Fixed an empty gap at the end of This Mac's row in Settings › Machines
+  ([#9509](https://github.com/ReviewStage/vespin/pull/9509))
+
 ## 0.35.0 — 2026-11-14
 
 ### Following
@@ -83,6 +147,8 @@ repository named.
 
 [#9160](https://github.com/ReviewStage/vespin/pull/9160),
 [#9184](https://github.com/ReviewStage/vespin/pull/9184)
+
+![Usage-based billing, Theo Walsh's task, open on its Overview with its Following chip's popover open: You, with the laptop mark for letting agents use your machines, Theo Walsh marked Assignee, and Dana Moreno, each checked, above Let agents here use my machines switched on; beside it the sidebar's Following group lists Usage-based billing, Rotate webhook signing secrets, and Onboarding checklist above My tasks](apps/web/public/changelog/0.35.0/following.png)
 
 ### Improvements
 

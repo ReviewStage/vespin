@@ -36,15 +36,3 @@ export function useOtherMachinesAsks(): readonly MachineAskLine[] {
 
   return useMemo(() => asks.filter((ask) => ask.deviceId !== here), [asks, here]);
 }
-
-/** How many of the asks given need the developer now, by the agent each is for: those whose window has not run out. */
-export function machineAsksByAgent(asks: readonly MachineAskLine[]): ReadonlyMap<string, number> {
-  const counts = new Map<string, number>();
-
-  for (const ask of asks) {
-    if (ask.lapsed || ask.agentId === undefined) continue;
-    counts.set(ask.agentId, (counts.get(ask.agentId) ?? 0) + 1);
-  }
-
-  return counts;
-}

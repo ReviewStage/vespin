@@ -23,6 +23,7 @@ import {
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { NEEDS_YOU } from "@repo/features/inbox-list-model";
+import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
@@ -31,6 +32,7 @@ import { useState } from "react";
 import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
 import { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
@@ -328,6 +330,29 @@ export function HarnessMark({
     <Image
       assetName={HARNESS_MARK_ASSET[provider]}
       modifiers={[resizable(), frame({ width: size, height: size }), accessibilityHidden()]}
+    />
+  );
+}
+
+/** An integration's mark, as the panel leads a call of its tool with it: the provider's own vector at `size`, a template mark in `ink`, unheard beside the words it leads. */
+export function IntegrationMark({
+  provider,
+  size,
+  ink,
+}: {
+  readonly provider: IntegrationProvider;
+  readonly size: number;
+  readonly ink: string;
+}) {
+  return (
+    <Image
+      assetName={INTEGRATION_MARK_ASSET[provider]}
+      modifiers={[
+        resizable(),
+        frame({ width: size, height: size }),
+        foregroundStyle(ink),
+        accessibilityHidden(),
+      ]}
     />
   );
 }

@@ -70,15 +70,16 @@ function sameTasksOrder(was: HeldTasksView, now: HeldTasksView): boolean {
 }
 
 /**
- * The groups `group` lays the listed tasks out in, held still as the
+ * The groups `group` lays `listed` out in, the listed workspace's tasks
+ * as the sidebar orders them (`useNamedTasks`), held still as the
  * module's head says while the page is shown, each task drawn as it is now.
  */
 export function useHeldTasks(
   tasks: TasksControl,
+  listed: readonly TaskSummary[],
   view: HeldTasksView,
   group: (tasks: readonly TaskSummary[]) => readonly TasksGroup[],
 ): readonly TasksGroup[] {
-  const listed = tasks.listed.tasks;
   const live = new Map(listed.map((task) => [task.id, task] as const));
   // The tasks waiting on the view when the page was last drawn.
   const waited = useRef<ReadonlySet<string>>(NO_TASKS);

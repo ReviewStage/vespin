@@ -108,10 +108,10 @@ export interface StandingDoor {
  * Done or Canceled on a task whose agents run asks first, through the
  * dialog the caller draws beside its rows.
  */
-export function useStandingDoor(tasks: Pick<TasksControl, "drawnTasks">): StandingDoor {
+export function useStandingDoor(tasks: Pick<TasksControl, "typedNamesNow">): StandingDoor {
   const toast = useToast();
   const { members } = useMemberDirectory();
-  const { onSetTaskStanding, dialog } = useStandingWrites(tasks.drawnTasks);
+  const { onSetTaskStanding, dialog } = useStandingWrites(tasks.typedNamesNow);
 
   const set: StandingDoor["set"] = (task, standing, onRefused) => {
     if (standsAt(task, standing)) return Promise.resolve();
