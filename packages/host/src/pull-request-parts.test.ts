@@ -455,3 +455,22 @@ it.effect(
       assert.deepEqual(asked.toSorted(), MOVING.map((part) => `${part} Acme/Relay#42`).toSorted());
     }),
 );
+
+it.effect(
+  "a pull request held by its repository is asked again as the list first names it, as an agent's own is when it publishes",
+  () =>
+    Effect.gen(function* () {
+      const { asked, draw, holdOwn } = yield* repositorySubject();
+      yield* holdOwn;
+      const listed = listing();
+      yield* draw({
+        ...listed,
+        agentPullRequests: listed.agentPullRequests.filter((each) => each.agentId !== AGENT),
+      });
+      asked.length = 0;
+
+      yield* draw(listed);
+
+      assert.deepEqual(asked.toSorted(), MOVING.map((part) => `${part} Acme/Relay#42`).toSorted());
+    }),
+);

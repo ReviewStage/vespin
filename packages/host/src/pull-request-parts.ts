@@ -31,11 +31,11 @@
  * (`repositoryPullRequestParts`). Such a pull request has no agent's own to
  * follow, so its line on the task list is found by the key alone, the
  * repository's case aside, as GitHub reads it: its first four parts are
- * asked again together as that line moves, or as the status of an agent the
- * list says published it moves, which is how a running agent's push is
- * heard; its viewed marks as the line's head moves; and its pickers'
- * options on focus and Try again alone. One no listed agent published is
- * asked again on nothing but focus and Try again.
+ * asked again together as that line moves or is first listed, or as the
+ * status of an agent the list says published it moves, which is how a
+ * running agent's push is heard; its viewed marks as the line's head moves;
+ * and its pickers' options on focus and Try again alone. One no listed
+ * agent published is asked again on nothing but focus and Try again.
  */
 
 import {
@@ -258,11 +258,12 @@ function lineMoved(before: AgentPullRequest, after: AgentPullRequest | undefined
 type Moved = {
   readonly agents: ReadonlySet<string>;
   readonly opened: ReadonlySet<string>;
+  readonly came: ReadonlySet<string>;
   readonly urls: ReadonlySet<string>;
   readonly heads: ReadonlySet<string>;
 };
 
-/** What a drawing of the list moved: the agents whose status moved, those it names a pull request of anew, the addresses of the pull requests whose line moved or left, and of those whose head moved or left among them. */
+/** What a drawing of the list moved: the agents whose status moved, those it names a pull request of anew and the addresses it names anew, the addresses of the pull requests whose line moved or left, and of those whose head moved or left among them. */
 function movedIn(listing: PullRequestListing): Moved {
   const agents = new Set<string>();
 
@@ -271,11 +272,15 @@ function movedIn(listing: PullRequestListing): Moved {
   }
 
   const opened = new Set<string>();
+  const came = new Set<string>();
   const urls = new Set<string>();
   const heads = new Set<string>();
 
   for (const { was, now } of listing.pullRequests) {
-    if (now !== undefined && was?.pullRequest.url !== now.pullRequest.url) opened.add(now.agentId);
+    if (now !== undefined && was?.pullRequest.url !== now.pullRequest.url) {
+      opened.add(now.agentId);
+      came.add(now.pullRequest.url);
+    }
 
     if (was === undefined) continue;
     const line = was.pullRequest;
@@ -286,7 +291,7 @@ function movedIn(listing: PullRequestListing): Moved {
     if (after?.headSha !== line.headSha) heads.add(line.url);
   }
 
-  return { agents, opened, urls, heads };
+  return { agents, opened, came, urls, heads };
 }
 
 /**
@@ -579,11 +584,15 @@ export function repositoryPullRequestParts(
         const moved = movedIn(listing);
         const wasUrlOf = addresses(listing);
 
-        if (listing.whole || (moved.agents.size === 0 && moved.urls.size === 0)) {
+        if (
+          listing.whole ||
+          (moved.agents.size === 0 && moved.urls.size === 0 && moved.came.size === 0)
+        ) {
           return Effect.void;
         }
 
-        const lines = [...moved.urls];
+        // Note that a line the list names anew is heard as moved, as an agent's own is, since the agent opened it or pushed to it.
+        const lines = [...moved.urls, ...moved.came];
         // Note that an agent's address is the one the drawing before left it, so an agent whose line went with its status is still heard.
         const agentLines = [...moved.agents].map(wasUrlOf);
         const heads = [...moved.heads];
