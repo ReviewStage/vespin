@@ -24,6 +24,18 @@
  * fetch the host holds does; one that fails before any answered holds the
  * failure, so its tab says why; but the viewed marks hold every answer,
  * since marks a read can no longer vouch for are taken away until one does.
+ *
+ * A Pull request tab that names its pull request by its repository and
+ * number, with no agent, holds the same six parts by the workspace whose
+ * installation reaches the repository, the repository, and the number
+ * (`repositoryPullRequestParts`). Such a pull request has no agent's own to
+ * follow, so its line on the task list is found by the key alone, the
+ * repository's case aside, as GitHub reads it: its first four parts are
+ * asked again together as that line moves, or as the status of an agent the
+ * list says published it moves, which is how a running agent's push is
+ * heard; its viewed marks as the line's head moves; and its pickers'
+ * options on focus and Try again alone. One no listed agent published is
+ * asked again on nothing but focus and Try again.
  */
 
 import {
@@ -38,10 +50,26 @@ import {
   type PullRequestPartParams,
 } from "@repo/features/agent-view";
 import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
+import { pullRequestAddressOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type {
+  RepositoryOverviewChecksAnswerView,
+  RepositoryOverviewConversationAnswerView,
+  RepositoryOverviewPullRequestAnswerView,
+  RepositoryPullRequestAnswerView,
+  RepositoryPullRequestParams,
+  RepositoryPullRequestPartParams,
+  RepositoryPullRequestViewedAnswerView,
+  RepositoryReviewOptionsAnswerView,
+} from "@repo/features/pull-request-view";
 import type { ListedPullRequest } from "@repo/features/task-wire";
 import { Data, Effect, MutableHashMap, Option, type Scope, Stream } from "effect";
-import { type AppPullRequestParts, NO_KEYS_HELD, OWN_PULL_REQUEST } from "./app-state.js";
+import {
+  type AppPullRequestParts,
+  type AppRepositoryPullRequestParts,
+  NO_KEYS_HELD,
+  OWN_PULL_REQUEST,
+} from "./app-state.js";
 import { type HeldFetch, heldFetch } from "./held-fetch.js";
 import { type ListMove, movesBetween } from "./list-moves.js";
 import type { WindowFocus } from "./window-focus.js";
@@ -50,6 +78,13 @@ import type { WindowFocus } from "./window-focus.js";
 export class PullRequestKey extends Data.Class<{
   readonly agentId: string;
   readonly number: number | undefined;
+}> {}
+
+/** Whose part: one pull request named by its repository and number, by the workspace whose installation reaches the repository, the repository's full name, and the number. */
+export class RepositoryPullRequestKey extends Data.Class<{
+  readonly workspaceId: string;
+  readonly repository: string;
+  readonly number: number;
 }> {}
 
 /** The task list's agents and their pull requests as one drawing of it holds them. */
@@ -115,20 +150,57 @@ export interface PullRequestPartsDependencies {
   };
 }
 
-/** The parts the windows hold, and what the host does for them. */
-export interface PullRequestParts {
+/** The parts the windows hold, by what names their pull request, and what the host does for them. */
+export interface PullRequestParts<Params = PullRequestPartParams> {
   /** Holds one part for the caller's scope, asking it where no window held it; let go with the last scope holding it, it is kept a while among those let go lately. */
-  readonly hold: (params: PullRequestPartParams) => Effect.Effect<void, never, Scope.Scope>;
+  readonly hold: (params: Params) => Effect.Effect<void, never, Scope.Scope>;
   /** Asks one held part again at once, as Try again asks; answers once that ask has landed. */
-  readonly retry: (params: PullRequestPartParams) => Effect.Effect<void>;
+  readonly retry: (params: Params) => Effect.Effect<void>;
   /** Follows every held part anew, as the account gate opening asks. */
   readonly open: Effect.Effect<void>;
   /** Lets every part go and tells none held: the session ended. */
   readonly end: Effect.Effect<void>;
 }
 
-/** One part's fetch as the windows' holds, Try again, and the list's moves reach it, whatever it holds. */
-type PartFetch = Omit<HeldFetch<PullRequestKey, unknown>, "answered">;
+export interface RepositoryPullRequestPartsDependencies {
+  /** Whether the account gate stands open, so a part may be asked. */
+  readonly gate: () => boolean;
+  readonly focus: WindowFocus;
+  /** One ask of each part of `key`'s pull request: what the service answered, or why there is none. */
+  readonly ask: {
+    readonly pullRequest: (
+      key: RepositoryPullRequestKey,
+    ) => Effect.Effect<RepositoryOverviewPullRequestAnswerView>;
+    readonly checks: (
+      key: RepositoryPullRequestKey,
+    ) => Effect.Effect<RepositoryOverviewChecksAnswerView>;
+    readonly conversation: (
+      key: RepositoryPullRequestKey,
+    ) => Effect.Effect<RepositoryOverviewConversationAnswerView>;
+    readonly published: (
+      key: RepositoryPullRequestKey,
+    ) => Effect.Effect<RepositoryPullRequestAnswerView>;
+    readonly reviewOptions: (
+      key: RepositoryPullRequestKey,
+    ) => Effect.Effect<RepositoryReviewOptionsAnswerView>;
+    readonly viewed: (
+      key: RepositoryPullRequestKey,
+    ) => Effect.Effect<RepositoryPullRequestViewedAnswerView>;
+  };
+  /** The task list each time it is drawn, from the caller's listening on. */
+  readonly listings: Effect.Effect<Stream.Stream<PullRequestListing>, never, Scope.Scope>;
+  /** How each part's slice is told, whole, each time any of its keys moves. */
+  readonly tell: {
+    readonly [Slice in keyof AppRepositoryPullRequestParts]: (
+      held: AppRepositoryPullRequestParts[Slice],
+    ) => void;
+  };
+}
+
+/** One part's fetch as the windows' holds, Try again, and the list's moves reach it, by its key, whatever it holds. */
+type PartFetchOf<Key> = Omit<HeldFetch<Key, unknown>, "answered">;
+
+type PartFetch = PartFetchOf<PullRequestKey>;
 
 /** Where a key's part stands on its slice: under the agent, then the pull request's number, or the agent's own. */
 function pathOf(key: PullRequestKey): readonly [string, string] {
@@ -137,6 +209,29 @@ function pathOf(key: PullRequestKey): readonly [string, string] {
 
 function keyOf(params: PullRequestPartParams): PullRequestKey {
   return new PullRequestKey({ agentId: params.agentId, number: params.number });
+}
+
+/** Where a repository key's part stands on its slice: under the workspace, then the repository, then the number. */
+function repositoryPathOf(key: RepositoryPullRequestKey): readonly [string, string, string] {
+  return [key.workspaceId, key.repository, String(key.number)];
+}
+
+/** The key of the pull request a window named by its repository and number, whatever else it named beside them. */
+export function repositoryKeyOf(params: RepositoryPullRequestParams): RepositoryPullRequestKey {
+  const { workspaceId, repository, number } = params;
+
+  return new RepositoryPullRequestKey({ workspaceId, repository, number });
+}
+
+/** Whether a listed pull request's address names `key`'s: the same number in the same repository, whatever the case its owner and name are spelled in. */
+function listedAs(key: RepositoryPullRequestKey, url: string | undefined): boolean {
+  const address = url === undefined ? undefined : pullRequestAddressOf(url);
+
+  return (
+    address !== undefined &&
+    address.number === key.number &&
+    address.repository.toLowerCase() === key.repository.toLowerCase()
+  );
 }
 
 /** What a part holds after an ask: the answer, but where it failed over an answer the part already held, nothing, so that answer stands. */
@@ -192,6 +287,37 @@ function movedIn(listing: PullRequestListing): Moved {
   }
 
   return { agents, opened, urls, heads };
+}
+
+/**
+ * Follows the address of each agent's pull request the list names across
+ * its drawings: each drawing laid over the addresses held, answering each
+ * agent's address as the drawing before it left it, so a pull request its
+ * line no longer names is still heard as left.
+ */
+function agentAddresses(): (
+  listing: PullRequestListing,
+) => (agentId: string) => string | undefined {
+  /** The address of each agent's pull request the list names, as the drawings so far left it. */
+  const agentUrls = new Map<string, string>();
+
+  return (listing) => {
+    const wasUrls = new Map(
+      listing.pullRequests.map(({ was, now }) => [
+        (now ?? was)?.agentId ?? "",
+        was?.pullRequest.url,
+      ]),
+    );
+
+    if (listing.whole) agentUrls.clear();
+
+    for (const { was, now } of listing.pullRequests) {
+      if (now !== undefined) agentUrls.set(now.agentId, now.pullRequest.url);
+      else if (was !== undefined) agentUrls.delete(was.agentId);
+    }
+
+    return (agentId) => (wasUrls.has(agentId) ? wasUrls.get(agentId) : agentUrls.get(agentId));
+  };
 }
 
 /** The parts of the pull requests the windows hold, for as long as the scope that made them stands. */
@@ -295,36 +421,13 @@ export function pullRequestParts(
       Option.getOrUndefined(MutableHashMap.get(urls, key)) ??
       (key.number === undefined ? agentUrl(key.agentId) : undefined);
 
-    /** The address of each agent's pull request the list names, as the drawings so far left it. */
-    const agentUrls = new Map<string, string>();
-
-    /** Lays a drawing's moved pull requests over the addresses held. */
-    const relisted = (listing: PullRequestListing) => {
-      if (listing.whole) agentUrls.clear();
-
-      for (const { was, now } of listing.pullRequests) {
-        if (now !== undefined) agentUrls.set(now.agentId, now.pullRequest.url);
-        else if (was !== undefined) agentUrls.delete(was.agentId);
-      }
-    };
+    const addresses = agentAddresses();
 
     // Note that a drawing that starts the list anew asks nothing, since nothing moved yet that a part was read before.
     const heard = (listing: PullRequestListing) =>
       Effect.suspend(() => {
         const moved = movedIn(listing);
-
-        // Note that an agent's address is read as the drawing before left it, so a pull request its line no longer names is still heard as left.
-        const wasUrls = new Map(
-          listing.pullRequests.map(({ was, now }) => [
-            (now ?? was)?.agentId ?? "",
-            was?.pullRequest.url,
-          ]),
-        );
-
-        const wasUrlOf = (agentId: string) =>
-          wasUrls.has(agentId) ? wasUrls.get(agentId) : agentUrls.get(agentId);
-
-        relisted(listing);
+        const wasUrlOf = addresses(listing);
 
         if (listing.whole) return Effect.void;
 
@@ -358,6 +461,149 @@ export function pullRequestParts(
     return {
       hold: (params) => fetches[params.part].hold(keyOf(params)),
       retry: (params) => fetches[params.part].retry(keyOf(params)),
+      open: Effect.forEach(every, (fetch) => fetch.open, { discard: true }),
+      end: Effect.forEach(every, (fetch) => fetch.end, { discard: true }),
+    };
+  });
+}
+
+/**
+ * The parts of the pull requests the windows hold by their repository and
+ * number, for as long as the scope that made them stands: asked as a window
+ * first holds one, as a window comes forward, and on its own Try again, and
+ * asked again as the task list moves the pull request's line or the status
+ * of an agent it lists as the pull request's.
+ */
+export function repositoryPullRequestParts(
+  dependencies: RepositoryPullRequestPartsDependencies,
+): Effect.Effect<PullRequestParts<RepositoryPullRequestPartParams>, never, Scope.Scope> {
+  return Effect.gen(function* () {
+    const { gate, focus, ask, tell } = dependencies;
+
+    const pullRequest = yield* heldFetch<
+      typeof LIVE_READ.REPOSITORY_PULL_REQUEST,
+      RepositoryPullRequestKey
+    >({
+      empty: NO_KEYS_HELD,
+      path: repositoryPathOf,
+      gate,
+      focus,
+      fetch: (key, held) => Effect.map(ask.pullRequest(key), (answer) => keptOver(answer, held)),
+      tell: tell[LIVE_READ.REPOSITORY_PULL_REQUEST],
+    });
+
+    const checks = yield* heldFetch<
+      typeof LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS,
+      RepositoryPullRequestKey
+    >({
+      empty: NO_KEYS_HELD,
+      path: repositoryPathOf,
+      gate,
+      focus,
+      fetch: (key, held) => Effect.map(ask.checks(key), (answer) => keptOver(answer, held)),
+      tell: tell[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS],
+    });
+
+    const conversation = yield* heldFetch<
+      typeof LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION,
+      RepositoryPullRequestKey
+    >({
+      empty: NO_KEYS_HELD,
+      path: repositoryPathOf,
+      gate,
+      focus,
+      fetch: (key, held) => Effect.map(ask.conversation(key), (answer) => keptOver(answer, held)),
+      tell: tell[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION],
+    });
+
+    const published = yield* heldFetch<
+      typeof LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED,
+      RepositoryPullRequestKey
+    >({
+      empty: NO_KEYS_HELD,
+      path: repositoryPathOf,
+      gate,
+      focus,
+      fetch: (key, held) => Effect.map(ask.published(key), (answer) => keptOver(answer, held)),
+      tell: tell[LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED],
+    });
+
+    const reviewOptions = yield* heldFetch<
+      typeof LIVE_READ.REPOSITORY_REVIEW_OPTIONS,
+      RepositoryPullRequestKey
+    >({
+      empty: NO_KEYS_HELD,
+      path: repositoryPathOf,
+      gate,
+      focus,
+      fetch: (key, held) => Effect.map(ask.reviewOptions(key), (answer) => keptOver(answer, held)),
+      tell: tell[LIVE_READ.REPOSITORY_REVIEW_OPTIONS],
+    });
+
+    const viewed = yield* heldFetch<
+      typeof LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED,
+      RepositoryPullRequestKey
+    >({
+      empty: NO_KEYS_HELD,
+      path: repositoryPathOf,
+      gate,
+      focus,
+      fetch: (key) => Effect.map(ask.viewed(key), Option.some),
+      tell: tell[LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED],
+    });
+
+    const fetches: Readonly<Record<PullRequestPart, PartFetchOf<RepositoryPullRequestKey>>> = {
+      [PULL_REQUEST_PART.PULL_REQUEST]: pullRequest,
+      [PULL_REQUEST_PART.CHECKS]: checks,
+      [PULL_REQUEST_PART.CONVERSATION]: conversation,
+      [PULL_REQUEST_PART.PUBLISHED]: published,
+      [PULL_REQUEST_PART.REVIEW_OPTIONS]: reviewOptions,
+      [PULL_REQUEST_PART.VIEWED]: viewed,
+    };
+
+    const every = Object.values(fetches);
+
+    /** The parts asked again together as the pull request or an agent listed as its own moves. */
+    const moving: readonly PartFetchOf<RepositoryPullRequestKey>[] = [
+      pullRequest,
+      checks,
+      conversation,
+      published,
+    ];
+
+    const addresses = agentAddresses();
+
+    // Note that a drawing that starts the list anew asks nothing, since nothing moved yet that a part was read before.
+    const heard = (listing: PullRequestListing) =>
+      Effect.suspend(() => {
+        const moved = movedIn(listing);
+        const wasUrlOf = addresses(listing);
+
+        if (listing.whole || (moved.agents.size === 0 && moved.urls.size === 0)) {
+          return Effect.void;
+        }
+
+        const lines = [...moved.urls];
+        // Note that an agent's address is the one the drawing before left it, so an agent whose line went with its status is still heard.
+        const agentLines = [...moved.agents].map(wasUrlOf);
+        const heads = [...moved.heads];
+
+        const named = (key: RepositoryPullRequestKey) =>
+          lines.some((url) => listedAs(key, url)) || agentLines.some((url) => listedAs(key, url));
+
+        const pushed = (key: RepositoryPullRequestKey) => heads.some((url) => listedAs(key, url));
+
+        return Effect.andThen(
+          Effect.forEach(moving, (fetch) => fetch.wake(named), { discard: true }),
+          viewed.wake(pushed),
+        );
+      });
+
+    yield* Effect.forkScoped(Stream.runForEach(yield* dependencies.listings, heard));
+
+    return {
+      hold: (params) => fetches[params.part].hold(repositoryKeyOf(params)),
+      retry: (params) => fetches[params.part].retry(repositoryKeyOf(params)),
       open: Effect.forEach(every, (fetch) => fetch.open, { discard: true }),
       end: Effect.forEach(every, (fetch) => fetch.end, { discard: true }),
     };

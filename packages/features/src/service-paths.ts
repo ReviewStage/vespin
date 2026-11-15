@@ -634,3 +634,18 @@ export function agentPicturePath(agentId: string, pictureId: string, callId?: st
 export function agentGitHubImagePath(agentId: string, src: string): string {
   return `/api/agents/${encodeURIComponent(agentId)}/github-image?${new URLSearchParams({ src })}`;
 }
+
+/** One image a pull request of a repository names (GET), by the workspace whose installation reaches the repository, the repository, and the address GitHub's rendering spelled; answered as bytes of one of `github-image.ts`'s types. */
+export function pullRequestGitHubImagePath(
+  place: { readonly workspaceId: string; readonly repository: string },
+  src: string,
+): string {
+  // Note that the place's keys are the query's names (`GITHUB_REPOSITORIES_QUERY`), which this module imports nothing to spell.
+  const query = new URLSearchParams({
+    workspaceId: place.workspaceId,
+    repository: place.repository,
+    src,
+  });
+
+  return `/api/pull-requests/github-image?${query}`;
+}
