@@ -11,8 +11,6 @@
  * are laid on main's document too, as the host lays them.
  */
 
-import type { TasksView } from "@repo/features/tasks-view";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import type { QueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
@@ -40,34 +38,6 @@ let loading: Promise<void> | undefined;
 /** The Query client the window's document is written into, whose `run` a fixture run's acts are staged by (`act.ts`). */
 let documentClient: QueryClient | undefined;
 
-/** Each document's task list with a fixture's followed lists laid on it, one object for each. */
-const followedLists = new WeakMap<AppStateSnapshot["tasks"], AppStateSnapshot["tasks"]>();
-
-/**
- * Main's document with the agents and pull requests of the task list the
- * fixture draws (`view`) laid on its own list, as the host lays the list it
- * follows, so every reader of a task's agents or pull requests
- * (`use-task-work.ts`) reads those the fixture's rows count.
- */
-function withFollowed(state: AppStateSnapshot, view: TasksView | undefined): AppStateSnapshot {
-  if (view === undefined) return state;
-  const held = followedLists.get(state.tasks);
-
-  if (held !== undefined) return { ...state, tasks: held };
-
-  const tasks = {
-    ...state.tasks,
-    ...(view.taskAgents === undefined ? undefined : { taskAgents: view.taskAgents }),
-    ...(view.taskPullRequests === undefined
-      ? undefined
-      : { taskPullRequests: view.taskPullRequests }),
-  };
-
-  followedLists.set(state.tasks, tasks);
-
-  return { ...state, tasks };
-}
-
 /** The tasks fixture with the Inbox's tasks, answers, and document laid over its own, which come last. */
 function laidOver(tasks: TasksModule, inbox: InboxModule): TasksFixture {
   const fixtureTasksView: TasksFixture["fixtureTasksView"] = (run) => {
@@ -85,10 +55,7 @@ function laidOver(tasks: TasksModule, inbox: InboxModule): TasksFixture {
       inbox.inboxActAnswer(run.profile, kind, payload) ??
       tasks.fixtureActAnswer(run, kind, payload),
     fixtureAppState: (state) =>
-      withFollowed(
-        inbox.inboxAppState(tasks.fixtureAppState(state), tasks.FIXTURE_WORKSPACE_IDS),
-        fixtureTasksView(state.run),
-      ),
+      inbox.inboxAppState(tasks.fixtureAppState(state), tasks.FIXTURE_WORKSPACE_IDS),
     fixtureReader: (run) => inbox.inboxReader(run.profile),
   };
 }

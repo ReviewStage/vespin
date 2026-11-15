@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { ORPCError } from "@orpc/client";
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
-import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, TASKS_READ } from "@repo/features/tasks-view";
 import {
   TERMINAL_PORT_CHANNEL,
   TERMINAL_REFUSAL,
@@ -31,7 +31,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import type { SideBundles } from "../bundle-loader.js";
 import { announcedPolitely, mountAnnouncer } from "../testing/announcer.js";
 import { type AnyAct, fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
-import { handHostReads } from "../testing/app-state.js";
+import { handHostReads, type WrittenTasksView } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { fittedTerminalBundles, onSideBundles } from "../testing/side-bundles.js";
 import { agentsControl } from "../testing/tasks-control.js";
@@ -675,7 +675,7 @@ test("a resume whose snapshot is gone says the sandbox shut down and how to star
 });
 
 /** The task list as the host lays it, the tab's agent's sandbox open or not. */
-function listedWithSandbox(open: boolean): TasksView {
+function listedWithSandbox(open: boolean): WrittenTasksView {
   return {
     ...IDLE_TASKS_VIEW,
     listStatus: TASKS_READ.READY,

@@ -49,8 +49,8 @@ function taskRowsNow(
 
       return row === undefined ? undefined : renamedTask(row, typedNames);
     },
-    // Note that the collection holds no agent while the list follows none, which the document alone tells from a list of none.
-    agents: () => (listed?.taskAgents === undefined ? undefined : collections.agents.toArray),
+    // Note that the collection holds no agent until the list says its lists are drawn, which tells a list of none from none read yet.
+    agents: () => (listed?.listed === true ? collections.agents.toArray : undefined),
     agentPins: listed?.taskAgentPins ?? [],
     activeTaskId: listed?.activeTaskId,
     held: state?.[LIVE_READ.HELD_TASK],
