@@ -32,6 +32,7 @@ import {
 import {
   agentCallLine,
   CALL_KIND,
+  CALL_MARK,
   CALL_WORDS,
   type CallKind,
   type CallLine,
@@ -1684,7 +1685,7 @@ export function TranscriptTool({
               {" Mac"}
             </ActorLine>
           ) : mcp ? undefined : (
-            callPlace(kind, server)
+            callPlace({ kind, server }, CALL_MARK.LEADS)
           )
         }
         status={held?.status ?? (notRun === undefined ? undefined : machineNotRunLabel(notRun))}

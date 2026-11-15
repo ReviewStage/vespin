@@ -21,6 +21,7 @@
  */
 
 import { Predicate } from "effect";
+import type { IntegrationProvider } from "./integration-wire.js";
 import { COMPUTER_ACTION, type ComputerAction } from "./machine-command-wire.js";
 import { countWords } from "./words.js";
 
@@ -407,14 +408,44 @@ export function isCommandKind(kind: CallKind): boolean {
 }
 
 /**
+ * Whether a call's reader leads its row with the mark of the integration it
+ * ran on: the panel and the iPhone do, so the mark already says the
+ * provider; a copy carries no mark, so its words must say it.
+ */
+export const CALL_MARK = {
+  LEADS: "leads",
+  NONE: "none",
+} as const;
+
+export type CallMark = (typeof CALL_MARK)[keyof typeof CALL_MARK];
+
+/** What says where a call ran: its kind, and for a call of an MCP server's tool, the server, the integration it is, and the account among several it ran on (`ToolCallView`). */
+export interface PlacedCall {
+  readonly kind: CallKind;
+  readonly server?: string | undefined;
+  readonly provider?: IntegrationProvider | undefined;
+  readonly account?: string | undefined;
+}
+
+/**
  * Where a call ran, as its row says beside its line, or nothing for a call
  * that ran where its tab says. A command on a Mac ran on the Mac of the
- * agent's starter, whom a row that knows them draws in these words' place;
- * a call of an MCP server's tool ran on the server it names. A browser call
+ * agent's starter, whom a row that knows them draws in these words' place.
+ * A call of an MCP server's tool, or a search of its tools, says only what
+ * its row's mark does not: under the mark, the account among its owner's
+ * several ("Acme"), a server of no integration's by its name, and nothing
+ * for an integration's lone account; with no mark, the server as its card
+ * names it, which says the account too ("Linear · Acme"). A browser call
  * says none, since its icon and its words already say the browser.
  */
-export function callPlace(kind: CallKind, server?: string): string | undefined {
-  if (kind === CALL_KIND.MCP_TOOL || kind === CALL_KIND.SEARCH_TOOLS) return server;
+export function callPlace(call: PlacedCall, mark: CallMark): string | undefined {
+  const { kind, server, provider, account } = call;
+
+  if (kind === CALL_KIND.MCP_TOOL || kind === CALL_KIND.SEARCH_TOOLS) {
+    if (mark === CALL_MARK.NONE || provider === undefined) return server;
+
+    return account;
+  }
 
   return kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER
     ? ON_YOUR_MAC
