@@ -55,23 +55,47 @@ function taskListPushOf(delivery: AppStateDelivery): TaskListDelivery | undefine
   return moved === undefined || moved.length === 0 ? undefined : { version, moved };
 }
 
+/** The task-list listeners `withTaskListPushes` made, which a fake spreading the bridge installed before may carry. */
+const madePushes = new WeakSet<AppBridge["onTaskList"]>();
+
 /**
  * The bridge's task-list pushes, where a fake hands the document but not
- * them: each document delivery heard also pushes what it carries of the
- * task list just before it, as the host sends the two.
+ * them: each document delivery a window hears first pushes what it carries
+ * of the task list to every task-list listener, as the host sends the two.
+ * Note that the pushes ride the window's own subscription to the document
+ * rather than one of their own, because a fake may do work for each
+ * subscription it is handed, such as numbering what it delivers.
  */
 function withTaskListPushes(calls: Partial<AppBridge>): Partial<AppBridge> {
-  const { onAppState } = calls;
+  const { onAppState, onTaskList } = calls;
 
-  if (calls.onTaskList !== undefined || onAppState === undefined) return calls;
+  // Note that a fake built over the bridge installed before carries that one's pushes, which its own subscription to the document no longer feeds, so they are made again.
+  if (onAppState === undefined || (onTaskList !== undefined && !madePushes.has(onTaskList))) {
+    return calls;
+  }
+
+  const rowsHeard = new Set<(delivery: TaskListDelivery) => void>();
+
+  const heardRows: AppBridge["onTaskList"] = (listener) => {
+    const entry = (delivery: TaskListDelivery) => listener(delivery);
+    rowsHeard.add(entry);
+
+    return () => {
+      rowsHeard.delete(entry);
+    };
+  };
+
+  madePushes.add(heardRows);
 
   return {
     ...calls,
-    onTaskList: (listener) =>
+    onTaskList: heardRows,
+    onAppState: (listener) =>
       onAppState((delivery) => {
         const pushed = taskListPushOf(delivery);
 
-        if (pushed !== undefined) listener(pushed);
+        if (pushed !== undefined) for (const heard of [...rowsHeard]) heard(pushed);
+        listener(delivery);
       }),
   };
 }

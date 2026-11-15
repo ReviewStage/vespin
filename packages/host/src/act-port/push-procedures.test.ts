@@ -46,6 +46,11 @@ async function nextOf(stream: AsyncIterator<PushEvent>): Promise<IteratorResult<
   }
 }
 
+/** The push one read of a stream carried, none where the stream ended. */
+function pushed(read: IteratorResult<PushEvent>): PushEvent | undefined {
+  return read.done ? undefined : read.value;
+}
+
 /** What one read of a stream carried, a document by its version. */
 function heard(read: IteratorResult<PushEvent>): number | string | undefined {
   if (read.done) return undefined;
@@ -58,7 +63,7 @@ it("a stream sends the task list's rows just before the document they moved in, 
   const stream = pushes.stream(WINDOW, undefined);
   const first = documentAt(1);
   pushes.pushState(WINDOW, first);
-  const opening = [await stream.next(), await stream.next()].map((read) => read.value);
+  const opening = [await stream.next(), await stream.next()].map(pushed);
 
   const task = {
     id: "task-1",
@@ -70,7 +75,7 @@ it("a stream sends the task list's rows just before the document they moved in, 
   };
 
   pushes.pushState(WINDOW, { ...documentAt(2), tasks: { ...first.tasks, tasks: [task] } });
-  const moved = [await stream.next(), await stream.next()].map((read) => read.value);
+  const moved = [await stream.next(), await stream.next()].map(pushed);
 
   assert.deepEqual(opening, [
     { push: PUSH.TASK_LIST, payload: { version: 1, whole: { tasks: [] } } },
