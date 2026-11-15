@@ -214,6 +214,13 @@ export const tasksViewSchema = EffectSchema.Struct({
   pendingTasks: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   listStatus: tasksReadSchema,
   /**
+   * Whether the task list's lists have been drawn, as they are from the
+   * list's first drawing, from disk or followed live: what a reader waiting
+   * on the list's agents or pull requests reads, since the lists themselves
+   * reach a window on their own channel. Absent before the first drawing.
+   */
+  listed: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /**
    * The workspaces in which the account reaches any task, as the list's
    * last answer said, whatever the list holds of them: whether it has ever
    * had a task there. Absent before an answer says, as one drawn from disk

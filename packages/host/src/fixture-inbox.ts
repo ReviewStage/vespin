@@ -1509,6 +1509,7 @@ export function inboxTasksView(profile: string, list: TasksView): TasksView {
   return {
     ...list,
     tasks,
+    listed: true,
     taskAgents: [
       ...(list.taskAgents ?? []).filter((agent) => !followed.some(({ id }) => id === agent.id)),
       ...followed,

@@ -141,6 +141,7 @@ import {
   NO_BROWSER_TABS,
   NO_KEYS_HELD,
   NO_PAGES,
+  TASK_LIST_PARTS,
 } from "./app-state.js";
 import type { AccountComposer } from "./compose-account.js";
 import type {
@@ -215,14 +216,6 @@ import { followSidebarRows } from "./workspaces-follow.js";
  * connected, are carried on the view beside the tasks, drawn there by the
  * workspaces' own concern (`compose-workspaces.ts`).
  */
-
-/** The view's lists each a live query of the task list draws, which cross as what moved in them (`list-moves.ts`). */
-const LISTED_PARTS = [
-  "tasks",
-  "taskAgents",
-  "taskPullRequests",
-  "agentPullRequests",
-] as const satisfies readonly (keyof TasksView)[];
 
 /** A task's pin and where it stands as the list carries them, each only where it stands. */
 type TaskMarkStamps = Pick<Task, "pinnedAt" | "pinPosition">;
@@ -909,7 +902,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     view = keepIdentity(published, view);
 
     // Note that a list laid anew over the one told is the drawing it was laid from, so its delivery is told what moved in it rather than walking it (`list-moves.ts`).
-    for (const part of LISTED_PARTS) drawnAs(view[part], drawn[part]);
+    for (const part of TASK_LIST_PARTS) drawnAs(view[part], drawn[part]);
 
     if (view === published) return;
     published = view;
@@ -1240,6 +1233,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
             taskPullRequests,
             agentPullRequests,
             taskAgentPins,
+            listed: true,
           });
           documents.relisted();
           const listing = { taskAgents, agentPullRequests };
