@@ -17,7 +17,7 @@ import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { type StandingTaskList, standingTaskList } from "../testing/history-rows.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { listedTasksOf, tasksControl } from "../testing/tasks-control.js";
 import { RelatedTasks } from "./related-tasks.js";
 
 /**
@@ -176,7 +176,7 @@ test("a related task's row leads its trailing run with its stop sign and says ho
     listRead: true,
   });
 
-  listed.stand({ tasks: tasks.tasks });
+  listed.stand({ tasks: listedTasksOf(tasks) });
 
   act(() =>
     root.render(

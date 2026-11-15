@@ -2,6 +2,7 @@
 
 import {
   Divider,
+  HStack,
   Menu,
   NavigationDestination,
   NavigationSplitView,
@@ -23,18 +24,29 @@ import {
   disabled,
   frame,
   hidden,
+  ignoreSafeArea,
   type ModifierConfig,
   menuIndicator,
   menuStyle,
   navigationSplitViewStyle,
   navigationTitle,
+  overlay,
   searchable,
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { Fragment, type ReactElement, type ReactNode, useEffect, useState } from "react";
+import {
+  Fragment,
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { StyleSheet, View } from "react-native";
 import { BarContent } from "./bar-content.js";
+import { type BarSubtitle, ColumnBarTitle } from "./bar-title.js";
 import type { Scope } from "./button.js";
 import { GLYPH, type Glyph } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
@@ -137,14 +149,16 @@ export type BarPath = {
  * What a column's bar holds: its title, small and inline as every screen's
  * stands, which the back button and the reader name it by; what leads it
  * (a SwiftUI view such as the workspace switcher), a page's path in its
- * middle, its menu and its act at its trailing edge, such as a list's
- * New task, a search field over its list, and the acts at its foot, in its
+ * middle, its menu and its act at its trailing edge, such as Select mode's
+ * Done, a search field over its list, and the acts at its foot, in its
  * bottom bar.
  */
 export type ColumnBar = {
   readonly title?: string | undefined;
   /** A pushed page's name, small and inline in the ink, as a compact window's stack names an agent's page; never with a `title`. */
   readonly name?: string | undefined;
+  /** A muted line under the page's `name`, such as an agent's state and model, standing with it in the bar's middle; never without a `name`. */
+  readonly subtitle?: BarSubtitle | undefined;
   readonly leading?: ReactNode | undefined;
   /** Glyph acts at the bar's leading edge, sharing one glass, as Mail's expand and compose stand over a message. */
   readonly lead?: readonly BarAction[] | undefined;
@@ -363,6 +377,7 @@ function barHolds(bar: ColumnBar): boolean {
     (bar.acts ?? []).length > 0 ||
     bar.filter !== undefined ||
     bar.path !== undefined ||
+    (bar.name !== undefined && bar.subtitle !== undefined) ||
     bar.menu !== undefined ||
     bar.action !== undefined ||
     (bar.foot ?? []).length > 0
@@ -403,6 +418,8 @@ function Column({
 }) {
   const colors = useColors();
   const text = useSearchWords(bar.search, searchKey);
+  // Note that a list standing first, as a portrait iPad's, ends in a hairline beside the detail, as Mail's message list does, because both columns paint one ground and the system's sidebar column draws no edge of its own.
+  const ruled = sidebar && !clear;
 
   const stacked = (
     <ZStack
@@ -416,7 +433,7 @@ function Column({
             ]),
         // Note that a page in the detail's own stack paints the stack's ground too, because a navigation stack stands the system's own color behind each of its pages.
         ...(inStack ? [containerBackground(colors.GROUND, "navigation")] : []),
-        // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, compose, ⋯ and the sidebar button, and a leading title folds them into an overflow. A page pushed over the detail names itself small and inline, as a stack's page does. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
+        // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A page pushed over the detail names itself small and inline, as a stack's page does. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title !== undefined
           ? [
               navigationTitle(bar.title),
@@ -427,7 +444,20 @@ function Column({
             : [toolbarTitleDisplayMode("inline")]),
       ]}
     >
-      {view}
+      {ruled ? (
+        <HStack spacing={0}>
+          <ZStack>{view}</ZStack>
+          {/* Note that the rule runs the column's whole height, under its bar and over the home indicator, as the column's ground does and Mail's rule does. */}
+          <Divider
+            modifiers={[
+              overlay({ color: colors.CHIP_EDGE }),
+              ignoreSafeArea({ edges: "vertical" }),
+            ]}
+          />
+        </HStack>
+      ) : (
+        view
+      )}
     </ZStack>
   );
 
@@ -448,6 +478,11 @@ function Column({
         {bar.path === undefined ? null : (
           <ToolbarItem placement="principal">
             <PathTitle path={bar.path.path} status={bar.path.status} />
+          </ToolbarItem>
+        )}
+        {bar.name === undefined || bar.subtitle === undefined ? null : (
+          <ToolbarItem placement="principal">
+            <ColumnBarTitle title={bar.name} subtitle={bar.subtitle} />
           </ToolbarItem>
         )}
         {barActItems(bar.acts ?? [])}
@@ -610,6 +645,85 @@ export function HostedFill({ children }: { readonly children: ReactNode }) {
   );
 }
 
+/** How long after the page stops standing alone the system's reports of the columns are its own, a little past its column slide. */
+const LEAVE_SETTLE_MS = 700;
+
+/** What a split view's columns stand as, by `NavigationSplitView`'s own names. */
+type ColumnVisibility = "automatic" | "all" | "doubleColumn" | "detailOnly";
+
+/**
+ * The stretch after a split view's detail stops standing alone, while the
+ * system slides the columns back: the report it sent, and whether the
+ * columns have been asked for again.
+ */
+type Leaving = { reported: ColumnVisibility | undefined; reasked: boolean };
+
+/**
+ * Brings the columns back as the detail stops standing alone, and marks the
+ * stretch while the system does it. Note that iPadOS answers the ask for all
+ * three columns from the detail alone with two, the sidebar left hidden, and
+ * reports only that; and that `@expo/ui` never reports the value it was asked
+ * for. So two columns reported in the stretch are the system's step down, not
+ * the reader hiding the sidebar: the split view asks for two, which already
+ * stand, then for all three on the next frame, which the system then shows,
+ * as it does for the sidebar button. Note that a report after that ask, once
+ * the stretch ends, is taken as what stands, so the sidebar's state never
+ * reads shown while the system keeps it hidden.
+ */
+function useColumnsBack(detailOnly: boolean, settle: (reported: ColumnVisibility) => void) {
+  const leaving = useRef<Leaving | undefined>(undefined);
+  const settleNow = useRef(settle);
+  const was = useRef(detailOnly);
+  const [stepped, setStepped] = useState(false);
+
+  useLayoutEffect(() => {
+    settleNow.current = settle;
+  });
+
+  useLayoutEffect(() => {
+    const left = was.current && !detailOnly;
+
+    was.current = detailOnly;
+
+    if (!left) return;
+
+    const stretch: Leaving = { reported: undefined, reasked: false };
+
+    leaving.current = stretch;
+
+    const timer = setTimeout(() => {
+      if (leaving.current !== stretch) return;
+
+      leaving.current = undefined;
+
+      if (stretch.reported !== undefined) settleNow.current(stretch.reported);
+    }, LEAVE_SETTLE_MS);
+
+    return () => clearTimeout(timer);
+  }, [detailOnly]);
+
+  /** Takes a report the system sent while the columns come back; false once the stretch is over, so the report counts as the reader's. */
+  const tookReport = (reported: ColumnVisibility, stepsDown: boolean): boolean => {
+    const stretch = leaving.current;
+
+    if (stretch === undefined) return false;
+
+    if (stepsDown && !stretch.reasked) {
+      stretch.reasked = true;
+      setStepped(true);
+      requestAnimationFrame(() => setStepped(false));
+
+      return true;
+    }
+
+    stretch.reported = reported;
+
+    return true;
+  };
+
+  return { stepped, tookReport };
+}
+
 /**
  * The app's columns for a regular-width window, such as an iPad's or the
  * unfolded iPhone Duo's, as Mail and Files stand theirs: the app's sidebar,
@@ -637,11 +751,20 @@ export function SplitView({
 }: SplitViewProps) {
   const hidden = content === undefined ? "detailOnly" : "doubleColumn";
 
+  // Note that a two-column split view names both columns standing "doubleColumn", which is its "all".
+  const sidebarStands = (visibility: ColumnVisibility) =>
+    visibility === "all" || (content === undefined && visibility === "doubleColumn");
+
+  const back = useColumnsBack(detailOnly, (reported) =>
+    onSidebarShownChange(sidebarStands(reported)),
+  );
+
+  const shown = detailOnly ? "detailOnly" : sidebarShown && !back.stepped ? "all" : hidden;
+
   return (
     <NavigationSplitView
-      columnVisibility={detailOnly ? "detailOnly" : sidebarShown ? "all" : hidden}
+      columnVisibility={shown}
       onColumnVisibilityChange={(visibility) => {
-        // Note that a two-column split view names both columns standing "doubleColumn", which is its "all".
         if (visibility === "automatic") return;
 
         // Note that the detail standing alone leaves the sidebar's own choice as it was, and columns brought back by the system's button end it.
@@ -651,9 +774,12 @@ export function SplitView({
           return;
         }
 
-        onSidebarShownChange(
-          visibility === "all" || (content === undefined && visibility === "doubleColumn"),
-        );
+        // Note that a report while the columns come back is the system's, never the reader hiding the sidebar.
+        const stepsDown = sidebarShown && !sidebarStands(visibility);
+
+        if (back.tookReport(visibility, stepsDown)) return;
+
+        onSidebarShownChange(sidebarStands(visibility));
       }}
       modifiers={[navigationSplitViewStyle("balanced")]}
     >

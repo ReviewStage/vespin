@@ -99,7 +99,6 @@ async function mount() {
         ...IDLE_TASKS_VIEW,
         listStatus: TASKS_READ.READY,
         workspaces: [ACME],
-        tasks: TASKS,
       },
       run: { fixtureMode: false, profile: RUN_PROFILE.IDLE },
       signedIn: true,
