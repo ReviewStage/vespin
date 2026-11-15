@@ -60,11 +60,9 @@
  * first line, and each message sent on, says Slack carried it, with the
  * writer's words and the message's link (`slackLine`), which a window draws
  * in place of the prompt the agent reads. The bot
- * reacts to the message with 👀 at once and replies with one line linking
- * the agent, as other agents' bots do, so the transcript opens from the
- * thread while the agent works, and the thread is kept as the agent's; a
- * message sent on to an agent is marked with 👀 alone, since its thread
- * already links it.
+ * reacts to the message with 👀 at once and says nothing in the thread, and
+ * the thread is kept as the agent's; a message sent on to an agent is marked
+ * with a reaction alone too.
  *
  * Where an agent stands shows on members' messages as the bot's reactions
  * (`STATUS_EMOJI`), never as words. A message that starts a turn is marked
@@ -752,21 +750,6 @@ const agentLink = (userId: string, organizationId: string, agentId: string) =>
     linkOf({ kind: LINK_DESTINATION.AGENT, agentId }, step),
   );
 
-/** The one line the bot says once an agent starts: that it is on it, where, and the agent's link, so the thread opens the transcript before the agent's first reply. */
-function startedReply(link: string, repository: string | null): SlackMessageContent {
-  const lead = repository === null ? "On it." : `On it in ${repository}.`;
-
-  return {
-    text: `${lead} ${link}`,
-    blocks: [
-      {
-        type: "section",
-        text: { type: "mrkdwn", text: `${slackEscaped(lead)} <${link}|Open in ${PRODUCT_NAME}>` },
-      },
-    ],
-  };
-}
-
 /** The words the bot links a continue with, said once in the thread: the earlier agent had stopped, and where its work goes on. */
 function continuedReply(link: string): SlackMessageContent {
   const lead = "The earlier agent had stopped, so I continued its work in";
@@ -1076,10 +1059,8 @@ const startFromSlack = Effect.fnUntraced(function* (
     startTs: addressed.ts,
     workingTs: addressed.ts,
   });
-  // Note that the reaction says the message was heard, and the reply links the agent at once, as other agents' bots do, rather than at its first settled turn.
+  // Note that the start says nothing in the thread: 👀 shows it was heard, and the agent speaks there itself.
   yield* bot.react(addressed.channel, addressed.ts, HEARD_EMOJI);
-  const link = yield* agentLink(userId, organizationId, agentId);
-  yield* bot.reply(addressed.channel, thread, startedReply(link, repository));
 });
 
 /**

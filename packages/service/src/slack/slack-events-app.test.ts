@@ -65,7 +65,7 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * is read; an uninstall of the app deletes the team's installation and its
  * members' ids; and a mention of the bot
  * starts an agent as the member Slack's email names on a task made for it,
- * replying with its link, and starts nothing for a Slack user who is no member; a message in
+ * reacting with 👀 and saying nothing, and starts nothing for a Slack user who is no member; a message in
  * the thread of an archived agent brings it back and hands it the message,
  * and one in the thread of an agent whose session ended continues it in a
  * new agent on the same task, which the thread moves to; a member's reply under the DM of an inbox
@@ -704,7 +704,7 @@ it.layer(SUITE)("our Slack route", (it) => {
   );
 
   it.effect(
-    "a mention starts an agent as the member Slack's email names, on an untitled task with a blank description in its channel's repository, reacts to it with 👀, and replies with the agent's link; one from no member starts nothing",
+    "a mention starts an agent as the member Slack's email names, on an untitled task with a blank description in its channel's repository, reacts to it with 👀 and says nothing in the thread; one from no member starts nothing",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
@@ -764,16 +764,8 @@ it.layer(SUITE)("our Slack route", (it) => {
           .where(eq(slackAgentThread.userId, owner));
 
         assert.equal(startedAgent?.repository, "Acme/Relay");
-        // The thread links the agent at once, before its first turn settles.
-        assert.deepEqual(
-          others.map((call) => call.args.thread_ts),
-          ["1700000002.000300"],
-        );
-        assert.ok(
-          others[0]?.args.text?.startsWith("On it in Acme/Relay.") &&
-            others[0].args.text.includes(`/agent/${startedAgent?.agentId}`),
-          "the reply says where the agent works and links it",
-        );
+        // The start says nothing in the thread; the reaction shows it was heard.
+        assert.deepEqual(others, []);
         const made = Option.getOrThrow(yield* readTask(owner, startedAgent?.taskId ?? ""));
         assert.deepEqual(
           {
