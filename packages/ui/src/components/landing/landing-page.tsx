@@ -150,7 +150,7 @@ export type LandingMoreItem = {
   readonly words: string;
 };
 
-/** The features the sections leave out: `title` over a grid of `items`, each a square of its glyph, its name, and its line. */
+/** The features the sections leave out: `title` beside two columns of `items`, each a ruled row of its glyph beside its name and its line. */
 export function LandingMore({
   title,
   items,
