@@ -200,11 +200,14 @@ export async function pickPictures(
     mediaTypes: ["images"],
     allowsMultipleSelection: true,
     selectionLimit: Math.max(1, bounds.most - held),
-    quality: bounds.quality,
-    base64: true,
   });
 
-  return picked.canceled ? [] : picked.assets.map((asset) => asset.base64);
+  if (picked.canceled) return [];
+
+  // Note that each is drawn within its long edge and compressed as the holder's own picks are, since the picker's quality never resizes a camera's photo.
+  return Promise.all(
+    picked.assets.map((asset) => readPicture(asset.uri, bounds).catch(() => undefined)),
+  );
 }
 
 /**
