@@ -1,6 +1,7 @@
 // bar-title.tsx -- a page's name in its bar with a muted line under it, such as an agent's state and model, in a compact window's stack and in a split view's detail column.
 
-import { Button, HStack, Image, Text as SwiftUIText, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, Spacer, Text as SwiftUIText, VStack } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
   accessibilityIdentifier,
@@ -8,12 +9,13 @@ import {
   buttonStyle,
   font,
   foregroundStyle,
+  frame,
   lineLimit,
 } from "@expo/ui/swift-ui/modifiers";
 import { SymbolView } from "expo-symbols";
 import { StyleSheet, Text, View } from "react-native";
 import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
-import { Press } from "./press.js";
+import { InlineHost } from "./inline-host.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE } from "./tokens/space.js";
 import { BAR_TITLE, TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
@@ -45,7 +47,11 @@ function spokenLine(subtitle: BarSubtitle): string {
  * line small and muted, with a chevron after it where a press on it opens
  * something. Note that it stands as the stack's title view, which React
  * Native lays out at its own size, since the stack's own title has no line
- * under it.
+ * under it; and that the press is a SwiftUI button laid over the words,
+ * because a React Native press in the stack's title view dims as a finger
+ * lands and never hears it lift (the Mac's shots of #9466), while a
+ * SwiftUI host there is UIKit's own view, which the bar hands its touches,
+ * as the workspace switcher's beside it takes them.
  */
 export function StackBarTitle({
   title,
@@ -57,29 +63,12 @@ export function StackBarTitle({
   const colors = useColors();
   const pressed = subtitle.onPress !== undefined;
 
-  const words = (
-    <View style={styles.line}>
-      <Text
-        numberOfLines={1}
-        style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}
-        maxFontSizeMultiplier={1.4}
-      >
-        {subtitle.words}
-      </Text>
-      {pressed ? (
-        <SymbolView
-          name={glyphSymbol(GLYPH.UNFOLDED)}
-          size={MARK_SIZE.GLYPH - 6}
-          weight="semibold"
-          tintColor={colors.TEXT_MUTED}
-          accessibilityElementsHidden
-        />
-      ) : null}
-    </View>
-  );
-
-  return (
-    <View style={styles.stack}>
+  const drawn = (
+    <View
+      style={styles.stack}
+      accessibilityElementsHidden={pressed}
+      importantForAccessibility={pressed ? "no-hide-descendants" : "auto"}
+    >
       <Text
         numberOfLines={1}
         accessibilityRole="header"
@@ -88,21 +77,50 @@ export function StackBarTitle({
       >
         {title}
       </Text>
-      {pressed ? (
-        <Press
-          onPress={subtitle.onPress}
-          accessibilityRole="button"
-          accessibilityLabel={spokenLine(subtitle)}
-          hitSlop={8}
-          testID={BAR_SUBTITLE_ID}
+      <View style={styles.line} accessible={!pressed} accessibilityLabel={subtitle.words}>
+        <Text
+          numberOfLines={1}
+          style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}
+          maxFontSizeMultiplier={1.4}
         >
-          {words}
-        </Press>
-      ) : (
-        <View accessible accessibilityLabel={spokenLine(subtitle)}>
-          {words}
-        </View>
-      )}
+          {subtitle.words}
+        </Text>
+        {pressed ? (
+          <SymbolView
+            name={glyphSymbol(GLYPH.UNFOLDED)}
+            size={MARK_SIZE.GLYPH - 6}
+            weight="semibold"
+            tintColor={colors.TEXT_MUTED}
+            accessibilityElementsHidden
+          />
+        ) : null}
+      </View>
+    </View>
+  );
+
+  if (!pressed) return drawn;
+
+  return (
+    <View>
+      {drawn}
+      {/* Note that the button draws nothing of its own, so the words under it are the one drawing of the title, and it spans them whole, so a press anywhere on the name or the line opens what the line names. */}
+      <InlineHost style={StyleSheet.absoluteFill}>
+        <Button
+          onPress={subtitle.onPress}
+          modifiers={[
+            buttonStyle("plain"),
+            accessibilityLabel(`${title}, ${spokenLine(subtitle)}`),
+            accessibilityIdentifier(BAR_SUBTITLE_ID),
+          ]}
+        >
+          <Spacer
+            modifiers={[
+              frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+              SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+            ]}
+          />
+        </Button>
+      </InlineHost>
     </View>
   );
 }
