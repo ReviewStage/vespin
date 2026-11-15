@@ -7,8 +7,14 @@
 # the settings file, without a network or the system's sign-in sheet.
 appId: dev.vespin.ios
 ---
+# Note that notifications are allowed before the app asks, as settings.yaml
+# allows them, since the prompt the app raises once an account signs in
+# (`usePushRegistration`) stands over the Inbox, and at an accessibility text
+# size its Allow stands below the alert's fold, where no tap reaches it.
 - launchApp:
     clearState: true
+    permissions:
+      notifications: allow
     arguments:
       authServer: stub
 - assertVisible: "Sign in to Vespin"
@@ -16,11 +22,6 @@ appId: dev.vespin.ios
 - takeScreenshot: sign-in
 - tapOn: "Continue with GitHub"
 - assertVisible: "Inbox"
-# Signed in, the app asks iOS's notification prompt once, which the flow
-# allows, so it covers nothing the flow taps next.
-- tapOn:
-    text: "Allow"
-    optional: true
 # The next launch reads the tokens back from the settings file and opens on
 # the Inbox, never the sign-in screen.
 - stopApp
