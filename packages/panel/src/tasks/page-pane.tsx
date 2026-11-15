@@ -98,7 +98,6 @@ import {
 } from "../find-in-tab.js";
 import { openPageInBrowserItem } from "../open-in-browser-item.js";
 import { usePhoneRoom } from "../stage-room.js";
-import { CODE_PANE_GROUND_CLASS } from "./code-pane-look.js";
 import {
   COMMENTS_FILTER,
   type CommentsFilter,
@@ -641,7 +640,7 @@ function PageSource({
   return (
     <Fill
       as={FILL_ELEMENT.SECTION}
-      className={`page-view-room file-tab ${CODE_PANE_GROUND_CLASS}`}
+      className="page-view-room file-tab bg-card-code"
       aria-label={`${title} source`}
     >
       <WholeFile

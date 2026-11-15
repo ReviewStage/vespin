@@ -44,10 +44,6 @@
      (`--ui-color-code-ground`), and the mark beside a line changed in that
      theme's blue. */
   --code-text: light-dark(#1f2328, #e6edf3);
-  /* The ground the code stands on where it is drawn: the code ground in a
-     card set into a conversation, and the window's own ground in a pane
-     that is all code (`tasks/code-pane-look.ts`), which sets this. */
-  --code-ground: var(--ui-color-code-ground);
   --code-pointed-edge: light-dark(#0969da, #388bfd);
   /* A diff's lines on the code's ground, wherever one is drawn: a line
      added tinted in the palette's green and one removed in its red, the
