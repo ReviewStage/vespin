@@ -154,7 +154,11 @@ agent wants each app, and you can answer Allow once, Always allow, or Deny.
 For an app you allow, the agent reads its window's controls and their text and
 a screenshot of the window, and clicks and types in it. The screenshot is sent
 to the agent's model provider, and a full-size copy and the app's icon are
-stored with the agent's transcript and deleted with it. Vespin never offers
+stored with the agent's transcript and deleted with it. After each click,
+keystroke, scroll, or drag, Vespin on your Mac also takes one picture of the
+window once it settles, so the members watching see it catch up with the
+agent; it is stored with the transcript the same way and is never sent to the
+agent's model provider. Vespin never offers
 agents terminals, password managers, System Settings, or Vespin itself, but
 **anything an allowed app's window shows goes too**, a message or a password
 on screen included. You can take an app off the always-allowed list, or turn

@@ -1,7 +1,7 @@
 import { readEither } from "@repo/wire/effect";
 import { Effect, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
-import type { CallCredential } from "./account-call.js";
+import type { HostedServiceOptions } from "./account-call.js";
 import { withWebhookUrl } from "./automation-live.js";
 import {
   AUTOMATION_CALL_FAILURE,
@@ -37,14 +37,6 @@ import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
  * why where the service said.
  */
 
-export interface HostedAutomationClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-  requestTimeoutMs?: number;
-}
-
 /** A write's answer as the window hears it: the summary with its webhook's address, and a webhook secret the write minted, the window's to show once by root AGENTS.md's carve-out. */
 function summaryOnly(serviceBaseUrl: string, read: AutomationView): AutomationView {
   if ("failure" in read) return read;
@@ -57,7 +49,7 @@ export class HostedAutomationClient {
   readonly #hosted: HostedClient;
   readonly #serviceBaseUrl: string;
 
-  constructor(options: HostedAutomationClientOptions) {
+  constructor(options: HostedServiceOptions) {
     this.#serviceBaseUrl = options.serviceBaseUrl;
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,

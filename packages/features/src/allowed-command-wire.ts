@@ -49,7 +49,7 @@ export const allowedCommandIdSchema = wireUuidSchema;
  * first words; the agent whose ask it came from, null for one added by
  * hand or whose agent is gone; and when it was added, in epoch milliseconds.
  */
-export const allowedCommandSchema = EffectSchema.Struct({
+const allowedCommandSchema = EffectSchema.Struct({
   id: allowedCommandIdSchema,
   prefix: EffectSchema.Array(EffectSchema.String),
   agentId: EffectSchema.NullOr(wireUuidSchema),
@@ -70,12 +70,8 @@ export const allowedCommandAddRequestSchema = EffectSchema.Struct({
   prefix: CommandPrefixSchema,
 });
 
-export type AllowedCommandAddRequest = typeof allowedCommandAddRequestSchema.Type;
-
 /** A command's first words replaced by ones typed by hand (PATCH): the command by its id, and its new prefix. */
 export const allowedCommandEditRequestSchema = EffectSchema.Struct({
   id: allowedCommandIdSchema,
   prefix: CommandPrefixSchema,
 });
-
-export type AllowedCommandEditRequest = typeof allowedCommandEditRequestSchema.Type;

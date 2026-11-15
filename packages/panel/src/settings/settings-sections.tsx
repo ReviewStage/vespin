@@ -16,10 +16,8 @@ import { WORKSPACE_CONNECTIONS } from "./pages.js";
 /**
  * settings-sections.tsx -- every titled section of a Settings page, declared once: the page draws its head from here and the settings search finds it from here.
  *
- * A section's head and its search result used to be written twice, the
- * head on its page and the result in the search's own list, and a section
- * whose result nobody wrote was drawn but never found. Here each section
- * says how it is found: by its own head, which the search then offers as a
+ * Each section's head and its search result come from one declaration, so
+ * no section is drawn but never found. Each section says how it is found: by its own head, which the search then offers as a
  * result landing on the section, under the same condition the page draws
  * it on; row by row, where every row under it is already indexed from the
  * declaration it is drawn from; or by its page's name alone, where it is

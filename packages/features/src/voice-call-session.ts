@@ -33,7 +33,7 @@ import { VOICE_CALL_STAGE, type VoiceCallStage } from "./voice-wire.js";
 export const VOICE_EVENTS_CHANNEL = "oai-events";
 
 /** The client events the session's allowlist takes from a client, and the server events it is told. */
-export const LIVE_EVENT = {
+const LIVE_EVENT = {
   MUTE: "session.input_audio.mute",
   UNMUTE: "session.input_audio.unmute",
   CLOSE: "session.close",
@@ -42,7 +42,7 @@ export const LIVE_EVENT = {
 } as const;
 
 /** The client events a client may send: mute, unmute, and close, and nothing else. */
-export type LiveClientEvent = (typeof LIVE_EVENT)["MUTE" | "UNMUTE" | "CLOSE"];
+type LiveClientEvent = (typeof LIVE_EVENT)["MUTE" | "UNMUTE" | "CLOSE"];
 
 /** Why a call stopped short, which each client says in its own words. */
 export const VOICE_CALL_FAILURE = {
@@ -165,7 +165,7 @@ const readServerEvent = readEither(EffectSchema.Struct({ type: EffectSchema.Stri
 });
 
 /** The type a server event names; nothing for a message that is not one. */
-export function liveEventType(text: string): string | undefined {
+function liveEventType(text: string): string | undefined {
   try {
     return Result.getOrUndefined(readServerEvent(unparsedWire(JSON.parse(text))))?.type;
   } catch {
@@ -174,7 +174,7 @@ export function liveEventType(text: string): string | undefined {
 }
 
 /** The text of one client event, as the channel carries it. */
-export function liveClientEvent(type: LiveClientEvent): string {
+function liveClientEvent(type: LiveClientEvent): string {
   return JSON.stringify({ type });
 }
 

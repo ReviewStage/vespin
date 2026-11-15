@@ -11,10 +11,11 @@ import {
 
 /**
  * shown-failure.test.ts -- a failure nothing named, shown while the machine
- * had no network or whose own facts say its call got no answer, is a log
- * line at `warn` and opens no issue, as a Mac waking from sleep offline shows
- * its task list unread, or a phone that reads online with no signal shows its
- * inbox unread. One shown online whose cause names and says nothing opens an
+ * had no network, whose own facts say its call got no answer, or shown while
+ * the service refused the build as older than it serves, is a log line at
+ * `warn` and opens no issue, as a Mac waking from sleep offline shows its
+ * task list unread, a phone that reads online with no signal shows its inbox
+ * unread, or a build below the service's floor shows every read unread. One shown online whose cause names and says nothing opens an
  * issue titled by where it was shown and its code. A recording SDK stands in
  * for Sentry. Synthetic throughout.
  */
@@ -65,6 +66,12 @@ test.each([
       cause: { _tag: FAILURE_FACT.HOSTED_UNANSWERED, errorName: "TimeoutError" },
     },
     line: "A failure was shown on home_tasks.read: unanswered",
+  },
+  {
+    shown: "online, while the service refused this build as older than it serves",
+    state: { online: true, account: SIGNED_IN, updateNeeded: true },
+    cause: FAILURE_CONDITION.UNREAD,
+    line: "A failure was shown on home_tasks.read: unread",
   },
 ])(
   "an unexpected failure shown $shown sends a warning line and opens no issue",

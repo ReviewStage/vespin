@@ -144,7 +144,7 @@ export const FOLD_WIDTH = {
   MODEL: 300,
 } as const;
 
-export type FoldWidth = (typeof FOLD_WIDTH)[keyof typeof FOLD_WIDTH];
+type FoldWidth = (typeof FOLD_WIDTH)[keyof typeof FOLD_WIDTH];
 
 /** The fold widths, narrowest first. */
 const FOLD_LINES = Object.values(FOLD_WIDTH).toSorted((a, b) => a - b);
