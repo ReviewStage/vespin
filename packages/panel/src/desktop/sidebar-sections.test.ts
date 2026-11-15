@@ -411,27 +411,76 @@ test("a section folds on its title, aria-expanded following, counts its tasks fo
   assert.deepEqual(namesIn(sidebar, "Sections"), ["Invite expiry"]);
 });
 
-test("a filter by person leaves out a section's task it would leave out of the list", async () => {
+test("a section draws a task put in it whatever the view's filters leave out of the list: a teammate's, and one in the backlog", async () => {
   const shared = { ...WORKSPACE, memberCount: 2 };
-  window.localStorage.setItem(
-    "app.sidebarTaskViews",
-    JSON.stringify({
-      [WORKSPACE.id]: { grouping: "repository", order: "updated", assignedTo: "user-ada" },
-    }),
-  );
 
   const sidebar = await mountSidebar([], SECTIONS, {
     workspace: shared,
     workspaces: [shared],
     me: "user-ada",
     tasks: [
-      { ...INVITES, assignee: { userId: "user-grace", name: "Grace Hopper" } },
-      { ...RETRIES, assignee: { userId: "user-ada", name: "Ada Lovelace" } },
+      {
+        ...INVITES,
+        status: TASK_STATUS.BACKLOG,
+        assignee: { userId: "user-grace", name: "Grace Hopper" },
+      },
+      {
+        ...RETRIES,
+        status: TASK_STATUS.TODO,
+        assignee: { userId: "user-ada", name: "Ada Lovelace" },
+      },
     ],
   });
 
-  assert.deepEqual(namesIn(sidebar, "Sections"), []);
+  assert.deepEqual(namesIn(sidebar, "Sections"), ["Invite expiry"]);
   assert.deepEqual(namesIn(sidebar, "My tasks"), ["Retry audit"]);
+});
+
+test("with completed sub-tasks shown, a finished sub-task put in a section stands under its parent where that stands, and nowhere where it does not", async () => {
+  const sub = (id: string, name: string, parentTaskId: string): TaskSummary => ({
+    ...task(id, name),
+    status: TASK_STATUS.DONE,
+    parentTaskId,
+  });
+
+  const rollout = {
+    ...task("0a1b2c3d-0000-4000-8000-100000000003", "Rollout"),
+    status: TASK_STATUS.IN_PROGRESS,
+  };
+
+  const rebrand = {
+    ...task("0a1b2c3d-0000-4000-8000-100000000004", "Rebrand"),
+    status: TASK_STATUS.DONE,
+  };
+
+  const notes = sub("0a1b2c3d-0000-4000-8000-100000000005", "Release notes", rollout.id);
+  const checklist = sub("0a1b2c3d-0000-4000-8000-100000000006", "Rebrand checklist", rebrand.id);
+
+  const sidebar = await mountSidebar(
+    [],
+    {
+      ...SECTIONS,
+      entries: [
+        { taskId: notes.id, sectionId: LAUNCH, addedAt: 2 },
+        { taskId: checklist.id, sectionId: LAUNCH, addedAt: 3 },
+      ],
+    },
+    { tasks: [rollout, rebrand, notes, checklist] },
+  );
+
+  act(() => {
+    runAppCommand(APP_COMMAND.SHOW_FINISHED_SUB_TASKS);
+  });
+  assert.deepEqual(namesIn(sidebar, "Sections"), []);
+
+  const fold = sidebar.querySelector<HTMLButtonElement>(
+    'button[aria-label="Sub-tasks of Rollout"]',
+  );
+
+  assert.ok(fold, "Rollout folds its sub-tasks");
+
+  act(() => fold.click());
+  assert.deepEqual(namesIn(sidebar, "My tasks"), ["Rollout", "Release notes"]);
 });
 
 test("a teammate's task the reader follows stands under Following, which it leaves once unfollowed", async () => {
@@ -468,18 +517,6 @@ test("a teammate's task the reader follows stands under Following, which it leav
   await draw([graceFollows]);
   assert.deepEqual(namesIn(container, "Following"), []);
   assert.deepEqual(namesIn(container, "My tasks"), ["Retry audit"]);
-});
-
-test("the status filter leaves a section's backlog task out as it does the list's", async () => {
-  const sidebar = await mountSidebar([], SECTIONS, {
-    tasks: [
-      { ...INVITES, status: TASK_STATUS.BACKLOG },
-      { ...RETRIES, status: TASK_STATUS.TODO },
-    ],
-  });
-
-  assert.deepEqual(namesIn(sidebar, "Sections"), []);
-  assert.deepEqual(namesIn(sidebar, "My tasks"), ["Retry audit"]);
 });
 
 test("a section whose only task is done still says Drag tasks here", async () => {
