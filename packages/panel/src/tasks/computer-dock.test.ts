@@ -188,3 +188,27 @@ test("the agent's pointer stands where the turn's newest call left its cursor, o
   assert.equal(appsInUse(messages.slice(0, 2), true)?.cursor?.callId, "c0");
   assert.equal(appsInUse([asked("ask-3"), turn("turn-4", [typed])], true)?.cursor, undefined);
 });
+
+test("a click that kept its window as it settled stands as its app's newest window, and a click that kept none leaves it", () => {
+  const settled = call(
+    "c1",
+    "computer",
+    { action: "click", app: "Simulator", element_index: 4 },
+    {
+      status: "ran",
+      done: "pressed",
+      app: { name: "Simulator", refused: false },
+      kept: { picture: OTHER_WINDOW },
+    },
+  );
+
+  const messages = [
+    asked("ask-1"),
+    turn("turn-1", [read("r1", "Simulator", WINDOW), settled, click("c2", "Simulator")]),
+  ];
+
+  assert.deepEqual(
+    appsInUse(messages, true)?.apps.map((each) => each.window),
+    [OTHER_WINDOW],
+  );
+});
