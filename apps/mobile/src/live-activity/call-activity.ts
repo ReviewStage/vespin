@@ -85,7 +85,8 @@ export function useCallLiveActivity(
   const state = call === undefined ? undefined : contentStateOf(call);
   // Note that the module's calls queue on one another, and the agent the activity stands for is kept beside them, both outside any render.
   const queue = useRef<Promise<void> | undefined>(undefined);
-  const shownFor = useRef<string | undefined>(undefined);
+  // Note that each start's mark is an object of its own, so a failed start clears only its own, never a later call's into the same agent.
+  const shownFor = useRef<{ readonly agentId: string } | undefined>(undefined);
   // Note that the press listener reads the call's agent through a ref, so it stays subscribed while the call changes.
   const callingAgent = useRef<string | undefined>(undefined);
 
@@ -113,12 +114,13 @@ export function useCallLiveActivity(
       return after(() => module.endCall());
     }
 
-    if (shownFor.current === agentId) return after(() => module.updateCall(state));
+    if (shownFor.current?.agentId === agentId) return after(() => module.updateCall(state));
     // Note that the agent counts as shown from the moment its start is queued, so a state set meanwhile updates rather than starts again, and stops counting where the start fails, so the next state tries it again.
-    shownFor.current = agentId;
+    const shown = { agentId };
+    shownFor.current = shown;
     after(() =>
       module.startCall(JSON.stringify({ agentId }), state).catch((cause: unknown) => {
-        if (shownFor.current === agentId) shownFor.current = undefined;
+        if (shownFor.current === shown) shownFor.current = undefined;
         throw cause;
       }),
     );
