@@ -39,9 +39,8 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { randomUUID } from "expo-crypto";
 import { Stack, useRouter } from "expo-router";
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
@@ -50,31 +49,20 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useListedTasks } from "../host/host-provider.js";
 import { useOnTab } from "../tab-route.js";
 import {
-  awaitStart,
   CLOUD,
-  forgetRefusedStart,
-  heldRefusedStart,
   inTree,
-  keepRefusedAgentStart,
-  keepRefusedStart,
   type ModelPick,
-  type RefusedAgentStart,
-  type RefusedStart,
   type RepositoryPick,
   runsOnOptions,
-  START_LANDED,
   type StartAnswer,
-  type StartAsk,
-  startLanded,
   startRefusalWords,
-  takeRefusedAgentStart,
   useFileTask,
   useModelPick,
   useRepositoryPick,
   useStartAgent,
   useStartTask,
 } from "../tasks/use-start.js";
-import { type AttachedPictures, useAttachedPictures } from "../use-attached-pictures.js";
+import { useAttachedPictures } from "../use-attached-pictures.js";
 import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
@@ -321,19 +309,9 @@ function RepositoryChip({
   );
 }
 
-/** A start that opens its task the moment it is pressed: the id the task is made under, and the sheet as it pressed Start, which a refusal opens New task again on. */
-interface OpensTask {
-  readonly taskId: string;
-  readonly pressed: () => Omit<RefusedStart, "note">;
-}
-
 type UseSheetStartResult = {
   readonly starting: boolean;
-  readonly go: (
-    start: () => Promise<StartAnswer>,
-    refusal?: string | undefined,
-    opens?: OpensTask,
-  ) => void;
+  readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
 };
 
 type Started = { answer?: StartAnswer };
@@ -345,13 +323,6 @@ type Started = { answer?: StartAnswer };
  * with its words and pictures, the refusal said under them. Pictures the
  * service would refuse hold a start that carries them, saying why, as the
  * agent's composer holds a send.
- *
- * A start that `opens` its task under an id minted on the phone gives way
- * at once, as the panel's New task does, since the host draws the task the
- * moment it is asked. Its task's page hears what it came to: it opens the
- * agent that started while it stands in front, and a refused start takes the
- * page back and opens New task again on what it held, the refusal said
- * under its words.
  */
 function useSheetStart(
   kept: KeptWords,
@@ -362,61 +333,12 @@ function useSheetStart(
   const write = useWrite();
   const [starting, setStarting] = useState(false);
 
-  const opensAtOnce = (start: () => Promise<StartAnswer>, { taskId, pressed }: OpensTask) => {
-    const asPressed = pressed();
-    const started: Started = {};
-    setNote(undefined);
-    kept.release();
-    awaitStart(taskId);
-    router.dismiss();
-    router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
-
-    void write(
-      () =>
-        start().then((answer) => {
-          started.answer = answer;
-
-          return answer;
-        }),
-      {
-        refused: (answer) => ("refused" in answer ? answer.refused : undefined),
-        // Note that the page is told first, so it steps back before New task opens again over where it stood.
-        inPlace: (note) => {
-          startLanded(taskId, { kind: START_LANDED.REFUSED });
-          keepRefusedStart({ ...asPressed, note });
-
-          router.push(
-            asPressed.parent === undefined
-              ? "/start-task"
-              : { pathname: "/start-task", params: { parent: asPressed.parent } },
-          );
-        },
-        went: BUZZ.SUCCESS,
-      },
-    ).then((went) => {
-      const answer = started.answer;
-      const agentId = answer !== undefined && "agentId" in answer ? answer.agentId : undefined;
-
-      if (went && agentId !== undefined) startLanded(taskId, { kind: START_LANDED.AGENT, agentId });
-    });
-  };
-
-  const go = (
-    start: () => Promise<StartAnswer>,
-    refusal?: string | undefined,
-    opens?: OpensTask,
-  ) => {
+  const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
     if (starting) return;
 
     if (refusal !== undefined) {
       setNote(refusal);
       buzz(BUZZ.WARNING);
-
-      return;
-    }
-
-    if (opens !== undefined) {
-      opensAtOnce(start, opens);
 
       return;
     }
@@ -456,79 +378,70 @@ function useSheetStart(
   return { starting, go };
 }
 
-/** What New agent's at-once start keeps of its sheet beyond the start itself, for a refusal to open it again on. */
-type AgentSheetHeld = Pick<RefusedAgentStart, "prompt" | "picked" | "runsOn">;
-
-type UseStartAtOnceResult = {
-  readonly go: (ask: StartAsk, held: AgentSheetHeld) => void;
-};
-
 /**
- * New agent's own start, which never waits on the service: the sheet gives
- * way to the task's page at once and the start goes on behind it, its agent's
- * page pushed once the service names it while the task's page still stands
- * (`useStartLanded`); a refusal says why in the failure notice and opens the
- * sheet again with its words, pictures, model and place, or keeps them for
- * the task's next New agent where its page no longer stands. Note that this
- * stands apart from `useSheetStart`, whose New task and File for later mint
- * the task's id on the phone, since an agent's id comes only from the
- * service.
+ * New task's and New agent's start, as the panel's sends it: the sheet
+ * closes the moment Start is pressed, and the start goes on as a write,
+ * opening the agent's page once it lands, or the task's where no agent
+ * started. A start refused is said in the failure notice, whose Try again
+ * sends the same start again. Note that this never makes a second task or
+ * agent, because the task's id and its agent's key are minted once per sheet
+ * (`useStartTask`, `useFileTask`, `useStartAgent`), and the service answers
+ * a start it already made with the same one. Pictures the service would
+ * refuse still hold the sheet, saying why under its words.
  */
-function useStartAtOnce(
-  taskId: string,
+function useClosingStart(
   kept: KeptWords,
-  pictures: AttachedPictures,
   setNote: (note: string | undefined) => void,
-): UseStartAtOnceResult {
+): UseSheetStartResult {
   const router = useRouter();
   const onTab = useOnTab();
   const write = useWrite();
-  const startAgent = useStartAgent(taskId);
+  // Note that a start goes once, so a second press while the sheet slides away sends nothing.
+  const [sent, setSent] = useState(false);
 
-  const go = (ask: StartAsk, sheet: AgentSheetHeld) => {
-    if (pictures.refusal !== undefined) {
-      setNote(pictures.refusal);
+  const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
+    if (sent) return;
+
+    if (refusal !== undefined) {
+      setNote(refusal);
       buzz(BUZZ.WARNING);
 
       return;
     }
 
-    const held = pictures.take();
-    const started: Started = {};
-    awaitStart(taskId);
+    setSent(true);
     kept.release();
     router.dismiss();
-    // Note that the task's page is brought in front, as New task's start brings it, so its overview stands to open the agent or New agent again, wherever New agent was opened from, such as the menu bar over another agent's page.
-    router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
+    const started: Started = {};
 
     void write(
       () =>
-        startAgent(ask).then((answer) => {
+        start().then((answer) => {
           started.answer = answer;
 
           return answer;
         }),
       {
         refused: (answer) => ("refused" in answer ? answer.refused : undefined),
+        retry: true,
         went: BUZZ.SUCCESS,
       },
-    ).then(() => {
+    ).then((went) => {
       const answer = started.answer;
 
-      if (answer !== undefined && "refused" in answer) {
-        keepRefusedAgentStart(taskId, { ...sheet, pictures: held, note: answer.refused });
-        startLanded(taskId, { kind: START_LANDED.AGENT_REFUSED });
+      if (!went || answer === undefined || "refused" in answer) return;
 
-        return;
-      }
-
-      if (answer?.agentId !== undefined) {
-        startLanded(taskId, { kind: START_LANDED.AGENT, agentId: answer.agentId });
-      }
+      router.navigate(
+        onTab(
+          answer.agentId === undefined
+            ? iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })
+            : iosAgentRoute(answer.agentId),
+        ),
+      );
     });
   };
 
-  return { go };
+  return { starting: sent, go };
 }
 
 /** The skills a `/` offers, as the compose sheet takes them. */
@@ -555,34 +468,23 @@ export function NewAgentScreen({
 }) {
   const action = opened?.view.action;
   const brief = action?.kind === REPLY_BUTTON_ACTION.START ? action.prompt : "";
-
-  // Note that a sheet opened again after a refused start stands as it was sent, its refusal said under its words.
-  const [draft] = useState(() =>
-    opened === undefined ? takeRefusedAgentStart(taskId) : undefined,
-  );
-
-  const [prompt, setPrompt] = useState(draft?.prompt ?? brief);
-  const [runsOn, setRunsOn] = useState(draft?.runsOn ?? CLOUD);
-  const pick = useModelPick(action === undefined ? draft?.picked : suggestedChoice(action));
+  const [prompt, setPrompt] = useState(brief);
+  const [runsOn, setRunsOn] = useState(CLOUD);
+  const pick = useModelPick(action === undefined ? undefined : suggestedChoice(action));
+  const startAgent = useStartAgent(taskId);
   const sendSuggestion = useSuggestionSender();
   const suggester = useShownAgent(opened?.suggestion.agentId ?? "");
   // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
   const suggestedTask = suggester?.taskId;
   const placed = opened === undefined || suggestedTask !== undefined;
-  const [note, setNote] = useState<string | undefined>(draft?.note);
+  const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
-  const { starting, go } = useSheetStart(kept, setNote);
-  const atOnce = useStartAtOnce(taskId, kept, pictures, setNote);
+  const sheet = useSheetStart(kept, setNote);
+  const closing = useClosingStart(kept, setNote);
+  const starting = sheet.starting || closing.starting;
   const skills = useSkillOffer(prompt, setPrompt, { taskId: taskId });
-  // The refused draft's pictures, put back once as the sheet first draws.
-  const [restored, setRestored] = useState(draft === undefined);
-
-  if (!restored && draft !== undefined) {
-    setRestored(true);
-    pictures.putBack(draft.pictures);
-  }
 
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
   const startSuggested = async (
@@ -600,14 +502,20 @@ export function NewAgentScreen({
       : { refused: result.failure.text };
   };
 
-  // Note that a suggestion's start keeps the sheet up until the service answers, since it goes through the suggestion once, as the panel's draft sends one.
+  // Note that New agent's own start closes the sheet at once, as New task's does, while a suggestion's keeps it up until the service answers, since it goes through the suggestion once, as the panel's draft sends one.
   const start = () =>
     opened === undefined
-      ? atOnce.go(
-          { prompt: prompt.trim(), attachments: pictures.files, picked: pick.picked, runsOn },
-          { prompt, picked: pick.picked, runsOn },
+      ? closing.go(
+          () =>
+            startAgent({
+              prompt: prompt.trim(),
+              attachments: pictures.files,
+              picked: pick.picked,
+              runsOn,
+            }),
+          pictures.refusal,
         )
-      : go(() => startSuggested(opened.suggestion), pictures.refusal);
+      : sheet.go(() => startSuggested(opened.suggestion), pictures.refusal);
 
   return (
     <>
@@ -704,15 +612,11 @@ function useRelationPick(
   listed: readonly TaskSummary[],
   workspaceId: string | undefined,
   parent: string | undefined,
-  restored?: { readonly relation: TaskCreateRelation | undefined },
 ): RelationPick {
-  // Note that a sheet opened again keeps the relation as it pressed Start, none where it was removed, rather than a parent's Sub-task of again.
   const [relation, setRelation] = useState<TaskCreateRelation | undefined>(
-    restored !== undefined
-      ? restored.relation
-      : parent === undefined
-        ? undefined
-        : { kind: TASK_CREATE_RELATION_KIND.SUB_TASK_OF, taskId: parent },
+    parent === undefined
+      ? undefined
+      : { kind: TASK_CREATE_RELATION_KIND.SUB_TASK_OF, taskId: parent },
   );
 
   const tasks = useMemo(
@@ -833,42 +737,30 @@ export function NewTaskScreen({
   readonly parent?: string | undefined;
   readonly draft?: NewTaskDraft | undefined;
 }) {
-  // Note that a start refused after the sheet closed opens it again on everything it held as Start was pressed, the refusal said under its words.
-  const [again] = useState(heldRefusedStart);
-  const [taskId] = useState(randomUUID);
-  const [prompt, setPrompt] = useState(again?.prompt ?? draft?.prompt ?? "");
-  const [runsOn, setRunsOn] = useState(again?.runsOn ?? CLOUD);
+  const [prompt, setPrompt] = useState(draft?.prompt ?? "");
+  const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const listed = useListedTasks();
   const chosen = useChosenWorkspace(workspaces).chosen;
-  const openedIn = again?.workspaceId ?? draft?.workspaceId;
-  const own = workspaces.find(({ id }) => id === openedIn) ?? chosen;
+  const own = workspaces.find(({ id }) => id === draft?.workspaceId) ?? chosen;
   // Note that a sub-task starts in its parent's workspace by the id its row holds, read before the workspace list may be, and holds its start until that row is read.
   const parentIn = listed.find((task) => task.id === parent)?.workspaceId;
   const workspaceId = parent === undefined ? own?.id : parentIn;
   const placed = workspaceId !== undefined || parent === undefined;
   // Note that a sub-task's repositories are its parent's workspace's alone, never the chosen one's, so none is offered until that workspace is read.
   const workspace = parent === undefined ? own : workspaces.find((each) => each.id === workspaceId);
-  const repository = useRepositoryPick(workspace, again?.repository ?? draft?.repository);
-  const relation = useRelationPick(listed, workspaceId, parent, again);
-  const pick = useModelPick(again?.picked);
+  const repository = useRepositoryPick(workspace, draft?.repository);
+  const relation = useRelationPick(listed, workspaceId, parent);
+  const pick = useModelPick();
   const startTask = useStartTask(workspaceId);
   const fileTask = useFileTask(workspaceId);
-  const [note, setNote] = useState<string | undefined>(again?.note);
+  const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote, draft?.pictures);
-
-  const openAgain = useEffectEvent(() => {
-    if (again === undefined) return;
-    forgetRefusedStart(again);
-    pictures.putBack(again.pictures);
-  });
-
-  useEffect(() => openAgain(), []);
   // Note that a share draft's pictures are read as the sheet opens, and nothing starts or files until they are in, so its words never go without them.
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
   const filed = pictures.files === undefined && !pictures.opening ? filedTaskOf(prompt) : undefined;
   const kept = useKeptWords(drafted);
-  const { starting, go } = useSheetStart(kept, setNote);
+  const { starting, go } = useClosingStart(kept, setNote);
   const place = { repository: repository.picked, relation: relation.relation };
   const tree = inTree(relation.relation) ? relation.task : undefined;
   // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
@@ -892,26 +784,11 @@ export function NewTaskScreen({
 
   const related = relationMenu(relation);
 
-  const opens: OpensTask = {
-    taskId,
-    pressed: () => ({
-      prompt,
-      parent,
-      workspaceId,
-      repository: repository.picked,
-      relation: relation.relation,
-      picked: pick.picked,
-      runsOn,
-      pictures: pictures.take(),
-    }),
-  };
-
   const start = () => {
     if (!drafted) return;
     go(
       () =>
         startTask({
-          id: taskId,
           prompt: prompt.trim(),
           attachments: pictures.files,
           picked: pick.picked,
@@ -919,12 +796,11 @@ export function NewTaskScreen({
           ...place,
         }),
       pictures.refusal,
-      opens,
     );
   };
 
   const file = () => {
-    if (filed !== undefined) go(() => fileTask({ id: taskId, filed, ...place }), undefined, opens);
+    if (filed !== undefined) go(() => fileTask({ filed, ...place }));
   };
 
   return (

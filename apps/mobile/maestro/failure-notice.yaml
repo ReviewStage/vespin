@@ -84,9 +84,8 @@ appId: dev.vespin.ios
 - assertVisible: "The memory could not be deleted\\..*"
 - waitForAnimationToEnd
 - takeScreenshot: failure-notice-settings
-# New task closes the moment Start is pressed, as the panel's does; once its
-# start is refused, the task it opened on goes and New task opens again on
-# the words it held, the refusal said under them.
+# New task closes the moment Start is pressed, as the panel's does; its start
+# refused, the notice says so with Try again, which sends the same start.
 - launchApp:
     clearState: true
     arguments:
@@ -98,8 +97,7 @@ appId: dev.vespin.ios
 - inputText: "Write the invite reminder email."
 - hideKeyboard
 - tapOn: "Start"
-- extendedWaitUntil:
-    visible: "Write the invite reminder email."
-    timeout: 5000
+- assertNotVisible: "Describe the task"
+- assertVisible: "Try again"
 - waitForAnimationToEnd
 - takeScreenshot: failure-notice-start-refused
