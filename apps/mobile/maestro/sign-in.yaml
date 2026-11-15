@@ -11,16 +11,38 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       authServer: stub
+# Note that a prompt standing over the sign-in screen, as one AX5 run showed,
+# is answered before the screen's title is looked for, since it hides the
+# title from the tree; the app asks only once an account is signed in, so
+# this is for a prompt that rose a beat late, never a second one.
+- extendedWaitUntil:
+    visible: "Sign in to Vespin|Don.t Allow"
+    timeout: 10000
+- runFlow:
+    when:
+      visible: "Don.t Allow"
+    commands:
+      - tapOn: "Don.t Allow"
 - assertVisible: "Sign in to Vespin"
 - waitForAnimationToEnd
 - takeScreenshot: sign-in
 - tapOn: "Continue with GitHub"
-- assertVisible: "Inbox"
-# Signed in, the app asks iOS's notification prompt once, which the flow
-# allows, so it covers nothing the flow taps next.
-- tapOn:
-    text: "Allow"
+# Signed in, the app asks iOS's notification prompt once
+# (`usePushRegistration`), which stands over the Inbox, so the flow waits for
+# it and answers it before it looks for the Inbox. Note that it answers Don't
+# Allow, because at an accessibility text size Allow stands below the alert's
+# fold, where no tap reaches it; and that nothing grants the permission
+# before, since Maestro 2.12.1's `permissions` sets no notifications and the
+# launch's clear reinstalls the app, which takes a grant back
+# (`scripts/simulator-screenshots.sh`).
+- extendedWaitUntil:
+    visible: "Don.t Allow"
+    timeout: 10000
     optional: true
+- tapOn:
+    text: "Don.t Allow"
+    optional: true
+- assertVisible: "Inbox"
 # The next launch reads the tokens back from the settings file and opens on
 # the Inbox, never the sign-in screen.
 - stopApp
