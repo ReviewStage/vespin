@@ -129,6 +129,14 @@ def median(values):
     return round(statistics.median(values)) if values else None
 
 
+# The markdown renderer's components (`packages/ui-native/src/markdown.tsx`), whose render time the thread open's split sums.
+MARKDOWN = {
+    "BlockView", "Blocks", "ChipGlyph", "CodeView", "ItemNumber", "Line", "ListItem", "ListView",
+    "Markdown", "MarkdownPage", "Marker", "MentionChip", "Picture", "PictureBlock", "RunView", "Runs",
+    "SuggestionChip", "SuggestionLink", "TableView",
+}
+
+
 def main():
     probe = load_probe()
     commands = load_commands()
@@ -239,6 +247,18 @@ def main():
                 total[name] += ms
         n = max(len(rows), 1)
         print(f"{path}: " + ", ".join(f"{name} {ms / n:.1f}" for name, ms in total.most_common(10)))
+    # The thread open's split: React's own render ms in the markdown renderer's components (`@repo/ui-native`'s markdown.tsx) against every other component, per tap; the native mount of the `@expo/ui` hosts is not React render time, and shows as "to 1st frame" less "to last commit".
+    print("\nmarkdown vs the rest (React render ms per tap, from the components' own times):")
+    for path, rows in taps.items():
+        md = rest = 0.0
+        for r in rows:
+            for name, ms in r["slow"]:
+                if name in MARKDOWN:
+                    md += ms
+                else:
+                    rest += ms
+        n = max(len(rows), 1)
+        print(f"{path}: markdown {md / n:.1f}, rest {rest / n:.1f}")
     # Background churn: commits and rendered components per second while nothing is tapped.
     if probe:
         span = (probe[-1]["t"] - probe[0]["t"]) / 1000
