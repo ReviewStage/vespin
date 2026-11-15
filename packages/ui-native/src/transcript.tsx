@@ -1,8 +1,5 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
-import type { AgentStatus } from "@repo/features/agent-wire";
-import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
-import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -12,7 +9,6 @@ import {
   type AccessibilityActionEvent,
   ActivityIndicator,
   FlatList,
-  Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   ScrollView,
@@ -23,7 +19,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   useAccessibilitySize,
-  useAnnounced,
   useReduceMotion,
   useReduceTransparency,
   useScaledSize,
@@ -36,7 +31,6 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
-import { HARNESS_MARK_ASSET } from "./marks.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
@@ -160,16 +154,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.EDGE - 4,
     paddingVertical: SPACE.ROW,
   },
-  head: {
-    paddingHorizontal: SPACE.EDGE,
-    paddingTop: SPACE.TIGHT,
-    paddingBottom: SPACE.EDGE,
-    gap: 6,
-  },
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
-  headModel: { flexDirection: "row", alignItems: "center", gap: 3 },
-  // Note that the mark leads the model's name at the size of its line's glyphs, from the asset catalog the app's config writes.
-  headMark: { width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH, marginRight: 1 },
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
   jump: { position: "absolute" },
   jumpFace: {
@@ -739,87 +724,6 @@ function TranscriptRow({
       throw new Error(`A transcript item of no kind the list draws: ${JSON.stringify(unknown)}`);
     }
   }
-}
-
-type AgentHeadProps = {
-  /** The model the agent runs on, as the panel's chip names it. */
-  readonly model: string | undefined;
-  /** The harness the model runs in, whose mark leads the model's name, as the panel's chip leads with it; none where it is not known. */
-  readonly harness?: ModelProvider | undefined;
-  readonly status: AgentStatus | undefined;
-  /** Opens the picker that changes the model, as a press on the panel's chip does; none where the reader may not change it. */
-  readonly onModel?: (() => void) | undefined;
-};
-
-/** What a press on the head's model says it does, to VoiceOver. */
-const CHANGE_MODEL = "Change model";
-
-/**
- * The line over the transcript, the agent's title standing in the system's
- * bar over it: where the agent stands and the model it runs on, as the
- * panel's tab and its model chip say them; nothing before either is known.
- * Where the model may be changed, its name is a press with a chevron after
- * it, as the panel's chip draws one, opening the picker.
- */
-export function AgentHead({ model, harness, status, onModel }: AgentHeadProps) {
-  const colors = useColors();
-  const state = status === undefined ? undefined : agentGlyphState(status);
-  const words = status === undefined ? undefined : agentStateWords(status);
-  const pressed = onModel !== undefined && model !== undefined && model !== "";
-
-  const said = [words, pressed ? undefined : model]
-    .filter((each) => each !== undefined && each !== "")
-    .join(" · ");
-
-  // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Finished or Failed, since the reader may stand anywhere in the transcript.
-  useAnnounced(words);
-
-  if (said === "" && !pressed) return null;
-  const ink = { fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED };
-
-  return (
-    <View style={[styles.head, styles.headLine]}>
-      {state === GLYPH_STATE.WORKING ? (
-        <ActivityIndicator size="small" color={colors.WORKING} accessibilityElementsHidden />
-      ) : state === GLYPH_STATE.FAILED ? (
-        <SymbolView
-          name={glyphSymbol(GLYPH.FAILED)}
-          size={MARK_SIZE.GLYPH}
-          tintColor={colors.DANGER}
-          accessibilityElementsHidden
-        />
-      ) : null}
-      {said === "" ? null : (
-        <Text style={ink}>{pressed && words !== undefined ? `${said} ·` : said}</Text>
-      )}
-      {pressed ? (
-        <Press
-          onPress={onModel}
-          accessibilityRole="button"
-          accessibilityLabel={`${CHANGE_MODEL}, ${model}`}
-          hitSlop={LINE_REACH}
-          testID="agent-model"
-          style={styles.headModel}
-        >
-          {harness === undefined ? null : (
-            <Image
-              source={{ uri: HARNESS_MARK_ASSET[harness] }}
-              style={styles.headMark}
-              accessibilityElementsHidden
-            />
-          )}
-          <Text style={ink}>{model}</Text>
-          <SymbolView
-            name={glyphSymbol(GLYPH.UNFOLDED)}
-            size={MARK_SIZE.GLYPH - 4}
-            weight="semibold"
-            tintColor={colors.TEXT_MUTED}
-            accessibilityElementsHidden
-          />
-        </Press>
-      ) : null}
-    </View>
-  );
 }
 
 /**

@@ -445,6 +445,7 @@ const FIXTURE_TASK_LIST: TasksView = {
   github: { connected: true, login: null },
   // Every task's agents as the list followed live carries them: none, where no profile stages one.
   taskAgents: [],
+  listed: true,
 };
 
 /** The open task, whose description main's document holds as read (`fixtureAppState`). */
