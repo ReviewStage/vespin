@@ -7,6 +7,8 @@ import {
   type AppStateSnapshot,
   type AppWindowFacts,
   appStateDelivery,
+  type TaskListParts,
+  taskListDelivery,
 } from "../app-state.js";
 import type { AppBridge, PushPayloadFor } from "../bridge.js";
 import type { PushMethod } from "../contract/pushes.js";
@@ -118,13 +120,17 @@ export function createInProcessBridge(
     // handed, as a desktop window's stream hands it, which its own read
     // bootstraps it from.
     let sent: AppStateSnapshot | undefined;
+    let sentLists: TaskListParts | undefined;
     yield* publishAppStateChanges(
       state,
       () =>
         Effect.sync(() => {
           const next = snapshot();
-          const delivery = appStateDelivery(sent, next);
+          const lists = state.taskList();
+          const rows = taskListDelivery(sentLists, lists, next.version);
+          const delivery = appStateDelivery(sent, next, rows);
           sent = next;
+          sentLists = lists;
 
           if (delivery !== undefined) appState.emit(delivery);
         }),
@@ -145,7 +151,7 @@ export function createInProcessBridge(
     );
 
     const bridge: AppBridge = {
-      requestAppState: async () => snapshot(),
+      requestAppState: async () => ({ ...snapshot(), taskList: state.taskList() }),
       onAppState: appState.subscribe,
       notifyReady: reports.notifyReady,
       recordSurfaceEvent: reports.recordSurfaceEvent,

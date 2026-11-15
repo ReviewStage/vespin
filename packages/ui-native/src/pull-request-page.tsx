@@ -375,9 +375,9 @@ export interface MergeMethodChoice {
 }
 
 /**
- * The merge's one press as a row of the page, where a regular window's bar
- * folds its acts out of sight, as GitHub's own app stands Merge under a
- * pull request's checks: the system's large button, as wide as its words,
+ * The merge's one press as a row of the page, under its heading in every
+ * window, as the panel's head stands Merge under the title, so the bar
+ * keeps its path: the system's large button, as wide as its words,
  * filled in the accent with its words in the brand's ink where it is the
  * page's one act, such as Squash and merge, and outlined in it otherwise,
  * such as Remove from queue. Where the repository merges more than one way
@@ -454,6 +454,16 @@ export function MergeActRow({
   );
 }
 
+/** What a `WordsAsk` field takes, and the keyboard it raises for it. */
+export const WORDS_ASK_KIND = {
+  /** A name, capitalized and corrected as the system does. */
+  NAME: "name",
+  /** An email address, on the address keyboard, with nothing capitalized or corrected. */
+  EMAIL: "email",
+} as const;
+
+export type WordsAskKind = (typeof WORDS_ASK_KIND)[keyof typeof WORDS_ASK_KIND];
+
 type ConfirmAskProps = {
   /** The question, as the panel's confirm asks it: "Remove from the merge queue?" */
   readonly title: string;
@@ -469,6 +479,8 @@ type ConfirmAskProps = {
    * an act that cannot be undone.
    */
   readonly gate?: string | undefined;
+  /** What the gate's words are, which picks the keyboard its field raises, such as the address keyboard for an account's address. */
+  readonly gateKind?: WordsAskKind | undefined;
   readonly presented: boolean;
   readonly onAct: () => void;
   /** Called as the alert goes, by its act or Cancel. */
@@ -498,6 +510,7 @@ export function ConfirmAsk({
   act,
   destructive = false,
   gate,
+  gateKind = WORDS_ASK_KIND.NAME,
   presented,
   onAct,
   onDismiss,
@@ -530,7 +543,11 @@ export function ConfirmAsk({
               text={typed}
               placeholder={gate}
               onTextChange={setWords}
-              modifiers={[autocorrectionDisabled(), textInputAutocapitalization("never")]}
+              modifiers={[
+                ...(gateKind === WORDS_ASK_KIND.EMAIL ? [keyboardType("email-address")] : []),
+                autocorrectionDisabled(),
+                textInputAutocapitalization("never"),
+              ]}
             />
           )}
           <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />
@@ -550,16 +567,6 @@ export function ConfirmAsk({
     </Host>
   );
 }
-
-/** What a `WordsAsk` field takes, and the keyboard it raises for it. */
-export const WORDS_ASK_KIND = {
-  /** A name, capitalized and corrected as the system does. */
-  NAME: "name",
-  /** An email address, on the address keyboard, with nothing capitalized or corrected. */
-  EMAIL: "email",
-} as const;
-
-export type WordsAskKind = (typeof WORDS_ASK_KIND)[keyof typeof WORDS_ASK_KIND];
 
 /** One of a `WordsAsk`'s acts beside Cancel, handed the words typed. */
 export interface WordsAskAct {
