@@ -133,12 +133,19 @@ import {
   useNavigation,
   useRouter,
 } from "expo-router";
-import { type ReactElement, type ReactNode, useCallback, useMemo, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import {
   PUSHED_PAGE,
-  useDetailCovered,
+  topPageOf,
   useDetailLeave,
   useDetailPush,
   useStackRoot,
@@ -205,11 +212,11 @@ import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
 import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./relation-screens.js";
 
-/** What a task's page hears of a start on its route, and a split view of the task it shows: a New task start refused, which takes the page back or empties the detail. */
-const ROUTE_HEARS = [START_LANDED.REFUSED] as const;
+/** What a task's page hears of a start on its route, and a split view of the task it shows, both standing before the task is read: its agent started, which opens, and a New task start refused, which takes the page back or empties the detail. */
+const ROUTE_HEARS = [START_LANDED.AGENT, START_LANDED.REFUSED] as const;
 
-/** What the overview every layout draws hears of a start: its agent started, or a New agent start refused. */
-const OVERVIEW_HEARS = [START_LANDED.AGENT, START_LANDED.AGENT_REFUSED] as const;
+/** What the overview every layout draws hears of a start: a New agent start refused, on a task already read. */
+const OVERVIEW_HEARS = [START_LANDED.AGENT_REFUSED] as const;
 
 /** The Tasks tab's name, at its head and on its back button. */
 const TASKS_TITLE = "Tasks";
@@ -1817,14 +1824,11 @@ function OverviewPage({
   overview,
   onRefresh,
   onArchiveAgent,
-  handsOff = false,
 }: {
   readonly overview: TaskOverview;
   readonly onRefresh: () => Promise<void>;
   /** Asks to archive one of its agents (`useAgentArchiveAsk`), whose question the screen stands beside its `<Screen>`. */
   readonly onArchiveAgent: (agentId: string) => void;
-  /** Whether the page drawing it hands its task to the split view and leaves, so it keeps a started agent for the split view's own overview rather than opening it, since its hand-off would pop the push. */
-  readonly handsOff?: boolean;
 }) {
   const router = useRouter();
   const toDetail = useDetailPush();
@@ -1833,28 +1837,12 @@ function OverviewPage({
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
 
   const navigation = useNavigation();
-  // Note that a page pushed over a split view's detail leaves its tab focused, so the started agent waits for this overview itself to stand in front.
-  const covered = useDetailCovered();
 
-  // Note that New task and New agent sheets give way to this page before the service answers, so the overview every layout draws, the iPad's split detail among them, opens the started agent while the page stands in front, and opens New agent again on the words of one refused; an agent landing before the overview stands in front, as a start the service answers at once does while the page slides in or hands itself to the split view, is kept for that moment.
-  useStartLanded(task.id, OVERVIEW_HEARS, (landed) => {
-    const shown = navigation.isFocused();
-
-    if (landed.kind === START_LANDED.AGENT) {
-      if (shown && !covered && !handsOff) router.push(onTab(iosAgentRoute(landed.agentId)));
-      else keepStartLanded(task.id, landed);
-    } else if (shown) router.push({ pathname: "/start-agent", params: { task: task.id } });
+  // Note that New agent gives way to this page before the service answers, so the overview every layout draws opens New agent again on the words of a start refused while the page stands in front; its started agent opens from the task's page or split view, which stand before the task is read (`ROUTE_HEARS`).
+  useStartLanded(task.id, OVERVIEW_HEARS, () => {
+    if (navigation.isFocused())
+      router.push({ pathname: "/start-agent", params: { task: task.id } });
   });
-
-  // Note that a kept agent opens as the overview stands in front, at its first focus or as the page over a split view's detail leaves.
-  useFocusEffect(
-    useCallback(() => {
-      if (covered || handsOff) return;
-      const kept = takeStartLanded(task.id);
-
-      if (kept?.kind === START_LANDED.AGENT) router.push(onTab(iosAgentRoute(kept.agentId)));
-    }, [covered, handsOff, task.id, router, onTab]),
-  );
 
   const { data: descriptions = false } = useQuery({
     ...appStateQuery,
@@ -2058,25 +2046,46 @@ export function TaskColumnPage({ taskId }: { readonly taskId: string }) {
   );
 }
 
-/** The Tasks root's own navigation, whose route keeps the task its split view shows. */
+/** The Tasks root's own navigation, as far as it sets the task it selects. */
 type TasksRootNavigation = {
   readonly setParams: (params: { readonly selected?: string | undefined }) => void;
 };
 
 /**
- * Hears a New task start refused for the task a regular window's split view
- * shows, since the task's own page hands itself to the split view and
- * leaves: the task was never made, so the detail is left empty, as New task
- * opens again over it. Note that its agent opening is the overview's, which
- * the detail draws (`OVERVIEW_HEARS`).
+ * Hears what a New task start came to for the task a regular window's split
+ * view shows, since the task's own page hands itself to the split view and
+ * leaves: its agent opens beside it while the task's detail stands in front,
+ * kept for that moment where it lands before, and a refused start, whose
+ * task was never made, leaves the detail empty, as New task opens again
+ * over it. Note that it stands before the task is read, as a new task's
+ * detail reads it a while after the agent starts.
  */
-function useSplitStartLanded(selected: string | undefined): void {
+function useSplitStartLanded(selected: string | undefined, focused: boolean): void {
+  const router = useRouter();
   const navigation = useNavigation<TasksRootNavigation>();
+  const onTab = useOnTab();
 
-  useStartLanded(selected, ROUTE_HEARS, () => {
+  useStartLanded(selected, ROUTE_HEARS, (landed) => {
+    if (landed.kind === START_LANDED.AGENT) {
+      // Note that a page pushed over the task's detail leaves Tasks focused, so the agent waits for the detail itself to stand in front, read as the answer lands, and one landing before it does is kept for that moment.
+      if (focused && topPageOf(SIDEBAR_PLACE.TASKS) === undefined) {
+        router.push(onTab(iosAgentRoute(landed.agentId)));
+      } else if (selected !== undefined) keepStartLanded(selected, landed);
+
+      return;
+    }
+
     // Note that the Tasks root's own route lets go of the task, whichever tab stands in front.
     navigation.setParams({ selected: undefined });
   });
+
+  // Note that an agent kept while Tasks came in front opens as it does, while nothing covers the task's detail.
+  useEffect(() => {
+    if (!focused || topPageOf(SIDEBAR_PLACE.TASKS) !== undefined) return;
+    const kept = takeStartLanded(selected);
+
+    if (kept?.kind === START_LANDED.AGENT) router.push(onTab(iosAgentRoute(kept.agentId)));
+  }, [focused, selected, router, onTab]);
 }
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the tree
@@ -2130,7 +2139,7 @@ function TasksSplitScreen({
   };
 
   const first = useListColumn(list);
-  useSplitStartLanded(selected);
+  useSplitStartLanded(selected, focused);
   useStackRoot(SIDEBAR_PLACE.TASKS, selected);
   // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
   const stack = useDetailStackColumn(SIDEBAR_PLACE.TASKS, { id: selected }, true);
@@ -2197,25 +2206,45 @@ export function TaskScreen() {
   const { id, workspace } = useLocalSearchParams<{ id: string; workspace?: string }>();
   const router = useRouter();
   const navigation = useNavigation();
+  const onTab = useOnTab();
   const colors = useColors();
-  // Note that a page New task opened before its task was made hears a refused start on its route, which takes the page back, at once or as soon as it stands in front again; its agent opening is the overview's (`OVERVIEW_HEARS`).
+  // Note that a page New task opened before its task was made hears what the start came to: its agent opens while the page still stands in front, and a refused start takes the page back, at once or as soon as it stands in front again.
   const [gone, setGone] = useState(false);
-  // Note that a page that hands its task to the split view and leaves, as `useHandToSplit` decides, never opens the agent itself: a push its overview made would be popped by its own hand-off, and the agent lost, so the split view's overview opens it.
+  // Note that a page that hands its task to the split view and leaves, as `useHandToSplit` decides, never opens the agent itself: a push it made would be popped by its own hand-off, and the agent lost, so the split view opens it.
   const own = useOwnTab();
 
   const handsOff =
     useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR &&
     (own === undefined || own === iosRouteTab(SPLIT_TAB.TASKS));
 
-  useStartLanded(id, ROUTE_HEARS, () => {
-    if (navigation.isFocused()) router.back();
+  // Note that an agent landing before the page stands in front, as a start the service answers at once does while the page still slides in or hands itself to the split view, is kept for the next page of the task in front.
+  useStartLanded(id, ROUTE_HEARS, (landed) => {
+    const shown = navigation.isFocused();
+
+    if (landed.kind === START_LANDED.AGENT) {
+      if (shown && !handsOff) router.push(onTab(iosAgentRoute(landed.agentId)));
+      else keepStartLanded(id, landed);
+
+      return;
+    }
+
+    if (shown) router.back();
     else setGone(true);
   });
 
   useFocusEffect(
     useCallback(() => {
-      if (gone) router.back();
-    }, [gone, router]),
+      if (gone) {
+        router.back();
+
+        return;
+      }
+
+      if (handsOff) return;
+      const kept = takeStartLanded(id);
+
+      if (kept?.kind === START_LANDED.AGENT) router.push(onTab(iosAgentRoute(kept.agentId)));
+    }, [gone, handsOff, id, router, onTab]),
   );
   const found = useFoundTask(id, workspace);
   const held = useTaskOverview(found.taskId);
@@ -2316,7 +2345,6 @@ export function TaskScreen() {
             overview={overview}
             onRefresh={refreshTasks}
             onArchiveAgent={archiveAsk.archive}
-            handsOff={handsOff}
           />
         ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
