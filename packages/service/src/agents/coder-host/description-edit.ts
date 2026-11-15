@@ -9,6 +9,7 @@ import { readTaskHeader } from "@repo/database/models/task-store";
 import { workspaceOf } from "@repo/database/models/workspace-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { isAudioType } from "@repo/features/conversation-picture-wire";
 import {
   descriptionAttachmentAddress,
   taskPictureMarkdown,
@@ -317,7 +318,14 @@ function readPictureFiles(
       );
 
       if (Result.isFailure(file)) return Result.fail(file.failure);
-      read.push({ picture, file: file.success, name: posix.basename(path) || path });
+      const { contentType, bytes } = file.success;
+
+      // Note that a sound clip is no file a description keeps yet, so it is refused as any other file it does not keep.
+      if (isAudioType(contentType)) {
+        return Result.fail(`${TASK_PICTURE_FILE_REFUSAL.NOT_IMAGE} ${path}`);
+      }
+
+      read.push({ picture, file: { contentType, bytes }, name: posix.basename(path) || path });
     }
 
     return Result.succeed(read);

@@ -413,7 +413,7 @@ function filesAt(input: WireValue | undefined): readonly string[] {
   return path === undefined || path === "" ? [] : [path];
 }
 
-/** The files a `show_image` call named, in order, as its row's subject. */
+/** The files a `show_media` or `show_image` call named, in order, as its row's subject. */
 function shownPaths(input: WireValue | undefined): string {
   const images = isRecord(input) && Array.isArray(input.images) ? input.images : [];
 
@@ -1329,6 +1329,14 @@ const READ_WEB_SEARCH: ToolReader = ({ input, output }) => ({
 
 const READ_INBOX_CALL: ToolReader = ({ tool, input, output }) => inboxToolView(tool, input, output);
 
+/** A call that showed media from the agent's sandbox, under either name it is stored by, named by the files it showed. */
+const SHOWN_MEDIA_CALL: ToolReader = ({ input, output }) => ({
+  kind: CALL_KIND.SHOW_IMAGE,
+  subject: shownPaths(input),
+  input: input === undefined ? textBlock("") : jsonBlock(input),
+  output: output === undefined ? undefined : jsonBlock(output),
+});
+
 /** A memory tool's refusal, which answers `rejected` with its reason. */
 const MEMORY_REJECTED = "rejected";
 
@@ -1627,12 +1635,8 @@ const AGENT_TOOL_VIEWS = {
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: output === undefined ? undefined : jsonBlock(output),
   }),
-  [AGENT_TOOL.SHOW_IMAGE]: ({ input, output }) => ({
-    kind: CALL_KIND.SHOW_IMAGE,
-    subject: shownPaths(input),
-    input: input === undefined ? textBlock("") : jsonBlock(input),
-    output: output === undefined ? undefined : jsonBlock(output),
-  }),
+  [AGENT_TOOL.SHOW_IMAGE]: SHOWN_MEDIA_CALL,
+  [AGENT_TOOL.SHOW_MEDIA]: SHOWN_MEDIA_CALL,
   [AGENT_TOOL.SLEEP]: ({ input, output }) => {
     const seconds = isRecord(input) && isWireNumber(input.seconds) ? input.seconds : undefined;
 

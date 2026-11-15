@@ -1,6 +1,7 @@
 import { Schema as EffectSchema, Result } from "effect";
 import { Base64 } from "effect/encoding";
 import { AGENT_ATTACHMENT_TYPE, AGENT_BOUNDS } from "./agent-wire.js";
+import { AUDIO_TYPE } from "./audio-signature.js";
 import { startsLikePdf } from "./media-signature.js";
 import {
   PICTURE_MEDIA_TYPE,
@@ -28,11 +29,17 @@ export const DESCRIPTION_ATTACHMENT_BOUNDS = {
   MAX_PER_DESCRIPTION: 100,
 } as const;
 
-/** The types a description's attachment is served as: a picture's or a video's its text names, or any a comment's file may be. */
+/**
+ * The types a description's attachment is served as: a picture's, a
+ * video's, or a sound clip's its text names, or any a comment's file may
+ * be. Note that a sound clip is read here before a description keeps one,
+ * because a reader released before it could read one would fail to draw it.
+ */
 const DESCRIPTION_ATTACHMENT_TYPE = {
   ...AGENT_ATTACHMENT_TYPE,
   WEBM: WEBM_TYPE,
   MP4: MP4_TYPE,
+  ...AUDIO_TYPE,
 } as const;
 
 /** A description's attachment's media type as the wire carries it. */
