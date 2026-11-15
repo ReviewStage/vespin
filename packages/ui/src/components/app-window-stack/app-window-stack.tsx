@@ -110,32 +110,42 @@ export interface StackedApp {
   readonly mark?: WordsMark | undefined;
 }
 
-/** A picture of the front app's window that landed: the app's id, its address, and the window's size as it was read. */
+/** A picture of an app's window that landed: its address, and the window's size as it was read. */
 interface LandedWindow {
-  readonly app: string;
   readonly url: string;
   readonly width: number;
   readonly height: number;
 }
 
+/** Each app's last landed picture, by its id, with `app` landing at `picture`. */
+function landedWith(
+  landed: ReadonlyMap<string, LandedWindow>,
+  app: string,
+  picture: LandedWindow,
+): ReadonlyMap<string, LandedWindow> {
+  return new Map(landed).set(app, picture);
+}
+
 /**
- * The picture of the front app's window to draw: the last one that landed,
- * held while the next is read, and given up for it only once it has
- * decoded, so swapping the two draws no blank frame; none until one of this
- * app's lands. Note that the first lands at once, with nothing to hold, and
- * that a next picture that does not land, or does not decode, keeps the last.
+ * The picture of the front app's window to draw: the last one of that app
+ * that landed, held while the next is read, and given up for it only once it
+ * has decoded, so swapping the two draws no blank frame; none until one of
+ * this app's lands. Note that each app keeps its own, so an app brought back
+ * to the front shows its last while its next is read, that the first lands
+ * at once, with nothing to hold, and that a next picture that does not land,
+ * or does not decode, keeps the last.
  */
 function useLandedWindow(app: StackedApp): LandedWindow | undefined {
   const window = app.window;
-  const [landed, setLanded] = useState<LandedWindow>();
-  const held = landed?.app === app.id ? landed : undefined;
+  const [landed, setLanded] = useState<ReadonlyMap<string, LandedWindow>>(new Map());
+  const held = landed.get(app.id);
 
   const next =
     window?.state.kind === PICTURE_STATE.READY
-      ? { app: app.id, url: window.state.url, width: window.width, height: window.height }
+      ? { url: window.state.url, width: window.width, height: window.height }
       : undefined;
 
-  if (held === undefined && next !== undefined) setLanded(next);
+  if (held === undefined && next !== undefined) setLanded(landedWith(landed, app.id, next));
   const swap = held === undefined || next === undefined || held.url === next.url ? undefined : next;
 
   useEffect(() => {
@@ -145,7 +155,7 @@ function useLandedWindow(app: StackedApp): LandedWindow | undefined {
     image.src = swap.url;
     image.decode().then(
       () => {
-        if (stands) setLanded(swap);
+        if (stands) setLanded((was) => landedWith(was, app.id, swap));
       },
       () => undefined,
     );
@@ -153,7 +163,7 @@ function useLandedWindow(app: StackedApp): LandedWindow | undefined {
     return () => {
       stands = false;
     };
-  }, [swap?.app, swap?.url, swap?.width, swap?.height]);
+  }, [app.id, swap?.url, swap?.width, swap?.height]);
 
   return held ?? next;
 }

@@ -9,8 +9,8 @@ import { AppWindowStack } from "./app-window-stack.js";
 
 /**
  * app-window-stack.test.ts -- the window in front opens when pressed, named
- * for its app, keeps its last picture while the next is read, a title behind
- * it brings its app forward, and a stack of no apps draws nothing.
+ * for its app, keeps each app's last picture while the next is read, a title
+ * behind it brings its app forward, and a stack of no apps draws nothing.
  */
 
 const roots: Root[] = [];
@@ -72,23 +72,39 @@ test("the window in front opens when pressed, named for its app", () => {
   assert.deepEqual(opened, ["open"]);
 });
 
-test("the window in front keeps its last picture while the next one is read", () => {
-  const simulator = (state: PictureState) => ({
+test("each app's window keeps its last picture while the next one is read, though another came forward between", () => {
+  const PHONE = "data:image/png;base64,AA==";
+  const EDITOR = "data:image/png;base64,AQ==";
+
+  const stack = (shown: string, simulator: PictureState) => ({
     label: "Apps in use",
     apps: [
       {
         id: "com.apple.iphonesimulator",
         name: "Simulator",
-        window: { state, width: 1180, height: 2556 },
+        window: { state: simulator, width: 1180, height: 2556 },
+      },
+      {
+        id: "com.apple.dt.Xcode",
+        name: "Xcode",
+        window: {
+          state: { kind: PICTURE_STATE.READY, url: EDITOR } as const,
+          width: 1440,
+          height: 900,
+        },
       },
     ],
+    shown,
     ...QUIET,
   });
 
-  const redraw = draw(simulator({ kind: PICTURE_STATE.READY, url: "data:image/png;base64,AA==" }));
+  const redraw = draw(
+    stack("com.apple.iphonesimulator", { kind: PICTURE_STATE.READY, url: PHONE }),
+  );
 
-  redraw(simulator({ kind: PICTURE_STATE.READING }));
-  assert.equal(document.querySelector("img")?.getAttribute("src"), "data:image/png;base64,AA==");
+  redraw(stack("com.apple.dt.Xcode", { kind: PICTURE_STATE.READING }));
+  redraw(stack("com.apple.iphonesimulator", { kind: PICTURE_STATE.READING }));
+  assert.equal(document.querySelector("img")?.getAttribute("src"), PHONE);
 });
 
 test("a title behind the window in front brings its own app forward, though another app shares its name", () => {
