@@ -35,6 +35,7 @@ import {
 import { automationAgentBrief } from "../desktop/automation-agent-brief.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, type ComposerWords } from "./agent-composer.js";
@@ -443,11 +444,8 @@ export function NewTaskComposer({
   const repositories = newTask.repositoriesIn(workspaceId);
   const workspace = newTask.workspaces.find((each) => each.id === workspaceId);
 
-  // Task relation offers the tasks of the card's workspace.
-  const relatable = useMemo(
-    () => newTask.tasks.filter((each) => each.workspaceId === workspaceId),
-    [newTask.tasks, workspaceId],
-  );
+  // Task relation offers the tasks of the card's workspace, in the sidebar's order.
+  const relatable = useNamedTasks(newTask.typedNames, NAMED_ORDER.PINNED_FIRST, workspaceId);
 
   // Runs on stands on every card but an automation's agent's.
   const runsOnStands = !forAutomation;
@@ -556,7 +554,7 @@ export function NewTaskComposer({
 
   const canStart = !devicesUnread && unpaid === undefined && filled;
   // What an `@` and a `/` offer: the chosen repository's, read through the workspace, as on an agent's page no task holds.
-  const readMentionAgents = useMentionAgentsReader(workspaceId, newTask.tasks, newTask.models);
+  const readMentionAgents = useMentionAgentsReader(workspaceId, relatable, newTask.models);
   const reader = useMentionedReader();
   const slug = workspace?.slug;
   const { onShowMention } = newTask;

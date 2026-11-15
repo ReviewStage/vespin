@@ -33,7 +33,12 @@ import { handHostReads } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { standingTaskList } from "../testing/history-rows.js";
-import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
+import {
+  agentsControl,
+  listedAgent,
+  type TasksControlOverrides,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { useVersionHistoryRoute, type VersionHistoryRoute } from "../version-history-route.js";
 import {
@@ -75,6 +80,8 @@ const AUTOMATION_ID = "5d1e7a9c-3b2f-4c6d-8e0a-9f1b2c3d4e5a";
 
 /** The Tasks tab as a window stands it, and the Inbox standing over it, on the item `chosen` names or on its list, where it stands. */
 type Standing = TasksControl & {
+  /** The tasks the window's task list holds, which its collections stand on. */
+  readonly tasks?: readonly TaskSummary[];
   readonly inboxStands?: { readonly chosen?: InboxChoice | undefined } | undefined;
 };
 
@@ -82,8 +89,12 @@ type Standing = TasksControl & {
 function listedTab({
   inboxStands,
   ...overrides
-}: Partial<TasksControl> & Pick<Standing, "inboxStands"> = {}): Standing {
-  return { ...tasksControl({ workspaces: [ACME], workspace: ACME, ...overrides }), inboxStands };
+}: TasksControlOverrides & Pick<Standing, "inboxStands"> = {}): Standing {
+  return {
+    ...tasksControl({ workspaces: [ACME], workspace: ACME, ...overrides }),
+    ...(overrides.tasks === undefined ? undefined : { tasks: overrides.tasks }),
+    inboxStands,
+  };
 }
 
 const roots: Root[] = [];
@@ -114,7 +125,7 @@ function mount(
   let history: (WindowHistory & HistoryBehind & TaskVisits & RecentSteps) | undefined;
   let open: TasksControl | undefined;
   let backs: NarrowBacks | undefined;
-  let restand: ((tasks: TasksControl) => void) | undefined;
+  let restand: ((tasks: Standing) => void) | undefined;
   let admin: AdminRoute | undefined;
   let board: BoardRoute | undefined;
   let person: PersonRoute | undefined;
@@ -127,10 +138,10 @@ function mount(
   // The Tasks tab as the window stands it or a test is about to stand it, which a routed place is left for.
   let wanted = initial;
   // Leaves the routed place standing for `to`'s place, as the Tasks tab's door does: a navigation to its task's own place, or Home.
-  let leaveTo: (to: TasksControl) => void = () => undefined;
+  let leaveTo: (to: Standing) => void = () => undefined;
   let taskRoute: TaskRoute | undefined;
   // The window's task-list collections, standing on the tasks and agents the tab stands on, as the window's follow writes them.
-  const taskList = standingTaskList({ tasks: initial.tasks, taskAgents: initial.liveAgents });
+  const taskList = standingTaskList({ tasks: initial.tasks ?? [], taskAgents: initial.liveAgents });
 
   function Probe() {
     const [standing, setTasks] = useState(initial);
@@ -143,7 +154,7 @@ function mount(
     exits.stay = placeLeave.stays;
     restand = (tasks) => {
       wanted = tasks;
-      taskList.stand({ tasks: tasks.tasks, taskAgents: tasks.liveAgents });
+      taskList.stand({ tasks: tasks.tasks ?? [], taskAgents: tasks.liveAgents });
       setTasks(tasks);
     };
 
@@ -190,7 +201,7 @@ function mount(
       const at =
         to.boundFor === undefined
           ? undefined
-          : taskAtOf(to.boundFor, to.tasks, to.workspaces, to.workspace, undefined);
+          : taskAtOf(to.boundFor, to.tasks ?? [], to.workspaces, to.workspace, undefined);
 
       if (at === undefined) home.onOpen();
       else route.onOpen(at, true, history?.onLeaveStart() ?? false);
@@ -202,7 +213,9 @@ function mount(
       atHome: home.open,
       taskView: {
         taskId:
-          taskAt === undefined ? undefined : taskOfAt(taskAt, standing.tasks, standing.workspaces),
+          taskAt === undefined
+            ? undefined
+            : taskOfAt(taskAt, standing.tasks ?? [], standing.workspaces),
       },
       // As the real one does, binding no task drops the task asked for at once, the host's answer still on its way.
       onUnbindTask: () => {

@@ -5,6 +5,7 @@ import {
   Host,
   HStack,
   Menu,
+  ScrollView,
   Button as SwiftUIButton,
   Text,
   TextField,
@@ -30,12 +31,12 @@ import {
   textInputAutocapitalization,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import type { GitHubPerson, PullRequestState } from "@repo/features/agent-wire";
+import type { GitHubPerson, PullRequestLabel, PullRequestState } from "@repo/features/agent-wire";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { agoText } from "@repo/features/time-format";
 import { type ReactElement, useEffect, useState } from "react";
 import { useScaledSize } from "./accessibility.js";
-import { FieldChip } from "./button.js";
+import { FieldChip, LabelChip } from "./button.js";
 import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { RowFrame, RowHead } from "./list-row.js";
@@ -78,6 +79,8 @@ type PullRequestHeadProps = {
   readonly sentence?: string | undefined;
   /** Who opened it and when; none until its read lands. */
   readonly opened?: Opened | undefined;
+  /** Its labels, in the order GitHub lists them; none until its read lands or where it has none. */
+  readonly labels?: readonly PullRequestLabel[] | undefined;
 };
 
 /** One branch, as the panel's header names it: Lucide's branch glyph, then its name in the monospaced face. */
@@ -146,9 +149,10 @@ function OpenedLine({ opened }: { readonly opened: Opened }) {
  * A pull request's heading, as a list's first row: its title in 20 pt
  * semibold with its number muted after it, then where it stands as a chip,
  * its state's glyph in GitHub's color and its word, then who opened it and
- * when, by their face, then its branches on a line of their own, the one it
- * merges into first, then GitHub's sentence of whether it would merge, in
- * the body's ink.
+ * when, by their face, then its labels filled with their colors, scrolling
+ * sideways where they run past the row, then its branches on a line of
+ * their own, the one it merges into first, then GitHub's sentence of
+ * whether it would merge, in the body's ink.
  */
 export function PullRequestHead({
   title,
@@ -159,6 +163,7 @@ export function PullRequestHead({
   branches,
   sentence,
   opened,
+  labels = [],
 }: PullRequestHeadProps) {
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[pullRequestMarkState({ state, queued })];
@@ -188,6 +193,15 @@ export function PullRequestHead({
         <FieldChip label={stateLabel} mark={{ glyph: look.symbol, tone: look.tone }} />
       </HStack>
       {opened === undefined ? null : <OpenedLine opened={opened} />}
+      {labels.length === 0 ? null : (
+        <ScrollView axes="horizontal" showsIndicators={false}>
+          <HStack spacing={SPACE.TIGHT}>
+            {labels.map((label) => (
+              <LabelChip key={label.name} name={label.name} color={label.color} />
+            ))}
+          </HStack>
+        </ScrollView>
+      )}
       {branches === undefined ? null : (
         <HStack spacing={SPACE.TIGHT + 2}>
           <Branch name={branches.base} />
@@ -361,9 +375,9 @@ export interface MergeMethodChoice {
 }
 
 /**
- * The merge's one press as a row of the page, where a regular window's bar
- * folds its acts out of sight, as GitHub's own app stands Merge under a
- * pull request's checks: the system's large button, as wide as its words,
+ * The merge's one press as a row of the page, under its heading in every
+ * window, as the panel's head stands Merge under the title, so the bar
+ * keeps its path: the system's large button, as wide as its words,
  * filled in the accent with its words in the brand's ink where it is the
  * page's one act, such as Squash and merge, and outlined in it otherwise,
  * such as Remove from queue. Where the repository merges more than one way
@@ -440,6 +454,16 @@ export function MergeActRow({
   );
 }
 
+/** What a `WordsAsk` field takes, and the keyboard it raises for it. */
+export const WORDS_ASK_KIND = {
+  /** A name, capitalized and corrected as the system does. */
+  NAME: "name",
+  /** An email address, on the address keyboard, with nothing capitalized or corrected. */
+  EMAIL: "email",
+} as const;
+
+export type WordsAskKind = (typeof WORDS_ASK_KIND)[keyof typeof WORDS_ASK_KIND];
+
 type ConfirmAskProps = {
   /** The question, as the panel's confirm asks it: "Remove from the merge queue?" */
   readonly title: string;
@@ -455,6 +479,8 @@ type ConfirmAskProps = {
    * an act that cannot be undone.
    */
   readonly gate?: string | undefined;
+  /** What the gate's words are, which picks the keyboard its field raises, such as the address keyboard for an account's address. */
+  readonly gateKind?: WordsAskKind | undefined;
   readonly presented: boolean;
   readonly onAct: () => void;
   /** Called as the alert goes, by its act or Cancel. */
@@ -484,6 +510,7 @@ export function ConfirmAsk({
   act,
   destructive = false,
   gate,
+  gateKind = WORDS_ASK_KIND.NAME,
   presented,
   onAct,
   onDismiss,
@@ -516,7 +543,11 @@ export function ConfirmAsk({
               text={typed}
               placeholder={gate}
               onTextChange={setWords}
-              modifiers={[autocorrectionDisabled(), textInputAutocapitalization("never")]}
+              modifiers={[
+                ...(gateKind === WORDS_ASK_KIND.EMAIL ? [keyboardType("email-address")] : []),
+                autocorrectionDisabled(),
+                textInputAutocapitalization("never"),
+              ]}
             />
           )}
           <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />
@@ -536,16 +567,6 @@ export function ConfirmAsk({
     </Host>
   );
 }
-
-/** What a `WordsAsk` field takes, and the keyboard it raises for it. */
-export const WORDS_ASK_KIND = {
-  /** A name, capitalized and corrected as the system does. */
-  NAME: "name",
-  /** An email address, on the address keyboard, with nothing capitalized or corrected. */
-  EMAIL: "email",
-} as const;
-
-export type WordsAskKind = (typeof WORDS_ASK_KIND)[keyof typeof WORDS_ASK_KIND];
 
 /** One of a `WordsAsk`'s acts beside Cancel, handed the words typed. */
 export interface WordsAskAct {
