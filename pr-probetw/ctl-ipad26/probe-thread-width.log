@@ -1,0 +1,53 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "subsystem == "com.facebook.react.log" AND category == "javascript""
+Timestamp               Ty Process[PID:TID]
+2026-11-14 21:16:44.540 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] Running "main"
+2026-11-14 21:16:53.033 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000072 x=0 width=671 height=91.5 window=1194x834 at=1794709013033
+2026-11-14 21:16:53.033 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000072 width=671 height=91.5 at=1794709013033
+2026-11-14 21:16:53.033 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000073 x=0 width=317.5 height=68 window=1194x834 at=1794709013033
+2026-11-14 21:16:53.033 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000073 width=317.5 height=68 at=1794709013033
+2026-11-14 21:16:53.033 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000075 x=0 width=250 height=78.5 window=1194x834 at=1794709013033
+2026-11-14 21:16:53.033 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000075 width=250 height=78.5 at=1794709013033
+2026-11-14 21:16:53.789 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000072 x=0 width=583.5 height=89.5 window=1194x834 at=1794709013789
+2026-11-14 21:16:53.791 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000072 width=583.5 height=89.5 at=1794709013791
+2026-11-14 21:16:53.791 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000073 x=0 width=583.5 height=28 window=1194x834 at=1794709013791
+2026-11-14 21:16:53.791 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000073 width=583.5 height=28 at=1794709013791
+2026-11-14 21:16:53.791 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000075 x=0 width=583.5 height=78.5 window=1194x834 at=1794709013791
+2026-11-14 21:16:53.791 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000075 width=583.5 height=78.5 at=1794709013791
+2026-11-14 21:16:53.804 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000072 x=0 width=583.5 height=433 window=1194x834 at=1794709013804
+2026-11-14 21:16:53.804 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000072 width=583.5 height=433 at=1794709013804
+2026-11-14 21:16:53.804 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000073 x=0 width=583.5 height=173 window=1194x834 at=1794709013804
+2026-11-14 21:16:53.804 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000073 width=583.5 height=173 at=1794709013804
+2026-11-14 21:16:53.819 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000072 x=0 width=583.5 height=384 window=1194x834 at=1794709013819
+2026-11-14 21:16:53.819 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000072 width=583.5 height=384 at=1794709013819
+2026-11-14 21:16:53.819 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000073 x=0 width=583.5 height=322.5 window=1194x834 at=1794709013819
+2026-11-14 21:16:53.819 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000073 width=583.5 height=322.5 at=1794709013819
+2026-11-14 21:17:00.593 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000075 x=0 width=720 height=78.5 window=1194x834 at=1794709020593
+2026-11-14 21:17:00.593 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000075 width=720 height=78.5 at=1794709020593
+2026-11-14 21:17:00.593 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000073 x=0 width=720 height=322.5 window=1194x834 at=1794709020593
+2026-11-14 21:17:00.593 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000073 width=720 height=322.5 at=1794709020593
+2026-11-14 21:17:00.593 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000072 x=0 width=720 height=366 window=1194x834 at=1794709020593
+2026-11-14 21:17:00.593 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000072 width=720 height=366 at=1794709020593
+2026-11-14 21:17:00.838 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000072 width=720 height=366 at=1794709020838
+2026-11-14 21:17:00.838 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000073 x=0 width=720 height=323 window=1194x834 at=1794709020838
+2026-11-14 21:17:00.838 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000073 width=720 height=322.46875 at=1794709020838
+2026-11-14 21:17:00.891 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000072 x=0 width=720 height=443 window=1194x834 at=1794709020891
+2026-11-14 21:17:00.891 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000072 width=720 height=443 at=1794709020891
+2026-11-14 21:17:00.891 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000073 x=0 width=720 height=399.5 window=1194x834 at=1794709020891
+2026-11-14 21:17:00.891 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000073 width=720 height=399.5 at=1794709020891
+2026-11-14 21:17:03.889 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000075 x=0 width=583.5 height=78.5 window=1194x834 at=1794709023889
+2026-11-14 21:17:03.889 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000075 width=583.5 height=78.5 at=1794709023889
+2026-11-14 21:17:03.889 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000073 x=0 width=583.5 height=399.5 window=1194x834 at=1794709023889
+2026-11-14 21:17:03.889 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000073 width=583.5 height=399.25 at=1794709023889
+2026-11-14 21:17:03.889 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000072 x=0 width=583.5 height=461 window=1194x834 at=1794709023889
+2026-11-14 21:17:03.890 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000072 width=583.5 height=461 at=1794709023890
+2026-11-14 21:17:04.121 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000073 width=583.5 height=399.5 at=1794709024121
+2026-11-14 21:17:04.121 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000072 width=583.5 height=461 at=1794709024121
+2026-11-14 21:17:04.146 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000072 x=0 width=583.5 height=384 window=1194x834 at=1794709024146
+2026-11-14 21:17:04.146 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000072 width=583.5 height=384 at=1794709024146
+2026-11-14 21:17:04.146 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000073 x=0 width=583.5 height=322.5 window=1194x834 at=1794709024146
+2026-11-14 21:17:04.146 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000073 width=583.5 height=322.5 at=1794709024146
+2026-11-14 21:17:04.150 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000072 width=583.5 height=383.96875 at=1794709024150
+2026-11-14 21:17:04.150 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] host message=81e2a425-6d9f-4ab7-92df-000000000073 x=0 width=583.5 height=323 window=1194x834 at=1794709024150
+2026-11-14 21:17:04.150 I  Vespin[71187:1a593d5] [com.facebook.react.log:javascript] [probe-thread-width] words message=81e2a425-6d9f-4ab7-92df-000000000073 width=583.5 height=322.46875 at=1794709024150
+Child process terminated with signal 9: Killed
