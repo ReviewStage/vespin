@@ -939,34 +939,31 @@ function TodosRow({
   );
 }
 
-/** Where the transcript draws the agent's to-do lists: the call whose list stays out of a finished turn's fold, the call whose list the agent is at, none once it stops, and the list as it stood after each of Claude Code's task calls (`taskTodos`). */
+/** Where the transcript draws the agent's to-do lists: the call whose list the agent is at, none once it stops, and the list as it stood after each of Claude Code's task calls (`taskTodos`). */
 interface TodosPlace {
-  readonly kept: string | undefined;
   readonly live: string | undefined;
   readonly lists: ReadonlyMap<string, AgentTodos["todos"]>;
 }
 
 /** A transcript that holds no to-do list, as the brain's does not. */
 const NO_TODOS: TodosPlace = {
-  kept: undefined,
   live: undefined,
   lists: new Map(),
 };
 
-/** Whether two places draw the to-do lists alike: the same calls kept and live, and each task call's list the one it was; none alike only with none. */
+/** Whether two places draw the to-do lists alike: the same call live, and each task call's list the one it was; none alike only with none. */
 function sameTodosPlace(a: TodosPlace | undefined, b: TodosPlace | undefined): boolean {
   if (a === undefined || b === undefined) return a === b;
 
-  return a.kept === b.kept && a.live === b.live && sameEntries(a.lists, b.lists);
+  return a.live === b.live && sameEntries(a.lists, b.lists);
 }
 
-/** Where the to-do lists are drawn for the transcript given: the newest kept, and live while the agent works. */
+/** Where the to-do lists are drawn for the transcript given: the newest live while the agent works. */
 function todosPlace(messages: readonly AgentTranscriptMessage[], working: boolean): TodosPlace {
   const lists = taskTodos(messages);
   const standing = newestTodos(messages, lists);
 
   return {
-    kept: standing?.callId,
     live: working ? standing?.callId : undefined,
     lists,
   };

@@ -330,7 +330,7 @@ test("Claude Code's TodoWrite is drawn as the agent's to-do list, a completed it
   }
 });
 
-test("Claude Code's task calls are drawn as the agent's to-do list as it stood after each, the newest folded until pressed", () => {
+test("Claude Code's task calls are drawn as the agent's to-do list as it stood after each, folded with the turn's calls until pressed", () => {
   const { container } = drawn(
     [
       storedPart(
@@ -351,11 +351,19 @@ test("Claude Code's task calls are drawn as the agent's to-do list as it stood a
     true,
   );
 
-  // The newest list stands folded on a row of its own; the calls before it fold with the turn, as a whole list's writes do.
-  const lines = [...container.querySelectorAll("summary")];
-  const newest = lines.at(-1) ?? assert.fail("the newest list is a fold's line");
-  assert.ok(newest.textContent?.includes("1 of 2 done"), newest.textContent ?? "");
+  // The task calls fold together as any calls do; opening the fold shows each list, the newest still folded.
+  const line = (words: string) =>
+    [...container.querySelectorAll("summary")].find((each) => each.textContent?.includes(words)) ??
+    assert.fail(`a fold's line says ${words}`);
+
   assert.ok(!container.textContent?.includes("Export the invoices"), container.textContent ?? "");
+  act(() => line("3 tool calls").click());
+
+  const newest =
+    [...container.querySelectorAll("summary")].at(-1) ??
+    assert.fail("the newest list is a fold's line");
+
+  assert.ok(newest.textContent?.includes("1 of 2 done"), newest.textContent ?? "");
   act(() => newest.click());
   const words = container.textContent ?? "";
 

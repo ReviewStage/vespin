@@ -524,7 +524,7 @@ export const ROW_PART = {
   WORDS: "words",
   /** A call, which runs together with the calls beside it, and which a group counts. */
   CALL: "call",
-  /** A call that stands on a row of its own, as an agent's to-do list does. */
+  /** A call that stands on a row of its own, as a set of pictures an agent showed does. */
   LONE_CALL: "lone-call",
   /** A subagent, which runs together with the calls beside it, and which a group counts apart from the calls. */
   SUBAGENT: "subagent",
