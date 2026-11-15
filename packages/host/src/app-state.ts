@@ -1211,6 +1211,12 @@ export interface AppStateDelivery {
   readonly gone?: readonly AppStateEntry[];
   /** Each keyed slice's keys that moved since the window's last delivery, in place of its entry, where the window held the slice and still does (`HOST_READ_SLICE`). */
   readonly moved?: { readonly [Slice in HostReadSlice]?: readonly KeyMoved[] };
+  /**
+   * The task list's rows that moved since the window's last delivery, beside
+   * the document rather than in it, for the window's task-list collections
+   * (`taskListDelivery`); none where no part of the list moved.
+   */
+  readonly taskList?: TaskListDelivery;
 }
 
 /** A value the document holds: a record or list, a primitive, or nothing. */
@@ -1540,7 +1546,8 @@ function withSliceMoved<Slice extends object>(
 }
 
 /**
- * The delivery that brings a window holding `sent` to `next`, or none where
+ * The delivery that brings a window holding `sent` to `next`, the task
+ * list's rows that moved beside it (`taskListDelivery`), or none where
  * nothing it is handed moved. Note that the document keeps the identity of
  * every part a patch did not move, so an untouched entry is answered at its
  * first comparison and only an entry that moved is walked.
@@ -1548,6 +1555,7 @@ function withSliceMoved<Slice extends object>(
 export function appStateDelivery(
   sent: AppStateSnapshot | undefined,
   next: AppStateSnapshot,
+  taskList?: TaskListDelivery,
 ): AppStateDelivery | undefined {
   // SAFETY: `Object.keys` of a snapshot names its own entries and its version, the last dropped here.
   const names = [...new Set([...Object.keys(sent ?? {}), ...Object.keys(next)])].filter(
@@ -1573,7 +1581,9 @@ export function appStateDelivery(
   const keys = patched.filter(([, keysOf]) => keysOf.length > 0);
   const gone = moved.filter((name) => next[name] === undefined);
 
-  if (sent !== undefined && moved.length === 0 && keys.length === 0) return undefined;
+  if (sent !== undefined && moved.length === 0 && keys.length === 0 && taskList === undefined) {
+    return undefined;
+  }
 
   return {
     version: next.version,
@@ -1582,8 +1592,83 @@ export function appStateDelivery(
     ),
     ...(gone.length === 0 ? undefined : { gone }),
     ...(keys.length === 0 ? undefined : { moved: Object.fromEntries(keys) }),
+    ...(taskList === undefined ? undefined : { taskList }),
   };
 }
+
+/** The task list's lists of rows, each a live query of the list draws (`HOST_READ_SLICE`'s `tasks`), by its name in `TasksView`. */
+export const TASK_LIST_PARTS = [
+  "tasks",
+  "taskAgents",
+  "taskPullRequests",
+  "agentPullRequests",
+] as const satisfies readonly (keyof TasksView)[];
+
+export type TaskListPart = (typeof TASK_LIST_PARTS)[number];
+
+/** The task list's lists as one drawing holds them, each absent where the view carries none. */
+export type TaskListParts = Pick<TasksView, TaskListPart>;
+
+/** One part of the task list that moved: its list whole, or null where it is gone; or its rows that moved, with its ids in order where they moved. */
+export type TaskListPartMoved = KeyMoved;
+
+/**
+ * The task list's rows as one delivery of the document hands them to a
+ * window, beside the document rather than in it (`AppStateDelivery`'s
+ * `taskList`): what one drawing moved in each part since the last this
+ * window was handed, under the document's version it moved to. A window's
+ * first is its lists whole, so a window's collections stand on these alone;
+ * each after it names the parts that moved, as the rows that moved in them
+ * where they can be told so.
+ */
+export interface TaskListDelivery {
+  readonly version: number;
+  /** The task list's lists whole, as a window's first carries them. */
+  readonly whole?: TaskListParts;
+  /** Each part that moved since the window's last delivery. */
+  readonly moved?: readonly TaskListPartMoved[];
+}
+
+/** The task list's lists `view` holds, each the very list it holds, so what moved in one is told by its drawing (`list-moves.ts`). */
+export function taskListPartsOf(view: TaskListParts): TaskListParts {
+  const { tasks, taskAgents, taskPullRequests, agentPullRequests } = view;
+
+  return {
+    tasks,
+    ...(taskAgents === undefined ? undefined : { taskAgents }),
+    ...(taskPullRequests === undefined ? undefined : { taskPullRequests }),
+    ...(agentPullRequests === undefined ? undefined : { agentPullRequests }),
+  };
+}
+
+/**
+ * The task list's rows that bring a window handed the lists `sent` to
+ * `next`, under the document's `version`: its lists whole where it was
+ * handed none, the parts that moved otherwise, or none where no part moved.
+ * A part crosses as the rows its drawing says moved rather than a walk of
+ * the list (`HOST_READ_SLICE`'s `tasks`).
+ */
+export function taskListDelivery(
+  sent: TaskListParts | undefined,
+  next: TaskListParts,
+  version: number,
+): TaskListDelivery | undefined {
+  if (sent === undefined) return { version, whole: next };
+
+  if (sent === next) return undefined;
+  // SAFETY: the task list's parts are its lists of rows, which `HOST_READ_SLICE`'s `tasks` keys by part.
+  const moved = idsMoved(HOST_READ_SLICE.tasks, [], sent as Keyed, next as Keyed);
+
+  return moved.length === 0 ? undefined : { version, moved };
+}
+
+/**
+ * The document as a whole read answers it: the snapshot, and the task
+ * list's lists beside it rather than in it, which the window's task-list
+ * collections are laid from (`task-list-following.ts`); none where the
+ * bridge holds none, as a test's may not.
+ */
+export type AppStateRead = AppStateSnapshot & { readonly taskList?: TaskListParts };
 
 /**
  * The document a window holds once a delivery lands on it: each entry named

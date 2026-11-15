@@ -19,6 +19,7 @@ import { installShownFailureReporter } from "./failure-report.js";
 import { copyingInto, fakeAppPlatform } from "./testing/app-platform.js";
 import { handState } from "./testing/app-state.js";
 import { readAppState, testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
+import { listedTaskRows } from "./testing/history-rows.js";
 import { STANDING_TOAST, standingToastWords } from "./testing/toast.js";
 import { ToastHost, type ToastNotice, useToast, useToastsOwner, useWorkingToast } from "./toast.js";
 import { forgetUndo, type PressedRows, pressRows, ROW_WRITE, undoLast } from "./undo-stack.js";
@@ -178,7 +179,7 @@ function pinPressed(sent: TasksPinParams[] = []): PressedRows {
 
   const pressed = pressRows(
     ROW_WRITE.TASK_PIN,
-    { rows: () => ({ tasks: drawn, held: undefined }), send: sendPin },
+    { rows: () => listedTaskRows(drawn.tasks), send: sendPin },
     [{ id: PINNED_TASK.id, after: { pinned: true, position: null } }],
   );
 

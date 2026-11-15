@@ -9,6 +9,7 @@ import {
 import { type DescriptionMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
 import { isGitHubAddress } from "@repo/host/acts";
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import { listedPullRequestOf } from "@repo/ui/pull-request-link";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
@@ -38,6 +39,7 @@ import {
 } from "../places/pressed-address.js";
 import { type Holding, pullRequestBeside } from "../places/pull-request-beside.js";
 import { useSteadyDoor } from "../steady-door.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { pullRequestsOnGitHubNow } from "./pull-request-opens.js";
 import { numberedTaskIdNow } from "./use-link-standing.js";
 
@@ -305,13 +307,17 @@ export function placeOfMention(mention: DescriptionMention): LinkDestination {
  * window lists no task for stays a number, which only the window opens,
  * finding the task on the service (`use-tasks-tab.ts`'s `openLink`).
  */
-function byListedTaskId(link: ReadLink, client: QueryClient): ReadLink {
+function byListedTaskId(
+  link: ReadLink,
+  client: QueryClient,
+  collections: TaskListCollections,
+): ReadLink {
   const number = taskNumberOf(link.place);
 
   const taskId =
     number === undefined
       ? undefined
-      : numberedTaskIdNow(client)({ workspace: link.workspace, number });
+      : numberedTaskIdNow(client, collections)({ workspace: link.workspace, number });
 
   return taskId === undefined ? link : { ...link, place: withTaskId(link.place, taskId) };
 }
@@ -457,15 +463,16 @@ export function useOpenLink(): (href: string) => void {
   const openHere = useContext(OpenHereContext);
   const listed = useContext(ListedTasksContext);
   const queryClient = useQueryClient();
+  const collections = useTaskListCollections();
   const router = useLinkRouter();
 
   return useCallback(
     (href: string) =>
       openAddress(
-        addressOf(href, router, (link) => byListedTaskId(link, queryClient)),
+        addressOf(href, router, (link) => byListedTaskId(link, queryClient, collections)),
         { openPlace, openHere, listed, router, onGitHub: pullRequestsOnGitHubNow(queryClient) },
       ),
-    [openPlace, openHere, listed, queryClient, router],
+    [openPlace, openHere, listed, queryClient, collections, router],
   );
 }
 
