@@ -1,4 +1,4 @@
-import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { NO_TASK_LIST, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import type { AppStateSnapshot, TaskListDelivery } from "@repo/host/app-state";
 import {
   type AppStateBeside,
@@ -52,7 +52,6 @@ export {
   selectSettingsHeld,
   selectSignedIn,
   selectStoredExperimentChoices,
-  selectTaskListStanding,
   selectTaskSendRefused,
   selectTasks,
   selectVoiceCall,
@@ -201,7 +200,12 @@ export function followAppState(client: QueryClient): AppStateFollowing {
   const shown = (state: AppStateSnapshot): void => {
     client.setQueryData(appStateQuery.queryKey, state);
 
-    if (state.run.fixtureMode) taskList.write(state.version, selectListedTasks(state));
+    if (state.run.fixtureMode) {
+      taskList.write(
+        state.version,
+        loadedTasksFixture()?.fixtureTasksView(state.run) ?? NO_TASK_LIST,
+      );
+    }
   };
 
   // Answers the staging the state waits on in a fixture run, and nothing where it is written at once.

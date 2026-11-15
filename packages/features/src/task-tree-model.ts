@@ -37,7 +37,7 @@ import {
 import type { TaskSection } from "./task-section-wire.js";
 import { NO_TASK_SECTIONS, sectionedTasks, sectionInView } from "./task-sections-model.js";
 import type { TaskSummary } from "./task-wire.js";
-import type { TasksView } from "./tasks-view.js";
+import type { TaskListParts, TasksView } from "./tasks-view.js";
 import { taskKey } from "./workspace-key.js";
 
 /** What heads the reader's pinned tasks, as the sidebar's section is called. */
@@ -81,7 +81,7 @@ export interface TaskTree {
 /** What the tree is read from: the host's task list, the workspace it is narrowed to, the reader, and what the group headings say of no repository. */
 export interface TaskTreeInput {
   readonly view: {
-    readonly tasks: TasksView["tasks"];
+    readonly tasks: TaskListParts["tasks"];
     readonly taskSections?: TasksView["taskSections"] | undefined;
     readonly repositoryPins?: TasksView["repositoryPins"] | undefined;
   };
@@ -286,7 +286,7 @@ export interface TaskRowLook {
 export function taskRowLook(
   task: TaskSummary,
   waiting: number,
-  taskPullRequests: TasksView["taskPullRequests"],
+  taskPullRequests: TaskListParts["taskPullRequests"],
 ): TaskRowLook {
   const at = taskTime(task, TASK_ORDER.UPDATED);
 

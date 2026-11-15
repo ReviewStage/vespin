@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { TASK_PRIORITY, TASK_STATUS } from "@repo/features/task-wire";
 import { SETTLED_STATUS, type TaskNames } from "@repo/features/tasks-model";
-import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, TASKS_READ } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { Option, Schema } from "effect";
 import { act, createElement, Fragment } from "react";
@@ -11,7 +11,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
 import { KEPT, type Kept } from "../act.js";
 import { type FakeActPort, fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
-import { writeListedTasks } from "../testing/app-state.js";
+import { type WrittenTasksView, writeListedTasks } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { newestToastAction } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
@@ -29,7 +29,7 @@ const NOTES = {
 };
 
 /** The tasks the tab draws: `NOTES` alone. */
-const VIEW: TasksView = { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.READY, tasks: [NOTES] };
+const VIEW: WrittenTasksView = { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.READY, tasks: [NOTES] };
 
 /** A status write's payload, read back as the act's own schema admits it. */
 const readStanding = Schema.decodeUnknownOption(
@@ -46,7 +46,7 @@ afterEach(() => {
 });
 
 /** `VIEW` with an agent of `NOTES` running. */
-const WORKING_VIEW: TasksView = {
+const WORKING_VIEW: WrittenTasksView = {
   ...VIEW,
   tasks: [{ ...NOTES, agents: { total: 1, working: 1, pullRequestTotal: 0 } }],
 };
@@ -66,7 +66,7 @@ type MountWritesResult = {
 /** The standing writes over `view`, drawn with their question under the window's toasts once the window's first read of it has landed, the act port answering `standing` and writing down each payload. */
 async function mountWrites(
   standing: FakeActPort[typeof ACT_KIND.TASKS_SET_STANDING],
-  view: TasksView = VIEW,
+  view: WrittenTasksView = VIEW,
 ): Promise<MountWritesResult> {
   const payloads: unknown[] = [];
   fakeAppBridge({ onAppState: () => () => undefined });
