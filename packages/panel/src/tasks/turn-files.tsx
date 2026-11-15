@@ -11,18 +11,21 @@
  * the Turn changes tab draws, so the two agree; a turn with none kept, as
  * one from before the summary or a Mac's host older than it, draws none.
  * The count names no file: a press on it opens the turn's changes, where
- * the Turn changes tab names them all, and it stands as words where no
- * such tab opens from here. A line count of zero is not
+ * the Turn changes tab names them all, which its hint says, and it stands
+ * as words where no such tab opens from here. A line count of zero is not
  * written, so a turn that only added reads as its added lines alone.
  */
 
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { WORKED_SEPARATOR } from "@repo/features/time-format";
 import { countWords, TERM } from "@repo/features/words";
-import { CountParts, linesCount, TextButton } from "@repo/ui";
+import { CountParts, linesCount, TextButton, Tooltip } from "@repo/ui";
 import { createContext, useContext } from "react";
 import { TranscriptAgent } from "./line-cards.js";
 import { useMentionDoors } from "./task-mentions.js";
+
+/** What the count's hint says its press does. */
+const OPEN_TURN_CHANGES = "Open turn changes";
 
 /** The developer's line that opened each reply's turn, by the reply's id, while the tab reads the experiment on; none where it is off, or no tab says. */
 const TurnFilesOnContext = createContext<ReadonlyMap<string, string> | undefined>(undefined);
@@ -66,7 +69,9 @@ export function TurnFilesRow({
       {openTurn === undefined || agentId === undefined || line === undefined ? (
         totals
       ) : (
-        <TextButton onClick={() => openTurn(agentId, line)}>{totals}</TextButton>
+        <Tooltip label={OPEN_TURN_CHANGES}>
+          <TextButton onClick={() => openTurn(agentId, line)}>{totals}</TextButton>
+        </Tooltip>
       )}
     </span>
   );

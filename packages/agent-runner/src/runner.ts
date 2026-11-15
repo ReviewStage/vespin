@@ -101,7 +101,11 @@ import {
 import { readLines } from "./lines.js";
 import { openMcpRelay } from "./mcp-relay.js";
 import { MCP_SERVER, MCP_STARTUP, type McpServer, mcpServersOf } from "./mcp-servers.js";
-import { type ClaudeCodeMemoryWatch, claudeCodeMemoryWatch } from "./out-of-memory.js";
+import {
+  type Annotated,
+  type ClaudeCodeMemoryWatch,
+  claudeCodeMemoryWatch,
+} from "./out-of-memory.js";
 import {
   APPROVAL_BY,
   type CheckoutSnapshot,
@@ -517,8 +521,8 @@ function userMessage(
 /** The launch's state, shared by its two loops. */
 interface Launch {
   readonly session: ClaudeCodeSession;
-  /** A command's answer as posted, with the line saying it was killed out of memory where it was (`out-of-memory.ts`). */
-  readonly annotate: (message: SDKMessage) => SDKMessage;
+  /** A command's answer as posted, with the line saying it was killed out of memory where it was, and the event marking its call (`out-of-memory.ts`). */
+  readonly annotate: (message: SDKMessage) => Annotated<SDKMessage>;
   readonly prompts: Queue.Queue<SDKUserMessage, Cause.Done>;
   readonly sink: EventSink;
   /** The tool calls held for the member's answer, in a launch whose mode asks. */
@@ -829,7 +833,11 @@ const takeMessage = Effect.fn("agent-runner/takeMessage")(function* (
     for (const goal of MutableRef.getAndSet(launch.goals, [])) yield* launch.sink.emit(goal);
   }
 
-  yield* launch.sink.emit(launch.annotate(message));
+  const annotated = launch.annotate(message);
+
+  // A call killed out of memory is marked just ahead of its answer, so the service settles it marked.
+  for (const killed of annotated.killed) yield* launch.sink.emit(killed);
+  yield* launch.sink.emit(annotated.message);
 
   if (message.type !== SDK_MESSAGE.RESULT) return;
   const inFlight = MutableRef.getAndSet(launch.inFlight, undefined);

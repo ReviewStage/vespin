@@ -29,6 +29,7 @@ import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bri
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { standingTaskList } from "../testing/history-rows.js";
 import { playListMotions } from "../testing/pane-motion.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
@@ -143,6 +144,8 @@ async function mountView(
     },
   });
 
+  const listedTasks = standingTaskList({ tasks });
+
   const draw = (listed: readonly TaskSummary[], drawing: Drawing = {}) => {
     const control = tasksControl({
       tasks: [...listed],
@@ -162,28 +165,32 @@ async function mountView(
       onDisplay: () => undefined,
     };
 
+    // Note that the collections hear the list before the tab does, as the window's follow commits them before its Query client tells its readers.
+    act(() => listedTasks.stand({ tasks: listed }));
     act(() =>
       root.render(
         withQueryClient(
           provide(
-            createElement(
-              Fragment,
-              null,
-              // The page kept drawn while the window is away from it, as the shell keeps it (`desktop-shell.tsx`).
-              createElement(Activity, {
-                mode: drawing.kept === true ? "hidden" : "visible",
-                children: createElement(MemberDirectory, {
-                  workspace: ACME,
-                  readerId: DEAN,
-                  children: createElement(view, {
-                    tasks: control,
-                    room: SHELL_ROOM.WIDE,
-                    title: "Tasks",
-                    frame,
+            listedTasks.provide(
+              createElement(
+                Fragment,
+                null,
+                // The page kept drawn while the window is away from it, as the shell keeps it (`desktop-shell.tsx`).
+                createElement(Activity, {
+                  mode: drawing.kept === true ? "hidden" : "visible",
+                  children: createElement(MemberDirectory, {
+                    workspace: ACME,
+                    readerId: DEAN,
+                    children: createElement(view, {
+                      tasks: control,
+                      room: SHELL_ROOM.WIDE,
+                      title: "Tasks",
+                      frame,
+                    }),
                   }),
                 }),
-              }),
-              createElement(ToastHost),
+                createElement(ToastHost),
+              ),
             ),
           ),
         ),

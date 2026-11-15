@@ -115,6 +115,8 @@ export interface ToolCallView {
   readonly connection?: string;
   /** For a terminal command or an action on an app that ran nothing on its machine, how it came to run nothing, which its row says quietly in place of a failure; absent for the rest. */
   readonly notRun?: MachineNotRun;
+  /** Whether the service answered the call without doing it, as a pull request it refused or a browser call that ran nothing, which its row marks as failed though the call answered; absent for the rest. */
+  readonly refused?: true;
 }
 
 /** The escape every terminal color and cursor sequence starts with. */
@@ -311,8 +313,9 @@ const NOT_RUN_LABEL = {
 
 /**
  * The one quiet label a call that ran nothing wears at its line's end,
- * after the chip of the machine it was meant for: "Not answered",
- * "Declined", "Offline", or "Needs Screen Recording".
+ * after the chip of the machine it was meant for, or alone where the card
+ * under the row names that machine: "Not answered", "Declined",
+ * "Offline", or "Needs Screen Recording".
  */
 export function machineNotRunLabel(notRun: MachineNotRun): string {
   switch (notRun.outcome) {
@@ -502,7 +505,7 @@ export interface CallMachine {
 }
 
 /** The machine a `run_on_mac` or `computer` answer names it went to, or was refused on (`machine`); none where it names none. */
-function callMachineOf(output: WireValue | undefined): CallMachine | undefined {
+export function callMachineOf(output: WireValue | undefined): CallMachine | undefined {
   const machine = isRecord(output) ? output.machine : undefined;
   const id = stringAt(machine, "id");
   const name = stringAt(machine, "name");
@@ -998,7 +1001,7 @@ function openedPullRequestView(
   return {
     kind: CALL_KIND.OPEN_PULL_REQUEST,
     subject: number === undefined ? title : `#${number} ${title}`,
-    ...(reason === undefined ? undefined : { description: PULL_REQUEST_REFUSED }),
+    ...(reason === undefined ? undefined : { description: PULL_REQUEST_REFUSED, refused: true }),
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: pullRequestAnswer(output, reason),
   };
@@ -1253,12 +1256,15 @@ function nativeMcpView(
   const call = nativeMcpCall(tool);
 
   if (call === undefined) return undefined;
+  // Note that a server that is an integration's connection wears its provider's mark, as a call of the integration's own tool does.
+  const provider = integrationConnectionOf(call.connection)?.provider;
 
   return {
     kind: CALL_KIND.MCP_TOOL,
     subject: call.name,
     server: call.server,
     connection: call.connection,
+    ...(provider === undefined ? undefined : { provider }),
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: output === undefined ? undefined : jsonBlock(output),
   };
@@ -1527,6 +1533,7 @@ const AGENT_TOOL_VIEWS = {
       kind: CALL_KIND.BROWSER,
       subject: words === undefined ? "" : (tab ?? ""),
       ...(words === undefined ? undefined : { description: words }),
+      ...(stringAt(output, "status") === BROWSER_NOT_RUN ? { refused: true } : undefined),
       input: input === undefined ? textBlock("") : jsonBlock(input),
       output: output === undefined ? undefined : browserOutput(output),
     };

@@ -34,6 +34,8 @@ export interface TranscriptCopying {
   readonly share: (way: TranscriptCopy) => void;
   /** Why the last copy did not take; none while none failed. */
   readonly note: string | undefined;
+  /** Outdates every press still reading, as a page pushed over the agent's in its own column does. */
+  readonly cancel: () => void;
 }
 
 /** Copy transcript for the agent `agentId` names, under its name `title` and with the brief it was handed. */
@@ -46,15 +48,12 @@ export function useTranscriptCopy(
   const [note, setNote] = useState<string | undefined>(undefined);
   const latest = useRef(0);
 
-  // Note that leaving the page, by a push over it or by closing it, outdates every press, so a read that settles after it neither copies, shares, nor says anything.
-  useFocusEffect(
-    useCallback(
-      () => () => {
-        latest.current += 1;
-      },
-      [],
-    ),
-  );
+  const cancel = useCallback(() => {
+    latest.current += 1;
+  }, []);
+
+  // Note that leaving the page, by a push over the window or by closing it, outdates every press, so a read that settles after it neither copies, shares, nor says anything; a push inside a split view's detail keeps the focus, so its page calls `cancel` itself.
+  useFocusEffect(useCallback(() => cancel, [cancel]));
 
   /**
    * Reads the transcript whole and hands its words in the way asked to
@@ -96,5 +95,6 @@ export function useTranscriptCopy(
       }),
     share: (way) => press(way, shareWords),
     note,
+    cancel,
   };
 }

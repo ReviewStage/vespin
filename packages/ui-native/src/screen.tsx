@@ -8,6 +8,11 @@ import { useColors } from "./tokens/colors.js";
 /** No ground at all: what a screen or a form stands on where the system's own glass is its ground, as a half-height sheet's is. */
 export const NO_GROUND = "transparent";
 
+/** The ground a screen stands on, by the role that paints it: a list's, or a grouped form's (Settings' pages). */
+export const SCREEN_GROUND = { PLAIN: "GROUND", GROUPED: "GROUPED" } as const;
+
+export type ScreenGround = (typeof SCREEN_GROUND)[keyof typeof SCREEN_GROUND];
+
 /**
  * Every screen's root: one SwiftUI host the size of the screen, which every
  * other piece here stands in. It stands on the brand's ground rather than the
@@ -21,15 +26,19 @@ export const NO_GROUND = "transparent";
 export function Screen({
   clear = false,
   children,
+  ground = SCREEN_GROUND.PLAIN,
 }: {
+  /** Whether it paints no ground at all, standing on what is under it, such as a half-height sheet's glass. */
   readonly clear?: boolean | undefined;
   readonly children: ReactNode;
+  /** The ground it stands on: a list's, or a grouped form's, so a form's page reads, fails, and lies empty on the ground its form stands on, never flashing a list's under it first. */
+  readonly ground?: ScreenGround;
 }) {
   const colors = useColors();
 
   return (
     <Host
-      style={{ flex: 1, backgroundColor: clear ? NO_GROUND : colors.GROUND }}
+      style={{ flex: 1, backgroundColor: clear ? NO_GROUND : colors[ground] }}
       modifiers={[tint(colors.TEXT)]}
     >
       {children}
