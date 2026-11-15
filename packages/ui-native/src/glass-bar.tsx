@@ -1,6 +1,7 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
 import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { frame, type ModifierConfig, onGeometryChange, padding } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
@@ -17,7 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useReduceTransparency } from "./accessibility.js";
 import { KeyboardDockArea } from "./keyboard-dock.js";
 import { useColors } from "./tokens/colors.js";
-import { READING_WIDTH, SPACE } from "./tokens/space.js";
+import { PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 
 /** The room a docked bar takes above the screen's bottom safe area before it is measured, in points: a bare field's, with its gap. */
 const DOCK_ROOM_UNMEASURED = 72;
@@ -179,8 +180,11 @@ export function GlassBar({
   children,
   head,
   modifiers = [],
+  field = false,
 }: {
   readonly children: ReactNode;
+  /** Whether the row is a field with its presses, which stands on a filled pill inside the glass, as Messages stands its field, so its placeholder and glyphs read over a bright picture scrolling under the bar. */
+  readonly field?: boolean;
   /** What stands over the row inside the same glass, such as a composer's queued messages and attached pictures; nothing where none is given. */
   readonly head?: ReactNode;
   /** What the bar's SwiftUI takes over its whole glass, such as a drop of pictures. */
@@ -190,12 +194,24 @@ export function GlassBar({
   const lifted = useContext(DockLifted);
   const measure = useContext(DockMeasure);
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
+  const colors = useColors();
+
+  // Note that a solid bar already stands on that fill, so only the glass takes the pill.
+  const pill =
+    field && !solid
+      ? [
+          SwiftModifiers.background(
+            colors.RAISED,
+            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: PRESS_SIZE / 2 }),
+          ),
+        ]
+      : [];
 
   const row = (
     <HStack
       alignment="bottom"
       spacing={BAR_ROW_SPACING}
-      modifiers={head === undefined ? [...modifiers] : []}
+      modifiers={head === undefined ? [...modifiers, ...pill] : pill}
     >
       {children}
     </HStack>
