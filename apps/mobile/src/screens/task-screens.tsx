@@ -2169,12 +2169,16 @@ export function TaskScreen() {
   const colors = useColors();
   // Note that a page New task opened before its task was made hears what the start came to: its agent opens while the page still stands in front, and a refused start takes the page back, at once or as soon as it stands in front again.
   const [gone, setGone] = useState(false);
+  // Note that an agent landing while the page still slides in, before it first stands in front, waits for that moment rather than being let go, since a start the service answers at once lands then.
+  const [arriving, setArriving] = useState(true);
+  const [waitingAgent, setWaitingAgent] = useState<string | undefined>(undefined);
 
   useStartLanded(id, (landed) => {
     const shown = navigation.isFocused();
 
     if (landed.kind === START_LANDED.AGENT) {
       if (shown) router.push(onTab(iosAgentRoute(landed.agentId)));
+      else if (arriving) setWaitingAgent(landed.agentId);
 
       return;
     }
@@ -2185,8 +2189,14 @@ export function TaskScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setArriving(false);
+
       if (gone) router.back();
-    }, [gone, router]),
+      else if (waitingAgent !== undefined) {
+        setWaitingAgent(undefined);
+        router.push(onTab(iosAgentRoute(waitingAgent)));
+      }
+    }, [gone, waitingAgent, router, onTab]),
   );
   const found = useFoundTask(id, workspace);
   const held = useTaskOverview(found.taskId);
