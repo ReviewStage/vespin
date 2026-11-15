@@ -64,6 +64,22 @@ const chaptersLiveRowSchema = EffectSchema.Struct({
   startedAt: countedNumber,
 });
 
+/** The newest claim as one row or none, its generation's start ordering them. */
+const chaptersParts = {
+  chapters: liveRows({
+    row: chaptersLiveRowSchema,
+    key: "headSha",
+    order: [["startedAt", ORDER.DESC]],
+  }),
+};
+
+/** Whether the reader can generate chapters on a key of their own, and on which model and whose key, absent from a service older than it. */
+const chaptersBeside = {
+  generatable: EffectSchema.Boolean,
+  runsOn: EffectSchema.optionalKey(chaptersRunsOnSchema),
+  runsOnChoices: EffectSchema.optionalKey(EffectSchema.Array(chaptersRunsOnSchema)),
+};
+
 /**
  * One coding agent's pull request's chapters as its Pull request tab
  * follows them: one part, the workspace's newest claim of the pull request
@@ -84,18 +100,37 @@ export const PULL_REQUEST_CHAPTERS_READ = liveRead({
     [LIVE_USER_QUERY]: LIVE_PARAM.USER,
   },
   mode: LIVE_MODE.SNAPSHOT,
-  parts: {
-    chapters: liveRows({
-      row: chaptersLiveRowSchema,
-      key: "headSha",
-      order: [["startedAt", ORDER.DESC]],
-    }),
+  parts: chaptersParts,
+  beside: chaptersBeside,
+  refuses: refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE),
+});
+
+/**
+ * One pull request's chapters by its repository and number, as a Pull
+ * request tab that names no agent follows them: the same one part and the
+ * same beside as an agent's (`PULL_REQUEST_CHAPTERS_READ`), the workspace
+ * under `?workspaceId=`, the repository's full name under `&repository=`,
+ * and the number under `&number=`. The service reads the claim under the
+ * repository's name as GitHub spells it, which it serves itself
+ * (`fullName`) once a token minted for the repository confirms the
+ * workspace reaches it. It refuses a query of no shape as
+ * `invalid-request`, answers `not-found` for a workspace the account is not
+ * a member of, and `repository-not-reachable` for a repository the
+ * workspace no longer reaches.
+ */
+export const REPOSITORY_PULL_REQUEST_CHAPTERS_READ = liveRead({
+  name: LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS,
+  path: HOSTED_SERVICE_PATH.LIVE_REPOSITORY_PULL_REQUEST_CHAPTERS,
+  params: {
+    workspaceId: LIVE_PARAM.TEXT,
+    repository: LIVE_PARAM.TEXT,
+    number: LIVE_PARAM.TEXT,
+    fullName: LIVE_PARAM.SERVED,
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
   },
-  beside: {
-    generatable: EffectSchema.Boolean,
-    runsOn: EffectSchema.optionalKey(chaptersRunsOnSchema),
-    runsOnChoices: EffectSchema.optionalKey(EffectSchema.Array(chaptersRunsOnSchema)),
-  },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: chaptersParts,
+  beside: chaptersBeside,
   refuses: refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE),
 });
 
