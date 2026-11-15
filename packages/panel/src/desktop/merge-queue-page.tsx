@@ -5,15 +5,19 @@
  * own: a section's head (`GROUP_LOOK.SECTION`) that names the repository as
  * the sidebar and the Tasks page do, its owner's picture and its name
  * (`repositoryLabel`), with how many it holds and a way to its queue on
- * GitHub (`OpenOnGitHubButton`), over its line on a track (`TrackList`),
- * front first, each node in its stage's tone (`mergeQueueStage`), a waiting
- * one's hollow. Every spot in a row holds one kind of thing or nothing, so
- * no row says a thing twice: who opened the pull request, by their mark as
- * every surface draws a GitHub account (`ActorMark`), its title, under
- * it its number and how the queue's checks stand on it (how many passed, or
- * which failed), and at its end when GitHub estimates it merges. The stage
- * is drawn by the node alone, and spoken before the number for a reader the
- * node, which is decoration, says nothing to. A
+ * GitHub (`OpenOnGitHubButton`), over its pull requests front first, each
+ * one line as Home's and a person's page's rows stand (`home-row.ts`). A
+ * row leads with where it stands in the queue, drawn with the glyphs the
+ * Pull request tab already draws it with: waiting its turn, the queued
+ * pull request's mark (`PullRequestMark`), as the sidebar's and the
+ * composer's rows draw it; and once GitHub builds its merge group, the glyph
+ * for how the group's checks stand (`CheckGlyph`), a running ring while it
+ * is checked, a check once it merges next, a × once it fails. Its title is
+ * its number and title as every pull request's row says them
+ * (`pullRequestLabelOf`), and at its end stand how its checks stand in words,
+ * who opened it, by their mark as every surface draws a GitHub account
+ * (`ActorMark`), and when GitHub estimates it merges. The stage the glyph
+ * draws is spoken to a reader, whom the glyph, decoration, tells nothing. A
  * row opens its pull request as the window opens a GitHub address
  * (`useOpenLink`): in its agent's Pull request tab where a listed task's
  * agent opened it, else on GitHub. The pull request the page was opened for,
@@ -28,6 +32,12 @@
  * queue.
  */
 
+import {
+  CHECK_STATE,
+  CHECK_SUMMARY,
+  type CheckState,
+  PULL_REQUEST_STATE,
+} from "@repo/features/agent-wire";
 import type {
   MergeQueueAnswer,
   MergeQueueChecks,
@@ -46,31 +56,31 @@ import { TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   AVATAR_SIZE,
+  CheckGlyph,
   DetailPage,
   EmptyState,
   ErrorState,
   GAP,
+  GLYPH_INK,
+  GlyphSlot,
   GROUP_ACTIONS,
   GROUP_LOOK,
   GroupHeader,
   LIST_ROW_CURRENT,
+  List,
   ListMotion,
+  ListRow,
   PAGE_FRAME,
   RepositoryPicture,
-  STATUS_TONE,
   Stack,
-  type StatusTone,
   TIME_LOOK,
   Time,
-  TRACK_NODE_LOOK,
-  TrackList,
-  type TrackNode,
-  TrackRow,
   VisuallyHidden,
 } from "@repo/ui";
 import { type Actor, DELETED_ACCOUNT_ACTOR, githubLoginActor } from "@repo/ui/actor-model";
-import { GLYPH } from "@repo/ui/icons";
+import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { queryOptions, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { Duration } from "effect";
 import { useRef } from "react";
@@ -80,7 +90,9 @@ import { failureShown } from "../failure-report.js";
 import { MERGE_QUEUE_WORDS } from "../history-titles.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
+import { HOME_ROW_CONTEXT, HOME_ROW_META } from "../tasks/home-row.js";
 import { OpenOnGitHubButton } from "../tasks/open-on-github-button.js";
+import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { RowsSkeleton } from "./person-frame.js";
 
@@ -93,13 +105,13 @@ const WORDS = {
 /** How often the queues are read again while the page stands. */
 const READ_EVERY = Duration.seconds(30);
 
-/** The tone each stage's node is drawn in; none for a pull request still waiting its turn, which stands at rest. */
-const STAGE_TONE = {
+/** How the merge group's checks stand at each stage once GitHub builds one, as the Pull request tab draws a check; none while the pull request waits its turn, which its queued mark says. */
+const STAGE_CHECK = {
   [MERGE_QUEUE_STAGE.WAITING]: undefined,
-  [MERGE_QUEUE_STAGE.CHECKING]: STATUS_TONE.WORKING,
-  [MERGE_QUEUE_STAGE.MERGING]: STATUS_TONE.MERGED,
-  [MERGE_QUEUE_STAGE.FAILING]: STATUS_TONE.DANGER,
-} as const satisfies Record<MergeQueueStage, StatusTone | undefined>;
+  [MERGE_QUEUE_STAGE.CHECKING]: CHECK_STATE.PENDING,
+  [MERGE_QUEUE_STAGE.MERGING]: CHECK_STATE.PASSED,
+  [MERGE_QUEUE_STAGE.FAILING]: CHECK_STATE.FAILED,
+} as const satisfies Record<MergeQueueStage, CheckState | undefined>;
 
 /** The workspace's queues, read as the page opens and every half minute while it stands. */
 function mergeQueueQuery(workspaceId: string | undefined) {
@@ -141,16 +153,31 @@ function checksWords(checks: MergeQueueChecks | null | undefined): string | unde
   return `${checks.passed} of ${checks.total} ${checks.total === 1 ? "check" : "checks"} passed`;
 }
 
-/** What a row says under its title: its stage, spoken only, its number, and how its checks stand where it has any. */
-function RowFacts({ entry }: { entry: MergeQueueEntry }): React.JSX.Element {
-  const checks = checksWords(entry.checks);
+/** Where a pull request stands in the queue, as its row leads with it: its queued mark while it waits its turn, else the glyph for how its merge group's checks stand; either in a glyph's slot, so every row's title starts on one edge. */
+function StageGlyph({
+  stage,
+  number,
+}: {
+  stage: MergeQueueStage;
+  number: number;
+}): React.JSX.Element {
+  const check = STAGE_CHECK[stage];
 
   return (
-    <>
-      <VisuallyHidden>{`${MERGE_QUEUE_STAGE_LABEL[mergeQueueStage(entry.state)]}, `}</VisuallyHidden>
-      {`#${entry.pullRequest.number}`}
-      {checks === undefined ? null : ` · ${checks}`}
-    </>
+    <GlyphSlot ink={GLYPH_INK.INHERIT} size={ICON_SIZE.MEDIUM}>
+      {check === undefined ? (
+        <PullRequestMark
+          pullRequest={{
+            number,
+            state: PULL_REQUEST_STATE.OPEN,
+            checks: CHECK_SUMMARY.NONE,
+            queued: true,
+          }}
+        />
+      ) : (
+        <CheckGlyph state={check} />
+      )}
+    </GlyphSlot>
   );
 }
 
@@ -161,15 +188,25 @@ function MergeEstimate({ entry }: { entry: MergeQueueEntry }): React.JSX.Element
   return at === null || at === undefined ? null : <Time at={at} look={TIME_LOOK.UNTIL} />;
 }
 
-/** A pull request's node on the track, in its stage's tone: hollow while it waits. */
-function nodeOf(stage: MergeQueueStage): TrackNode {
-  return {
-    tone: STAGE_TONE[stage],
-    look: stage === MERGE_QUEUE_STAGE.WAITING ? TRACK_NODE_LOOK.HOLLOW : TRACK_NODE_LOOK.FILLED,
-  };
+/** What a row says at its end: its stage, spoken only, how its checks stand where it has any, who opened it, and when GitHub estimates it merges. */
+function RowMeta({ entry }: { entry: MergeQueueEntry }): React.JSX.Element {
+  const checks = checksWords(entry.checks);
+
+  return (
+    <span className={HOME_ROW_META}>
+      <VisuallyHidden>{MERGE_QUEUE_STAGE_LABEL[mergeQueueStage(entry.state)]}</VisuallyHidden>
+      {checks === undefined ? null : (
+        <span className={HOME_ROW_CONTEXT}>
+          <ReplayMask>{checks}</ReplayMask>
+        </span>
+      )}
+      <ActorMark actor={authorActor(entry)} size={ACTOR_SIZE.INLINE} />
+      <MergeEstimate entry={entry} />
+    </span>
+  );
 }
 
-/** One repository's line: its section's head over its pull requests on the track, front first. */
+/** One repository's line: its section's head over its pull requests, front first. */
 function RepositoryQueue({
   queue,
   label,
@@ -208,24 +245,26 @@ function RepositoryQueue({
         actionsShown={GROUP_ACTIONS.AT_REST}
         actions={<OpenOnGitHubButton url={queue.url} />}
       >
-        <TrackList label={queue.repository} moves>
+        <List label={queue.repository} moves>
           {queue.entries.map((entry) => (
-            <TrackRow
+            <ListRow
               key={entry.pullRequest.url}
               motionKey={entry.pullRequest.url}
-              node={nodeOf(mergeQueueStage(entry.state))}
-              leading={<ActorMark actor={authorActor(entry)} size={ACTOR_SIZE.ROW} />}
-              title={entry.pullRequest.title}
+              leading={
+                <StageGlyph
+                  stage={mergeQueueStage(entry.state)}
+                  number={entry.pullRequest.number}
+                />
+              }
+              title={pullRequestLabelOf(entry.pullRequest)}
               titleReplayMasked
-              description={<RowFacts entry={entry} />}
-              descriptionReplayMasked
-              meta={<MergeEstimate entry={entry} />}
+              meta={<RowMeta entry={entry} />}
               current={entry.pullRequest.url === marked ? LIST_ROW_CURRENT.ITEM : undefined}
               linkHref={entry.pullRequest.url}
               onPress={() => onOpen(entry.pullRequest.url)}
             />
           ))}
-        </TrackList>
+        </List>
       </GroupHeader>
     </div>
   );

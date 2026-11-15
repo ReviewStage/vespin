@@ -65,6 +65,7 @@ import {
   CHIP_LOOK,
   CHOICE_BAR_FOLD,
   CHOICE_BAR_LOOK,
+  CheckGlyph,
   Chip,
   ChipCount,
   ChipName,
@@ -130,7 +131,6 @@ import { actorName } from "@repo/ui/actor-model";
 import { renderingText } from "@repo/ui/github-html";
 import {
   CheckIcon,
-  CircleSlashIcon,
   ExternalLinkIcon,
   GLYPH,
   MessagesSquareIcon,
@@ -564,22 +564,6 @@ function landed<A>(part: Part<A>): A | undefined {
   return part.kind === PART.LANDED ? part.value : undefined;
 }
 
-/** The glyph a check wears for where it stands. */
-const CHECK_GLYPHS = {
-  [CHECK_STATE.FAILED]: <XIcon />,
-  [CHECK_STATE.PENDING]: <SpinnerRing />,
-  [CHECK_STATE.PASSED]: <CheckIcon />,
-  [CHECK_STATE.SKIPPED]: <CircleSlashIcon />,
-} as const satisfies Record<CheckState, ReactNode>;
-
-/** The ink a check's glyph wears for where it stands: passed green, failed red, and one still running or skipped quiet, a running one turning the ring every wait turns, since it is work under way rather than something that needs you. */
-const CHECK_INK = {
-  [CHECK_STATE.FAILED]: "text-destructive",
-  [CHECK_STATE.PENDING]: "text-muted-foreground",
-  [CHECK_STATE.PASSED]: "text-complete",
-  [CHECK_STATE.SKIPPED]: "text-muted-foreground",
-} as const satisfies Record<CheckState, string>;
-
 /** The tone and glyph a deployment wears, as a check's: ready as passed, deploying as running, failed as failed, and no longer serving as skipped. */
 const DEPLOYMENT_TONE = {
   [DEPLOYMENT_STATE.READY]: CHECK_STATE.PASSED,
@@ -855,12 +839,7 @@ function CheckLead({
 }): React.JSX.Element {
   return (
     <span className="inline-flex items-center gap-control-gap">
-      <span
-        className={`inline-grid size-check-glyph flex-none place-items-center [&>svg]:size-check-glyph ${CHECK_INK[tone]}`}
-        data-check-state={tone}
-      >
-        {CHECK_GLYPHS[tone]}
-      </span>
+      <CheckGlyph state={tone} />
       {avatarUrl === undefined ? null : (
         <CheckAvatar agentId={agentId} name={name} src={avatarUrl} />
       )}
