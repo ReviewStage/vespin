@@ -28,6 +28,7 @@ import {
   padding,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { longPasteIn } from "@repo/features/long-paste";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
@@ -158,6 +159,8 @@ type ComposerProps = {
   readonly autoFocus?: boolean | undefined;
   /** Called with the file addresses of pictures dropped on the composer from Photos, Files, or another app, on an iPad; it takes no drop where none is given. */
   readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
+  /** Takes words pasted long enough to come as a file (`@repo/features/long-paste`), answering whether it did, so the field takes them back out of its words; they paste as words where none is given. */
+  readonly onLongPaste?: ((words: string) => boolean) | undefined;
 };
 
 /**
@@ -325,6 +328,7 @@ function ComposerPieces(props: ComposerProps) {
     call,
     onStop,
     stopping = false,
+    onLongPaste,
   } = props;
 
   const text = useNativeState(held ?? "");
@@ -338,10 +342,16 @@ function ComposerPieces(props: ComposerProps) {
     text.set(held);
   }, [held, text]);
 
+  // Note that a long paste its holder took as a file is taken back out of the words at once, since the field hears no paste of its own, only its words as they change.
   const type = (next: string) => {
-    shown.current = next;
-    setTyped(next);
-    onWords?.(next);
+    const pasted = onLongPaste === undefined ? undefined : longPasteIn(shown.current, next);
+    const taken = pasted !== undefined && onLongPaste?.(pasted.words) === true;
+    const typedNow = taken ? pasted.kept : next;
+    shown.current = typedNow;
+
+    if (taken) text.set(typedNow);
+    setTyped(typedNow);
+    onWords?.(typedNow);
   };
 
   const empty = words.trim() === "" && !sendable;
@@ -353,6 +363,7 @@ function ComposerPieces(props: ComposerProps) {
           onSend(words.trim());
 
           if (held !== undefined) return;
+          shown.current = "";
           text.set("");
           setTyped("");
         };

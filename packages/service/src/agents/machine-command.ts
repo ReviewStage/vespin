@@ -32,6 +32,7 @@ import {
   machineAskSeconds,
   machineCommandSchema,
 } from "@repo/features/machine-command-wire";
+import { MACHINE_REFUSAL_NEXT } from "@repo/features/machine-refusal-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { UnparsedWireValue } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
@@ -115,34 +116,39 @@ export const MACHINE_COMMAND_STATUS = {
 const MACHINE_COMMAND_REFUSAL = {
   NO_MAC:
     `Not run: ${PRODUCT_NAME} is not running on the developer's Mac, or they switched off ` +
-    "Settings › Let agents run commands on this Mac.",
+    `Settings › Let agents run commands on this Mac. ${MACHINE_REFUSAL_NEXT.LATER}`,
   NO_ANSWER:
-    "No answer: the developer's Mac did not say what the command did in time; it may or may " +
-    "not have run.",
+    "No answer: the developer's Mac did not say what the command did in time. " +
+    MACHINE_REFUSAL_NEXT.SHELL_UNHEARD,
   UNAVAILABLE: "Not run: the command could not be queued. The call may be made again.",
   UNREADABLE:
     "Not run: `command` must be one non-empty shell command, and `timeout_seconds` a whole " +
     `number from 1 to ${MACHINE_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS}.`,
   NO_COMPUTER:
     `Not run: ${PRODUCT_NAME} is not running on the developer's Mac, or that Mac cannot use ` +
-    "apps for agents; updating it there may let it.",
+    `apps for agents; updating it there may let it. ${MACHINE_REFUSAL_NEXT.LATER}`,
+  COMPUTER_NO_ANSWER:
+    "No answer: the developer's Mac did not say what the action did in time. " +
+    MACHINE_REFUSAL_NEXT.ACTION_UNHEARD,
   COMPUTER_UNREADABLE:
     "Not run: the action does not read; name the app, and only the fields its action takes.",
 } as const;
 
-/** Why a call ran nothing by its kind: no Mac that runs that kind listening, or an ask the Mac's read would refuse. */
+/** Why a call ran nothing by its kind: no Mac that runs that kind listening, an ask the Mac's read would refuse, or no word back from the Mac, which a shell command may have run before. */
 const MACHINE_COMMAND_KIND_REFUSAL = {
   [MACHINE_COMMAND_KIND.SHELL]: {
     NO_MAC: MACHINE_COMMAND_REFUSAL.NO_MAC,
     UNREADABLE: MACHINE_COMMAND_REFUSAL.UNREADABLE,
+    NO_ANSWER: MACHINE_COMMAND_REFUSAL.NO_ANSWER,
   },
   [MACHINE_COMMAND_KIND.COMPUTER]: {
     NO_MAC: MACHINE_COMMAND_REFUSAL.NO_COMPUTER,
     UNREADABLE: MACHINE_COMMAND_REFUSAL.COMPUTER_UNREADABLE,
+    NO_ANSWER: MACHINE_COMMAND_REFUSAL.COMPUTER_NO_ANSWER,
   },
 } as const satisfies Record<
   MachineCommandKind,
-  { readonly NO_MAC: string; readonly UNREADABLE: string }
+  { readonly NO_MAC: string; readonly UNREADABLE: string; readonly NO_ANSWER: string }
 >;
 
 /** What a call answers: what a shell command or an action on an app did, or why nothing ran. */
@@ -383,7 +389,7 @@ export function askMacHeard(
     if (Option.isNone(heard)) {
       return {
         answer: {
-          ...machineCommandNotRun(MACHINE_COMMAND_REFUSAL.NO_ANSWER),
+          ...machineCommandNotRun(refusal.NO_ANSWER),
           outcome: MACHINE_REFUSAL.NO_ANSWER,
         },
       };
