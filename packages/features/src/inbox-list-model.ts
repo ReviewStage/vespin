@@ -1442,10 +1442,11 @@ export function inboxMemberName(
   return readerId !== undefined && member.userId === readerId ? MEMBER_WORDS.YOU : member.name;
 }
 
-/** How a file after a message's words is drawn: a picture, a video in a player, or any other file, such as a PDF, as its chip that opens it. */
+/** How a file after a message's words is drawn: a picture, a video in a player, a sound clip in its player, or any other file, such as a PDF, as its chip that opens it. */
 export const INBOX_MEDIA = {
   PICTURE: "picture",
   VIDEO: "video",
+  AUDIO: "audio",
   FILE: "file",
 } as const;
 
@@ -1487,19 +1488,21 @@ export interface InboxAnswerValue {
   readonly words: string;
 }
 
-/** One of the item's own files a message's words draw in place, and how: a picture, or a video it carried, played where the words name it. */
+/** One of the item's own files a message's words draw in place, and how: a picture, or a video or sound clip it carried, played where the words name it. */
 export interface InboxDrawnMedia {
-  readonly kind: typeof INBOX_MEDIA.PICTURE | typeof INBOX_MEDIA.VIDEO;
+  readonly kind: Exclude<InboxMediaKind, typeof INBOX_MEDIA.FILE>;
   readonly attachmentId: string;
 }
 
-/** A file's kind as a thread draws it after its words: a picture, a video, or a file of any other kind, such as a PDF, as its chip. */
+/** A file's kind as a thread draws it after its words: a picture, a video, a sound clip, or a file of any other kind, such as a PDF, as its chip. */
 function mediaKindOf(file: InboxMessageFile): InboxMediaKind {
   const view = attachmentView({ name: file.name, mediaType: file.mediaType, url: "" });
 
   if (view === ATTACHMENT_VIEW.IMAGE) return INBOX_MEDIA.PICTURE;
 
   if (view === ATTACHMENT_VIEW.VIDEO) return INBOX_MEDIA.VIDEO;
+
+  if (view === ATTACHMENT_VIEW.AUDIO) return INBOX_MEDIA.AUDIO;
 
   return INBOX_MEDIA.FILE;
 }
@@ -1508,11 +1511,11 @@ function mediaKindOf(file: InboxMessageFile): InboxMediaKind {
  * Each message of an item's thread, in its order, as a client draws it
  * without the panel's member directory: the agent's under `agentName`, a
  * member's under their name (`inboxMemberName`), and after its words its
- * pictures, videos, and other files, a picture its words draw already left
- * out (`inboxCommentFiles`), each named in `drawn` instead with what it is:
- * a video the message carried, a WebM an agent recorded among them, is
- * played where its words name it, as the panel plays one, and anything else
- * they name is a picture. Note that a WebM stands as the video it is, though
+ * pictures, videos, sound clips, and other files, a picture its words draw
+ * already left out (`inboxCommentFiles`), each named in `drawn` instead with
+ * what it is: a video or a sound clip the message carried, a WebM an agent
+ * recorded among them, is played where its words name it, as the panel plays
+ * one, and anything else they name is a picture. Note that a WebM stands as the video it is, though
  * the panel draws it where its pictures stand, since a player is what plays
  * it; and that a file of another kind, such as a PDF, stands after the words
  * as its chip whether or not they name it, as the panel's chips stand.
@@ -1531,10 +1534,10 @@ export function inboxThreadMessages(
 
       const kind = file === undefined ? INBOX_MEDIA.PICTURE : mediaKindOf(file);
 
-      return { kind: kind === INBOX_MEDIA.VIDEO ? kind : INBOX_MEDIA.PICTURE, attachmentId };
+      return { kind: kind === INBOX_MEDIA.FILE ? INBOX_MEDIA.PICTURE : kind, attachmentId };
     });
 
-    // Note that a picture or video the words draw stands where they draw it alone, an MP4 among them, which the panel's file split keeps after the words.
+    // Note that a picture, video, or sound clip the words draw stands where they draw it alone, an MP4 among them, which the panel's file split keeps after the words.
     const drawnIds = new Set(drawn.map(({ attachmentId }) => attachmentId));
 
     // An open ask's options stand on its card with their files, which the message draws nowhere else.

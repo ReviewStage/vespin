@@ -23,6 +23,8 @@ const CLIP = "3e915c4d-6f70-4182-9d2e-4f5a6b7c8d93";
 const SHOT = "4fa26d5e-7081-4293-8e3f-5a6b7c8d9ea4";
 const MOVIE = "50b37e6f-8192-43a4-9f40-6b7c8d9eafb5";
 const PLAN_PDF = "61c48f70-92a3-44b5-8a51-7c8d9eafb0c6";
+const CHIME = "72d590a1-a3b4-45c6-9b62-8d9eafb0c1d7";
+const ALARM = "83e6a1b2-b4c5-46d7-8c73-9eafb0c1d2e8";
 
 /** One of the item's files' addresses, as an agent's post names it in its words. */
 function address(attachmentId: string): string {
@@ -34,7 +36,7 @@ function address(attachmentId: string): string {
 }
 
 describe("inboxThreadMessages", () => {
-  it("plays a recording its words name where they name it, a WebM or an MP4, and draws after them only what they leave unnamed, a PDF as a file", () => {
+  it("plays a recording or a sound clip its words name where they name it, and draws after them only what they leave unnamed, a clip as a clip and a PDF as a file", () => {
     const item: InboxItem = {
       id: ITEM,
       agentId: "agent-1",
@@ -48,13 +50,15 @@ describe("inboxThreadMessages", () => {
         {
           id: "message-1",
           author: INBOX_MESSAGE_AUTHOR.AGENT,
-          text: `The page:\n\n![The page](${address(STILL)})\n\nThe flow:\n\n![The flow](${address(CLIP)})\n\n![The export](${address(MOVIE)})`,
+          text: `The page:\n\n![The page](${address(STILL)})\n\nThe flow:\n\n![The flow](${address(CLIP)})\n\n![The export](${address(MOVIE)})\n\n![The chime](${address(CHIME)})`,
           files: [
             { attachmentId: STILL, name: "page.png", mediaType: "image/png" },
             { attachmentId: CLIP, name: "flow.webm", mediaType: "video/webm" },
             { attachmentId: SHOT, name: "after.png", mediaType: "image/png" },
             { attachmentId: MOVIE, name: "export.mp4", mediaType: "video/mp4" },
             { attachmentId: PLAN_PDF, name: "plan.pdf", mediaType: "application/pdf" },
+            { attachmentId: CHIME, name: "chime.mp3", mediaType: "audio/mpeg" },
+            { attachmentId: ALARM, name: "alarm.ogg", mediaType: "audio/ogg" },
           ],
           createdAt: 1_000,
         },
@@ -69,10 +73,12 @@ describe("inboxThreadMessages", () => {
       { kind: INBOX_MEDIA.PICTURE, attachmentId: STILL },
       { kind: INBOX_MEDIA.VIDEO, attachmentId: CLIP },
       { kind: INBOX_MEDIA.VIDEO, attachmentId: MOVIE },
+      { kind: INBOX_MEDIA.AUDIO, attachmentId: CHIME },
     ]);
     expect(message?.media.map(({ kind, attachmentId }) => ({ kind, attachmentId }))).toEqual([
       { kind: INBOX_MEDIA.PICTURE, attachmentId: SHOT },
       { kind: INBOX_MEDIA.FILE, attachmentId: PLAN_PDF },
+      { kind: INBOX_MEDIA.AUDIO, attachmentId: ALARM },
     ]);
   });
 
