@@ -1,11 +1,10 @@
 import type { AgentPullRequestAnswerView } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentPullRequestAnswer } from "@repo/features/agent-wire";
 import type { ListedPullRequest } from "@repo/features/task-wire";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { pullRequestPublishedQuery } from "../live-reads.js";
-import { appStateQuery } from "../use-app-state.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 
 /**
  * use-agent-pull-request.ts -- what one agent published, as its tab draws it: the pull request the task list carries for it, and its branch as the host holds it while the tab shows.
@@ -91,16 +90,10 @@ export function useListedPullRequests(
  * The pull request one agent opened, as the service last synced it onto the
  * agent's row and the task list carries it, a hover card's whole source of
  * it, so hanging one asks the service nothing; none where it opened none,
- * and before the list first answers live. The document keeps a row's
- * identity while it does not move, so its reader is drawn again only as it
- * does.
+ * and before the list first answers live. It is read by the agent's id from
+ * the task list's collections, so its reader is drawn again only as that
+ * row moves.
  */
 export function useListedPullRequest(agentId: string): AgentPullRequest | undefined {
-  const select = useCallback(
-    (state: AppStateSnapshot) =>
-      state.tasks.agentPullRequests?.find((each) => each.agentId === agentId)?.pullRequest,
-    [agentId],
-  );
-
-  return useQuery({ ...appStateQuery, select }).data;
+  return useTaskListRow(useTaskListCollections().agentPullRequests, agentId)?.pullRequest;
 }

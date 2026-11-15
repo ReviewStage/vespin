@@ -333,6 +333,39 @@ export function writeListedTasks(listed: Partial<TasksView>): void {
   );
 }
 
+/**
+ * Patches the task list of main's document as `writeListedTasks` does, and
+ * has the window's follow hear it, so the task list's collections stand on
+ * its rows as the window's do. Answers how to hand the next list, patched
+ * over the one held as main's push delivers it, inside the caller's `act`.
+ */
+export function followListedTasks(listed: Partial<TasksView>): (next: Partial<TasksView>) => void {
+  writeListedTasks(listed);
+  const listeners = new Set<(delivery: AppStateDelivery) => void>();
+  fakeAppBridge({
+    ...fakeAppBridgeCalls(),
+    onAppState: (heard) => {
+      listeners.add(heard);
+
+      return () => listeners.delete(heard);
+    },
+  });
+
+  return (next) => {
+    const held =
+      testQueryClientNow().getQueryData<AppStateSnapshot>(appStateQuery.queryKey) ??
+      stateWith({}, {});
+
+    const delivered = deliveryOf({
+      ...held,
+      version: held.version + 1,
+      tasks: { ...held.tasks, ...next },
+    });
+
+    for (const heard of listeners) heard(delivered);
+  };
+}
+
 /** Main's document for the account signed in as given, no experiment on. */
 export function signedInAs(account: {
   readonly id: string;

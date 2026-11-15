@@ -20,6 +20,7 @@ import {
 } from "../tasks/chip-cards.js";
 import { FileCard } from "../tasks/file-ref.js";
 import { InboxItemChipCard } from "../tasks/inbox-item-chip.js";
+import { MacAppMentionCard } from "../tasks/mac-app-card.js";
 import {
   AgentPullRequestChipCard,
   MentionedAgentCard,
@@ -191,7 +192,15 @@ const ENTITY_CARD: EntityCards = {
   [ENTITY_KIND.REPOSITORY]: OWN_CARD,
   [ENTITY_KIND.WORKSPACE]: OWN_CARD,
   [ENTITY_KIND.DATE]: OWN_CARD,
-  [ENTITY_KIND.MAC_APP]: OWN_CARD,
+  // An app hangs the card every chip naming one hangs: the machine it is on, and whether that machine always allows it.
+  [ENTITY_KIND.MAC_APP]: (macApp, at) => (
+    <MacAppMentionCard
+      app={macApp.app}
+      machineId={macApp.machine}
+      name={at.name}
+      wordsWorkspaceId={at.wordsWorkspaceId}
+    />
+  ),
   [ENTITY_KIND.COMPUTER]: OWN_CARD,
   // A machine hangs whose it is and what it is, as the workspace its link names reads it.
   [ENTITY_KIND.MACHINE]: (machine, at) => (

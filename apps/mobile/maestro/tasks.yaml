@@ -1,4 +1,4 @@
-# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link share sheet, Rename alert, and Permanently delete question, an agent's preview and swipe, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with a reply typed, the list in landscape, and its search.
+# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link copying at once, Rename alert, and Permanently delete question, an agent's preview and swipe, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with a reply typed, the list in landscape, and its search.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -125,15 +125,13 @@ onFlowComplete:
 - tapOn: "Cancel"
 - waitForAnimationToEnd
 - assertVisible: "Weekly digest email"
-# Copy link raises the system's share sheet on the task's address. Its Copy
-# action copies the address and puts the sheet away; the sheet's own close
-# button isn't reliably found by its label on iOS 27.2.
+# Copy link copies the task's address at once, as Safari's and Notes' do,
+# with no share sheet, so the list stands back under the closed menu.
 - longPressOn: "Weekly digest email"
 - tapOn: "Copy link"
 - waitForAnimationToEnd
+- assertVisible: "Weekly digest email"
 - takeScreenshot: tasks-copy-link
-- tapOn: "Copy"
-- waitForAnimationToEnd
 - longPressOn: "Weekly digest email"
 # Mark as unread draws the row's dot.
 - tapOn: "Mark as unread"
@@ -144,7 +142,7 @@ onFlowComplete:
 - longPressOn: "Weekly digest email"
 - tapOn: "Mark done"
 - assertVisible: "Mark as Done?"
-- assertVisible: "Stop agents"
+- assertVisible: "Stop agent"
 - takeScreenshot: tasks-mark-done-ask
 - tapOn: "Cancel"
 - waitForAnimationToEnd
