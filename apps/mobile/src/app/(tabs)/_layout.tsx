@@ -17,7 +17,7 @@ import { usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
-import { isStackedRoute, useStackToRoutes } from "../../detail-stack.js";
+import { isStackedRoute, PUSHED_PAGE, useStackToRoutes, useTopPage } from "../../detail-stack.js";
 import { useInboxChoosingOn } from "../../inbox/inbox-choosing.js";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
@@ -133,8 +133,13 @@ export default function TabsLayout() {
   useStackToRoutes({ threeColumns: appSidebar, regular: !iconOnly }, placeOfRoute(standing));
   // Note that a tab under the split view leaves its content clear, because NativeTabs paints each tab in the navigation theme's light ground, which flashed over the split as a page pushed.
   const underSplit = appSidebar ? UNDER_SPLIT_SCREEN.contentStyle : undefined;
-  // Note that the call's own agent's page holds the call's presses in its composer, so the way back stands aside there rather than repeat them.
-  const shownAgent = iosRouteAgent(pathname);
+  // Note that the call's own agent's page holds the call's presses in its composer, so the way back stands aside there rather than repeat them: a page the route pushed, or, in a regular window, one its place's detail column pushed, whose route stays the place's own.
+  const detailTop = useTopPage(placeOfRoute(standing));
+
+  const shownAgent =
+    iosRouteAgent(pathname) ??
+    (detailTop?.kind === PUSHED_PAGE.AGENT ? detailTop.agentId : undefined);
+
   const calling = useStandingCallCard(shownAgent) !== undefined;
 
   // Note that the Inbox's Select mode hides the bar only while the Inbox's own list stands, so a link that opens another place never leaves the bar hidden over it.
