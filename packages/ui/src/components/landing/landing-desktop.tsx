@@ -1,7 +1,7 @@
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
-import type { ReactNode } from "react";
+import { createContext, type ReactNode, useContext } from "react";
 import { ChevronDownIcon, GLYPH, InboxIcon, ListTodoIcon, ZapIcon } from "../../icons/icons.js";
 import {
   ArrowLeftIcon,
@@ -12,6 +12,7 @@ import {
   SidePanelIcon,
 } from "../../icons/lucide-glyphs.js";
 import { HarnessMark } from "../../marks/harness-mark.js";
+import { ProductMark } from "../../marks/product-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
@@ -98,16 +99,56 @@ const MY_TASKS: readonly { readonly repository: string; readonly tasks: readonly
     },
   ];
 
-/** A GitHub account's picture at `size` pixels, as the panel's faces take it. */
-function githubPicture(id: number, size: number): string {
-  return `https://avatars.githubusercontent.com/u/${id}?s=${size}`;
+/** A person in the mockups: their name, and their picture's address on the site that mounts them. */
+export type LandingPerson = {
+  readonly name: string;
+  readonly picture?: string | undefined;
+};
+
+/** The people the mockups are drawn for: the member at the account's foot, who writes the answers, and the teammate they bring in. */
+export type LandingCast = {
+  readonly member: LandingPerson;
+  readonly teammate: LandingPerson;
+};
+
+/** The cast a page names none for: our own, by their letters. */
+const OWN_CAST: LandingCast = {
+  member: { name: "Charles Pan" },
+  teammate: { name: "Dean Stratakos" },
+};
+
+const LandingCastContext = createContext<LandingCast>(OWN_CAST);
+
+/** Hands every mockup under it the people it is drawn for. */
+export const LandingCastProvider = LandingCastContext.Provider;
+
+/** The member the mockups are drawn for (`LandingCastProvider`). */
+export function useLandingMember(): LandingPerson {
+  return useContext(LandingCastContext).member;
 }
 
-/** The member at the account's foot, who writes the answers: our own. */
-export const MEMBER = { name: "Charles Pan", picture: githubPicture(30245070, 96) } as const;
+/** The teammate the member brings in (`LandingCastProvider`). */
+export function useLandingTeammate(): LandingPerson {
+  return useContext(LandingCastContext).teammate;
+}
 
-/** The workspace the app opens on, under its own logo: our own. */
-export const WORKSPACE = { name: PRODUCT_NAME, picture: githubPicture(251784045, 96) } as const;
+/** The workspace's face at `size`: the product's own mark on its copper tile, since the workspace is ours. */
+export function WorkspaceFace({
+  size,
+}: {
+  size: (typeof AVATAR_SIZE)[keyof typeof AVATAR_SIZE];
+}): React.JSX.Element {
+  return (
+    <Avatar
+      name={PRODUCT_NAME}
+      size={size}
+      outline={AVATAR_OUTLINE.TILE}
+      glyph={<ProductMark inherit />}
+      branded
+      decorative
+    />
+  );
+}
 
 /** The repository the tasks work in, as its chip names it. */
 export const REPOSITORY = "ReviewStage/vespin";
@@ -205,21 +246,17 @@ export function DesktopSidebar({
   place: DesktopPlace;
   openTask?: string | undefined;
 }): React.JSX.Element {
+  const member = useLandingMember();
+
   return (
     <aside className="ui-landing-sidebar">
       <TitleBarControls />
       <div className="ui-landing-workspace">
         <NavItem variant={NAV_ITEM_VARIANT.IDENTITY} mark={<ChevronDownIcon />}>
           <span className="ui-landing-workspace-ref">
-            <Avatar
-              name={WORKSPACE.name}
-              src={WORKSPACE.picture}
-              size={AVATAR_SIZE.CARD}
-              outline={AVATAR_OUTLINE.TILE}
-              decorative
-            />
+            <WorkspaceFace size={AVATAR_SIZE.CARD} />
             <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.SECTION}>
-              {WORKSPACE.name}
+              {PRODUCT_NAME}
             </Text>
           </span>
         </NavItem>
@@ -262,10 +299,10 @@ export function DesktopSidebar({
         <NavItem
           variant={NAV_ITEM_VARIANT.IDENTITY}
           icon={
-            <Avatar name={MEMBER.name} src={MEMBER.picture} size={AVATAR_SIZE.ACCOUNT} decorative />
+            <Avatar name={member.name} src={member.picture} size={AVATAR_SIZE.ACCOUNT} decorative />
           }
         >
-          {MEMBER.name}
+          {member.name}
         </NavItem>
         <IconButton icon={<GearIcon />} label="Settings" onClick={still} />
       </div>

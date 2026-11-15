@@ -83,9 +83,11 @@ import {
   agentFace,
   DESKTOP_PLACE,
   DesktopSidebar,
-  MEMBER,
+  type LandingPerson,
   REPOSITORY,
   SidePanelToggle,
+  useLandingMember,
+  useLandingTeammate,
 } from "./landing-desktop.js";
 import { LandingPhone, LandingWindow } from "./landing-devices.js";
 import { MINUTE, STORY_NOW, still, useStory } from "./landing-story.js";
@@ -117,7 +119,7 @@ const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700 } as const;
  */
 const STORY = {
   INBOX: { STEPS: 7, LAST: 5, FROM: 1 },
-  AGENTS: { STEPS: 7, LAST: 5, FROM: 0 },
+  AGENTS: { STEPS: 9, LAST: 6, FROM: 0 },
 } as const;
 
 /** The step a window's `story` draws, from its telling moment on. */
@@ -446,6 +448,7 @@ function DraftAnswer({ picked, note }: { picked: boolean; note: string }): React
  * a fresh draft waiting under it.
  */
 function QuestionThread({ step }: { step: number }): React.JSX.Element {
+  const member = useLandingMember();
   const sent = step >= 5;
 
   return (
@@ -467,14 +470,14 @@ function QuestionThread({ step }: { step: number }): React.JSX.Element {
         </li>
         {sent ? (
           <li className="ui-landing-comment ui-landing-enter">
-            <Comment author={MEMBER} at={STORY_NOW} now={STORY_NOW}>
+            <Comment author={member} at={STORY_NOW} now={STORY_NOW}>
               <AskChoices picked readOnly />
               <Text>{QUESTION.NOTE}</Text>
             </Comment>
           </li>
         ) : null}
         <li className="ui-landing-comment">
-          <Comment author={MEMBER} nameRef="You">
+          <Comment author={member} nameRef="You">
             {sent ? (
               <ReplyComposer placeholder="Reply" sendable={false} />
             ) : (
@@ -674,6 +677,55 @@ function ReceivedMessage({ sender, words }: { sender: string; words: string }): 
   );
 }
 
+/** A person in a log's words: their face beside their name, as a mention draws them. */
+function PersonPill({
+  person,
+  look = INLINE_REF_LOOK.PILL,
+}: {
+  person: LandingPerson;
+  look?: (typeof INLINE_REF_LOOK)[keyof typeof INLINE_REF_LOOK];
+}): React.JSX.Element {
+  return (
+    <InlineRef
+      look={look}
+      glyph={
+        <Avatar name={person.name} src={person.picture} size={AVATAR_SIZE.INLINE} decorative />
+      }
+      label={person.name}
+      hint={false}
+    />
+  );
+}
+
+/** The member's own message in the log, at its trailing side: their words, a teammate named in them. */
+function SentMessage({ children }: { children: ReactNode }): React.JSX.Element {
+  return (
+    <MessageFrame className="ui-landing-sent ui-landing-enter">
+      <div className="ui-landing-bubble">
+        <Text>{children}</Text>
+      </div>
+    </MessageFrame>
+  );
+}
+
+/** A teammate's message in the log: their face and name over their words. */
+function TeammateMessage({
+  person,
+  words,
+}: {
+  person: LandingPerson;
+  words: string;
+}): React.JSX.Element {
+  return (
+    <MessageFrame className="ui-landing-received ui-landing-enter">
+      <MessageHead sender={<PersonPill person={person} look={INLINE_REF_LOOK.WASH} />} />
+      <div className="ui-landing-bubble">
+        <Text>{words}</Text>
+      </div>
+    </MessageFrame>
+  );
+}
+
 const ACCEPT_PAGE = "Accept page";
 const INVITE_EMAILS = "Invite emails";
 
@@ -698,7 +750,7 @@ function subTasks(step: number): readonly SubTask[] {
       status: TASK_STATUS.DONE,
       key: "VES-55",
     },
-    { id: "accept", name: ACCEPT_PAGE, status: at(1, 4), key: "VES-56" },
+    { id: "accept", name: ACCEPT_PAGE, status: at(1, 6), key: "VES-56" },
     { id: "emails", name: "Invite emails through Postmark", status: at(0, 9), key: "VES-57" },
   ];
 }
@@ -725,6 +777,7 @@ function TaskTabs({ step }: { step: number }): React.JSX.Element {
 
 /** The agent's log at `step`: its words, its folded calls, the other agent's messages, and its working line. */
 function AgentLog({ step }: { step: number }): React.JSX.Element {
+  const teammate = useLandingTeammate();
   const calls = step >= 3 ? 3 : step >= 1 ? 2 : 1;
 
   return (
@@ -769,6 +822,12 @@ function AgentLog({ step }: { step: number }): React.JSX.Element {
       {step >= 4 ? (
         <ReceivedMessage sender={ACCEPT_PAGE} words="#216 is ready for review." />
       ) : null}
+      {step >= 5 ? (
+        <SentMessage>
+          <PersonPill person={teammate} /> can you review #216?
+        </SentMessage>
+      ) : null}
+      {step >= 6 ? <TeammateMessage person={teammate} words="Looks good. Merging it now." /> : null}
       <NoteLine look={NOTE_LINE_LOOK.INSET}>
         <span className="ui-landing-working">
           <Shimmer>Working…</Shimmer>
@@ -873,8 +932,9 @@ function LogCard({ step }: { step: number }): React.JSX.Element {
 
 /**
  * A task close up: the agent's log, where it starts another agent and the
- * two trade messages, and the plan's sub-tasks over its corner, stepping to
- * done.
+ * two trade messages, then the member tags a teammate to review and the
+ * teammate answers in the same log, the plan's sub-tasks over its corner
+ * stepping to done.
  */
 function AgentsScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
@@ -885,7 +945,7 @@ function AgentsScene(): React.JSX.Element {
       ref={ref}
       className="ui-landing-scene ui-landing-closeup"
       role="img"
-      aria-label="A task's agent starting another agent, and the two trading messages"
+      aria-label="A task's agent starting another agent, the two trading messages, and a teammate brought in to review"
       {...DESKTOP_SURFACE}
     >
       <div className="ui-landing-closeup-cards" inert>

@@ -77,7 +77,13 @@ import { Toolbar } from "../toolbar/toolbar.js";
 import { TOOLBAR_INSET } from "../toolbar/toolbar-frame.js";
 import { UnreadMark } from "../unread-mark/unread-mark.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
-import { DESKTOP_PLACE, DesktopPlaces, MEMBER, REPOSITORY, WORKSPACE } from "./landing-desktop.js";
+import {
+  DESKTOP_PLACE,
+  DesktopPlaces,
+  REPOSITORY,
+  useLandingMember,
+  WorkspaceFace,
+} from "./landing-desktop.js";
 import { PullRequestCard } from "./landing-scenes.js";
 import { MINUTE, STORY_NOW, still } from "./landing-story.js";
 
@@ -760,6 +766,7 @@ function Sidebar({
   needYou: number;
   go: (view: View) => void;
 }): React.JSX.Element {
+  const member = useLandingMember();
   const openTask = view.place === DESKTOP_PLACE.TASK ? view.task : undefined;
 
   const row = (task: Task) => (
@@ -788,14 +795,8 @@ function Sidebar({
       <div className="ui-hero-workspace">
         <NavItem variant={NAV_ITEM_VARIANT.IDENTITY} mark={<ChevronDownIcon />}>
           <span className="ui-hero-workspace-ref">
-            <Avatar
-              name={WORKSPACE.name}
-              src={WORKSPACE.picture}
-              size={AVATAR_SIZE.ROW}
-              outline={AVATAR_OUTLINE.TILE}
-              decorative
-            />
-            {WORKSPACE.name}
+            <WorkspaceFace size={AVATAR_SIZE.ROW} />
+            {PRODUCT_NAME}
           </span>
         </NavItem>
         <IconButton
@@ -844,14 +845,14 @@ function Sidebar({
             variant={NAV_ITEM_VARIANT.IDENTITY}
             icon={
               <Avatar
-                name={MEMBER.name}
-                src={MEMBER.picture}
+                name={member.name}
+                src={member.picture}
                 size={AVATAR_SIZE.ACCOUNT}
                 decorative
               />
             }
           >
-            {MEMBER.name}
+            {member.name}
           </NavItem>
           <IconButton icon={<CommentsIcon />} label="Send feedback" onClick={still} />
           <IconButton icon={<GearIcon />} label="Settings" onClick={still} />
@@ -965,6 +966,7 @@ function InboxThread({
   onReply: (words: string) => void;
   onSend: () => void;
 }): React.JSX.Element {
+  const member = useLandingMember();
   const question = item.id === QUESTION_ID;
   const asking = question && !answer.sent;
 
@@ -987,7 +989,7 @@ function InboxThread({
         </li>
         {question && answer.sent ? (
           <li className="ui-hero-comment ui-hero-enter">
-            <Comment author={MEMBER} at={STORY_NOW} now={STORY_NOW}>
+            <Comment author={member} at={STORY_NOW} now={STORY_NOW}>
               <QuestionChoices pick={answer.pick} readOnly />
               {answer.note === "" ? null : <Text>{answer.note}</Text>}
             </Comment>
@@ -995,13 +997,13 @@ function InboxThread({
         ) : null}
         {replies.map((said) => (
           <li key={said.id} className="ui-hero-comment ui-hero-enter">
-            <Comment author={MEMBER} at={STORY_NOW} now={STORY_NOW}>
+            <Comment author={member} at={STORY_NOW} now={STORY_NOW}>
               <Text>{said.words}</Text>
             </Comment>
           </li>
         ))}
         <li className="ui-hero-comment">
-          <Comment author={MEMBER} nameRef="You">
+          <Comment author={member} nameRef="You">
             {asking ? (
               <AgentComposer
                 label="Add a note"

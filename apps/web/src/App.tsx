@@ -28,6 +28,12 @@ const CODEX_ART = {
   threeX: `${PANEL_ASSET_BASE}marks/codex-48.png`,
 };
 
+/** The people the landing's mockups are drawn for: our own, their pictures served by the site. */
+const LANDING_CAST = {
+  member: { name: "Charles Pan", picture: "/landing/charles-pan.jpg" },
+  teammate: { name: "Dean Stratakos", picture: "/landing/dean-stratakos.jpg" },
+};
+
 /** Our page among Y Combinator's companies, which the hero's backing chip opens. */
 const Y_COMBINATOR_PAGE = "https://www.ycombinator.com/companies/vespin";
 
@@ -68,6 +74,7 @@ export function App(): React.JSX.Element {
         ),
       }}
       footer={<SiteFooterLinks current={{ page: SITE_PAGE.HOME }} />}
+      cast={LANDING_CAST}
     >
       <LandingSection
         title="Monitor all your agents with one inbox."
@@ -76,8 +83,8 @@ export function App(): React.JSX.Element {
         scene={LANDING_SCENE.INBOX}
       />
       <LandingSection
-        title="Agents work together."
-        lead="They hand off work, message each other, and split tasks into sub-tasks."
+        title="Your team and agents, in one place."
+        lead="Agents hand off work and message each other, and anyone on your team can jump in with an @mention."
         more={{ label: "Learn more", href: DOCS_URL }}
         scene={LANDING_SCENE.AGENTS}
       />

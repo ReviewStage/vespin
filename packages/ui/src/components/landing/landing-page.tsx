@@ -1,10 +1,13 @@
 import { type ReactNode, useId } from "react";
 import type { CodexArt } from "../../marks/harness-mark.js";
 import { TEXT_LINK_HEIGHT, TextLink } from "../text-link/text-link.js";
+import { type LandingCast, LandingCastProvider } from "./landing-desktop.js";
 import { LANDING_FIELD, LandingField, type LandingFieldPattern } from "./landing-field.js";
 import { LandingHeroApp } from "./landing-hero.js";
 import { LANDING_SCENE, type LandingScene, LandingSceneView } from "./landing-scenes.js";
 import { SiteFrame, SiteRule } from "./site-frame.js";
+
+export type { LandingCast, LandingPerson } from "./landing-desktop.js";
 
 export { SiteBarPages } from "./site-frame.js";
 
@@ -136,6 +139,19 @@ export function LandingBackedBy({ href }: { href: string }): React.JSX.Element {
   );
 }
 
+/** Hands the mockups under it `cast`, or leaves them our own where none is named. */
+function LandingCastScope({
+  cast,
+  children,
+}: {
+  cast: LandingCast | undefined;
+  children: ReactNode;
+}): React.JSX.Element {
+  if (cast === undefined) return <>{children}</>;
+
+  return <LandingCastProvider value={cast}>{children}</LandingCastProvider>;
+}
+
 /** The landing: `bar` over the hero's `badge`, `title`, and its `lead` beside its `actions`, over the live app, the sections, the `close`, and the `footer` over the wordmark. */
 export function LandingPage({
   bar,
@@ -147,6 +163,7 @@ export function LandingPage({
   children,
   close,
   footer,
+  cast,
 }: {
   /** The site's wordmark and links, laid across the bar. */
   bar: ReactNode;
@@ -166,37 +183,41 @@ export function LandingPage({
   close: { readonly title: ReactNode; readonly lead?: ReactNode; readonly actions: ReactNode };
   /** The site's closing links and notices. */
   footer: ReactNode;
+  /** The people the mockups are drawn for, their pictures served by the site; none draws our own by their letters. */
+  cast?: LandingCast | undefined;
 }): React.JSX.Element {
   const closeId = `${useId()}close`;
 
   return (
     <SiteFrame bar={bar} barCall={barCall} footer={footer}>
-      <main>
-        <div className="ui-landing-hero">
-          <div className="ui-landing-hero-words">
-            {badge === undefined ? null : <div className="ui-landing-hero-badge">{badge}</div>}
-            <h1 className="ui-landing-title">{title}</h1>
-            <div className="ui-landing-hero-row">
-              {lead === undefined ? null : <p className="ui-landing-hero-lead">{lead}</p>}
-              <div className="ui-landing-actions">{actions}</div>
+      <LandingCastScope cast={cast}>
+        <main>
+          <div className="ui-landing-hero">
+            <div className="ui-landing-hero-words">
+              {badge === undefined ? null : <div className="ui-landing-hero-badge">{badge}</div>}
+              <h1 className="ui-landing-title">{title}</h1>
+              <div className="ui-landing-hero-row">
+                {lead === undefined ? null : <p className="ui-landing-hero-lead">{lead}</p>}
+                <div className="ui-landing-actions">{actions}</div>
+              </div>
+            </div>
+            <div className="ui-landing-hero-stage">
+              <div className="ui-landing-hero-app">
+                <LandingHeroApp />
+              </div>
             </div>
           </div>
-          <div className="ui-landing-hero-stage">
-            <div className="ui-landing-hero-app">
-              <LandingHeroApp />
-            </div>
-          </div>
-        </div>
-        {children}
-        <SiteRule />
-        <section className="ui-landing-close" aria-labelledby={closeId}>
-          <h2 className="ui-landing-close-title" id={closeId}>
-            {close.title}
-          </h2>
-          {close.lead === undefined ? null : <p className="ui-landing-lead">{close.lead}</p>}
-          <div className="ui-landing-actions">{close.actions}</div>
-        </section>
-      </main>
+          {children}
+          <SiteRule />
+          <section className="ui-landing-close" aria-labelledby={closeId}>
+            <h2 className="ui-landing-close-title" id={closeId}>
+              {close.title}
+            </h2>
+            {close.lead === undefined ? null : <p className="ui-landing-lead">{close.lead}</p>}
+            <div className="ui-landing-actions">{close.actions}</div>
+          </section>
+        </main>
+      </LandingCastScope>
     </SiteFrame>
   );
 }

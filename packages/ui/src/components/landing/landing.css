@@ -945,14 +945,14 @@
      standing past its edge. */
   .ui-landing-stage[data-scene="agents"] .ui-landing-card {
     grid-column: 1 / span 10;
-    height: 460px;
+    height: 580px;
   }
 
   .ui-landing-satellite {
     z-index: 1;
     grid-row: 1;
     grid-column: 6 / -1;
-    margin-top: 380px;
+    margin-top: 500px;
     box-shadow:
       0 0 0 1px var(--ui-color-border),
       0 24px 64px -16px var(--ui-color-shadow-deep);
@@ -1571,6 +1571,12 @@
     align-items: flex-start;
     max-width: 85%;
     margin-right: auto;
+  }
+
+  .ui-landing-sent {
+    align-items: flex-end;
+    max-width: 85%;
+    margin-left: auto;
   }
 
   .ui-landing-bubble {
