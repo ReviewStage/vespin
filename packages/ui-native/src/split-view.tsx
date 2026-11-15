@@ -35,7 +35,7 @@ import {
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { type ReactElement, type ReactNode, useEffect } from "react";
+import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { BarContent } from "./bar-content.js";
 import type { Scope } from "./button.js";
@@ -187,6 +187,9 @@ type SplitViewProps = {
 
 /** One page pushed over a split view's detail, by the key its stack's path names it by, drawn by its `DetailPage`. */
 export type DetailStackPage = { readonly key: string; readonly view: ReactNode };
+
+/** How long a detail's stack stands after its last page is popped, a little past UIKit's own pop, before the plain column takes its place. */
+const POP_SETTLE_MS = 500;
 
 /**
  * The pages pushed over a split view's detail, oldest first: the path of
@@ -504,11 +507,30 @@ function DetailStackColumn({
   readonly rootBar: ColumnBar | undefined;
 }) {
   const { pages, onPathChange } = stack;
+  const empty = pages.length === 0;
+  // The pages last pushed, kept mounted while the stack finishes popping them.
+  const [held, hold] = useState(pages);
+  // Whether the last pop has had time to finish, so the plain column may take the stack's place.
+  const [settled, settle] = useState(empty);
+
+  if (!empty && held !== pages) hold(pages);
+
+  if (!empty && settled) settle(false);
+
+  useEffect(() => {
+    if (!empty) return;
+    const timer = setTimeout(() => settle(true), POP_SETTLE_MS);
+
+    return () => clearTimeout(timer);
+  }, [empty]);
+
+  // Note that a detail with nothing pushed over it stands as a plain column, since a thread's React Native hosts drew no words as a stack's root; the stack stands on through a pop, its pages still mounted, because SwiftUI writes the emptied path as the pop starts, and taking the stack out then left the column on the popped page's bar with no root.
+  if (empty && settled) return <Column view={root} bar={rootBar} />;
 
   return (
     <NavigationStack path={pages.map((page) => page.key)} onPathChange={onPathChange}>
       <Column view={root} bar={rootBar} stacked />
-      {pages.map((page) => (
+      {(empty ? held : pages).map((page) => (
         <NavigationDestination key={page.key} value={page.key}>
           {page.view}
         </NavigationDestination>

@@ -403,6 +403,7 @@ export function Composer(props: ComposerProps) {
 
   return (
     <GlassBar
+      field
       head={props.head}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
     >

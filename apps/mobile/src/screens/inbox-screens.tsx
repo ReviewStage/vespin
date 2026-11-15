@@ -32,16 +32,11 @@ import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
+import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { CHOOSE_AN_ITEM_WORDS, SELECTION_WORDS, selectedWords } from "@repo/features/words";
-import {
-  INBOX_FEED,
-  type InboxFeed,
-  selectAgentHarnesses,
-  selectAgentNames,
-  selectWorkspaces,
-} from "@repo/host/app-state-reads";
+import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
   type BarAction,
@@ -86,6 +81,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
 import { PUSHED_PAGE, useDetailPush, useStackRoot } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
   useInboxActs,
@@ -148,9 +144,6 @@ const SELECT_DONE = "Done";
 
 /** What a video the words draw in place is heard as, its file's name being the words' own alt. */
 const VIDEO_LABEL = "Video";
-
-/** No agent's name held. */
-const NO_NAMES: ReadonlyMap<string, string> = new Map();
 
 /** What an agent is called where the task list does not hold it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
@@ -272,8 +265,7 @@ function InboxRow({
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
-  const agentName = useAgentNames().get(item.agentId) ?? UNLISTED_AGENT;
-  const harness = useAgentHarness(item.agentId);
+  const { name: agentName, harness } = useAgentLabel(item.agentId);
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspaceStep = linkWorkspaceStep(holder.task.workspaceId, workspaces);
@@ -496,18 +488,16 @@ function toolbarMenuActions(menu: BarMenu) {
   ));
 }
 
-/** Every agent's name the document holds, by the agent's id, as the panel names it. */
-function useAgentNames(): ReadonlyMap<string, string> {
-  const { data = NO_NAMES } = useQuery({ ...appStateQuery, select: selectAgentNames });
+/** The name an agent is called by, as the panel names it, and the harness its model runs in, whose mark its tile wears, as the task list's collections hold it; the unlisted name and no harness before the agent is listed. */
+function useAgentLabel(agentId: string): {
+  readonly name: string;
+  readonly harness: ModelProvider | undefined;
+} {
+  const agent = useTaskListRow(useTaskListCollections().agents, agentId);
 
-  return data;
-}
-
-/** The harness an agent runs in, as the document holds its model, whose mark its tile wears; none before the agent is listed. */
-function useAgentHarness(agentId: string): ModelProvider | undefined {
-  const { data } = useQuery({ ...appStateQuery, select: selectAgentHarnesses });
-
-  return data?.get(agentId);
+  return agent === undefined
+    ? { name: UNLISTED_AGENT, harness: undefined }
+    : { name: agentNameOf(agent), harness: providerOf(agent.model) };
 }
 
 /**
@@ -550,8 +540,7 @@ function ThreadDetail({
   const colors = useColors();
   const { holder, item } = listed;
   const openLink = useOpenLink();
-  const agentName = useAgentNames().get(item.agentId) ?? UNLISTED_AGENT;
-  const harness = useAgentHarness(item.agentId);
+  const { name: agentName, harness } = useAgentLabel(item.agentId);
   const pictureOf = useMemberPictures();
 
   const messages = useMemo(
@@ -693,6 +682,7 @@ function ThreadDetail({
     ...message,
     writer: {
       ...message.writer,
+      id: message.writer.agent ? undefined : message.writer.userId,
       picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
       harness: message.writer.agent ? harness : undefined,
     },

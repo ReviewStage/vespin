@@ -41,6 +41,7 @@ import {
 } from "@repo/features/task-tree-model";
 import {
   isTaskSettled,
+  type ListedPullRequest,
   type Task,
   type TaskPriority,
   type TaskStatus,
@@ -67,30 +68,25 @@ import {
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import {
-  answerKeeper,
-  selectInboxGroupsIn,
-  selectInboxReader,
-  selectTasks,
-  selectWorkspaces,
-} from "@repo/host/app-state-reads";
+import { answerKeeper, selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
 import { BUZZ } from "@repo/ui-native";
 import { caseWhen, coalesce, gt, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
+import {
+  useHostActs,
+  useListedAgents,
+  useListedTasks,
+  useTaskListCollections,
+  useTaskListRows,
+} from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { type TaskRelationWrites, useTaskRelationWrites } from "./use-relations.js";
 import { useWorkspaceRepositories } from "./use-start.js";
-
-/** No task list read yet. */
-const NO_TASKS: AppStateSnapshot["tasks"]["tasks"] = [];
-
-/** No holder of Inbox items read yet. */
-const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
 function refused(what: string): (cause: unknown) => void {
@@ -109,10 +105,7 @@ export function useWaiting(workspaceId: string | undefined): {
   readonly byTask: ReadonlyMap<string, number>;
   readonly byAgent: ReadonlyMap<string, number>;
 } {
-  const { data: groups = NO_GROUPS } = useQuery({
-    ...appStateQuery,
-    select: selectInboxGroupsIn(workspaceId),
-  });
+  const groups = useInboxGroupsIn(workspaceId);
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 
@@ -473,15 +466,19 @@ function useServiceTaskSearch(search: string, listRead: boolean): void {
 /** The listing as it is read, before the screen that draws it holds the questions its acts ask first. */
 export type ReadListing = Omit<TasksListing, "askDelete">;
 
-/** The task list's parts the listing reads off the document rather than its collections: how its read stands, its sections, its pinned repositories, the tasks' pull requests, and whether it carries its agents. */
+/** The task list's parts the listing reads off the document rather than its collections: how its read stands, its sections, its pinned repositories, and whether it carries its agents, which an empty collection cannot tell from none read. */
 function selectListingParts(state: AppStateSnapshot) {
   return {
     listStatus: state.tasks.listStatus,
     taskSections: state.tasks.taskSections,
     repositoryPins: state.tasks.repositoryPins,
-    taskPullRequests: state.tasks.taskPullRequests,
-    agentsListed: state.tasks.taskAgents !== undefined,
+    agentsListed: selectAgentsListed(state),
   };
+}
+
+/** Whether the task list carries its agents yet, so a task's working agents are counted from them rather than its row's count. */
+function selectAgentsListed(state: AppStateSnapshot): boolean {
+  return state.tasks.taskAgents !== undefined;
 }
 
 /** The task list's rows as the listing reads them off its collections. */
@@ -530,6 +527,7 @@ export function useTasksListing(search: string): ReadListing {
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const waiting = useWaiting(workspace?.id);
   const { tasks: listed, agents: listedAgents } = useListedRows();
+  const taskPullRequests = useTaskListRows(useTaskListCollections().taskPullRequests);
   const { held, setStatus } = useStatusWrites(listed);
   const { rename } = useTaskWrites();
   const placing = useTaskPlacing(workspace?.id);
@@ -559,7 +557,7 @@ export function useTasksListing(search: string): ReadListing {
     });
 
     const lookOf = (task: TaskSummary) =>
-      taskRowLook(task, waiting.byTask.get(task.id) ?? 0, view?.taskPullRequests);
+      taskRowLook(task, waiting.byTask.get(task.id) ?? 0, taskPullRequests);
 
     // Note that the host draws a mark and a pin on the row the moment they are asked, and puts either back where the service refused it.
     const markRead = (taskId: string, unread: boolean) => {
@@ -627,6 +625,7 @@ export function useTasksListing(search: string): ReadListing {
     write,
     listed,
     listedAgents,
+    taskPullRequests,
     held,
     view,
     workspace,
@@ -643,21 +642,19 @@ export function useTasksListing(search: string): ReadListing {
 export interface TaskAgentLine {
   readonly agent: ListedAgent;
   readonly waiting: number;
-  readonly pullRequest:
-    | NonNullable<AppStateSnapshot["tasks"]["agentPullRequests"]>[number]["pullRequest"]
-    | undefined;
+  readonly pullRequest: ListedPullRequest["pullRequest"] | undefined;
 }
 
-/** An agent's line: how many of its threads wait on the reader, and the pull request the document holds for it. */
+/** An agent's line: how many of its threads wait on the reader, and the pull request the task list holds for it among `pullRequests`. */
 export function agentLine(
   agent: ListedAgent,
   waitingByAgent: ReadonlyMap<string, number>,
-  view: AppStateSnapshot["tasks"] | undefined,
+  pullRequests: readonly ListedPullRequest[],
 ): TaskAgentLine {
   return {
     agent,
     waiting: waitingByAgent.get(agent.id) ?? 0,
-    pullRequest: view?.agentPullRequests?.find((each) => each.agentId === agent.id)?.pullRequest,
+    pullRequest: pullRequests.find((each) => each.agentId === agent.id)?.pullRequest,
   };
 }
 
@@ -724,11 +721,15 @@ function idNamed(named: string | undefined): string | undefined {
 export function useTaskOverview(named: string | undefined): TaskOverview | undefined {
   const acts = useHostActs();
   const workspace = useTasksWorkspace();
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const collections = useTaskListCollections();
+  const tasks = useListedTasks();
+  const listedAgents = useListedAgents();
+  const pullRequests = useTaskListRows(collections.agentPullRequests);
+  const { data: agentsListed = false } = useQuery({ ...appStateQuery, select: selectAgentsListed });
   const waiting = useWaiting(workspace?.id);
-  const { held: statuses, setStatus } = useStatusWrites(view?.tasks ?? NO_TASKS);
+  const { held: statuses, setStatus } = useStatusWrites(tasks);
   const { rename, setPriority, setAssignee } = useTaskWrites();
-  const listed = useMemo(() => withHeld(view?.tasks ?? NO_TASKS, statuses), [view, statuses]);
+  const listed = useMemo(() => withHeld(tasks, statuses), [tasks, statuses]);
 
   const listedTask =
     named === undefined ? undefined : listed.find((each) => namesTask(each, named));
@@ -774,8 +775,8 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   return useMemo(() => {
     if (task === undefined) return undefined;
 
-    const agents = taskAgentsInOrder(agentsByTask(view?.taskAgents), task.id, waiting.byAgent).map(
-      (agent) => agentLine(agent, waiting.byAgent, view),
+    const agents = taskAgentsInOrder(agentsByTask(listedAgents), task.id, waiting.byAgent).map(
+      (agent) => agentLine(agent, waiting.byAgent, pullRequests),
     );
 
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
@@ -799,7 +800,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       waitingElsewhere: Math.max(0, (waiting.byTask.get(task.id) ?? 0) - listedWaiting),
       tasks: listed,
       setStatus,
-      workingAgents: workingAgentsIn(view?.taskAgents, listed),
+      workingAgents: workingAgentsIn(agentsListed ? listedAgents : undefined, listed),
       rename,
       setPriority,
       setAssignee,
@@ -808,7 +809,9 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
     };
   }, [
     task,
-    view,
+    listedAgents,
+    pullRequests,
+    agentsListed,
     waiting,
     held,
     taskWorkspace,

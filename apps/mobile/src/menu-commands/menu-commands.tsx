@@ -29,9 +29,10 @@ import {
 } from "@repo/features/tasks-model";
 import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
-import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
 import { BUZZ, ConfirmAsk } from "@repo/ui-native";
+import { and, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import { useGlobalSearchParams, usePathname, useRootNavigationState, useRouter } from "expo-router";
@@ -46,7 +47,12 @@ import {
   useTopPage,
 } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import {
+  useHostActs,
+  useListedTasks,
+  useTaskListCollections,
+  useTaskListRow,
+} from "../host/host-provider.js";
 import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
 import { placeOfRoute, type SidebarPlace } from "../screens/app-sidebar.js";
@@ -166,22 +172,20 @@ function useSubject(signedIn: boolean): Subject {
   );
 
   const thread = useInboxThread(focus.kind === MENU_SUBJECT.THREAD ? focus.id : undefined).listed;
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const collections = useTaskListCollections();
+  const tasks = useListedTasks();
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
 
-  const agent =
-    focus.kind === MENU_SUBJECT.AGENT
-      ? view?.taskAgents?.find(({ id }) => id === focus.id)
-      : undefined;
+  const agent = useTaskListRow(
+    collections.agents,
+    focus.kind === MENU_SUBJECT.AGENT ? focus.id : undefined,
+  );
 
   const taskNamed =
-    focus.kind === MENU_SUBJECT.TASK
-      ? (view?.tasks ?? []).find((each) => namesTask(each, focus.id))
-      : undefined;
+    focus.kind === MENU_SUBJECT.TASK ? tasks.find((each) => namesTask(each, focus.id)) : undefined;
 
   const task =
-    taskNamed ??
-    (agent === undefined ? undefined : view?.tasks?.find(({ id }) => id === agent.taskId));
+    taskNamed ?? (agent === undefined ? undefined : tasks.find(({ id }) => id === agent.taskId));
 
   const workspaceId = thread?.holder.task.workspaceId ?? task?.workspaceId;
   const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
@@ -256,20 +260,18 @@ function useSubject(signedIn: boolean): Subject {
 
 /** How many agents of the task are starting or running, so marking it done stops them and asks first. */
 function useWorkingAgents(taskId: string | undefined): number {
-  const { data: working = 0 } = useQuery({
-    ...appStateQuery,
-    select: (state) =>
-      taskId === undefined
-        ? 0
-        : (selectTasks(state).taskAgents ?? []).filter(
-            (agent) =>
-              agent.taskId === taskId &&
-              agent.archivedAt === undefined &&
-              agentStillWriting(agent.status),
-          ).length,
-  });
+  const { agents } = useTaskListCollections();
 
-  return working;
+  // Note that the query's identity is the values it captures, as TanStack DB 1.0 derives it, so it is made again only for another task.
+  const { data: onTask } = useLiveQuery((q) =>
+    taskId === undefined
+      ? undefined
+      : q
+          .from({ agent: agents })
+          .where(({ agent }) => and(eq(agent.taskId, taskId), isUndefined(agent.archivedAt))),
+  );
+
+  return (onTask ?? []).filter((agent) => agentStillWriting(agent.status)).length;
 }
 
 /** The question a command asks before it acts. */
