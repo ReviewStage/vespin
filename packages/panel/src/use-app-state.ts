@@ -114,31 +114,21 @@ export const appStateQuery = queryOptions({
   retry: false,
 });
 
-/** The bridge's reads of `app:state`, and its pushes of the task list's rows beside them. */
-interface BridgeHeard extends AppStateBridgeReads {
-  readonly onTaskList: (listener: (delivery: TaskListDelivery) => void) => () => void;
-}
-
-/** Hears nothing, for a bridge that pushes no task list, as a test's fake answering the document alone. */
-const hearsNothing = (): (() => void) => () => undefined;
-
 /**
- * The bridge's reads of `app:state` and `app:task-list`; none where the
- * bridge cannot be heard, as a test's fake answering other calls alone
- * cannot (`testing/app-bridge.ts` leaves a call it does not answer
- * undefined), which leaves the client on the document seeded into it.
+ * The bridge's reads of `app:state`; none where the bridge cannot be heard,
+ * as a test's fake answering other calls alone cannot (`testing/app-bridge.ts`
+ * leaves a call it does not answer undefined), which leaves the client on
+ * the document seeded into it.
  */
-function heard(): BridgeHeard | undefined {
+function heard(): AppStateBridgeReads | undefined {
   try {
     const bridge = appBridge();
 
     if (!Predicate.isFunction(bridge.onAppState)) return undefined;
-    const onTaskList = Predicate.isFunction(bridge.onTaskList) ? bridge.onTaskList : hearsNothing;
 
     return {
       requestAppState: () => bridge.requestAppState(),
       onAppState: (listener) => bridge.onAppState(listener),
-      onTaskList: (listener) => onTaskList(listener),
     };
   } catch {
     return undefined;
@@ -170,14 +160,15 @@ export interface AppStateFollowing {
  * passed over. The client is handed to the fixture while it is written
  * into, whose staged acts read the run from it (`act.ts`).
  *
- * The task list's collections are fed beside the client: each push of the
- * rows a drawing moved (`app:task-list`), which the bridge sends just before
- * the document they moved in, and a whole read or a fixture run's staging
- * as the list it lists from (`selectListedTasks`) under its version; a
- * staging that throws leaves their rows standing and says so on them. A
- * fixture run's list is its own synthetic one, so the host's pushes of
- * the account's rows are passed over there, and those heard before the
- * first read lands wait to learn whether it is one.
+ * The task list's collections are fed beside the client: the task list's
+ * rows each delivery carries beside the document (its `taskList`), handed on
+ * as the delivery is heard and before the document it came with is written,
+ * and a whole read or a fixture run's staging as the list it lists from
+ * (`selectListedTasks`) under its version; a staging that throws leaves
+ * their rows standing and says so on them. A fixture run's list is its own
+ * synthetic one, so the account's rows the host delivers are passed over
+ * there, and those heard before the first read lands wait to learn whether
+ * it is one.
  */
 export function followAppState(client: QueryClient): AppStateFollowing {
   let following = true;
@@ -246,18 +237,25 @@ export function followAppState(client: QueryClient): AppStateFollowing {
   const takeBack = handFixtureClient(client);
   const hearing = heard();
 
-  // Note that the task list's pushes are heard before the document is read, as the document's are, so none sent meanwhile is lost.
-  const stopRows = hearing?.onTaskList((delivery) => {
-    if (fixtureRun === undefined) rowsHeard.push(delivery);
-    else if (!fixtureRun) taskList.deliver(delivery);
-  });
+  // Hands on the task list's rows a delivery carries, those heard before the first document waiting on it.
+  const rowsOf = ({ taskList: rows }: AppStateDelivery): void => {
+    if (rows === undefined) return;
+
+    if (fixtureRun === undefined) rowsHeard.push(rows);
+    else if (!fixtureRun) taskList.deliver(rows);
+  };
 
   const followed =
     hearing === undefined
       ? undefined
-      : followAppStateOver(hearing, write, (message, cause) => {
-          console.error(message, cause);
-        });
+      : followAppStateOver(
+          hearing,
+          write,
+          (message, cause) => {
+            console.error(message, cause);
+          },
+          rowsOf,
+        );
 
   const stopMoves = onFixtureMoved(() => {
     const held = followed?.held();
@@ -270,7 +268,6 @@ export function followAppState(client: QueryClient): AppStateFollowing {
     taskList: taskList.collections,
     stop: () => {
       following = false;
-      stopRows?.();
       followed?.stop();
       stopMoves();
       takeBack();

@@ -1211,6 +1211,12 @@ export interface AppStateDelivery {
   readonly gone?: readonly AppStateEntry[];
   /** Each keyed slice's keys that moved since the window's last delivery, in place of its entry, where the window held the slice and still does (`HOST_READ_SLICE`). */
   readonly moved?: { readonly [Slice in HostReadSlice]?: readonly KeyMoved[] };
+  /**
+   * The task list's rows that moved since the window's last delivery, beside
+   * the document rather than in it, for the window's task-list collections
+   * (`taskListDelivery`); none where no part of the list moved.
+   */
+  readonly taskList?: TaskListDelivery;
 }
 
 /** A value the document holds: a record or list, a primitive, or nothing. */
@@ -1572,8 +1578,11 @@ export function appStateDelivery(
 
   const keys = patched.filter(([, keysOf]) => keysOf.length > 0);
   const gone = moved.filter((name) => next[name] === undefined);
+  const taskList = taskListDelivery(sent, next);
 
-  if (sent !== undefined && moved.length === 0 && keys.length === 0) return undefined;
+  if (sent !== undefined && moved.length === 0 && keys.length === 0 && taskList === undefined) {
+    return undefined;
+  }
 
   return {
     version: next.version,
@@ -1582,6 +1591,7 @@ export function appStateDelivery(
     ),
     ...(gone.length === 0 ? undefined : { gone }),
     ...(keys.length === 0 ? undefined : { moved: Object.fromEntries(keys) }),
+    ...(taskList === undefined ? undefined : { taskList }),
   };
 }
 
@@ -1602,12 +1612,13 @@ export type TaskListParts = Pick<TasksView, TaskListPart>;
 export type TaskListPartMoved = KeyMoved;
 
 /**
- * One push of the task list's rows to a window, on a channel of its own
- * beside the document (`PUSH.TASK_LIST`): what one drawing moved in each
- * part since the last this window was handed, under the document's version
- * it moved to. A window's first is its lists whole, so a window's feed
- * stands on its channel alone; each after it names the parts that moved,
- * as the rows that moved in them where they can be told so.
+ * The task list's rows as one delivery of the document hands them to a
+ * window, beside the document rather than in it (`AppStateDelivery`'s
+ * `taskList`): what one drawing moved in each part since the last this
+ * window was handed, under the document's version it moved to. A window's
+ * first is its lists whole, so a window's collections stand on these alone;
+ * each after it names the parts that moved, as the rows that moved in them
+ * where they can be told so.
  */
 export interface TaskListDelivery {
   readonly version: number;
@@ -1630,7 +1641,7 @@ function taskListPartsOf(view: TasksView): TaskListParts {
 }
 
 /**
- * The task-list push that brings a window handed `sent` to `next`: its
+ * The task list's rows that bring a window handed `sent` to `next`: its
  * lists whole where it was handed none, the parts that moved otherwise, or
  * none where no part moved. Worked out as `appStateDelivery` works out the
  * document's task list (`HOST_READ_SLICE`'s `tasks`), so a part crosses as
@@ -1720,18 +1731,6 @@ const readAppStateDelivery = readEither(appStateDeliverySchema, { excess: EXCESS
 /** The boundary parse for a delivery, as the window's push stream holds every one to it. */
 export function isAppStateDelivery(value: UnparsedWireValue): boolean {
   return Result.isSuccess(readAppStateDelivery(value));
-}
-
-/** The boundary declaration of a task-list push: its version, as a document's is held. */
-const taskListDeliverySchema = Schema.Struct({
-  version: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-});
-
-const readTaskListDelivery = readEither(taskListDeliverySchema, { excess: EXCESS_KEYS.DROP });
-
-/** The boundary parse for a task-list push, as the window's push stream holds every one to it. */
-export function isTaskListDelivery(value: UnparsedWireValue): boolean {
-  return Result.isSuccess(readTaskListDelivery(value));
 }
 
 /**

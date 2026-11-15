@@ -4,26 +4,26 @@
  * A screen that reads the task list off the document derives again from
  * every row whenever any row moves. These collections hold the same rows
  * keyed by id, so a live query or a lookup (`.get(key)`) is told only the
- * rows that moved. The host pushes each drawing's moved rows on a channel
- * of their own (`PUSH.TASK_LIST`, `TaskListDelivery`), just before the
- * document they moved in, and a client hands each to `deliver`; its whole
+ * rows that moved. Each delivery of the document carries the rows a drawing
+ * moved beside the document rather than in it (`AppStateDelivery`'s
+ * `taskList`), and a client hands each to `deliver` as it is heard; its whole
  * read of the document, and a fixture run's synthetic list, are laid
  * through `write`. Both clients stand on it: the panel (`@repo/panel`'s
  * `use-app-state.ts`) and the iOS app (`apps/mobile`'s `app-state-query.ts`),
  * each with its own React hooks over these collections, since the two draw
  * on different Reacts.
  *
- * A push names the task list's rows that moved by part, so it is laid in as
+ * A delivery names the task list's rows that moved by part, so it is laid in as
  * those rows alone, never by walking a list: each row it carries is written
  * where it says something new, and a row its ids leave out is deleted. A
- * whole read, a fixture run's list, and a push carrying the lists whole are
+ * whole read, a fixture run's list, and a delivery carrying the lists whole are
  * laid as the whole list they are, writing each row that is not the one
  * held.
  *
- * A push of moved rows was worked out from the document the channel last
- * sent, which a client may never have held whole: the desktop's stream
- * sends its first whole, but a page running the host in process hears from
- * the moment it subscribes. So one heard before any whole list is laid
+ * Moved rows were worked out from the document the bridge last sent, which
+ * a client may never have held whole: the desktop's stream sends its first
+ * whole, but a page running the host in process hears from the moment it
+ * subscribes. So one heard before any whole list is laid
  * waits for one, and is laid over it then; laying moved rows over a list as
  * new as the document they were worked out from or newer still lands on
  * the document they moved to, and one older than the list held is passed
@@ -271,7 +271,7 @@ export interface TaskListFollowing {
   readonly collections: TaskListCollections;
   /** Lays a whole task list, a whole read's or a fixture run's, under its version. */
   readonly write: (version: number, view: TasksView) => void;
-  /** Lays one task-list push (`PUSH.TASK_LIST`): its lists whole, or the rows it moved, under its version. */
+  /** Lays the task list's rows one delivery carries (`AppStateDelivery`'s `taskList`): its lists whole, or the rows it moved, under its version. */
   readonly deliver: (delivery: TaskListDelivery) => void;
   /** Says a document could not be written; the rows held stay, and the next write clears it. */
   readonly trouble: (cause: unknown) => void;
@@ -283,7 +283,7 @@ export interface TaskListFollowing {
 export function taskListFollowing(): TaskListFollowing {
   let version = -1;
   let laid = false;
-  /** The pushes of moved rows heard before any whole list was laid, in order. */
+  /** The moved rows heard before any whole list was laid, in order. */
   let early: TaskListDelivery[] = [];
 
   const feeds = {
@@ -343,7 +343,7 @@ export function taskListFollowing(): TaskListFollowing {
     else for (const move of delivery.moved ?? []) moveIn(move);
   };
 
-  // Lays the pushes heard before the first whole list, now one is laid.
+  // Lays the moved rows heard before the first whole list, now one is laid.
   const takeEarly = (): void => {
     const waiting = early;
     early = [];

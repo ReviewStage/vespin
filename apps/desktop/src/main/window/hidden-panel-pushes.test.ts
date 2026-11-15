@@ -119,23 +119,12 @@ function shownPanel() {
   return { panels, window, stream: windowPushes.stream(page, stop.signal), page };
 }
 
-/** The stream's next push but the task list's, which goes out beside each document it moved in. */
-async function nextPush(
-  stream: AsyncIteratorObject<PushEvent>,
-): Promise<IteratorResult<PushEvent>> {
-  for (;;) {
-    const result = await stream.next();
-
-    if (result.done || result.value.push !== PUSH.TASK_LIST) return result;
-  }
-}
-
-/** What the next read of a stream carries once everything pending has run, a document by its version, the task list's pushes passed over; nothing while it waits. */
+/** What the next read of a stream carries once everything pending has run, a document by its version; nothing while it waits. */
 async function nextHeard(stream: AsyncIteratorObject<PushEvent>) {
   let heard: number | string | undefined;
 
   // Note that a read still waiting when its test ends is refused by the stream's abort, which ends nothing here.
-  const read = nextPush(stream).then(
+  const read = stream.next().then(
     (result) => {
       if (result.done) return;
       heard =

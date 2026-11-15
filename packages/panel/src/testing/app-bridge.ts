@@ -36,11 +36,11 @@ let answering: Partial<AppBridge> = {};
 let answeringPort: Partial<FakeActPort> = {};
 
 /**
- * The task-list push the host sends just before `delivery`, read off the
- * task list it carries: its lists whole where it carries the slice whole or
- * gone, its parts that moved where it carries them moved, none otherwise.
+ * The task list's rows the host carries beside `delivery`, read off the task
+ * list it carries: its lists whole where it carries the slice whole or gone,
+ * its parts that moved where it carries them moved, none otherwise.
  */
-function taskListPushOf(delivery: AppStateDelivery): TaskListDelivery | undefined {
+function taskListOf(delivery: AppStateDelivery): TaskListDelivery | undefined {
   const { version } = delivery;
   const whole = delivery.entries.tasks;
 
@@ -55,47 +55,23 @@ function taskListPushOf(delivery: AppStateDelivery): TaskListDelivery | undefine
   return moved === undefined || moved.length === 0 ? undefined : { version, moved };
 }
 
-/** The task-list listeners `withTaskListPushes` made, which a fake spreading the bridge installed before may carry. */
-const madePushes = new WeakSet<AppBridge["onTaskList"]>();
-
 /**
- * The bridge's task-list pushes, where a fake hands the document but not
- * them: each document delivery a window hears first pushes what it carries
- * of the task list to every task-list listener, as the host sends the two.
- * Note that the pushes ride the window's own subscription to the document
- * rather than one of their own, because a fake may do work for each
- * subscription it is handed, such as numbering what it delivers.
+ * The document's deliveries with the task list's rows beside them, where a
+ * fake hands a delivery it built by hand without them, as the host carries
+ * the two in one (`appStateDelivery`).
  */
-function withTaskListPushes(calls: Partial<AppBridge>): Partial<AppBridge> {
-  const { onAppState, onTaskList } = calls;
+function withTaskLists(calls: Partial<AppBridge>): Partial<AppBridge> {
+  const { onAppState } = calls;
 
-  // Note that a fake built over the bridge installed before carries that one's pushes, which its own subscription to the document no longer feeds, so they are made again.
-  if (onAppState === undefined || (onTaskList !== undefined && !madePushes.has(onTaskList))) {
-    return calls;
-  }
-
-  const rowsHeard = new Set<(delivery: TaskListDelivery) => void>();
-
-  const heardRows: AppBridge["onTaskList"] = (listener) => {
-    const entry = (delivery: TaskListDelivery) => listener(delivery);
-    rowsHeard.add(entry);
-
-    return () => {
-      rowsHeard.delete(entry);
-    };
-  };
-
-  madePushes.add(heardRows);
+  if (onAppState === undefined) return calls;
 
   return {
     ...calls,
-    onTaskList: heardRows,
     onAppState: (listener) =>
       onAppState((delivery) => {
-        const pushed = taskListPushOf(delivery);
+        const taskList = delivery.taskList ?? taskListOf(delivery);
 
-        if (pushed !== undefined) for (const heard of [...rowsHeard]) heard(pushed);
-        listener(delivery);
+        listener(taskList === undefined ? delivery : { ...delivery, taskList });
       }),
   };
 }
@@ -104,7 +80,7 @@ function withTaskListPushes(calls: Partial<AppBridge>): Partial<AppBridge> {
 export function fakeAppBridge(calls: Partial<AppBridge>): void {
   answering = calls;
   // SAFETY: a test's window makes only the calls its test answers, and any other is undefined and throws where it is made.
-  installAppBridge(withTaskListPushes(calls) as AppBridge);
+  installAppBridge(withTaskLists(calls) as AppBridge);
 }
 
 /** The calls the fake bridge answers now, for a test that answers one more beside them or puts them back. */

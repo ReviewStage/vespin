@@ -102,11 +102,17 @@ export interface FollowedAppState {
  * on, such as an older read or another account's; the refusal is said
  * through `report`. Note that the read is asked after the subscription
  * stands, so a delivery sent while it is in flight is heard.
+ *
+ * Each delivery is handed to `heard` the moment it arrives, before it is
+ * laid and whether or not a whole read stands to lay it over, for a reader
+ * of what it carries beside the document (its `taskList`) that keeps its
+ * own order (`task-list-following.ts`).
  */
 export function followAppStateOver(
   bridge: AppStateBridgeReads,
   write: (state: AppStateSnapshot, delivery?: AppStateDelivery) => Promise<void> | undefined,
   report: (message: string, cause: unknown) => void,
+  heard?: (delivery: AppStateDelivery) => void,
 ): FollowedAppState {
   let following = true;
   let held: AppStateSnapshot | undefined;
@@ -134,6 +140,8 @@ export function followAppStateOver(
   };
 
   const stopHearing = bridge.onAppState((delivered) => {
+    heard?.(delivered);
+
     if (held === undefined) {
       early.push(delivered);
 

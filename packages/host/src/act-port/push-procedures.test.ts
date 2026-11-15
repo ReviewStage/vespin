@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { it } from "vitest";
-import type { AppStateDelivery, AppStateSnapshot } from "../app-state.js";
+import type { AppStateDelivery, AppStateSnapshot, TaskListDelivery } from "../app-state.js";
 import { initialAppState } from "../client/app-state-store.js";
 import { PUSH, type PushEvent } from "../contract/index.js";
 import { runModeFor } from "../run-mode.js";
@@ -37,18 +37,9 @@ function documentAt(version: number): AppStateSnapshot {
   };
 }
 
-/** The stream's next push but the task list's, which goes out beside each document it moved in. */
-async function nextOf(stream: AsyncIterator<PushEvent>): Promise<IteratorResult<PushEvent>> {
-  for (;;) {
-    const read = await stream.next();
-
-    if (read.done || read.value.push !== PUSH.TASK_LIST) return read;
-  }
-}
-
-/** The push one read of a stream carried, none where the stream ended. */
-function pushed(read: IteratorResult<PushEvent>): PushEvent | undefined {
-  return read.done ? undefined : read.value;
+/** The task list's rows one read of a stream carried beside its document; none where it carried no document. */
+function taskListOf(read: IteratorResult<PushEvent>): TaskListDelivery | undefined {
+  return read.done || read.value.push !== PUSH.APP_STATE ? undefined : read.value.payload.taskList;
 }
 
 /** What one read of a stream carried, a document by its version. */
@@ -58,12 +49,12 @@ function heard(read: IteratorResult<PushEvent>): number | string | undefined {
   return read.value.push === PUSH.APP_STATE ? read.value.payload.version : read.value.push;
 }
 
-it("a stream sends the task list's rows just before the document they moved in, its first whole", async () => {
+it("a stream's first document carries the task list whole beside it, and each after it the rows that moved", async () => {
   const pushes = new WindowPushes();
   const stream = pushes.stream(WINDOW, undefined);
   const first = documentAt(1);
   pushes.pushState(WINDOW, first);
-  const opening = [await stream.next(), await stream.next()].map(pushed);
+  const opening = await stream.next();
 
   const task = {
     id: "task-1",
@@ -75,17 +66,13 @@ it("a stream sends the task list's rows just before the document they moved in, 
   };
 
   pushes.pushState(WINDOW, { ...documentAt(2), tasks: { ...first.tasks, tasks: [task] } });
-  const moved = [await stream.next(), await stream.next()].map(pushed);
+  const moved = await stream.next();
 
-  assert.deepEqual(opening, [
-    { push: PUSH.TASK_LIST, payload: { version: 1, whole: { tasks: [] } } },
-    { push: PUSH.APP_STATE, payload: opening[1]?.payload },
-  ]);
-  assert.deepEqual(moved[0], {
-    push: PUSH.TASK_LIST,
-    payload: { version: 2, moved: [{ key: ["tasks"], rows: [task], ids: ["task-1"] }] },
+  assert.deepEqual(taskListOf(opening), { version: 1, whole: { tasks: [] } });
+  assert.deepEqual(taskListOf(moved), {
+    version: 2,
+    moved: [{ key: ["tasks"], rows: [task], ids: ["task-1"] }],
   });
-  assert.equal(moved[1]?.push, PUSH.APP_STATE);
 });
 
 it("three documents pushed before a slow reader reads are one delivery, the third", async () => {
@@ -95,9 +82,9 @@ it("three documents pushed before a slow reader reads are one delivery, the thir
   for (const version of [1, 2, 3]) pushes.pushState(WINDOW, documentAt(version));
   pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);
 
-  assert.equal(heard(await nextOf(stream)), 3);
+  assert.equal(heard(await stream.next()), 3);
   // Nothing else was held for it: the next read is the event pushed after.
-  assert.equal(heard(await nextOf(stream)), PUSH.SHOW_LINK);
+  assert.equal(heard(await stream.next()), PUSH.SHOW_LINK);
 });
 
 it("every event is sent in order, each after a document at least as new as the one pushed before it", async () => {
@@ -107,24 +94,24 @@ it("every event is sent in order, each after a document at least as new as the o
   pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);
   pushes.pushState(WINDOW, documentAt(2));
   pushes.push(WINDOW, PUSH.MENU_COMMAND, "settings");
-  const reads = [await nextOf(stream), await nextOf(stream), await nextOf(stream)].map(heard);
+  const reads = [await stream.next(), await stream.next(), await stream.next()].map(heard);
   pushes.pushState(WINDOW, documentAt(3));
 
   assert.deepEqual(reads, [2, PUSH.SHOW_LINK, PUSH.MENU_COMMAND]);
   // A document pushed once the last was sent is sent in its own turn.
-  assert.equal(heard(await nextOf(stream)), 3);
+  assert.equal(heard(await stream.next()), 3);
 });
 
 it("each stream of a reloading window keeps its own unsent document", async () => {
   const pushes = new WindowPushes();
   const before = pushes.stream(WINDOW, undefined);
   pushes.pushState(WINDOW, documentAt(1));
-  assert.equal(heard(await nextOf(before)), 1);
+  assert.equal(heard(await before.next()), 1);
   const after = pushes.stream(WINDOW, undefined);
   pushes.pushState(WINDOW, documentAt(2));
 
-  assert.equal(heard(await nextOf(after)), 2);
-  assert.equal(heard(await nextOf(before)), 2);
+  assert.equal(heard(await after.next()), 2);
+  assert.equal(heard(await before.next()), 2);
   await before.return?.(undefined);
   await after.return?.(undefined);
   assert.equal(pushes.listening(WINDOW), false);
@@ -138,7 +125,7 @@ it("a held window's reload stays held, and its release sends the newest document
   pushes.pushState(WINDOW, documentAt(2));
   let read: number | string | undefined;
 
-  const reading = nextOf(page).then((result) => {
+  const reading = page.next().then((result) => {
     read = heard(result);
   });
 
@@ -158,10 +145,10 @@ it("a document queued but unread as its window is held waits for the release, an
   pushes.pushState(WINDOW, documentAt(1));
   pushes.holdState(WINDOW, true);
   pushes.pushState(WINDOW, documentAt(2));
-  assert.equal(heard(await nextOf(page)), PUSH.SHOW_LINK);
+  assert.equal(heard(await page.next()), PUSH.SHOW_LINK);
   let read: number | string | undefined;
 
-  const reading = nextOf(page).then((result) => {
+  const reading = page.next().then((result) => {
     read = heard(result);
   });
 
@@ -173,7 +160,7 @@ it("a document queued but unread as its window is held waits for the release, an
   assert.equal(read, 2);
   pushes.push(WINDOW, PUSH.MENU_COMMAND, "settings");
   // Nothing else was queued for it: the next read is the event pushed after.
-  assert.equal(heard(await nextOf(page)), PUSH.MENU_COMMAND);
+  assert.equal(heard(await page.next()), PUSH.MENU_COMMAND);
   await page.return?.(undefined);
 });
 
@@ -185,14 +172,14 @@ it("an event pushed to a held window goes out behind the document held before it
   pushes.pushState(WINDOW, documentAt(2));
   pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);
 
-  const reads = [await nextOf(page), await nextOf(page)].map(heard);
+  const reads = [await page.next(), await page.next()].map(heard);
   assert.deepEqual(reads, [2, PUSH.SHOW_LINK]);
   await page.return?.(undefined);
 });
 
 /** What the next read of a stream carried, as the delivery of a document it must be. */
 async function delivered(stream: AsyncIteratorObject<PushEvent>): Promise<AppStateDelivery> {
-  const read = await nextOf(stream);
+  const read = await stream.next();
 
   if (read.done || read.value.push !== PUSH.APP_STATE) throw new Error("no document was sent");
 
@@ -243,5 +230,5 @@ it("a document in which nothing the window is handed moved is not sent", async (
 
   pushes.pushState(WINDOW, { ...first, version: 2 });
   pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);
-  assert.equal(heard(await nextOf(stream)), PUSH.SHOW_LINK);
+  assert.equal(heard(await stream.next()), PUSH.SHOW_LINK);
 });
