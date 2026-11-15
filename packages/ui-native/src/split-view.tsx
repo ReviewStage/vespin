@@ -632,6 +632,11 @@ export function SplitView({
     <NavigationSplitView
       columnVisibility={shown}
       onColumnVisibilityChange={(visibility) => {
+        // PROBE (j9001b, dropped before arming): each report the system sends, with the state it meets.
+        console.log(
+          `[columns] got=${visibility} asked=${shown} detailOnly=${detailOnly} leaving=${leaving.current !== undefined} sidebarShown=${sidebarShown}`,
+        );
+
         // Note that a two-column split view names both columns standing "doubleColumn", which is its "all".
         if (visibility === "automatic") return;
 
