@@ -23,7 +23,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { filedTaskOf } from "@repo/features/tasks-model";
-import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
   type BarMenu,
@@ -418,8 +418,8 @@ export function NewAgentScreen({
   // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
   const suggestedTask = suggester?.taskId;
   const placed = opened === undefined || suggestedTask !== undefined;
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
-  const startsOn = view?.tasks.find((task) => task.id === (suggestedTask ?? taskId));
+  const listed = useListedTasks();
+  const startsOn = listed.find((task) => task.id === (suggestedTask ?? taskId));
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
