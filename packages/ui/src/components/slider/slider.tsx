@@ -31,9 +31,10 @@ const LENGTH = {
 
 /**
  * How a slider is drawn: on its own track, or bare over a drawing its
- * holder makes of what it moves along, as a sound clip's waveform, its
- * thumb riding across the whole of the room it stands in with no track
- * under it.
+ * holder makes of what it moves along, as a sound clip's waveform, which
+ * says where it stands itself, so the slider draws neither a track nor a
+ * thumb, though its thumb still rides across the whole of the room it
+ * stands in to take a press, a drag, and the keys.
  */
 export const SLIDER_LOOK = {
   TRACK: "track",
@@ -42,10 +43,10 @@ export const SLIDER_LOOK = {
 
 export type SliderLook = (typeof SLIDER_LOOK)[keyof typeof SLIDER_LOOK];
 
-/** Each look's box: the track as it stands, or the room its holder gives it, track and range clear. */
+/** Each look's box: the track as it stands, or the room its holder gives it, track, range, and thumb clear. */
 const LOOK = {
   track: "",
-  bare: "absolute inset-0 [&>*]:h-full [&_[data-slot=slider-track]]:bg-transparent [&_[data-slot=slider-range]]:bg-transparent",
+  bare: "absolute inset-0 [&>*]:h-full [&_[data-slot=slider-track]]:bg-transparent [&_[data-slot=slider-range]]:bg-transparent [&_[data-slot=slider-thumb]]:bg-transparent [&_[data-slot=slider-thumb]]:shadow-none",
 } as const satisfies Record<SliderLook, string>;
 
 /** A range at `value` between `min` and `max`, named by `label`, told of each change. */
