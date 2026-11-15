@@ -41,6 +41,8 @@ export const FOLLOWING_WORDS = {
   FOLLOWER: "Following",
   /** The reader's own switch. */
   MACHINES: "Let agents here use my machines",
+  /** What the switch says at its end where none of the reader's machines lets agents run commands or use apps. */
+  NONE_SET_UP: "None set up",
   /** Why the assignee cannot unfollow. */
   ASSIGNEE_STAYS: "You're the assignee",
   /** A machine's state on a card. */

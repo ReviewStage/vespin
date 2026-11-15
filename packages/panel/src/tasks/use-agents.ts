@@ -31,11 +31,11 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type DraftSuggestion, sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { ListedPullRequest } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
 import type { TranscriptReader } from "@repo/features/transcript-copy";
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActPayload } from "@repo/host/contract";
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import { EXPERIMENT } from "@repo/settings";
 import { STATUS_TONE } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
@@ -75,7 +75,7 @@ import { modelsRetryMutation } from "../live-reads.js";
 import type { RenameTerms } from "../rename-write.js";
 import { rendererFork } from "../renderer-runtime.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
-import { type TaskListCollections, useTaskListCollections } from "../task-list-collections.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import {
   type LocalWrite,
@@ -113,6 +113,7 @@ import {
 } from "./agent-reads.js";
 import { type AgentFork, continueFork, forkStart } from "./fork-model.js";
 import { type ByPullRequestTab, pullRequestAsked } from "./pull-request-number.js";
+import { type HeldUpdate, heldUpdateOver } from "./refused-send.js";
 import { keptSkills } from "./repository-skills.js";
 import type { SkillSource } from "./skill-picker.js";
 import { useSuggestionSender } from "./suggestion-send.js";
@@ -248,7 +249,7 @@ function useTaskRows(
       ? undefined
       : q
           .from({ agent: collections.agents })
-          .where(({ agent }) => eq(agent.planId, taskId))
+          .where(({ agent }) => eq(agent.taskId, taskId))
           .orderBy(({ agent }) => agent.createdAt)
           .orderBy(({ agent }) => agent.id),
   );
@@ -264,16 +265,6 @@ function useTaskRows(
   return {
     listedHere: followed ? agents : undefined,
     listedPullRequests: pullRequests,
-  };
-}
-
-/** What a fixture run's staged list carries of one task, as the collections carry a followed list's. */
-function stagedRows(staged: TasksView, taskId: string | undefined): TaskRows {
-  const carried = taskId !== undefined && staged.tasks.some((task) => task.id === taskId);
-
-  return {
-    listedHere: carried ? staged.taskAgents?.filter((agent) => agent.planId === taskId) : undefined,
-    listedPullRequests: staged.agentPullRequests,
   };
 }
 
@@ -443,13 +434,10 @@ export interface AgentsControl {
   ) => string;
   /** Lets the open task's draft's fork or suggestion go, leaving an ordinary draft with its words and chips. */
   onDropFork: () => void;
-  /** Writes the open task's draft: the words in its box, the choice on its chip, the MCP servers it switched off, the mode its Permissions row picked, or that the refusal it was handed was let go. */
+  /** Writes the open task's draft: the choice on its chip, the MCP servers it switched off, the mode its Permissions row picked, or that the refusal it was handed was let go. */
   onDraftChange: (
     change: Partial<
-      Pick<
-        AgentDraft,
-        "prompt" | "choice" | "disabledServers" | "runsOn" | "permissionMode" | "refused"
-      >
+      Pick<AgentDraft, "choice" | "disabledServers" | "runsOn" | "permissionMode" | "refused">
     >,
   ) => void;
   /**
@@ -467,10 +455,8 @@ export interface AgentsControl {
    * launch hands them off.
    */
   onTaskStarted: (taskId: string, agent: AgentSummary) => void;
-  /** Changes the open task's draft's files from those it holds as the change lands. */
-  onDraftAttachments: (
-    next: (held: readonly AgentAttachment[]) => readonly AgentAttachment[],
-  ) => void;
+  /** Moves the open task's draft's words and files on together from what it holds as the change lands, as every box's are (`refused-send.ts`). */
+  onDraftHeld: HeldUpdate;
   /**
    * Lets the draft go; nothing was started, so nothing is left behind. One
    * that held words or files raises a toast whose Undo puts it back and
@@ -926,8 +912,6 @@ export function useAgents(input: {
   repository: string | null;
   /** Whether the task list follows the open task's agents live, so a task with none has none, rather than none read yet. */
   agentsFollowed: boolean;
-  /** A fixture run's staged task list, which stands in for the task list's collections, which never carry it; none outside one. */
-  staged?: TasksView | undefined;
   /** Where the task list's read stands, which an answer on the task's Inbox reads again where it failed: failed, and its Try again; none where nothing reads it again. */
   list?: { readonly failed: boolean; readonly onRetry: () => void } | undefined;
   /** Opens Settings on its Integrations page. */
@@ -1048,15 +1032,7 @@ export function useAgents(input: {
   // The task's agents and their pull requests as the task list's collections carry them, read by the task alone, so a
   // delivery that moves another task's rows draws nothing here; none where the list does not carry the task.
   const collections = useTaskListCollections();
-  const followedRows = useTaskRows(collections, taskId, input.agentsFollowed);
-  const { staged } = input;
-
-  const stagedHere = useMemo(
-    () => (staged === undefined ? undefined : stagedRows(staged, taskId)),
-    [staged, taskId],
-  );
-
-  const { listedHere, listedPullRequests } = stagedHere ?? followedRows;
+  const { listedHere, listedPullRequests } = useTaskRows(collections, taskId, input.agentsFollowed);
 
   // Note that an agent New task holds stands beside the list's until the list first carries it,
   // and leaves with it once it no longer does, so a tab never leaves between the two.
@@ -1336,7 +1312,7 @@ export function useAgents(input: {
   /**
    * Where a draft's words are kept: under its key, beside the fork it is.
    * Note that an agent page's draft is kept with its agent's id as the
-   * `planId`, so the drafted plans list that id too; no task has it, so no
+   * `taskId`, so the drafted plans list that id too; no task has it, so no
    * row reads it as drafted.
    */
   const wordsPlace = (
@@ -1346,7 +1322,7 @@ export function useAgents(input: {
     suggestion?: DraftSuggestion,
   ): NewAgentPlace => ({
     kind: DRAFT_PLACE.NEW_AGENT,
-    planId: on,
+    taskId: on,
     draftId: id,
     ...forkOf(fork),
     ...suggestionOf(suggestion),
@@ -1487,19 +1463,11 @@ export function useAgents(input: {
   };
 
   const onDraftChange = (
-    change: Partial<
-      Pick<
-        AgentDraft,
-        "prompt" | "choice" | "disabledServers" | "runsOn" | "permissionMode" | "refused"
-      >
+    choices: Partial<
+      Pick<AgentDraft, "choice" | "disabledServers" | "runsOn" | "permissionMode" | "refused">
     >,
   ) => {
-    if (taskId === undefined || draft === undefined) return;
-    const { prompt, ...choices } = change;
-
-    if (prompt !== undefined) writeWords((was) => ({ ...was, text: prompt }));
-
-    if (Object.keys(choices).length === 0) return;
+    if (taskId === undefined || draft === undefined || Object.keys(choices).length === 0) return;
     withDraft(taskId, {
       id: draft.id,
       choice: draft.choice,
@@ -1541,11 +1509,9 @@ export function useAgents(input: {
     setStarted({ taskId: on, agent });
   };
 
-  // Note that the files are changed from the draft as it stands when the
+  // Note that the words and files are changed from the draft as it stands when the
   // change lands, because a file's read lands after the render that began it.
-  const onDraftAttachments = (
-    next: (held: readonly AgentAttachment[]) => readonly AgentAttachment[],
-  ) => writeWords((was) => ({ ...was, attachments: next(was.attachments) }));
+  const onDraftHeld = heldUpdateOver(writeWords);
 
   // Note that a draft holding words or files is let go at once, as every
   // act that can be taken back is, and ⌘Z and its toast's Undo put it back.
@@ -2057,7 +2023,7 @@ export function useAgents(input: {
     if (!skillsOn || taskId === undefined) return undefined;
 
     return keptSkills(() =>
-      queryClient.fetchQuery(repositorySkillsQueryOptions({ planId: taskId })),
+      queryClient.fetchQuery(repositorySkillsQueryOptions({ taskId: taskId })),
     );
   }, [queryClient, skillsOn, taskId, repository]);
 
@@ -2087,7 +2053,7 @@ export function useAgents(input: {
     onDraftChange,
     onHandDraft,
     onTaskStarted,
-    onDraftAttachments,
+    onDraftHeld,
     onDiscardDraft,
     startPrompt: steadyStartPrompt,
     startFork: steadyStartFork,

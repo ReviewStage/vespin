@@ -54,7 +54,7 @@ function markOf(entry: PullRequestStackEntry): PullRequestMarked {
 
 /** The place in the app a stacked pull request's agent stands: its Pull request tab, on its task. */
 function placeOf(agent: NonNullable<PullRequestStackEntry["agent"]>): LinkDestination {
-  return { kind: LINK_DESTINATION.CHANGES, planId: agent.taskId, agentId: agent.id };
+  return { kind: LINK_DESTINATION.CHANGES, taskId: agent.taskId, agentId: agent.id };
 }
 
 /** How a pull request of the stack opens: its agent's Pull request tab where an agent owns it and the window can open one, else its page on GitHub. */

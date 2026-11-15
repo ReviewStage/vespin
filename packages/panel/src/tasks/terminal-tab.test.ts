@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { ORPCError } from "@orpc/client";
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
-import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, TASKS_READ } from "@repo/features/tasks-view";
 import {
   TERMINAL_PORT_CHANNEL,
   TERMINAL_REFUSAL,
@@ -31,7 +31,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import type { SideBundles } from "../bundle-loader.js";
 import { announcedPolitely, mountAnnouncer } from "../testing/announcer.js";
 import { type AnyAct, fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
-import { handHostReads } from "../testing/app-state.js";
+import { handHostReads, type WrittenTasksView } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { fittedTerminalBundles, onSideBundles } from "../testing/side-bundles.js";
 import { agentsControl } from "../testing/tasks-control.js";
@@ -56,7 +56,7 @@ import { WindowAccountContext } from "./window-account.js";
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+  taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   model: "openai/gpt-5.6-sol",
   effort: "high",
   title: "Invite flow",
@@ -675,7 +675,7 @@ test("a resume whose snapshot is gone says the sandbox shut down and how to star
 });
 
 /** The task list as the host lays it, the tab's agent's sandbox open or not. */
-function listedWithSandbox(open: boolean): TasksView {
+function listedWithSandbox(open: boolean): WrittenTasksView {
   return {
     ...IDLE_TASKS_VIEW,
     listStatus: TASKS_READ.READY,
@@ -774,28 +774,6 @@ test("a connection the host ended says so in the bar, and any key reconnects to 
     port.posted.filter((message) => message.type === "input"),
     [],
   );
-});
-
-test("a tab says on its shell's port each minute that it is shown, only while shown in a window in use", async () => {
-  vi.useFakeTimers();
-  const focused = vi.spyOn(document, "hasFocus").mockReturnValue(true);
-  const tab = await mount(true, false);
-  const port = main.post(MADE);
-  port.say({ type: "state", state: "attached" });
-  const shown = () => port.posted.filter((message) => message.type === "shown").length;
-  const minute = () => act(async () => vi.advanceTimersByTimeAsync(60_000));
-  await minute();
-  const whileInUse = shown();
-  focused.mockReturnValue(false);
-  await minute();
-  const whileUnfocused = shown();
-  focused.mockReturnValue(true);
-  await tab.render(false);
-  await minute();
-
-  assert.equal(whileInUse, 1);
-  assert.equal(whileUnfocused, 1, "a window nobody is using says nothing");
-  assert.equal(shown(), 1, "a hidden tab says nothing");
 });
 
 test("a shell that ended takes any key for a new one in the same tab", async () => {

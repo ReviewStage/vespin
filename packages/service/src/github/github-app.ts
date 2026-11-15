@@ -533,7 +533,7 @@ type RepositorySetUnreached =
     };
 
 /** One installation token for several repositories: each as GitHub spells it, in the order named, and the bearer, good for an hour from its mint. */
-export interface GitHubRepositoriesToken {
+interface GitHubRepositoriesToken {
   readonly repositories: readonly GitHubRepository[];
   readonly bearer: GitHubBearer;
   readonly access: { readonly kind: typeof GITHUB_ACCESS.APP };

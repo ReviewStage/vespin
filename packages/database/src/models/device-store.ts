@@ -33,9 +33,24 @@ import {
   type MachineDeviceSettings,
   machineCommandModeSchema,
 } from "@repo/features/machine-command-wire";
-import { and, asc, desc, eq, exists, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  type SQL,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { member } from "../schemas/auth.js";
@@ -480,9 +495,10 @@ const changeSettings = SqlSchema.findAll({
     commandMode: Schema.UndefinedOr(machineCommandModeSchema),
     computerUse: Schema.UndefinedOr(Schema.Boolean),
     removeApp: Schema.UndefinedOr(Schema.String),
+    addApp: Schema.UndefinedOr(Schema.String),
   }),
   Result: TxidRowSchema,
-  execute: ({ userId, id, commandMode, computerUse, removeApp }) =>
+  execute: ({ userId, id, commandMode, computerUse, removeApp, addApp }) =>
     Database.use((db) =>
       db
         .update(device)
@@ -494,6 +510,12 @@ const changeSettings = SqlSchema.findAll({
           ...(removeApp === undefined
             ? undefined
             : { alwaysAllowedApps: sql`${device.alwaysAllowedApps} - ${removeApp}::text` }),
+          // Note that an app the machine already allows is kept once.
+          ...(addApp === undefined
+            ? undefined
+            : {
+                alwaysAllowedApps: sql`(coalesce(${device.alwaysAllowedApps}, '[]'::jsonb) - ${addApp}::text) || jsonb_build_array(${addApp}::text)`,
+              }),
         })
         .where(
           and(
@@ -504,6 +526,57 @@ const changeSettings = SqlSchema.findAll({
           ),
         )
         .returning(TXID_RETURNING),
+    ),
+});
+
+/** The account's machines read beside the one asked after, to find which of them is the default. */
+const accountMachine = alias(device, "account_machine");
+
+/**
+ * Whether the machine is its account's default machine, where an agent's
+ * call goes that names no machine and whose agent has no pick of its own:
+ * the one the member picked, else the one of theirs whose app joined
+ * first, so a member with one machine has it as their default and keeps it
+ * as they add another, until they pick. Note that a removed machine and
+ * one whose app never joined, such as a Linux box that only runs agents,
+ * take no call, so neither is ever the default. The one statement every
+ * reader of the default asks, the routing and Settings › Machines alike;
+ * false for every machine of an account none of whose apps joined.
+ */
+export const isDefaultMachine: SQL<boolean> = sql<boolean>`coalesce(${device.id} = (${queryBuilder
+  .select({ id: accountMachine.id })
+  .from(accountMachine)
+  .where(
+    and(
+      eq(accountMachine.userId, device.userId),
+      isNull(accountMachine.removedAt),
+      isNotNull(accountMachine.commandMode),
+    ),
+  )
+  .orderBy(desc(accountMachine.isDefault), asc(accountMachine.createdAt), asc(accountMachine.id))
+  .limit(1)}), false)`;
+
+/** Every other machine of the account no longer its default, so the one picked next can be. */
+const clearDefault = SqlSchema.void({
+  Request: DeviceKeySchema,
+  execute: ({ userId, id }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ isDefault: false })
+        .where(and(eq(device.userId, userId), eq(device.isDefault, true), ne(device.id, id))),
+    ),
+});
+
+/** The account's machine of the id picked as its default. */
+const markDefault = SqlSchema.void({
+  Request: DeviceKeySchema,
+  execute: ({ userId, id }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ isDefault: true })
+        .where(and(eq(device.id, id), eq(device.userId, userId))),
     ),
 });
 
@@ -618,6 +691,8 @@ const findWorkspaceMachines = SqlSchema.findAll({
     platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     userId: Schema.String,
     online: Schema.Boolean,
+    commandMode: Schema.NullOr(machineCommandModeSchema),
+    computerUse: Schema.NullOr(Schema.Boolean),
   }),
   execute: ({ readerId, workspaceId, memberId, listenedSince }) =>
     Database.use((db) =>
@@ -628,6 +703,8 @@ const findWorkspaceMachines = SqlSchema.findAll({
           platform: device.platform,
           userId: device.userId,
           online: machineOnline(listenedSince),
+          commandMode: device.commandMode,
+          computerUse: device.computerUse,
         })
         .from(device)
         .innerJoin(
@@ -845,11 +922,14 @@ export function saveCommandDeviceSettings(
   );
 }
 
-/** What a member changed of one of their machines from anywhere: each setting named, and an app taken back from those it always allows. */
+/** What a member changed of one of their machines from anywhere: each setting named, an app taken back from those it always allows, and one added, as a late Always allow adds it. */
 export interface MachineChange {
   readonly commandMode?: MachineCommandMode | undefined;
   readonly computerUse?: boolean | undefined;
   readonly removeApp?: string | undefined;
+  readonly addApp?: string | undefined;
+  /** Whether the machine becomes the member's default machine (`isDefaultMachine`). */
+  readonly makeDefault?: true | undefined;
 }
 
 /**
@@ -857,23 +937,34 @@ export interface MachineChange {
  * devices, answering the transaction it was written in; none where the
  * account holds no such machine standing, or one whose app never joined,
  * which holds no settings yet. The machine follows the change live, or
- * takes it as it next joins.
+ * takes it as it next joins; a machine made the default is the account's
+ * one default from then on, every other it held no longer.
  */
 export function changeMachine(
   userId: string,
   id: string,
   change: MachineChange,
 ): DeviceEffect<string | undefined> {
-  return Effect.map(
-    changeSettings({
+  const write = Effect.gen(function* () {
+    const [changed] = yield* changeSettings({
       userId,
       id,
       commandMode: change.commandMode,
       computerUse: change.computerUse,
       removeApp: change.removeApp,
-    }),
-    ([changed]) => changed?.txid,
-  );
+      addApp: change.addApp,
+    });
+
+    // Note that the default moves only once the machine is known to stand, so a pick of one gone leaves the default where it was.
+    if (changed !== undefined && change.makeDefault === true) {
+      yield* clearDefault({ userId, id });
+      yield* markDefault({ userId, id });
+    }
+
+    return changed?.txid;
+  });
+
+  return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(write));
 }
 
 /**
@@ -902,13 +993,15 @@ export function markCommandsAwayDevices(now: number, freshMs: number): DeviceEff
   );
 }
 
-/** A machine of a workspace's member as the workspace's members see it: its id, name, platform, whose it is, and whether it is there now. */
+/** A machine of a workspace's member as the workspace's members see it: its id, name, platform, whose it is, whether it is there now, and, where it carried them up, its terminal commands mode and its apps switch. */
 export interface WorkspaceMachine {
   readonly id: string;
   readonly name: string;
   readonly platform: DevicePlatform;
   readonly userId: string;
   readonly online: boolean;
+  readonly commandMode?: MachineCommandMode;
+  readonly computerUse?: boolean;
 }
 
 /**
@@ -917,9 +1010,12 @@ export interface WorkspaceMachine {
  * and only those of an owner who stands in it too, so a reader never reads
  * the machines of someone who shares no workspace with them; one member's
  * alone where `memberId` names one; each online where its app listened at
- * or after `listenedSince` or it beats as a host (`machineOnline`). Note
- * that it selects no secret, setting, or folder, since a teammate is shown
- * only what each machine is, whose, and whether it is there.
+ * or after `listenedSince` or it beats as a host (`machineOnline`). Each
+ * carries its terminal commands mode and apps switch where its row holds
+ * them, so any member can see why a call there would be refused. Note that
+ * it selects no secret, folder, or always-allowed app, since a teammate is
+ * shown only what each machine is, whose, whether it is there, and what it
+ * lets agents do.
  */
 export function workspaceMachinesOf(
   readerId: string,
@@ -927,10 +1023,18 @@ export function workspaceMachinesOf(
   listenedSince: Date,
   memberId?: string,
 ): DeviceEffect<readonly WorkspaceMachine[]> {
-  return findWorkspaceMachines({
-    readerId,
-    workspaceId,
-    memberId: memberId ?? null,
-    listenedSince,
-  });
+  return Effect.map(
+    findWorkspaceMachines({
+      readerId,
+      workspaceId,
+      memberId: memberId ?? null,
+      listenedSince,
+    }),
+    (rows) =>
+      rows.map(({ commandMode, computerUse, ...machine }) => ({
+        ...machine,
+        ...(commandMode === null ? undefined : { commandMode }),
+        ...(computerUse === null ? undefined : { computerUse }),
+      })),
+  );
 }

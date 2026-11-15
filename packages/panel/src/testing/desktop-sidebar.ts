@@ -1,4 +1,5 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import type { TaskSummary } from "@repo/features/task-wire";
 import { UPDATE_STATUS } from "@repo/settings/update";
 import {
   type ComponentProps,
@@ -12,7 +13,11 @@ import { DesktopSidebar } from "../desktop/desktop-sidebar.js";
 import { SIDEBAR_OVERLAY } from "../desktop/sidebar-collapse.js";
 import { PANEL_TAB } from "../panel-tabs.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { appStateQuery } from "../use-app-state.js";
+import type { ListedAppState } from "./app-state.js";
+import { testQueryClientNow } from "./copy-feedback.js";
 import { standingTaskList } from "./history-rows.js";
+import { listedTasksOf } from "./tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "./window-router.js";
 
 /**
@@ -68,6 +73,17 @@ export function sidebarProps(tasks: TasksControl): ComponentProps<typeof Desktop
   };
 }
 
+/** `tasks` beside the pull requests main's document holds in the test's client, as the window's follow writes both. */
+function withHeldPullRequests(tasks: readonly TaskSummary[]) {
+  const held = testQueryClientNow().getQueryData<ListedAppState>(appStateQuery.queryKey)?.tasks;
+
+  return {
+    tasks,
+    taskPullRequests: held?.taskPullRequests,
+    agentPullRequests: held?.agentPullRequests,
+  };
+}
+
 /**
  * `children` over the window's task collections standing on what `tasks`
  * lists, as the window's follow keeps them beside the tab it hands the
@@ -81,10 +97,10 @@ function StandingListed({
   tasks: TasksControl;
   children: ReactNode;
 }): ReactElement {
-  const listed = tasks.listed.tasks;
-  const [taskList] = useState(() => standingTaskList({ tasks: listed }));
+  const listed = listedTasksOf(tasks);
+  const [taskList] = useState(() => standingTaskList(withHeldPullRequests(listed)));
 
-  useLayoutEffect(() => taskList.stand({ tasks: listed }), [taskList, listed]);
+  useLayoutEffect(() => taskList.stand(withHeldPullRequests(listed)), [taskList, listed]);
 
   return taskList.provide(children);
 }

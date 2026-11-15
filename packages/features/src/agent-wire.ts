@@ -75,10 +75,6 @@ import { TurnFilesSummarySchema } from "./turn-files-wire.js";
  * Every request refuses a key it does not name; an answer ignores one a
  * newer service added. Declared directly with Effect's `Schema.Struct` and
  * exported under its own name.
- *
- * Note that `planId` keep the wire's legacy spelling of a task, because a
- * released desktop sends and reads them; they are renamed with the wire in a
- * follow-up, with no alias.
  */
 
 export const AGENT_BOUNDS = {
@@ -1202,7 +1198,7 @@ export function agentOwnerOf(read: AgentOwnerRead): AgentOwner | undefined {
  */
 export const agentSummarySchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  planId: wireUuidSchema,
+  taskId: wireUuidSchema,
   /** AI Gateway's catalog id, such as `anthropic/claude-opus-5.5`. */
   model: EffectSchema.String,
   effort: EffectSchema.String,
@@ -1411,15 +1407,37 @@ export const agentMessageAnswerSchema = EffectSchema.Struct({
   queued: EffectSchema.optionalKey(agentQueueSchema),
 });
 
+/** Whether a window or device shows an agent's chat now, as its warm call says: shown holds the sandbox up, and hidden lets go of that window's hold at once. */
+export const AGENT_CHAT = {
+  SHOWN: "shown",
+  HIDDEN: "hidden",
+} as const;
+
+export type AgentChat = (typeof AGENT_CHAT)[keyof typeof AGENT_CHAT];
+
+/** The most characters a chat holder's id is: one window's or one app launch's. */
+const AGENT_CHAT_HOLDER_MAX_CHARS = 64;
+
+/** What a warm call says of the chat that asks it: whether it is shown, and the window or device showing it. */
+export const agentChatHoldSchema = EffectSchema.Struct({
+  chat: EffectSchema.Literals(Object.values(AGENT_CHAT)),
+  holder: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(AGENT_CHAT_HOLDER_MAX_CHARS)),
+});
+
+export type AgentChatHold = typeof agentChatHoldSchema.Type;
+
 /**
- * A warm call taken (`POST /api/agents/{id}/warm`): a client says the agent
- * is on screen, at once and then every minute while it stays there. The
- * service answers at once and keeps a cloud agent's sandbox and runner
- * warm past it, launching the runner with no message where none runs, so
- * a message goes straight into the running session; it lets them go five
- * minutes after the later of the agent's last turn's end and the last such
- * call. A Mac's agent, an archived one, and one the caller may not message
- * are answered the same and kept warm by nothing.
+ * A warm call taken (`POST /api/agents/{id}/warm`): a client says the
+ * agent's chat is shown, at once and then every minute while it stays
+ * shown, and says once that it is hidden as it stops being. A shown chat
+ * holds the cloud agent's sandbox up as one beat of its window or device
+ * (`agentChatHoldSchema`), and the service wakes the sandbox and launches
+ * its runner with no message where none runs, so a message goes straight
+ * into the running session. A hidden chat lets go of its hold at once, and
+ * the sandbox stops where nothing else keeps it up. A call that names no
+ * chat, from a build older than the hold, wakes and holds nothing past
+ * the turn. A Mac's agent, an archived one, and one the caller may not
+ * message are answered the same and kept warm by nothing.
  */
 export const agentWarmAnswerSchema = EffectSchema.Struct({
   warm: EffectSchema.Literal(true),

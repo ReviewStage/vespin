@@ -41,6 +41,8 @@ export const QUERY_ROOT = {
   COMPUTER_USE_APP_ICON: "computer-use-app-icon",
   /** A task's followers' machines, with where each stands, as a follower's card lists them (`tasks/following-chip.tsx`). */
   FOLLOWER_MACHINES: "follower-machines",
+  /** One member's machines as their profile lists them, by the workspace and the member (`desktop/person-page.tsx`). */
+  MEMBER_MACHINES: "member-machines",
   /** The apps the account's own machines always allow, as an agent's `@` lists them off the agent's Mac. */
   MACHINE_ALLOWED_APPS: "machine-allowed-apps",
   INSTALLED_SKILL: "installed-skill",
@@ -82,6 +84,8 @@ export const QUERY_ROOT = {
   PICTURE: "picture",
   /** The section icon picker's wholes loaded on demand (`desktop/section-icon-picker.tsx`), Lucide's and the emoji, by which. */
   SECTION_ICONS: "section-icons",
+  /** A person's page: how many of their tasks and agents the service counts, their newest read into the task list (`desktop/person-page.tsx`). */
+  PERSON_PAGE: "person-page",
 } as const;
 
 /**
@@ -109,6 +113,8 @@ const ACCOUNT_SCOPED_ROOTS: ReadonlySet<unknown> = new Set<string>([
   QUERY_ROOT.MERGE_QUEUE,
   QUERY_ROOT.MACHINE_ALLOWED_APPS,
   QUERY_ROOT.WORKSPACE_MACHINES,
+  QUERY_ROOT.PERSON_PAGE,
+  QUERY_ROOT.MEMBER_MACHINES,
 ]);
 
 /**

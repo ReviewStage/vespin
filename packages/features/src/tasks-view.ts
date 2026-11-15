@@ -2,7 +2,12 @@ import { taskFollowerSchema } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { browserTabsPlaceSchema } from "./agent-browser-tab-wire.js";
 import { agentAgentAnswerSchema } from "./agent-view.js";
-import { AGENT_STATUS, listedAgentSchema, localAgentRefusalSchema } from "./agent-wire.js";
+import {
+  AGENT_STATUS,
+  type ListedAgent,
+  listedAgentSchema,
+  localAgentRefusalSchema,
+} from "./agent-wire.js";
 import { agentBrowserTabsContract } from "./contract/agent-browser-tabs.js";
 import { descriptionCommentsContract } from "./contract/description-comments.js";
 import { githubContract } from "./contract/github.js";
@@ -148,10 +153,10 @@ export type HostLive = (typeof HOST_LIVE)[keyof typeof HOST_LIVE];
 
 /**
  * One task's description as the host holds it for the windows that opened it
- * (`LIVE_READ.DESCRIPTION_DOCUMENT`): the task with its text as last read or
+ * (`LIVE_READ.HELD_TASK`): the task with its text as last read or
  * written, or that the account no longer reaches it.
  */
-export type HeldDescriptionDocument = { readonly task: Task } | { readonly gone: true };
+export type HeldTask = { readonly task: Task } | { readonly gone: true };
 
 /** One run of a line in one color per appearance, as the host's highlighter split it. */
 const codeTokenSchema = EffectSchema.Struct({
@@ -170,6 +175,58 @@ export const codeLinesSchema = EffectSchema.Array(EffectSchema.Array(codeTokenSc
 export type CodeLines = typeof codeLinesSchema.Type;
 
 export const tasksViewSchema = EffectSchema.Struct({
+  /**
+   * The reader's pins of agents on a plan, the archived ones left out: present
+   * only while the list is followed live, when the sidebar's Pinned section
+   * draws each beside the pinned tasks.
+   */
+  taskAgentPins: EffectSchema.optionalKey(EffectSchema.Array(taskAgentPinSchema)),
+  /**
+   * The tasks a rename, a pin, or where they stand, asked on this Mac and not
+   * yet carried by the list, is drawn over, so a list that holds its rows
+   * still while read moves those at once; absent where none stands.
+   */
+  pendingTasks: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
+  listStatus: tasksReadSchema,
+  /**
+   * Whether the task list's lists have been drawn, as they are from the
+   * list's first drawing, from disk or followed live: what a reader waiting
+   * on the list's agents or pull requests reads, since the lists themselves
+   * reach a window on their own channel. Absent before the first drawing.
+   */
+  listed: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /**
+   * The workspaces in which the account reaches any task, as the list's
+   * last answer said, whatever the list holds of them: whether it has ever
+   * had a task there. Absent before an answer says, as one drawn from disk
+   * or from a service before it was answered.
+   */
+  taskWorkspaces: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
+  /** Whether what the host follows live is current (`HOST_LIVE`); absent before the list's follow first says, which reads as live. */
+  live: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(HOST_LIVE))),
+  /** The workspaces the account is a member of, its first one first, as the last list read answered; none before the first lands. */
+  workspaces: EffectSchema.Array(workspaceSchema),
+  /** Where the read of the workspaces stands, a failed one keeping those held; absent before the first is asked. */
+  workspacesStatus: EffectSchema.optionalKey(tasksReadSchema),
+  /** Whether the account has GitHub connected, and its login, as last read beside the workspaces; absent before the first read lands. */
+  github: EffectSchema.optionalKey(githubConnectionSchema),
+  /** The repositories the account pinned in the sidebar, newest pinned first, as last read or pinned; absent before the first read lands. */
+  repositoryPins: EffectSchema.optionalKey(EffectSchema.Array(repositoryPinSchema)),
+  /** The sections the account made in its sidebars and the tasks it keeps in them, as last read or written; absent before the first read lands. */
+  taskSections: EffectSchema.optionalKey(taskSectionsAnswerSchema),
+  /** The one active task, absent while the window has none open; its plan is held apart (`LIVE_READ.HELD_TASK`). */
+  activeTaskId: EffectSchema.optionalKey(EffectSchema.String),
+});
+
+export type TasksView = typeof tasksViewSchema.Type;
+
+/**
+ * The task list's lists, each a live query of the list draws: held beside
+ * the app-state document, never in it, and carried to a window beside it
+ * (`@repo/host`'s `AppStateRead` and `TaskListDelivery`), where its task-list
+ * collections hold them.
+ */
+export const taskListPartsSchema = EffectSchema.Struct({
   /** The account's tasks, newest started first, as the last list read answered. */
   tasks: EffectSchema.Array(taskSummarySchema),
   /**
@@ -195,51 +252,55 @@ export const tasksViewSchema = EffectSchema.Struct({
    * agent's Changes by, in place of reading each agent of it apart.
    */
   agentPullRequests: EffectSchema.optionalKey(EffectSchema.Array(listedPullRequestSchema)),
-  /**
-   * The reader's pins of agents on a plan, the archived ones left out: present
-   * only while the list is followed live, when the sidebar's Pinned section
-   * draws each beside the pinned tasks.
-   */
-  taskAgentPins: EffectSchema.optionalKey(EffectSchema.Array(taskAgentPinSchema)),
-  /**
-   * The tasks a rename, a pin, or where they stand, asked on this Mac and not
-   * yet carried by the list, is drawn over, so a list that holds its rows
-   * still while read moves those at once; absent where none stands.
-   */
-  pendingTasks: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
-  listStatus: tasksReadSchema,
-  /** Whether what the host follows live is current (`HOST_LIVE`); absent before the list's follow first says, which reads as live. */
-  live: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(HOST_LIVE))),
-  /** The workspaces the account is a member of, its first one first, as the last list read answered; none before the first lands. */
-  workspaces: EffectSchema.Array(workspaceSchema),
-  /** Where the read of the workspaces stands, a failed one keeping those held; absent before the first is asked. */
-  workspacesStatus: EffectSchema.optionalKey(tasksReadSchema),
-  /** Whether the account has GitHub connected, and its login, as last read beside the workspaces; absent before the first read lands. */
-  github: EffectSchema.optionalKey(githubConnectionSchema),
-  /** The repositories the account pinned in the sidebar, newest pinned first, as last read or pinned; absent before the first read lands. */
-  repositoryPins: EffectSchema.optionalKey(EffectSchema.Array(repositoryPinSchema)),
-  /** The sections the account made in its sidebars and the tasks it keeps in them, as last read or written; absent before the first read lands. */
-  taskSections: EffectSchema.optionalKey(taskSectionsAnswerSchema),
-  /** The one active task, absent while the window has none open; its plan is held apart (`LIVE_READ.DESCRIPTION_DOCUMENT`). */
-  activeTaskId: EffectSchema.optionalKey(EffectSchema.String),
 });
 
-export type TasksView = typeof tasksViewSchema.Type;
+export type TaskListParts = typeof taskListPartsSchema.Type;
 
-/** The view before anything is asked: no tasks read, none active. */
+/** The tasks view as the host draws it: what the document carries, and the task list's lists beside it. */
+export const listedTasksViewSchema = EffectSchema.Struct({
+  ...tasksViewSchema.fields,
+  ...taskListPartsSchema.fields,
+});
+
+export type ListedTasksView = typeof listedTasksViewSchema.Type;
+
+/** The view before anything is asked: nothing read, none active. */
 export const IDLE_TASKS_VIEW: TasksView = {
-  tasks: [],
   listStatus: TASKS_READ.IDLE,
   workspaces: [],
 };
 
+/** No task list drawn yet: no tasks, and none of their agents or pull requests followed. */
+export const NO_TASK_LIST: TaskListParts = { tasks: [] };
+
+/** A tasks view held apart: the slice the document carries, and the task list's lists beside it. */
+export interface ListedApart {
+  readonly tasks: TasksView;
+  readonly lists: TaskListParts;
+}
+
+/** `listed` held apart, as the host holds it: the tasks slice the document carries, and the task list's lists beside it, each the very list `listed` holds. */
+export function listedApart(listed: ListedTasksView): ListedApart {
+  const { tasks, taskAgents, taskPullRequests, agentPullRequests, ...standing } = listed;
+
+  return {
+    tasks: standing,
+    lists: {
+      tasks,
+      ...(taskAgents === undefined ? undefined : { taskAgents }),
+      ...(taskPullRequests === undefined ? undefined : { taskPullRequests }),
+      ...(agentPullRequests === undefined ? undefined : { agentPullRequests }),
+    },
+  };
+}
+
 /**
- * How many of the agents the view lists are working, starting or running a
- * turn. Note that the agents are listed only while the list is followed
- * live, so before then this counts none.
+ * How many of `agents` are working, starting or running a turn. Note that
+ * the agents are listed only while the list is followed live, so before
+ * then this counts none.
  */
-export function workingAgentCount(view: TasksView): number {
-  return (view.taskAgents ?? []).filter(
+export function workingAgentCount(agents: readonly ListedAgent[] | undefined): number {
+  return (agents ?? []).filter(
     (agent) => agent.status === AGENT_STATUS.STARTING || agent.status === AGENT_STATUS.RUNNING,
   ).length;
 }
@@ -492,7 +553,7 @@ export type StartCallFailure = (typeof START_CALL_FAILURES)[number];
  */
 export const tasksStartAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({
-    planId: EffectSchema.String,
+    taskId: EffectSchema.String,
     agentStart: EffectSchema.optionalKey(agentAgentAnswerSchema),
   }),
   EffectSchema.Struct({
@@ -563,7 +624,7 @@ export const tasksSetParentAnswerSchema = EffectSchema.Union([
 
 export type TasksSetParentAnswer = typeof tasksSetParentAnswerSchema.Type;
 
-/** Why a follower write wrote nothing: the service did not answer, the task is out of reach or its workspace has Following off, or, for an unfollow, the account is its assignee. */
+/** Why a follower write wrote nothing: the service did not answer, the task is out of reach, or, for an unfollow, the account is its assignee. */
 export const FOLLOWER_CALL_FAILURE = failureSetOf(taskFollowersContract);
 
 const FOLLOWER_CALL_FAILURES = Object.values(FOLLOWER_CALL_FAILURE);
@@ -668,7 +729,7 @@ export type TasksFileAnswer = typeof tasksFileAnswerSchema.Type;
  * the repository where no plan names it, and the folder's path from the root.
  */
 export const tasksTreeParamsSchema = EffectSchema.Union([
-  EffectSchema.Struct({ planId: EffectSchema.NonEmptyString, ...taskTreeRequestSchema.fields }),
+  EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString, ...taskTreeRequestSchema.fields }),
   EffectSchema.Struct({ ...repositoryPlaceFields, ...taskTreeRequestSchema.fields }),
 ]);
 
@@ -683,7 +744,7 @@ export type TasksTreeAnswer = typeof tasksTreeAnswerSchema.Type;
 
 /** The skills a developer may choose, as the window asks the host for them: the plan they are chosen on, or the workspace and the repository where no plan names it, or the workspace alone for an agent with no repository, which is offered its installed skills alone. */
 export const tasksSkillsParamsSchema = EffectSchema.Union([
-  EffectSchema.Struct({ planId: EffectSchema.NonEmptyString }),
+  EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString }),
   EffectSchema.Struct({
     workspaceId: repositoryPlaceFields.workspaceId,
     repository: EffectSchema.optionalKey(repositoryPlaceFields.repository),
@@ -768,12 +829,58 @@ export const tasksFindAnswerSchema = EffectSchema.Union([
 ]);
 
 /** The most characters a task search sends the service. */
-export const TASK_SEARCH_QUERY_MAX_CHARS = 200;
+const TASK_SEARCH_QUERY_MAX_CHARS = 200;
+
+/** How long typing pauses before a task search's words are asked of the host, so a word typed out reads once rather than once a letter. */
+export const TASK_SEARCH_PAUSE_MILLIS = 250;
+
+/** The words a task search typed as `typed` asks of the service (`TASKS_SEARCH`): trimmed and cut to what it sends, or none where nothing is typed. */
+export function serviceTaskSearchQuery(typed: string): string | undefined {
+  const words = typed.trim().slice(0, TASK_SEARCH_QUERY_MAX_CHARS);
+
+  return words.length === 0 ? undefined : words;
+}
 
 /** A search of the account's tasks the window asks the host to read past the list it holds: the words typed. */
 export const tasksSearchParamsSchema = EffectSchema.Struct({
   query: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(TASK_SEARCH_QUERY_MAX_CHARS)),
 });
+
+/** Where a page of a workspace's settled tasks ends, which the next page reads past (`SettledPageCursor`). */
+const settledPageCursorSchema = EffectSchema.Struct({
+  finishedAt: EffectSchema.Finite,
+  taskId: EffectSchema.NonEmptyString,
+});
+
+/** A page of a workspace's settled tasks, as a list that shows finished work asks the host for it: the workspace, and the cursor the page reads past where it is not the first. */
+export const tasksSettledPageParamsSchema = EffectSchema.Struct({
+  workspaceId: EffectSchema.NonEmptyString,
+  before: EffectSchema.optionalKey(settledPageCursorSchema),
+});
+
+/** A page of settled tasks read into the task list, as the window hears it: the cursor the next page reads past, none after the last, or that the service did not answer. */
+export const tasksSettledPageAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({ next: EffectSchema.optionalKey(settledPageCursorSchema) }),
+  EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
+]);
+
+/** A person's tasks and agents in a workspace, as their page asks the host for them. */
+export const tasksPersonPageParamsSchema = EffectSchema.Struct({
+  workspaceId: EffectSchema.NonEmptyString,
+  personId: EffectSchema.NonEmptyString,
+});
+
+/** How many of a person's tasks and agents the service counts (`PersonCounts`), as their page hears it once their newest are read into the task list, or that the service did not answer. */
+export const tasksPersonPageAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    counts: EffectSchema.Struct({
+      assigned: EffectSchema.Finite,
+      created: EffectSchema.Finite,
+      agents: EffectSchema.Finite,
+    }),
+  }),
+  EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
+]);
 
 /** A page of a description's history, as the version history asks the host for it: the task, and the revision the page is read before where it is an older page. */
 export const tasksRevisionsParamsSchema = EffectSchema.Struct({
@@ -789,8 +896,8 @@ export const tasksRevisionsAnswerSchema = EffectSchema.Union([
 
 export type TasksRevisionsAnswer = typeof tasksRevisionsAnswerSchema.Type;
 
-/** One task's description, held by a window while it has the task open (`LIVE_READ.DESCRIPTION_DOCUMENT`), and read again at once on its Try again. */
-export const taskDocumentFollowSchema = EffectSchema.Struct({
+/** One task's description, held by a window while it has the task open (`LIVE_READ.HELD_TASK`), and read again at once on its Try again. */
+export const heldTaskFollowSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
 });
 
@@ -813,7 +920,7 @@ export type TasksRevisionAnswer = typeof tasksRevisionAnswerSchema.Type;
 
 /** One attachment of a description, as the window drawing it names it: the plan, and the id its text or a comment's file names. */
 export const tasksPictureParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   attachmentId: EffectSchema.NonEmptyString,
 });
 
@@ -839,7 +946,7 @@ export type TasksPictureAnswer = typeof tasksPictureAnswerSchema.Type;
 
 /** A picture kept on a description, as the editor that took it asks: the plan, and the picture, video, or PDF as a `data:` URL. */
 export const tasksPictureKeepParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   picture: descriptionFileDataUrlSchema,
 });
 
@@ -1062,7 +1169,7 @@ export type TasksCommentsFollow = typeof tasksCommentsFollowSchema.Type;
 
 /** A thread started on a description, as the window asks it. */
 export const tasksCommentStartParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   start: descriptionCommentStartRequestSchema,
 });
 
@@ -1070,7 +1177,7 @@ export type TasksCommentStartParams = typeof tasksCommentStartParamsSchema.Type;
 
 /** One thing done to one thread of a description, as the window asks it. */
 export const tasksCommentActParamsSchema = EffectSchema.Struct({
-  planId: EffectSchema.NonEmptyString,
+  taskId: EffectSchema.NonEmptyString,
   threadId: EffectSchema.NonEmptyString,
   action: descriptionCommentActionRequestSchema,
 });

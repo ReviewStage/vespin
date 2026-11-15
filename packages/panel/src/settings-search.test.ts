@@ -210,7 +210,6 @@ test("an experiment is found by its name, what it brings, and what other apps ca
     "Goals",
     "Merge queue",
     "Voice",
-    "Following",
     "Turn changes",
     "Suggestions",
     "Rewind restores files",

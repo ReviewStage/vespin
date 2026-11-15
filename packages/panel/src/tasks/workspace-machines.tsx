@@ -3,10 +3,22 @@ import { DEVICE_STANDING } from "@repo/features/agent-wire";
 import type { DevicePlatform } from "@repo/features/device-agent-wire";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { type WorkspaceMachine, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { HoverCard, HoverCardHead, HoverCardNote, STATUS_TONE } from "@repo/ui";
+import { MACHINE_COMMAND_MODE_LABEL } from "@repo/settings";
+import { SETTINGS_VIEW } from "@repo/settings/settings-views";
+import {
+  HOVER_CARD_ROW_LOOK,
+  HoverCard,
+  HoverCardHead,
+  HoverCardNote,
+  HoverCardRow,
+  STATUS_TONE,
+  type WordsMark,
+} from "@repo/ui";
 import { personActor } from "@repo/ui/actor-model";
+import { GLYPH } from "@repo/ui/icons";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { Duration } from "effect";
 import { type ReactNode, useContext } from "react";
@@ -16,10 +28,12 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
 import { workspaceToolsQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { useOpenSettings } from "../open-settings.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { appStateQuery, selectAccount, selectWorkspaces } from "../use-app-state.js";
 import { TranscriptAgent } from "./line-cards.js";
 import { DeviceGlyph, DeviceStandingGlyph } from "./runs-on.js";
+import { useOpenLink } from "./use-open-link.js";
 
 /**
  * workspace-machines.tsx -- the machines of a workspace's members, as the `@` list offers them and a machine's chip draws one: its platform's glyph wearing its online dot, its owner's face, its name, and its card.
@@ -168,6 +182,27 @@ export function MachineChipOwner({
 }
 
 /**
+ * The face set inside words that end in a machine's name ("Simulator on
+ * Theo's MacBook Pro"), right before that name: its owner's, where it is a
+ * teammate's; none where the words do not end in the machine's name as the
+ * workspace's machines read names it, or the machine is unread.
+ */
+export function useMachineNameMark(
+  machineId: string | undefined,
+  workspace: string,
+  words: string,
+): WordsMark | undefined {
+  const { machine } = useMachine(machineId, workspace);
+
+  if (machine === undefined || !words.endsWith(` ${machine.name}`)) return undefined;
+
+  return {
+    at: words.length - machine.name.length,
+    mark: <MachineOwnerFace userId={machine.userId} />,
+  };
+}
+
+/**
  * What a screen reader hears after a machine's chip's name, which its
  * owner's face says to the eye: whose it is, where it is a teammate's;
  * nothing for the reader's own, one unread, or none named.
@@ -189,11 +224,40 @@ export function useMachineOwnerHeard(
   return owner === undefined ? undefined : ` (${owner}'s)`;
 }
 
+/**
+ * What a press on a machine's chip does: the reader's own machine opens
+ * Settings › Machines at it, unfolded and lit; a teammate's opens their
+ * person page at it, as a person's chip opens their page; one unread opens
+ * nothing.
+ */
+export function useMachinePress(
+  machineId: string | undefined,
+  workspace: string,
+): (() => void) | undefined {
+  const { machine } = useMachine(machineId, workspace);
+  const readerId = useReaderId();
+  const openSettings = useOpenSettings();
+  const openLink = useOpenLink();
+
+  if (machine === undefined) return undefined;
+  const { id, userId } = machine;
+
+  if (userId === readerId) return () => openSettings({ page: SETTINGS_VIEW.HOSTS, machineId: id });
+
+  return () =>
+    openLink(linkOf({ kind: LINK_DESTINATION.PERSON, userId, machineId: id }, workspace));
+}
+
 /** What a machine's card says. */
 const MACHINE_CARD_WORDS = {
   ONLINE: "Online",
   OFFLINE: "Offline",
   DEFAULT: "This agent's default machine",
+  /** The rows of what the machine lets agents do, named as Settings › Machines names them. */
+  COMMANDS: "Terminal commands",
+  COMPUTER_USE: "Computer use",
+  ON: "On",
+  OFF: "Off",
 } as const;
 
 /** Whose machine it is, as its card's second line says it with its platform: This Mac, Your Mac, or its owner's; the platform alone where the owner is not known. */
@@ -210,12 +274,38 @@ function machineWhose(input: {
   return input.owner === undefined ? input.kind : `${input.owner}'s ${input.kind}`;
 }
 
+/** What a machine lets agents do, a row each, as its card says it to any member: its terminal commands mode and its apps switch, each where the machine carried it up. */
+function MachineSettingsRows({ machine }: { machine: WorkspaceMachine }): React.JSX.Element {
+  return (
+    <>
+      {machine.commandMode === undefined ? null : (
+        <HoverCardRow
+          look={HOVER_CARD_ROW_LOOK.DETAIL}
+          glyph={<GLYPH.TERMINAL />}
+          label={MACHINE_CARD_WORDS.COMMANDS}
+          end={MACHINE_COMMAND_MODE_LABEL[machine.commandMode]}
+        />
+      )}
+      {machine.computerUse === undefined ? null : (
+        <HoverCardRow
+          look={HOVER_CARD_ROW_LOOK.DETAIL}
+          glyph={<GLYPH.COMPUTER_USE />}
+          label={MACHINE_CARD_WORDS.COMPUTER_USE}
+          end={machine.computerUse ? MACHINE_CARD_WORDS.ON : MACHINE_CARD_WORDS.OFF}
+        />
+      )}
+    </>
+  );
+}
+
 /**
  * A machine's card, read the same for every machine: its glyph and its own
  * name, then whose it is with its platform (This Mac, Your Mac, or its
- * owner's), and whether it is online in the corner; that it is the agent's
- * default machine where it is read in that agent's transcript; or that the
- * workspace no longer lists it.
+ * owner's), and whether it is online in the corner; what it lets agents do,
+ * its terminal commands mode and its apps switch, so any member sees why a
+ * call there would be refused; that it is the agent's default machine where
+ * it is read in that agent's transcript; or that the workspace no longer
+ * lists it.
  */
 export function MachineChipCard({
   machineId,
@@ -266,6 +356,7 @@ export function MachineChipCard({
         }
         cornerTone={machine?.online === true ? STATUS_TONE.COMPLETE : STATUS_TONE.NEUTRAL}
       />
+      {machine === undefined ? null : <MachineSettingsRows machine={machine} />}
       {routed === machineId ? <HoverCardNote>{MACHINE_CARD_WORDS.DEFAULT}</HoverCardNote> : null}
       {read && machine === undefined ? <HoverCardNote>{UNLISTED_WORDS}</HoverCardNote> : null}
     </HoverCard>

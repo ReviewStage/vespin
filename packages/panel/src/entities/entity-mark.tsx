@@ -19,17 +19,18 @@ import { useAutomation } from "../automation-directory.js";
 import { TILE_SIZE, WorkspaceTile } from "../desktop/workspace-tile.js";
 import { usePerson } from "../member-directory.js";
 import { providerOf } from "../tasks/agent-model.js";
-import { KeptAppIcon, useComputerApps } from "../tasks/agent-pictures.js";
+import { useComputerApps } from "../tasks/agent-pictures.js";
 import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { FileTypeIcon } from "../tasks/file-type-icon.js";
 import { InboxItemChipGlyph } from "../tasks/inbox-item-chip.js";
 import { IssueMark } from "../tasks/issue-mark.js";
-import { useAllowedAppIcon, useMacAppIcon } from "../tasks/mac-apps.js";
+import { useMacAppIconAddress } from "../tasks/mac-app-card.js";
 import { ReadAgentModel } from "../tasks/mentioned-agent-card.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { SkillMark } from "../tasks/skill-ref.js";
 import { AgentGlyph, AgentMark, PlanGlyph } from "../tasks/tab-look.js";
 import { useAgentStatus, useTaskStatus } from "../tasks/use-known-names.js";
+import { useTaskReadIn } from "../tasks/use-task-outside.js";
 import { MachineMark } from "../tasks/workspace-machines.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { EntityGlyph } from "./entity-glyph.js";
@@ -77,8 +78,10 @@ type EntityMark<T> = (entity: T, at: EntityMarkAt) => ReactNode;
 /** The marks, one entry per kind. */
 type EntityMarks = { readonly [K in EntityKind]: EntityMark<EntityOf<K>> };
 
-/** A plan's glyph, wearing its status where the window holds the task, as its row does. */
+/** A plan's glyph, wearing its status where the window holds the task, as its row does; a task it holds not is read into its list (`useTaskReadIn`), and wears its status once it lands. */
 function PlanMark({ taskId }: { taskId: string }): React.JSX.Element {
+  useTaskReadIn(taskId);
+
   return <PlanGlyph status={useTaskStatus(taskId)} />;
 }
 
@@ -200,17 +203,17 @@ function WorkspaceMark({ slug }: { slug: string }): React.JSX.Element {
  * the icon a `computer` call kept for the app in the conversation; a
  * screen's glyph where there is none.
  */
-function MacAppMark({ app }: { app: string }): React.JSX.Element {
-  const onMac = useMacAppIcon(app);
-  const posted = useAllowedAppIcon(app);
-  const own = onMac ?? posted;
-  const kept = computerAppNamed(useComputerApps(), app)?.icon;
+function MacAppMark({
+  app,
+  machine,
+}: {
+  app: string;
+  machine: string | undefined;
+}): React.JSX.Element {
+  const apps = useComputerApps();
+  const kept = (computerAppNamed(apps, app, machine) ?? computerAppNamed(apps, app))?.icon;
 
-  return own === undefined && kept !== undefined ? (
-    <KeptAppIcon id={kept} />
-  ) : (
-    <AppIcon src={own} />
-  );
+  return <AppIcon src={useMacAppIconAddress(app, kept)} />;
 }
 
 /** An automation's mark, or one of its runs': the automation's tile. */
@@ -227,7 +230,7 @@ const SERVER_MARK: EntityMark<EntityOf<typeof ENTITY_KIND.SERVER | typeof ENTITY
 const ENTITY_MARK: EntityMarks = {
   [ENTITY_KIND.PLAN]: (plan) => <PlanMark taskId={plan.taskId} />,
   [ENTITY_KIND.SECTION]: () => <EntityGlyph kind={ENTITY_KIND.SECTION} />,
-  [ENTITY_KIND.VERSION]: (version) => <PlanMark taskId={version.planId} />,
+  [ENTITY_KIND.VERSION]: (version) => <PlanMark taskId={version.taskId} />,
   [ENTITY_KIND.COMMENT]: () => <EntityGlyph kind={ENTITY_KIND.COMMENT} />,
   [ENTITY_KIND.PAGE]: () => <EntityGlyph kind={ENTITY_KIND.PAGE} />,
   [ENTITY_KIND.AGENT]: (agent, at) => <AgentEntityMark agent={agent} at={at} />,
@@ -273,7 +276,7 @@ const ENTITY_MARK: EntityMarks = {
   [ENTITY_KIND.REPOSITORY]: () => <EntityGlyph kind={ENTITY_KIND.REPOSITORY} />,
   [ENTITY_KIND.WORKSPACE]: (workspace) => <WorkspaceMark slug={workspace.workspace} />,
   [ENTITY_KIND.DATE]: () => <EntityGlyph kind={ENTITY_KIND.DATE} />,
-  [ENTITY_KIND.MAC_APP]: (macApp) => <MacAppMark app={macApp.app} />,
+  [ENTITY_KIND.MAC_APP]: (macApp) => <MacAppMark app={macApp.app} machine={macApp.machine} />,
   [ENTITY_KIND.COMPUTER]: () => <EntityGlyph kind={ENTITY_KIND.COMPUTER} />,
   [ENTITY_KIND.MACHINE]: (machine, at) => (
     <MachineMark machineId={machine.machineId} workspace={at.workspace} />

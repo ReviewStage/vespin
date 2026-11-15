@@ -5,6 +5,7 @@ import {
   AnchoredPopover,
   POPOVER_ALIGN,
   POPOVER_WIDTH,
+  type PopoverWidth,
 } from "../anchored-popover/anchored-popover.js";
 import { CHIP_LOOK, CHIP_WIDTH, Chip, ChipName } from "../chip/chip.js";
 import { Fact, Facts } from "../facts/facts.js";
@@ -71,6 +72,8 @@ export interface ChipPopoverMenu {
   readonly onPick?: ((id: string) => void) | undefined;
   /** Rows pinned under the list: a press, or a switch, each acting with the popover still standing. */
   readonly foot?: readonly FootRow[] | undefined;
+  /** How wide the menu stands; regular where none is named, wide where a pinned row's words and detail need the room. */
+  readonly width?: PopoverWidth | undefined;
 }
 
 /**
@@ -229,7 +232,7 @@ export function ChipPopover({
           noMatch={menu.noMatch}
           foot={menu.foot}
           align={POPOVER_ALIGN.START}
-          width={POPOVER_WIDTH.REGULAR}
+          width={menu.width ?? POPOVER_WIDTH.REGULAR}
           replayUnmasked
           onPick={(id) => {
             const { onPick } = menu;

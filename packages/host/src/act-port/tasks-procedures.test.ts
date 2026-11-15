@@ -71,7 +71,7 @@ type TasksKind = keyof typeof REFUSAL;
 type AnyPayload = PortActPayload<PortActKind>;
 
 const TASK = { taskId: TASK_ID };
-const PLAN = { planId: "plan-1" };
+const PLAN = { taskId: "plan-1" };
 
 /** One ask of every hand-written task kind, with a payload its schema admits. */
 const ACTS: readonly { kind: TasksKind; payload: AnyPayload }[] = [
@@ -131,6 +131,8 @@ const DECLARED: readonly {
     payload: { agentId: "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a", address: "https://example.com" },
   },
   { name: "TASKS_FIND", payload: { workspace: "acme", number: 7 } },
+  { name: "TASKS_SETTLED_PAGE", payload: { workspaceId: "acme" } },
+  { name: "TASKS_PERSON_PAGE", payload: { workspaceId: "acme", personId: "user-1" } },
   { name: "TASKS_REVISIONS", payload: TASK },
   { name: "TASKS_REVISION", payload: { ...TASK, seq: 3 } },
   { name: "TASKS_RESTORE", payload: { ...TASK, seq: 3 } },

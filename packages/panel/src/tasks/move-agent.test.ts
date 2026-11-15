@@ -43,7 +43,7 @@ const MACS: readonly MacOffer[] = [
 /** The agent at rest in the cloud. */
 const AT_REST: AgentSummary = {
   id: AGENT,
-  planId: TASK,
+  taskId: TASK,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Fix the tile",

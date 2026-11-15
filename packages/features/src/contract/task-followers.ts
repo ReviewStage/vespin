@@ -5,8 +5,7 @@
  * an id, so one that is no UUID names no task and answers as none. Each
  * write answers the task's followers as they then stand, and the
  * transaction it committed in (`taskFollowersAnswerSchema`). A task the
- * account does not reach, or whose workspace has Following off, answers as
- * none; an unfollow or a removal of the task's assignee is refused as not
+ * account does not reach answers as none; an unfollow or a removal of the task's assignee is refused as not
  * permitted, since the assignee follows the task while assigned; an add of
  * someone who is no member of the task's workspace answers as none. No
  * procedure here switches another member's machines.
