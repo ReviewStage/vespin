@@ -152,10 +152,7 @@ const CASE_WORKSPACES: readonly { readonly id: string; readonly slug?: string }[
  * every workspace it lists that chose none of its own, and in each of
  * `CASE_WORKSPACES` it does not list: as it stands where none of them is on.
  */
-function withWorkspaceExperiments<View extends TasksView>(
-  view: View,
-  experiments: ExperimentChoices,
-): View {
+function withWorkspaceExperiments(view: TasksView, experiments: ExperimentChoices): TasksView {
   const chosen = WORKSPACE_EXPERIMENT_LIST.filter((experiment) => experiments[experiment] === true);
 
   if (chosen.length === 0) return view;

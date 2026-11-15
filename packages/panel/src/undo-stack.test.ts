@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
-
 import assert from "node:assert/strict";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSummary } from "@repo/features/task-wire";
-import {
-  IDLE_TASKS_VIEW,
-  type ListedTasksView,
-  type TasksPinParams,
-} from "@repo/features/tasks-view";
+import type { TasksPinParams } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { createElement } from "react";
 import { afterEach, test, vi } from "vitest";
@@ -43,7 +38,7 @@ const TASK_ID = "3f2c8a51-6d0e-4b7a-9c14-2e5f7a9b0d36";
 afterEach(forgetUndo);
 
 /** The tasks drawn: the one task, pinned or not. */
-function tasksShowing(pinned: boolean): ListedTasksView {
+function tasksShowing(pinned: boolean): readonly TaskSummary[] {
   const task: TaskSummary = {
     id: TASK_ID,
     workspaceId: "workspace-personal",
@@ -54,7 +49,7 @@ function tasksShowing(pinned: boolean): ListedTasksView {
     ...(pinned ? { pinnedAt: 3 } : undefined),
   };
 
-  return { ...IDLE_TASKS_VIEW, tasks: [task] };
+  return [task];
 }
 
 /** A window drawing the task unpinned, its act keeping each pin and drawing the task as the pin leaves it. */
@@ -81,7 +76,7 @@ function standWindow(): PinWindow {
     return Promise.resolve(true);
   };
 
-  return { doors: { rows: () => listedTaskRows(drawn.tasks), send }, sent, show };
+  return { doors: { rows: () => listedTaskRows(drawn), send }, sent, show };
 }
 
 /** Pins the task as its menu's Pin does: its row read as pressed, the pin sent, and kept for ⌘Z once the act keeps it. */

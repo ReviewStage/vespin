@@ -9,11 +9,8 @@ import {
   type ShownFailureSentry,
   sendShownFailure,
 } from "@repo/features/shown-failure";
-import {
-  IDLE_TASKS_VIEW,
-  type ListedTasksView,
-  type TasksPinParams,
-} from "@repo/features/tasks-view";
+import type { TaskSummary } from "@repo/features/task-wire";
+import type { TasksPinParams } from "@repo/features/tasks-view";
 import { STATUS_TONE, TOAST_HOLD } from "@repo/ui";
 import { Duration, Effect } from "effect";
 import { act, createElement, Fragment } from "react";
@@ -173,7 +170,7 @@ const PINNED_TASK = {
 
 /** A pin of the task pressed as its menu presses it and drawn as the host draws it once kept, each undo it is sent kept in `sent`. */
 function pinPressed(sent: TasksPinParams[] = []): PressedRows {
-  let drawn: ListedTasksView = { ...IDLE_TASKS_VIEW, tasks: [PINNED_TASK] };
+  let drawn: readonly TaskSummary[] = [PINNED_TASK];
 
   const sendPin = (payload: TasksPinParams) => {
     sent.push(payload);
@@ -183,11 +180,11 @@ function pinPressed(sent: TasksPinParams[] = []): PressedRows {
 
   const pressed = pressRows(
     ROW_WRITE.TASK_PIN,
-    { rows: () => listedTaskRows(drawn.tasks), send: sendPin },
+    { rows: () => listedTaskRows(drawn), send: sendPin },
     [{ id: PINNED_TASK.id, after: { pinned: true, position: null } }],
   );
 
-  drawn = { ...IDLE_TASKS_VIEW, tasks: [{ ...PINNED_TASK, pinnedAt: 3 }] };
+  drawn = [{ ...PINNED_TASK, pinnedAt: 3 }];
 
   return pressed;
 }

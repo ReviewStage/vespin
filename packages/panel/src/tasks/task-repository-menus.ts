@@ -19,12 +19,7 @@ import { useTaskListCollections } from "../task-list-collections.js";
 import { appStateQuery, selectListedTasks } from "../use-app-state.js";
 import type { RepositoryChooser } from "./repository-chip.js";
 
-/**
- * The tasks the list holds that are about a repository, newest started
- * first, as the host lists them: what the recent repositories are read
- * from. One live query keeps them, so a task with no repository coming or
- * moving leaves the list the same array.
- */
+/** The tasks about a repository, newest started first: one live query, so a task about none moving leaves the same array. */
 function useRepositoryTasks(): readonly TaskSummary[] {
   const { tasks } = useTaskListCollections();
 
@@ -32,8 +27,7 @@ function useRepositoryTasks(): readonly TaskSummary[] {
     q
       .from({ task: tasks })
       .where(({ task }) => not(isNull(task.repository)))
-      .orderBy(({ task }) => task.createdAt, "desc")
-      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" }),
+      .orderBy(({ task }) => task.createdAt, "desc"),
   ).data;
 }
 
