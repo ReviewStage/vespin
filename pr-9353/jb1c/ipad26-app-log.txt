@@ -1,0 +1,387 @@
+getpwuid_r did not find a match for uid 501
+Timestamp               Ty Process[PID:TID]
+2026-11-15 10:03:23.366 Df Vespin[49012:446e617] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc55e00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateUnattached>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10de99000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:23.855 Df Vespin[49012:446e670] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 49012
+)} (error: (null))
+2026-11-15 10:03:23.855 Df Vespin[49012:446e670] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10df9b630> (error: (null))
+2026-11-15 10:03:24.164 Df Vespin[49012:446e670] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 49012
+)} (error: (null))
+2026-11-15 10:03:24.164 Df Vespin[49012:446e670] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x11eedc360> (error: (null))
+2026-11-15 10:03:24.191 Df Vespin[49012:446e636] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 49012
+)} (error: (null))
+2026-11-15 10:03:24.191 Df Vespin[49012:446e636] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x11eedd080> (error: (null))
+2026-11-15 10:03:24.470 Df Vespin[49012:446e617] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc55e00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10de99000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:24.474 Df Vespin[49012:446e639] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 49012
+)} (error: (null))
+2026-11-15 10:03:24.474 Df Vespin[49012:446e639] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x11eedf060> (error: (null))
+2026-11-15 10:03:24.547 E  Vespin[49012:446e617] [com.apple.UIKit:Snapshotting] Snapshotting a view (0x10a220600, RNSScreenView) that has not been rendered at least once requires afterScreenUpdates:YES.
+2026-11-15 10:03:24.977 Df Vespin[49012:446e617] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc55e00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10de99000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:24.981 Df Vespin[49012:446e617] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc55e00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10de99000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:25.242 F  Vespin[49012:446e617] [com.apple.SwiftUI:Invalid Configuration] No symbol named '' found in system symbol set
+2026-11-15 10:03:25.493 Df Vespin[49012:446e617] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc55e00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10de99000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:25.494 Df Vespin[49012:446e617] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc55e00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10de99000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:25.494 Df Vespin[49012:446e617] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc55e00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10de99000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:25.494 Df Vespin[49012:446e617] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc55e00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10de99000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:26.891 E  Vespin[49012:446e637] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:03:26.891 E  Vespin[49012:446e637] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:03:26.892 Df Vespin[49012:446e637] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 49012
+)} (error: (null))
+2026-11-15 10:03:26.892 Df Vespin[49012:446e637] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x11eedc360> (error: (null))
+2026-11-15 10:03:27.590 E  Vespin[49012:446e617] [com.apple.dt.xctest:Default] Unexpectedly received animationDidStop without a matching animationDidStart. Monitoring for idle animations may no longer function correctly.
+2026-11-15 10:03:28.767 Df Vespin[49012:446e637] [com.apple.xpc:connection] [0x127792d00] failed to do a bootstrap look-up: xpc_error=[3: No such process]
+2026-11-15 10:03:29.214 E  Vespin[49012:446e637] [com.apple.CFBundle:plugin] AddInstanceForFactory: No factory registered for id <CFUUID 0x129dc19c0> F8BB1C28-BAE8-11D6-9C31-00039315CD46
+2026-11-15 10:03:29.337 Df Vespin[49012:446e670] [com.apple.avkit:AVKit] Enhance Dialogue isDefaultAudioDeviceSupported:NO error: (null)
+2026-11-15 10:03:29.337 Df Vespin[49012:446e670] [com.apple.avkit:AVKit] Enhance Dialogue isDefaultAudioDeviceSupported:NO error: (null)
+2026-11-15 10:03:29.389 Df Vespin[49012:446e617] (UIKitCore) Unbalanced calls to begin/end appearance transitions for <ExpoVideo.OrientationAVPlayerViewController: 0x10a1b8a00>.
+2026-11-15 10:03:29.464 Df Vespin[49012:446e670] [com.apple.avkit:AVKit] Enhance Dialogue isDefaultAudioDeviceSupported:NO error: (null)
+2026-11-15 10:03:29.534 Df Vespin[49012:446e617] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke_2: currentItem KVO: P/JT will willChange AVPlayer.currentItem
+2026-11-15 10:03:29.535 Df Vespin[49012:446e617] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke: currentItem KVO: P/JT did willChange AVPlayer.currentItem
+2026-11-15 10:03:29.535 Df Vespin[49012:446e617] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke: P/JT setting timeControlStatus=0, reasonForWaitingToPlay=(null)
+2026-11-15 10:03:29.535 Df Vespin[49012:446e617] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke: currentItem KVO: P/JT will didChange AVPlayer.currentItem
+2026-11-15 10:03:29.540 Df Vespin[49012:446e617] [com.apple.avkit:AVKit] New playerItem: <ExpoVideo.VideoPlayerItem: 0x127700cc0>
+2026-11-15 10:03:29.543 Df Vespin[49012:446e617] [com.apple.avkit:AVKit] -[AVPlayerViewController _delegateRespondsTo:] <ExpoVideo.OrientationAVPlayerViewController 0x10a1b8a00> does NOT respond to playerViewControllerShouldStartPictureInPictureFromInlineWhenEnteringBackground:
+2026-11-15 10:03:29.553 Df Vespin[49012:446e617] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke: currentItem KVO: P/JT did didChange AVPlayer.currentItem
+2026-11-15 10:03:29.594 E  Vespin[49012:446ea17] [com.apple.coremedia:] (Fig) signalled err=-12900 at <>:1242
+2026-11-15 10:03:29.594 Df Vespin[49012:446ea17] [com.apple.coremedia:] <<<< VMC >>>> vmc2BuildDecompressionSession: [0x126cc0500:P/JT:I/OTW.01.t1a] decompression session 0x12aeb0a80 (error 0)
+2026-11-15 10:03:29.595 E  Vespin[49012:446ea17] [com.apple.coremedia:] <<<< VRP >>>> signalled err=-12852 at <>:2336
+2026-11-15 10:03:29.663 Df Vespin[49012:446e670] [com.apple.avkit:AVKit] Enhance Dialogue isDefaultAudioDeviceSupported:NO error: (null)
+2026-11-15 10:03:29.663 Df Vespin[49012:446e617] [com.apple.avkit:AVKit] New asset: <ExpoVideo.VideoAsset: 0x125adf520>
+2026-11-15 10:03:29.899 E  Vespin[49012:446e617] [com.apple.dt.xctest:Default] Unexpectedly received animationDidStop without a matching animationDidStart. Monitoring for idle animations may no longer function correctly.
+2026-11-15 10:03:30.895 Df Vespin[49012:446e7fa] [com.apple.VisionKit:com.apple.VisionKit.processing] Calling completion handler id: 1
+Total Processing Time 974.86ms
+Has Analysis: YES
+TextLength: 12 DD: 1, MRC: 0, VS:0 
+request: <VKCImageAnalyzerRequest: 0x12af30900> requestID: 1 madRequestID: 1 cancelled: NO
+Error: (null)
+2026-11-15 10:03:31.483 E  Vespin[49012:446e7f9] [com.apple.Translation:LID] Failed to get dominant result for text LID: lidInconclusive
+2026-11-15 10:03:31.485 E  Vespin[49012:446e670] [com.apple.Translation:VisualTranslation] Visual isTranslatable: NO; not offering translation: lidInconclusive
+2026-11-15 10:03:32.062 E  Vespin[49012:446e670] [com.apple.coregraphics:Unknown process name] verify_image_parameters: invalid image bits/pixel or bytes/row.
+2026-11-15 10:03:32.063 E  Vespin[49012:446e670] [com.apple.VisionKit:com.apple.VisionKit.RemoveBackground] Request to remove background on an unsupported device. Error Domain=com.apple.VisionKit.RemoveBackground Code=-8 "(null)"
+2026-11-15 10:03:32.064 E  Vespin[49012:446e670] [com.apple.VisionKit:com.apple.VisionKit.RemoveBackground] Error generating mask only remove background image: <VKCImageSubjectHighlightView: 0x12942d880> id: 1 - Error Domain=com.apple.VisionKit.RemoveBackground Code=-8 "(null)"
+2026-11-15 10:03:35.536 F  Vespin[49012:446e617] [com.apple.SwiftUI:Invalid Configuration] No symbol named '' found in system symbol set
+2026-11-15 10:03:43.655 E  Vespin[49012:446e6ad] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:03:43.655 E  Vespin[49012:446e6ad] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:03:43.656 E  Vespin[49012:446e6ad] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:03:43.656 E  Vespin[49012:446e6ad] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:03:43.656 E  Vespin[49012:446e6ad] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:03:43.656 E  Vespin[49012:446e6ad] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:03:43.656 E  Vespin[49012:446e6ad] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:03:43.657 Df Vespin[49012:446e6ad] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 49012
+)} (error: (null))
+2026-11-15 10:03:43.657 Df Vespin[49012:446e6ad] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12b7f5cb0> (error: (null))
+2026-11-15 10:03:48.246 Df Vespin[51199:446ffd4] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10e44de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateUnattached>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10e6a1000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:48.281 E  Vespin[51199:4470082] [com.apple.app_launch_measurement:General] Failed to send CA Event for app launch measurements for ca_event_type: 0 event_name: com.apple.app_launch_measurement.FirstFramePresentationMetric
+2026-11-15 10:03:48.451 Df Vespin[51199:4470093] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 51199
+)} (error: (null))
+2026-11-15 10:03:48.452 Df Vespin[51199:4470093] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10e7a4e70> (error: (null))
+2026-11-15 10:03:48.480 Df Vespin[51199:4470093] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 51199
+)} (error: (null))
+2026-11-15 10:03:48.480 Df Vespin[51199:4470093] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10e7a4ea0> (error: (null))
+2026-11-15 10:03:48.510 E  Vespin[51199:4470093] [com.apple.app_launch_measurement:General] Failed to send CA Event for app launch measurements for ca_event_type: 1 event_name: com.apple.app_launch_measurement.ExtendedLaunchMetrics
+2026-11-15 10:03:48.577 Df Vespin[51199:4470093] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 51199
+)} (error: (null))
+2026-11-15 10:03:48.577 Df Vespin[51199:4470093] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10e7a6a90> (error: (null))
+2026-11-15 10:03:48.689 Df Vespin[51199:4470093] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 51199
+)} (error: (null))
+2026-11-15 10:03:48.689 Df Vespin[51199:4470093] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10e7a4ea0> (error: (null))
+2026-11-15 10:03:48.777 Df Vespin[51199:447008e] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 51199
+)} (error: (null))
+2026-11-15 10:03:48.777 Df Vespin[51199:447008e] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10e7a42d0> (error: (null))
+2026-11-15 10:03:48.869 Df Vespin[51199:447008e] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 51199
+)} (error: (null))
+2026-11-15 10:03:48.869 Df Vespin[51199:447008e] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10e7a5cb0> (error: (null))
+2026-11-15 10:03:48.964 Df Vespin[51199:447008e] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 51199
+)} (error: (null))
+2026-11-15 10:03:48.964 Df Vespin[51199:447008e] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x11e2fc3c0> (error: (null))
+2026-11-15 10:03:49.121 Df Vespin[51199:447008d] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 51199
+)} (error: (null))
+2026-11-15 10:03:49.121 Df Vespin[51199:447008d] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x11e2fc990> (error: (null))
+2026-11-15 10:03:49.229 Df Vespin[51199:446ffd4] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10e44de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10e6a1000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:49.233 Df Vespin[51199:447008e] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 51199
+)} (error: (null))
+2026-11-15 10:03:49.233 Df Vespin[51199:447008e] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x11e2fe760> (error: (null))
+2026-11-15 10:03:49.288 E  Vespin[51199:446ffd4] [com.apple.UIKit:Snapshotting] Snapshotting a view (0x10aa24600, RNSScreenView) that has not been rendered at least once requires afterScreenUpdates:YES.
+2026-11-15 10:03:49.644 Df Vespin[51199:446ffd4] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10e44de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10e6a1000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:49.647 Df Vespin[51199:446ffd4] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10e44de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10e6a1000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:49.844 F  Vespin[51199:446ffd4] [com.apple.SwiftUI:Invalid Configuration] No symbol named '' found in system symbol set
+2026-11-15 10:03:50.039 Df Vespin[51199:446ffd4] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10e44de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10e6a1000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:50.039 Df Vespin[51199:446ffd4] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10e44de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10e6a1000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:50.039 Df Vespin[51199:446ffd4] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10e44de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10e6a1000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:50.039 Df Vespin[51199:446ffd4] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10e44de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10e6a1000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:03:51.022 E  Vespin[51199:4470093] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:03:51.022 E  Vespin[51199:4470093] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:03:51.024 Df Vespin[51199:4470093] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 51199
+)} (error: (null))
+2026-11-15 10:03:51.024 Df Vespin[51199:4470093] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12328cc30> (error: (null))
+2026-11-15 10:03:52.023 E  Vespin[51199:446ffd4] [com.apple.dt.xctest:Default] Unexpectedly received animationDidStop without a matching animationDidStart. Monitoring for idle animations may no longer function correctly.
+2026-11-15 10:03:52.925 Df Vespin[51199:447025d] [com.apple.xpc:connection] [0x12765ea00] failed to do a bootstrap look-up: xpc_error=[3: No such process]
+2026-11-15 10:03:53.301 Df Vespin[51199:447025e] [com.apple.avkit:AVKit] Enhance Dialogue isDefaultAudioDeviceSupported:NO error: (null)
+2026-11-15 10:03:53.301 Df Vespin[51199:447025e] [com.apple.avkit:AVKit] Enhance Dialogue isDefaultAudioDeviceSupported:NO error: (null)
+2026-11-15 10:03:53.344 E  Vespin[51199:447012f] [com.apple.CFBundle:plugin] AddInstanceForFactory: No factory registered for id <CFUUID 0x12a8e0ea0> F8BB1C28-BAE8-11D6-9C31-00039315CD46
+2026-11-15 10:03:53.355 Df Vespin[51199:446ffd4] (UIKitCore) Unbalanced calls to begin/end appearance transitions for <ExpoVideo.OrientationAVPlayerViewController: 0x10a9c0a00>.
+2026-11-15 10:03:53.491 Df Vespin[51199:446ffd4] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke_2: currentItem KVO: P/CL will willChange AVPlayer.currentItem
+2026-11-15 10:03:53.492 Df Vespin[51199:446ffd4] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke: currentItem KVO: P/CL did willChange AVPlayer.currentItem
+2026-11-15 10:03:53.492 Df Vespin[51199:446ffd4] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke: P/CL setting timeControlStatus=0, reasonForWaitingToPlay=(null)
+2026-11-15 10:03:53.492 Df Vespin[51199:446ffd4] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke: currentItem KVO: P/CL will didChange AVPlayer.currentItem
+2026-11-15 10:03:53.496 Df Vespin[51199:446ffd4] [com.apple.avkit:AVKit] New playerItem: <ExpoVideo.VideoPlayerItem: 0x1275c5ec0>
+2026-11-15 10:03:53.498 Df Vespin[51199:446ffd4] [com.apple.avkit:AVKit] -[AVPlayerViewController _delegateRespondsTo:] <ExpoVideo.OrientationAVPlayerViewController 0x10a9c0a00> does NOT respond to playerViewControllerShouldStartPictureInPictureFromInlineWhenEnteringBackground:
+2026-11-15 10:03:53.504 Df Vespin[51199:446ffd4] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke: currentItem KVO: P/CL did didChange AVPlayer.currentItem
+2026-11-15 10:03:53.550 E  Vespin[51199:4470410] [com.apple.coremedia:] (Fig) signalled err=-12900 at <>:1242
+2026-11-15 10:03:53.551 Df Vespin[51199:4470410] [com.apple.coremedia:] <<<< VMC >>>> vmc2BuildDecompressionSession: [0x126dbca00:P/CL:I/JIX.01.t1a] decompression session 0x12a8fbd80 (error 0)
+2026-11-15 10:03:53.551 E  Vespin[51199:4470410] [com.apple.coremedia:] <<<< VRP >>>> signalled err=-12852 at <>:2336
+2026-11-15 10:03:53.580 Df Vespin[51199:447025e] [com.apple.avkit:AVKit] Enhance Dialogue isDefaultAudioDeviceSupported:NO error: (null)
+2026-11-15 10:03:53.580 Df Vespin[51199:446ffd4] [com.apple.avkit:AVKit] New asset: <ExpoVideo.VideoAsset: 0x124f221c0>
+2026-11-15 10:03:53.832 E  Vespin[51199:446ffd4] [com.apple.dt.xctest:Default] Unexpectedly received animationDidStop without a matching animationDidStart. Monitoring for idle animations may no longer function correctly.
+2026-11-15 10:03:54.157 Df Vespin[51199:4470093] [com.apple.VisionKit:com.apple.VisionKit.processing] Calling completion handler id: 1
+Total Processing Time 321.41ms
+Has Analysis: YES
+TextLength: 12 DD: 1, MRC: 0, VS:0 
+request: <VKCImageAnalyzerRequest: 0x12aae4b00> requestID: 1 madRequestID: 1 cancelled: NO
+Error: (null)
+2026-11-15 10:03:54.300 E  Vespin[51199:447025e] [com.apple.Translation:LID] Failed to get dominant result for text LID: lidInconclusive
+2026-11-15 10:03:54.302 E  Vespin[51199:4470082] [com.apple.Translation:VisualTranslation] Visual isTranslatable: NO; not offering translation: lidInconclusive
+2026-11-15 10:03:55.320 E  Vespin[51199:4470090] [com.apple.coregraphics:Unknown process name] verify_image_parameters: invalid image bits/pixel or bytes/row.
+2026-11-15 10:03:55.323 E  Vespin[51199:4470090] [com.apple.VisionKit:com.apple.VisionKit.RemoveBackground] Request to remove background on an unsupported device. Error Domain=com.apple.VisionKit.RemoveBackground Code=-8 "(null)"
+2026-11-15 10:03:55.323 E  Vespin[51199:4470090] [com.apple.VisionKit:com.apple.VisionKit.RemoveBackground] Error generating mask only remove background image: <VKCImageSubjectHighlightView: 0x1296cd880> id: 1 - Error Domain=com.apple.VisionKit.RemoveBackground Code=-8 "(null)"
+2026-11-15 10:03:57.478 F  Vespin[51199:446ffd4] [com.apple.SwiftUI:Invalid Configuration] No symbol named '' found in system symbol set
+2026-11-15 10:04:10.972 E  Vespin[51199:4470082] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:10.973 E  Vespin[51199:4470082] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:10.973 E  Vespin[51199:4470082] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:10.973 E  Vespin[51199:4470082] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:10.974 E  Vespin[51199:4470082] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:10.974 E  Vespin[51199:4470082] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:10.974 E  Vespin[51199:4470082] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:10.974 Df Vespin[51199:4470082] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 51199
+)} (error: (null))
+2026-11-15 10:04:10.974 Df Vespin[51199:4470082] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x1276736f0> (error: (null))
+2026-11-15 10:04:15.778 Df Vespin[53843:4471e32] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc5de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateUnattached>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10dea5000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:04:15.806 E  Vespin[53843:4471eb4] [com.apple.app_launch_measurement:General] Failed to send CA Event for app launch measurements for ca_event_type: 0 event_name: com.apple.app_launch_measurement.FirstFramePresentationMetric
+2026-11-15 10:04:15.934 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:15.934 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10dfa9230> (error: (null))
+2026-11-15 10:04:15.985 Df Vespin[53843:4471eb4] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:15.985 Df Vespin[53843:4471eb4] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10dfaa700> (error: (null))
+2026-11-15 10:04:16.053 E  Vespin[53843:4471eb4] [com.apple.app_launch_measurement:General] Failed to send CA Event for app launch measurements for ca_event_type: 1 event_name: com.apple.app_launch_measurement.ExtendedLaunchMetrics
+2026-11-15 10:04:16.079 Df Vespin[53843:4471eaf] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:16.079 Df Vespin[53843:4471eaf] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10dfab420> (error: (null))
+2026-11-15 10:04:16.165 Df Vespin[53843:4471eb4] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:16.165 Df Vespin[53843:4471eb4] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10dfab810> (error: (null))
+2026-11-15 10:04:16.262 Df Vespin[53843:4471eac] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:16.263 Df Vespin[53843:4471eac] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10dfab0f0> (error: (null))
+2026-11-15 10:04:16.346 Df Vespin[53843:4471eaf] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:16.346 Df Vespin[53843:4471eaf] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x10dfab3f0> (error: (null))
+2026-11-15 10:04:16.438 Df Vespin[53843:4471eb1] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:16.439 Df Vespin[53843:4471eb1] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x11dac02a0> (error: (null))
+2026-11-15 10:04:16.531 Df Vespin[53843:4471eb1] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:16.531 Df Vespin[53843:4471eb1] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x11dac1320> (error: (null))
+2026-11-15 10:04:16.699 Df Vespin[53843:4471e32] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc5de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10dea5000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:04:16.703 Df Vespin[53843:4471eb4] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:16.703 Df Vespin[53843:4471eb4] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x11dac1a70> (error: (null))
+2026-11-15 10:04:16.750 E  Vespin[53843:4471e32] [com.apple.UIKit:Snapshotting] Snapshotting a view (0x10a224600, RNSScreenView) that has not been rendered at least once requires afterScreenUpdates:YES.
+2026-11-15 10:04:17.007 E  Vespin[53843:4471e32] [com.apple.UIKit:UIFocus] RCTScrollViewComponentView implements focusItemsInRect: - caching for linear focus movement is limited as long as this view is on screen.
+2026-11-15 10:04:17.096 Df Vespin[53843:4471eac] [com.apple.xpc:connection] [0x124dcf000] failed to do a bootstrap look-up: xpc_error=[3: No such process]
+2026-11-15 10:04:17.330 Df Vespin[53843:4471e32] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc5de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10dea5000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:04:17.346 E  Vespin[53843:4471eaf] [com.apple.CFBundle:plugin] AddInstanceForFactory: No factory registered for id <CFUUID 0x1234a9580> F8BB1C28-BAE8-11D6-9C31-00039315CD46
+2026-11-15 10:04:17.371 Df Vespin[53843:4471eb5] [com.apple.avkit:AVKit] Enhance Dialogue isDefaultAudioDeviceSupported:NO error: (null)
+2026-11-15 10:04:17.371 Df Vespin[53843:4471eb5] [com.apple.avkit:AVKit] Enhance Dialogue isDefaultAudioDeviceSupported:NO error: (null)
+2026-11-15 10:04:17.480 F  Vespin[53843:4471e32] [com.apple.SwiftUI:Invalid Configuration] No symbol named '' found in system symbol set
+2026-11-15 10:04:17.759 Df Vespin[53843:4471e32] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc5de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10dea5000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:04:17.759 Df Vespin[53843:4471e32] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc5de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10dea5000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:04:17.759 Df Vespin[53843:4471e32] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc5de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10dea5000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:04:17.759 Df Vespin[53843:4471e32] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc5de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10dea5000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:04:17.912 Df Vespin[53843:4471e32] (UIKitCore) Unbalanced calls to begin/end appearance transitions for <ExpoVideo.OrientationAVPlayerViewController: 0x10a1b0a00>.
+2026-11-15 10:04:18.259 Df Vespin[53843:4471eb3] [com.apple.avkit:AVKit] Enhance Dialogue isDefaultAudioDeviceSupported:NO error: (null)
+2026-11-15 10:04:18.368 Df Vespin[53843:4471e32] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke_2: currentItem KVO: P/UF will willChange AVPlayer.currentItem
+2026-11-15 10:04:18.369 Df Vespin[53843:4471e32] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke: currentItem KVO: P/UF did willChange AVPlayer.currentItem
+2026-11-15 10:04:18.369 Df Vespin[53843:4471e32] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke: P/UF setting timeControlStatus=0, reasonForWaitingToPlay=(null)
+2026-11-15 10:04:18.369 Df Vespin[53843:4471e32] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke: currentItem KVO: P/UF will didChange AVPlayer.currentItem
+2026-11-15 10:04:18.372 Df Vespin[53843:4471e32] [com.apple.avkit:AVKit] New playerItem: <ExpoVideo.VideoPlayerItem: 0x1230c4f60>
+2026-11-15 10:04:18.374 Df Vespin[53843:4471e32] [com.apple.avkit:AVKit] -[AVPlayerViewController _delegateRespondsTo:] <ExpoVideo.OrientationAVPlayerViewController 0x10a1b0a00> does NOT respond to playerViewControllerShouldStartPictureInPictureFromInlineWhenEnteringBackground:
+2026-11-15 10:04:18.382 Df Vespin[53843:4471e32] [com.apple.coremedia:] <<<< AVPlayer >>>> -[AVPlayer _runOnIvarAccessQueueOperationThatMayChangeCurrentItemWithPreflightBlock:modificationBlock:error:]_block_invoke: currentItem KVO: P/UF did didChange AVPlayer.currentItem
+2026-11-15 10:04:18.424 E  Vespin[53843:4471fbd] [com.apple.coremedia:] (Fig) signalled err=-12900 at <>:1242
+2026-11-15 10:04:18.424 Df Vespin[53843:4471fbd] [com.apple.coremedia:] <<<< VMC >>>> vmc2BuildDecompressionSession: [0x126755400:P/UF:I/SYJ.01.t1a] decompression session 0x129d36d00 (error 0)
+2026-11-15 10:04:18.424 E  Vespin[53843:4471fbd] [com.apple.coremedia:] <<<< VRP >>>> signalled err=-12852 at <>:2336
+2026-11-15 10:04:18.473 Df Vespin[53843:4471eb0] [com.apple.avkit:AVKit] Enhance Dialogue isDefaultAudioDeviceSupported:NO error: (null)
+2026-11-15 10:04:18.474 Df Vespin[53843:4471e32] [com.apple.avkit:AVKit] New asset: <ExpoVideo.VideoAsset: 0x124deaee0>
+2026-11-15 10:04:18.841 Df Vespin[53843:4471e32] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc5de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10dea5000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:04:18.848 Df Vespin[53843:4471e32] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10dc5de00; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: A0E30471-84B1-4FB0-9AA8-1C281297E9D8; activationState: UISceneActivationStateForegroundActive>; viewController: <ExpoModulesCore.ExpoRootViewController: 0x10dea5000>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+2026-11-15 10:04:19.170 E  Vespin[53843:447201e] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:19.170 E  Vespin[53843:447201e] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:19.171 E  Vespin[53843:447201e] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:19.171 Df Vespin[53843:447201e] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:19.171 Df Vespin[53843:447201e] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a3553e0> (error: (null))
+2026-11-15 10:04:19.205 Df Vespin[53843:447201e] [com.apple.VisionKit:com.apple.VisionKit.processing] Calling completion handler id: 1
+Total Processing Time 337.21ms
+Has Analysis: YES
+TextLength: 12 DD: 1, MRC: 0, VS:0 
+request: <VKCImageAnalyzerRequest: 0x129df2500> requestID: 1 madRequestID: 1 cancelled: NO
+Error: (null)
+2026-11-15 10:04:19.408 E  Vespin[53843:447201b] [com.apple.Translation:LID] Failed to get dominant result for text LID: lidInconclusive
+2026-11-15 10:04:19.411 E  Vespin[53843:4471eb5] [com.apple.Translation:VisualTranslation] Visual isTranslatable: NO; not offering translation: lidInconclusive
+2026-11-15 10:04:19.542 E  Vespin[53843:4471e32] [com.apple.dt.xctest:Default] Unexpectedly received animationDidStop without a matching animationDidStart. Monitoring for idle animations may no longer function correctly.
+2026-11-15 10:04:19.542 E  Vespin[53843:4471e32] [com.apple.dt.xctest:Default] Unexpectedly received animationDidStop without a matching animationDidStart. Monitoring for idle animations may no longer function correctly.
+2026-11-15 10:04:19.582 E  Vespin[53843:4471e32] [com.apple.dt.xctest:Default] Unexpectedly received animationDidStop without a matching animationDidStart. Monitoring for idle animations may no longer function correctly.
+2026-11-15 10:04:20.444 E  Vespin[53843:4471eb5] [com.apple.coregraphics:Unknown process name] verify_image_parameters: invalid image bits/pixel or bytes/row.
+2026-11-15 10:04:20.445 E  Vespin[53843:4471eb5] [com.apple.VisionKit:com.apple.VisionKit.RemoveBackground] Request to remove background on an unsupported device. Error Domain=com.apple.VisionKit.RemoveBackground Code=-8 "(null)"
+2026-11-15 10:04:20.446 E  Vespin[53843:4471eb5] [com.apple.VisionKit:com.apple.VisionKit.RemoveBackground] Error generating mask only remove background image: <VKCImageSubjectHighlightView: 0x12b7c1f80> id: 1 - Error Domain=com.apple.VisionKit.RemoveBackground Code=-8 "(null)"
+2026-11-15 10:04:21.672 E  Vespin[53843:4471eb5] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:21.673 E  Vespin[53843:4471eb5] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:21.673 E  Vespin[53843:4471eb5] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:21.673 Df Vespin[53843:4471eb5] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:21.674 Df Vespin[53843:4471eb5] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a3559e0> (error: (null))
+2026-11-15 10:04:26.024 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:26.024 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:26.024 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:26.025 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:26.025 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a3566d0> (error: (null))
+2026-11-15 10:04:26.342 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:26.343 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:26.343 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:26.344 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:26.344 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a355e30> (error: (null))
+2026-11-15 10:04:26.614 Df Vespin[53843:4471e32] [com.apple.dt.xctest:Default] App element pid: 53843 (App element pid: 53843) faulted in {
+    "XC_kAXXCAttributeChildren" =     (
+        "AX element pid: 53843, elementOrHash.elementID: 4974603264.19",
+        "AX element pid: 53843, elementOrHash.elementID: 4528424960.3"
+    );
+}: (no error) for children using XC_kAXXCAttributeChildren
+2026-11-15 10:04:26.614 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query ↪︎ Children matching type Any (First Match) found matching snapshots: {(
+    AX element pid: 53843, elementOrHash.elementID: 4974603264.19
+)} (error: (null))
+2026-11-15 10:04:26.615 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query ↪︎ Children matching type Any (First Match) with results: <XCTElementQueryResults: 0x12a356970> (error: (null))
+2026-11-15 10:04:30.456 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:30.457 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:30.457 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:30.458 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:30.458 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a355950> (error: (null))
+2026-11-15 10:04:30.772 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:30.773 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:30.773 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:30.773 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:30.773 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a3561f0> (error: (null))
+2026-11-15 10:04:34.300 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:34.301 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:34.301 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:34.301 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:34.301 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a3566d0> (error: (null))
+2026-11-15 10:04:34.607 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:34.608 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:34.608 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:34.608 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:34.609 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a356bb0> (error: (null))
+2026-11-15 10:04:34.844 Df Vespin[53843:4471e32] [com.apple.dt.xctest:Default] App element pid: 53843 (App element pid: 53843) faulted in {
+    "XC_kAXXCAttributeChildren" =     (
+        "AX element pid: 53843, elementOrHash.elementID: 4974603264.19",
+        "AX element pid: 53843, elementOrHash.elementID: 4528424960.3"
+    );
+}: (no error) for children using XC_kAXXCAttributeChildren
+2026-11-15 10:04:34.844 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query ↪︎ Children matching type Any (First Match) found matching snapshots: {(
+    AX element pid: 53843, elementOrHash.elementID: 4974603264.19
+)} (error: (null))
+2026-11-15 10:04:34.844 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query ↪︎ Children matching type Any (First Match) with results: <XCTElementQueryResults: 0x12a356550> (error: (null))
+2026-11-15 10:04:38.854 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:38.854 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:38.854 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:38.855 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:38.855 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a356400> (error: (null))
+2026-11-15 10:04:39.151 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:39.152 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:39.152 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:39.152 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:39.152 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a356910> (error: (null))
+2026-11-15 10:04:40.503 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:40.504 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:40.504 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:40.504 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:40.504 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a356c10> (error: (null))
+2026-11-15 10:04:43.845 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:43.846 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:43.846 E  Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:43.846 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:43.846 Df Vespin[53843:4471eb3] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a356a60> (error: (null))
+2026-11-15 10:04:47.726 E  Vespin[53843:447201b] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:47.727 E  Vespin[53843:447201b] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:47.727 E  Vespin[53843:447201b] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:47.727 Df Vespin[53843:447201b] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:47.728 Df Vespin[53843:447201b] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a356d30> (error: (null))
+2026-11-15 10:04:48.075 E  Vespin[53843:447201b] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:48.076 E  Vespin[53843:447201b] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:04:48.076 E  Vespin[53843:447201b] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:04:48.076 Df Vespin[53843:447201b] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:04:48.076 Df Vespin[53843:447201b] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a3561f0> (error: (null))
+2026-11-15 10:05:01.258 E  Vespin[53843:447201f] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:05:01.259 E  Vespin[53843:447201f] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:05:01.259 E  Vespin[53843:447201f] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:05:01.260 Df Vespin[53843:447201f] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:05:01.260 Df Vespin[53843:447201f] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a3562e0> (error: (null))
+2026-11-15 10:05:01.597 E  Vespin[53843:44742a6] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:05:01.597 E  Vespin[53843:44742a6] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 9 from class SwiftUI.AccessibilityNode:UIResponder, traits 1108101562369, but AXAutomationType returned 14 which maps to 14
+2026-11-15 10:05:01.598 E  Vespin[53843:44742a6] [com.apple.dt.xctest:Default] Automation type mismatch; legacy system derived element type 49 from class SwiftUI.VerticalTextView:UITextView, traits 146029150208, but AXAutomationType returned 52 which maps to 52
+2026-11-15 10:05:01.598 Df Vespin[53843:44742a6] [com.apple.dt.xctest:Default] Query  found matching snapshots: {(
+    Application, pid: 53843
+)} (error: (null))
+2026-11-15 10:05:01.598 Df Vespin[53843:44742a6] [com.apple.dt.xctest:Default] Replying to query  with results: <XCTElementQueryResults: 0x12a356790> (error: (null))
