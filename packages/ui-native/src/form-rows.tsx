@@ -25,6 +25,7 @@ import {
   textInputAutocapitalization,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { longPasteIn } from "@repo/features/long-paste";
 import { useEffect, useRef } from "react";
 import { type AttachedPicture, AttachedPictures } from "./composer-head.js";
 import { forgetField, noteFieldFocus } from "./field-focus.js";
@@ -68,6 +69,8 @@ type WordsFieldProps = {
   readonly verbatim?: boolean | undefined;
   /** Where the words stand: a Form's row, a row of one line, or the sheet's own page. */
   readonly look?: WordsLook | undefined;
+  /** Takes words pasted long enough to come as a file (`@repo/features/long-paste`), answering whether it did, so the field takes them back out of its words; they paste as words where none is given. */
+  readonly onLongPaste?: ((words: string) => boolean) | undefined;
 };
 
 /**
@@ -89,6 +92,7 @@ export function WordsField({
   disabled = false,
   verbatim = false,
   look = WORDS_LOOK.ROW,
+  onLongPaste,
 }: WordsFieldProps) {
   const colors = useColors();
   const text = useNativeState(words ?? initialWords);
@@ -111,9 +115,15 @@ export function WordsField({
     text.set(words);
   }, [words, text]);
 
+  // Note that a long paste its holder took as a file is taken back out of the words at once, since the field hears no paste of its own, only its words as they change.
   const type = (next: string) => {
-    shown.current = next;
-    onWords(next);
+    const pasted = onLongPaste === undefined ? undefined : longPasteIn(shown.current, next);
+    const taken = pasted !== undefined && onLongPaste?.(pasted.words) === true;
+    const words = taken ? pasted.kept : next;
+    shown.current = words;
+
+    if (taken) text.set(words);
+    onWords(words);
   };
 
   // Note that a row of one line, such as a name, stands as one line, as Settings' name fields do, rather than in a box a few lines tall.

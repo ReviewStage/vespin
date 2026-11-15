@@ -1,6 +1,11 @@
 // start-screens.tsx -- the two sheets that start work, each a compose sheet as Mail's stands: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus above the keyboard; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules, or File for later, which files it with no agent.
 
-import { hasWordsOrFiles } from "@repo/features/agent-wire";
+import {
+  AGENT_ATTACHMENT_TYPE,
+  type AgentAttachment,
+  hasWordsOrFiles,
+} from "@repo/features/agent-wire";
+import { attachmentText } from "@repo/features/attachment-model";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
@@ -12,13 +17,14 @@ import { REMOVE_RELATION, TASK_RELATION_MENU } from "@repo/features/task-relatio
 import { TASK_CREATE_RELATION_WORDS, TASK_STATUS_TONE } from "@repo/features/task-standing-words";
 import {
   isTaskSettled,
+  TASK_BOUNDS,
   TASK_CREATE_RELATION_KIND,
   TASK_STATUS,
   type TaskCreateRelation,
   type TaskCreateRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { filedTaskOf } from "@repo/features/tasks-model";
+import { type FiledTask, filedTaskOf } from "@repo/features/tasks-model";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
@@ -444,6 +450,29 @@ function useClosingStart(
   return { starting: sent, go };
 }
 
+/**
+ * The task File for later files from the sheet's words and the files it
+ * holds: none while it holds a picture, which goes only with an agent's
+ * start. Note that a long paste held as a text file is filed as words after
+ * the words typed, since a task filed for later carries no file, so a pasted
+ * description can still be filed, while it fits in a brief.
+ */
+function filedOf(
+  prompt: string,
+  files: readonly AgentAttachment[] | undefined,
+): FiledTask | undefined {
+  const held = files ?? [];
+
+  if (held.some((file) => file.mediaType !== AGENT_ATTACHMENT_TYPE.TEXT)) return undefined;
+  const words = [prompt.trim(), ...held.map((file) => attachmentText(file.data).trim())];
+  const kept = words.filter((each) => each !== "").join("\n\n");
+
+  // Note that pasted text a brief would cut holds File for later back rather than being filed short, since a paste may run far past a brief's bound.
+  if (held.length > 0 && kept.length > TASK_BOUNDS.MAX_BRIEF_CHARS) return undefined;
+
+  return filedTaskOf(kept);
+}
+
 /** The skills a `/` offers, as the compose sheet takes them. */
 function offered(skills: SkillsOffered | undefined) {
   return skills === undefined
@@ -538,6 +567,7 @@ export function NewAgentScreen({
           placeholder: WORDS.AGENT_PLACEHOLDER,
           words: prompt,
           onWords: setPrompt,
+          onLongPaste: pictures.pasteText,
           testId: TEST_IDS.NEW_AGENT.WORDS,
         }}
         skills={offered(skills)}
@@ -725,8 +755,8 @@ function RelationChip({ pick }: { readonly pick: RelationPick }) {
  * task and starts its agent in one act, as Home does, in the workspace the
  * app works in, or the one a share draft it opens on was kept for; File for
  * later before it files the task in the Backlog under its words with no
- * agent, offered on words alone, since pictures go only with an agent's
- * start. A task's New sub-task opens it as a sub-task of `parent`, in the
+ * agent, offered on words and pasted text alone, since pictures go only
+ * with an agent's start. A task's New sub-task opens it as a sub-task of `parent`, in the
  * parent's workspace, which a task opened by a link may hold apart from the
  * one the app works in, since a tree stands in one.
  */
@@ -758,7 +788,7 @@ export function NewTaskScreen({
   const pictures = useAttachedPictures(setNote, draft?.pictures);
   // Note that a share draft's pictures are read as the sheet opens, and nothing starts or files until they are in, so its words never go without them.
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
-  const filed = pictures.files === undefined && !pictures.opening ? filedTaskOf(prompt) : undefined;
+  const filed = pictures.opening ? undefined : filedOf(prompt, pictures.files);
   const kept = useKeptWords(drafted);
   const { starting, go } = useClosingStart(kept, setNote);
   const place = { repository: repository.picked, relation: relation.relation };
@@ -818,6 +848,7 @@ export function NewTaskScreen({
           placeholder: WORDS.TASK_PLACEHOLDER,
           words: prompt,
           onWords: setPrompt,
+          onLongPaste: pictures.pasteText,
           testId: TEST_IDS.NEW_TASK.WORDS,
         }}
         skills={offered(skills)}

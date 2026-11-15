@@ -5643,7 +5643,13 @@ const environmentAsMember = <R>(
     const workspaceId = callerWorkspaceId(caller);
 
     return run(callerUserId(caller), workspaceId).pipe(
-      Effect.map((answer): WireRecord => ({ workspaceId, variables: answer.variables })),
+      // Note that a config's value is left out of every answer, a write's too, so none reaches the model through a tool.
+      Effect.map(
+        (answer): WireRecord => ({
+          workspaceId,
+          variables: answer.variables.map(({ value: _value, ...variable }) => variable),
+        }),
+      ),
       Effect.catch((refusal) =>
         Effect.succeed(agentToolRejected(environmentRefusalWords(refusal, verb))),
       ),
@@ -5682,7 +5688,8 @@ const LIST_ENVIRONMENT_VARIABLES_TOOL = memberMcpTool({
   annotations: READ_ONLY,
   run: ({ workspace }) =>
     environmentAsMember(workspace, "run", (userId, workspaceId) =>
-      listWorkspaceEnvironment(userId, workspaceId),
+      // Note that no ring is handed, so a config's value never reaches the model through a tool.
+      listWorkspaceEnvironment(undefined, userId, workspaceId),
     ),
 });
 
@@ -5736,7 +5743,7 @@ const DELETE_ENVIRONMENT_VARIABLE_TOOL = memberMcpTool({
   annotations: DESTRUCTIVE,
   run: ({ workspace, name }) =>
     environmentAsMember(workspace, "deleted", (userId, workspaceId) =>
-      deleteWorkspaceVariable(userId, { workspaceId, name }),
+      deleteWorkspaceVariable(undefined, userId, { workspaceId, name }),
     ),
 });
 

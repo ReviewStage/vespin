@@ -1,4 +1,5 @@
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { base64Of } from "@repo/features/attached-files";
 import {
   descriptionAttachmentAddress,
   descriptionAttachmentOf,
@@ -63,7 +64,6 @@ import {
 } from "../picture-block.js";
 import { isPdfUpload } from "../picture-files.js";
 import { keepPictureRead, pictureQuery } from "../picture-query.js";
-import { base64Of } from "./attached-files.js";
 import {
   type DescriptionPicturesDoor,
   useDescriptionPicturesDoor,
@@ -106,7 +106,6 @@ import { documentScrollerOf } from "./document-frame.js";
 const UPLOAD_WORDS = {
   NOT_A_PICTURE: "This file is not a picture a description can keep.",
   TOO_MANY: "This description already holds as many pictures as it can.",
-  TOO_MANY_VIDEOS: "This description already holds as many videos as it can.",
   NOT_COPIED: "The picture could not be read from its description.",
   FAILED: "The image could not be uploaded.",
   PDF_FAILED: "The PDF could not be uploaded.",
@@ -175,8 +174,6 @@ interface DrawnPicture {
 /** Why a keep failed, in the words said on what failed to go: a picture, or a PDF. */
 function keepFailedWords(failure: string | undefined, url: string): string {
   if (failure === PICTURE_KEEP_FAILURE.TOO_MANY) return UPLOAD_WORDS.TOO_MANY;
-
-  if (failure === PICTURE_KEEP_FAILURE.TOO_MANY_VIDEOS) return UPLOAD_WORDS.TOO_MANY_VIDEOS;
 
   return isPdfDataUrl(url) ? UPLOAD_WORDS.PDF_FAILED : UPLOAD_WORDS.FAILED;
 }

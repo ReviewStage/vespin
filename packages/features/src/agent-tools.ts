@@ -88,8 +88,10 @@ export const AGENT_TOOL = {
   REPLY_TO_COMMENT: DESCRIPTION_COMMENT_TOOL.REPLY,
   UPDATE_COMMENT: DESCRIPTION_COMMENT_TOOL.UPDATE,
   READ_PAGE: "read_page",
-  // Pictures from a coding agent's sandbox, shown in its transcript.
+  // Pictures and recordings from a coding agent's sandbox, shown in its transcript.
   SHOW_IMAGE: "show_image",
+  // The same, with sound clips beside them, under the name the service offers it by once every client released reads it.
+  SHOW_MEDIA: "show_media",
   // A wakeup a coding agent books for later: its turn ends, and the prompt opens its next turn when due.
   SCHEDULE_WAKEUP: "schedule_wakeup",
   // A coding agent's turn ended in a short summary, the reply its developer reads, and the follow-ups it offers them.
@@ -202,6 +204,16 @@ export const RETIRED_TOOL = {
 export const RENAMED_TOOL: ReadonlyMap<string, AgentTool> = new Map([
   [RETIRED_TOOL.EDIT_PLAN, AGENT_TOOL.EDIT_DESCRIPTION],
 ]);
+
+/**
+ * Whether a call is one that showed the developer media from a coding
+ * agent's sandbox, under either of the names it is stored by: `show_image`,
+ * as a transcript written while it was offered by that name stores it, or
+ * `show_media`.
+ */
+export function isShowMediaTool(tool: string): boolean {
+  return tool === AGENT_TOOL.SHOW_MEDIA || tool === AGENT_TOOL.SHOW_IMAGE;
+}
 
 /**
  * Claude Code's own tools, by the names its CLI calls them, which a coding
