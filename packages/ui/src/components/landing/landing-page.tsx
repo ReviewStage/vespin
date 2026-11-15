@@ -1,6 +1,7 @@
 import { type ReactNode, useId } from "react";
 import { ICON_SIZE } from "../../icons/icons.js";
 import type { CodexArt } from "../../marks/harness-mark.js";
+import { MarkOrb } from "../../marks/mark-orb.js";
 import { GLYPH_INK, GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { TEXT_LINK_HEIGHT, TextLink } from "../text-link/text-link.js";
 import { type LandingCast, LandingCastProvider } from "./landing-desktop.js";
@@ -255,11 +256,16 @@ export function LandingPage({
           {children}
           <SiteRule />
           <section className="ui-landing-close" aria-labelledby={closeId}>
-            <h2 className="ui-landing-close-title" id={closeId}>
-              {close.title}
-            </h2>
-            {close.lead === undefined ? null : <p className="ui-landing-lead">{close.lead}</p>}
-            <div className="ui-landing-actions">{close.actions}</div>
+            <div className="ui-landing-close-words">
+              <h2 className="ui-landing-close-title" id={closeId}>
+                {close.title}
+              </h2>
+              {close.lead === undefined ? null : <p className="ui-landing-lead">{close.lead}</p>}
+              <div className="ui-landing-actions">{close.actions}</div>
+            </div>
+            <div className="ui-landing-close-art">
+              <MarkOrb />
+            </div>
           </section>
         </main>
       </LandingCastScope>
