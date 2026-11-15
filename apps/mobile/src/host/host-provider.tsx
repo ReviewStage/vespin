@@ -1,12 +1,23 @@
 // host-provider.tsx -- the host started as the app mounts, its document followed into the Query client every screen reads.
 
+import type { ListedAgent } from "@repo/features/agent-wire";
+import type { TaskSummary } from "@repo/features/task-wire";
 import type { AppBridge } from "@repo/host/bridge";
 import type { ActPortClient } from "@repo/host/contract";
 import type { TaskListCollections } from "@repo/host/task-list-following";
+import { type Collection, useLiveQuery } from "@tanstack/react-db";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Effect } from "effect";
 import Constants from "expo-constants";
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.js";
 import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
 import { releaseSplashAfterFrame } from "../splash.js";
@@ -14,6 +25,7 @@ import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
 import {
   launchFixtureProfile,
+  launchMachineAsk,
   launchRefusesWrites,
   launchStubsAuthServer,
   launchUpdateNeeded,
@@ -96,6 +108,67 @@ export function useTaskListCollections(): TaskListCollections {
   return collections;
 }
 
+/** Nothing to listen for: what a read with no key subscribes with. */
+const LISTEN_TO_NOTHING = (): (() => void) => () => {};
+
+/**
+ * The row `key` names in one of the task list's collections (`.get(key)`),
+ * drawn again only when that row moves, and the same object until it does;
+ * none where the collection holds no such row, or no key is given.
+ */
+export function useTaskListRow<Row extends object>(
+  collection: Collection<Row, string>,
+  key: string | undefined,
+): Row | undefined {
+  const subscribe = useCallback(
+    (heard: () => void) => {
+      if (key === undefined) return LISTEN_TO_NOTHING();
+
+      const subscription = collection.subscribeChanges((changes) => {
+        if (changes.some((change) => change.key === key)) heard();
+      });
+
+      return () => subscription.unsubscribe();
+    },
+    [collection, key],
+  );
+
+  return useSyncExternalStore(subscribe, () =>
+    key === undefined ? undefined : collection.get(key),
+  );
+}
+
+/** Every row of one of the task list's pull-request collections, in no order, as one live query, drawn again only when one of them moves. */
+export function useTaskListRows<Row extends object>(
+  collection: Collection<Row, string>,
+): readonly Row[] {
+  return useLiveQuery((q) => q.from({ row: collection })).data;
+}
+
+/** The task list's tasks newest started first, as the document lists them, as one live query, drawn again only when one of them moves. */
+export function useListedTasks(): readonly TaskSummary[] {
+  const { tasks } = useTaskListCollections();
+
+  return useLiveQuery((q) =>
+    q
+      .from({ task: tasks })
+      .orderBy(({ task }) => task.createdAt, "desc")
+      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" }),
+  ).data;
+}
+
+/** The task list's agents, the archived among them, first started first, as the document lists them, as one live query, drawn again only when one of them moves. */
+export function useListedAgents(): readonly ListedAgent[] {
+  const { agents } = useTaskListCollections();
+
+  return useLiveQuery((q) =>
+    q
+      .from({ agent: agents })
+      .orderBy(({ agent }) => agent.createdAt)
+      .orderBy(({ agent }) => agent.id, { stringSort: "lexical" }),
+  ).data;
+}
+
 /**
  * What this launch starts the host on: the device, or, where a flow names
  * the stubbed account service, the device with its sign-in sheet and every
@@ -109,6 +182,7 @@ function launchOptions(): MobileHostStartOptions {
     errorReporting: crashReportsErrorReporting,
     fixture: launchFixtureProfile(),
     fixtureUpdateNeeded: launchUpdateNeeded(),
+    fixtureMachineAsk: launchMachineAsk(),
     fixtureRefusesWrites: launchRefusesWrites(),
     appVersion: APP_VERSION,
     stateRoot: hostStateRoot(),

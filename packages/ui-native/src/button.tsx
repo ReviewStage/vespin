@@ -80,6 +80,8 @@ type ButtonProps = {
   readonly symbol?: Glyph | undefined;
   readonly look?: ButtonLook | undefined;
   readonly size?: ButtonSize | undefined;
+  /** Whether it spans the width it stands in, as the one or two acts at a sheet's foot do. */
+  readonly wide?: boolean | undefined;
   /** Whether the act deletes or undoes something, which the system draws red. */
   readonly destructive?: boolean | undefined;
   readonly disabled?: boolean | undefined;
@@ -108,7 +110,13 @@ export function Button(props: ButtonProps) {
 
   return (
     <SwiftUIButton
-      {...actContent(label, symbol)}
+      {...(props.wide === true
+        ? {
+            children: (
+              <Text modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY })]}>{label}</Text>
+            ),
+          }
+        : actContent(label, symbol))}
       role={props.destructive === true ? "destructive" : "default"}
       onPress={props.onPress}
       modifiers={[
@@ -353,7 +361,14 @@ function fieldMark(props: FieldChipProps, colors: BrandColors, glyphSize: number
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
 
   if (props.face !== undefined) {
-    return <Avatar name={props.face.name} picture={props.face.picture} size={MARK_SIZE.FACE} />;
+    return (
+      <Avatar
+        name={props.face.name}
+        id={props.face.id}
+        picture={props.face.picture}
+        size={MARK_SIZE.FACE}
+      />
+    );
   }
 
   if (props.symbol !== undefined) {
@@ -535,6 +550,7 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
               // Note that a face is keyed by its place, since two followers may share a name.
               key={at}
               name={face.name}
+              id={face.id}
               picture={face.picture}
               size={MARK_SIZE.FACE}
             />

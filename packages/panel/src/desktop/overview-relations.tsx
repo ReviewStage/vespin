@@ -29,6 +29,7 @@ import { LinkIcon, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import type { DescriptionRoom } from "../tasks/description-body.js";
 import { RelationKindPill } from "../tasks/relation-kind-pill.js";
 import {
@@ -366,12 +367,15 @@ export function OverviewRelations({
   const doorsOf = (other: TaskSummary, kind: TaskRelationKind) =>
     relationDoors(writes, task, other, kind);
 
-  const subTasks = subTaskRows(tasks.tasks, task, opened, fold, (subTask) =>
+  // Note that its sub-tasks and blocks are of its own workspace, whose tasks alone are read.
+  const ofWorkspace = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, task.workspaceId);
+
+  const subTasks = subTaskRows(ofWorkspace, task, opened, fold, (subTask) =>
     relationMenu(TASK_RELATION_KIND.SUB_TASK, doorsOf(subTask, TASK_RELATION_KIND.SUB_TASK)),
   );
 
-  const count = subTaskCount(task, subTasksOf(tasks.tasks, task.id));
-  const byId = new Map(tasks.tasks.map((each) => [each.id, each]));
+  const count = subTaskCount(task, subTasksOf(ofWorkspace, task.id));
+  const byId = new Map(ofWorkspace.map((each) => [each.id, each]));
 
   const sides = [
     { kind: TASK_RELATION_KIND.BLOCKED_BY, related: blockTasks(task, byId, task.blockedBy) },
