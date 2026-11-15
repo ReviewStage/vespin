@@ -17,6 +17,8 @@ export {
 
 export { AuthPage } from "./auth-page.js";
 
+export { type BarSubtitle, StackBarTitle } from "./bar-title.js";
+
 export { BRAND_MARK_ASSET, BrandMark } from "./brand-mark.js";
 
 export {
@@ -316,7 +318,6 @@ export { MARK_SIZE, SPACE } from "./tokens/space.js";
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
 export {
-  AgentHead,
   AgentTranscript,
   type OlderPages,
   type TranscriptReveal,
