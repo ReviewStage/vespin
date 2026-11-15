@@ -109,7 +109,8 @@ function moveWithKeyboard({ duration, easing }: KeyboardEvent) {
 
 /** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. */
 export function useKeyboardHeight(): number {
-  const [height, setHeight] = useState(0);
+  // Note that it starts from the keyboard already standing, as a notice or a dock mounted under a sheet whose field holds the keyboard finds it, rather than reading none until the next show.
+  const [height, setHeight] = useState(() => Keyboard.metrics()?.height ?? 0);
   useEffect(() => {
     const rising = Keyboard.addListener("keyboardWillShow", (event) => {
       moveWithKeyboard(event);
