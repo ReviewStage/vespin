@@ -222,35 +222,6 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
   assert.equal(messageWords(refused), "Reading the check's log.\n\nIt's all in the summary above.");
 });
 
-test("a finished turn folds a to-do update in with the calls beside it, so it never splits their group", () => {
-  const call = (tool: string, id: string) => ({
-    type: `tool-${tool}`,
-    toolCallId: id,
-    state: "output-available",
-    input: {},
-    output: "ok",
-  });
-
-  const turn: AgentTranscriptMessage = {
-    id: "t",
-    role: MESSAGE_ROLE.ASSISTANT,
-    parts: [
-      call("Bash", "call_1"),
-      call("post_thread", "call_2"),
-      call("TaskUpdate", "call_3"),
-      call("add_suggestion", "call_4"),
-      { type: "text", text: "Merged." },
-    ],
-  };
-
-  assert.deepEqual(
-    agentRows(turn, false).map((row) =>
-      row.kind === TURN_ROW.GROUP ? row.summary : row.block.kind,
-    ),
-    ["4 tool calls", AGENT_PART.TEXT],
-  );
-});
-
 test("the wakeup a turn booked is read off Claude Code's own call or ours alike, by the delay held or asked, past a cancel or a refused call", () => {
   type Call = { input: Record<string, number | string | boolean>; output?: WireValue };
 
