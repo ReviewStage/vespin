@@ -20,7 +20,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
 import { fakeActPort } from "../testing/app-bridge.js";
 import { handState, stateWith } from "../testing/app-state.js";
-import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import { settledWrites, withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { standingToastWords } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { UNDO_RAN, undoLast } from "../undo-stack.js";
@@ -265,7 +265,7 @@ test("⌘Z puts back the reminder a new one replaced, through the undo stack", a
       {
         [LIVE_READ.INBOX_ITEMS]: {
           rows: {
-            [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [{ ...item(X, false), remindAt }] },
+            [INBOX_SCOPE_KIND.TASK]: { [TASK.id]: [{ ...item(X, false), remindAt }] },
           },
         },
       },
@@ -292,6 +292,8 @@ test("⌘Z puts back the reminder a new one replaced, through the undo stack", a
 
   root = createRoot(document.createElement("div"));
   act(() => root?.render(withQueryClient(createElement(Harness))));
+  // The window's first read lands before the press, as a window's root waits on it before it draws.
+  await act(() => settledWrites());
 
   await act(() => control?.onRemind({ ...item(X, false), remindAt: EARLIER }, LATER));
   const undone = await act(() => undoLast());

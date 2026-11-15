@@ -59,11 +59,19 @@ export function ConnectionNames({
   return needed ? <ConnectionNamesReading>{children}</ConnectionNamesReading> : children;
 }
 
-/** The server a call's row says it ran on: its account's name where the window knows it, else the name its id gives; none for a call of no server's tool. */
+/**
+ * The server a call's row says it ran on: the account's name the call keeps
+ * (`ToolCallView`'s `account`), which names the account it ran on for every
+ * reader; for a call from before it kept one, its account's name where the
+ * window knows it, else the name its id gives; none for a call of no
+ * server's tool.
+ */
 export function useServerName(
-  view: Pick<ToolCallView, "server" | "connection">,
+  view: Pick<ToolCallView, "server" | "connection" | "account">,
 ): string | undefined {
   const nameOf = useContext(ConnectionNamesContext);
+
+  if (view.account !== undefined) return view.server;
 
   return (view.connection === undefined ? undefined : nameOf?.(view.connection)) ?? view.server;
 }

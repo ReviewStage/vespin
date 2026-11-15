@@ -28,9 +28,9 @@ import {
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   codeLinesSchema,
+  heldTaskFollowSchema,
   TASK_CALL_FAILURE,
   taskBrowserTabsFollowSchema,
-  taskDocumentFollowSchema,
   taskHistoryFollowSchema,
   taskPagesFollowSchema,
   tasksAddFollowerParamsSchema,
@@ -559,14 +559,14 @@ export const TASKS_FOLLOWS = liveFollows({
     refusal: "Could not follow that task's pages on this system.",
     panelOnly: true,
   }),
-  TASKS_DOCUMENT_FOLLOW: liveFollow({
-    slice: LIVE_READ.DESCRIPTION_DOCUMENT,
+  TASKS_HELD_FOLLOW: liveFollow({
+    slice: LIVE_READ.HELD_TASK,
     hold: HOLD.WINDOW,
-    key: taskDocumentFollowSchema,
+    key: heldTaskFollowSchema,
     refusal: "Could not follow that task's description on this system.",
     panelOnly: true,
     retry: {
-      name: "TASKS_DOCUMENT_RETRY",
+      name: "TASKS_HELD_RETRY",
       refusal: "Could not read that task's description again on this system.",
     },
   }),

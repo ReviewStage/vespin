@@ -186,7 +186,7 @@ function routeOf(
     return iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: push.itemId });
 
   return push.agentId === undefined
-    ? iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: push.taskId })
+    ? iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: push.taskId })
     : iosAgentRoute(push.agentId);
 }
 

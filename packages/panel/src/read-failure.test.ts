@@ -12,7 +12,7 @@ import {
   type DescriptionRevisionLine,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { UPDATE_STATUS } from "@repo/settings/update";
 import { createMemoryHistory } from "@tanstack/react-router";
@@ -40,6 +40,7 @@ import { ChangesTabReading } from "./testing/changes-tab.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
 import { drawnSidebar } from "./testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "./testing/document-task.js";
+import { overEveryTask } from "./testing/history-rows.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
 import { agentsControl, tasksControl } from "./testing/tasks-control.js";
 import { windowRouter } from "./testing/window-router.js";
@@ -227,18 +228,14 @@ test("the Inbox's list says its feed could not be read as the sidebar does, and 
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: () => {
-      deliver({ rows: { [INBOX_SCOPE_KIND.PLAN]: {} } });
+      deliver({ rows: { [INBOX_SCOPE_KIND.TASK]: {} } });
 
       return Promise.resolve(undefined);
     },
   });
 
-  const page = await mount(
-    createElement(DesktopInbox, {
-      tasks: tasksControl({ tasks: [TASK] }),
-    }),
-    INBOX_AT,
-  );
+  const tasks = tasksControl({ tasks: [TASK] });
+  const page = await mount(overEveryTask(tasks, createElement(DesktopInbox, { tasks })), INBOX_AT);
 
   // Note that the failure, and then the feed read again, stand once they reach the feed's query.
   const failure = await vi.waitFor(() => readFailure(page));
@@ -381,9 +378,9 @@ async function versionNotRead(sections: boolean, onRetryVersion: () => void): Pr
   };
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: DOCUMENT_TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     history,
   });
 

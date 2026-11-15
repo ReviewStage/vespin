@@ -38,6 +38,22 @@ export interface BoxHeld {
  */
 export type HeldUpdate = (next: (now: BoxHeld) => BoxHeld | undefined) => void;
 
+/**
+ * A box's `HeldUpdate` over the draft its words and files are kept in, the
+ * rest of the draft (its picks, its revision) left as it stands, so every box
+ * moves its words on the one way.
+ */
+export function heldUpdateOver<D extends BoxHeld>(
+  update: (next: (was: D) => D) => void,
+): HeldUpdate {
+  return (next) =>
+    update((was) => {
+      const moved = next(was);
+
+      return moved === undefined ? was : { ...was, ...moved };
+    });
+}
+
 /** A send refused after the box let go of it: what went, the box's word bound, and how the box is changed. */
 export interface RefusedSend {
   readonly went: BoxHeld;

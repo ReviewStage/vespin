@@ -111,7 +111,8 @@ export function useTaskFound(
  * The link a task's key written among words names its task with, as
  * `useWordTargets` holds it; where the window lists no task by it, the
  * task is found on the service by its workspace's number (`useTaskFound`),
- * and the key names it once the list holds it. None until then, or where
+ * and read in again where the list let it go since (`useTaskReadIn`); the
+ * key names it once the list holds it. None until then, or where
  * no one workspace's tasks could be keyed so.
  */
 export function useKeyTarget(key: string): string | undefined {
@@ -125,7 +126,13 @@ export function useKeyTarget(key: string): string | undefined {
 
   const workspace = useQuery({ ...appStateQuery, select }).data;
   const number = keyNumber(key);
-  useTaskFound(workspace === undefined || number === undefined ? undefined : { workspace, number });
+
+  const found = useTaskFound(
+    workspace === undefined || number === undefined ? undefined : { workspace, number },
+  );
+
+  // Note that a task found once is read in again where the list let it go since, as a find stays fresh for the session.
+  useTaskReadIn(found);
 
   return target;
 }

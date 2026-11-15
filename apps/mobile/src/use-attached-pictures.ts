@@ -102,6 +102,12 @@ export interface AttachedPictures {
   readonly putBack: (pictures: readonly HeldPicture[]) => void;
 }
 
+/** Where a holder's pictures are kept beyond its screen, such as a comment's draft: the pictures it opens on, and where each change goes. */
+export interface KeptPictures {
+  readonly held: readonly HeldPicture[];
+  readonly keep: (pictures: readonly HeldPicture[]) => void;
+}
+
 /**
  * The pictures a composer or a sheet attaches, saying what the picker or a
  * bound refused through `onNote`, and nothing once a picture is taken off.
@@ -112,13 +118,18 @@ export function useAttachedPictures(
   onNote: (note: string | undefined) => void,
   opensWith?: readonly string[],
   bounds: PictureBounds = MESSAGE_PICTURES,
+  kept?: KeptPictures,
 ): AttachedPictures {
-  const [pictures, setPictures] = useState<readonly HeldPicture[]>([]);
+  const [pictures, setPictures] = useState<readonly HeldPicture[]>(() => kept?.held ?? []);
   // The pictures held now, which a picker answering later adds to, so pictures a refused send put back while it stood open are kept.
   const held = useRef(pictures);
   useEffect(() => {
     held.current = pictures;
   }, [pictures]);
+
+  // Note that the pictures are handed to their keeper as they change, so a screen drawn anew opens on them.
+  const keep = useEffectEvent((now: readonly HeldPicture[]) => kept?.keep(now));
+  useEffect(() => keep(pictures), [pictures]);
 
   // Pictures read as base64, or none for one that could not be, named past every picture held now and added after them, saying the first that could not be read, or else what a bound refuses. Note that the held pictures are written at once, so a second drop landing before the next render adds after this one rather than over it.
   const add = (contents: readonly (string | null | undefined)[], unreadable = 0) => {

@@ -40,13 +40,17 @@ import { ACT_KIND } from "@repo/host/acts";
 import { BUZZ, buzz, THREAD_MEDIA, type ThreadMedia, type ThreadMessage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { cachedFile } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import type { PictureOf } from "../member-pictures.js";
-import { type AttachedPictures, useAttachedPictures } from "../use-attached-pictures.js";
+import {
+  type AttachedPictures,
+  type HeldPicture,
+  useAttachedPictures,
+} from "../use-attached-pictures.js";
 import { useWrite } from "../use-write.js";
 
 /** No threads read yet. */
@@ -99,6 +103,74 @@ async function sourceOf(
     file.mediaType,
     read.base64,
   );
+}
+
+/**
+ * A new thread's draft kept beside its block: the words typed, the start
+ * sent under them and not yet answered as posted, so the same words sent
+ * again after a lost answer go under the same key, and which edit of the
+ * words it holds, so a send answered late lets the draft go only while it
+ * still holds the words that send carried.
+ */
+type StartDraft = {
+  /** The block's words as the draft was typed on it, since an edited description can stand another block at the same offsets. */
+  readonly quote: string | undefined;
+  readonly words: string;
+  /** The pictures picked for it and not yet sent. */
+  readonly pictures: readonly HeldPicture[];
+  readonly sent: SentStart | undefined;
+  readonly revision: number;
+};
+
+/**
+ * Each new thread's draft, by the task, then the block's start and end, so
+ * it outlives the screen that drew it, as a rotation hands a new comment
+ * between a split view's detail and its tab's stack, each drawing its own
+ * screen.
+ */
+const startDrafts = new Map<string, Map<number, Map<number, StartDraft>>>();
+
+/** The last edit numbered, across every draft, so a draft let go and typed again never takes an edit's number a send still waits to compare. */
+let lastEdit = 0;
+
+/** The next edit's number, never one given before. */
+function nextEdit(): number {
+  lastEdit += 1;
+
+  return lastEdit;
+}
+
+/** The draft kept at one block's offsets of a task, whatever block it was typed on; none kept, or no block yet read. */
+function heldDraftAt(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
+  if (block === undefined) return undefined;
+
+  return startDrafts.get(taskId)?.get(block.from)?.get(block.to);
+}
+
+/** The draft kept toward a new thread on one block of a task, typed on these same words; none kept, or no block yet read. */
+function startDraftOf(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
+  const draft = heldDraftAt(taskId, block);
+
+  return draft?.quote === block?.quote ? draft : undefined;
+}
+
+/** Keeps a new thread's draft on one block of a task, or lets it go at none. */
+function keepStartDraft(
+  taskId: string,
+  block: DescriptionBlock,
+  draft: StartDraft | undefined,
+): void {
+  const spans = startDrafts.get(taskId) ?? new Map<number, Map<number, StartDraft>>();
+  const ends = spans.get(block.from) ?? new Map<number, StartDraft>();
+
+  if (draft === undefined) ends.delete(block.to);
+  else ends.set(block.to, draft);
+
+  if (ends.size === 0) spans.delete(block.from);
+  else spans.set(block.from, ends);
+
+  if (spans.size === 0) startDrafts.delete(taskId);
+  else startDrafts.set(taskId, spans);
 }
 
 /**
@@ -271,7 +343,7 @@ export function useCommentMedia(
       if (asked.current.has(id)) continue;
       asked.current.add(id);
 
-      acts[ACT_KIND.TASKS_PICTURE_READ]({ planId: taskId, attachmentId: id })
+      acts[ACT_KIND.TASKS_PICTURE_READ]({ taskId, attachmentId: id })
         .then(async (answer) => {
           // Note that a file the service says is not there stays so, while one that got no answer offers Try again.
           if (!("base64" in answer) && answer.failure === TASK_CALL_FAILURE.NOT_FOUND) {
@@ -321,6 +393,40 @@ export interface CommentReply {
   readonly note: string | undefined;
 }
 
+/** A thread's reply typed and not yet sent: its words, and the pictures picked for it. */
+interface UnsentReply {
+  readonly words: string;
+  readonly pictures: readonly HeldPicture[];
+}
+
+/** No reply typed and nothing picked. */
+const NO_UNSENT_REPLY: UnsentReply = { words: "", pictures: [] };
+
+/**
+ * Each thread's reply typed and not yet sent, by the task, then the thread,
+ * so it outlives the screen that drew it, as a widening window hands a
+ * thread from its tab's stack to a split view's detail, or a fold draws it
+ * anew.
+ */
+const unsentReplies = new Map<string, Map<string, UnsentReply>>();
+
+/** A thread's unsent reply, or none typed. */
+function unsentReplyOf(taskId: string, threadId: string): UnsentReply {
+  return unsentReplies.get(taskId)?.get(threadId) ?? NO_UNSENT_REPLY;
+}
+
+/** Keeps a change to a thread's unsent reply, or lets it go once it holds neither words nor pictures. */
+function keepUnsentReply(taskId: string, threadId: string, change: Partial<UnsentReply>): void {
+  const threads = unsentReplies.get(taskId) ?? new Map<string, UnsentReply>();
+  const next = { ...unsentReplyOf(taskId, threadId), ...change };
+
+  if (next.words === "" && next.pictures.length === 0) threads.delete(threadId);
+  else threads.set(threadId, next);
+
+  if (threads.size === 0) unsentReplies.delete(taskId);
+  else unsentReplies.set(taskId, threads);
+}
+
 /** A reply sent and not yet answered as posted: its words, the pictures it carried, and the key it went under. */
 interface SentReply {
   readonly words: string;
@@ -350,24 +456,32 @@ function sameSend(sent: SentReply | undefined, words: string, files: readonly Ag
  * once under a key kept for as long as they stand, so the same words sent
  * again after a lost answer are taken once, and other words go under a key
  * of their own; the field is emptied as they go and given them back where
- * the service refused them, with why.
+ * the service refused them, with why. Note that a reply out holds back no
+ * other, since each is a declared write the host draws at once under its own
+ * key, so a second reply goes while the first is still unanswered, as the
+ * panel's does.
  */
 export function useCommentReply(taskId: string, threadId: string): CommentReply {
   const acts = useHostActs();
   const write = useWrite();
-  const [words, setWords] = useState("");
-  const [sent, setSent] = useState<SentReply | undefined>(undefined);
-  const [sending, setSending] = useState(false);
+  const [words, setWords] = useState(() => unsentReplyOf(taskId, threadId).words);
+  // Note that the reply is kept beside its thread as it changes, so a screen drawn anew for the thread opens on it.
+  useEffect(() => keepUnsentReply(taskId, threadId, { words }), [taskId, threadId, words]);
+  // Note that the last reply sent is held outside render, so a second tap before the next render reuses its key and the service takes the reply once.
+  const sent = useRef<SentReply | undefined>(undefined);
   const [note, setNote] = useState<string | undefined>(undefined);
-  const pictures = useAttachedPictures(setNote);
-  // Note that a second tap before the next render reads no `sending` yet, so the send in flight is held here too, or two taps would post twice and hand the pictures back twice.
-  const inFlight = useRef(false);
+
+  // Note that the pictures picked are kept with the words, so a rotation or a fold never drops one.
+  const pictures = useAttachedPictures(setNote, undefined, undefined, {
+    held: unsentReplyOf(taskId, threadId).pictures,
+    keep: (held) => keepUnsentReply(taskId, threadId, { pictures: held }),
+  });
 
   return useMemo(() => {
     const send = () => {
       const kept = words.trim();
 
-      if (kept === "" || sending || inFlight.current) return;
+      if (kept === "") return;
 
       // A picture past a bound holds the send back, saying why, as an agent's composer does.
       if (pictures.refusal !== undefined) {
@@ -378,19 +492,23 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
       }
 
       const files = pictures.files ?? [];
-      const key = sameSend(sent, kept, files) && sent !== undefined ? sent.key : randomUUID();
-      inFlight.current = true;
-      setSent({ words: kept, files, key });
-      setSending(true);
+
+      const key =
+        sameSend(sent.current, kept, files) && sent.current !== undefined
+          ? sent.current.key
+          : randomUUID();
+
+      sent.current = { words: kept, files, key };
       setNote(undefined);
       setWords("");
       // The pictures go with the words, and come back with them where the reply is refused.
       const carried = pictures.take();
+
       // Note that a reply refused says why under the box, where its words go back, rather than in the notice.
       write(
         () =>
           acts[ACT_KIND.TASKS_COMMENT_ACT]({
-            planId: taskId,
+            taskId: taskId,
             threadId,
             action: {
               action: DESCRIPTION_COMMENT_ACTION.REPLY,
@@ -412,25 +530,21 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
           },
           went: BUZZ.SUCCESS,
         },
-      )
-        .then((went) => {
-          if (went) setSent(undefined);
-        })
-        .finally(() => {
-          inFlight.current = false;
-          setSending(false);
-        });
+      ).then((went) => {
+        // Note that a reply answered after a later one went lets go of its key only while it is still the one held.
+        if (went && sent.current?.key === key) sent.current = undefined;
+      });
     };
 
     return {
       words,
       onWords: setWords,
       pictures,
-      sendable: words.trim() !== "" && !sending,
+      sendable: words.trim() !== "",
       send,
       note,
     };
-  }, [acts, write, taskId, threadId, words, sent, sending, note, pictures]);
+  }, [acts, write, taskId, threadId, words, note, pictures]);
 }
 
 /** The open threads standing on each block of a description, by the block's start, the oldest started first. */
@@ -476,7 +590,9 @@ interface SentStart extends SentReply {
  * in, which the service carries over to the text as it stands. It goes
  * under an id minted here, so the host draws the thread at once, and a key
  * kept for as long as the words stand, so the same words sent again after a
- * lost answer start one thread; a refusal keeps the words with why.
+ * lost answer start one thread; a refusal keeps the words with why. The
+ * words typed are kept for the block until they are sent, so a new comment
+ * handed to another screen by a rotation opens on them.
  */
 export function useCommentStart(
   taskId: string,
@@ -485,14 +601,74 @@ export function useCommentStart(
 ): CommentStart {
   const acts = useHostActs();
   const write = useWrite();
-  const [words, setWords] = useState("");
-  const [sent, setSent] = useState<SentStart | undefined>(undefined);
+  const [words, setLocal] = useState(() => startDraftOf(taskId, block)?.words ?? "");
+  const [sent, setSentLocal] = useState(() => startDraftOf(taskId, block)?.sent);
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | undefined>(undefined);
   // Note that a second tap before the next render reads no `sending` yet, so the send in flight is held here too, or two taps would start two threads.
   const inFlight = useRef(false);
   const quote = block?.quote;
-  const pictures = useAttachedPictures(setNote);
+
+  // Note that the pictures picked are kept with the draft's words, so a rotation or a fold never drops one.
+  const pictures = useAttachedPictures(setNote, undefined, undefined, {
+    held: startDraftOf(taskId, block)?.pictures ?? [],
+    keep: (held) => {
+      if (block === undefined) return;
+      const was = startDraftOf(taskId, block);
+
+      keepStartDraft(
+        taskId,
+        block,
+        held.length === 0 && (was?.words ?? "") === "" && was?.sent === undefined
+          ? undefined
+          : {
+              quote: block.quote,
+              words: was?.words ?? "",
+              pictures: held,
+              sent: was?.sent,
+              revision: was?.revision ?? nextEdit(),
+            },
+      );
+    },
+  });
+
+  // Note that a block read after the first draw takes up the draft kept for it, where nothing was typed or picked meanwhile.
+  const takeUp = useEffectEvent((kept: StartDraft) => {
+    setLocal((was) => (was === "" ? kept.words : was));
+    setSentLocal((was) => was ?? kept.sent);
+
+    if (pictures.attached.length === 0 && kept.pictures.length > 0) pictures.putBack(kept.pictures);
+  });
+
+  useEffect(() => {
+    const kept = startDraftOf(taskId, block);
+
+    if (kept !== undefined) takeUp(kept);
+  }, [taskId, block]);
+
+  const setWords = useCallback(
+    (next: string) => {
+      setLocal(next);
+
+      if (block === undefined) return;
+      const was = startDraftOf(taskId, block);
+
+      keepStartDraft(
+        taskId,
+        block,
+        next === "" && was?.sent === undefined && (was?.pictures.length ?? 0) === 0
+          ? undefined
+          : {
+              quote: block.quote,
+              words: next,
+              pictures: was?.pictures ?? [],
+              sent: was?.sent,
+              revision: nextEdit(),
+            },
+      );
+    },
+    [taskId, block],
+  );
 
   return useMemo(() => {
     const send = async (): Promise<string | undefined> => {
@@ -515,14 +691,25 @@ export function useCommentStart(
       const again = sameSend(sent, kept, files) ? sent : undefined;
       const key = again?.key ?? randomUUID();
       const threadId = again?.threadId ?? randomUUID();
-      setSent({ words: kept, files, key, threadId });
+      const start = { words: kept, files, key, threadId };
+      setSentLocal(start);
+      // Note that the start is kept with the draft, so a screen drawn anew by a rotation sends the same words again under the same key.
+      const held = startDraftOf(taskId, block);
+      const revision = held?.revision ?? 0;
+      keepStartDraft(taskId, block, {
+        quote: block.quote,
+        words: held?.words ?? words,
+        pictures: held?.pictures ?? [],
+        sent: start,
+        revision,
+      });
       setSending(true);
       setNote(undefined);
 
       const went = await write(
         () =>
           acts[ACT_KIND.TASKS_COMMENT_START]({
-            planId: taskId,
+            taskId: taskId,
             start: {
               id: threadId,
               clientKey: key,
@@ -551,9 +738,25 @@ export function useCommentStart(
       });
 
       if (!went) return undefined;
-      setSent(undefined);
-      setWords("");
+      // Note that the pictures that went are taken off before the draft is settled, so the draft never keeps them.
       pictures.take();
+      const now = heldDraftAt(taskId, block);
+      // Note that a newer send's key, kept by a screen a rotation drew, stays with the draft until that send settles.
+      const pending = now?.sent?.threadId === threadId ? undefined : now?.sent;
+
+      // Note that the draft goes only while it still holds the words this send carried, so words typed meanwhile, on this screen or one a rotation drew, stay in the field and kept; and a draft another block's words now stand under at these offsets is left as it is.
+      if (now === undefined || now.revision === revision) {
+        setSentLocal(pending);
+        setLocal("");
+        keepStartDraft(taskId, block, undefined);
+      } else if (now.quote !== block.quote) {
+        setSentLocal(undefined);
+        setLocal("");
+      } else {
+        setSentLocal(pending);
+        setLocal(now.words);
+        keepStartDraft(taskId, block, { ...now, sent: pending });
+      }
 
       return threadId;
     };
@@ -566,5 +769,5 @@ export function useCommentStart(
       send,
       note,
     };
-  }, [acts, write, taskId, text, block, quote, words, sent, sending, note, pictures]);
+  }, [acts, write, taskId, text, block, quote, words, setWords, sent, sending, note, pictures]);
 }

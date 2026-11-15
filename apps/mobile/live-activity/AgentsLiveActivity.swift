@@ -121,10 +121,13 @@ struct WaitingLabel: View {
 
 /// The running agents, the newest turn first.
 struct AgentList: View {
+  /// The room between two rows, in points.
+  static let spacing: CGFloat = 8
+
   let state: AgentsActivityAttributes.ContentState
 
   var body: some View {
-    VStack(spacing: 8) {
+    VStack(spacing: Self.spacing) {
       ForEach(state.agents.prefix(3)) { agent in
         AgentRow(agent: agent)
       }
@@ -152,16 +155,28 @@ struct AgentRow: View {
         }
       }
       Button(intent: StopAgentIntent(agentId: agent.id)) {
-        // The panel's Stop is a filled square, which SF Symbols' stop.fill draws, as the app's composer keeps it.
+        // The panel's Stop is a filled square, which SF Symbols' stop.fill draws, in the ground on an ink circle, as the composer's Stop stands.
         Image(systemName: "stop.fill")
           .font(.caption)
-          .frame(width: 28, height: 28)
-          .background(.quaternary, in: Circle())
+          .foregroundStyle(Color("Ground"))
+          .frame(width: StopTarget.mark, height: StopTarget.mark)
+          .background(Color("Text"), in: Circle())
+          // Note that the target is wider and taller than the circle, but gives its height back to the row, so three rows still fit the expanded island; it reaches halfway into the gap between rows, never into the next row's Stop.
+          .frame(width: StopTarget.width, height: StopTarget.height)
+          .contentShape(Rectangle())
+          .padding(.vertical, (StopTarget.mark - StopTarget.height) / 2)
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Stop \(agent.title)")
     }
   }
+}
+
+/// Stop's circle and the target around it, in points. The target is Apple's least width, and as tall as a row and half the gap to each neighbor (`AgentList`'s spacing), so a press between two rows stops the nearer agent.
+enum StopTarget {
+  static let mark: CGFloat = 28
+  static let width: CGFloat = 44
+  static let height: CGFloat = mark + AgentList.spacing
 }
 
 /// Whether the Dynamic Island cannot widen its compact and minimal presentations, as in landscape and beside another activity on iOS 27; never before it.
