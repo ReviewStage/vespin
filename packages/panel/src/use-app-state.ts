@@ -1,6 +1,7 @@
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
-import type { AppStateDelivery, AppStateSnapshot, TaskListDelivery } from "@repo/host/app-state";
+import type { AppStateSnapshot, TaskListDelivery } from "@repo/host/app-state";
 import {
+  type AppStateBeside,
   type AppStateBridgeReads,
   followAppStateOver,
   shareAppState,
@@ -81,7 +82,9 @@ const firstRead: Effect.Effect<AppStateSnapshot, AppStateUnread> = Effect.flatMa
     try: () => appBridge().requestAppState(),
     catch: (cause) => new AppStateUnread({ cause }),
   }),
-  (read) => (read.run.fixtureMode ? Effect.promise(() => staged(read)) : Effect.succeed(read)),
+  // Note that the lists the read answers beside the document are the collections', never the client's.
+  ({ taskList: _lists, ...read }) =>
+    read.run.fixtureMode ? Effect.promise(() => staged(read)) : Effect.succeed(read),
 );
 
 /**
@@ -163,8 +166,9 @@ export interface AppStateFollowing {
  * The task list's collections are fed beside the client: the task list's
  * rows each delivery carries beside the document (its `taskList`), handed on
  * as the delivery is heard and before the document it came with is written,
- * and a whole read or a fixture run's staging as the list it lists from
- * (`selectListedTasks`) under its version; a staging that throws leaves
+ * the lists a whole read answers beside the document under its version, and
+ * a fixture run's staging as the list it lists from (`selectListedTasks`)
+ * under its version; a staging that throws leaves
  * their rows standing and says so on them. A fixture run's list is its own
  * synthetic one, so the account's rows the host delivers are passed over
  * there, and those heard before the first read lands wait to learn whether
@@ -193,21 +197,19 @@ export function followAppState(client: QueryClient): AppStateFollowing {
     for (const delivery of waiting) taskList.deliver(delivery);
   };
 
-  const shown = (state: AppStateSnapshot, whole: boolean): void => {
+  // Note that a fixture run's list is staged into the collections with its document, since the account's lists the host answers are passed over there.
+  const shown = (state: AppStateSnapshot): void => {
     client.setQueryData(appStateQuery.queryKey, state);
 
-    if (whole) taskList.write(state.version, selectListedTasks(state));
+    if (state.run.fixtureMode) taskList.write(state.version, selectListedTasks(state));
   };
 
   // Answers the staging the state waits on in a fixture run, and nothing where it is written at once.
-  const write = (
-    state: AppStateSnapshot,
-    delivery?: AppStateDelivery,
-  ): Promise<void> | undefined => {
+  const write = (state: AppStateSnapshot): Promise<void> | undefined => {
     if (fixtureRun === undefined) heardRun(state.run.fixtureMode);
 
     if (!state.run.fixtureMode && staging === undefined) {
-      shown(state, delivery === undefined);
+      shown(state);
       takeRowsHeard();
 
       return undefined;
@@ -218,7 +220,7 @@ export function followAppState(client: QueryClient): AppStateFollowing {
       .then(() => staged(state))
       .then(
         (stagedState) => {
-          if (following) shown(stagedState, true);
+          if (following) shown(stagedState);
         },
         (cause: unknown) => {
           console.error("A fixture run's document could not be staged.", cause);
@@ -237,12 +239,19 @@ export function followAppState(client: QueryClient): AppStateFollowing {
   const takeBack = handFixtureClient(client);
   const hearing = heard();
 
-  // Hands on the task list's rows a delivery carries, those heard before the first document waiting on it.
-  const rowsOf = ({ taskList: rows }: AppStateDelivery): void => {
-    if (rows === undefined) return;
+  // Hands on the task list's rows a delivery carries, those heard before the first document waiting on it, and the lists a whole read answers beside it.
+  const beside: AppStateBeside = {
+    heard: ({ taskList: rows }) => {
+      if (rows === undefined) return;
 
-    if (fixtureRun === undefined) rowsHeard.push(rows);
-    else if (!fixtureRun) taskList.deliver(rows);
+      if (fixtureRun === undefined) rowsHeard.push(rows);
+      else if (!fixtureRun) taskList.deliver(rows);
+    },
+    read: (read, lists) => {
+      if (fixtureRun === undefined) heardRun(read.run.fixtureMode);
+
+      if (!fixtureRun) taskList.write(read.version, lists);
+    },
   };
 
   const followed =
@@ -254,7 +263,7 @@ export function followAppState(client: QueryClient): AppStateFollowing {
           (message, cause) => {
             console.error(message, cause);
           },
-          rowsOf,
+          beside,
         );
 
   const stopMoves = onFixtureMoved(() => {

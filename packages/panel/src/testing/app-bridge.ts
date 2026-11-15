@@ -10,6 +10,7 @@ import {
   type AppStateDelivery,
   TASK_LIST_PARTS,
   type TaskListDelivery,
+  taskListPartsOf,
 } from "@repo/host/app-state";
 import type { AppBridge } from "@repo/host/bridge";
 import {
@@ -56,23 +57,36 @@ function taskListOf(delivery: AppStateDelivery): TaskListDelivery | undefined {
 }
 
 /**
- * The document's deliveries with the task list's rows beside them, where a
- * fake hands a delivery it built by hand without them, as the host carries
- * the two in one (`appStateDelivery`).
+ * The document's whole read and deliveries with the task list's lists and
+ * rows beside them, where a fake hands a document or a delivery it built by
+ * hand without them, as the host carries the two in one (`AppStateRead`,
+ * `appStateDelivery`).
  */
 function withTaskLists(calls: Partial<AppBridge>): Partial<AppBridge> {
-  const { onAppState } = calls;
-
-  if (onAppState === undefined) return calls;
+  const { onAppState, requestAppState } = calls;
 
   return {
     ...calls,
-    onAppState: (listener) =>
-      onAppState((delivery) => {
-        const taskList = delivery.taskList ?? taskListOf(delivery);
+    ...(requestAppState === undefined
+      ? undefined
+      : {
+          requestAppState: () =>
+            requestAppState().then((read) =>
+              read.taskList === undefined
+                ? { ...read, taskList: taskListPartsOf(read.tasks) }
+                : read,
+            ),
+        }),
+    ...(onAppState === undefined
+      ? undefined
+      : {
+          onAppState: (listener) =>
+            onAppState((delivery) => {
+              const taskList = delivery.taskList ?? taskListOf(delivery);
 
-        listener(taskList === undefined ? delivery : { ...delivery, taskList });
-      }),
+              listener(taskList === undefined ? delivery : { ...delivery, taskList });
+            }),
+        }),
   };
 }
 

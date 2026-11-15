@@ -11,6 +11,8 @@ import {
   type AppStateDelivery,
   type AppStateSnapshot,
   appStateDelivery,
+  taskListDelivery,
+  taskListPartsOf,
 } from "@repo/host/app-state";
 import { QueryClient } from "@tanstack/react-query";
 import { act, createElement } from "react";
@@ -92,7 +94,12 @@ async function following(first: AppStateSnapshot): Promise<{
 
 /** What main pushes a window that holds `sent` once its document is `next`. */
 function deliveryBetween(sent: AppStateSnapshot, next: AppStateSnapshot): AppStateDelivery {
-  const delivery = appStateDelivery(sent, next);
+  const rows = taskListDelivery(
+    taskListPartsOf(sent.tasks),
+    taskListPartsOf(next.tasks),
+    next.version,
+  );
+  const delivery = appStateDelivery(sent, next, rows);
 
   if (delivery === undefined) throw new Error("The two documents do not differ.");
 

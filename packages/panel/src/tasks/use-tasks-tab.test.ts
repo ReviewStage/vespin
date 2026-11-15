@@ -1144,7 +1144,7 @@ test("a task last viewed on an agent's tab shows nothing until its agents are re
   assert.equal(tab.control().agents.agents, undefined, "the agents are still being read");
   assert.equal(tab.control().mainTabs.tab, undefined, "nothing stands in the agent's place");
 
-  tab.stand({ tasks: { ...listed, taskAgents: [listedAgent(RUNNING_AGENT)] } });
+  tab.stand({ tasks: { ...listed, taskAgents: [listedAgent(RUNNING_AGENT)], listed: true } });
   await settle();
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the agent once they are read");
 });
@@ -1322,6 +1322,7 @@ test("a task opened from a list, gone back to from the sidebar, or named by a ch
     ...OPEN,
     tasks,
     taskAgents: followed,
+    listed: true,
     activeTaskId: OTHER_TASK_ID,
   });
 
@@ -1340,17 +1341,17 @@ test("a task opened from a list, gone back to from the sidebar, or named by a ch
   );
 
   act(() => tab.control().onSelect(TASK.id));
-  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed } });
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(WAITING), "from a list, the agent waiting");
 
   tab.stand({ tasks: elsewhere([waitingRow]) });
   act(() => tab.control().onShowMention({ kind: MENTION_KIND.TASK, taskId: TASK.id }));
-  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed } });
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(WAITING), "from a chip, the agent waiting");
 
   tab.stand({ tasks: elsewhere([waitingRow]) });
   act(() => tab.control().onResume(TASK.id));
-  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed } });
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
   assert.deepEqual(
     tab.control().mainTabs.tab,
     agentTab(WAITING),
@@ -3620,7 +3621,12 @@ function listed(): TasksView["tasks"][number] {
 
 /** The task listed and open, its agents as the list followed live carries them. */
 function withAgents(agents: readonly AgentSummary[]): TasksView {
-  return { ...OPEN, tasks: [listed()], taskAgents: agents.map((agent) => listedAgent(agent)) };
+  return {
+    ...OPEN,
+    tasks: [listed()],
+    taskAgents: agents.map((agent) => listedAgent(agent)),
+    listed: true,
+  };
 }
 
 /** The view once the list is read with nothing open, holding `plans`. */
@@ -4591,6 +4597,7 @@ test("an agent refused as New task's Agent mode started its task opens the task 
             ...AGENT_TASK,
             tasks: [{ ...listed(), id: OTHER_TASK_ID }],
             taskAgents: [listedAgent(started)],
+            listed: true,
           },
         });
 

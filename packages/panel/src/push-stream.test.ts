@@ -134,7 +134,7 @@ it("a document pushed the moment the stream opens is heard, and a burst of them 
   await panel.opened;
 
   for (const version of [1, 2, 3]) {
-    main.pushes.pushState(WINDOW, stateWith({}, { version }));
+    main.pushes.pushState(WINDOW, stateWith({}, { version }), { tasks: [] });
   }
 
   main.pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);

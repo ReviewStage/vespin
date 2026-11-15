@@ -1659,37 +1659,31 @@ const INVITES_PAGES: readonly PageLine[] = [
   },
 ];
 
-/** A descriptions slice with the reference journey's laid over it, and the listed task it was laid from. */
-interface StagedDocuments {
-  readonly from: TaskSummary;
-  readonly laid: AppStateSnapshot[typeof LIVE_READ.HELD_TASK];
-}
-
 /**
  * Each held descriptions slice with the reference journey's laid over it, by
- * the slice, so a slice staged is never staged anew while the task it was
- * laid from stands as it was.
+ * the slice, so a slice staged is never staged anew.
  */
 const STAGED_DOCUMENTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.HELD_TASK],
-  StagedDocuments
+  AppStateSnapshot[typeof LIVE_READ.HELD_TASK]
 >();
 
 /**
  * The descriptions slice with the reference journey's laid over it, its
- * fields the task's as the list stands it (`ownInvites`), so its page and its
- * row say the same; the stand-in where the document lists none of it, as the
- * panel's fixture run, which lists its own on the window's side, does.
+ * fields the task's as these profiles list it (`ownInvites` of the
+ * stand-in, `inboxTasksView`), so its page and its row say the same.
  */
 function stagedDocuments(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.HELD_TASK] {
   const held = state[LIVE_READ.HELD_TASK];
-  const from = state.tasks.tasks.find((task) => task.id === TASK.INVITES) ?? INVITES_TASK;
   const staged = STAGED_DOCUMENTS.get(held);
 
-  if (staged !== undefined && staged.from === from) return staged.laid;
-  const laid = { ...held, [TASK.INVITES]: { rows: { task: invitesDocument(ownInvites(from)) } } };
-  STAGED_DOCUMENTS.set(held, { from, laid });
-  STAGED_DOCUMENTS.set(laid, { from, laid });
+  if (staged !== undefined) return staged;
+  const laid = {
+    ...held,
+    [TASK.INVITES]: { rows: { task: invitesDocument(ownInvites(INVITES_TASK)) } },
+  };
+  STAGED_DOCUMENTS.set(held, laid);
+  STAGED_DOCUMENTS.set(laid, laid);
 
   return laid;
 }

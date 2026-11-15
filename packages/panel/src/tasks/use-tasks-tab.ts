@@ -1063,8 +1063,8 @@ export function useTasksTab(input: {
   useEffect(() => {
     if (inboxElsewhere && listedStep !== undefined) turnInbox(listedStep);
   }, [inboxElsewhere, listedStep, turnInbox]);
-  // Every agent the list followed live carries, the archived ones among them; none while it is not, which the view alone says.
-  const agentsCarried = viewed.taskAgents !== undefined;
+  // Every agent the list followed live carries, the archived ones among them; none until it says its lists are drawn.
+  const agentsCarried = viewed.listed === true;
   const liveAgents = useListedAgents(agentsCarried);
   const inboxWaiting = useInboxWaitingTasks();
   const signedIn = fixture !== undefined || input.signedIn;
@@ -1115,7 +1115,6 @@ export function useTasksTab(input: {
     repository:
       openDocument?.id === viewed.activeTaskId ? (openDocument?.repository ?? null) : null,
     agentsFollowed: liveAgents !== undefined && openListed !== undefined,
-    staged: fixture,
     onOpenIntegrations: input.onOpenIntegrations,
     onOpenApiKeys: input.onOpenApiKeys,
     me: input.accountId,
