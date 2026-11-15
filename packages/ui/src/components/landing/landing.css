@@ -131,7 +131,7 @@
     position: relative;
     z-index: 1;
     /* off-scale: the room above the words, a share of the screen */
-    padding: clamp(120px, 24svh, 240px) var(--ui-landing-gutter) 0;
+    padding: clamp(96px, 19svh, 192px) var(--ui-landing-gutter) 0;
   }
 
   /* The line takes the row's whole width, balanced over two lines of
