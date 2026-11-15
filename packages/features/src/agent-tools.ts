@@ -90,6 +90,8 @@ export const AGENT_TOOL = {
   READ_PAGE: "read_page",
   // Pictures, recordings, and sound clips from a coding agent's sandbox, shown in its transcript.
   SHOW_MEDIA: "show_media",
+  // One message a coding agent sends as the Slack bot in the Slack thread it answers in.
+  SEND_SLACK_MESSAGE: "send_slack_message",
   // A wakeup a coding agent books for later: its turn ends, and the prompt opens its next turn when due.
   SCHEDULE_WAKEUP: "schedule_wakeup",
   // A coding agent's turn ended in a short summary, the reply its developer reads, and the follow-ups it offers them.
