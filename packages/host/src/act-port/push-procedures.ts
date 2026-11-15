@@ -1,10 +1,6 @@
 import { MemoryPublisher } from "@orpc/publisher/memory";
-import {
-  type AppStateSnapshot,
-  appStateDelivery,
-  type TaskListParts,
-  taskListDelivery,
-} from "../app-state.js";
+import type { TaskListParts } from "@repo/features/tasks-view";
+import { type AppStateSnapshot, appStateDelivery, taskListDelivery } from "../app-state.js";
 import {
   type EventPushName,
   PUSH,

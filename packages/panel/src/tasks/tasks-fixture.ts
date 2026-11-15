@@ -20,6 +20,7 @@ import {
 } from "@repo/features/task-wire";
 import {
   COMMENT_SUBJECT,
+  type ListedTasksView,
   TASK_CALL_FAILURE,
   TASKS_READ,
   type TasksView,
@@ -424,7 +425,7 @@ function repositoriesAppState(state: AppStateSnapshot): AppStateSnapshot {
   return { ...state, [LIVE_READ.REPOSITORY_LISTS]: staged };
 }
 
-const FIXTURE_TASK_LIST: TasksView = {
+const FIXTURE_TASK_LIST: ListedTasksView = {
   tasks: [
     {
       id: FIXTURE_TASK.id,
@@ -449,7 +450,7 @@ const FIXTURE_TASK_LIST: TasksView = {
 };
 
 /** The open task, whose description main's document holds as read (`fixtureAppState`). */
-const FIXTURE_OPEN_TASK: TasksView = {
+const FIXTURE_OPEN_TASK: ListedTasksView = {
   ...FIXTURE_TASK_LIST,
   activeTaskId: FIXTURE_TASK.id,
 };
@@ -642,7 +643,7 @@ const FIXTURE_CLOSED_PANEL: SidePanelState = { ...FIXTURE_OPEN_PANEL, open: fals
 export function fixtureTasksView(run: {
   readonly fixtureMode: boolean;
   readonly profile: string;
-}): TasksView | undefined {
+}): ListedTasksView | undefined {
   if (!run.fixtureMode) return undefined;
   const agent = agentTasksView(run.profile, FIXTURE_OPEN_TASK);
 
