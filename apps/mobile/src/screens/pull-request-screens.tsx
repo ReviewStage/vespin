@@ -57,7 +57,6 @@ import {
   MarkRow,
   MergeActRow,
   PATH_PART,
-  PUSH_ROW_GOES,
   PullRequestHead,
   REVIEW_LOOK,
   RowList,
@@ -566,7 +565,7 @@ export function PullRequestPage({
               detail={checkDetail(check)}
               standing={CHECK_WORDS[check.state]}
               face={checkFace(check)}
-              goes={check.url === null ? undefined : PUSH_ROW_GOES.OUT}
+              opens={check.url ?? undefined}
             />
           ))
         )}
@@ -592,7 +591,7 @@ export function PullRequestPage({
                 : PULL_REQUEST_READ_WORDS.READING_CONVERSATION
               : PULL_REQUEST_READ_WORDS.commentCount(conversationCount(conversation))
           }
-          goes={url === undefined ? undefined : PUSH_ROW_GOES.OUT}
+          opens={url}
         />
       </ListSection>
     </RowList>,
