@@ -60,6 +60,7 @@ import {
   callLine,
   callPlace,
   isCommandKind,
+  searchToolsLine,
   TURN_ROW,
   type TurnRow,
 } from "./turn-rows.js";
@@ -264,28 +265,42 @@ function agentBlock(part: AgentPart): CopiedBlock[] {
 }
 
 /**
- * A block's words as its row draws them, open: words and a thought as they
- * are; a call's line as one phrase, its verb or a described command's
- * purpose, its subject where the body does not say it whole (`blockSays`),
- * and where it ran; then its body as its cards draw it (`bodyWords`).
+ * A call's line as its open row draws it, in its order: its verb or a
+ * described command's purpose, its subject where the body does not say it
+ * whole (`blockSays`), and where it ran; or, for a search of a server's
+ * tools, the verb, the server its chip names, and its words whole after
+ * them (`searchToolsLine`).
  */
-function drawnWords(block: CopiedBlock): readonly string[] {
-  if (block.kind !== COPIED_BLOCK.CALL) return [block.text];
-  const { call, subject, description, server, provider, account, input, output, error } = block;
-  const line = callLine(call, subject, description);
+function drawnLead(call: CopiedCall): string {
+  const { call: kind, subject, description, server, provider, account, input } = call;
+
+  if (kind === CALL_KIND.SEARCH_TOOLS) {
+    const searched = searchToolsLine(subject);
+
+    return [searched.verb, server, searched.subject]
+      .filter((words) => words !== undefined)
+      .join(" ");
+  }
+
+  const line = callLine(kind, subject, description);
 
   const said =
     input !== undefined &&
-    ((isCommandKind(call) && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject));
+    ((isCommandKind(kind) && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject));
 
   // Note that the panel's row leads with the integration's mark, so it names only what the mark does not.
-  const place = callPlace({ kind: call, server, provider, account }, CALL_MARK.LEADS);
-  const lead = [line.verb, said ? undefined : line.subject, place];
+  const place = callPlace({ kind, server, provider, account }, CALL_MARK.LEADS);
 
-  return [
-    lead.filter((words) => words !== undefined).join(" "),
-    ...bodyWords(input, output, error),
-  ];
+  return [line.verb, said ? undefined : line.subject, place]
+    .filter((words) => words !== undefined)
+    .join(" ");
+}
+
+/** A block's words as its row draws them, open: words and a thought as they are; a call's line as one phrase (`drawnLead`), then its body as its cards draw it (`bodyWords`). */
+function drawnWords(block: CopiedBlock): readonly string[] {
+  if (block.kind !== COPIED_BLOCK.CALL) return [block.text];
+
+  return [drawnLead(block), ...bodyWords(block.input, block.output, block.error)];
 }
 
 /** Which of a message's drawn words a find reads: what was said, or its details, the calls and thoughts its folds hold, which it may leave out. */
