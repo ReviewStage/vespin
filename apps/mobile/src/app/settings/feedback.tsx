@@ -25,6 +25,7 @@ import {
   GLYPH,
   glyphSymbol,
   ListSection,
+  SCREEN_GROUND,
   ScopePicker,
   Screen,
   SettingsForm,
@@ -33,8 +34,9 @@ import {
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { Fragment, useEffect, useRef, useState } from "react";
+import { useCloseSheet } from "../../close-sheet.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import {
@@ -93,7 +95,7 @@ function screenshotsOf(pictures: AttachedPictures): readonly FeedbackImage[] {
  */
 export default function FeedbackScreen() {
   const colors = useColors();
-  const router = useRouter();
+  const close = useCloseSheet();
   const acts = useHostActs();
   const write = useWrite();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
@@ -206,7 +208,7 @@ export default function FeedbackScreen() {
       // Note that a picture dropped while the send was out and still being read keeps the page too, so it lands where it can be seen.
       if (!standing.current || edited || added || otherHeld || now.reading) return;
       kept.release();
-      router.back();
+      close();
     });
   };
 
@@ -243,7 +245,7 @@ export default function FeedbackScreen() {
         }}
         onDismiss={kept.stay}
       />
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <ScopePicker label={FEEDBACK_WORDS.KIND} scopes={scopes}>
           <SettingsForm>
             <ListSection footer={note}>

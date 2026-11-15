@@ -91,10 +91,11 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import {
-  DOCUMENT_REGION,
   SETTLED_STATUS,
   settleOffered,
+  sidebarTasks,
   TASK_MARK,
+  TASK_REGION,
 } from "@repo/features/tasks-model";
 import type { TasksTreeAnswer } from "@repo/features/tasks-view";
 import { TERMINAL_ASK } from "@repo/features/terminal-entry";
@@ -209,6 +210,12 @@ import {
   settingsSearchEntries,
 } from "../settings-search.js";
 import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
+import {
+  NAMED_ORDER,
+  type TaskListRows,
+  useNamedTasks,
+  useTaskListRows,
+} from "../task-list-collections.js";
 import { agentSummaryEnd } from "../tasks/agent-menu-row.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
@@ -857,6 +864,7 @@ function taskDetail(
  */
 function taskRows(
   tasks: TasksControl,
+  every: readonly TaskSummary[],
   members: readonly WorkspaceMember[] | undefined,
   open: (taskId: string) => void,
   showAgent: TasksControl["onShowAgent"],
@@ -866,9 +874,9 @@ function taskRows(
   const carded = { ...tasks, onShowAgent: showAgent };
 
   // Note that a repository's name is weighed against each repository listed once, not against each task, since many tasks share one.
-  const repositories = [...new Set(tasks.tasks.map((task) => task.repository))].map(
-    (repository) => ({ repository }),
-  );
+  const repositories = [...new Set(every.map((task) => task.repository))].map((repository) => ({
+    repository,
+  }));
 
   // Note that only the listed workspace's members are read, so another workspace's assignee stands by the wire's name, never as having left.
   const listedMembers = (task: TaskSummary) =>
@@ -949,15 +957,16 @@ function taskRows(
 
   const listed = (task: TaskSummary) => listedId === undefined || task.workspaceId === listedId;
 
-  // The pinned stand first, as the sidebar's; the rest by their last
+  // The pinned stand first, newest pinned first, as the sidebar's; the rest by their last
   // activity, as the sidebar, Home's Recent, and the row's time read it.
-  const pinnedFirst = (each: readonly TaskSummary[]) => [
-    ...each.filter((task) => task.pinnedAt !== undefined),
-    ...orderTasks(each.filter((task) => task.pinnedAt === undefined)),
-  ];
+  const pinnedFirst = (each: readonly TaskSummary[]) => {
+    const { pinned, rest } = sidebarTasks(each);
 
-  const here = tasks.tasks.filter(listed);
-  const elsewhere = tasks.tasks.filter((task) => !listed(task));
+    return [...pinned, ...orderTasks(rest)];
+  };
+
+  const here = every.filter(listed);
+  const elsewhere = every.filter((task) => !listed(task));
 
   return [...pinnedFirst(here).map(taskOf), ...pinnedFirst(elsewhere).map(taskOf)];
 }
@@ -1003,6 +1012,7 @@ function paletteEntries(entry: AddEntry): readonly AddEntry[] {
  */
 function agentRows(
   tasks: TasksControl,
+  rows: TaskListRows,
   inboxWaiting: readonly AppInboxTask[],
   inboxStanding: InboxStanding,
   doors: PanelOfferDoors,
@@ -1013,7 +1023,7 @@ function agentRows(
   const taskId = tasks.activeTaskId;
 
   if (taskId === undefined) return [];
-  const taskName = tasks.tasks.find((task) => task.id === taskId)?.name;
+  const taskName = rows.task(taskId)?.name;
   // Note that an item main says waits on the task holds its Inbox with no agent read yet.
   const waiting = inboxWaiting.find((each) => each.taskId === taskId)?.items.length ?? 0;
   const inbox = inboxEntries(tasks.agents, waiting, () => tasks.onShowInbox({ taskId }));
@@ -1044,7 +1054,7 @@ function agentRows(
         onNewTerminal: doors.onNewTerminal,
         onNewLocal: doors.onNewLocal,
         viewedAgent: undefined,
-        plan: openPlanStanding(tasks),
+        plan: openPlanStanding(tasks, rows),
         cards: {
           agents: tasks.agents,
           held: NOTHING_HELD,
@@ -1108,10 +1118,12 @@ function agentRows(
  */
 function runRows(
   offer: RunOffer | undefined,
-  tasks: TasksControl,
+  tasks: Pick<TasksControl, "activeTaskId">,
+  rows: Pick<TaskListRows, "task">,
   show: (pick: () => void) => void,
 ): readonly PaletteRow[] {
-  const taskName = tasks.tasks.find((task) => task.id === tasks.activeTaskId)?.name;
+  const taskName =
+    tasks.activeTaskId === undefined ? undefined : rows.task(tasks.activeTaskId)?.name;
 
   return runPaletteRows(offer).map((row) => ({
     replayMasked: true,
@@ -1159,7 +1171,7 @@ function archivedAgentRows(
         />
       ),
       terms: [look.label, ...(taskName === undefined ? [] : [taskName])],
-      onChoose: () => show(() => tasks.onShowAgent(agent.planId, agent.id)),
+      onChoose: () => show(() => tasks.onShowAgent(agent.taskId, agent.id)),
     };
   });
 }
@@ -1200,9 +1212,9 @@ function automationRows(
       icon: <ActorMark actor={automationActor(automation)} size={ACTOR_SIZE.INLINE} />,
       label: automation.name,
       // Note that its task's name, which finds it too, is said after what fires it, so a row it found says why.
-      detail: automation.planName === null ? trigger : `${trigger} · ${automation.planName}`,
+      detail: automation.taskName === null ? trigger : `${trigger} · ${automation.taskName}`,
       card: <AutomationCard automation={automation} workspaceName={workspaceName} />,
-      terms: [automation.name, trigger, automation.planName].filter((term) => term !== null),
+      terms: [automation.name, trigger, automation.taskName].filter((term) => term !== null),
       onChoose: () => open(automation.id),
     };
   });
@@ -1478,11 +1490,12 @@ function copyLinkRows(
  */
 function panelTabRows(
   tasks: TasksControl,
+  rows: TaskListRows,
   inbox: InboxStanding,
   show: (pick: () => void) => void,
 ): readonly PaletteRow[] {
-  if (tasks.region.kind !== DOCUMENT_REGION.READY || !holdsTaskPanel(tasks, inbox)) return [];
-  const plan = openPlanStanding(tasks);
+  if (tasks.region.kind !== TASK_REGION.READY || !holdsTaskPanel(tasks, inbox)) return [];
+  const plan = openPlanStanding(tasks, rows);
   const kinds = offeredPanelKinds(SIDE_PANEL_HOLDER.TASK);
 
   return kinds.map((tab) => {
@@ -1512,7 +1525,7 @@ function readMarkRows(
   reads: ReadMarks,
   choose: (run: () => void) => void,
 ): readonly PaletteRow[] {
-  if (tasks.region.kind !== DOCUMENT_REGION.READY) return [];
+  if (tasks.region.kind !== TASK_REGION.READY) return [];
   const { task } = tasks.region;
 
   if (task.id !== reads.watched) return [];
@@ -1540,11 +1553,12 @@ function readMarkRows(
  */
 function taskPinRows(
   tasks: TasksControl,
+  rows: TaskListRows,
   pins: Pick<PinWrites, "onMarkTask">,
   reads: ReadMarks,
   choose: (run: () => void) => void,
 ): readonly PaletteRow[] {
-  const task = reads.watched === undefined ? undefined : taskOf(tasks, reads.watched);
+  const task = reads.watched === undefined ? undefined : taskOf(tasks, rows, reads.watched);
 
   if (task === undefined) return [];
   const pinned = task.pinnedAt !== undefined;
@@ -1576,6 +1590,7 @@ function taskPinRows(
  */
 function taskCommandRows(
   tasks: TasksControl,
+  rows: TaskListRows,
   writes: Pick<TaskRelationWrites, "onRemoveTaskParent">,
   standing: Pick<StandingWrites, "onSettleTasks">,
   reads: ReadMarks,
@@ -1583,7 +1598,7 @@ function taskCommandRows(
   choose: (run: () => void) => void,
   historyOffered: boolean,
 ): readonly PaletteRow[] {
-  const task = reads.watched === undefined ? undefined : taskOf(tasks, reads.watched);
+  const task = reads.watched === undefined ? undefined : taskOf(tasks, rows, reads.watched);
 
   if (task === undefined) return [];
   const renamed = rename?.taskId === task.id ? rename.begin : undefined;
@@ -1638,12 +1653,15 @@ function taskCommandRows(
  */
 function useOpenThingKeys(
   tasks: TasksControl,
+  rows: TaskListRows,
   pins: Pick<PinWrites, "onMarkTask">,
   inboxStanding: InboxStanding,
   reads: ReadMarks,
 ): void {
   const inbox = inboxStanding.open;
-  const task = inbox || reads.watched === undefined ? undefined : taskOf(tasks, reads.watched);
+
+  const task =
+    inbox || reads.watched === undefined ? undefined : taskOf(tasks, rows, reads.watched);
 
   const toggleRead =
     task === undefined ? undefined : () => reads.mark(task, !reads.markedUnread(task.id));
@@ -2061,6 +2079,9 @@ export function CommandPalette({
   const automationsDoor = useAutomationsDoor(tasks);
   const inboxDoor = useInboxDoor(tasks);
   const inboxStanding = useInboxView(tasks);
+  // The task list's rows read by id, and every task for the task rows, each name as it is being typed.
+  const rows = useTaskListRows(tasks.typedNames);
+  const everyTask = useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED);
   // A task, and an agent's tab, are always opened on the Tasks tab, as a
   // press in the sidebar is.
   const { placeLeave } = tasks;
@@ -2180,6 +2201,7 @@ export function CommandPalette({
       tasksShown
         ? taskRows(
             tasks,
+            everyTask,
             members,
             // Note that a task jumped to goes back to work on it, as a sidebar row does (`onResume`).
             (id) => onTasks(() => tasks.onResume(id)),
@@ -2187,22 +2209,22 @@ export function CommandPalette({
             originOf,
           )
         : [],
-    [tasksShown, tasks, members, onTasks, originOf],
+    [tasksShown, tasks, everyTask, members, onTasks, originOf],
   );
 
   const reads = useReadMarks();
 
   // The watched task's history is its description's, which stands by its own workspace's choice.
   const historyOffered = useWorkspaceExperiment(
-    reads.watched === undefined ? undefined : taskOf(tasks, reads.watched)?.workspaceId,
+    reads.watched === undefined ? undefined : taskOf(tasks, rows, reads.watched)?.workspaceId,
     EXPERIMENT.DESCRIPTIONS,
   );
 
   const renameOffer = useTaskRenameOffer();
   const relationWrites = useTaskRelationWrites();
-  const pins = usePinWrites(tasks.drawnTasks);
-  const standing = useStandingWrites(tasks.drawnTasks);
-  useOpenThingKeys(tasks, pins, inboxStanding, reads);
+  const pins = usePinWrites(tasks.typedNamesNow);
+  const standing = useStandingWrites(tasks.typedNamesNow);
+  useOpenThingKeys(tasks, rows, pins, inboxStanding, reads);
   const limit = filter === PALETTE_FILTER.ALL ? KIND_ROWS.ALL : KIND_ROWS.FILTERED;
   // The task's terminals and Browser tabs are offered as the panel's "+" offers them, through its own doors.
   const openTerminal = useOpenTerminal(tasks.sidePanel, noFocusMove);
@@ -2250,7 +2272,7 @@ export function CommandPalette({
   };
 
   const taskId = tasks.activeTaskId;
-  const repository = tasks.tasks.find((task) => task.id === taskId)?.repository ?? null;
+  const repository = (taskId === undefined ? undefined : rows.task(taskId))?.repository ?? null;
 
   // Note that a task's files are searched only while its panel is the one standing, which an agent's page holds otherwise.
   const filesOpen =
@@ -2337,6 +2359,7 @@ export function CommandPalette({
       [
         ...agentRows(
           tasks,
+          rows,
           inboxWaiting,
           inboxStanding,
           offerDoors,
@@ -2344,7 +2367,7 @@ export function CommandPalette({
           changesPeople,
           directory,
         ),
-        ...runRows(runOffer, tasks, onTasks),
+        ...runRows(runOffer, tasks, rows, onTasks),
       ],
     ],
     [PALETTE_FILTER.PEOPLE]: () => [
@@ -2368,9 +2391,10 @@ export function CommandPalette({
         ...copyLinkRows(links.linksAt(fromPanel), (held) => choose(() => links.copy(held))),
         ...actionRows(openThingCommands(inboxStanding), runCommand, experiments),
         ...readMarkRows(tasks, reads, choose),
-        ...taskPinRows(tasks, pins, reads, choose),
+        ...taskPinRows(tasks, rows, pins, reads, choose),
         ...taskCommandRows(
           tasks,
+          rows,
           relationWrites,
           standing,
           reads,
@@ -2378,7 +2402,7 @@ export function CommandPalette({
           choose,
           historyOffered,
         ),
-        ...panelTabRows(tasks, inboxStanding, onTasks),
+        ...panelTabRows(tasks, rows, inboxStanding, onTasks),
         ...actionRows(OPEN_THING_SHOW_COMMANDS, runCommand, experiments),
         ...actionRows(OPEN_THING_LAST_COMMANDS, runCommand, experiments),
         ...actionRows(GO_TO_COMMANDS, runCommand, experiments),

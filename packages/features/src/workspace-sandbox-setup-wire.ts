@@ -165,7 +165,7 @@ const runActionCommandSchema = EffectSchema.String.check(
  * where it wears one, a sidebar section's kind of icon, whether it is the
  * repository's default, the Run button's and ⌥⌘R's, and where it may run.
  */
-export const runActionSchema = EffectSchema.Struct({
+const runActionSchema = EffectSchema.Struct({
   id: EffectSchema.String,
   label: EffectSchema.String,
   command: EffectSchema.String,

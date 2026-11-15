@@ -32,6 +32,7 @@ import { FIND_PAGE, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { keptKey, useKept } from "../use-kept.js";
 import { PhoneHead, PlaceMore, phoneFindGroups, useMenuAsk } from "./phone-head.js";
@@ -219,7 +220,7 @@ export function TasksPage({
   );
 
   const shared = (tasks.workspace?.memberCount ?? 1) > 1;
-  const listed = tasks.listed.tasks;
+  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, workspaceId);
   const filterAsk = useMenuAsk();
   const optionsAsk = useMenuAsk();
   // A phone heads the page as it heads every place (`phone-head.tsx`): its start corner empty where the places bar

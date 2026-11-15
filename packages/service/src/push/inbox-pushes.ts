@@ -425,7 +425,7 @@ function stillWaitingPost(userId: string, itemId: string) {
     if (!waiting) return Option.none<ThreadPushPost>();
     const home = yield* readInboxItemHome(userId, itemId);
 
-    return Option.map(home, ({ planId }) => ({ item, asked: asks, taskId: planId }));
+    return Option.map(home, ({ taskId }) => ({ item, asked: asks, taskId: taskId }));
   });
 }
 

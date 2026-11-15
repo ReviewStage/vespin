@@ -66,7 +66,7 @@ import { keptKey, useKept } from "../use-kept.js";
  * where the member has no device (`new-task-composer.tsx`). On
  * the task, each agent's row in its plan's head says Cloud, or the device
  * that agent runs on, named the same way, or that the device was removed
- * (`plan-agents.tsx`).
+ * (`overview-agents.tsx`).
  */
 
 /** The id the Cloud row is picked by, which no device's id is. */

@@ -105,7 +105,7 @@ const SNAPSHOT_SCRIPT = [
 const STAMP_DIGITS = 16;
 
 /** The ref a snapshot taken at `now` for the agent's line stands under: the agent's id, then its stamp, so the refs sort by when they were taken, then the line's id. */
-export function snapshotRef(agentId: string, now: number, lineId: string): string {
+function snapshotRef(agentId: string, now: number, lineId: string): string {
   return `${CHECKOUT_SNAPSHOT.REF_PREFIX}${agentId}/${String(now).padStart(STAMP_DIGITS, "0")}-${lineId}`;
 }
 
