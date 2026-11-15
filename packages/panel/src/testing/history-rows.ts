@@ -11,6 +11,7 @@ import { createElement, type ReactElement, type ReactNode, useLayoutEffect, useS
 import type { HistoryRows } from "../places/history-rows.js";
 import { TaskListCollectionsProvider } from "../task-list-collections.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TaskRows } from "../undo-stack.js";
 
 /** The rows of `tasks` and `agents` by id, each task among them the only ones ever listed: for a name read once, where no task is deleted between reads. */
 export function listedRows(
@@ -26,6 +27,17 @@ export function listedRows(
     everListed: (taskId) => byId.has(taskId),
     everStepped: (workspaceId, step) =>
       tasks.find((task) => task.workspaceId === workspaceId && taskLinkStep(task) === step)?.id,
+  };
+}
+
+/** The rows a task's row write reads over `tasks` alone, as a list with no agent followed, no task open, and no plan held draws them. */
+export function listedTaskRows(tasks: readonly TaskSummary[]): TaskRows {
+  return {
+    listed: (taskId) => tasks.find((task) => task.id === taskId),
+    agents: () => undefined,
+    agentPins: [],
+    activeTaskId: undefined,
+    held: undefined,
   };
 }
 
