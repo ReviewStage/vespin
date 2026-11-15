@@ -38,3 +38,13 @@ test("a quoted value running over several lines is read whole, its line breaks k
     { name: "NEXT", value: "1" },
   ]);
 });
+
+test("a quoted value closes at its quote, a comment after it left out", () => {
+  const text = ['TOKEN="one # two" # primary', "NEXT='three'", "EMPTY="].join("\n");
+
+  assert.deepEqual(parseDotenv(text), [
+    { name: "TOKEN", value: "one # two" },
+    { name: "NEXT", value: "three" },
+    { name: "EMPTY", value: "" },
+  ]);
+});

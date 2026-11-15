@@ -57,6 +57,7 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  TextArea,
   TextField,
   TIME_LOOK,
   Time,
@@ -160,6 +161,7 @@ const WORDS = {
   /** What a save or an edit says once it lands: when the agents already running take it. */
   SAVED: "Saved. Agents pick it up from their next message.",
   NAME_SPELLING: "Use letters, digits, and _, not starting with a digit.",
+  SEALS_CONFIG: "Choose Config to replace its value, or make it secret from its row.",
   ADDED: "Added",
   UPDATED: "Updated",
   BY: "by",
@@ -273,6 +275,20 @@ function nameProblem(name: string, others: readonly string[]): string | undefine
   if (others.includes(name)) return `${name} is named twice.`;
 
   return undefined;
+}
+
+/** What saving a line over a variable already saved does to it, where one is. */
+function replacesNote(
+  name: string,
+  saved: WorkspaceVariable | undefined,
+  secret: boolean,
+): string | undefined {
+  if (saved === undefined) return undefined;
+
+  // Note that a secret stays one whatever a save says, so a line saved as a config says so.
+  return !secret && saved.secret !== false
+    ? `Replaces the saved ${name}, which stays a secret.`
+    : `Replaces the saved ${name}.`;
 }
 
 /** The variables in the order View options names. */
@@ -511,6 +527,7 @@ function useEditDialog(
   const wasSecret = variable.secret !== false;
   const [value, setValue] = useState(variable.value ?? "");
   const valueChanged = wasSecret ? value !== "" : value !== (variable.value ?? "");
+  const multiline = (variable.value ?? "").includes("\n");
 
   const editing = useMutation({
     mutationFn: () =>
@@ -583,16 +600,30 @@ function useEditDialog(
           <FormField label="Value" error={replayMaskedError(form.refusal)}>
             {(control) => (
               <ReplayMask>
-                <TextField
-                  field={control}
-                  font={TEXT_FIELD_FONT.MONO}
-                  autoCorrect={false}
-                  spellCheck={false}
-                  disabled={form.settling}
-                  value={value}
-                  onChange={setValue}
-                  onEnter={form.submit}
-                />
+                {/* Note that a value of several lines, as a `.env` may set, is edited where its line breaks stand, since one line's field would drop them. */}
+                {multiline ? (
+                  <TextArea
+                    field={control}
+                    font={TEXT_FIELD_FONT.MONO}
+                    rows={3}
+                    grow
+                    spellCheck={false}
+                    disabled={form.settling}
+                    value={value}
+                    onChange={setValue}
+                  />
+                ) : (
+                  <TextField
+                    field={control}
+                    font={TEXT_FIELD_FONT.MONO}
+                    autoCorrect={false}
+                    spellCheck={false}
+                    disabled={form.settling}
+                    value={value}
+                    onChange={setValue}
+                    onEnter={form.submit}
+                  />
+                )}
               </ReplayMask>
             )}
           </FormField>
@@ -629,7 +660,7 @@ const blankDraft = (): Draft => ({ key: `draft-${draftCount++}`, name: "", value
  */
 function useAddDialog(
   workspaceId: string,
-  names: readonly string[],
+  existing: readonly WorkspaceVariable[],
   onWritten: (names: readonly string[]) => void,
 ) {
   const queries = useQueryClient();
@@ -637,7 +668,8 @@ function useAddDialog(
   const [kind, setKind] = useState<Kind>(KIND.SECRET);
   const secret = kind === KIND.SECRET;
   const typedNames = drafts.map((draft) => draft.name.trim());
-  const filled = drafts.filter((draft) => draft.name.trim() !== "" && draft.value !== "");
+  // Note that a named line is saved whatever its value, an empty one among them, as a `.env`'s `OPTIONAL=` sets it.
+  const filled = drafts.filter((draft) => draft.name.trim() !== "");
 
   const rows: readonly NameValueRow[] = drafts.map((draft, at) => {
     const name = draft.name.trim();
@@ -647,14 +679,19 @@ function useAddDialog(
       typedNames.filter((_, other) => other !== at),
     );
 
-    const replaces = problem === undefined && names.includes(name);
+    const saved = problem === undefined ? existing.find((each) => each.name === name) : undefined;
+    const savedConfig = saved !== undefined && saved.secret === false;
+
+    // Note that a save as secrets would turn a saved config secret for good, which only Make secret does, behind its question.
+    const sealsConfig =
+      secret && savedConfig ? `${name} is a config. ${WORDS.SEALS_CONFIG}` : undefined;
 
     return {
       key: draft.key,
       name: draft.name,
       value: draft.value,
-      problem,
-      note: SET_BY_VESPIN.get(name) ?? (replaces ? `Replaces the saved ${name}.` : undefined),
+      problem: problem ?? sealsConfig,
+      note: SET_BY_VESPIN.get(name) ?? replacesNote(name, saved, secret),
     };
   });
 
@@ -662,7 +699,7 @@ function useAddDialog(
     filled.length > 0 &&
     filled.length <= WORKSPACE_ENVIRONMENT_BOUNDS.MAX_SAVED &&
     rows.every((row) => row.problem === undefined) &&
-    drafts.every((draft) => (draft.name.trim() === "") === (draft.value === "")) &&
+    drafts.every((draft) => draft.name.trim() !== "" || draft.value === "") &&
     filled.every((draft) => draft.value.length <= WORKSPACE_ENVIRONMENT_BOUNDS.MAX_VALUE_CHARS);
 
   const saving = useMutation({
@@ -960,11 +997,7 @@ export function EnvironmentVariablesSection({
   const { landed, land } = useLanded();
   const variables = environment.data?.variables;
 
-  const add = useAddDialog(
-    workspace.id,
-    (variables ?? []).map((variable) => variable.name),
-    land,
-  );
+  const add = useAddDialog(workspace.id, variables ?? [], land);
 
   return (
     <>
