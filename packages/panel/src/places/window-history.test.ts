@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { agentTab, fileTab, pageTab, STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
@@ -33,7 +33,12 @@ import { handHostReads } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { standingTaskList } from "../testing/history-rows.js";
-import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
+import {
+  agentsControl,
+  listedAgent,
+  type TasksControlOverrides,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { useVersionHistoryRoute, type VersionHistoryRoute } from "../version-history-route.js";
 import {
@@ -75,6 +80,8 @@ const AUTOMATION_ID = "5d1e7a9c-3b2f-4c6d-8e0a-9f1b2c3d4e5a";
 
 /** The Tasks tab as a window stands it, and the Inbox standing over it, on the item `chosen` names or on its list, where it stands. */
 type Standing = TasksControl & {
+  /** The tasks the window's task list holds, which its collections stand on. */
+  readonly tasks?: readonly TaskSummary[];
   readonly inboxStands?: { readonly chosen?: InboxChoice | undefined } | undefined;
 };
 
@@ -82,8 +89,12 @@ type Standing = TasksControl & {
 function listedTab({
   inboxStands,
   ...overrides
-}: Partial<TasksControl> & Pick<Standing, "inboxStands"> = {}): Standing {
-  return { ...tasksControl({ workspaces: [ACME], workspace: ACME, ...overrides }), inboxStands };
+}: TasksControlOverrides & Pick<Standing, "inboxStands"> = {}): Standing {
+  return {
+    ...tasksControl({ workspaces: [ACME], workspace: ACME, ...overrides }),
+    ...(overrides.tasks === undefined ? undefined : { tasks: overrides.tasks }),
+    inboxStands,
+  };
 }
 
 const roots: Root[] = [];
@@ -114,7 +125,7 @@ function mount(
   let history: (WindowHistory & HistoryBehind & TaskVisits & RecentSteps) | undefined;
   let open: TasksControl | undefined;
   let backs: NarrowBacks | undefined;
-  let restand: ((tasks: TasksControl) => void) | undefined;
+  let restand: ((tasks: Standing) => void) | undefined;
   let admin: AdminRoute | undefined;
   let board: BoardRoute | undefined;
   let person: PersonRoute | undefined;
@@ -127,10 +138,10 @@ function mount(
   // The Tasks tab as the window stands it or a test is about to stand it, which a routed place is left for.
   let wanted = initial;
   // Leaves the routed place standing for `to`'s place, as the Tasks tab's door does: a navigation to its task's own place, or Home.
-  let leaveTo: (to: TasksControl) => void = () => undefined;
+  let leaveTo: (to: Standing) => void = () => undefined;
   let taskRoute: TaskRoute | undefined;
   // The window's task-list collections, standing on the tasks and agents the tab stands on, as the window's follow writes them.
-  const taskList = standingTaskList({ tasks: initial.tasks, taskAgents: initial.liveAgents });
+  const taskList = standingTaskList({ tasks: initial.tasks ?? [], taskAgents: initial.liveAgents });
 
   function Probe() {
     const [standing, setTasks] = useState(initial);
@@ -143,7 +154,7 @@ function mount(
     exits.stay = placeLeave.stays;
     restand = (tasks) => {
       wanted = tasks;
-      taskList.stand({ tasks: tasks.tasks, taskAgents: tasks.liveAgents });
+      taskList.stand({ tasks: tasks.tasks ?? [], taskAgents: tasks.liveAgents });
       setTasks(tasks);
     };
 
@@ -190,7 +201,7 @@ function mount(
       const at =
         to.boundFor === undefined
           ? undefined
-          : taskAtOf(to.boundFor, to.tasks, to.workspaces, to.workspace, undefined);
+          : taskAtOf(to.boundFor, to.tasks ?? [], to.workspaces, to.workspace, undefined);
 
       if (at === undefined) home.onOpen();
       else route.onOpen(at, true, history?.onLeaveStart() ?? false);
@@ -202,7 +213,9 @@ function mount(
       atHome: home.open,
       taskView: {
         taskId:
-          taskAt === undefined ? undefined : taskOfAt(taskAt, standing.tasks, standing.workspaces),
+          taskAt === undefined
+            ? undefined
+            : taskOfAt(taskAt, standing.tasks ?? [], standing.workspaces),
       },
       // As the real one does, binding no task drops the task asked for at once, the host's answer still on its way.
       onUnbindTask: () => {
@@ -379,7 +392,7 @@ async function settle(): Promise<void> {
 
 test("leaving a plan for Home is a step Back returns from", () => {
   const window = mount(
-    listedTab({ page: TASKS_PAGE.DOCUMENT, activeTaskId: TASK_ID, boundFor: TASK_ID }),
+    listedTab({ page: TASKS_PAGE.TASK, activeTaskId: TASK_ID, boundFor: TASK_ID }),
   );
 
   window.stand(listedTab());
@@ -388,7 +401,7 @@ test("leaving a plan for Home is a step Back returns from", () => {
 
 test("a press of the mouse's Back or Forward button takes one step and cancels the browser's own, so a browser tab takes no second step", () => {
   const window = mount(
-    listedTab({ page: TASKS_PAGE.DOCUMENT, activeTaskId: TASK_ID, boundFor: TASK_ID }),
+    listedTab({ page: TASKS_PAGE.TASK, activeTaskId: TASK_ID, boundFor: TASK_ID }),
   );
 
   window.stand(listedTab());
@@ -415,7 +428,7 @@ test("a step back canceled at the leave ask leaves the history where the window 
   const window = mount(listedTab());
   window.stand(
     listedTab({
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       activeTaskId: TASK_ID,
       boundFor: TASK_ID,
       onUnbindTask: () => homes.push("home"),
@@ -444,7 +457,7 @@ test("a move landing on an entry holding no step at /app stands Home, which lets
   const window = mount(listedTab(), held);
   window.stand(
     listedTab({
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       activeTaskId: TASK_ID,
       boundFor: TASK_ID,
       onUnbindTask: () => homes.push("home"),
@@ -460,7 +473,7 @@ test("a move landing on an entry holding no step at /app stands Home, which lets
 /** The window on Acme's Inbox, which the router stands, or on the task `onTask` stands, each task left recorded in `left`. */
 function inboxOrTask(onTask: boolean, left: string[]): Standing {
   return listedTab({
-    ...(onTask && { page: TASKS_PAGE.DOCUMENT, activeTaskId: TASK_ID, boundFor: TASK_ID }),
+    ...(onTask && { page: TASKS_PAGE.TASK, activeTaskId: TASK_ID, boundFor: TASK_ID }),
     workspaces: [ACME],
     workspace: ACME,
     onLeaveTask: () => left.push(TASK_ID),
@@ -485,7 +498,7 @@ test("a task New task starts over the Inbox takes the step its starting page sto
   const STARTED = "7e8f9a0b-0000-4000-8000-0000000000d5";
   const window = mount(listedTab({ activeTaskId: TASK_ID, boundFor: TASK_ID, inboxStands: {} }));
   window.standStart(ACME.slug, TASK_ID);
-  window.stand(listedTab({ page: TASKS_PAGE.DOCUMENT, activeTaskId: STARTED, boundFor: STARTED }));
+  window.stand(listedTab({ page: TASKS_PAGE.TASK, activeTaskId: STARTED, boundFor: STARTED }));
   assert.equal(window.at(), `/acme/task/${STARTED}`);
 
   act(() => window.history().onBack());
@@ -502,7 +515,7 @@ test("Escape on a task opened from a person's page returns to that page", async 
   window.leaveFor(
     listedTab({
       ...listed,
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       activeTaskId: TASK_ID,
       boundFor: TASK_ID,
     }),
@@ -520,7 +533,7 @@ test("Escape on a task with no step behind it, as a launch or a link opens one o
 
   const window = mount(
     listedTab({
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       activeTaskId: TASK_ID,
       boundFor: TASK_ID,
       onLeaveTask: () => left.push(TASK_ID),
@@ -558,7 +571,7 @@ test("a person's page is a step of its own, which Back from a plan opened after 
   window.leaveFor(
     listedTab({
       ...listed,
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       activeTaskId: TASK_ID,
       boundFor: TASK_ID,
     }),
@@ -581,7 +594,7 @@ test("an agent's own page, which opens its agent on its task, is a step Back fro
   window.leaveFor(
     listedTab({
       ...listed,
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       activeTaskId: TASK_ID,
       boundFor: TASK_ID,
     }),
@@ -601,7 +614,7 @@ test("a person's page opened again with a newer name keeps that name, which Back
   window.leaveFor(
     listedTab({
       ...listed,
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       activeTaskId: TASK_ID,
       boundFor: TASK_ID,
     }),
@@ -714,11 +727,11 @@ function onTask(workspaces: TasksControl["workspaces"], number?: number): TasksC
   const task = { ...DOCUMENT_TASK, workspaceId: ACME.id };
 
   return tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: DOCUMENT_TASK.id,
     boundFor: DOCUMENT_TASK.id,
     region: {
-      kind: DOCUMENT_REGION.READY,
+      kind: TASK_REGION.READY,
       task: number === undefined ? task : { ...task, number },
     },
     workspaces,
@@ -915,7 +928,7 @@ function onTabs(input: {
   const agents = input.agents ?? [AGENT_A, AGENT_B, AGENT_C];
 
   return listedTab({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: TASK_ID,
     boundFor: TASK_ID,
     mainTabs: {
@@ -969,7 +982,7 @@ function listedTask(name: string): TaskSummary {
 function openAgent(title: string): AgentSummary {
   return {
     id: AGENT_A.agent,
-    planId: TASK_ID,
+    taskId: TASK_ID,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title,
@@ -1085,7 +1098,7 @@ test("Back's list names a person's page by the name the workspace's members give
     listedTab({
       workspaces: [workspace],
       workspace,
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       activeTaskId: TASK_ID,
       boundFor: TASK_ID,
       tasks: [listedTask("Auth refactor")],
@@ -1174,7 +1187,7 @@ test("Back to another task whose panel stood shut leaves the panel to shut as th
     const base = listedTab();
 
     return listedTab({
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       activeTaskId: taskId,
       boundFor: taskId,
       onArriveTask: (id) => done.push(`task:${id}`),
@@ -1268,7 +1281,7 @@ test("the open task deleted, as the host binds none, goes Home by a move of the 
   window.stand(
     listedTab({
       tasks: [task],
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       activeTaskId: TASK_ID,
       boundFor: TASK_ID,
     }),
@@ -1449,7 +1462,7 @@ test("a version history opened over another task is counted once, as the history
     listedTab({
       workspace: ACME,
       workspaces: [ACME],
-      page: TASKS_PAGE.DOCUMENT,
+      page: TASKS_PAGE.TASK,
       activeTaskId: taskId,
       boundFor: taskId,
     });

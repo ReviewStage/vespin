@@ -1,7 +1,8 @@
 // press.tsx -- React Native's Pressable with the system's pressed dim, the one press the React Native views that SwiftUI has no piece for (the transcript, markdown, file chips) draw with.
 
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import {
+  type HostInstance,
   Pressable,
   type PressableProps,
   type PressableStateCallbackType,
@@ -26,6 +27,8 @@ export function Press({
 }: Omit<PressableProps, "style"> & {
   readonly style?: StyleProp<ViewStyle>;
   readonly children?: ReactNode;
+  /** The press's own view, such as a row that takes VoiceOver's focus when it is asked into view. */
+  readonly ref?: Ref<HostInstance> | undefined;
 }) {
   const pressedStyle = ({ pressed }: PressableStateCallbackType) => [
     style,

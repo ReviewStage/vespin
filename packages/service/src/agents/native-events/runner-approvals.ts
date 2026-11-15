@@ -139,7 +139,7 @@ function cutValue<Value>(value: Value, depth: number): WireBoundaryInput {
  * a runner sent, and empty where it is still past the bound, since the call
  * stands whole in the transcript.
  */
-export function keptApprovalInput(
+function keptApprovalInput(
   input: (typeof RunnerApprovalRequestedSchema.Type)["input"],
 ): AgentPendingApproval["input"] {
   const cut = readInput(cutValue(input, 0));

@@ -8,13 +8,14 @@ import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { DOCUMENT_REGION } from "@repo/features/tasks-model";
+import { TASK_REGION } from "@repo/features/tasks-model";
 import { AgentPlaceholderIcon, DocumentIcon, PlusIcon, TaskStatusMark } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { pullRequestLabelOf, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { HarnessMark } from "../harness-marks.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
+import type { TaskListRows } from "../task-list-collections.js";
 import { providerOf } from "./agent-model.js";
 import { fileLook } from "./file-ref.js";
 import { PullRequestMark, type PullRequestMarked } from "./pull-request-mark.js";
@@ -154,23 +155,24 @@ export function PlanGlyph({ status }: { status: TaskStatus | undefined }) {
 /**
  * The open task as its Description tab wears it: its name, and its status as the
  * task list holds it, which a status set from the sidebar moves first; none
- * while no task is open.
+ * while no task is open, the task list's rows read by id (`useTaskListRows`).
  */
 export function openPlanStanding(
-  tasks: Pick<TasksControl, "region" | "tasks" | "activeTaskId">,
+  tasks: Pick<TasksControl, "region" | "activeTaskId">,
+  rows: Pick<TaskListRows, "task">,
 ): PlanStanding | undefined {
   const { region } = tasks;
 
   // Note that while its description is read, the tab wears the task as the list holds it.
-  if (region.kind === DOCUMENT_REGION.READING) {
-    const listed = tasks.tasks.find((each) => each.id === tasks.activeTaskId);
+  if (region.kind === TASK_REGION.READING) {
+    const listed = tasks.activeTaskId === undefined ? undefined : rows.task(tasks.activeTaskId);
 
     return listed === undefined ? undefined : { name: listed.name, status: listed.status };
   }
 
-  if (region.kind !== DOCUMENT_REGION.READY) return undefined;
+  if (region.kind !== TASK_REGION.READY) return undefined;
   const { task } = region;
-  const listed = tasks.tasks.find((each) => each.id === task.id) ?? task;
+  const listed = rows.task(task.id) ?? task;
 
   return { name: task.name, status: listed.status };
 }

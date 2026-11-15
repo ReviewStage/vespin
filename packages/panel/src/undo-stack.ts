@@ -55,15 +55,20 @@
  */
 
 import type { AgentAgentAnswer } from "@repo/features/agent-view";
-import type { AgentSummary } from "@repo/features/agent-wire";
+import type { AgentSummary, ListedAgent } from "@repo/features/agent-wire";
 import type { LIVE_READ } from "@repo/features/live-wire";
 import {
   FAILURE_SURFACE,
   type FailureAbout,
   type FailureSurface,
 } from "@repo/features/shown-failure";
-import type { Task, TaskPriority, TaskStatus, TaskSummary } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
+import type {
+  Task,
+  TaskAgentPin,
+  TaskPriority,
+  TaskStatus,
+  TaskSummary,
+} from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import type { PortActKind } from "@repo/host/contract";
@@ -913,29 +918,38 @@ export function pressLocal<Doors, Change>(
 }
 
 /**
- * The rows a task's write reads: the tasks drawn, and the plans the host
- * holds for the window (`LIVE_READ.DESCRIPTION_DOCUMENT`), none before the
- * document is read, as the caller's Query client holds them.
+ * The rows a task's write reads as they stand at the call: the task list's
+ * rows by id, as the window's collections hold them, what the list carries
+ * beside them (the agents' pins, the open task, and whether it follows the
+ * agents at all), and the plans the host holds for the window
+ * (`LIVE_READ.HELD_TASK`), none before the document is read.
  */
 export interface TaskRows {
-  readonly tasks: TasksView;
-  readonly held: AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT] | undefined;
+  /** The task the list holds under `taskId`, its name drawn as it is being typed; none where it holds none. */
+  readonly listed: (taskId: string) => TaskSummary | undefined;
+  /** Every agent the list follows, the archived ones among them; none while it follows none. */
+  readonly agents: () => readonly ListedAgent[] | undefined;
+  /** The agents pinned, each with where it was dragged. */
+  readonly agentPins: readonly TaskAgentPin[];
+  /** The task open in the window; none while none is. */
+  readonly activeTaskId: string | undefined;
+  readonly held: AppStateSnapshot[typeof LIVE_READ.HELD_TASK] | undefined;
 }
 
 /** A task as the host holds its plan for the window, with what the list leaves out, its blocks among it; none where it holds none. */
-export function heldTask({ held }: TaskRows, taskId: string): Task | undefined {
+export function heldTask({ held }: Pick<TaskRows, "held">, taskId: string): Task | undefined {
   const rows = held?.[taskId]?.rows;
 
   return rows !== undefined && "task" in rows ? rows.task : undefined;
 }
 
 /**
- * A task as the tasks drawn show it: the list's, else its plan's as
- * the host holds it for the window, as a task just started is held before
- * the list carries it.
+ * A task as the window draws it: the list's, else its plan's as the host
+ * holds it for the window, as a task just started is held before the list
+ * carries it.
  */
 export function drawnTask(rows: TaskRows, taskId: string): TaskSummary | undefined {
-  return rows.tasks.tasks.find((task) => task.id === taskId) ?? heldTask(rows, taskId);
+  return rows.listed(taskId) ?? heldTask(rows, taskId);
 }
 
 /** A pin as an entry reads and sends it: whether it stands, and where it was dragged, none while it stands by when it was pinned. */
@@ -956,12 +970,10 @@ function agentKept(asked: Promise<AgentAgentAnswer>): Promise<Kept> {
   return asked.then((answer) => ("agent" in answer ? KEPT : notKept(answer)), notKept);
 }
 
-/** An agent's pin as the tasks drawn show it, among its plan's pins; none where they show no such agent. */
-function agentPin(tasks: TasksView, agentId: string): PinFields | undefined {
-  const { taskAgents = [], taskAgentPins = [] } = tasks;
-
-  if (!taskAgents.some((agent) => agent.id === agentId)) return undefined;
-  const pin = taskAgentPins.find((each) => each.agentId === agentId);
+/** An agent's pin as the list shows it, among the agents' pins; none where it lists no such agent. */
+function agentPin(rows: TaskRows, agentId: string): PinFields | undefined {
+  if (!(rows.agents() ?? []).some((agent) => agent.id === agentId)) return undefined;
+  const pin = rows.agentPins.find((each) => each.agentId === agentId);
 
   return { pinned: pin !== undefined, position: pin?.pinPosition ?? null };
 }
@@ -975,13 +987,13 @@ function pinSent({ pinned, position }: PinFields): { pinned: boolean; position?:
  * The row writes an entry takes back and puts back, one for each act that
  * changes a row's fields at once and asks nothing first (`CLAUDE.md`'s
  * Confirms): a task's name, where it stands, and its pin, read off the
- * tasks drawn, and an agent's pin, read there too, and its archive, read
- * off the agents drawn.
+ * task list's rows, and an agent's pin, read there too, and its archive,
+ * read off the agents drawn.
  */
 export const ROW_WRITE = {
   TASK_RENAME: {
-    read: (tasks, taskId) => {
-      const task = drawnTask(tasks, taskId);
+    read: (rows, taskId) => {
+      const task = drawnTask(rows, taskId);
 
       return task === undefined ? undefined : { name: task.name };
     },
@@ -992,8 +1004,8 @@ export const ROW_WRITE = {
     surface: FAILURE_SURFACE.TASK_RENAME,
   } satisfies RowWrite<TaskRows, { readonly name: string }, typeof ACT_KIND.TASKS_RENAME>,
   TASK_STANDING: {
-    read: (tasks, taskId) => {
-      const task = drawnTask(tasks, taskId);
+    read: (rows, taskId) => {
+      const task = drawnTask(rows, taskId);
 
       if (task === undefined) return undefined;
 
@@ -1024,8 +1036,8 @@ export const ROW_WRITE = {
     surface: FAILURE_SURFACE.TASK_STANDING,
   } satisfies RowWrite<TaskRows, StandingFields, typeof ACT_KIND.TASKS_SET_STANDING>,
   TASK_PIN: {
-    read: (tasks, taskId) => {
-      const task = drawnTask(tasks, taskId);
+    read: (rows, taskId) => {
+      const task = drawnTask(rows, taskId);
 
       if (task === undefined) return undefined;
 
@@ -1038,7 +1050,7 @@ export const ROW_WRITE = {
     surface: FAILURE_SURFACE.TASK_MARK,
   } satisfies RowWrite<TaskRows, PinFields, typeof ACT_KIND.TASKS_PIN>,
   AGENT_PIN: {
-    read: ({ tasks }, agentId) => agentPin(tasks, agentId),
+    read: agentPin,
     holds: holdsEach,
     kind: ACT_KIND.AGENTS_PIN,
     send: (send, agentId, pin) => agentKept(send({ agentId, ...pinSent(pin) })),
