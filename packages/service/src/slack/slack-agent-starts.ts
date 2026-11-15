@@ -34,9 +34,9 @@
  * conversation, and the thread becomes the agent's current one once the
  * agent took the message. Where its session has ended for good (`AGENT_RETIRED`), a new
  * agent continues it as Continue does, handed its work, a summary of its
- * transcript, and the message, and the thread moves to it, with one line in
- * the thread linking it, the new agent on the ended one's own task, as
- * Continue puts it; any other
+ * transcript, and the message, and the thread moves to it, the bot saying
+ * nothing of it, the new agent on the ended one's own task, as Continue
+ * puts it; any other
  * makes a task and starts an agent as the writer on it, on the one path a
  * Start takes (`coder-host/start.ts`), both keyed by Slack's event id. The
  * task starts untitled, for its agent's title to name it, with a blank
@@ -749,21 +749,6 @@ const agentLink = (userId: string, organizationId: string, agentId: string) =>
     linkOf({ kind: LINK_DESTINATION.AGENT, agentId }, step),
   );
 
-/** The words the bot links a continue with, said once in the thread: the earlier agent had stopped, and where its work goes on. */
-function continuedReply(link: string): SlackMessageContent {
-  const lead = "The earlier agent had stopped, so I continued its work in";
-
-  return {
-    text: `${lead} a new agent.`,
-    blocks: [
-      {
-        type: "section",
-        text: { type: "mrkdwn", text: `${slackEscaped(lead)} <${link}|a new agent>.` },
-      },
-    ],
-  };
-}
-
 /** The message's 👀 taken off where its thread still marks it as worked on; one marked since stands. */
 const clearedWorking = Effect.fnUntraced(function* (
   bot: SlackWorkspaceBot,
@@ -779,8 +764,8 @@ const clearedWorking = Effect.fnUntraced(function* (
  * steps that do not fit summarized, with the member's message as its note
  * and the files it shared as the note's files.
  * The thread moves to it, the message already marked 👀 stays marked as
- * worked on, and one line in the thread links it; a refusal is said
- * instead, and the message's 👀 taken off.
+ * worked on, and the bot says nothing more, for the new agent speaks for
+ * itself; a refusal is said instead, and the message's 👀 taken off.
  */
 const continueFromSlack = Effect.fnUntraced(function* (
   bot: SlackWorkspaceBot,
@@ -847,8 +832,6 @@ const continueFromSlack = Effect.fnUntraced(function* (
     userId,
     workingTs: addressed.ts,
   });
-  const link = yield* agentLink(userId, source.organizationId, agentId);
-  yield* bot.reply(addressed.channel, thread, continuedReply(link));
 });
 
 /**

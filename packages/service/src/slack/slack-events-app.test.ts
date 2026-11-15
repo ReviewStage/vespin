@@ -911,7 +911,7 @@ it.layer(SUITE)("our Slack route", (it) => {
   );
 
   it.effect(
-    "a message in the thread of an agent whose session ended continues it in a new agent on the same task, moves the thread to it, and links it once",
+    "a message in the thread of an agent whose session ended continues it in a new agent on the same task, moves the thread to it, and posts nothing in the thread",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
@@ -941,10 +941,11 @@ it.layer(SUITE)("our Slack route", (it) => {
         assert.deepEqual(continued.startedFrom?.agentId, agent.id);
         assert.equal(continued.taskId, taskId, "the new agent works on the ended one's task");
         assert.deepEqual(HARNESS.heard.at(-1), { call: "open", account: owner });
-        const replies = calls.filter((call) => call.method === "chat.postMessage");
-        assert.equal(replies.length, 1);
-        assert.equal(replies[0]?.args.thread_ts, threadTs);
-        assert.match(replies[0]?.args.text ?? "", /had stopped/u);
+        assert.deepEqual(
+          calls.filter((call) => call.method === "chat.postMessage"),
+          [],
+          "the new agent speaks for itself",
+        );
         assert.deepEqual(
           calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
           [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
