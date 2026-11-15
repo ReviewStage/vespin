@@ -1,7 +1,7 @@
 // inbox-screens.tsx -- the Inbox's list and its thread: the Stack's two screens in a compact window, one split view in a regular one.
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
@@ -148,14 +148,24 @@ const PATH_OPENS = { TASK: "Open task", AGENT: "Open agent" } as const;
 /** What ends Select mode, as the system's own Done does. */
 const SELECT_DONE = "Done";
 
-/** What a video the words draw in place is heard as, its file's name being the words' own alt. */
-const VIDEO_LABEL = "Video";
+/** What a video or a sound clip the words draw in place is heard as, where the words give it no alt. */
+const PLAYED_LABEL = {
+  [INBOX_MEDIA.VIDEO]: "Video",
+  [INBOX_MEDIA.AUDIO]: "Sound clip",
+} as const;
 
 /** What an agent is called where the task list does not hold it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
 
 /** How many of a thread's newest messages its row reads for its preview: more than the preview draws, since a file sent alone says nothing there. */
 const PREVIEW_TAIL = 6;
+
+/** How an open ask's option file is read beside the thread's own: a recording, a sound clip, or a picture. */
+function askFileKind(mediaType: string) {
+  if (isVideoType(mediaType)) return INBOX_MEDIA.VIDEO;
+
+  return isAudioType(mediaType) ? INBOX_MEDIA.AUDIO : INBOX_MEDIA.PICTURE;
+}
 
 /** What the list's search says where it finds nothing. */
 function noMatchWords(search: string): string {
@@ -571,7 +581,7 @@ function ThreadDetail({
         })),
       ]),
       ...openAskFiles(item).map((file) => ({
-        kind: isVideoType(file.mediaType) ? INBOX_MEDIA.VIDEO : INBOX_MEDIA.PICTURE,
+        kind: askFileKind(file.mediaType),
         attachmentId: file.attachmentId,
         name: "",
         mediaType: file.mediaType,
@@ -580,14 +590,16 @@ function ThreadDetail({
     [messages, item],
   );
 
-  // The videos the words draw in place, by attachment.
-  const drawnVideos = useMemo(
+  // The videos and sound clips the words draw in place, by attachment, with which each is.
+  const drawnPlayed = useMemo(
     () =>
-      new Set(
+      new Map(
         messages.flatMap((message) =>
-          message.drawn
-            .filter(({ kind }) => kind === INBOX_MEDIA.VIDEO)
-            .map(({ attachmentId }) => attachmentId),
+          message.drawn.flatMap(({ kind, attachmentId }) =>
+            kind === INBOX_MEDIA.VIDEO || kind === INBOX_MEDIA.AUDIO
+              ? [[attachmentId, kind] as const]
+              : [],
+          ),
         ),
       ),
     [messages],
@@ -714,6 +726,10 @@ function ThreadDetail({
         };
       }
 
+      if (each.kind === INBOX_MEDIA.AUDIO) {
+        return { kind: THREAD_MEDIA.AUDIO, key, source, label: each.name };
+      }
+
       if (each.kind === INBOX_MEDIA.FILE) {
         const size = sizes.get(key);
 
@@ -740,17 +756,17 @@ function ThreadDetail({
       : sources.get(named.attachmentId);
   };
 
-  // A video the words name as a picture is played where they name it, from its bytes as read.
+  // A video or a sound clip the words name as a picture is played where they name it, from its bytes as read.
   const videoAt = (written: string): MarkdownVideo | undefined => {
     const named = inboxAttachmentOf(inboxPictureDestination(written));
+    const kind = named?.itemId === item.id ? drawnPlayed.get(named.attachmentId) : undefined;
 
-    if (named === undefined || named.itemId !== item.id || !drawnVideos.has(named.attachmentId)) {
-      return undefined;
-    }
+    if (named === undefined || kind === undefined) return undefined;
 
     return {
       source: sources.get(named.attachmentId),
-      label: VIDEO_LABEL,
+      label: PLAYED_LABEL[kind],
+      audio: kind === INBOX_MEDIA.AUDIO,
       onOpenElsewhere: openOnWeb,
     };
   };
