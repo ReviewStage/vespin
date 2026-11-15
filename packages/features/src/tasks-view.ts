@@ -2,7 +2,12 @@ import { taskFollowerSchema } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { browserTabsPlaceSchema } from "./agent-browser-tab-wire.js";
 import { agentAgentAnswerSchema } from "./agent-view.js";
-import { AGENT_STATUS, listedAgentSchema, localAgentRefusalSchema } from "./agent-wire.js";
+import {
+  AGENT_STATUS,
+  type ListedAgent,
+  listedAgentSchema,
+  localAgentRefusalSchema,
+} from "./agent-wire.js";
 import { agentBrowserTabsContract } from "./contract/agent-browser-tabs.js";
 import { descriptionCommentsContract } from "./contract/description-comments.js";
 import { githubContract } from "./contract/github.js";
@@ -233,6 +238,9 @@ export const tasksViewSchema = EffectSchema.Struct({
 
 export type TasksView = typeof tasksViewSchema.Type;
 
+/** What a tasks view holds but the list itself, which a window reads from its task list's collections rather than the document. */
+export type TaskListStanding = Omit<TasksView, "tasks">;
+
 /** The view before anything is asked: no tasks read, none active. */
 export const IDLE_TASKS_VIEW: TasksView = {
   tasks: [],
@@ -241,12 +249,12 @@ export const IDLE_TASKS_VIEW: TasksView = {
 };
 
 /**
- * How many of the agents the view lists are working, starting or running a
- * turn. Note that the agents are listed only while the list is followed
- * live, so before then this counts none.
+ * How many of `agents` are working, starting or running a turn. Note that
+ * the agents are listed only while the list is followed live, so before
+ * then this counts none.
  */
-export function workingAgentCount(view: TasksView): number {
-  return (view.taskAgents ?? []).filter(
+export function workingAgentCount(agents: readonly ListedAgent[] | undefined): number {
+  return (agents ?? []).filter(
     (agent) => agent.status === AGENT_STATUS.STARTING || agent.status === AGENT_STATUS.RUNNING,
   ).length;
 }

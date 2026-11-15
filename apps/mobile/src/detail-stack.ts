@@ -7,10 +7,10 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useSyncExternalStore,
 } from "react";
-import { placeRoot } from "./place-columns.js";
 import {
   placeOfRoute,
   placeRoute,
@@ -88,7 +88,7 @@ export type PushedPage =
 /** A page on a place's stack, by the key its column's path names it by. */
 export type HeldPage = { readonly key: string; readonly page: PushedPage };
 
-/** A place's pushed pages, oldest first, and the detail they were pushed over, by its root's key (`PlaceColumns`' `root`). */
+/** A place's pushed pages, oldest first, and the detail they were pushed over, by its root's key (`useStackRoot`). */
 export type PlaceStack = { readonly over: string | undefined; readonly pages: readonly HeldPage[] };
 
 /**
@@ -115,6 +115,9 @@ const PLACE_TAB = {
   [SIDEBAR_PLACE.TASKS]: IOS_TAB.TASKS,
   [SIDEBAR_PLACE.SEARCH]: IOS_TAB.SEARCH,
 } as const satisfies Record<SidebarPlace, IosTab>;
+
+/** What each place's detail stands for now, such as its picked thread's id, as its split view last drew it. */
+const roots = new Map<SidebarPlace, string | undefined>();
 
 /** Each place's stack, as it was last pushed or popped. */
 const stacks = new Map<SidebarPlace, PlaceStack>();
@@ -156,7 +159,7 @@ function stackOf(place: SidebarPlace): PlaceStack {
  * belonged to a row no longer picked.
  */
 function pushDetail(place: SidebarPlace, page: PushedPage): void {
-  const over = placeRoot(place);
+  const over = roots.get(place);
   const was = stackOf(place);
   const kept = was.over === over ? was.pages : [];
   serial += 1;
@@ -280,6 +283,35 @@ export function useDetailStack(place: SidebarPlace): PlaceStack {
   return useSyncExternalStore(subscribe, () => stackOf(place));
 }
 
+/** The page on top of a place's stack, while it stands over the detail it was pushed over. */
+function topPageOf(place: SidebarPlace | undefined): PushedPage | undefined {
+  if (place === undefined) return undefined;
+  const stack = stackOf(place);
+
+  return stack.over === roots.get(place) ? stack.pages.at(-1)?.page : undefined;
+}
+
+/**
+ * The page on top of a place's detail stack, live as it is pushed and
+ * popped, such as the pull request the iPad's menu bar acts on; none with
+ * nothing pushed or no place named.
+ */
+export function useTopPage(place: SidebarPlace | undefined): PushedPage | undefined {
+  return useSyncExternalStore(subscribe, () => topPageOf(place));
+}
+
+/**
+ * Names what a place's detail stands for as its split view draws it, such
+ * as the picked thread's id, so a page is pushed over that detail and goes
+ * as another row is picked. Note that it is kept as each draw commits, so a
+ * press in the detail right after a pick pushes over the new row.
+ */
+export function useStackRoot(place: SidebarPlace, root: string | undefined): void {
+  useLayoutEffect(() => {
+    roots.set(place, root);
+  }, [place, root]);
+}
+
 /** Stands the views under it in a place's detail, so a page they open is pushed over it there. */
 export const DetailPlaceProvider = DetailPlace.Provider;
 
@@ -287,13 +319,14 @@ export const DetailPlaceProvider = DetailPlace.Provider;
 export const PageKeyProvider = PageKey.Provider;
 
 /**
- * Pushes a page over the detail the calling view stands in, answering
- * whether it did: false outside a three-column split view's detail, where
- * the caller pushes its route as it always has, so a compact window and a
- * portrait iPad stand their pages over the window as before.
+ * Pushes a page over the detail the calling view stands in, or over `at`'s
+ * where the caller draws that detail's bar from outside it, answering
+ * whether it did: false outside a split view's detail that stands its own
+ * stack, where the caller pushes its route as it always has, so a compact
+ * window stands its pages over the window as before.
  */
-export function useDetailPush(): (page: PushedPage) => boolean {
-  const place = useContext(DetailPlace);
+export function useDetailPush(at?: SidebarPlace | undefined): (page: PushedPage) => boolean {
+  const place = useContext(DetailPlace) ?? at;
 
   return useCallback(
     (page) => {
@@ -350,6 +383,61 @@ export function useDetailCovered(): boolean {
   });
 }
 
+/** The place whose detail stands in front, as the split view showing it says: the three-column split, or a two-column tab root; none while no split view stands in front. */
+let front: SidebarPlace | undefined;
+
+/** Names the place whose detail stands in front, so the menu bar's Back pops its pages; none as its split view steps behind or leaves. */
+function standDetailFront(place: SidebarPlace | undefined): void {
+  if (front === place) return;
+  front = place;
+
+  for (const listener of listeners) listener();
+}
+
+/**
+ * Stands a place's detail in front while its split view is shown, so the
+ * menu bar's Back pops the pages pushed over it. Note that stepping back
+ * clears the front only while this place still holds it, because another
+ * split view, such as the next tab's, may already have named its own in the
+ * same switch.
+ */
+export function useStandDetailFront(place: SidebarPlace, shown: boolean): void {
+  useEffect(() => {
+    if (!shown) return;
+    standDetailFront(place);
+
+    return () => {
+      if (front === place) standDetailFront(undefined);
+    };
+  }, [place, shown]);
+}
+
+/** How the detail in front stands, for the menu bar's Back: no split view in front, its own page alone, or a page pushed over it. */
+export const DETAIL_FRONT = {
+  NONE: "none",
+  ROOT: "root",
+  PUSHED: "pushed",
+} as const;
+
+export type DetailFront = (typeof DETAIL_FRONT)[keyof typeof DETAIL_FRONT];
+
+/** How the detail in front stands, which the menu bar's Back pops only while a page is pushed over it, as the column's own Back would. */
+export function useDetailFront(): DetailFront {
+  return useSyncExternalStore(subscribe, () => {
+    if (front === undefined) return DETAIL_FRONT.NONE;
+
+    return stackOf(front).pages.length > 0 ? DETAIL_FRONT.PUSHED : DETAIL_FRONT.ROOT;
+  });
+}
+
+/** Pops the top page off the detail in front, as its column's Back does; nothing where none is pushed. */
+export function popDetailFront(): void {
+  if (front === undefined) return;
+  const top = stackOf(front).pages.at(-1);
+
+  if (top !== undefined) popDetail(front, top.key);
+}
+
 /** Whether a tab's route (its segments under the tab's group) is a page the detail's stack stands, as an agent's or a pull request's. */
 export function isStackedRoute(segments: readonly string[]): boolean {
   const [first, second] = segments;
@@ -389,28 +477,57 @@ export function useHandToDetail(page: PushedPage | undefined): boolean {
   return handing;
 }
 
+/** How wide the window stands, which says whether a place's detail stands a stack of its own. */
+export type StackLayout = { readonly threeColumns: boolean; readonly regular: boolean };
+
 /**
- * Keeps the page in front as the window leaves three columns, as Mail keeps
- * the open message across a rotation: the top page of the place standing
- * is pushed onto its tab's router stack, over the row its list keeps
- * picked, and every place's stack is let go, since a window that narrow
- * stands its pages over the window. Note that only the top page is pushed,
- * because Back from it then lands on the row it was opened from rather than
- * on each page under it.
+ * Whether a place's detail stands its own stack in a window this wide:
+ * every place's beside the app sidebar, and in a two-column window the
+ * places whose root draws a split view (the Inbox and Tasks; Search's
+ * results stand alone there).
  */
-export function useStackToRoutes(threeColumns: boolean, place: SidebarPlace | undefined): void {
+function standsStack(layout: StackLayout, place: SidebarPlace): boolean {
+  return layout.threeColumns || (layout.regular && place !== SIDEBAR_PLACE.SEARCH);
+}
+
+/**
+ * Keeps the page in front as the window narrows past where its place's
+ * detail stands a stack, as Mail keeps the open message across a fold or a
+ * rotation: the top page of the place standing is pushed onto its tab's
+ * router stack, over the row its list keeps picked, and each place whose
+ * stack no longer stands is let go. A turn from landscape to portrait keeps
+ * the Inbox's and Tasks' pages in their column, since the two-column split
+ * view stands them too. Note that only the top page is pushed, because Back
+ * from it then lands on the row it was opened from rather than on each page
+ * under it.
+ */
+export function useStackToRoutes(layout: StackLayout, place: SidebarPlace | undefined): void {
   const router = useRouter();
-  const was = useRef(threeColumns);
+  const was = useRef(layout);
+  const standing = useRef(place);
+
+  // Note that the place is read through a ref the commit writes, so a tab's switch alone narrows nothing.
+  useEffect(() => {
+    standing.current = place;
+  }, [place]);
 
   useEffect(() => {
-    const left = was.current && !threeColumns;
-    was.current = threeColumns;
+    const before = was.current;
+    was.current = layout;
 
-    if (!left) return;
-    const top = place === undefined ? undefined : stackOf(place).pages.at(-1);
+    const shown = standing.current;
+    const top = shown === undefined ? undefined : stackOf(shown).pages.at(-1);
 
-    for (const each of Object.values(SIDEBAR_PLACE)) clearDetail(each);
+    const pushes =
+      shown !== undefined &&
+      top !== undefined &&
+      standsStack(before, shown) &&
+      !standsStack(layout, shown);
 
-    if (place !== undefined && top !== undefined) router.push(routeOf(top.page, PLACE_TAB[place]));
-  }, [threeColumns, place, router]);
+    for (const each of Object.values(SIDEBAR_PLACE)) {
+      if (standsStack(before, each) && !standsStack(layout, each)) clearDetail(each);
+    }
+
+    if (pushes) router.push(routeOf(top.page, PLACE_TAB[shown]));
+  }, [layout.threeColumns, layout.regular, router]);
 }

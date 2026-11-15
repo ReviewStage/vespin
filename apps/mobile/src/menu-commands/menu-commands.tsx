@@ -29,17 +29,39 @@ import {
 } from "@repo/features/tasks-model";
 import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
-import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
 import { BUZZ, ConfirmAsk } from "@repo/ui-native";
+import { and, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
-import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
+import {
+  useGlobalSearchParams,
+  useNavigationContainerRef,
+  usePathname,
+  useRootNavigationState,
+  useRouter,
+} from "expo-router";
 import { useEffect, useRef, useState } from "react";
+import { useAgentPullRequests } from "../agents/use-agent.js";
+import {
+  DETAIL_FRONT,
+  PUSHED_PAGE,
+  type PushedPage,
+  popDetailFront,
+  useDetailFront,
+  useTopPage,
+} from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import {
+  useHostActs,
+  useListedTasks,
+  useTaskListCollections,
+  useTaskListRow,
+} from "../host/host-provider.js";
 import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
+import { placeOfRoute, type SidebarPlace } from "../screens/app-sidebar.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
@@ -48,6 +70,7 @@ import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
+import { type NavigatorState, tabStackBacks, tabsInFront } from "./window-back.js";
 
 /** What Sign Out asks first, since it leaves the phone with no account until the next sign-in. */
 const SIGN_OUT_ASK = {
@@ -109,28 +132,66 @@ function namesTask(task: TaskSummary, named: string): boolean {
   return task.id === named || (task.number !== undefined && String(task.number) === named);
 }
 
+/** The place whose split view stands at a tab's root, by the route; none on a page pushed over the window. */
+function rootPlaceOf(pathname: string): SidebarPlace | undefined {
+  const segments = pathname.split("/").filter((segment) => segment !== "");
+
+  return segments.length === 1 ? placeOfRoute(segments[0]) : undefined;
+}
+
+/**
+ * What a page pushed over a split view's detail puts in front of the menu:
+ * an agent for its own page, its pull request, or a page it showed, so Stop
+ * and Pin follow it; a task for its page, comments, history, or versions.
+ */
+function pushedFocus(page: PushedPage): MenuFocus {
+  switch (page.kind) {
+    case PUSHED_PAGE.AGENT:
+    case PUSHED_PAGE.PULL_REQUEST:
+    case PUSHED_PAGE.AGENT_PAGE:
+      return { kind: MENU_SUBJECT.AGENT, id: page.agentId };
+    case PUSHED_PAGE.TASK:
+    case PUSHED_PAGE.TASK_PAGE:
+    case PUSHED_PAGE.COMMENTS:
+    case PUSHED_PAGE.NEW_COMMENT:
+    case PUSHED_PAGE.HISTORY:
+    case PUSHED_PAGE.VERSION:
+      return { kind: MENU_SUBJECT.TASK, id: page.taskId };
+  }
+}
+
 /** Reads what the route stands in front into what each command may do to it. */
 function useSubject(signedIn: boolean): Subject {
   const pathname = usePathname();
   const { selected } = useGlobalSearchParams<{ selected?: string }>();
-  const focus: MenuFocus = signedIn ? menuFocusOf(pathname, selected) : { kind: MENU_SUBJECT.NONE };
+  // Note that a page pushed over a split view's detail is no route, so it is read off the detail's stack while its tab's root stands.
+  const pushed = useTopPage(signedIn ? rootPlaceOf(pathname) : undefined);
+
+  const focus: MenuFocus = !signedIn
+    ? { kind: MENU_SUBJECT.NONE }
+    : pushed === undefined
+      ? menuFocusOf(pathname, selected)
+      : pushedFocus(pushed);
+
+  const pulled = useAgentPullRequests(
+    pushed?.kind === PUSHED_PAGE.PULL_REQUEST ? pushed.agentId : "",
+  );
+
   const thread = useInboxThread(focus.kind === MENU_SUBJECT.THREAD ? focus.id : undefined).listed;
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const collections = useTaskListCollections();
+  const tasks = useListedTasks();
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
 
-  const agent =
-    focus.kind === MENU_SUBJECT.AGENT
-      ? view?.taskAgents?.find(({ id }) => id === focus.id)
-      : undefined;
+  const agent = useTaskListRow(
+    collections.agents,
+    focus.kind === MENU_SUBJECT.AGENT ? focus.id : undefined,
+  );
 
   const taskNamed =
-    focus.kind === MENU_SUBJECT.TASK
-      ? (view?.tasks ?? []).find((each) => namesTask(each, focus.id))
-      : undefined;
+    focus.kind === MENU_SUBJECT.TASK ? tasks.find((each) => namesTask(each, focus.id)) : undefined;
 
   const task =
-    taskNamed ??
-    (agent === undefined ? undefined : view?.tasks?.find(({ id }) => id === agent.taskId));
+    taskNamed ?? (agent === undefined ? undefined : tasks.find(({ id }) => id === agent.taskId));
 
   const workspaceId = thread?.holder.task.workspaceId ?? task?.workspaceId;
   const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
@@ -172,6 +233,24 @@ function useSubject(signedIn: boolean): Subject {
     if (task.pinnedAt !== undefined) toggled.push(MENU_COMMAND.PIN);
   }
 
+  // Note that a pushed pull request or page opens itself in the browser, not the agent or task it stands over.
+  if (pushed?.kind === PUSHED_PAGE.PULL_REQUEST) {
+    address = pulled.find(({ number }) => number === pushed.number)?.url;
+  } else if (pushed?.kind === PUSHED_PAGE.AGENT_PAGE && agent !== undefined) {
+    address = linked({ kind: LINK_DESTINATION.PAGE, taskId: agent.taskId, pageId: pushed.pageId });
+  } else if (pushed?.kind === PUSHED_PAGE.TASK_PAGE) {
+    // Note that a task's page carries its own workspace, so it opens even where the task isn't in the list read.
+    const pageStep = linkWorkspaceStep(pushed.workspaceId ?? task?.workspaceId, workspaces);
+
+    const page = {
+      kind: LINK_DESTINATION.PAGE,
+      taskId: pushed.taskId,
+      pageId: pushed.pageId,
+    } as const;
+
+    address = pageStep === undefined ? undefined : linkOf(page, pageStep);
+  }
+
   if (address !== undefined) enabled.push(MENU_COMMAND.OPEN_IN_BROWSER);
 
   return {
@@ -187,20 +266,18 @@ function useSubject(signedIn: boolean): Subject {
 
 /** How many agents of the task are starting or running, so marking it done stops them and asks first. */
 function useWorkingAgents(taskId: string | undefined): number {
-  const { data: working = 0 } = useQuery({
-    ...appStateQuery,
-    select: (state) =>
-      taskId === undefined
-        ? 0
-        : (selectTasks(state).taskAgents ?? []).filter(
-            (agent) =>
-              agent.taskId === taskId &&
-              agent.archivedAt === undefined &&
-              agentStillWriting(agent.status),
-          ).length,
-  });
+  const { agents } = useTaskListCollections();
 
-  return working;
+  // Note that the query's identity is the values it captures, as TanStack DB 1.0 derives it, so it is made again only for another task.
+  const { data: onTask } = useLiveQuery((q) =>
+    taskId === undefined
+      ? undefined
+      : q
+          .from({ agent: agents })
+          .where(({ agent }) => and(eq(agent.taskId, taskId), isUndefined(agent.archivedAt))),
+  );
+
+  return (onTask ?? []).filter((agent) => agentStillWriting(agent.status)).length;
 }
 
 /** The question a command asks before it acts. */
@@ -240,10 +317,22 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const sidebarStands = signedIn && regular;
 
+  // Note that Back pops a page pushed over the detail in front, else a page the tab pushed over the window, as a stack's own Back does; never a sheet, which closes with its own Done or Cancel.
+  const detailFront = useDetailFront();
+  const root: NavigatorState = useRootNavigationState();
+  const navigation = useNavigationContainerRef();
+  const tabs = tabsInFront(root);
+
+  const backs =
+    signedIn &&
+    tabs !== undefined &&
+    (detailFront === DETAIL_FRONT.NONE ? tabStackBacks(tabs) : detailFront === DETAIL_FRONT.PUSHED);
+
   const enabled = [
     ...subject.enabled,
     ...(workspaces.length > 0 ? [MENU_COMMAND.SWITCH_WORKSPACE] : []),
     ...(sidebarStands ? [MENU_COMMAND.SIDEBAR] : []),
+    ...(backs ? [MENU_COMMAND.BACK] : []),
   ];
 
   const toggled =
@@ -340,6 +429,18 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         return router.navigate("/search");
       case MENU_COMMAND.SIDEBAR:
         return sidebar.toggle();
+      case MENU_COMMAND.BACK: {
+        if (detailFront === DETAIL_FRONT.PUSHED) return popDetailFront();
+
+        // Note that the tab's stack is read again at the press, because a held ⌘[ repeats before this render's enablement catches up, and a Back at the tab's root would go to the first tab.
+        const liveRoot: NavigatorState | undefined = navigation.getRootState();
+        const live = tabsInFront(liveRoot);
+
+        if (live !== undefined && tabStackBacks(live)) router.back();
+
+        return;
+      }
+
       case MENU_COMMAND.MARK_DONE:
         if (working > 0) setAsking(ASK.MARK_DONE);
         else markDone();
