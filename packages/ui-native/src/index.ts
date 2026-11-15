@@ -206,6 +206,8 @@ export {
 export { RemindPickSheet } from "./remind-sheet.js";
 
 export {
+  FOOTER_TONE,
+  type FooterTone,
   LIST_LOOK,
   type ListLook,
   ListSection,
