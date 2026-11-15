@@ -1,17 +1,13 @@
 // @vitest-environment jsdom
 
 /**
- * task-list-collections.test.ts -- the task list's collections fill from the window's first read and take only the rows a delivery moved, and a surface reading them by id holds across a delivery moving another task.
+ * task-list-collections.test.ts -- the task list's collections fill from the window's first read and take only the rows a delivery carries beside the document as moved, and a surface reading them by id holds across a delivery moving another task.
  */
 
 import { AGENT_STATUS } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
-import {
-  type AppStateDelivery,
-  type AppStateSnapshot,
-  appStateDelivery,
-} from "@repo/host/app-state";
+import { listedApart, TASKS_READ } from "@repo/features/tasks-view";
+import { type AppStateDelivery, appStateDelivery, taskListDelivery } from "@repo/host/app-state";
 import { QueryClient } from "@tanstack/react-query";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -22,7 +18,7 @@ import {
   useTaskListRows,
 } from "./task-list-collections.js";
 import { fakeAppBridge } from "./testing/app-bridge.js";
-import { stateWith } from "./testing/app-state.js";
+import { type ListedAppState, stateWith, type WrittenTasksView } from "./testing/app-state.js";
 import { listedAgent } from "./testing/tasks-control.js";
 import { type AppStateFollowing, followAppState } from "./use-app-state.js";
 
@@ -42,7 +38,7 @@ const INVITES = task("task-invites", "Teammate invitations");
 const BILLING = task("task-billing", "Billing export");
 const SEARCH = task("task-search", "Search outside the live set");
 
-const LISTED: TasksView = {
+const LISTED: WrittenTasksView = {
   tasks: [INVITES, BILLING, SEARCH],
   taskAgents: [
     listedAgent({
@@ -62,13 +58,18 @@ const LISTED: TasksView = {
   workspaces: [],
 };
 
-/** Main's document at `version`, its task list as given. */
-function documentAt(version: number, tasks: TasksView): AppStateSnapshot {
+/** The tasks slice of `listed` held apart from its lists, as the host holds them. */
+function heldApart(listed: ListedAppState) {
+  return listedApart({ ...listed.tasks, tasks: listed.tasks.tasks ?? [] });
+}
+
+/** Main's document at `version`, its task list as given, the lists written into it as a test writes them (`ListedAppState`). */
+function documentAt(version: number, tasks: WrittenTasksView): ListedAppState {
   return { ...stateWith({}, {}), version, tasks };
 }
 
 /** A window following `first` over a fake bridge, and the push that hands it a delivery as JSON crosses it. */
-async function following(first: AppStateSnapshot): Promise<{
+async function following(first: ListedAppState): Promise<{
   readonly window: AppStateFollowing;
   readonly push: (delivery: AppStateDelivery) => void;
 }> {
@@ -91,8 +92,15 @@ async function following(first: AppStateSnapshot): Promise<{
 }
 
 /** What main pushes a window that holds `sent` once its document is `next`. */
-function deliveryBetween(sent: AppStateSnapshot, next: AppStateSnapshot): AppStateDelivery {
-  const delivery = appStateDelivery(sent, next);
+function deliveryBetween(sent: ListedAppState, next: ListedAppState): AppStateDelivery {
+  const [before, after] = [heldApart(sent), heldApart(next)];
+  const rows = taskListDelivery(before.lists, after.lists, next.version);
+
+  const delivery = appStateDelivery(
+    { ...sent, tasks: before.tasks },
+    { ...next, tasks: after.tasks },
+    rows,
+  );
 
   if (delivery === undefined) throw new Error("The two documents do not differ.");
 
@@ -171,7 +179,7 @@ describe("the task list's collections", () => {
     expect(window.taskList.taskPullRequests.get(INVITES.id)?.pullRequests).toEqual([]);
   });
 
-  it("write only the row a delivery moved, and delete the row that went", async () => {
+  it("write only the row a delivery carries as moved beside the document, and delete the row that went", async () => {
     const first = documentAt(1, LISTED);
     const { window, push } = await following(first);
     stops.push(window.stop);
@@ -202,7 +210,13 @@ describe("the task list's collections", () => {
       tasks: [INVITES, { ...BILLING, name: "Billing" }, SEARCH],
     });
 
-    push(deliveryBetween(first, renamed));
+    const delivery = deliveryBetween(first, renamed);
+
+    expect(delivery.taskList).toEqual({
+      version: 2,
+      moved: [{ key: ["tasks"], rows: [{ ...BILLING, name: "Billing" }] }],
+    });
+    push(delivery);
 
     expect(told).toEqual([{ type: "update", key: BILLING.id }]);
     expect(window.taskList.tasks.get(BILLING.id)?.name).toBe("Billing");

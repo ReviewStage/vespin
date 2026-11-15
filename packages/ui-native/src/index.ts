@@ -17,6 +17,8 @@ export {
 
 export { AuthPage } from "./auth-page.js";
 
+export { type BarSubtitle, StackBarTitle } from "./bar-title.js";
+
 export { BRAND_MARK_ASSET, BrandMark } from "./brand-mark.js";
 
 export {
@@ -29,6 +31,7 @@ export {
   FieldChip,
   FollowingChip,
   LabelChip,
+  type ListScopes,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -70,6 +73,7 @@ export {
 export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
 export {
+  FailureNoticeLayer,
   FailureNoticeProvider,
   type FailureNotices,
   useFailureNotices,
@@ -316,7 +320,6 @@ export { MARK_SIZE, SPACE } from "./tokens/space.js";
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
 export {
-  AgentHead,
   AgentTranscript,
   type OlderPages,
   type TranscriptReveal,

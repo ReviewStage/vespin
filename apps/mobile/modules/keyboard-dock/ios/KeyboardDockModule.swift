@@ -161,8 +161,7 @@ final class KeyboardDockView: ExpoView {
   private func standAsEdge() {
     if edgeStands() { return }
     letEdgeGo()
-    // Note that once the looks are spent with no scroll view found, a layout pass does not walk the content again until a held one goes or the dock comes back into a window.
-    guard looksLeft > 0 || lookPending else { return }
+    // Note that a layout pass walks the content even once the timed looks are spent, so a list that mounts late, with the dock laid out after it, is still found; the walk is shallow and a frame drawn never makes it.
     findEdge()
   }
 
@@ -175,7 +174,7 @@ final class KeyboardDockView: ExpoView {
       return
     }
 
-    edge.view?.removeInteraction(edge)
+    letEdgeGo()
     edge.edge = .bottom
     edge.scrollView = scroller
     scroller.bottomEdgeEffect.style = .soft
@@ -201,9 +200,11 @@ final class KeyboardDockView: ExpoView {
     lookAgainSoon()
   }
 
-  /// Lets go of a scroll view the content no longer holds, and looks for its successor afresh.
+  /// Lets go of a scroll view the content no longer holds, setting its edges back to the system's, since Fabric may recycle it into a screen with no dock, and looks for its successor afresh.
   private func letEdgeGo() {
-    guard edge.scrollView != nil else { return }
+    guard let held = edge.scrollView else { return }
+    held.bottomEdgeEffect.style = .automatic
+    held.topEdgeEffect.style = .automatic
     edge.view?.removeInteraction(edge)
     edge.scrollView = nil
     looksLeft = edgeLooks
@@ -211,13 +212,14 @@ final class KeyboardDockView: ExpoView {
 
   /// Looks for the content's scroll view again a moment later, a bounded number of times, since a list mounted deep in the content after its skeleton asks the dock for no layout pass of its own.
   private func lookAgainSoon() {
-    guard looksLeft > 0, !lookPending else { return }
+    guard looksLeft > 0, !lookPending, window != nil else { return }
     looksLeft -= 1
     lookPending = true
     DispatchQueue.main.asyncAfter(deadline: .now() + edgeLookPause) { [weak self] in
       guard let self else { return }
       self.lookPending = false
-      if !self.edgeStands() { self.findEdge() }
+      // Note that a dock that left its window meanwhile looks again as it comes back, with its looks restored.
+      if self.window != nil, !self.edgeStands() { self.findEdge() }
     }
   }
 
@@ -245,11 +247,11 @@ final class KeyboardDockView: ExpoView {
   }
 }
 
-/// The first scroll view at or under a view, the shallowest first, so a list's own scroller is found before any it holds in its rows.
+/// The first scroll view at or under a view, the shallowest first, so a list's own scroller is found before any it holds in its rows. Note that a text view is a scroll view too, and is passed over, since a field in the content is never the content's scroller.
 private func firstScrollView(in root: UIView) -> UIScrollView? {
   var level: [UIView] = [root]
   for _ in 0..<scrollViewDepth where !level.isEmpty {
-    if let found = level.lazy.compactMap({ $0 as? UIScrollView }).first { return found }
+    if let found = level.lazy.compactMap({ $0 as? UIScrollView }).first(where: { !($0 is UITextView) }) { return found }
     level = level.flatMap(\.subviews)
   }
   return nil
