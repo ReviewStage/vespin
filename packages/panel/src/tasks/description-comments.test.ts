@@ -1025,6 +1025,7 @@ test("a reply pasted past the comment's cap and too large for a file is cut to t
   const note = () => card.querySelector(".ui-composer-foot-note")?.textContent;
   assert.equal(card.querySelector(".ui-length-counter"), null);
 
+  // Note that this runs longer than most, because only words past a text file's bound stay words to be cut.
   pasteInComposer(card, "x".repeat(AGENT_BOUNDS.MAX_TEXT_BYTES + 1));
   assert.equal(note(), pasteCutWords(cap));
   assert.equal(
