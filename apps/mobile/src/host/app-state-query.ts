@@ -11,10 +11,11 @@
  * what the client already holds, and stands only for a reader on a client
  * nothing follows into, which refuses.
  *
- * Every reading is handed on in the same breath to the task list's
- * collections (`@repo/host/task-list-following`), the panel's own, so a
- * list that reads its rows through a live query is told only the rows that
- * moved, and the two never disagree.
+ * The task list's collections (`@repo/host/task-list-following`), the
+ * panel's own, are fed beside it from the rows each delivery carries beside
+ * the document (its `taskList`), handed on before the document is written,
+ * so a list that reads its rows through a live query is told only the rows
+ * that moved, and is never behind the document.
  */
 
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -53,8 +54,9 @@ export interface FollowedAppStateInto extends FollowedAppState {
 /**
  * Writes every reading of the document into `client`, from the moment it
  * is called until it is stopped, as the panel's root does for its window:
- * the first whole read, then each delivery laid over what is held. Each is
- * written into the task list's collections beside it, under its version.
+ * the first whole read, then each delivery laid over what is held. The task
+ * list's collections take the whole read as their list, and the rows each
+ * delivery carries beside the document, heard from before the read is asked.
  */
 export function followAppStateInto(
   bridge: AppStateBridgeReads,
@@ -64,14 +66,18 @@ export function followAppStateInto(
 
   const followed = followAppStateOver(
     bridge,
-    (state) => {
+    (state, delivery) => {
       client.setQueryData(appStateQuery.queryKey, state);
-      taskList.write(state.version, selectTasks(state));
+
+      if (delivery === undefined) taskList.write(state.version, selectTasks(state));
 
       return undefined;
     },
     (message, cause) => {
       console.error(message, cause);
+    },
+    ({ taskList: rows }) => {
+      if (rows !== undefined) taskList.deliver(rows);
     },
   );
 

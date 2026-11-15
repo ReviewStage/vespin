@@ -9,6 +9,7 @@ import {
   SplitView,
 } from "@repo/ui-native";
 import { useEffect, useState } from "react";
+import { useStandDetailFront } from "../detail-stack.js";
 import { InFrontProvider, type PlaceColumns, usePlaceColumns } from "../place-columns.js";
 import {
   SIDEBAR_PLACE,
@@ -125,6 +126,9 @@ export function AppSplit({
     columns === undefined ? undefined : { id: columns.root },
     front,
   );
+
+  // Note that the menu bar's Back pops this place's pages only while the split view stands in front, so it never acts on a detail the reader can't see.
+  useStandDetailFront(standing, front);
 
   // Note that Collapse stays while the page stands alone even once nothing is picked, so the columns always have a way back.
   const lead = detailOnly ? [expand] : columns?.root === undefined ? [compose] : [expand, compose];

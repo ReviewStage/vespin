@@ -277,6 +277,17 @@ export const WORKSPACE_MCP_SERVER_NAMES: ReadonlySet<string> = new Set([
   "luke",
 ]);
 
+/**
+ * The key of our MCP server's result `_meta` under which a call's answer
+ * carries fields for the people watching the agent alone, which the
+ * transcript keeps beside the answer it read (`toolAnswerSettlement`). Note
+ * that no harness hands a result's `_meta` to its model: Claude Code passes
+ * it to its SDK's consumer as the message's `tool_use_result`, and Codex
+ * on its app-server's item, so the model reads the answer as it was without
+ * them.
+ */
+export const WORKSPACE_MCP_WATCHED_META = "vespin.dev/watched";
+
 /** Our tool's own name from a Claude Code call's, `mcp__team__read_thread` being our `read_thread`; none for a tool of any other server. */
 export function claudeCodeWorkspaceTool(name: string): string | undefined {
   for (const server of WORKSPACE_MCP_SERVER_NAMES) {

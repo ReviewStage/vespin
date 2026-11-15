@@ -57,7 +57,7 @@ import {
   workspaceOfSlug,
 } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppInboxItems, AppStateSnapshot } from "@repo/host/app-state";
+import type { AppInboxItems } from "@repo/host/app-state";
 import type { MacApp } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
@@ -90,6 +90,7 @@ import {
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
+import { eq, useLiveQuery } from "@tanstack/react-db";
 import {
   queryOptions,
   skipToken,
@@ -121,7 +122,8 @@ import { useWorkspaceDirectory } from "../member-directory.js";
 import { memberRows, YOU_WORD } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { Highlighted } from "../search-field.js";
-import { appStateQuery, selectMachineCommandDevice } from "../use-app-state.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import { appStateQuery, selectMachineCommandDevice, selectWorkspaces } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { type AgentRowPlace, agentMenuRow, useAgentRowPlace } from "./agent-menu-row.js";
 import { useComputerApps } from "./agent-pictures.js";
@@ -426,19 +428,8 @@ const PER_KIND = 50;
 /** How long the typing rests before the service is searched for the agents the words name. */
 const SEARCH_PAUSE = Duration.millis(250);
 
-/** The window's tasks and workspaces, which tell their readers only when one is a new list, so a patch to the open plan draws no list again. */
-interface ListedTasks {
-  readonly tasks: readonly TaskSummary[];
-  readonly workspaces: readonly Workspace[];
-}
-
-/** The lists before the first document arrives. */
-const NO_LISTED_TASKS: ListedTasks = { tasks: [], workspaces: [] };
-
-const selectListedTasks = (state: AppStateSnapshot): ListedTasks => ({
-  tasks: state.tasks.tasks,
-  workspaces: state.tasks.workspaces,
-});
+/** No workspaces, before the first document arrives. */
+const NO_WORKSPACES: readonly Workspace[] = [];
 
 /** The list's own name, which its listbox is read by. */
 const MENU_LABEL = "Mention";
@@ -799,12 +790,11 @@ function threadRow(place: InboxItemPlace, item: InboxItem, holder: string): Ment
 /** The ids of the tasks the feed holds threads of that the window lists not. */
 function unlistedThreadTasks(
   feed: AppInboxItems | undefined,
-  tasks: readonly TaskSummary[],
+  listed: (taskId: string) => boolean,
 ): readonly string[] {
   if (feed === undefined) return [];
-  const listed = new Set(tasks.map((task) => task.id));
 
-  return Object.keys(feed[INBOX_SCOPE_KIND.TASK]).filter((taskId) => !listed.has(taskId));
+  return Object.keys(feed[INBOX_SCOPE_KIND.TASK]).filter((taskId) => !listed(taskId));
 }
 
 /**
@@ -2186,14 +2176,28 @@ export function useMentionPicker({
   }, [askedAt, askSkills]);
 
   // The tasks offered are the workspace's the words stand in: the one that names it, else the plan's, else the one its slug names.
-  const listed = useQuery({ ...appStateQuery, select: selectListedTasks }).data ?? NO_LISTED_TASKS;
+  const collections = useTaskListCollections();
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
+  const ownTask = useTaskListRow(collections.tasks, taskId ?? undefined);
 
   const tasksWorkspaceId =
     workspaceId ??
-    listed.tasks.find((task) => task.id === taskId)?.workspaceId ??
-    (source === undefined ? undefined : workspaceOfSlug(listed.workspaces, source.workspace))?.id;
+    ownTask?.workspaceId ??
+    (source === undefined ? undefined : workspaceOfSlug(workspaces, source.workspace))?.id;
 
-  const tasksWorkspace = listed.workspaces.find((each) => each.id === tasksWorkspaceId);
+  const tasksWorkspace = workspaces.find((each) => each.id === tasksWorkspaceId);
+
+  // The workspace's tasks, newest started first as the list holds them, read only while the list stands open.
+  const { data: workspaceTasks } = useLiveQuery((q) =>
+    !open || tasksWorkspaceId === undefined
+      ? undefined
+      : q
+          .from({ task: collections.tasks })
+          .where(({ task }) => eq(task.workspaceId, tasksWorkspaceId))
+          .orderBy(({ task }) => task.createdAt, "desc")
+          .orderBy(({ task }) => task.id, "desc"),
+  );
+
   // The people offered are the members of that workspace, read while the list stands open wherever the words stand, so every box offers the same people.
   const directory = useWorkspaceDirectory(open ? tasksWorkspace : undefined);
   const { readerId } = directory;
@@ -2205,7 +2209,7 @@ export function useMentionPicker({
   const descriptionsOn = useWorkspaceExperiment(tasksWorkspaceId, EXPERIMENT.DESCRIPTIONS);
 
   const taskRowsOffered = open
-    ? workspaceTaskRows(descriptionsOn ? taskId : undefined, tasksWorkspace, listed.tasks)
+    ? workspaceTaskRows(descriptionsOn ? taskId : undefined, tasksWorkspace, workspaceTasks ?? [])
     : [];
 
   // The threads offered are the workspace's as the account's feed holds them, which the host holds for the session.
@@ -2214,11 +2218,14 @@ export function useMentionPicker({
   const threadsAsked = open && tasksWorkspace !== undefined;
 
   const threadRowsOffered = threadsAsked
-    ? threadRows(feed.data, taskId, tasksWorkspace, listed.tasks)
+    ? threadRows(feed.data, taskId, tasksWorkspace, workspaceTasks ?? [])
     : [];
 
   // Note that a thread of a task the window lists not is offered once the task is read into its list, each asked once while the list stands open and again once it opens anew.
-  const threadTasksOutside = threadsAsked ? unlistedThreadTasks(feed.data, listed.tasks) : [];
+  const threadTasksOutside = threadsAsked
+    ? unlistedThreadTasks(feed.data, (each) => collections.tasks.has(each))
+    : [];
+
   const threadTasksAsked = useRef(new Set<string>());
   useEffect(() => {
     if (!threadsAsked) threadTasksAsked.current.clear();
@@ -2241,7 +2248,7 @@ export function useMentionPicker({
       : [];
 
   // The plan's own key, which finds the description's row as another task's finds its.
-  const planNumber = listed.tasks.find((task) => task.id === taskId)?.number;
+  const planNumber = ownTask?.number;
 
   const planKey =
     tasksWorkspace === undefined || planNumber === undefined
@@ -2276,7 +2283,7 @@ export function useMentionPicker({
           ownNameOf: (deviceId) => machines.machines.find((each) => each.id === deviceId)?.name,
         });
 
-  const followers = listed.tasks.find((task) => task.id === taskId)?.followers;
+  const followers = ownTask?.followers;
   const followerIds = new Set((followers ?? []).map((follower) => follower.userId));
 
   const machineRowsOffered = machinesAsked
