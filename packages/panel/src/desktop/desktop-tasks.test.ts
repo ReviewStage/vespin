@@ -75,6 +75,7 @@ import {
   withExperiments,
   writeExperiments,
 } from "../testing/app-state.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
@@ -285,23 +286,26 @@ test("a listed task draws its name, its status, and the column's tab from its ro
               Fragment,
               null,
               createElement(RenameOfferProbe),
-              createElement(DesktopTasks, {
-                looks: NO_LOOKS,
-                tasks: tasksControl({
-                  page: TASKS_PAGE.TASK,
-                  tasks: [listed],
-                  activeTaskId: TASK.id,
-                  region: { kind: TASK_REGION.READING },
-                  workspaces: [
-                    {
-                      id: TASK.workspaceId,
-                      name: "Personal",
-                      role: WORKSPACE_ROLE.OWNER,
-                      github: null,
-                    },
-                  ],
+              overEveryTask(
+                { tasks: [listed] },
+                createElement(DesktopTasks, {
+                  looks: NO_LOOKS,
+                  tasks: tasksControl({
+                    page: TASKS_PAGE.TASK,
+                    tasks: [listed],
+                    activeTaskId: TASK.id,
+                    region: { kind: TASK_REGION.READING },
+                    workspaces: [
+                      {
+                        id: TASK.workspaceId,
+                        name: "Personal",
+                        role: WORKSPACE_ROLE.OWNER,
+                        github: null,
+                      },
+                    ],
+                  }),
                 }),
-              }),
+              ),
             ),
           ),
         ),
@@ -845,20 +849,23 @@ test("a sub-task's row opens the task as a sidebar row does, never a link to its
           createElement(
             OpenLinkProvider,
             { value: (link: ReadLink) => linked.push(link) },
-            createElement(DesktopTasks, {
-              looks: NO_LOOKS,
-              tasks: tasksControl({
-                page: TASKS_PAGE.TASK,
-                tasks: [{ ...TASK, number: 1 }, child],
-                listRead: true,
-                activeTaskId: TASK.id,
-                region: { kind: TASK_REGION.READY, task: TASK },
-                workspaces: [home],
-                workspace: home,
-                sidePanel: DOCUMENT_PANEL,
-                onSelect: (taskId) => selected.push(taskId),
+            overEveryTask(
+              { tasks: [{ ...TASK, number: 1 }, child] },
+              createElement(DesktopTasks, {
+                looks: NO_LOOKS,
+                tasks: tasksControl({
+                  page: TASKS_PAGE.TASK,
+                  tasks: [{ ...TASK, number: 1 }, child],
+                  listRead: true,
+                  activeTaskId: TASK.id,
+                  region: { kind: TASK_REGION.READY, task: TASK },
+                  workspaces: [home],
+                  workspace: home,
+                  sidePanel: DOCUMENT_PANEL,
+                  onSelect: (taskId) => selected.push(taskId),
+                }),
               }),
-            }),
+            ),
           ),
         ),
       ),
@@ -906,18 +913,21 @@ test("opening another task draws only its own title and sub-tasks, none of the t
       root.render(
         windowRouter().provide(
           withQueryClient(
-            createElement(DesktopTasks, {
-              looks: NO_LOOKS,
-              tasks: tasksControl({
-                page: TASKS_PAGE.TASK,
-                activeTaskId: task.id,
-                region: { kind: TASK_REGION.READY, task },
-                tasks: listed,
-                workspaces: [home],
-                workspace: home,
-                sidePanel: DOCUMENT_PANEL,
+            overEveryTask(
+              { tasks: listed },
+              createElement(DesktopTasks, {
+                looks: NO_LOOKS,
+                tasks: tasksControl({
+                  page: TASKS_PAGE.TASK,
+                  activeTaskId: task.id,
+                  region: { kind: TASK_REGION.READY, task },
+                  tasks: listed,
+                  workspaces: [home],
+                  workspace: home,
+                  sidePanel: DOCUMENT_PANEL,
+                }),
               }),
-            }),
+            ),
           ),
         ),
       ),

@@ -27,11 +27,7 @@ import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppHostRead, AppStateSnapshot, AppTranscript } from "@repo/host/app-state";
-import {
-  type FollowedAgent,
-  selectFollowedAgent,
-  selectTranscript,
-} from "@repo/host/app-state-reads";
+import { type FollowedAgent, selectTranscript } from "@repo/host/app-state-reads";
 import {
   BUZZ,
   latestStep,
@@ -46,7 +42,12 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cachedVideo } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs, useHostFollow } from "../host/host-provider.js";
+import {
+  useHostActs,
+  useHostFollow,
+  useTaskListCollections,
+  useTaskListRow,
+} from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
 
 /** What an agent's recordings are named under among the app's caches. */
@@ -95,9 +96,7 @@ function agentOfAnswer(answer: AgentPageAnswerView): ListedAgent | undefined {
 
 /** The agent as the task list follows it, by its id; none until the list holds it. */
 export function useFollowedAgent(agentId: string): FollowedAgent | undefined {
-  const select = useMemo(() => selectFollowedAgent(agentId), [agentId]);
-
-  return useQuery({ ...appStateQuery, select }).data;
+  return useTaskListRow(useTaskListCollections().agents, agentId);
 }
 
 /**
@@ -146,15 +145,9 @@ const NO_PULL_REQUESTS: readonly AgentPullRequest[] = [];
 
 /** The pull requests the agent opened, as the task list holds them now; none before it holds them. */
 export function useAgentPullRequests(agentId: string): readonly AgentPullRequest[] {
-  const select = useMemo(
-    () => (state: AppStateSnapshot) =>
-      (state.tasks.agentPullRequests ?? [])
-        .filter((each) => each.agentId === agentId)
-        .map(({ pullRequest }) => pullRequest),
-    [agentId],
-  );
+  const listed = useTaskListRow(useTaskListCollections().agentPullRequests, agentId);
 
-  return useQuery({ ...appStateQuery, select }).data ?? NO_PULL_REQUESTS;
+  return useMemo(() => (listed === undefined ? NO_PULL_REQUESTS : [listed.pullRequest]), [listed]);
 }
 
 /**

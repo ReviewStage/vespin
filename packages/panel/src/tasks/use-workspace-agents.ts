@@ -1,9 +1,15 @@
 import { AGENT_BOUNDS, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
-import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
-import type { AppStateSnapshot } from "@repo/host/app-state";
+import type { TasksView } from "@repo/features/tasks-view";
+import { and, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
-import { appStateQuery, selectTasks } from "../use-app-state.js";
+import { useMemo } from "react";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import {
+  AGENTS_LISTED,
+  type AgentsListed,
+  appStateQuery,
+  selectAgentsListed,
+} from "../use-app-state.js";
 
 /**
  * use-workspace-agents.ts -- a workspace's newest agents as the task list the host holds carries them: what an automation's Agent picker and an `@` list offer before a word is typed.
@@ -37,30 +43,26 @@ function newestFirst(a: ListedAgent, b: ListedAgent): number {
 }
 
 /**
- * Where the list stands on `workspaceId`'s newest agents, on `repository`
- * where one is named. Note that the list carries the agents on a task only
- * once it answered live, so until then they are not yet carried, unless it
- * failed first.
+ * Where the list stands on `workspaceId`'s newest agents among `unarchived`,
+ * its agents there, on `repository` where one is named. Note that the list
+ * carries the agents on a task only once it answered live, so until then
+ * they are not yet carried, unless it failed first.
  */
 function newestOf(
-  tasks: TasksView | undefined,
-  workspaceId: string,
+  listed: AgentsListed | undefined,
+  unarchived: readonly ListedAgent[],
   repository: string | null,
 ): WorkspaceAgents {
-  const onTasks = tasks?.taskAgents;
-
-  if (onTasks === undefined) {
-    return tasks?.listStatus === TASKS_READ.FAILED ? AGENTS_FAILED : undefined;
+  if (listed !== AGENTS_LISTED.CARRIED) {
+    return listed === AGENTS_LISTED.FAILED ? AGENTS_FAILED : undefined;
   }
 
   const repositoryNamed = repository?.toLowerCase();
 
-  const agents = onTasks
+  const agents = unarchived
     .filter(
       (agent) =>
-        agent.workspaceId === workspaceId &&
-        agent.archivedAt === undefined &&
-        (repositoryNamed === undefined || agent.repository?.toLowerCase() === repositoryNamed),
+        repositoryNamed === undefined || agent.repository?.toLowerCase() === repositoryNamed,
     )
     .toSorted(newestFirst)
     .slice(0, AGENT_BOUNDS.MAX_WORKSPACE_AGENTS);
@@ -73,11 +75,25 @@ export function useWorkspaceAgents(
   workspaceId: string | undefined,
   repository: string | null,
 ): WorkspaceAgents {
-  const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
+  const { agents } = useTaskListCollections();
+  const listed = useQuery({ ...appStateQuery, select: selectAgentsListed }).data;
+
+  const { data: unarchived } = useLiveQuery((q) =>
+    workspaceId === undefined
+      ? undefined
+      : q
+          .from({ agent: agents })
+          .where(({ agent }) =>
+            and(eq(agent.workspaceId, workspaceId), isUndefined(agent.archivedAt)),
+          ),
+  );
 
   return useMemo(
-    () => (workspaceId === undefined ? undefined : newestOf(tasks, workspaceId, repository)),
-    [tasks, workspaceId, repository],
+    () =>
+      workspaceId === undefined || unarchived === undefined
+        ? undefined
+        : newestOf(listed, unarchived, repository),
+    [listed, unarchived, workspaceId, repository],
   );
 }
 
@@ -96,12 +112,9 @@ export function listedAgentIn(
 
 /** The agent `agentId` names as the task list carries it, past the newest and archived alike; none while none is named, or where the list holds no such agent. */
 export function useListedAgent(agentId: string | null): AgentSummary | undefined {
-  const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
+  const { agents } = useTaskListCollections();
 
-  return useMemo(
-    () => (agentId === null ? undefined : listedAgentIn(tasks, agentId)),
-    [tasks, agentId],
-  );
+  return useTaskListRow(agents, agentId ?? undefined);
 }
 
 /**
@@ -112,11 +125,7 @@ export function useListedAgent(agentId: string | null): AgentSummary | undefined
  * service that does not carry it.
  */
 export function useSandboxOpen(agentId: string | null): boolean | undefined {
-  const select = useCallback(
-    (state: AppStateSnapshot) =>
-      agentId === null ? undefined : listedAgentIn(state.tasks, agentId)?.sandboxOpen,
-    [agentId],
-  );
+  const { agents } = useTaskListCollections();
 
-  return useQuery({ ...appStateQuery, select }).data;
+  return useTaskListRow(agents, agentId ?? undefined)?.sandboxOpen;
 }

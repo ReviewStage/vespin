@@ -105,6 +105,7 @@ import { QUERY_ROOT } from "../query-keys.js";
 import { centerWithin, scrollerOf } from "../scroll-within.js";
 import { useShortcutTargetsOf } from "../shortcut-target.js";
 import { stateEndMark } from "../state-glyph.js";
+import { useListedTasks } from "../task-list-collections.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { HOME_ROW_CONTEXT, HOME_ROW_META, HOME_ROW_PICTURE } from "../tasks/home-row.js";
@@ -983,7 +984,8 @@ function PersonColumn({
   const { workspace: standing, landing } = usePersonRoute();
   // What a phone's bar picks up from the page's header once it scrolls away.
   const [pickUp, setPickUp] = useState<ToolbarPickUp>({ name: "", shown: false });
-  const listed = tasks.listed.tasks;
+  // The listed workspace's tasks, or every task while none is listed, as the sidebar lists them.
+  const listed = useListedTasks(tasks.workspace?.id, tasks.typedNames);
   // Named as the list names them, else as the members read does, else by the name the page was opened with, else as the former members read does; nobody's name where none does.
   const { members, readerId, former, refused, retry } = useMemberDirectory();
   const member = members?.find((each) => each.userId === userId);

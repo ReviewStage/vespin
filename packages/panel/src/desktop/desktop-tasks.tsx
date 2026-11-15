@@ -64,6 +64,7 @@ import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-door
 import { renameWrite } from "../rename-write.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
+import { useNamedTask, useNamedTasks } from "../task-list-collections.js";
 import { AgentCard, agentSubject } from "../tasks/agent-ref.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
@@ -453,7 +454,7 @@ function DescriptionDocument({
   away: TaskHeadBack;
 }): React.JSX.Element {
   const { region } = tasks;
-  const pins = usePins(tasks.drawnTasks);
+  const pins = usePins(tasks.typedNamesNow);
   const account = useWindowAccount();
   // The tab a phone's panel shows past the plan, which its header is named by, and the tab its column shows, whose menu the header's ⋯ offers on the agent's screen (`strip-tabs.tsx`'s `ShownTab`).
   const [shownTab, setShownTab] = useState<ShownTab | undefined>(undefined);
@@ -481,11 +482,13 @@ function DescriptionDocument({
   });
 
   // The task's comments are held from its open while it is shown, for its description's margin and list, so its first ready frame marks them; none are read while its workspace, the listed one while it is read, has Descriptions off.
+  // The open task as the list holds it, read by its id, its name as it is being typed.
+  const listedActive = useNamedTask(tasks.activeTaskId, tasks.typedNames);
+
   const shownWorkspaceId =
     region.kind === TASK_REGION.READY
       ? region.task.workspaceId
-      : (tasks.tasks.find((each) => each.id === tasks.activeTaskId)?.workspaceId ??
-        tasks.workspace?.id);
+      : (listedActive?.workspaceId ?? tasks.workspace?.id);
 
   const descriptionsOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.DESCRIPTIONS);
 
@@ -566,17 +569,14 @@ function DescriptionDocument({
   // The task the page stands on: as read, or, while its description is read, as the list holds it, so its bars, its
   // tabs, and its agents draw at once rather than wait on the description.
   const opened: TaskSummary | undefined =
-    read ??
-    (region.kind === TASK_REGION.READING
-      ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
-      : undefined);
+    read ?? (region.kind === TASK_REGION.READING ? listedActive : undefined);
 
   // The task renamed is the one the page stands on, so its rename opens while its description is still read.
   const taskId = opened?.id;
-  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const renaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_TERMS));
   // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
-  const barRenaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const barRenaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_TERMS));
 
   // The open task's one rename door, which its title's menu and ⌘K ask: it opens the field over the task's name where the window heads the task, a phone's head or the title bar.
@@ -587,17 +587,15 @@ function DescriptionDocument({
 
   useOfferTaskRename(taskId, beginRename);
 
-  const listedOpen =
-    opened === undefined
-      ? undefined
-      : (tasks.tasks.find((each) => each.id === opened.id) ?? opened);
+  const listedOpened = useNamedTask(opened?.id, tasks.typedNames);
+  const listedOpen = opened === undefined ? undefined : (listedOpened ?? opened);
 
   const stranded = useStrandedTaskBanner(tasks, listedOpen);
 
   // The workspace's agents an `@` offers after the task's own, named by the tasks the window lists.
   const readMentionAgents = useMentionAgentsReader(
     opened?.workspaceId,
-    tasks.tasks,
+    useNamedTasks(tasks.typedNames),
     tasks.agents.models,
   );
 

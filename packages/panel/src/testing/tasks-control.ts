@@ -11,7 +11,6 @@ import {
 } from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
-import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import type {
   AppHostRead,
   AppInboxSlice,
@@ -642,7 +641,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     onGoHome: ignore,
     onLeaveRouted: ignore,
     onUnbindTask: ignore,
-    drawnTasks: () => ({ ...IDLE_TASKS_VIEW, tasks: overrides.tasks ?? [] }),
+    typedNamesNow: () => overrides.typedNames ?? new Map(),
     onDraftName: ignore,
     liveAgents: [],
     listedPullRequests: undefined,
