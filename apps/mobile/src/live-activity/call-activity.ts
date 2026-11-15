@@ -10,7 +10,8 @@
  * activity again, since its attributes name the agent and cannot change,
  * and a press names the agent its activity shows, so one pressed on the
  * last call's activity while the next one's starts is dropped rather than
- * acting on the new call.
+ * acting on the new call. A start that fails, such as one refused while
+ * Live Activities are turned off, is tried again on the call's next state.
  * One left standing from a launch that ended mid-call is ended as the app
  * starts, since no call outlives its launch. Where Live Activities are
  * turned off, or the build has no module, the call goes on without one.
@@ -113,8 +114,14 @@ export function useCallLiveActivity(
     }
 
     if (shownFor.current === agentId) return after(() => module.updateCall(state));
+    // Note that the agent counts as shown from the moment its start is queued, so a state set meanwhile updates rather than starts again, and stops counting where the start fails, so the next state tries it again.
     shownFor.current = agentId;
-    after(() => module.startCall(JSON.stringify({ agentId }), state));
+    after(() =>
+      module.startCall(JSON.stringify({ agentId }), state).catch((cause: unknown) => {
+        if (shownFor.current === agentId) shownFor.current = undefined;
+        throw cause;
+      }),
+    );
   }, [agentId, state]);
 
   useEffect(() => {
