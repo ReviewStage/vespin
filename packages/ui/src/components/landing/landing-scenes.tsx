@@ -622,7 +622,7 @@ const INBOX_BEAT = {
 
 /** How long each beat holds, in milliseconds, by its place in `INBOX_BEAT`: long enough for the pointer's move or the typing it holds. */
 const INBOX_DURATIONS: readonly number[] = [
-  1200, 1300, 1100, 450, 900, 1100, 600, 1100, 1700, 1100, 450, 1100, 1300, 1800,
+  900, 1000, 700, 350, 650, 700, 450, 700, 1100, 700, 350, 800, 1000, 1400,
 ];
 
 /** What the pointer rests on at each beat: the row, the picked option, the note, the send, or nothing. */

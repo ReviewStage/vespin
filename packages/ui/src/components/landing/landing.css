@@ -972,13 +972,13 @@
     z-index: 2;
     pointer-events: none;
     transform: translateX(var(--ui-landing-pointer-x));
-    transition: transform var(--ui-duration-showcase) var(--ui-motion-exit);
+    transition: transform var(--ui-duration-shape) var(--ui-motion-exit);
   }
 
   .ui-landing-pointer-down {
     display: block;
     transform: translateY(var(--ui-landing-pointer-y));
-    transition: transform var(--ui-duration-showcase) var(--ui-motion-pane);
+    transition: transform var(--ui-duration-shape) var(--ui-motion-pane);
   }
 
   /* off-scale: the pointer's own size, a desktop arrow's */
