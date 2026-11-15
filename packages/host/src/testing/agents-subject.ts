@@ -75,7 +75,7 @@ import { Duration, Effect, Exit, Predicate, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { type AppTranscript, type AppTranscripts, OWN_TRANSCRIPT } from "../app-state.js";
 import { type AccountAsksClient, composeAccountAsks } from "../compose-account-asks.js";
-import { type AgentClient, composeAgents } from "../compose-agents.js";
+import { type AgentClient, composeAgents, type PullRequestClient } from "../compose-agents.js";
 import type { EntityStore } from "../entity-store.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "../kept-content.js";
 import { windowFocus } from "../window-focus.js";
@@ -1299,6 +1299,22 @@ function bySyncId(
   };
 }
 
+const UNANSWERED_CALL = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
+
+/** The service's side of a pull request named by its repository, which no test here asks, so it answers none. */
+const NO_PULL_REQUESTS: PullRequestClient = {
+  pullRequest: () => Effect.succeed(UNANSWERED_CALL),
+  changes: () => Effect.succeed(UNANSWERED_CALL),
+  overviewPullRequest: () => Effect.succeed(UNANSWERED_CALL),
+  overviewChecks: () => Effect.succeed(UNANSWERED_CALL),
+  overviewConversation: () => Effect.succeed(UNANSWERED_CALL),
+  reviewOptions: () => Effect.succeed(UNANSWERED_CALL),
+  viewed: () => Effect.succeed(UNANSWERED_CALL),
+  action: () => Effect.succeed(UNANSWERED_CALL),
+  generateChapters: () => Effect.succeed(UNANSWERED_CALL),
+  githubImage: () => Effect.succeed(UNANSWERED_CALL),
+};
+
 /** Every step a follow has to take, taken: it runs on a fiber of its own. */
 export const settled = Effect.repeat(Effect.yieldNow, { times: 100 });
 
@@ -1365,6 +1381,7 @@ export function subject(
       kept: yield* keptContent(KEPT_CONTENT_CHARACTERS),
       focus,
       client: service.client,
+      pullRequests: NO_PULL_REQUESTS,
       // Note that no test here asks an agent's ports, so their service is a sandbox that is not running.
       ports: {
         list: () => Effect.succeed({ running: false, ports: [] }),
