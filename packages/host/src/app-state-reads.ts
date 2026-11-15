@@ -46,9 +46,11 @@ import {
   type AppHostRead,
   type AppMemories,
   type AppStateDelivery,
+  type AppStateRead,
   type AppStateSnapshot,
   type AppTranscript,
   OWN_TRANSCRIPT,
+  type TaskListParts,
   withAppStateDelivery,
 } from "./app-state.js";
 
@@ -74,7 +76,7 @@ function adoptAppStateDelivery(
 
 /** The bridge's two reads of the document: the whole of it on request, and what moved on every change. */
 export interface AppStateBridgeReads {
-  readonly requestAppState: () => Promise<AppStateSnapshot>;
+  readonly requestAppState: () => Promise<AppStateRead>;
   readonly onAppState: (listener: (delivery: AppStateDelivery) => void) => () => void;
 }
 
@@ -85,6 +87,14 @@ export interface FollowedAppState {
   /** The document as last adopted, for a reader that writes it again; none before the first read answers. */
   readonly held: () => AppStateSnapshot | undefined;
   readonly stop: () => void;
+}
+
+/** A reader of what crosses beside the document: the task list's lists. */
+export interface AppStateBeside {
+  /** Each delivery, as it arrives. */
+  readonly heard: (delivery: AppStateDelivery) => void;
+  /** The lists a whole read answers beside the document `read`, before the document is written. */
+  readonly read: (read: AppStateSnapshot, taskList: TaskListParts) => void;
 }
 
 /**
@@ -103,16 +113,18 @@ export interface FollowedAppState {
  * through `report`. Note that the read is asked after the subscription
  * stands, so a delivery sent while it is in flight is heard.
  *
- * Each delivery is handed to `heard` the moment it arrives, before it is
- * laid and whether or not a whole read stands to lay it over, for a reader
- * of what it carries beside the document (its `taskList`) that keeps its
- * own order (`task-list-following.ts`).
+ * What crosses beside the document, the task list's lists, is handed to
+ * `beside` (`task-list-following.ts`), which keeps its own order: each
+ * delivery the moment it arrives, before it is laid and whether or not a
+ * whole read stands to lay it over, and each whole read's lists before the
+ * document it came with is written. The document held is the read's alone,
+ * never the lists beside it.
  */
 export function followAppStateOver(
   bridge: AppStateBridgeReads,
   write: (state: AppStateSnapshot, delivery?: AppStateDelivery) => Promise<void> | undefined,
   report: (message: string, cause: unknown) => void,
-  heard?: (delivery: AppStateDelivery) => void,
+  beside?: AppStateBeside,
 ): FollowedAppState {
   let following = true;
   let held: AppStateSnapshot | undefined;
@@ -123,10 +135,12 @@ export function followAppStateOver(
     reading = true;
 
     return bridge.requestAppState().then(
-      (read) => {
+      ({ taskList, ...read }) => {
         reading = false;
 
         if (!following) return undefined;
+
+        if (taskList !== undefined) beside?.read(read, taskList);
         held = early.reduce(adoptAppStateDelivery, read);
         early = [];
 
@@ -140,7 +154,7 @@ export function followAppStateOver(
   };
 
   const stopHearing = bridge.onAppState((delivered) => {
-    heard?.(delivered);
+    beside?.heard(delivered);
 
     if (held === undefined) {
       early.push(delivered);

@@ -23,7 +23,6 @@ import {
   type AppStateBridgeReads,
   type FollowedAppState,
   followAppStateOver,
-  selectTasks,
   shareAppState,
 } from "@repo/host/app-state-reads";
 import { type TaskListCollections, taskListFollowing } from "@repo/host/task-list-following";
@@ -55,8 +54,9 @@ export interface FollowedAppStateInto extends FollowedAppState {
  * Writes every reading of the document into `client`, from the moment it
  * is called until it is stopped, as the panel's root does for its window:
  * the first whole read, then each delivery laid over what is held. The task
- * list's collections take the whole read as their list, and the rows each
- * delivery carries beside the document, heard from before the read is asked.
+ * list's collections take the lists the whole read answers beside the
+ * document, and the rows each delivery carries beside it, heard from before
+ * the read is asked.
  */
 export function followAppStateInto(
   bridge: AppStateBridgeReads,
@@ -66,18 +66,19 @@ export function followAppStateInto(
 
   const followed = followAppStateOver(
     bridge,
-    (state, delivery) => {
+    (state) => {
       client.setQueryData(appStateQuery.queryKey, state);
-
-      if (delivery === undefined) taskList.write(state.version, selectTasks(state));
 
       return undefined;
     },
     (message, cause) => {
       console.error(message, cause);
     },
-    ({ taskList: rows }) => {
-      if (rows !== undefined) taskList.deliver(rows);
+    {
+      heard: ({ taskList: rows }) => {
+        if (rows !== undefined) taskList.deliver(rows);
+      },
+      read: (read, lists) => taskList.write(read.version, lists),
     },
   );
 

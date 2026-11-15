@@ -14,7 +14,12 @@
  */
 
 import { ACT_KIND } from "@repo/host/acts";
-import { type AppStateSnapshot, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
+import {
+  type AppStateSnapshot,
+  RUN_PROFILE,
+  type RunProfile,
+  taskListPartsOf,
+} from "@repo/host/app-state";
 import type { AppStateStore } from "@repo/host/client";
 import type {
   ActPortClient,
@@ -164,7 +169,7 @@ export function stageFixture(
     network: stagedNetwork(held, updateNeeded),
   };
 
-  state.update(stagedPatch(held, staged));
+  state.update(stagedPatch(held, staged), taskListPartsOf(staged.tasks));
 }
 
 /** Keeps a reminder the fixture took, set or cleared, and lays it over the document at once, as the host draws one; nothing for any other act. */

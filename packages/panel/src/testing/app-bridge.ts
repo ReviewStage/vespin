@@ -8,8 +8,10 @@ import type { TaskFileRequest } from "@repo/features/task-wire";
 import type { TasksFileAnswer } from "@repo/features/tasks-view";
 import {
   type AppStateDelivery,
+  type AppStateRead,
   TASK_LIST_PARTS,
   type TaskListDelivery,
+  taskListPartsOf,
 } from "@repo/host/app-state";
 import type { AppBridge } from "@repo/host/bridge";
 import {
@@ -55,24 +57,37 @@ function taskListOf(delivery: AppStateDelivery): TaskListDelivery | undefined {
   return moved === undefined || moved.length === 0 ? undefined : { version, moved };
 }
 
+/** `read` with the task list's lists beside it, as the host answers a whole read, where a fake answered it without them. */
+function withListsBeside(read: AppStateRead): AppStateRead {
+  return read.taskList === undefined ? { ...read, taskList: taskListPartsOf(read.tasks) } : read;
+}
+
 /**
- * The document's deliveries with the task list's rows beside them, where a
- * fake hands a delivery it built by hand without them, as the host carries
- * the two in one (`appStateDelivery`).
+ * The document's whole read and deliveries with the task list's lists and
+ * rows beside them, where a fake hands a document or a delivery it built by
+ * hand without them, as the host carries the two in one (`AppStateRead`,
+ * `appStateDelivery`).
  */
 function withTaskLists(calls: Partial<AppBridge>): Partial<AppBridge> {
-  const { onAppState } = calls;
-
-  if (onAppState === undefined) return calls;
+  const { onAppState, requestAppState } = calls;
 
   return {
     ...calls,
-    onAppState: (listener) =>
-      onAppState((delivery) => {
-        const taskList = delivery.taskList ?? taskListOf(delivery);
+    ...(requestAppState === undefined
+      ? undefined
+      : {
+          requestAppState: () => requestAppState().then(withListsBeside),
+        }),
+    ...(onAppState === undefined
+      ? undefined
+      : {
+          onAppState: (listener) =>
+            onAppState((delivery) => {
+              const taskList = delivery.taskList ?? taskListOf(delivery);
 
-        listener(taskList === undefined ? delivery : { ...delivery, taskList });
-      }),
+              listener(taskList === undefined ? delivery : { ...delivery, taskList });
+            }),
+        }),
   };
 }
 

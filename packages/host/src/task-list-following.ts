@@ -37,7 +37,6 @@
 
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { ListedPullRequest, TaskPullRequests, TaskSummary } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
 import { keepIdentity } from "@repo/wire";
 import { type Collection, type CollectionConfig, createCollection } from "@tanstack/db";
 import type { TaskListDelivery, TaskListPartMoved, TaskListParts } from "./app-state.js";
@@ -270,7 +269,7 @@ export interface TaskListCollections {
 export interface TaskListFollowing {
   readonly collections: TaskListCollections;
   /** Lays a whole task list, a whole read's or a fixture run's, under its version. */
-  readonly write: (version: number, view: TasksView) => void;
+  readonly write: (version: number, lists: TaskListParts) => void;
   /** Lays the task list's rows one delivery carries (`AppStateDelivery`'s `taskList`): its lists whole, or the rows it moved, under its version. */
   readonly deliver: (delivery: TaskListDelivery) => void;
   /** Says a document could not be written; the rows held stay, and the next write clears it. */
@@ -353,9 +352,9 @@ export function taskListFollowing(): TaskListFollowing {
 
   return {
     collections,
-    write: (at, view) => {
+    write: (at, lists) => {
       if (!current(at)) return;
-      lay(view);
+      lay(lists);
       takeEarly();
     },
     deliver: (delivery) => {
