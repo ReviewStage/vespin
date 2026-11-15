@@ -112,8 +112,8 @@ import {
  * inbox on every post. A list answers one line a thread, the agent's own
  * or, read only, another agent's or a task's of its workspace, and a read
  * answers one thread whole, a page of its messages at a time, its pictures
- * and pages by reference. A worker gets none of these tools, because the
- * developer answers the agent it works for.
+ * and pages by reference. A subagent's call reaches us as its agent's own,
+ * so its thread is the agent's, and an answer on it reaches the agent.
  */
 
 /** The inbox's picture bound in megabytes, as the words the model reads say it. */
