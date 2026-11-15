@@ -180,7 +180,11 @@ import {
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
 import { BOOT_FAILURE, type BootFailure } from "@repo/features/agent-boot";
-import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
+import {
+  AGENT_ATTACHMENT_TYPE,
+  AGENT_MACHINE,
+  type AgentMachineKind,
+} from "@repo/features/agent-wire";
 import { leadingCommand } from "@repo/features/slash-command";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
@@ -223,6 +227,7 @@ import { AfterResponse, afterResponse } from "../../http/after-response.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { agentSpanAttributes, sentryRunnerTrace } from "../../observability/sentry.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
+import { writtenTextLine } from "../attached-files.js";
 import {
   AgentMachine,
   type AgentMachineService,
@@ -555,8 +560,10 @@ type RunnerContentResult = {
 /**
  * A message's content as the runner's lines carry it, and the files it
  * names: words as text, an image as an image block, and any other file,
- * such as a PDF, written into the machine under the line's own folder of
- * the attachments folder given and named by its path. A file whose bytes
+ * such as a PDF or a text file too large to inline, written into the
+ * machine under the line's own folder of the attachments folder given and
+ * named by its path, a text file's first lines inlined after it
+ * (`writtenTextLine`). A file whose bytes
  * are not in the message, a URL
  * elsewhere, is named as not passed.
  */
@@ -602,16 +609,17 @@ function runnerContent(
     }
 
     const path = `${attachments}/${lineId}/${attachmentFileName(name, at)}`;
-    files.push({
-      path,
-      contents: new Uint8Array(Buffer.from(base64, "base64")),
-      mode: ATTACHMENT_FILE_MODE,
-    });
+    const contents = new Uint8Array(Buffer.from(base64, "base64"));
+    files.push({ path, contents, mode: ATTACHMENT_FILE_MODE });
 
     return [
       {
         type: "text" as const,
-        text: `[${name} (${mediaType}) was attached: it is at ${path}, read it from there]`,
+        // A text file reaches here only where it was too large to inline, so its line inlines its first lines.
+        text:
+          mediaType === AGENT_ATTACHMENT_TYPE.TEXT
+            ? writtenTextLine(name, path, contents)
+            : `[${name} (${mediaType}) was attached: it is at ${path}, read it from there]`,
       },
     ];
   });
