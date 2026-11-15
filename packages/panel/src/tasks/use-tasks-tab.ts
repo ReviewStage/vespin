@@ -101,7 +101,11 @@ import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { type LinkStep, type TaskAt, taskAtOf, taskOfAt } from "../places/task-step.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
-import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import {
+  useTaskListCollections,
+  useTaskListRow,
+  useTaskListRows,
+} from "../task-list-collections.js";
 import type { TaskRoute } from "../task-route.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
@@ -1182,9 +1186,11 @@ export function useTasksTab(input: {
   const pages = useMemo(() => (taskPages ?? NO_PAGES).map((page) => page.id), [taskPages]);
 
   // The Inbox lists the listed workspace's items alone, so a choice another workspace's list made gives way with it.
+  const listedRows = useTaskListRows();
+
   const inboxChosen = listedInboxChoice(inboxView?.chosen, {
-    tasks: tasks.tasks,
     workspace: listedWorkspace,
+    task: listedRows.task,
   });
 
   // While the Inbox stands, the panel beside it is the chosen item's task's: what the item opens
