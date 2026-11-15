@@ -1,0 +1,96 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow r9388p
+Set orientation ${ORIENT}...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Tap on id: workspace-switcher... COMPLETED
+Scrolling DOWN until ".*, Settings" is visible with speed 40, visibility percentage 100%, timeout 10000 ms, with centering disabled... COMPLETED
+Tap on ".*, Settings"... COMPLETED
+Wait for animation to end... COMPLETED
+Scrolling DOWN until "Send feedback" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Send feedback"... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on id: feedback-words... COMPLETED
+Run ${output.long = 'word '.repeat(2100)}... COMPLETED
+Set Maestro clipboard to ${output.long}... COMPLETED
+Paste text...maestro.DeviceUnreachableException: Device became unreachable during inputText
+	at maestro.drivers.IOSDriver.runDeviceCall(IOSDriver.kt:658)
+	at maestro.drivers.IOSDriver.inputText$lambda$40(IOSDriver.kt:449)
+	at maestro.utils.Metrics.measured(Metrics.kt:48)
+	at maestro.drivers.IOSDriver.inputText(IOSDriver.kt:448)
+	at maestro.Maestro.inputText$lambda$37(Maestro.kt:589)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: ios.IOSDeviceErrors$Unreachable: Device became unreachable while processing inputText
+	at ios.xctest.XCTestIOSDevice.execute(XCTestIOSDevice.kt:244)
+	at ios.xctest.XCTestIOSDevice.input(XCTestIOSDevice.kt:116)
+	at ios.LocalIOSDevice.input(LocalIOSDevice.kt:84)
+	at maestro.drivers.IOSDriver.inputText$lambda$40$lambda$39(IOSDriver.kt:449)
+	at maestro.drivers.IOSDriver.runDeviceCall(IOSDriver.kt:655)
+	... 15 more
+Caused by: maestro.utils.network.XCUITestServerError$Unreachable: Transport unreachable while processing inputText
+	at xcuitest.XCTestDriverClient.transportCall(XCTestDriverClient.kt:73)
+	at xcuitest.XCTestDriverClient.executeJsonRequest(XCTestDriverClient.kt:267)
+	at xcuitest.XCTestDriverClient.executeJsonRequest$default(XCTestDriverClient.kt:266)
+	at xcuitest.XCTestDriverClient.inputText(XCTestDriverClient.kt:174)
+	at ios.xctest.XCTestIOSDevice.input$lambda$8(XCTestIOSDevice.kt:118)
+	at ios.xctest.XCTestIOSDevice.execute(XCTestIOSDevice.kt:240)
+	... 19 more
+Caused by: java.io.InterruptedIOException: timeout
+	at okhttp3.internal.connection.RealCall.timeoutExit(RealCall.kt:398)
+	at okhttp3.internal.connection.RealCall.callDone(RealCall.kt:360)
+	at okhttp3.internal.connection.RealCall.noMoreExchanges$okhttp(RealCall.kt:325)
+	at okhttp3.internal.connection.RealCall.getResponseWithInterceptorChain$okhttp(RealCall.kt:209)
+	at okhttp3.internal.connection.RealCall.execute(RealCall.kt:154)
+	at xcuitest.XCTestDriverClient.executeJsonRequest$lambda$7(XCTestDriverClient.kt:279)
+	at xcuitest.XCTestDriverClient.transportCall(XCTestDriverClient.kt:67)
+	... 24 more
+Caused by: java.net.SocketTimeoutException: Read timed out
+	at java.base/sun.nio.ch.NioSocketImpl.timedRead(NioSocketImpl.java:272)
+	at java.base/sun.nio.ch.NioSocketImpl.implRead(NioSocketImpl.java:298)
+	at java.base/sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:356)
+	at java.base/sun.nio.ch.NioSocketImpl$1.read(NioSocketImpl.java:798)
+	at java.base/java.net.Socket$SocketInputStream.implRead(Socket.java:984)
+	at java.base/java.net.Socket$SocketInputStream.read(Socket.java:974)
+	at okio.InputStreamSource.read(JvmOkio.kt:94)
+	at okio.AsyncTimeout$source$1.read(AsyncTimeout.kt:157)
+	at okio.RealBufferedSource.indexOf(RealBufferedSource.kt:457)
+	at okio.RealBufferedSource.readUtf8LineStrict(RealBufferedSource.kt:350)
+	at okhttp3.internal.http1.HeadersReader.readLine(HeadersReader.kt:29)
+	at okhttp3.internal.http1.Http1ExchangeCodec.readResponseHeaders(Http1ExchangeCodec.kt:180)
+	at okhttp3.internal.connection.Exchange.readResponseHeaders(Exchange.kt:110)
+	at okhttp3.internal.http.CallServerInterceptor.intercept(CallServerInterceptor.kt:93)
+	at okhttp3.internal.http.RealInterceptorChain.proceed(RealInterceptorChain.kt:109)
+	at maestro.utils.HttpClient.build_S81q6HU$lambda$0(HttpClient.kt:83)
+	at okhttp3.internal.http.RealInterceptorChain.proceed(RealInterceptorChain.kt:109)
+	at okhttp3.internal.connection.ConnectInterceptor.intercept(ConnectInterceptor.kt:34)
+	at okhttp3.internal.http.RealInterceptorChain.proceed(RealInterceptorChain.kt:109)
+	at okhttp3.internal.cache.CacheInterceptor.intercept(CacheInterceptor.kt:95)
+	at okhttp3.internal.http.RealInterceptorChain.proceed(RealInterceptorChain.kt:109)
+	at okhttp3.internal.http.BridgeInterceptor.intercept(BridgeInterceptor.kt:83)
+	at okhttp3.internal.http.RealInterceptorChain.proceed(RealInterceptorChain.kt:109)
+	at okhttp3.internal.http.RetryAndFollowUpInterceptor.intercept(RetryAndFollowUpInterceptor.kt:76)
+	at okhttp3.internal.http.RealInterceptorChain.proceed(RealInterceptorChain.kt:109)
+	at okhttp3.internal.connection.RealCall.getResponseWithInterceptorChain$okhttp(RealCall.kt:201)
+	... 27 more
+
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/j9388/9388/9388-ipad26-light/r9388p/2026-11-15_140243
