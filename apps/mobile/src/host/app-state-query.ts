@@ -11,13 +11,14 @@
  * what the client already holds, and stands only for a reader on a client
  * nothing follows into, which refuses.
  *
- * Every reading is handed on in the same breath to the task list's
- * collections (`@repo/host/task-list-following`), the panel's own, so a
- * list that reads its rows through a live query is told only the rows that
- * moved, and the two never disagree.
+ * The task list's collections (`@repo/host/task-list-following`), the
+ * panel's own, are fed beside it from the host's pushes of the rows each
+ * drawing moved, which the bridge hands just before the document they moved
+ * in, so a list that reads its rows through a live query is told only the
+ * rows that moved, and is never behind the document.
  */
 
-import type { AppStateSnapshot } from "@repo/host/app-state";
+import type { AppStateSnapshot, TaskListDelivery } from "@repo/host/app-state";
 import {
   type AppStateBridgeReads,
   type FollowedAppState,
@@ -50,18 +51,21 @@ export interface FollowedAppStateInto extends FollowedAppState {
   readonly taskList: TaskListCollections;
 }
 
+/** The bridge's reads of the document, and its pushes of the task list's rows beside them. */
+interface BridgeReads extends AppStateBridgeReads {
+  readonly onTaskList: (listener: (delivery: TaskListDelivery) => void) => () => void;
+}
+
 /**
  * Writes every reading of the document into `client`, from the moment it
  * is called until it is stopped, as the panel's root does for its window:
- * the first whole read, then each delivery laid over what is held. Each is
- * written into the task list's collections beside it: a whole read as its
- * list, and a delivery as the rows it moved.
+ * the first whole read, then each delivery laid over what is held. The task
+ * list's collections take the whole read as their list, and each push of
+ * the rows a drawing moved, heard from before the read is asked.
  */
-export function followAppStateInto(
-  bridge: AppStateBridgeReads,
-  client: QueryClient,
-): FollowedAppStateInto {
+export function followAppStateInto(bridge: BridgeReads, client: QueryClient): FollowedAppStateInto {
   const taskList = taskListFollowing();
+  const stopRows = bridge.onTaskList(taskList.deliver);
 
   const followed = followAppStateOver(
     bridge,
@@ -69,7 +73,6 @@ export function followAppStateInto(
       client.setQueryData(appStateQuery.queryKey, state);
 
       if (delivery === undefined) taskList.write(state.version, selectTasks(state));
-      else taskList.deliver(delivery);
 
       return undefined;
     },
@@ -82,6 +85,7 @@ export function followAppStateInto(
     ...followed,
     taskList: taskList.collections,
     stop: () => {
+      stopRows();
       followed.stop();
       taskList.stop();
     },

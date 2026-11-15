@@ -7,6 +7,8 @@ import {
   type AppStateSnapshot,
   type AppWindowFacts,
   appStateDelivery,
+  type TaskListDelivery,
+  taskListDelivery,
 } from "../app-state.js";
 import type { AppBridge, PushPayloadFor } from "../bridge.js";
 import type { PushMethod } from "../contract/pushes.js";
@@ -114,17 +116,21 @@ export function createInProcessBridge(
   return Effect.gen(function* () {
     const snapshot = (): AppStateSnapshot => ({ ...state.snapshot(), window: windowFacts() });
     const appState = listeners<AppStateDelivery>(report);
+    const taskList = listeners<TaskListDelivery>(report);
     // Note that the page is handed what moved since the document it was last
     // handed, as a desktop window's stream hands it, which its own read
-    // bootstraps it from.
+    // bootstraps it from, the task list's rows first on a channel of their own.
     let sent: AppStateSnapshot | undefined;
     yield* publishAppStateChanges(
       state,
       () =>
         Effect.sync(() => {
           const next = snapshot();
+          const rows = taskListDelivery(sent, next);
           const delivery = appStateDelivery(sent, next);
           sent = next;
+
+          if (rows !== undefined) taskList.emit(rows);
 
           if (delivery !== undefined) appState.emit(delivery);
         }),
@@ -139,6 +145,7 @@ export function createInProcessBridge(
     yield* Effect.addFinalizer(() =>
       Effect.sync(() => {
         appState.close();
+        taskList.close();
 
         for (const set of Object.values(said)) set.close();
       }),
@@ -147,6 +154,7 @@ export function createInProcessBridge(
     const bridge: AppBridge = {
       requestAppState: async () => snapshot(),
       onAppState: appState.subscribe,
+      onTaskList: taskList.subscribe,
       notifyReady: reports.notifyReady,
       recordSurfaceEvent: reports.recordSurfaceEvent,
       onShowLink: said.onShowLink.subscribe,

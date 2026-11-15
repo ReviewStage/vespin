@@ -22,12 +22,18 @@ import { isRecord, isWireString } from "@repo/wire";
 import { COMPLETION_SOUNDS, type CompletionSound } from "@repo/wire/app-settings";
 import { wireResult as result, type WireGuard, type WireGuardValue } from "@repo/wire/wire-guard";
 import { Schema as EffectSchema } from "effect";
-import { type AppStateDelivery, isAppStateDelivery } from "../app-state.js";
+import {
+  type AppStateDelivery,
+  isAppStateDelivery,
+  isTaskListDelivery,
+  type TaskListDelivery,
+} from "../app-state.js";
 import { actProcedure } from "./base.js";
 
 /** Every push main sends a window, by the name it crosses under. */
 export const PUSH = {
   APP_STATE: "app:state",
+  TASK_LIST: "app:task-list",
   MENU_COMMAND: "app:menu-command",
   SHOW_LINK: "app:show-link",
   CHIME: "app:chime",
@@ -36,8 +42,8 @@ export const PUSH = {
 
 export type PushName = (typeof PUSH)[keyof typeof PUSH];
 
-/** Every push but the document's, which a window's stream works out from the document itself rather than carrying as handed. */
-export type EventPushName = Exclude<PushName, typeof PUSH.APP_STATE>;
+/** Every push but the document's and its task list's, which a window's stream works out from the document itself rather than carrying as handed. */
+export type EventPushName = Exclude<PushName, typeof PUSH.APP_STATE | typeof PUSH.TASK_LIST>;
 
 /** Each push's guard, which the window reads its payload with before any listener hears it. */
 export const PUSH_GUARD = {
@@ -51,6 +57,14 @@ export const PUSH_GUARD = {
    * or the display it stands on — which the document does not number.
    */
   [PUSH.APP_STATE]: result<AppStateDelivery>(isAppStateDelivery),
+  /**
+   * The task list's rows that one drawing moved, each part's apart, under
+   * the version of the document it moved in: a window's first carries its
+   * lists whole. Worked out from the same document as the delivery beside
+   * it and sent just before it, so the task list's collections a window
+   * feeds from it are never behind the document it draws.
+   */
+  [PUSH.TASK_LIST]: result<TaskListDelivery>(isTaskListDelivery),
   /** A command chosen from the menu bar, for the focused window to run as its shortcut would. */
   [PUSH.MENU_COMMAND]: result<AppCommand>(isAppCommand),
   /**
@@ -92,6 +106,7 @@ export type PushEvent = {
 /** The bridge method a window hears each push on, as it did when each push was a channel of its own. */
 export const PUSH_METHOD = {
   onAppState: PUSH.APP_STATE,
+  onTaskList: PUSH.TASK_LIST,
   onMenuCommand: PUSH.MENU_COMMAND,
   onShowLink: PUSH.SHOW_LINK,
   onChime: PUSH.CHIME,

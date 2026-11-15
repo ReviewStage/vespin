@@ -270,6 +270,10 @@ export const selectLiveMark = (state: AppStateSnapshot): LiveMark | undefined =>
 /** Where the task list's read stands: not yet asked, on its way, read, or refused. */
 export const selectTaskListStatus = (state: AppStateSnapshot) => state.tasks.listStatus;
 
+/** Whether the task list's lists have been drawn, so a reader of its agents or pull requests can tell none from none read yet. */
+export const selectTaskListListed = (state: AppStateSnapshot): boolean =>
+  state.tasks.listed === true;
+
 /** The account's workspaces, which tell their readers only as the list moves, not as the tasks beside it do. */
 export const selectWorkspaces = (state: AppStateSnapshot) => state.tasks.workspaces;
 

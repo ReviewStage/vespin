@@ -1,5 +1,5 @@
 import { MemoryPublisher } from "@orpc/publisher/memory";
-import { type AppStateSnapshot, appStateDelivery } from "../app-state.js";
+import { type AppStateSnapshot, appStateDelivery, taskListDelivery } from "../app-state.js";
 import {
   type EventPushName,
   PUSH,
@@ -33,7 +33,10 @@ import { actPort } from "./base.js";
  * pushed, so a document replaced unsent takes nothing it moved with it, and
  * a document in which nothing the window is handed moved is not sent at all.
  * A stream's first sends every entry, which is what makes a reloaded page's
- * new stream whole whatever its old one sent.
+ * new stream whole whatever its old one sent. The task list's rows that
+ * moved go out on a push of their own (`TaskListDelivery`) just before the
+ * document they moved in, worked out between the same two documents, the
+ * first again whole.
  *
  * A window the platform says is hidden may have its document held
  * (`holdState`): a document pushed to it still takes the unsent one's place,
@@ -59,7 +62,10 @@ const UNBOUNDED = Number.POSITIVE_INFINITY;
 /** Where a stream's unsent document stands in its queue; the document itself is read as the marker is sent. */
 const LATEST_STATE = Object.freeze({ latest: PUSH.APP_STATE });
 
-type EventPush = Exclude<PushEvent, { readonly push: typeof PUSH.APP_STATE }>;
+type EventPush = Exclude<
+  PushEvent,
+  { readonly push: typeof PUSH.APP_STATE | typeof PUSH.TASK_LIST }
+>;
 
 type Queued = PushEvent | typeof LATEST_STATE;
 
@@ -84,19 +90,24 @@ function mark(stream: WindowStream): void {
 }
 
 /**
- * The stream's unsent document as the push it sends, what moved since the
- * one it last sent, taken off the stream; none where there is no document
- * unsent or nothing in it moved.
+ * The stream's unsent document as the pushes it sends, taken off the
+ * stream: the task list's rows that moved since the document it last sent,
+ * then what else moved in it; none where there is no document unsent, and
+ * neither where nothing in it moved.
  */
-function takeUnsent(stream: WindowStream): PushEvent | undefined {
+function takeUnsent(stream: WindowStream): readonly PushEvent[] {
   const latest = stream.unsent;
   stream.unsent = undefined;
 
-  if (latest === undefined) return undefined;
+  if (latest === undefined) return [];
+  const rows = taskListDelivery(stream.sent, latest);
   const delivery = appStateDelivery(stream.sent, latest);
   stream.sent = latest;
 
-  return delivery === undefined ? undefined : { push: PUSH.APP_STATE, payload: delivery };
+  return [
+    ...(rows === undefined ? [] : [{ push: PUSH.TASK_LIST, payload: rows } as const]),
+    ...(delivery === undefined ? [] : [{ push: PUSH.APP_STATE, payload: delivery } as const]),
+  ];
 }
 
 /** One event queued on one stream, behind the others. */
@@ -104,9 +115,9 @@ function offerEvent(stream: WindowStream, event: EventPush): void {
   // Note that a held document goes out itself before the event, because an
   // event must never be heard ahead of a document pushed before it, and a
   // marker read while held would send nothing.
-  const latest = stream.held ? takeUnsent(stream) : undefined;
+  const latest = stream.held ? takeUnsent(stream) : [];
 
-  if (latest !== undefined) void stream.publisher.publish(PUSHED, latest);
+  for (const pushed of latest) void stream.publisher.publish(PUSHED, pushed);
   void stream.publisher.publish(PUSHED, event);
 }
 
@@ -233,9 +244,8 @@ async function* untilClosed(
       stream.marked = false;
 
       if (stream.held) continue;
-      const latest = takeUnsent(stream);
 
-      if (latest !== undefined) yield latest;
+      yield* takeUnsent(stream);
     }
   } finally {
     close();

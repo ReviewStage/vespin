@@ -4,28 +4,35 @@
  * A screen that reads the task list off the document derives again from
  * every row whenever any row moves. These collections hold the same rows
  * keyed by id, so a live query or a lookup (`.get(key)`) is told only the
- * rows that moved. A client's follow (`followAppStateOver`) hands them each
- * whole read it writes and each delivery it lays after one, in the same
- * breath as it writes the document, so the two never disagree and the host
- * is still heard once. Both clients stand on it: the panel (`@repo/panel`'s
+ * rows that moved. The host pushes each drawing's moved rows on a channel
+ * of their own (`PUSH.TASK_LIST`, `TaskListDelivery`), just before the
+ * document they moved in, and a client hands each to `deliver`; its whole
+ * read of the document, and a fixture run's synthetic list, are laid
+ * through `write`. Both clients stand on it: the panel (`@repo/panel`'s
  * `use-app-state.ts`) and the iOS app (`apps/mobile`'s `app-state-query.ts`),
  * each with its own React hooks over these collections, since the two draw
  * on different Reacts.
  *
- * A delivery names the task list's rows that moved by part
- * (`HOST_READ_SLICE`'s `tasks`), so it is laid in as those rows alone, never
- * by walking a list: each row it carries is written where it says something
- * new, and a row its ids leave out is deleted. A whole read, a fixture run's
- * synthetic list, and a delivery carrying the slice whole are laid as the
- * whole list they are, writing each row that is not the one held.
+ * A push names the task list's rows that moved by part, so it is laid in as
+ * those rows alone, never by walking a list: each row it carries is written
+ * where it says something new, and a row its ids leave out is deleted. A
+ * whole read, a fixture run's list, and a push carrying the lists whole are
+ * laid as the whole list they are, writing each row that is not the one
+ * held.
+ *
+ * A push of moved rows was worked out from the document the channel last
+ * sent, which a client may never have held whole: the desktop's stream
+ * sends its first whole, but a page running the host in process hears from
+ * the moment it subscribes. So one heard before any whole list is laid
+ * waits for one, and is laid over it then; laying moved rows over a list as
+ * new as the document they were worked out from or newer still lands on
+ * the document they moved to, and one older than the list held is passed
+ * over.
  *
  * Each collection's sync is a custom one, as TanStack DB's Collection Options
  * Creator guide writes it: it listens before it reads, takes the rows its
  * part holds as its snapshot and marks itself ready once the first list is
  * laid, then writes each later change in one `begin()`/`write()`/`commit()`.
- * The follow already buffers the deliveries heard before its first read and
- * drops one older than the document held, so the feed has nothing left to
- * buffer and only passes over a version older than its last.
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
@@ -33,10 +40,7 @@ import type { ListedPullRequest, TaskPullRequests, TaskSummary } from "@repo/fea
 import type { TasksView } from "@repo/features/tasks-view";
 import { keepIdentity } from "@repo/wire";
 import { type Collection, type CollectionConfig, createCollection } from "@tanstack/db";
-import type { AppStateDelivery } from "./app-state.js";
-
-/** One key of the task list a delivery says moved: a part's list whole, or its rows that moved with its ids where they moved. */
-type PartMoved = NonNullable<NonNullable<AppStateDelivery["moved"]>["tasks"]>[number];
+import type { TaskListDelivery, TaskListPartMoved, TaskListParts } from "./app-state.js";
 
 /** One row a change writes, and whether the part held it before. */
 interface RowWritten<Row> {
@@ -267,8 +271,8 @@ export interface TaskListFollowing {
   readonly collections: TaskListCollections;
   /** Lays a whole task list, a whole read's or a fixture run's, under its version. */
   readonly write: (version: number, view: TasksView) => void;
-  /** Lays the task list's rows that one delivery moved, under its version. */
-  readonly deliver: (delivery: AppStateDelivery) => void;
+  /** Lays one task-list push (`PUSH.TASK_LIST`): its lists whole, or the rows it moved, under its version. */
+  readonly deliver: (delivery: TaskListDelivery) => void;
   /** Says a document could not be written; the rows held stay, and the next write clears it. */
   readonly trouble: (cause: unknown) => void;
   /** Stops every collection's sync. */
@@ -278,6 +282,9 @@ export interface TaskListFollowing {
 /** The collections of one client's task list, syncing from the moment they are made, and the feed its follow writes them through. */
 export function taskListFollowing(): TaskListFollowing {
   let version = -1;
+  let laid = false;
+  /** The pushes of moved rows heard before any whole list was laid, in order. */
+  let early: TaskListDelivery[] = [];
 
   const feeds = {
     tasks: partFeed(TASKS_PART),
@@ -307,15 +314,16 @@ export function taskListFollowing(): TaskListFollowing {
     return true;
   };
 
-  const lay = (view: TasksView | undefined): void => {
-    feeds.tasks.lay(view?.tasks ?? []);
-    feeds.taskAgents.lay(view?.taskAgents ?? []);
-    feeds.taskPullRequests.lay(view?.taskPullRequests ?? []);
-    feeds.agentPullRequests.lay(view?.agentPullRequests ?? []);
+  const lay = (view: TaskListParts): void => {
+    laid = true;
+    feeds.tasks.lay(view.tasks ?? []);
+    feeds.taskAgents.lay(view.taskAgents ?? []);
+    feeds.taskPullRequests.lay(view.taskPullRequests ?? []);
+    feeds.agentPullRequests.lay(view.agentPullRequests ?? []);
   };
 
-  // Lays one moved key of the task list into the feed of the part it names.
-  const moveIn = (move: PartMoved): void => {
+  // Lays one moved part of the task list into the feed of the part it names.
+  const moveIn = (move: TaskListPartMoved): void => {
     const field = move.key[0];
 
     if (field === undefined || !Object.hasOwn(feeds, field)) return;
@@ -328,18 +336,37 @@ export function taskListFollowing(): TaskListFollowing {
     } else feed.move(move.rows, move.ids);
   };
 
+  const take = (delivery: TaskListDelivery): void => {
+    if (!current(delivery.version)) return;
+
+    if (delivery.whole !== undefined) lay(delivery.whole);
+    else for (const move of delivery.moved ?? []) moveIn(move);
+  };
+
+  // Lays the pushes heard before the first whole list, now one is laid.
+  const takeEarly = (): void => {
+    const waiting = early;
+    early = [];
+
+    for (const delivery of waiting) take(delivery);
+  };
+
   return {
     collections,
     write: (at, view) => {
-      if (current(at)) lay(view);
+      if (!current(at)) return;
+      lay(view);
+      takeEarly();
     },
     deliver: (delivery) => {
-      if (!current(delivery.version)) return;
-      const whole = delivery.entries.tasks;
+      if (!laid && delivery.whole === undefined) {
+        early.push(delivery);
 
-      if (whole !== undefined) lay(whole);
-      else if (delivery.gone?.includes("tasks") === true) lay(undefined);
-      else for (const move of delivery.moved?.tasks ?? []) moveIn(move);
+        return;
+      }
+
+      take(delivery);
+      takeEarly();
     },
     trouble: (cause) => {
       for (const feed of Object.values(feeds)) feed.trouble(cause);

@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 
 /**
- * task-list-collections.test.ts -- the task list's collections fill from the window's first read and take only the rows a delivery moved, and a surface reading them by id holds across a delivery moving another task.
+ * task-list-collections.test.ts -- the task list's collections fill from the window's first read and take only the rows a task-list push moved, and a surface reading them by id holds across a push moving another task.
  */
 
 import { AGENT_STATUS } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import {
-  type AppStateDelivery,
   type AppStateSnapshot,
-  appStateDelivery,
+  type TaskListDelivery,
+  taskListDelivery,
 } from "@repo/host/app-state";
 import { QueryClient } from "@tanstack/react-query";
 import { act, createElement } from "react";
@@ -67,15 +67,16 @@ function documentAt(version: number, tasks: TasksView): AppStateSnapshot {
   return { ...stateWith({}, {}), version, tasks };
 }
 
-/** A window following `first` over a fake bridge, and the push that hands it a delivery as JSON crosses it. */
+/** A window following `first` over a fake bridge, and the task-list push that hands it a delivery as JSON crosses it. */
 async function following(first: AppStateSnapshot): Promise<{
   readonly window: AppStateFollowing;
-  readonly push: (delivery: AppStateDelivery) => void;
+  readonly push: (delivery: TaskListDelivery) => void;
 }> {
-  let hear: ((delivery: AppStateDelivery) => void) | undefined;
+  let hear: ((delivery: TaskListDelivery) => void) | undefined;
   fakeAppBridge({
     requestAppState: () => Promise.resolve(structuredClone(first)),
-    onAppState: (listener) => {
+    onAppState: () => () => undefined,
+    onTaskList: (listener) => {
       hear = listener;
 
       return () => undefined;
@@ -90,9 +91,9 @@ async function following(first: AppStateSnapshot): Promise<{
   };
 }
 
-/** What main pushes a window that holds `sent` once its document is `next`. */
-function deliveryBetween(sent: AppStateSnapshot, next: AppStateSnapshot): AppStateDelivery {
-  const delivery = appStateDelivery(sent, next);
+/** The task-list push main sends a window that holds `sent` once its document is `next`. */
+function deliveryBetween(sent: AppStateSnapshot, next: AppStateSnapshot): TaskListDelivery {
+  const delivery = taskListDelivery(sent, next);
 
   if (delivery === undefined) throw new Error("The two documents do not differ.");
 
@@ -171,7 +172,7 @@ describe("the task list's collections", () => {
     expect(window.taskList.taskPullRequests.get(INVITES.id)?.pullRequests).toEqual([]);
   });
 
-  it("write only the row a delivery moved, and delete the row that went", async () => {
+  it("write only the row a push moved, and delete the row that went", async () => {
     const first = documentAt(1, LISTED);
     const { window, push } = await following(first);
     stops.push(window.stop);
@@ -202,7 +203,13 @@ describe("the task list's collections", () => {
       tasks: [INVITES, { ...BILLING, name: "Billing" }, SEARCH],
     });
 
-    push(deliveryBetween(first, renamed));
+    const moved = deliveryBetween(first, renamed);
+
+    expect(moved).toEqual({
+      version: 2,
+      moved: [{ key: ["tasks"], rows: [{ ...BILLING, name: "Billing" }] }],
+    });
+    push(moved);
 
     expect(told).toEqual([{ type: "update", key: BILLING.id }]);
     expect(window.taskList.tasks.get(BILLING.id)?.name).toBe("Billing");
@@ -217,7 +224,7 @@ describe("the task list's collections", () => {
 });
 
 describe("a surface reading the task list by id", () => {
-  it("is handed the same objects while a delivery moves another task, and the moved row once its own moves", async () => {
+  it("is handed the same objects while a push moves another task, and the moved row once its own moves", async () => {
     const first = documentAt(1, LISTED);
     const { window, push } = await following(first);
     stops.push(window.stop);

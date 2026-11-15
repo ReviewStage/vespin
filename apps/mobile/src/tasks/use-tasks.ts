@@ -72,6 +72,7 @@ import {
   answerKeeper,
   selectInboxGroupsIn,
   selectInboxReader,
+  selectTaskListListed,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
 import { BUZZ } from "@repo/ui-native";
@@ -482,13 +483,8 @@ function selectListingParts(state: AppStateSnapshot) {
     listStatus: state.tasks.listStatus,
     taskSections: state.tasks.taskSections,
     repositoryPins: state.tasks.repositoryPins,
-    agentsListed: selectAgentsListed(state),
+    agentsListed: selectTaskListListed(state),
   };
-}
-
-/** Whether the task list carries its agents yet, so a task's working agents are counted from them rather than its row's count. */
-function selectAgentsListed(state: AppStateSnapshot): boolean {
-  return state.tasks.taskAgents !== undefined;
 }
 
 /** The task list's rows as the listing reads them off its collections. */
@@ -735,7 +731,12 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   const tasks = useListedTasks();
   const listedAgents = useListedAgents();
   const pullRequests = useTaskListRows(collections.agentPullRequests);
-  const { data: agentsListed = false } = useQuery({ ...appStateQuery, select: selectAgentsListed });
+
+  const { data: agentsListed = false } = useQuery({
+    ...appStateQuery,
+    select: selectTaskListListed,
+  });
+
   const waiting = useWaiting(workspace?.id);
   const { held: statuses, setStatus } = useStatusWrites(tasks);
   const { rename, setPriority, setAssignee } = useTaskWrites();

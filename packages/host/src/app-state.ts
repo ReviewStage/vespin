@@ -1585,6 +1585,78 @@ export function appStateDelivery(
   };
 }
 
+/** The task list's lists of rows, each a live query of the list draws (`HOST_READ_SLICE`'s `tasks`), by its name in `TasksView`. */
+export const TASK_LIST_PARTS = [
+  "tasks",
+  "taskAgents",
+  "taskPullRequests",
+  "agentPullRequests",
+] as const satisfies readonly (keyof TasksView)[];
+
+export type TaskListPart = (typeof TASK_LIST_PARTS)[number];
+
+/** The task list's lists as one drawing holds them, each absent where the view carries none. */
+export type TaskListParts = Pick<TasksView, TaskListPart>;
+
+/** One part of the task list that moved: its list whole, or null where it is gone; or its rows that moved, with its ids in order where they moved. */
+export type TaskListPartMoved = KeyMoved;
+
+/**
+ * One push of the task list's rows to a window, on a channel of its own
+ * beside the document (`PUSH.TASK_LIST`): what one drawing moved in each
+ * part since the last this window was handed, under the document's version
+ * it moved to. A window's first is its lists whole, so a window's feed
+ * stands on its channel alone; each after it names the parts that moved,
+ * as the rows that moved in them where they can be told so.
+ */
+export interface TaskListDelivery {
+  readonly version: number;
+  /** The task list's lists whole, as a window's first carries them. */
+  readonly whole?: TaskListParts;
+  /** Each part that moved since the window's last delivery. */
+  readonly moved?: readonly TaskListPartMoved[];
+}
+
+/** The task list's lists `view` holds, each the very list it holds, so what moved in one is told by its drawing (`list-moves.ts`). */
+function taskListPartsOf(view: TasksView): TaskListParts {
+  const { tasks, taskAgents, taskPullRequests, agentPullRequests } = view;
+
+  return {
+    tasks,
+    ...(taskAgents === undefined ? undefined : { taskAgents }),
+    ...(taskPullRequests === undefined ? undefined : { taskPullRequests }),
+    ...(agentPullRequests === undefined ? undefined : { agentPullRequests }),
+  };
+}
+
+/**
+ * The task-list push that brings a window handed `sent` to `next`: its
+ * lists whole where it was handed none, the parts that moved otherwise, or
+ * none where no part moved. Worked out as `appStateDelivery` works out the
+ * document's task list (`HOST_READ_SLICE`'s `tasks`), so a part crosses as
+ * the rows its drawing says moved rather than a walk of the list.
+ */
+export function taskListDelivery(
+  sent: AppStateSnapshot | undefined,
+  next: AppStateSnapshot,
+): TaskListDelivery | undefined {
+  const after = taskListPartsOf(next.tasks);
+
+  if (sent === undefined) return { version: next.version, whole: after };
+
+  if (sent.tasks === next.tasks) return undefined;
+  // SAFETY: the task list's parts are its lists of rows, which `HOST_READ_SLICE`'s `tasks` keys by part.
+
+  const moved = idsMoved(
+    HOST_READ_SLICE.tasks,
+    [],
+    taskListPartsOf(sent.tasks) as Keyed,
+    after as Keyed,
+  );
+
+  return moved.length === 0 ? undefined : { version: next.version, moved };
+}
+
 /**
  * The document a window holds once a delivery lands on it: each entry named
  * replaced, keeping the identity of every part of it that did not move, so a
@@ -1648,6 +1720,18 @@ const readAppStateDelivery = readEither(appStateDeliverySchema, { excess: EXCESS
 /** The boundary parse for a delivery, as the window's push stream holds every one to it. */
 export function isAppStateDelivery(value: UnparsedWireValue): boolean {
   return Result.isSuccess(readAppStateDelivery(value));
+}
+
+/** The boundary declaration of a task-list push: its version, as a document's is held. */
+const taskListDeliverySchema = Schema.Struct({
+  version: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+});
+
+const readTaskListDelivery = readEither(taskListDeliverySchema, { excess: EXCESS_KEYS.DROP });
+
+/** The boundary parse for a task-list push, as the window's push stream holds every one to it. */
+export function isTaskListDelivery(value: UnparsedWireValue): boolean {
+  return Result.isSuccess(readTaskListDelivery(value));
 }
 
 /**

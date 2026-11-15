@@ -1,5 +1,5 @@
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
-import type { AppStateDelivery, AppStateSnapshot } from "@repo/host/app-state";
+import type { AppStateDelivery, AppStateSnapshot, TaskListDelivery } from "@repo/host/app-state";
 import {
   type AppStateBridgeReads,
   followAppStateOver,
@@ -114,21 +114,31 @@ export const appStateQuery = queryOptions({
   retry: false,
 });
 
+/** The bridge's reads of `app:state`, and its pushes of the task list's rows beside them. */
+interface BridgeHeard extends AppStateBridgeReads {
+  readonly onTaskList: (listener: (delivery: TaskListDelivery) => void) => () => void;
+}
+
+/** Hears nothing, for a bridge that pushes no task list, as a test's fake answering the document alone. */
+const hearsNothing = (): (() => void) => () => undefined;
+
 /**
- * The bridge's reads of `app:state`; none where the bridge cannot be heard,
- * as a test's fake answering other calls alone cannot (`testing/app-bridge.ts`
- * leaves a call it does not answer undefined), which leaves the client on
- * the document seeded into it.
+ * The bridge's reads of `app:state` and `app:task-list`; none where the
+ * bridge cannot be heard, as a test's fake answering other calls alone
+ * cannot (`testing/app-bridge.ts` leaves a call it does not answer
+ * undefined), which leaves the client on the document seeded into it.
  */
-function heard(): AppStateBridgeReads | undefined {
+function heard(): BridgeHeard | undefined {
   try {
     const bridge = appBridge();
 
     if (!Predicate.isFunction(bridge.onAppState)) return undefined;
+    const onTaskList = Predicate.isFunction(bridge.onTaskList) ? bridge.onTaskList : hearsNothing;
 
     return {
       requestAppState: () => bridge.requestAppState(),
       onAppState: (listener) => bridge.onAppState(listener),
+      onTaskList: (listener) => onTaskList(listener),
     };
   } catch {
     return undefined;
@@ -160,23 +170,42 @@ export interface AppStateFollowing {
  * passed over. The client is handed to the fixture while it is written
  * into, whose staged acts read the run from it (`act.ts`).
  *
- * Every document written into the client is handed on to the task list's
- * collections in the same breath, so they and the client never disagree and
- * the bridge is still heard once: a delivery as the rows it moved, and a
- * whole read or a fixture run's staging as the list it lists from
- * (`selectListedTasks`) under its version; a staging that throws leaves
- * their rows standing and says so on them.
+ * The task list's collections are fed beside the client: each push of the
+ * rows a drawing moved (`app:task-list`), which the bridge sends just before
+ * the document they moved in, and a whole read or a fixture run's staging
+ * as the list it lists from (`selectListedTasks`) under its version; a
+ * staging that throws leaves their rows standing and says so on them. A
+ * fixture run's list is its own synthetic one, so the host's pushes of
+ * the account's rows are passed over there, and those heard before the
+ * first read lands wait to learn whether it is one.
  */
 export function followAppState(client: QueryClient): AppStateFollowing {
   let following = true;
   let staging: Promise<void> | undefined;
   const taskList = taskListFollowing();
+  /** Whether the window draws a fixture run's list; unknown before the first read lands, while the pushes heard wait in `rowsHeard`. */
+  let fixtureRun: boolean | undefined;
+  let rowsHeard: TaskListDelivery[] = [];
 
-  const shown = (state: AppStateSnapshot, delivery?: AppStateDelivery): void => {
+  // Learns from the first document written whether the run is a fixture's, passing over the pushes heard before it where it is.
+  const heardRun = (fixture: boolean): void => {
+    fixtureRun = fixture;
+
+    if (fixture) rowsHeard = [];
+  };
+
+  // Lays the pushes heard before the first document, once it is laid.
+  const takeRowsHeard = (): void => {
+    const waiting = rowsHeard;
+    rowsHeard = [];
+
+    for (const delivery of waiting) taskList.deliver(delivery);
+  };
+
+  const shown = (state: AppStateSnapshot, whole: boolean): void => {
     client.setQueryData(appStateQuery.queryKey, state);
 
-    if (delivery === undefined) taskList.write(state.version, selectListedTasks(state));
-    else taskList.deliver(delivery);
+    if (whole) taskList.write(state.version, selectListedTasks(state));
   };
 
   // Answers the staging the state waits on in a fixture run, and nothing where it is written at once.
@@ -184,8 +213,11 @@ export function followAppState(client: QueryClient): AppStateFollowing {
     state: AppStateSnapshot,
     delivery?: AppStateDelivery,
   ): Promise<void> | undefined => {
+    if (fixtureRun === undefined) heardRun(state.run.fixtureMode);
+
     if (!state.run.fixtureMode && staging === undefined) {
-      shown(state, delivery);
+      shown(state, delivery === undefined);
+      takeRowsHeard();
 
       return undefined;
     }
@@ -195,7 +227,7 @@ export function followAppState(client: QueryClient): AppStateFollowing {
       .then(() => staged(state))
       .then(
         (stagedState) => {
-          if (following) shown(stagedState);
+          if (following) shown(stagedState, true);
         },
         (cause: unknown) => {
           console.error("A fixture run's document could not be staged.", cause);
@@ -213,6 +245,12 @@ export function followAppState(client: QueryClient): AppStateFollowing {
 
   const takeBack = handFixtureClient(client);
   const hearing = heard();
+
+  // Note that the task list's pushes are heard before the document is read, as the document's are, so none sent meanwhile is lost.
+  const stopRows = hearing?.onTaskList((delivery) => {
+    if (fixtureRun === undefined) rowsHeard.push(delivery);
+    else if (!fixtureRun) taskList.deliver(delivery);
+  });
 
   const followed =
     hearing === undefined
@@ -232,6 +270,7 @@ export function followAppState(client: QueryClient): AppStateFollowing {
     taskList: taskList.collections,
     stop: () => {
       following = false;
+      stopRows?.();
       followed?.stop();
       stopMoves();
       takeBack();
@@ -265,12 +304,13 @@ export type AgentsListed = (typeof AGENTS_LISTED)[keyof typeof AGENTS_LISTED];
 /**
  * Where the task list the window lists from stands on its agents, which the
  * collections (`task-list-collections.tsx`) cannot say, since they hold a
- * list not yet carried as one with no rows.
+ * list not yet carried as one with no rows: carried once the list says its
+ * lists are drawn (`listed`).
  */
 export const selectAgentsListed = (state: AppStateSnapshot): AgentsListed => {
   const listed = selectListedTasks(state);
 
-  if (listed.taskAgents !== undefined) return AGENTS_LISTED.CARRIED;
+  if (listed.listed === true) return AGENTS_LISTED.CARRIED;
 
   return listed.listStatus === TASKS_READ.FAILED ? AGENTS_LISTED.FAILED : AGENTS_LISTED.READING;
 };
