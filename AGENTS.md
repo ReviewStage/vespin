@@ -181,7 +181,11 @@ component, or add the component or variant there.
   icon are kept beside the transcript the call is written to, as
   `show_image`'s pictures are (`packages/service/src/agents/computer-tool.ts`),
   shown to the members who can open the task and deleted with the
-  conversation; session replay masks the transcript's screenshots, and none
+  conversation; a picture of that window the Mac takes once each of the
+  agent's actions on it settles, for the members watching, is kept, shown,
+  and deleted the same way and is never handed to the model, which the
+  call's result carries apart from its answer, in its `_meta`; session
+  replay masks the transcript's screenshots, and none
   of it ever goes into a trace, a counted event, or a fixture. And an app's
   window on a member's own Mac may be recorded as a video by the `computer`
   tool's `record` and `stop_recording`, only for an app the member allowed:
