@@ -61,8 +61,11 @@ appId: dev.vespin.ios
     id: "new-workspace-name"
 - takeScreenshot: workspace-new-refused
 - tapOn: "Cancel"
-# Back to the account's own workspace, whose threads stand again.
+# Back to the account's own workspace, whose threads stand again. The Inbox
+# is tapped first, since a wide iPad keeps the Tasks collection picked above
+# and would stand on it after the switch.
 - tapOn:
     id: "workspace-switcher"
 - tapOn: "Ada Lovelace, Personal workspace"
+- tapOn: "Inbox"
 - assertVisible: "Recorded the invite flow"
