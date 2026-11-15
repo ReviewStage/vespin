@@ -22,7 +22,6 @@ import {
   font,
   foregroundStyle,
   frame,
-  glassEffect,
   lineLimit,
   onGeometryChange,
   opacity,
@@ -33,7 +32,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
-import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glass-bar.js";
+import { BAR_EDGE, BAR_ROW_SPACING, BarHead, GlassBar, useBarGlass } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
@@ -183,6 +182,7 @@ function SendButton({
   const round = useScaledSize(SEND_SIZE);
   const stopSize = useScaledSize(MARK_SIZE.GLYPH - 2);
   const sendSize = useScaledSize(MARK_SIZE.GLYPH);
+  const dictateSize = useScaledSize(MARK_SIZE.LEAD + 2);
 
   if (empty && onStop !== undefined && stopping) {
     return (
@@ -211,7 +211,7 @@ function SendButton({
         onPress={onDictate}
         modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel("Dictate")]}
       >
-        <Image {...glyphImage(GLYPH.DICTATE)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+        <Image {...glyphImage(GLYPH.DICTATE)} size={dictateSize} color={colors.TEXT_MUTED} />
       </Button>
     );
   }
@@ -235,14 +235,13 @@ function SendButton({
 /** The + as a menu, as SwiftUI draws one from a press: its acts, a rule, then its choices within and its switches. */
 function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testId: string }) {
   const colors = useColors();
+  const addSize = useScaledSize(MARK_SIZE.LEAD + 2);
   const submenus = menu.submenus ?? [];
   const switches = menu.switches ?? [];
 
   return (
     <Menu
-      label={
-        <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
-      }
+      label={<Image {...glyphImage(GLYPH.ADD)} size={addSize} color={colors.TEXT_MUTED} />}
       modifiers={[...PRESS_FRAME, accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
     >
       {menu.actions.map((action) => (
@@ -289,6 +288,7 @@ export function AddPress({
   readonly testId?: string | undefined;
 }) {
   const colors = useColors();
+  const addSize = useScaledSize(MARK_SIZE.LEAD + 2);
 
   if (menu !== undefined) return <AddMenu menu={menu} testId={testId} />;
 
@@ -304,7 +304,7 @@ export function AddPress({
         accessibilityIdentifier(testId),
       ]}
     >
-      <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+      <Image {...glyphImage(GLYPH.ADD)} size={addSize} color={colors.TEXT_MUTED} />
     </Button>
   );
 }
@@ -406,6 +406,7 @@ export function Composer(props: ComposerProps) {
 
   return (
     <GlassBar
+      field
       head={props.head}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
     >
@@ -417,8 +418,9 @@ export function Composer(props: ComposerProps) {
 /**
  * The same composer at the foot of a SwiftUI column, such as a split view's
  * detail, where no React Native bar can stand: its pieces in a row of the
- * system's own glass, rounded as the bar is, taking pictures dropped on it
- * as the bar does.
+ * system's own glass, rounded as the bar is, or solid where the reader
+ * reduces transparency, as the bar stands (`useBarGlass`), taking pictures
+ * dropped on it as the bar does.
  */
 export function ComposerFoot(props: ComposerProps) {
   const { onDropPictures } = props;
@@ -429,12 +431,7 @@ export function ComposerFoot(props: ComposerProps) {
 
   const glass = [
     padding({ all: BAR_EDGE }),
-    glassEffect({
-      glass: { variant: "regular" },
-      // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-      shape: "roundedRectangle",
-      cornerRadius: BAR_RADIUS,
-    }),
+    ...useBarGlass(),
     padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
     ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
     onGeometryChange(({ height }) => setTall(height)),

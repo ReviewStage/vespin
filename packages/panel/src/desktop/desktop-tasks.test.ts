@@ -287,7 +287,7 @@ test("a listed task draws its name, its status, and the column's tab from its ro
               null,
               createElement(RenameOfferProbe),
               overEveryTask(
-                { tasks: [listed] },
+                tasksControl({ tasks: [listed] }),
                 createElement(DesktopTasks, {
                   looks: NO_LOOKS,
                   tasks: tasksControl({
@@ -849,20 +849,23 @@ test("a sub-task's row opens the task as a sidebar row does, never a link to its
           createElement(
             OpenLinkProvider,
             { value: (link: ReadLink) => linked.push(link) },
-            createElement(DesktopTasks, {
-              looks: NO_LOOKS,
-              tasks: tasksControl({
-                page: TASKS_PAGE.TASK,
-                tasks: [{ ...TASK, number: 1 }, child],
-                listRead: true,
-                activeTaskId: TASK.id,
-                region: { kind: TASK_REGION.READY, task: TASK },
-                workspaces: [home],
-                workspace: home,
-                sidePanel: DOCUMENT_PANEL,
-                onSelect: (taskId) => selected.push(taskId),
+            overEveryTask(
+              tasksControl({ tasks: [{ ...TASK, number: 1 }, child] }),
+              createElement(DesktopTasks, {
+                looks: NO_LOOKS,
+                tasks: tasksControl({
+                  page: TASKS_PAGE.TASK,
+                  tasks: [{ ...TASK, number: 1 }, child],
+                  listRead: true,
+                  activeTaskId: TASK.id,
+                  region: { kind: TASK_REGION.READY, task: TASK },
+                  workspaces: [home],
+                  workspace: home,
+                  sidePanel: DOCUMENT_PANEL,
+                  onSelect: (taskId) => selected.push(taskId),
+                }),
               }),
-            }),
+            ),
           ),
         ),
       ),
@@ -910,18 +913,21 @@ test("opening another task draws only its own title and sub-tasks, none of the t
       root.render(
         windowRouter().provide(
           withQueryClient(
-            createElement(DesktopTasks, {
-              looks: NO_LOOKS,
-              tasks: tasksControl({
-                page: TASKS_PAGE.TASK,
-                activeTaskId: task.id,
-                region: { kind: TASK_REGION.READY, task },
-                tasks: listed,
-                workspaces: [home],
-                workspace: home,
-                sidePanel: DOCUMENT_PANEL,
+            overEveryTask(
+              tasksControl({ tasks: listed }),
+              createElement(DesktopTasks, {
+                looks: NO_LOOKS,
+                tasks: tasksControl({
+                  page: TASKS_PAGE.TASK,
+                  activeTaskId: task.id,
+                  region: { kind: TASK_REGION.READY, task },
+                  tasks: listed,
+                  workspaces: [home],
+                  workspace: home,
+                  sidePanel: DOCUMENT_PANEL,
+                }),
               }),
-            }),
+            ),
           ),
         ),
       ),

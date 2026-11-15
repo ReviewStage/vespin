@@ -31,6 +31,7 @@ import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { followListedTasks, handMembers, writeListedTasks } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
 import { layScrollerOut } from "../testing/scroller.js";
@@ -209,18 +210,21 @@ async function mountBoard(
             createElement(MemberDirectory, {
               workspace: ACME,
               readerId: DEAN,
-              children: createElement(TasksBoard, {
-                tasks: { ...control, ...changed },
-                room,
-                title: "Tasks",
-                frame: {
-                  toolbar: null,
-                  chips: null,
-                  filter: NO_TASKS_FILTER,
-                  display: shown,
-                  onDisplay: (next) => displayed.push(next),
-                },
-              }),
+              children: overListedTasks(
+                { ...control, ...changed },
+                createElement(TasksBoard, {
+                  tasks: { ...control, ...changed },
+                  room,
+                  title: "Tasks",
+                  frame: {
+                    toolbar: null,
+                    chips: null,
+                    filter: NO_TASKS_FILTER,
+                    display: shown,
+                    onDisplay: (next) => displayed.push(next),
+                  },
+                }),
+              ),
             }),
             createElement(ToastHost),
           ),

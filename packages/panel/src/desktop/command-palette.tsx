@@ -210,7 +210,12 @@ import {
   settingsSearchEntries,
 } from "../settings-search.js";
 import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
-import { type TaskListRows, useNamedTasks, useTaskListRows } from "../task-list-collections.js";
+import {
+  NAMED_ORDER,
+  type TaskListRows,
+  useNamedTasks,
+  useTaskListRows,
+} from "../task-list-collections.js";
 import { agentSummaryEnd } from "../tasks/agent-menu-row.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
@@ -1548,11 +1553,12 @@ function readMarkRows(
  */
 function taskPinRows(
   tasks: TasksControl,
+  rows: TaskListRows,
   pins: Pick<PinWrites, "onMarkTask">,
   reads: ReadMarks,
   choose: (run: () => void) => void,
 ): readonly PaletteRow[] {
-  const task = reads.watched === undefined ? undefined : taskOf(tasks, reads.watched);
+  const task = reads.watched === undefined ? undefined : taskOf(tasks, rows, reads.watched);
 
   if (task === undefined) return [];
   const pinned = task.pinnedAt !== undefined;
@@ -1584,6 +1590,7 @@ function taskPinRows(
  */
 function taskCommandRows(
   tasks: TasksControl,
+  rows: TaskListRows,
   writes: Pick<TaskRelationWrites, "onRemoveTaskParent">,
   standing: Pick<StandingWrites, "onSettleTasks">,
   reads: ReadMarks,
@@ -1591,7 +1598,7 @@ function taskCommandRows(
   choose: (run: () => void) => void,
   historyOffered: boolean,
 ): readonly PaletteRow[] {
-  const task = reads.watched === undefined ? undefined : taskOf(tasks, reads.watched);
+  const task = reads.watched === undefined ? undefined : taskOf(tasks, rows, reads.watched);
 
   if (task === undefined) return [];
   const renamed = rename?.taskId === task.id ? rename.begin : undefined;
@@ -1646,12 +1653,15 @@ function taskCommandRows(
  */
 function useOpenThingKeys(
   tasks: TasksControl,
+  rows: TaskListRows,
   pins: Pick<PinWrites, "onMarkTask">,
   inboxStanding: InboxStanding,
   reads: ReadMarks,
 ): void {
   const inbox = inboxStanding.open;
-  const task = inbox || reads.watched === undefined ? undefined : taskOf(tasks, reads.watched);
+
+  const task =
+    inbox || reads.watched === undefined ? undefined : taskOf(tasks, rows, reads.watched);
 
   const toggleRead =
     task === undefined ? undefined : () => reads.mark(task, !reads.markedUnread(task.id));
@@ -2071,7 +2081,7 @@ export function CommandPalette({
   const inboxStanding = useInboxView(tasks);
   // The task list's rows read by id, and every task for the task rows, each name as it is being typed.
   const rows = useTaskListRows(tasks.typedNames);
-  const everyTask = useNamedTasks(tasks.typedNames);
+  const everyTask = useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED);
   // A task, and an agent's tab, are always opened on the Tasks tab, as a
   // press in the sidebar is.
   const { placeLeave } = tasks;
@@ -2206,7 +2216,7 @@ export function CommandPalette({
 
   // The watched task's history is its description's, which stands by its own workspace's choice.
   const historyOffered = useWorkspaceExperiment(
-    reads.watched === undefined ? undefined : taskOf(tasks, reads.watched)?.workspaceId,
+    reads.watched === undefined ? undefined : taskOf(tasks, rows, reads.watched)?.workspaceId,
     EXPERIMENT.DESCRIPTIONS,
   );
 
@@ -2214,7 +2224,7 @@ export function CommandPalette({
   const relationWrites = useTaskRelationWrites();
   const pins = usePinWrites(tasks.typedNamesNow);
   const standing = useStandingWrites(tasks.typedNamesNow);
-  useOpenThingKeys(tasks, pins, inboxStanding, reads);
+  useOpenThingKeys(tasks, rows, pins, inboxStanding, reads);
   const limit = filter === PALETTE_FILTER.ALL ? KIND_ROWS.ALL : KIND_ROWS.FILTERED;
   // The task's terminals and Browser tabs are offered as the panel's "+" offers them, through its own doors.
   const openTerminal = useOpenTerminal(tasks.sidePanel, noFocusMove);
@@ -2381,9 +2391,10 @@ export function CommandPalette({
         ...copyLinkRows(links.linksAt(fromPanel), (held) => choose(() => links.copy(held))),
         ...actionRows(openThingCommands(inboxStanding), runCommand, experiments),
         ...readMarkRows(tasks, reads, choose),
-        ...taskPinRows(tasks, pins, reads, choose),
+        ...taskPinRows(tasks, rows, pins, reads, choose),
         ...taskCommandRows(
           tasks,
+          rows,
           relationWrites,
           standing,
           reads,

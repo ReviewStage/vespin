@@ -1,5 +1,6 @@
 import { AGENT_BOUNDS, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
-import type { TasksView } from "@repo/features/tasks-view";
+import type { ListedPullRequest } from "@repo/features/task-wire";
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import { and, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -98,16 +99,50 @@ export function useWorkspaceAgents(
 }
 
 /**
- * The agent `agentId` names as the task list carries it, archived or not;
- * none where the list holds no such agent, which
- * may yet be one on a task the list has not carried live, so a caller
- * that must know reads it of the service then.
+ * The agent `agentId` names as the task list's collections carry it,
+ * archived or not, read at the call; none where the list holds no such
+ * agent, which may yet be one on a task the list has not carried live, so a
+ * caller that must know reads it of the service then.
  */
 export function listedAgentIn(
-  tasks: Pick<TasksView, "taskAgents"> | undefined,
+  collections: Pick<TaskListCollections, "agents">,
   agentId: string,
 ): ListedAgent | undefined {
-  return tasks?.taskAgents?.find((agent) => agent.id === agentId);
+  return collections.agents.get(agentId);
+}
+
+/**
+ * Every agent the task list carries, the archived among them, the first
+ * started first, and by id among those started at one instant; none while
+ * `carried` says the list carries no agents, as before it is followed live,
+ * which the collections cannot tell from a list of none.
+ */
+export function useListedAgents(carried: boolean): readonly ListedAgent[] | undefined {
+  const { agents } = useTaskListCollections();
+
+  const { data } = useLiveQuery((q) =>
+    carried
+      ? q
+          .from({ agent: agents })
+          .orderBy(({ agent }) => agent.createdAt)
+          .orderBy(({ agent }) => agent.id, { stringSort: "lexical" })
+      : undefined,
+  );
+
+  return data;
+}
+
+/** The pull request of every agent the task list carries one of, the archived among them; none while `carried` says the list carries no agents (`useListedAgents`). */
+export function useListedAgentPullRequests(
+  carried: boolean,
+): readonly ListedPullRequest[] | undefined {
+  const { agentPullRequests } = useTaskListCollections();
+
+  const { data } = useLiveQuery((q) =>
+    carried ? q.from({ listed: agentPullRequests }) : undefined,
+  );
+
+  return data;
 }
 
 /** The agent `agentId` names as the task list carries it, past the newest and archived alike; none while none is named, or where the list holds no such agent. */

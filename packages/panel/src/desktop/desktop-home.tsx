@@ -19,6 +19,7 @@ import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { NOTICE_LOOK } from "../tasks/connect-agent-banner.js";
 import { InboxItemRows } from "../tasks/inbox-item-rows.js";
 import { MENTION_MENU_SIDE } from "../tasks/mention-picker.js";
@@ -192,7 +193,8 @@ function HomeRecent({
 }): React.JSX.Element | null {
   // A task's row is unread as its sidebar row is, so its weight and its menu's Mark as read agree with the sidebar's.
   const unread = useUnreadTasks({ staged });
-  const recent = recentTasks(tasks.listed.tasks, room);
+  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
+  const recent = recentTasks(listed, room);
 
   if (recent.length === 0 && !tasks.listFailed) return null;
 
