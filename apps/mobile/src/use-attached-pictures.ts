@@ -1,7 +1,9 @@
 /**
  * use-attached-pictures.ts -- the pictures a message or a start carries, as an agent's composer and the sheets that start work hold them: picked from the system's photo picker or dropped from Photos or Files, compressed as they are read, named as the panel names them, held to the service's bounds, and taken off on a press.
  *
- * A picture is read as a JPEG at `PICTURE_QUALITY`, named "Picture 1",
+ * A picture is drawn with its long edge within 2048 pixels and read as a
+ * JPEG at `PICTURE_QUALITY`, lower only where it would not stand within the
+ * bound for one picture (`@repo/features/picture-fit`), named "Picture 1",
  * "Picture 2", and on past every picture the holder has, and checked against
  * the service's bounds for one message (`AGENT_BOUNDS`), or the holder's
  * own, such as a note's to the people who make the app, as it is attached
@@ -17,15 +19,17 @@ import {
   base64Bytes,
 } from "@repo/features/agent-wire";
 import { pictureName } from "@repo/features/file-marker";
+import { encodeWithin, fitWithin } from "@repo/features/picture-fit";
 import type { AttachedPicture } from "@repo/ui-native";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { launchImageLibraryAsync } from "expo-image-picker";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-/** How a picture is compressed as it is read from the library: JPEG at this quality keeps a phone's photo under the service's bound for an image. */
-const PICTURE_QUALITY = 0.7;
+/** The JPEG quality a message's picture is first read at, once drawn within its long edge, as the panel's feedback form reads a screenshot. */
+const PICTURE_QUALITY = 0.8;
 
 /** What a picture the service would refuse says, in the panel's words for a file. */
 const PICTURE_REFUSAL = {
@@ -40,7 +44,7 @@ export interface PictureBounds {
   readonly most: number;
   readonly pictureBytes: number;
   readonly totalBytes: number;
-  /** The JPEG quality a picture is read at. */
+  /** The JPEG quality a picture is first read at, before it steps down to stand within `pictureBytes`. */
   readonly quality: number;
   readonly full: string;
 }
@@ -63,6 +67,42 @@ export interface HeldPicture {
 /** The next picture's name, numbered past every picture held. */
 function nextName(pictures: readonly HeldPicture[], offset: number): string {
   return pictureName(pictures.length + offset + 1);
+}
+
+/**
+ * A picture at `uri` as JPEG base64: drawn with its long edge within the
+ * fit, then encoded at the bounds' quality, stepping down only until it
+ * stands within the bound for one picture. Note that a camera's photo is
+ * read from its full size, since the picker's own quality compresses but
+ * never resizes, so a 12-megapixel photo would stand past the bound at any
+ * quality the panel would draw it at.
+ */
+async function readPicture(uri: string, bounds: PictureBounds): Promise<string> {
+  const context = ImageManipulator.manipulate(uri);
+
+  try {
+    const whole = await context.renderAsync();
+    const fit = fitWithin(whole);
+    const image = fit === undefined ? whole : await context.resize(fit).renderAsync();
+
+    return await encodeWithin(
+      async (quality) => {
+        const saved = await image.saveAsync({
+          compress: quality,
+          format: SaveFormat.JPEG,
+          base64: true,
+        });
+
+        if (saved.base64 === undefined) throw new Error("The picture was saved without its bytes.");
+
+        return saved.base64;
+      },
+      bounds.pictureBytes,
+      bounds.quality,
+    );
+  } finally {
+    context.release();
+  }
 }
 
 /** Why the pictures held cannot all go together, in the panel's words; none where they can. */
@@ -116,6 +156,9 @@ export function useAttachedPictures(
   const [pictures, setPictures] = useState<readonly HeldPicture[]>([]);
   // The pictures held now, which a picker answering later adds to, so pictures a refused send put back while it stood open are kept.
   const held = useRef(pictures);
+
+  // How many picks and drops are still being read.
+  const [reads, setReads] = useState(0);
   useEffect(() => {
     held.current = pictures;
   }, [pictures]);
@@ -151,27 +194,27 @@ export function useAttachedPictures(
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
       selectionLimit: Math.max(1, bounds.most - pictures.length),
-      quality: bounds.quality,
-      base64: true,
     })
       .then((picked) => {
         if (picked.canceled) return;
-        add(picked.assets.map((asset) => asset.base64));
+        setReads((count) => count + 1);
+
+        void Promise.all(
+          picked.assets.map((asset) => readPicture(asset.uri, bounds).catch(() => undefined)),
+        )
+          .then((contents) => add(contents))
+          .finally(() => setReads((count) => count - 1));
       })
       .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
   };
 
-  // How many drops are still being read.
-  const [reads, setReads] = useState(0);
-
-  // Each dropped JPEG is read whole and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
+  // Each dropped JPEG is read, fit within the bound, and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
   const dropped = (uris: readonly string[], unreadable: number) =>
     Promise.all(
       uris.map((uri) => {
         const file = new File(uri);
 
-        return file
-          .base64()
+        return readPicture(uri, bounds)
           .catch(() => undefined)
           .finally(() => {
             try {
