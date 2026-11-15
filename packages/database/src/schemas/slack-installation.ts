@@ -1,4 +1,5 @@
-import { index, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { check, index, integer, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
 import { SLACK_THREAD_ORIGIN, type SlackThreadOrigin } from "../storage-vocabulary.js";
 import { timestamptz } from "./_helpers.js";
 import { agentTable } from "./agent.js";
@@ -31,23 +32,51 @@ import { organization, user } from "./auth.js";
  * An owner or admin may name a default repository for the workspace's Slack
  * starts, and one for each channel the bot is in; a channel's leaves with
  * its installation, and when the bot leaves the channel.
+ *
+ * Once the bot runs on our own Slack app, installed per workspace, the row
+ * also holds the bot token Slack granted that workspace, sealed by
+ * `models/provider-key-seal.ts` under the provider keys' ring with purposes
+ * of its own and the workspace and team bound beside them, with the bot's
+ * own Slack user id and the scopes it was granted. All five are set together
+ * or none is: none on a row linked through the Vercel connector, and none
+ * once Slack revoked the token. The token leaves with the row.
  */
-export const slackInstallation = pgTable("slack_installation", {
-  organizationId: text("organization_id")
-    .primaryKey()
-    .references(() => organization.id, { onDelete: "cascade" }),
-  /** Slack's id for the team the bot token answers for (`T…`). */
-  teamId: text("team_id").notNull(),
-  /** The team's name as Slack answered it, which the settings row shows. */
-  teamName: text("team_name").notNull(),
-  /** The repository, `owner/name`, an agent started from Slack works in where neither its message nor its channel names one; null for none. */
-  defaultRepository: text("default_repository"),
-  linkedByUserId: text("linked_by_user_id").references(() => user.id, {
-    onDelete: "set null",
-  }),
-  createdAt: timestamptz("created_at").notNull(),
-  updatedAt: timestamptz("updated_at").notNull(),
-});
+export const slackInstallation = pgTable(
+  "slack_installation",
+  {
+    organizationId: text("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** Slack's id for the team the bot token answers for (`T…`). */
+    teamId: text("team_id").notNull(),
+    /** The team's name as Slack answered it, which the settings row shows. */
+    teamName: text("team_name").notNull(),
+    /** The repository, `owner/name`, an agent started from Slack works in where neither its message nor its channel names one; null for none. */
+    defaultRepository: text("default_repository"),
+    linkedByUserId: text("linked_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    /** The version of the deployment's key-encryption key the bot token's data key is wrapped under; null where no token is held. */
+    botKeyVersion: integer("bot_key_version"),
+    /** base64 of nonce, ciphertext, and tag: the bot token's data key under the key-encryption key. */
+    botSealedDataKey: text("bot_sealed_data_key"),
+    /** base64 of nonce, ciphertext, and tag: the bot token (`xoxb-…`) under the data key. */
+    botSealedToken: text("bot_sealed_token"),
+    /** Slack's id for the bot's own user in the team (`U…`). */
+    botUserId: text("bot_user_id"),
+    /** The scopes Slack granted the bot token, as its install answered them. */
+    botScopes: text("bot_scopes").array(),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (t) => [
+    // The token, its seal, the bot's id, and its scopes stand together or not at all.
+    check(
+      "slack_installation_bot_token_whole",
+      sql`num_nonnulls(${t.botKeyVersion}, ${t.botSealedDataKey}, ${t.botSealedToken}, ${t.botUserId}, ${t.botScopes}) in (0, 5)`,
+    ),
+  ],
+);
 
 /** One member's Slack user id in the workspace's connected team, or null where their email matched no one when it was looked up. */
 export const slackMember = pgTable(
