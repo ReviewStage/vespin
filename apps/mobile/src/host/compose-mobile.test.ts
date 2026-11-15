@@ -82,6 +82,7 @@ const inboxGroupsOver = (bridge: Parameters<typeof followAppStateInto>[0]) =>
       Effect.sync(() => followAppStateInto(bridge, new QueryClient())),
       (followed) => Effect.sync(() => followed.stop()),
     );
+
     yield* Effect.promise(() => following.written);
     const state = following.held();
     expect(state).toBeDefined();
