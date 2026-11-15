@@ -2046,7 +2046,7 @@ function SidebarColumn({
   room = SHELL_ROOM.WIDE,
 }: DesktopSidebarProps): React.JSX.Element {
   // Note that the column's tasks stand while neither the window's nor the pins change, because every row is handed them, and a new one draws every row again.
-  const pins = useSteadyDoors(usePins(control.drawnTasks));
+  const pins = useSteadyDoors(usePins(control.typedNamesNow));
   const tasks: SidebarTasks = useMemo(() => ({ ...control, ...pins }), [control, pins]);
   const pictures = useRepositoryPictures();
   const connected = useConnected();

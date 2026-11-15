@@ -964,7 +964,7 @@ export function TasksList({
   frame: TasksViewFrame;
 }): React.JSX.Element {
   // The tab with the pins and sections beside it, which the List's groups and drops read; its rows read the tab alone.
-  const pins = usePins(tasks.drawnTasks);
+  const pins = usePins(tasks.typedNamesNow);
   const listTasks: ListTasks = { ...tasks, ...pins };
   const pictures = useRepositoryPictures();
   useAppCommand(APP_COMMAND.EXIT_BOARD, useBoardDoor(tasks).close);

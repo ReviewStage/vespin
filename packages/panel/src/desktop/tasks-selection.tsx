@@ -307,7 +307,7 @@ export function useTasksSelection(
 ): TasksSelection {
   // The sections as they stand, which New section's answer reads renders after its act.
   const sections = useSectionDialogs(tasks, tasks.shown);
-  const standing = useStandingWrites(tasks.drawnTasks);
+  const standing = useStandingWrites(tasks.typedNamesNow);
   const latest = useRef(sections.sections);
   latest.current = sections.sections;
   const { regionId, selected, setChosen, onClear } = useChosen(drawn, held);

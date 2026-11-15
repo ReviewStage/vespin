@@ -454,7 +454,7 @@ function DescriptionDocument({
   away: TaskHeadBack;
 }): React.JSX.Element {
   const { region } = tasks;
-  const pins = usePins(tasks.drawnTasks);
+  const pins = usePins(tasks.typedNamesNow);
   const account = useWindowAccount();
   // The tab a phone's panel shows past the plan, which its header is named by, and the tab its column shows, whose menu the header's ⋯ offers on the agent's screen (`strip-tabs.tsx`'s `ShownTab`).
   const [shownTab, setShownTab] = useState<ShownTab | undefined>(undefined);
@@ -573,10 +573,10 @@ function DescriptionDocument({
 
   // The task renamed is the one the page stands on, so its rename opens while its description is still read.
   const taskId = opened?.id;
-  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const renaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_TERMS));
   // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
-  const barRenaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const barRenaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_TERMS));
 
   // The open task's one rename door, which its title's menu and ⌘K ask: it opens the field over the task's name where the window heads the task, a phone's head or the title bar.

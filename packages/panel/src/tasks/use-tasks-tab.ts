@@ -526,8 +526,8 @@ export interface TasksControl {
   onLeaveRouted: () => void;
   /** Asks the host to bind no task, as arriving on Home does (`places/place-binding.ts`); no door of its own. */
   onUnbindTask: () => void;
-  /** The tasks the tab draws as they stand at the call, names being typed among them, which a row write reads its rows off (`task-row-doors.ts`). */
-  drawnTasks: () => TasksView;
+  /** The names being typed as they stand at the call (`typedNames`), which a row write draws over the rows it reads (`task-row-doors.ts`); the same function for the tab's life. */
+  typedNamesNow: () => TaskNames;
   /**
    * Draws a name being typed for a task everywhere the task is named, before
    * any of it is saved, or none, which draws its saved name again.
@@ -2034,11 +2034,11 @@ export function useTasksTab(input: {
     if (taskId !== boundFor) select(taskId, true);
   };
 
-  // The tasks the tab draws as they stand at each call, and each row write's
-  // doors, which ⌘Z reads a press's rows and sends its writes through (`undo-stack.ts`).
-  const drawnTasks = useRef(tasks);
-  drawnTasks.current = tasks;
-  const drawnNow = useCallback(() => drawnTasks.current, []);
+  // The names being typed as they stand at each call, which each row write's
+  // doors draw over the rows ⌘Z reads a press by (`task-row-doors.ts`).
+  const typedNames = useRef(drafts);
+  typedNames.current = drafts;
+  const typedNamesNow = useCallback(() => typedNames.current, []);
 
   // The open task as it stands when a move is answered, which may be
   // another than the one open when it was pressed.
@@ -2046,7 +2046,7 @@ export function useTasksTab(input: {
   openNow.current = openTaskId;
 
   // A task's pin the pin migration above asks (`use-pin-writes.ts`).
-  markTaskNow.current = usePinWrites(drawnNow).onMarkTask;
+  markTaskNow.current = usePinWrites(typedNamesNow).onMarkTask;
 
   const { taskAgentPins = NO_TASK_AGENT_PINS } = tasks;
 
@@ -3662,7 +3662,7 @@ export function useTasksTab(input: {
     onUnbindTask: unbindTask,
     atHome: homeOpen && boundFor === undefined,
     taskPlaceStands: input.place === undefined || input.place.binding === PLACE_BINDING.TASK,
-    drawnTasks: drawnNow,
+    typedNamesNow,
     onDraftName: draftName,
     back: escapeTask,
     placeLeave,

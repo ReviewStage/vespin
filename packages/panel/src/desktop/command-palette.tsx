@@ -2212,8 +2212,8 @@ export function CommandPalette({
 
   const renameOffer = useTaskRenameOffer();
   const relationWrites = useTaskRelationWrites();
-  const pins = usePinWrites(tasks.drawnTasks);
-  const standing = useStandingWrites(tasks.drawnTasks);
+  const pins = usePinWrites(tasks.typedNamesNow);
+  const standing = useStandingWrites(tasks.typedNamesNow);
   useOpenThingKeys(tasks, pins, inboxStanding, reads);
   const limit = filter === PALETTE_FILTER.ALL ? KIND_ROWS.ALL : KIND_ROWS.FILTERED;
   // The task's terminals and Browser tabs are offered as the panel's "+" offers them, through its own doors.
