@@ -13,11 +13,11 @@ import {
   lineLimit,
 } from "@expo/ui/swift-ui/modifiers";
 import { SymbolView } from "expo-symbols";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { InlineHost } from "./inline-host.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { BAR_TITLE, TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
 
 /** What stands under a page's name in its bar: its words, and what a press on them opens with what VoiceOver says it does, where they open anything. */
@@ -31,9 +31,13 @@ export type BarSubtitle = {
 /** What the line's press is found by in the app's flows, in either bar. */
 const BAR_SUBTITLE_ID = "bar-subtitle";
 
+/** What a compact bar keeps either side of its title view: the screen's edge, one round glass button (Back, or ⋯), and a gap before the words. */
+const BAR_SIDE = SPACE.EDGE + PRESS_SIZE + SPACE.ROW;
+
 const styles = StyleSheet.create({
   stack: { alignItems: "center" },
   line: { flexDirection: "row", alignItems: "center", gap: 2 },
+  words: { flexShrink: 1 },
 });
 
 /** What VoiceOver hears for the line: its press's label, then its words. */
@@ -51,7 +55,10 @@ function spokenLine(subtitle: BarSubtitle): string {
  * because a React Native press in the stack's title view dims as a finger
  * lands and never hears it lift (the Mac's shots of #9466), while a
  * SwiftUI host there is UIKit's own view, which the bar hands its touches,
- * as the workspace switcher's beside it takes them.
+ * as the workspace switcher's beside it takes them. Its width is capped to
+ * the room between the bar's two buttons, since React Native measures a
+ * title view at its words' own width, which at the accessibility sizes ran
+ * into the ⋯'s glass, where the stack's own title would cut short.
  */
 export function StackBarTitle({
   title,
@@ -61,11 +68,12 @@ export function StackBarTitle({
   readonly subtitle: BarSubtitle;
 }) {
   const colors = useColors();
+  const { width } = useWindowDimensions();
   const pressed = subtitle.onPress !== undefined;
 
   const drawn = (
     <View
-      style={styles.stack}
+      style={[styles.stack, { maxWidth: Math.max(0, width - 2 * BAR_SIDE) }]}
       accessibilityElementsHidden={pressed}
       importantForAccessibility={pressed ? "no-hide-descendants" : "auto"}
     >
@@ -80,7 +88,7 @@ export function StackBarTitle({
       <View style={styles.line} accessible={!pressed} accessibilityLabel={subtitle.words}>
         <Text
           numberOfLines={1}
-          style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}
+          style={[styles.words, { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }]}
           maxFontSizeMultiplier={1.4}
         >
           {subtitle.words}
