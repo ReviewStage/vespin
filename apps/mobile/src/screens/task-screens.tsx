@@ -5,7 +5,12 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
-import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
+import {
+  iosAgentRoute,
+  iosAppRouteOf,
+  iosPullRequestRoute,
+  iosRouteTab,
+} from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
 import {
   LINK_DESTINATION,
@@ -157,7 +162,7 @@ import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useOnOwnTab, useOnTab } from "../tab-route.js";
+import { useOnOwnTab, useOnTab, useOwnTab } from "../tab-route.js";
 import {
   threadComments,
   threadOpen,
@@ -2189,13 +2194,19 @@ export function TaskScreen() {
   const colors = useColors();
   // Note that a page New task opened before its task was made hears what the start came to: its agent opens while the page still stands in front, and a refused start takes the page back, at once or as soon as it stands in front again.
   const [gone, setGone] = useState(false);
+  // Note that a page that hands its task to the split view and leaves, as `useHandToSplit` decides, never opens the agent itself: a push it made would be popped by its own hand-off, and the agent lost, so the split view opens it.
+  const own = useOwnTab();
+
+  const handsOff =
+    useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR &&
+    (own === undefined || own === iosRouteTab(SPLIT_TAB.TASKS));
 
   // Note that an agent landing before the page stands in front, as a start the service answers at once does while the page still slides in or hands itself to the split view, is kept for the next page of the task in front.
   useStartLanded(id, (landed) => {
     const shown = navigation.isFocused();
 
     if (landed.kind === START_LANDED.AGENT) {
-      if (shown) router.push(onTab(iosAgentRoute(landed.agentId)));
+      if (shown && !handsOff) router.push(onTab(iosAgentRoute(landed.agentId)));
       else keepStartLanded(id, landed);
 
       return;
@@ -2213,10 +2224,11 @@ export function TaskScreen() {
         return;
       }
 
+      if (handsOff) return;
       const kept = takeStartLanded(id);
 
       if (kept?.kind === START_LANDED.AGENT) router.push(onTab(iosAgentRoute(kept.agentId)));
-    }, [gone, id, router, onTab]),
+    }, [gone, handsOff, id, router, onTab]),
   );
   const found = useFoundTask(id, workspace);
   const held = useTaskOverview(found.taskId);
