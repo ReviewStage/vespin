@@ -2,11 +2,14 @@
  * merge-queue-page.tsx -- the Merge queue page: every pull request GitHub's merge queues hold across the listed workspace's repositories, each repository's line drawn front first.
  *
  * Each repository is a section of the page, as a task's Overview draws its
- * own: a section's head (`GROUP_LOOK.SECTION`) with GitHub's mark, its name,
- * and a way to its queue on GitHub, over its line on a track (`TrackList`),
+ * own: a section's head (`GROUP_LOOK.SECTION`) that names the repository as
+ * the sidebar and the Tasks page do, its owner's picture and its name
+ * (`repositoryLabel`), with how many it holds and a way to its queue on
+ * GitHub (`OpenOnGitHubButton`), over its line on a track (`TrackList`),
  * front first, each node in its stage's tone (`mergeQueueStage`), a waiting
  * one's hollow. Every spot in a row holds one kind of thing or nothing, so
- * no row says a thing twice: who opened the pull request, its title, under
+ * no row says a thing twice: who opened the pull request, by their mark as
+ * every surface draws a GitHub account (`ActorMark`), its title, under
  * it its number and how the queue's checks stand on it (how many passed, or
  * which failed), and at its end when GitHub estimates it merges. The stage
  * is drawn by the node alone, and spoken before the number for a reader the
@@ -38,11 +41,11 @@ import {
   mergeQueueStage,
 } from "@repo/features/pull-request-model";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { repositoryLabel } from "@repo/features/task-list-model";
+import { TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   AVATAR_SIZE,
-  Avatar,
-  type AvatarSize,
   DetailPage,
   EmptyState,
   ErrorState,
@@ -50,46 +53,42 @@ import {
   GROUP_ACTIONS,
   GROUP_LOOK,
   GroupHeader,
-  IconButtonLink,
   LIST_ROW_CURRENT,
   ListMotion,
-  MARK_PROVIDER,
   PAGE_FRAME,
-  ProviderMark,
+  RepositoryPicture,
   STATUS_TONE,
   Stack,
   type StatusTone,
   TIME_LOOK,
   Time,
-  Tooltip,
   TRACK_NODE_LOOK,
   TrackList,
   type TrackNode,
   TrackRow,
   VisuallyHidden,
 } from "@repo/ui";
+import { type Actor, DELETED_ACCOUNT_ACTOR, githubLoginActor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { queryOptions, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { Duration } from "effect";
 import { useRef } from "react";
 import { askAct } from "../act.js";
-import { appPlatform } from "../app-platform.js";
+import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { failureShown } from "../failure-report.js";
 import { MERGE_QUEUE_WORDS } from "../history-titles.js";
 import { QUERY_ROOT } from "../query-keys.js";
-import { linkPressOf, useOpenLink } from "../tasks/use-open-link.js";
+import { useRepositoryPictures } from "../repository-pictures.js";
+import { OpenOnGitHubButton } from "../tasks/open-on-github-button.js";
+import { useOpenLink } from "../tasks/use-open-link.js";
 import { RowsSkeleton } from "./person-frame.js";
 
 const WORDS = {
   READING: "Reading the merge queues…",
   EMPTY: "Nothing is queued.",
   UNREAD: "The merge queues could not be read.",
-  OPEN_ON_GITHUB: "Open on GitHub",
 } as const;
-
-/** Who GitHub names a deleted account's pull request as, whose disc keeps the row's title in line with the rest. */
-const GHOST_LOGIN = "ghost";
 
 /** How often the queues are read again while the page stands. */
 const READ_EVERY = Duration.seconds(30);
@@ -117,19 +116,13 @@ function mergeQueueQuery(workspaceId: string | undefined) {
   });
 }
 
-/** Who opened the pull request, at `size`, GitHub's ghost for a deleted account. */
-function AuthorFace({
-  entry,
-  size,
-}: {
-  entry: MergeQueueEntry;
-  size: AvatarSize;
-}): React.JSX.Element {
+/** Who opened the pull request, as every surface draws a GitHub account: a person's circle, an App's bot's square, or a deleted account's mark. */
+function authorActor(entry: MergeQueueEntry): Actor {
   const { author } = entry.pullRequest;
 
-  return (
-    <Avatar name={author?.login ?? GHOST_LOGIN} src={author?.avatarUrl} size={size} decorative />
-  );
+  return author === null
+    ? DELETED_ACCOUNT_ACTOR
+    : { ...githubLoginActor(author.login), avatarUrl: author.avatarUrl };
 }
 
 /** How the queue's checks stand on a pull request: the first named failure and how many more failed, or how many failed where none is named, else how many passed; none before it reports any. */
@@ -179,32 +172,41 @@ function nodeOf(stage: MergeQueueStage): TrackNode {
 /** One repository's line: its section's head over its pull requests on the track, front first. */
 function RepositoryQueue({
   queue,
+  label,
+  pictures,
   marked,
   onOpen,
 }: {
   queue: MergeQueueRepository;
+  /** The words the page says for the repository (`repositoryLabel`). */
+  label: string;
+  /** Whether owners' pictures are drawn at all: not in a fixture run. */
+  pictures: boolean;
   marked: string | undefined;
   onOpen: (url: string) => void;
 }): React.JSX.Element {
+  const count = queue.entries.length;
+
   return (
     // Note that the section is pulled out by a row's inset on each side, as a task's Overview's are, so its marks stand on the title's edge.
-    <div className="-mx-row-inset">
+    <div className="merge-queue-repository -mx-row-inset">
       <GroupHeader
         look={GROUP_LOOK.SECTION}
-        glyph={<ProviderMark provider={MARK_PROVIDER.GITHUB} />}
-        label={<ReplayMask>{queue.repository}</ReplayMask>}
-        actionsShown={GROUP_ACTIONS.AT_REST}
-        actions={
-          <Tooltip label={WORDS.OPEN_ON_GITHUB}>
-            <IconButtonLink
-              icon={<GLYPH.OPEN_EXTERNALLY />}
-              label={WORDS.OPEN_ON_GITHUB}
-              href={queue.url}
-              newTab
-              onClick={linkPressOf((href) => appPlatform().openGitHub(href), queue.url)}
-            />
-          </Tooltip>
+        glyph={
+          <RepositoryPicture
+            repository={queue.repository}
+            pictures={pictures}
+            size={AVATAR_SIZE.GLYPH}
+          />
         }
+        label={<ReplayMask>{label}</ReplayMask>}
+        tooltip={label === queue.repository ? undefined : queue.repository}
+        count={{
+          value: count,
+          noun: count === 1 ? TERM.PULL_REQUEST.one : TERM.PULL_REQUEST.many,
+        }}
+        actionsShown={GROUP_ACTIONS.AT_REST}
+        actions={<OpenOnGitHubButton url={queue.url} />}
       >
         <TrackList label={queue.repository} moves>
           {queue.entries.map((entry) => (
@@ -212,7 +214,7 @@ function RepositoryQueue({
               key={entry.pullRequest.url}
               motionKey={entry.pullRequest.url}
               node={nodeOf(mergeQueueStage(entry.state))}
-              leading={<AuthorFace entry={entry} size={AVATAR_SIZE.ROW} />}
+              leading={<ActorMark actor={authorActor(entry)} size={ACTOR_SIZE.ROW} />}
               title={entry.pullRequest.title}
               titleReplayMasked
               description={<RowFacts entry={entry} />}
@@ -272,12 +274,20 @@ function Queues({
   onOpen: (url: string) => void;
 }): React.JSX.Element {
   const root = useRef<HTMLElement>(null);
+  const pictures = useRepositoryPictures();
 
   return (
     <ListMotion root={root} change={repositories}>
       <Stack ref={root} gap={GAP.BLOCK}>
         {repositories.map((queue) => (
-          <RepositoryQueue key={queue.repository} queue={queue} marked={marked} onOpen={onOpen} />
+          <RepositoryQueue
+            key={queue.repository}
+            queue={queue}
+            label={repositoryLabel(queue.repository, repositories)}
+            pictures={pictures}
+            marked={marked}
+            onOpen={onOpen}
+          />
         ))}
       </Stack>
     </ListMotion>
