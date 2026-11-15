@@ -469,12 +469,8 @@ export function RowFrame({
     preview === undefined || open === undefined
       ? []
       : [
-          {
-            label: VERB.OPEN,
-            symbol: GLYPH.OPEN_EXTERNALLY,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => open(id),
-          },
+          // Note that Open stands as words alone, since it opens the row in the app; the arrow out marks only what leaves it, such as Open in browser.
+          { label: VERB.OPEN, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => open(id) },
         ];
 
   const menu = (
