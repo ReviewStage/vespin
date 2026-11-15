@@ -1,0 +1,56 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow wrap-navigation
+  > On Flow Complete
+Set orientation ${ORIENT}...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Run navigation.yaml...
+  Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+  Assert that "Recorded the invite flow" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Run flow when "Choose an item" is visible...
+    Set orientation LANDSCAPE_LEFT... COMPLETED
+    Wait for animation to end... COMPLETED
+    Assert that "Pinned" is visible... COMPLETED
+    Take screenshot ipad-sidebar... COMPLETED
+    Tap on "Pinned"... COMPLETED
+    Tap on "Weekly digest email"... COMPLETED
+    Assert that "Created by .*" is visible... COMPLETED
+    Wait for animation to end... COMPLETED
+    Take screenshot ipad-sidebar-pinned... COMPLETED
+    Tap on "New task"... COMPLETED
+    Assert that "Describe the task" is visible... COMPLETED
+    Take screenshot ipad-compose... COMPLETED
+    Tap on "Cancel"... COMPLETED
+    Wait for animation to end... COMPLETED
+    Set orientation PORTRAIT... COMPLETED
+    Wait for animation to end... COMPLETED
+    Set orientation LANDSCAPE_LEFT... COMPLETED
+    Wait for animation to end... COMPLETED
+    Assert that "Weekly digest email" is visible... COMPLETED
+    Take screenshot ipad-sidebar-pinned-turned... COMPLETED
+    Tap on "Tasks"... COMPLETED
+    Wait for animation to end... COMPLETED
+    Take screenshot ipad-sidebar-tasks... COMPLETED
+    Tap on id: search-tab... COMPLETED
+    Assert that "Find a task, an Inbox item, or an agent." is visible... COMPLETED
+    Wait for animation to end... COMPLETED
+    Take screenshot ipad-sidebar-search... COMPLETED
+    Tap on "Inbox"... COMPLETED
+    Tap on id: workspace-switcher... COMPLETED
+    Assert that ".*, Settings" is visible... COMPLETED
+    Assert that "Workspace settings|Settings…" is visible... COMPLETED
+    Take screenshot ipad-switcher-settings... COMPLETED
+    Tap on point (75%, 90%)... COMPLETED
+    Set orientation PORTRAIT... COMPLETED
+    Wait for animation to end... COMPLETED
+  Run flow when "Choose an item" is visible... COMPLETED
+  Run flow when "Choose an item" is not visible...
+  Run flow when "Choose an item" is not visible... SKIPPED
+  Set orientation PORTRAIT... COMPLETED
+Run navigation.yaml... COMPLETED
