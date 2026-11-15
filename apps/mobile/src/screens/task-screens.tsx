@@ -137,6 +137,7 @@ import {
   useDetailPush,
   useStackRoot,
   useStandDetailFront,
+  useTopPage,
 } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
@@ -2017,17 +2018,19 @@ export function TaskColumnPage({ taskId }: { readonly taskId: string }) {
 /**
  * Hears what a New task start came to for the task a regular window's split
  * view shows, since the task's own page hands itself to the split view and
- * leaves: its agent opens beside it while the Tasks tab stands in front, and
+ * leaves: its agent opens beside it while the task's detail stands in front, and
  * a refused start, whose task was never made, leaves the detail empty, as
  * New task opens again over it.
  */
 function useSplitStartLanded(selected: string | undefined, focused: boolean): void {
   const router = useRouter();
   const onTab = useOnTab();
+  // Note that a page pushed over the task's detail leaves Tasks focused, so the agent waits for the detail itself to stand in front.
+  const covered = useTopPage(SIDEBAR_PLACE.TASKS) !== undefined;
 
   useStartLanded(selected, (landed) => {
     if (landed.kind === START_LANDED.AGENT) {
-      if (focused) router.push(onTab(iosAgentRoute(landed.agentId)));
+      if (focused && !covered) router.push(onTab(iosAgentRoute(landed.agentId)));
 
       return;
     }
