@@ -9,6 +9,8 @@ import {
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { SHORTCUT_KEY, type ShortcutChord } from "@repo/settings/shortcuts";
 import {
+  AUDIO_PLAYER_PLACE,
+  AudioPlayer,
   Button,
   ButtonLink,
   CloseIcon,
@@ -37,6 +39,7 @@ import {
   ZoomImage,
 } from "@repo/ui";
 import { DIAGRAM_DRAWING } from "@repo/ui/diagram-contract";
+import { GLYPH } from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
@@ -447,6 +450,22 @@ function AttachmentBody({
     );
   }
 
+  if (attachmentView(file) === ATTACHMENT_VIEW.AUDIO) {
+    return (
+      // A sound clip plays across the card under its header, its waveform as wide as the card leaves it.
+      <div
+        className="attachment-viewer-body min-h-0 flex-auto flex items-center overflow-hidden bg-surface p-ui-24"
+        {...DIALOG_VEIL}
+      >
+        <AudioPlayer
+          dataUrl={file.url}
+          label={file.alt ?? file.name}
+          place={AUDIO_PLAYER_PLACE.VIEWER}
+        />
+      </div>
+    );
+  }
+
   if (text !== undefined) {
     return (
       <div className="attachment-viewer-body min-h-0 flex-auto attachment-viewer-lines mx-auto flex w-viewer-text flex-col bg-card-code">
@@ -817,11 +836,18 @@ export function AttachmentViewer({
                 const view = attachmentView(each);
                 const drawn = view === ATTACHMENT_VIEW.IMAGE || view === ATTACHMENT_VIEW.VIDEO;
 
+                const glyph =
+                  view === ATTACHMENT_VIEW.AUDIO ? (
+                    <GLYPH.SOUND_CLIP />
+                  ) : drawn ? undefined : (
+                    <FileTypeIcon name={each.name} />
+                  );
+
                 return {
                   name: each.name,
                   image: view === ATTACHMENT_VIEW.IMAGE ? each.url : undefined,
                   video: view === ATTACHMENT_VIEW.VIDEO ? each.url : undefined,
-                  glyph: drawn ? undefined : <FileTypeIcon name={each.name} />,
+                  glyph,
                 };
               })}
               at={at}
