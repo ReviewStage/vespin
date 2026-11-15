@@ -151,6 +151,13 @@ const helperAppSchema = Schema.Struct({
 /** Where the agent's cursor stands, as a share of the window the app's last read captured, in the helper's spelling. */
 const helperCursorSchema = Schema.Struct({ x_fraction: Schema.Number, y_fraction: Schema.Number });
 
+/** One screenshot of a window, as base64 JPEG. */
+const helperShotSchema = Schema.Struct({
+  width: Schema.Number,
+  height: Schema.Number,
+  jpeg: Schema.String,
+});
+
 /**
  * One line of the helper's, by its request's id. Note that a read's answer
  * comes before a description's, since a read names its app too, and the
@@ -181,9 +188,7 @@ const helperLineSchema = Schema.fromJsonString(
       }),
       elements: Schema.String,
       truncated: Schema.Boolean,
-      shots: Schema.Array(
-        Schema.Struct({ width: Schema.Number, height: Schema.Number, jpeg: Schema.String }),
-      ),
+      shots: Schema.Array(helperShotSchema),
       cursor: Schema.optionalKey(helperCursorSchema),
     }),
     Schema.Struct({ id: Schema.Number, ok: Schema.Literal(true), app: helperAppSchema }),
@@ -198,6 +203,7 @@ const helperLineSchema = Schema.fromJsonString(
       ok: Schema.Literal(true),
       done: Schema.String,
       cursor: Schema.optionalKey(helperCursorSchema),
+      shot: Schema.optionalKey(helperShotSchema),
     }),
     Schema.Struct({
       id: Schema.Number,
@@ -274,7 +280,11 @@ function answerOf(line: HelperLine): ComputerHelperAnswer {
     };
   }
 
-  return { outcome: { done: line.done, ...wireCursor(line.cursor) } };
+  const { done, cursor, shot } = line;
+
+  return {
+    outcome: { done, ...wireCursor(cursor), ...(shot === undefined ? undefined : { shot }) },
+  };
 }
 
 /** What a request answers where the helper was still on an earlier one when its own time ran out. */

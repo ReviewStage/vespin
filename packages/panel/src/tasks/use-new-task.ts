@@ -25,7 +25,7 @@ import type {
   TaskStanding,
   TaskSummary,
 } from "@repo/features/task-wire";
-import { startFailureNote } from "@repo/features/tasks-model";
+import { startFailureNote, type TaskNames } from "@repo/features/tasks-model";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -305,8 +305,8 @@ export interface NewTask {
   readModels: () => void;
   /** Puts the dialog away with nothing started. */
   onClose: () => void;
-  /** The tasks the window lists, archived ones among them, which name the agents an `@` in the composer offers and New task's Task relation offers its workspace's of. */
-  tasks: readonly TaskSummary[];
+  /** The names being typed for tasks, which the card's reads of the task list draw over their listed names (`task-list-collections.tsx`); empty while none is typed. */
+  typedNames: TaskNames;
   /** Opens a task or a section a mention in the composer names, as the window's own opener does. */
   onShowMention: (mention: DescriptionMention) => void;
 }
@@ -338,8 +338,8 @@ export interface NewTaskDoors {
   readonly shown: boolean;
   /** The workspace the window lists, which New task starts in until another is chosen. */
   readonly workspaceId: string | undefined;
-  /** The tasks the window lists, in the sidebar's order. */
-  readonly tasks: readonly TaskSummary[];
+  /** The names being typed for tasks, which the card's reads of the task list draw over their listed names. */
+  readonly typedNames: TaskNames;
   /** The task New task relates a new one to, as the window holds it; none where it holds none. */
   readonly taskOf: (taskId: string) => TaskSummary | undefined;
   readonly place: NewTaskPlaceDoors;
@@ -727,7 +727,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     modelsRead: agents.modelsRead,
     readModels: agents.readModels,
     onClose: () => setNewTaskAsk(undefined),
-    tasks: doors.tasks,
+    typedNames: doors.typedNames,
     onShowMention: place.showMention,
   };
 }
