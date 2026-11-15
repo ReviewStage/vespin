@@ -357,6 +357,9 @@ const awaiting = new Map<string, number>();
  */
 const UNHEARD_FOR_MS = 5000;
 
+/** When each task's start last landed, which every keeping of its answer counts its wait from. */
+const landedAt = new Map<string, number>();
+
 /** What a start came to while no page of its task stood to hear it, by its task, and when it landed. */
 const unheard = new Map<string, { readonly landed: StartLanded; readonly at: number }>();
 
@@ -380,12 +383,15 @@ export function startLanded(taskId: string, landed: StartLanded): void {
   if (waits > 1) awaiting.set(taskId, waits - 1);
   else awaiting.delete(taskId);
 
+  const at = Date.now();
+  landedAt.set(taskId, at);
+
   const hearers = [...(hearing.get(taskId) ?? [])].filter(({ kinds }) =>
     kinds.includes(landed.kind),
   );
 
   if (hearers.length === 0) {
-    unheard.set(taskId, { landed, at: Date.now() });
+    unheard.set(taskId, { landed, at });
 
     return;
   }
@@ -399,7 +405,8 @@ export function startLanded(taskId: string, landed: StartLanded): void {
  * view, hears it before it can act on it.
  */
 export function keepStartLanded(taskId: string, landed: StartLanded): void {
-  unheard.set(taskId, { landed, at: Date.now() });
+  // Note that it is kept from the moment it landed, however often a page keeps it again, so a page remounting out of sight never stretches the wait.
+  unheard.set(taskId, { landed, at: landedAt.get(taskId) ?? Date.now() });
 }
 
 /** What a start came to that waits for a page of its task in front, taken once; none once it has waited past `UNHEARD_FOR_MS`. */
