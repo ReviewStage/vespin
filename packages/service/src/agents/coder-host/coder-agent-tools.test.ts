@@ -182,6 +182,8 @@ import {
 import { runReadAgentTranscript } from "../agent-transcript-tool.js";
 import { AUTOMATION_TOOL_REFUSAL } from "../automation-tools.js";
 import { AgentBrowser } from "../browser/agent-browser.js";
+import { COMPUTER_TOOL } from "../computer-tool.js";
+import { RUN_ON_MAC_TOOL } from "../machine-command.js";
 import { FORGET_MEMORY_TOOL, LIST_MEMORIES_TOOL } from "../memory-tools.js";
 import { ADD_SUGGESTION_REFUSAL, ADD_SUGGESTION_TOOL } from "../reply-buttons/add-suggestion.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
@@ -459,9 +461,14 @@ async function fakeCoderSessions(
   const github = githubReaching([installation], undefined, undefined, async (request) => {
     const { pathname } = new URL(request.url);
     // The repository holds the branches given, each at a commit; any other is GitHub's not found.
-    const ref = pathname.slice(`/repos/${RELAY_FULL_NAME}/git/ref/heads/`.length);
+    // Note that the ref is one path segment, its slashes encoded, as Octokit sends it.
+    const ref = decodeURIComponent(pathname.slice(`/repos/${RELAY_FULL_NAME}/git/ref/`.length));
+    const branch = ref.slice("heads/".length);
 
-    if (pathname.startsWith(`/repos/${RELAY_FULL_NAME}/git/ref/heads/`) && branches.includes(ref)) {
+    if (
+      pathname.startsWith(`/repos/${RELAY_FULL_NAME}/git/ref/heads%2F`) &&
+      branches.includes(branch)
+    ) {
       return Response.json({ object: { type: "commit", sha: BRANCH_COMMIT } });
     }
 
@@ -1596,6 +1603,11 @@ test("start_agent shows the model the recorded input, images among it, and one t
     "start-agent-input-off",
     startAgentToolOf(NO_EXPERIMENT_ON).inputSchema,
   );
+});
+
+test("run_on_mac and computer show the model the recorded input, the machine to run on among it", async () => {
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "run-on-mac-input", RUN_ON_MAC_TOOL.inputSchema);
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "computer-input", COMPUTER_TOOL.inputSchema);
 });
 
 test("add_suggestion shows the model the recorded input", async () => {

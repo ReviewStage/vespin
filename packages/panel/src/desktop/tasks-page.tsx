@@ -17,6 +17,7 @@ import {
   filteredFields,
   keptTasksDisplay,
   NO_TASKS_FILTER,
+  showsSettledInFull,
   TASK_MAKER_ORDER,
   TASK_PROPERTY_ORDER,
   TASKS_GROUPING,
@@ -31,6 +32,7 @@ import { FIND_PAGE, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { keptKey, useKept } from "../use-kept.js";
 import { PhoneHead, PlaceMore, phoneFindGroups, useMenuAsk } from "./phone-head.js";
@@ -45,6 +47,7 @@ import {
   TasksViewOptions,
   VIEW_OPTIONS,
 } from "./tasks-page-options.js";
+import { useSettledPages } from "./use-settled-pages.js";
 
 /**
  * tasks-page.tsx -- the window's Tasks page: the listed workspace's tasks as a List or as the Board, chosen by a switch beside its title, narrowed by its Filter and laid out by its View options.
@@ -209,8 +212,15 @@ export function TasksPage({
   const display = view === TASKS_VIEW.LIST ? listDisplay : boardDisplay;
   const onDisplay = view === TASKS_VIEW.LIST ? onListDisplay : onBoardDisplay;
   const choose = (next: TasksView) => keepView(next);
+
+  // Note that settled tasks past those the list holds are read from the service a page at a time while the view shows them in full, once the list they stand beside is read.
+  const settledPages = useSettledPages(
+    workspaceId,
+    tasks.shown && tasks.listRead && showsSettledInFull(filter, display),
+  );
+
   const shared = (tasks.workspace?.memberCount ?? 1) > 1;
-  const listed = tasks.listed.tasks;
+  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, workspaceId);
   const filterAsk = useMenuAsk();
   const optionsAsk = useMenuAsk();
   // A phone heads the page as it heads every place (`phone-head.tsx`): its start corner empty where the places bar
@@ -331,6 +341,7 @@ export function TasksPage({
     filter,
     display,
     onDisplay,
+    settledPages,
     chosen: held?.chosenIn(view),
     measured: held?.measuredIn(view),
     column: held?.column,

@@ -13,6 +13,7 @@ import {
   PickRows,
   PUSH_ROW_GOES,
   PushRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   ValueRow,
@@ -32,8 +33,8 @@ import {
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
-/** What the row that says how the phone's pushes fare is named, under the page's own title. */
-const NOTIFICATIONS_STATUS = "Status";
+/** What the row that says how the phone's pushes fare is named, so its value reads as the pushes' state rather than a bare "Working". */
+const NOTIFICATIONS_STATUS = "Push notifications";
 
 /** The step toward allowing them, where one is left: the system's prompt, or iOS's Settings after a refusal. */
 const NOTIFICATION_STEP = {
@@ -55,7 +56,7 @@ export default function NotificationsScreen() {
   const allowed = notificationsAllowed(fixture, notifications.standing);
 
   return (
-    <Screen>
+    <Screen ground={SCREEN_GROUND.GROUPED}>
       <SettingsForm>
         {allowed ? (
           <ListSection>
@@ -68,8 +69,16 @@ export default function NotificationsScreen() {
               }
             />
           </ListSection>
-        ) : notifications.standing === NOTIFICATION_STANDING.REFUSED ||
-          notifications.standing === NOTIFICATION_STANDING.UNASKED ? (
+        ) : notifications.standing === NOTIFICATION_STANDING.REFUSED ? (
+          // Note that once iOS has refused, the one way on is its own Settings, so the row leaves the app as Open iOS notification settings does, with the arrow out.
+          <ListSection>
+            <PushRow
+              label={NOTIFICATION_STEP[notifications.standing]}
+              goes={PUSH_ROW_GOES.OUT}
+              onPress={notifications.allow}
+            />
+          </ListSection>
+        ) : notifications.standing === NOTIFICATION_STANDING.UNASKED ? (
           <ListSection>
             <ActionRow
               label={NOTIFICATION_STEP[notifications.standing]}

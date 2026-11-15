@@ -5,8 +5,10 @@ import {
 } from "@repo/features/automation-wire";
 import {
   MACHINE_COMMAND_KIND,
+  MACHINE_COMMAND_MODE,
   type MachineCommand,
   type MachineCommandKind,
+  type MachineCommandMode,
   type MachineCommandResult,
   machineCommandOfStored,
   machineCommandResultSchema,
@@ -34,7 +36,7 @@ import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, queryBuilder } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
-import { member } from "../schemas/auth.js";
+import { member, user } from "../schemas/auth.js";
 import { automationRun } from "../schemas/automation.js";
 import { device } from "../schemas/device.js";
 import {
@@ -46,6 +48,7 @@ import { conversations, messages, standingLine } from "../schemas/storage.js";
 import { task } from "../schemas/task.js";
 import { MESSAGE_SENDER, messageSenderSchema } from "../storage-vocabulary.js";
 import { InstantColumnSchema } from "./columns.js";
+import { isDefaultMachine } from "./device-store.js";
 import type { TaskStoreEffect } from "./task-store.js";
 import type { ConversationTarget } from "./writer.js";
 
@@ -115,6 +118,20 @@ const upsertDeviceListener = SqlSchema.void({
     ),
 });
 
+/** The account's device of the id no longer marked away from its commands, where it was; an update that finds it listening already writes nothing, so a listen wakes no read. */
+const clearCommandsAway = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, deviceId: Schema.String }),
+  execute: ({ userId, deviceId }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ commandsAwayAt: null })
+        .where(
+          and(eq(device.id, deviceId), eq(device.userId, userId), isNotNull(device.commandsAwayAt)),
+        ),
+    ),
+});
+
 const findListener = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, since: Schema.Date }),
   Result: Schema.Struct({ userId: Schema.String }),
@@ -136,6 +153,7 @@ const QueuedRowSchema = Schema.Struct({
   kind: KindSchema,
   command: Schema.String,
   timeoutSeconds: Schema.Number,
+  agentId: Schema.NullOr(Schema.String),
   now: Schema.Date,
 });
 
@@ -150,6 +168,7 @@ const insertCommand = SqlSchema.void({
         kind: row.kind,
         command: row.command,
         timeoutSeconds: row.timeoutSeconds,
+        agentId: row.agentId,
         queuedAt: row.now,
       }),
     ),
@@ -172,6 +191,7 @@ const insertDeviceCommand = SqlSchema.findAll({
               kind: sql<MachineCommandKind>`${row.kind}`.as("kind"),
               command: sql<string>`${row.command}::text`.as("command"),
               timeoutSeconds: sql<number>`${row.timeoutSeconds}::integer`.as("timeout_seconds"),
+              agentId: sql<string | null>`${row.agentId}::uuid`.as("agent_id"),
               queuedAt: sql<Date>`${row.now}::timestamptz`.as("queued_at"),
             })
             .from(device)
@@ -550,11 +570,25 @@ const ownAgent = alias(agentTable, "own_agent");
  */
 const findMacOwner = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
-  Result: Schema.Struct({ userId: Schema.String }),
+  Result: Schema.Struct({
+    userId: Schema.String,
+    taskId: Schema.NullOr(Schema.String),
+    workspaceId: Schema.NullOr(Schema.String),
+    targetDeviceId: Schema.NullOr(Schema.String),
+    deviceId: Schema.NullOr(Schema.String),
+    starterId: Schema.String,
+  }),
   execute: ({ userId, conversationId }) =>
     Database.use((db) =>
       db
-        .select({ userId: sql<string>`coalesce(${member.userId}, ${ownAgent.userId})` })
+        .select({
+          userId: sql<string>`coalesce(${member.userId}, ${ownAgent.userId})`,
+          taskId: task.id,
+          workspaceId: task.organizationId,
+          targetDeviceId: ownAgent.targetDeviceId,
+          deviceId: ownAgent.deviceId,
+          starterId: ownAgent.userId,
+        })
         .from(conversations)
         .leftJoin(parent, eq(parent.id, conversations.parentConversationId))
         .innerJoin(
@@ -572,6 +606,43 @@ const findMacOwner = SqlSchema.findOneOption({
     ),
 });
 
+/** The machines of the accounts given, as a call is routed to one: each with its owner's name, its command mode, whether it is its owner's default, and when it last listened for commands as a device, the latest first. */
+const findCommandMachines = SqlSchema.findAll({
+  Request: Schema.Struct({ userIds: Schema.Array(Schema.String) }),
+  Result: Schema.Struct({
+    id: Schema.String,
+    name: Schema.String,
+    userId: Schema.String,
+    ownerName: Schema.String,
+    commandMode: Schema.NullOr(Schema.Literals(Object.values(MACHINE_COMMAND_MODE))),
+    computerUse: Schema.NullOr(Schema.Boolean),
+    isDefault: Schema.Boolean,
+    seenAt: Schema.NullOr(InstantColumnSchema),
+  }),
+  execute: ({ userIds }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: device.id,
+          name: device.name,
+          userId: device.userId,
+          ownerName: user.name,
+          commandMode: device.commandMode,
+          computerUse: device.computerUse,
+          isDefault: isDefaultMachine,
+          seenAt: machineCommandDeviceListener.seenAt,
+        })
+        .from(device)
+        .innerJoin(user, eq(user.id, device.userId))
+        .leftJoin(
+          machineCommandDeviceListener,
+          eq(machineCommandDeviceListener.deviceId, device.id),
+        )
+        .where(and(inArray(device.userId, [...userIds]), isNull(device.removedAt)))
+        .orderBy(sql`${machineCommandDeviceListener.seenAt} desc nulls last`, asc(device.name)),
+    ),
+});
+
 const deleteCommand = SqlSchema.void({
   Request: CommandKeySchema,
   execute: ({ userId, id }) =>
@@ -585,13 +656,19 @@ const deleteCommand = SqlSchema.void({
 /**
  * Records that a Mac of the account is listening now, for shell commands,
  * which every Mac runs, and, where it listens as a device of the account,
- * that the device is.
+ * that the device is, no longer marked away where the sweep or its join
+ * marked it (`markCommandsAwayDevices`).
  */
 export function markMachineListening(userId: string, deviceId?: string): TaskStoreEffect<void> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     Effect.andThen(
       upsertListener({ userId, now }),
-      deviceId === undefined ? Effect.void : upsertDeviceListener({ userId, deviceId, now }),
+      deviceId === undefined
+        ? Effect.void
+        : Effect.andThen(
+            upsertDeviceListener({ userId, deviceId, now }),
+            clearCommandsAway({ userId, deviceId }),
+          ),
     ),
   );
 }
@@ -623,15 +700,60 @@ export function heardFromAnotherAccount(target: ConversationTarget): TaskStoreEf
  * member who left, or it is no agent's.
  */
 export function machineOwnerOf(target: ConversationTarget): TaskStoreEffect<string> {
+  return Effect.map(machineRoutingOf(target), (routing) => routing.userId);
+}
+
+/** What a conversation's commands are routed by: whose Mac runs them (`machineOwnerOf`), the task and workspace of its agent, the agent's default machine, the machine it runs on itself, and who started it; each none for a conversation that is no agent's. */
+export interface MachineRouting {
+  readonly userId: string;
+  readonly taskId: string | null;
+  readonly workspaceId: string | null;
+  readonly targetDeviceId: string | null;
+  readonly deviceId: string | null;
+  readonly starterId: string | null;
+}
+
+/** What the conversation's commands are routed by (`MachineRouting`). */
+export function machineRoutingOf(target: ConversationTarget): TaskStoreEffect<MachineRouting> {
   return Effect.map(
     findMacOwner(target),
-    Option.match({ onNone: () => target.userId, onSome: (row) => row.userId }),
+    Option.getOrElse(() => ({
+      userId: target.userId,
+      taskId: null,
+      workspaceId: null,
+      targetDeviceId: null,
+      deviceId: null,
+      starterId: null,
+    })),
   );
+}
+
+/** One machine a call may be routed to: its id and name, its owner, its command mode and apps switch (none for a machine whose app never carried it up), whether it is its owner's default, and when it last listened for commands as a device (none where it never did). */
+export interface CommandMachine {
+  readonly id: string;
+  readonly name: string;
+  readonly userId: string;
+  readonly ownerName: string;
+  readonly commandMode: MachineCommandMode | null;
+  /** Whether agents may use its apps, none for a machine whose app never carried its switch up. */
+  readonly computerUse: boolean | null;
+  /** Whether it is its owner's default machine (`isDefaultMachine`). */
+  readonly isDefault: boolean;
+  readonly seenAt: Date | null;
+}
+
+/** The machines of the accounts given, none removed, the one that listened last first; nothing for no account. Note that the caller decides whose machines a call may reach; this reads only those. */
+export function commandMachinesOf(
+  userIds: readonly string[],
+): TaskStoreEffect<readonly CommandMachine[]> {
+  return userIds.length === 0 ? Effect.succeed([]) : findCommandMachines({ userIds });
 }
 
 /**
  * Queues one command for the account's Mac, under the id its caller minted:
- * for the device given alone, or for any of its Macs where none is given.
+ * for the device given alone, or for any of its Macs where none is given,
+ * naming the agent whose call it is where there is one, which the ask its
+ * machine may post is drawn on.
  * Answers whether it was queued: a device that is not the account's, or
  * was removed, queues nothing, since no Mac could ever claim it, and its caller says so at once
  * rather than waiting out its result.
@@ -640,6 +762,7 @@ export function queueMachineCommand(
   userId: string,
   queued: MachineCommand,
   deviceId?: string,
+  agentId?: string,
 ): TaskStoreEffect<boolean> {
   return Effect.flatMap(DateTime.nowAsDate, (now) => {
     const row = {
@@ -648,6 +771,7 @@ export function queueMachineCommand(
       kind: queued.kind,
       command: storedMachineCommandText(queued),
       timeoutSeconds: queued.timeoutSeconds,
+      agentId: agentId ?? null,
       now,
     };
 

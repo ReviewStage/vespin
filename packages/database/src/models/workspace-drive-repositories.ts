@@ -4,12 +4,15 @@
  * A name is lower-cased on its way in, as the drive's folder is named, so a
  * read, a record, and a forget agree however GitHub or a caller spelled it.
  * Recording a repository already held moves its instant to the new fill's.
+ * A repository no agent of its workspace started in since a cutoff is
+ * unused (`unusedWorkspaceDriveRepositories`), for the daily cleanup to drop.
  */
 
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, notExists, sql } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
+import { agentTable } from "../schemas/agent.js";
 import { workspaceDriveRepository } from "../schemas/workspace-drive-repository.js";
 import type { AgentStoreEffect } from "./agent-store.js";
 
@@ -60,6 +63,43 @@ const deleteRepositories = SqlSchema.void({
     ),
 });
 
+const findUnusedRepositories = SqlSchema.findAll({
+  Request: Schema.Struct({ since: Schema.Date, organizationId: Schema.UndefinedOr(Schema.String) }),
+  Result: Schema.Struct({ organizationId: Schema.String, repository: Schema.String }),
+  execute: ({ since, organizationId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          organizationId: workspaceDriveRepository.organizationId,
+          repository: workspaceDriveRepository.repository,
+        })
+        .from(workspaceDriveRepository)
+        .where(
+          and(
+            organizationId === undefined
+              ? undefined
+              : eq(workspaceDriveRepository.organizationId, organizationId),
+            notExists(
+              db
+                .select({ id: agentTable.id })
+                .from(agentTable)
+                .where(
+                  and(
+                    eq(agentTable.organizationId, workspaceDriveRepository.organizationId),
+                    eq(sql`lower(${agentTable.repository})`, workspaceDriveRepository.repository),
+                    gte(agentTable.createdAt, since),
+                  ),
+                ),
+            ),
+          ),
+        )
+        .orderBy(
+          asc(workspaceDriveRepository.organizationId),
+          asc(workspaceDriveRepository.repository),
+        ),
+    ),
+});
+
 /** Each name lower-cased once, as the drive's folder is named. */
 function driveNames(repositories: readonly string[]): readonly string[] {
   return [...new Set(repositories.map((repository) => repository.toLowerCase()))];
@@ -95,4 +135,34 @@ export function forgetWorkspaceDriveRepositories(
   if (names.length === 0) return Effect.void;
 
   return deleteRepositories({ organizationId, repositories: names });
+}
+
+/** A workspace and the repositories its drive holds that no agent of it started in since the cutoff. */
+export interface UnusedWorkspaceDriveRepositories {
+  readonly workspaceId: string;
+  readonly repositories: readonly string[];
+}
+
+/**
+ * Every workspace drive's repositories that no agent of its workspace started
+ * in at or past `since`, by workspace, each lower-cased `owner/name` in name
+ * order, of the one workspace given or of every one; a workspace with none
+ * is left out. Note that only an agent's own repository counts, since a fill
+ * adds only that one to the drive.
+ */
+export function unusedWorkspaceDriveRepositories(
+  since: Date,
+  organizationId?: string,
+): AgentStoreEffect<readonly UnusedWorkspaceDriveRepositories[]> {
+  return Effect.map(findUnusedRepositories({ since, organizationId }), (rows) => {
+    const byWorkspace = new Map<string, string[]>();
+
+    for (const row of rows) {
+      const repositories = byWorkspace.get(row.organizationId) ?? [];
+      repositories.push(row.repository);
+      byWorkspace.set(row.organizationId, repositories);
+    }
+
+    return [...byWorkspace].map(([workspaceId, repositories]) => ({ workspaceId, repositories }));
+  });
 }

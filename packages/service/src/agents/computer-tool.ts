@@ -1,6 +1,6 @@
 import type { DatabaseServices } from "@repo/database/core/query";
+import { readAgentHeaderOfConversation } from "@repo/database/models/agent-store";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
-import { machineOwnerOf } from "@repo/database/models/machine-command-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
@@ -17,6 +17,7 @@ import {
   COMPUTER_RECORDING_BOUNDS,
   COMPUTER_SCROLL_DIRECTION,
   type ComputerApp,
+  type ComputerCursor,
   type ComputerOutcome,
   type ComputerShot,
   MACHINE_COMMAND_KIND,
@@ -37,10 +38,12 @@ import { logStoreFailure } from "../http/store-failure.js";
 import type { InboxSandboxDoor } from "./coder-host/inbox-image.js";
 import { COMMAND_DESCRIPTION } from "./command-description.js";
 import {
-  askMacHeard,
+  askMachine,
   MACHINE_COMMAND_STATUS,
+  MACHINE_INPUT,
   type MachineCommandAnswer,
   machineCommandNotRun,
+  routedCall,
 } from "./machine-command.js";
 import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-keep.js";
 
@@ -48,11 +51,13 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  * computer-tool.ts -- the `computer` tool: an agent sees and uses one app on the developer's own Mac at a time, in the background, through the Mac's computer-use helper.
  *
  * Every agent may call it, the brain, a coding agent, and either's workers,
- * wherever it runs, since the Mac it reaches is the task's assignee's
- * (`machineOwnerOf`), as `run_on_mac`'s is. One call is one action, queued as a
- * computer command (`machine-command.ts`'s `askMac`): the Mac asks the developer
- * about the app the first time it is used, and the call waits for that
- * answer and the action within `COMPUTER_TOOL_TIMEOUT_SECONDS`.
+ * wherever it runs, since the Mac it reaches is routed as `run_on_mac`'s is
+ * (`machine-routing.ts`): the machine the call names, or else the agent's
+ * default. One call is one action, queued as a computer command for that
+ * machine (`machine-command.ts`'s `askMachine`): the Mac asks the developer
+ * about the app the first time it is used, for as long as its ask stands
+ * (`machineAskSeconds`), and the action then runs within
+ * `COMPUTER_TOOL_TIMEOUT_SECONDS`.
  *
  * Reading an app answers its window twice, as the browser's screenshot
  * does: a copy at most `COMPUTER_SHOTS.MODEL.edge` pixels long, which the
@@ -62,6 +67,14 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  * window draws it. The app's icon is kept the same way, once per
  * transcript, since pictures are kept by their bytes. Neither picture's
  * base64 is spelled out in the result the conversation stores.
+ *
+ * An action that can change the window asks the Mac for one picture of it
+ * once it has settled, at the kept copy's size, so the people watching see
+ * it catch up with the agent's cursor; it is kept beside the transcript as
+ * a read's is, and answered under `watched`, which the model is never
+ * handed: the agent's text leaves it out (`storedComputerOutput`), and the
+ * call carries it apart, in its result's `_meta` (`computerWatched`), to
+ * the transcript alone. A Mac from before it answers no picture.
  *
  * An app's window is recorded as the browser is, with `record` and
  * `stop_recording`, under the same limits and words where they mean the
@@ -73,14 +86,25 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  * where it has one, so the agent can post it. The model is never handed it.
  */
 
-/** How long one call waits for the developer to allow the app and for the action to run, together. */
-export const COMPUTER_TOOL_TIMEOUT_SECONDS = 120;
+/** How long one action may run once its app is allowed; the ask before it stands apart (`machineAskSeconds`). */
+const COMPUTER_TOOL_TIMEOUT_SECONDS = 120;
 
 /** The two screenshots a read asks for: the model's copy, and the one kept beside the transcript. */
 const COMPUTER_SHOTS = {
   MODEL: { edge: 1280, quality: 0.7 },
   KEPT: { edge: 2560, quality: 0.8 },
 } as const;
+
+/** The actions that can change their app's window, after which the Mac is asked for one picture of it as it settled. */
+const SETTLING_ACTIONS: ReadonlySet<string> = new Set([
+  COMPUTER_ACTION.CLICK,
+  COMPUTER_ACTION.TYPE_TEXT,
+  COMPUTER_ACTION.PRESS_KEY,
+  COMPUTER_ACTION.SCROLL,
+  COMPUTER_ACTION.DRAG,
+  COMPUTER_ACTION.SET_VALUE,
+  COMPUTER_ACTION.PERFORM_SECONDARY_ACTION,
+]);
 
 const elementIndex = Schema.optionalKey(
   describeWire(
@@ -174,6 +198,7 @@ const COMPUTER_INPUT = Schema.Struct({
   ),
   caption: Schema.optionalKey(recordingCaptionSchema),
   description: COMMAND_DESCRIPTION,
+  machine: Schema.optionalKey(MACHINE_INPUT),
 });
 
 type ComputerInput = typeof COMPUTER_INPUT.Type;
@@ -217,7 +242,8 @@ export const COMPUTER_TOOL = {
     "drove in an app, the iOS Simulator above all, record it: record starts a video of the " +
     "app's window, your cursor drawn over it while it records, " +
     `up to ${COMPUTER_RECORDING_BOUNDS.MAX_SECONDS} seconds and across calls, and ` +
-    "stop_recording, with a caption, stops it and keeps it in your transcript, where it plays; " +
+    "stop_recording, with a caption and the machine's id its record answered in machine, stops " +
+    "it on the machine it runs on and keeps it in your transcript, where it plays; " +
     "it stops by itself once its time runs out, and stop_recording still keeps it then. Its " +
     "answer names the path the video stays at in your sandbox until your next recording, by " +
     "which you can post it to a thread, or says why it has none.",
@@ -226,7 +252,14 @@ export const COMPUTER_TOOL = {
 
 /** The action the input names, as the Mac's helper reads it; nothing where its fields do not make one. */
 function actionOf(input: ComputerInput): MacComputerAction | undefined {
-  const { action, secondary_action, caption, description: _description, ...fields } = input;
+  const {
+    action,
+    secondary_action,
+    caption,
+    description: _description,
+    machine: _machine,
+    ...fields
+  } = input;
 
   // Note that a caption is the service's to keep, never the Mac's, so only a stop may name one.
   if (caption !== undefined && action !== COMPUTER_ACTION.STOP_RECORDING) return undefined;
@@ -238,6 +271,7 @@ function actionOf(input: ComputerInput): MacComputerAction | undefined {
     ...(action === COMPUTER_ACTION.GET_APP_STATE
       ? { shots: [COMPUTER_SHOTS.MODEL, COMPUTER_SHOTS.KEPT] }
       : undefined),
+    ...(SETTLING_ACTIONS.has(action) ? { shot: COMPUTER_SHOTS.KEPT } : undefined),
     ...(action === COMPUTER_ACTION.RECORD
       ? {
           max_seconds: COMPUTER_RECORDING_BOUNDS.MAX_SECONDS,
@@ -309,6 +343,23 @@ type ActedOutcome = Exclude<
   { readonly recorded: unknown } | { readonly unrecorded: unknown }
 >;
 
+/** Where the agent's cursor stands once the action landed, as a share of the app's last read window, which the panel draws its pointer at; none where the Mac answered none. */
+function cursorOf(outcome: { readonly cursor?: ComputerCursor }): object | undefined {
+  return outcome.cursor === undefined ? undefined : { cursor: outcome.cursor };
+}
+
+/** What the people watching are shown of an action and the model never is: the window as it settled, where the Mac answered it and it was kept. */
+function watchedOf(
+  transcript: ConversationTarget,
+  shot: ComputerShot | undefined,
+): Effect.Effect<object | undefined, never, DatabaseServices> {
+  if (shot === undefined || shot.jpeg === "") return Effect.succeed(undefined);
+
+  return Effect.map(kept(transcript, shot.jpeg), (note) =>
+    "picture" in note ? { watched: { kept: note } } : undefined,
+  );
+}
+
 /** What a call answers for what the action came to, its pictures kept or handed on; a recording started, how long it runs at most, as the browser's answers. */
 function answeredOutcome(
   transcript: ConversationTarget,
@@ -322,11 +373,14 @@ function answeredOutcome(
     const done =
       outcome.done === COMPUTER_ACTION.RECORD
         ? { done: outcome.done, maxSeconds: COMPUTER_RECORDING_BOUNDS.MAX_SECONDS }
-        : { done: outcome.done };
+        : { done: outcome.done, ...cursorOf(outcome) };
 
-    if (acted === undefined) return Effect.succeed({ ...ran, ...done });
+    return Effect.gen(function* () {
+      const app = acted === undefined ? undefined : { app: yield* namedApp(transcript, acted) };
+      const watched = yield* watchedOf(transcript, outcome.shot);
 
-    return Effect.map(namedApp(transcript, acted), (app) => ({ ...ran, ...done, app }));
+      return { ...ran, ...done, ...app, ...watched };
+    });
   }
 
   if ("apps" in outcome) {
@@ -351,6 +405,7 @@ function answeredOutcome(
       window: outcome.window,
       elements: outcome.elements,
       truncated: outcome.truncated,
+      ...cursorOf(outcome),
       ...(shown === undefined
         ? undefined
         : {
@@ -373,6 +428,20 @@ const COMPUTER_RECORDING_REFUSAL = {
   [RECORDING_FAILURE.UNREACHABLE]: "the recorder could not reach the app's window",
   [RECORDING_FAILURE.TOO_LARGE]: recordingTooLarge(COMPUTER_RECORDING_BOUNDS.MAX_BYTES),
 } as const satisfies Record<RecordingFailure | "UNKEPT", string>;
+
+/** How the agent stops a recording that started on the machine given: by its id, which no other machine shares and a rename leaves as it is. */
+function stopOn(machine: { readonly id: string; readonly name: string }): string {
+  return `Stop it with stop_recording and machine "${machine.id}" (${machine.name}), where it runs.`;
+}
+
+/** What a machine with no recording of the conversation answers, naming it, so a stop that went to the wrong machine is sent again to the right one. */
+function noRecordingOn(machine: { readonly name: string }): string {
+  return (
+    `no recording of this conversation runs on ${machine.name}: if you started one on another ` +
+    "machine, call stop_recording again with the id its record answered in machine; otherwise " +
+    "start one with record"
+  );
+}
 
 /** A recording's refusal as the call answers it. */
 function recordingNotRun(words: string): MachineCommandAnswer {
@@ -458,7 +527,7 @@ function keptMacRecording(
 /**
  * One `computer` call made in the conversation, whichever agent made it: its
  * input read against the tool's schema and made one action, then run on the
- * Mac of its task's assignee (`machineOwnerOf`) as `askMac` runs a command;
+ * machine it is routed to (`routedCall`) as `askMachine` runs a command;
  * a stopped recording kept, and saved through the agent's sandbox door,
  * where it has one, for posting. It never fails: what the Mac would not
  * run, or never answered, answers `not-run` with why.
@@ -473,33 +542,64 @@ export function runComputerTool(
 
   if (action === undefined || Result.isFailure(read))
     return Effect.succeed(machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNREADABLE));
-  const { caption } = read.success;
+  const { caption, machine } = read.success;
 
   return Effect.gen(function* () {
-    const owner = yield* Effect.result(machineOwnerOf(target));
+    const route = yield* Effect.result(routedCall(target, MACHINE_COMMAND_KIND.COMPUTER, machine));
 
     // Note that a read that fails refuses, because an action on a guess could land on the wrong Mac.
-    if (Result.isFailure(owner)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
+    if (Result.isFailure(route)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
 
-    const { answer, recording } = yield* askMacHeard(owner.success, {
+    // Note that the agent rides along so the Mac puts its cursor away once that agent's turn ends; a read that fails leaves it to the helper's own clock.
+    const agent = yield* Effect.option(
+      readAgentHeaderOfConversation(target.userId, target.conversationId),
+    );
+
+    const agentId = Option.getOrUndefined(Option.flatten(agent))?.id;
+
+    const ask = {
       kind: MACHINE_COMMAND_KIND.COMPUTER,
       conversationId: target.conversationId,
       action,
       timeoutSeconds: COMPUTER_TOOL_TIMEOUT_SECONDS,
-    });
+    };
+
+    const { answer, recording } = yield* askMachine(
+      route.success,
+      agentId === undefined ? ask : { ...ask, agentId },
+    );
 
     if (!("computer" in answer)) return answer;
     const outcome = answer.computer;
 
+    const named = <T extends object>(ran: T) =>
+      answer.machine === undefined ? ran : { ...ran, machine: answer.machine };
+
     if ("unrecorded" in outcome) {
-      return recordingNotRun(COMPUTER_RECORDING_REFUSAL[outcome.unrecorded]);
+      const words =
+        outcome.unrecorded === RECORDING_FAILURE.NONE && answer.machine !== undefined
+          ? noRecordingOn(answer.machine)
+          : COMPUTER_RECORDING_REFUSAL[outcome.unrecorded];
+
+      return named(recordingNotRun(words));
     }
 
     if ("recorded" in outcome) {
-      return yield* keptMacRecording(target, outcome.recorded, recording, caption, sandbox);
+      return named(yield* keptMacRecording(target, outcome.recorded, recording, caption, sandbox));
     }
 
-    return yield* answeredOutcome(target, outcome);
+    const ran = named(yield* answeredOutcome(target, outcome));
+
+    // Note that a recording names the machine it runs on for its stop, since the agent's default may move while it runs.
+    if (
+      "done" in outcome &&
+      outcome.done === COMPUTER_ACTION.RECORD &&
+      answer.machine !== undefined
+    ) {
+      return { ...ran, stop: stopOn(answer.machine) };
+    }
+
+    return ran;
   });
 }
 
@@ -515,10 +615,23 @@ export function computerScreenshot(
     : undefined;
 }
 
-/** A call's result as the conversation keeps it: the model's copy of the window without its base64, the kept copy named by id. */
+/**
+ * A call's result as the agent reads it in words, which the transcript keeps
+ * too: the model's copy of the window without its base64, a read's kept
+ * copy named by id, and what only the people watching are shown
+ * (`computerWatched`) left out.
+ */
 export function storedComputerOutput(output: UnparsedWireValue): UnparsedWireValue {
-  if (!isRecord(output) || !isRecord(output.screenshot)) return output;
-  const { data: _data, ...screenshot } = output.screenshot;
+  if (!isRecord(output)) return output;
+  const { watched, ...answered } = output;
 
-  return unparsedWire({ ...output, screenshot });
+  if (!isRecord(answered.screenshot)) return watched === undefined ? output : answered;
+  const { data: _data, ...screenshot } = answered.screenshot;
+
+  return unparsedWire({ ...answered, screenshot });
+}
+
+/** What a call's result holds for the people watching alone, which its result's `_meta` carries to the transcript and no model reads; none where it holds none. */
+export function computerWatched(output: UnparsedWireValue): UnparsedWireValue | undefined {
+  return isRecord(output) && isRecord(output.watched) ? output.watched : undefined;
 }

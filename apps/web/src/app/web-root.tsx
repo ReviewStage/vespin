@@ -28,6 +28,7 @@
 
 import type { LinkPlatform } from "@repo/features/link-open";
 import type { DuplicateGatewayMethod, DuplicateHostAct, HostTag } from "@repo/host/effect";
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import { installActPort, installAppBridge } from "@repo/panel/app-bridge";
 import { installAppPlatform } from "@repo/panel/app-platform";
 import { installShownFailureReporter } from "@repo/panel/failure-report";
@@ -35,6 +36,7 @@ import { LiveReadSubscription } from "@repo/panel/live-reads";
 import { createPanelRouter, PanelRouterProvider } from "@repo/panel/panel-router";
 import { QueryProvider, queryClient } from "@repo/panel/query-client";
 import { installSendTracer } from "@repo/panel/send-traces";
+import { TaskListCollectionsProvider } from "@repo/panel/task-list-collections";
 import { followAppState } from "@repo/panel/use-app-state";
 import { ErrorBoundary, RELOAD_ROOM, ReloadState } from "@repo/ui/error-boundary";
 import { createBrowserHistory } from "@tanstack/react-router";
@@ -146,6 +148,9 @@ export async function mountWebApp(
     for (const undo of installed.splice(0).reverse()) undo();
   };
 
+  // The task list's collections the tab's follow feeds, handed to the panel once its first read is written.
+  let taskList: TaskListCollections;
+
   try {
     const web = await runtime.runPromise(WebHostTag);
     // The address the tab was opened at is said once, as the link it is.
@@ -160,6 +165,7 @@ export async function mountWebApp(
     // and drawn over only once that read is written, so the first frame holds what moved meanwhile.
     const following = followAppState(queryClient);
     installed.push(following.stop);
+    taskList = following.taskList;
     await following.written;
   } catch (error) {
     console.error(
@@ -184,9 +190,11 @@ export async function mountWebApp(
   root.render(
     <ErrorBoundary failure={TAB_FAILED} room={RELOAD_ROOM.WINDOW} onReload={reloadTab}>
       <QueryProvider>
-        <LiveReadSubscription />
-        <WebAppearance />
-        <PanelRouterProvider router={router} />
+        <TaskListCollectionsProvider collections={taskList}>
+          <LiveReadSubscription />
+          <WebAppearance />
+          <PanelRouterProvider router={router} />
+        </TaskListCollectionsProvider>
       </QueryProvider>
     </ErrorBoundary>,
   );

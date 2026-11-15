@@ -8,6 +8,7 @@ import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { RETRY } from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import {
+  closedNote,
   NOT_RESOLVED,
   RESOLVE_UNTAKEN,
   resolvedWords,
@@ -17,7 +18,6 @@ import {
   untakenSaid,
 } from "@repo/features/inbox-write-words";
 import { FAILURE_SURFACE, type FailureSurface } from "@repo/features/shown-failure";
-import { countWords, TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActKind } from "@repo/host/contract";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -51,13 +51,6 @@ import { pressTakeBack, type TakeBackUndoRefusal, type TakeBackWrite } from "../
 
 /** What a close the act channel refused hears, as the service not answering, with the error beneath. */
 const unreached = unreachedAs(AGENT_CALL_FAILURE.UNANSWERED);
-
-/** What one toast says of a resolve of several items the service refused some of: how many it took, and how many not. */
-function closedNote(landed: number, refused: number): string {
-  return landed === 0
-    ? `Could not resolve ${countWords(refused, TERM.INBOX_ITEM)}`
-    : `${countWords(landed, TERM.INBOX_ITEM)} resolved, ${refused} could not be`;
-}
 
 /** Why the service did not take one close, in a toast's words, or none where it took it. */
 function refusalWords(

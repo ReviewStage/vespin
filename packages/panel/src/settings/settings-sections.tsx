@@ -1,7 +1,6 @@
 import { MACHINES_WORDS } from "@repo/features/machines-settings-words";
 import { SKILLS_LINE, workspaceGroupTitle } from "@repo/features/skills-settings-words";
 import type { Workspace } from "@repo/features/workspace-wire";
-import { EXPERIMENT, experimentOn } from "@repo/settings";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsView } from "@repo/settings/settings-views";
 import {
@@ -17,10 +16,8 @@ import { WORKSPACE_CONNECTIONS } from "./pages.js";
 /**
  * settings-sections.tsx -- every titled section of a Settings page, declared once: the page draws its head from here and the settings search finds it from here.
  *
- * A section's head and its search result used to be written twice, the
- * head on its page and the result in the search's own list, and a section
- * whose result nobody wrote was drawn but never found. Here each section
- * says how it is found: by its own head, which the search then offers as a
+ * Each section's head and its search result come from one declaration, so
+ * no section is drawn but never found. Each section says how it is found: by its own head, which the search then offers as a
  * result landing on the section, under the same condition the page draws
  * it on; row by row, where every row under it is already indexed from the
  * declaration it is drawn from; or by its page's name alone, where it is
@@ -146,10 +143,7 @@ export const SECTION = {
   PRIVACY: "privacy",
   NEW_AGENTS: "new-agents",
   ALWAYS_ALLOWED: SETTINGS_SEARCH_ROW.ALWAYS_ALLOWED,
-  COMPUTER_USE: "computer-use",
-  COMPUTER_USE_APPS: "computer-use-apps",
-  STARTUP: "startup",
-  DICTATION: "dictation",
+  PERMISSIONS: "permissions",
   NOTIFICATIONS: "notifications",
   YOUR_SOUNDS: "your-sounds",
   APPEARANCE_GROUP: "appearance-group",
@@ -228,8 +222,7 @@ const SETTINGS_SECTIONS = {
     page: SETTINGS_VIEW.ENVIRONMENT,
     head: "Run actions",
     words: `run action command run menu run button terminal ${CLOUD_WORDS}`,
-    drawn: (input) =>
-      workspaceShown(input) && experimentOn(input.settings.experiments, EXPERIMENT.RUN_ACTIONS),
+    drawn: workspaceShown,
   },
   [SECTION.NEW_AGENTS]: {
     found: SECTION_FOUND.ROWS,
@@ -244,13 +237,9 @@ const SETTINGS_SECTIONS = {
       "always allow allowlist allowed commands permissions approval ask run without asking shell bash claude code",
     drawn: accountDrawn,
   },
-  [SECTION.COMPUTER_USE]: {
+  [SECTION.PERMISSIONS]: {
     found: SECTION_FOUND.PAGE,
-    head: "Computer use",
-  },
-  [SECTION.COMPUTER_USE_APPS]: {
-    found: SECTION_FOUND.PAGE,
-    head: "Always-allowed apps",
+    head: "Permissions",
   },
   [SECTION.ADD_HOSTS]: {
     found: SECTION_FOUND.HEAD,
@@ -263,7 +252,8 @@ const SETTINGS_SECTIONS = {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.HOSTS,
     head: MACHINES_WORDS.TITLE,
-    words: "machines machine hosts host connected list",
+    words:
+      "machines machine hosts host connected list agents terminal commands run computer use apps always allow allowed never ask every time remove",
     drawn: accountDrawn,
   },
   [SECTION.INTEGRATIONS_GROUP]: {
@@ -308,16 +298,6 @@ const SETTINGS_SECTIONS = {
   [SECTION.APPEARANCE_GROUP]: {
     found: SECTION_FOUND.ROWS,
     rows: SECTION_ROWS.SCHEMA,
-  },
-  [SECTION.STARTUP]: {
-    found: SECTION_FOUND.ROWS,
-    rows: SECTION_ROWS.SCHEMA,
-    head: "Startup",
-  },
-  [SECTION.DICTATION]: {
-    found: SECTION_FOUND.ROWS,
-    rows: SECTION_ROWS.SCHEMA,
-    head: "Dictation",
   },
   [SECTION.EXPERIMENTS_WORKSPACE]: {
     found: SECTION_FOUND.HEAD,

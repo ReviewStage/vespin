@@ -1,30 +1,50 @@
-// empty-state.tsx -- what a screen or a column says when it has nothing to show, laid out as the system's own ContentUnavailableView lays it out, or the system's spinner over its words while what it shows is still read.
+// empty-state.tsx -- what a screen or a column says when it has nothing to show, in the system's own ContentUnavailableView, or the system's spinner over its words while what it shows is still read.
 
-import { Image, ProgressView, Text, VStack } from "@expo/ui/swift-ui";
+import { ContentUnavailableView, ProgressView, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import {
-  accessibilityHidden,
   font,
   foregroundStyle,
   frame,
   multilineTextAlignment,
   padding,
+  scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import { Fragment } from "react";
-import { Button } from "./button.js";
+import { useAccessibilitySize } from "./accessibility.js";
+import { BUTTON_LOOK, Button, type ButtonLook } from "./button.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
-/** The room between the glyph, the title, the line, and the act, as the system's view stands them. */
+/** What a press to read or send again says, as the app says it everywhere: the panel's Retry in the phone's words. */
+export const TRY_AGAIN_WORDS = "Try again";
+
+/** The room around a column's words while it waits for a pick, in points. */
 const EMPTY_SPACING = 12;
 
-export type EmptyStateProps = {
+/** The one act an empty screen offers: its own, or the Try again a read that failed offers; never both, since one would stand in the other's place. */
+type EmptyStateAct =
+  | {
+      /** The one act that fills the screen, such as Sign in, filled unless it names a quieter look. */
+      readonly action?:
+        | { readonly label: string; readonly onPress: () => void; readonly look?: ButtonLook }
+        | undefined;
+      readonly retry?: undefined;
+    }
+  | {
+      readonly action?: undefined;
+      /**
+       * Reads what failed again: the bordered Try again in the act's place,
+       * quiet rather than filled, since a failure is no screen's main act, as
+       * every read that failed offers it.
+       */
+      readonly retry: () => void;
+    };
+
+export type EmptyStateProps = EmptyStateAct & {
   readonly title: string;
   readonly symbol: Glyph;
   readonly description?: string | undefined;
-  /** The one act that fills the screen, such as Sign in. */
-  readonly action?: { readonly label: string; readonly onPress: () => void } | undefined;
   /** Whether what the screen shows is still read, which stands the system's spinner over the title in the symbol's place, so a read under way never looks like nothing to show. */
   readonly loading?: boolean | undefined;
 };
@@ -50,64 +70,89 @@ function LoadingState({ title }: { readonly title: string }) {
 }
 
 /**
- * An empty screen's glyph, title, line, and the act that fills it; or, while
- * it reads, the spinner and its title. Note that it stacks them itself, as
- * the system's ContentUnavailableView does (a large muted glyph, a bold
- * title, a muted line), because that view takes only an SF Symbol and the
- * glyph is the panel's own Lucide one. Note too that the stack is drawn anew
- * whenever its title or line changes, keyed by both, because `@expo/ui`'s
- * native text keeps the words it first stood with when only its props change,
- * so Search went on saying what it finds after a query that found nothing.
+ * An empty screen's glyph, title, line, and the act that fills it, in the
+ * system's own ContentUnavailableView, as Mail and Notes say a list is empty;
+ * or, while it reads, the spinner and its title. Note that the view takes the
+ * panel's own Lucide glyph from the asset catalog, and its title and line in
+ * the brand's inks, through the app's `@expo/ui` patch
+ * (`patches/@expo__ui@58.0.27.patch`).
  */
 export function EmptyState({
   title,
   symbol,
   description,
-  action,
+  action: given,
+  retry,
   loading = false,
 }: EmptyStateProps) {
   const colors = useColors();
+  const large = useAccessibilitySize();
 
   if (loading) return <LoadingState title={title} />;
-  const centered = multilineTextAlignment("center");
+
+  const image = glyphImage(symbol);
+
+  const action =
+    retry === undefined
+      ? given
+      : { label: TRY_AGAIN_WORDS, onPress: retry, look: BUTTON_LOOK.BORDERED };
+
+  const view = (
+    <ContentUnavailableView
+      title={title}
+      {...("assetName" in image ? { image: image.assetName } : { systemImage: image.systemName })}
+      description={description ?? ""}
+      primaryColor={colors.TEXT}
+      secondaryColor={colors.TEXT_MUTED}
+      modifiers={[
+        frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+      ]}
+      actions={
+        action === undefined ? undefined : (
+          <Button
+            label={action.label}
+            onPress={action.onPress}
+            look={action.look ?? BUTTON_LOOK.PROMINENT}
+          />
+        )
+      }
+    />
+  );
+
+  // Note that at an accessibility size the words outgrow a short screen, such as Search's over its keyboard, so they scroll there rather than stand cut short with "…".
+  return large ? (
+    <ScrollView modifiers={[scrollDismissesKeyboard("immediately")]}>{view}</ScrollView>
+  ) : (
+    view
+  );
+}
+
+/**
+ * What a detail column says before a row is picked: its words alone in the
+ * muted ink, centered, as Mail stands "No Message Selected". Note that it
+ * draws no glyph and no bold title, a step under a column's own title, because nothing is wrong or empty; the
+ * column only waits for a pick.
+ */
+export function NoSelection({ title }: { readonly title: string }) {
+  const colors = useColors();
 
   return (
-    <Fragment key={description ?? ""}>
-      <VStack
-        key={title}
-        spacing={EMPTY_SPACING}
+    <VStack
+      key={title}
+      modifiers={[
+        padding({ all: EMPTY_SPACING * 2 }),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+      ]}
+    >
+      <Text
         modifiers={[
-          padding({ all: EMPTY_SPACING * 2 }),
-          frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+          font({ textStyle: "title3" }),
+          foregroundStyle(colors.TEXT_MUTED),
+          multilineTextAlignment("center"),
         ]}
       >
-        <Image
-          {...glyphImage(symbol)}
-          color={colors.TEXT_MUTED}
-          modifiers={[font({ textStyle: "largeTitle", weight: "regular" }), accessibilityHidden()]}
-        />
-        <Text
-          modifiers={[
-            font({ textStyle: "title2", weight: "bold" }),
-            foregroundStyle(colors.TEXT),
-            centered,
-          ]}
-        >
-          {title}
-        </Text>
-        {description === undefined ? null : (
-          <Text
-            modifiers={[
-              font({ textStyle: "callout" }),
-              foregroundStyle(colors.TEXT_MUTED),
-              centered,
-            ]}
-          >
-            {description}
-          </Text>
-        )}
-        {action === undefined ? null : <Button label={action.label} onPress={action.onPress} />}
-      </VStack>
-    </Fragment>
+        {title}
+      </Text>
+    </VStack>
   );
 }

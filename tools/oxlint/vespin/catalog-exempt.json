@@ -8,6 +8,7 @@
   },
   "awaitingAnExample": [
     "DropLine",
+    "MenuCardFrame",
     "MenuRowList",
     "RowHint",
     "RowHintOptions",

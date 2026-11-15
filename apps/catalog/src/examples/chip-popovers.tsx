@@ -3,6 +3,7 @@ import {
   Avatar,
   ChipPopover,
   type ChipPopoverFact,
+  MENU_ROW_WHY,
   type MenuRow,
   STATUS_TONE,
   StatusGlyph,
@@ -22,9 +23,10 @@ import { CatalogSection } from "../section";
  * chip-popovers.tsx -- a toolbar chip whose press opens a popover of facts:
  * a cloud sandbox off, booting, and running, its state on the chip's dot
  * and in the popover's Status, one with a menu section under the facts,
- * the places to move its agent to, and one with no title and no facts,
- * whose rows only say, a task's followers, with rows pinned under them: a
- * switch and Unfollow.
+ * the places to move its agent to, and one with no title and no facts, a
+ * task's followers as a checklist: a press adds or removes someone, the
+ * other members listed only once something is searched, and the reader's
+ * switch pinned under them.
  */
 
 const STATES = [
@@ -87,28 +89,61 @@ function WithMoveTo(): React.JSX.Element {
   );
 }
 
-/** A follower's row: their face, their name, a muted Assignee, and a laptop where agents may use their machines. */
-function followerRow(id: string, name: string, assignee: boolean, machines: boolean): MenuRow {
+/** A person's face at a menu row's size. */
+function face(id: string, name: string): React.JSX.Element {
+  return <Avatar id={id} name={name} size={AVATAR_SIZE.INLINE} decorative />;
+}
+
+/** The workspace's members, the reader first, the assignee and whose machines agents may use marked. */
+const MEMBERS = [
+  { id: "ada", name: "You", assignee: true, machines: true },
+  { id: "manuel", name: "Manuel Ruiz", assignee: false, machines: true },
+  { id: "charles", name: "Charles Lin", assignee: false, machines: false },
+  { id: "priya", name: "Priya Shah", assignee: false, machines: false },
+  { id: "tomas", name: "Tomás Silva", assignee: false, machines: false },
+] as const;
+
+/** A member's row: their face, their name, and at its end a muted Assignee and a laptop where agents may use their machines; the assignee dimmed. */
+function memberRow(member: (typeof MEMBERS)[number]): MenuRow {
   return {
-    id,
-    label: name,
-    icon: <Avatar id={id} name={name} size={AVATAR_SIZE.INLINE} decorative />,
+    id: member.id,
+    label: member.name,
+    icon: face(member.id, member.name),
     end: (
       <>
-        {assignee ? (
+        {member.assignee ? (
           <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
             Assignee
           </Text>
         ) : null}
-        {machines ? <GLYPH.DESKTOP aria-label="Agents may use their machines" /> : null}
+        {member.machines ? <GLYPH.DESKTOP aria-label="Agents may use their machines" /> : null}
       </>
     ),
+    ...(member.assignee ? { disabled: "You're the assignee", why: MENU_ROW_WHY.MARK } : undefined),
   };
 }
 
-/** A task's followers, the reader first: rows that only say, then the reader's switch and Unfollow pinned under them. */
+/** A task's followers as a checklist: followers checked, the rest found by a search, a press adding or removing one, and the reader's switch pinned under them. */
 function Followers(): React.JSX.Element {
   const [machines, setMachines] = useState(true);
+
+  const [following, setFollowing] = useState<ReadonlySet<string>>(
+    new Set(["ada", "manuel", "charles"]),
+  );
+
+  // Note that anyone pressed stays listed, unchecked where removed, as the task page keeps them until its popover closes.
+  const [listed, setListed] = useState<ReadonlySet<string>>(following);
+
+  const toggle = (id: string) => {
+    setListed((now) => new Set([...now, id]));
+    setFollowing((now) => {
+      const next = new Set(now);
+
+      if (!next.delete(id)) next.add(id);
+
+      return next;
+    });
+  };
 
   return (
     <ChipPopover
@@ -116,24 +151,20 @@ function Followers(): React.JSX.Element {
       glyph={<GLYPH.SHOW aria-hidden="true" />}
       words="Following"
       menu={{
-        rows: [
-          followerRow("ada", "You", true, machines),
-          followerRow("manuel", "Manuel Ruiz", false, true),
-          followerRow("charles", "Charles Lin", false, false),
-        ],
-        noMatch: "No followers",
+        rows: MEMBERS.map((member) => ({
+          ...memberRow(member),
+          searchOnly: !listed.has(member.id),
+        })),
+        checked: following,
+        placeholder: "Add or remove followers",
+        noMatch: "No one matches",
+        onPick: toggle,
         foot: [
           {
             id: "machines",
             label: "Let agents here use my machines",
             icon: <GLYPH.DESKTOP aria-hidden="true" />,
             toggle: { on: machines, onToggle: () => setMachines(!machines) },
-          },
-          {
-            id: "unfollow",
-            label: "Unfollow",
-            icon: <GLYPH.HIDE aria-hidden="true" />,
-            disabled: "You're the assignee",
           },
         ],
       }}
@@ -164,7 +195,10 @@ function ChipPopovers(): React.JSX.Element {
           <WithMoveTo />
         </div>
       </CatalogSection>
-      <CatalogSection id="chip-popover-rows" title="Rows that only say, with pinned rows">
+      <CatalogSection
+        id="chip-popover-rows"
+        title="A checklist found by a search, with a pinned row"
+      >
         <div className="catalog-glyph-line catalog-chip-popover-stage">
           <Followers />
         </div>

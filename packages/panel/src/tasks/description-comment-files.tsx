@@ -32,14 +32,14 @@ import { AttachedFileChips } from "./attached-file-chips.js";
  */
 
 /** How a plan's comment's file is read: as the plan's attachment, which its pictures read too. */
-function readDescriptionFile(planId: string, attachmentId: string) {
-  return sendAct(ACT_KIND.TASKS_PICTURE_READ, { planId, attachmentId });
+function readDescriptionFile(taskId: string, attachmentId: string) {
+  return sendAct(ACT_KIND.TASKS_PICTURE_READ, { taskId, attachmentId });
 }
 
 /** A comment's files as read, in order: each one's `data:` URL once it landed, and an empty one until then or where it did not. */
-function useCommentFileReads(planId: string, files: readonly DescriptionCommentFile[]): string[] {
+function useCommentFileReads(taskId: string, files: readonly DescriptionCommentFile[]): string[] {
   const reads = useQueries({
-    queries: files.map((file) => pictureQuery(planId, file.attachmentId, readDescriptionFile)),
+    queries: files.map((file) => pictureQuery(taskId, file.attachmentId, readDescriptionFile)),
     combine: (results) => results.map((result) => result.data),
   });
 
@@ -52,10 +52,10 @@ function useCommentFileReads(planId: string, files: readonly DescriptionCommentF
 
 /** A comment's files as chips, each read once and kept as the plan's pictures are (`../picture-query.ts`). */
 export function useCommentFileChips(
-  planId: string,
+  taskId: string,
   files: readonly DescriptionCommentFile[],
 ): FileChip[] {
-  const urls = useCommentFileReads(planId, files);
+  const urls = useCommentFileReads(taskId, files);
 
   return files.map((file, index) => ({
     name: file.name,
@@ -91,10 +91,10 @@ type UseCommentFileEntriesResult = {
  * comment as it stands.
  */
 export function useCommentFileEntries(
-  planId: string,
+  taskId: string,
   files: readonly DescriptionCommentFile[],
 ): UseCommentFileEntriesResult {
-  const urls = useCommentFileReads(planId, files);
+  const urls = useCommentFileReads(taskId, files);
   const known = useRef(new Map<string, AgentAttachment>());
 
   const entries = files.flatMap((file, index) => {

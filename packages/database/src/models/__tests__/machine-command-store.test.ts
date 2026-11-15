@@ -49,6 +49,7 @@ import { registerDevice } from "../device-store.js";
 import {
   claimMachineCommand,
   claimMachineCommands,
+  commandMachinesOf,
   heardFromAnotherAccount,
   machineCommandResult,
   machineCommandsWaiting,
@@ -224,6 +225,41 @@ it.layer(getTestDB())("the Mac command store", (it) => {
         assert.deepEqual(byAnotherOfTheirs, Option.none(), "another Mac of theirs takes none");
         assert.equal(waitsForStudio, true);
         assert.deepEqual(byStudio, [queued]);
+      }),
+  );
+
+  it.effect(
+    "the machines a call may reach are the accounts' own, not removed, the one that listened last first",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+
+        const [quiet, heard, removed] = [
+          yield* openDevice(owner, "Quiet"),
+          yield* openDevice(owner, "Heard"),
+          yield* openDevice(owner, "Removed"),
+        ];
+
+        yield* openDevice(other, "Other's Mac");
+        yield* markMachineListening(owner, heard);
+        yield* markMachineListening(owner, removed);
+
+        yield* Database.use((db) =>
+          db
+            .update(device)
+            .set({ removedAt: new Date(0) })
+            .where(eq(device.id, removed)),
+        );
+
+        const machines = yield* commandMachinesOf([owner]);
+
+        assert.deepEqual(
+          machines.map((machine) => [machine.id, machine.seenAt === null]),
+          [
+            [heard, false],
+            [quiet, true],
+          ],
+        );
       }),
   );
 

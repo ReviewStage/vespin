@@ -13,7 +13,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { APPROVAL_PRESS_WORDS, DENIES_WAITING } from "@repo/features/agent-approval-model";
 import { APPROVAL_ANSWER } from "@repo/features/agent-approval-wire";
-import { useAccessibilitySize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { AskNote } from "./ask-card.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, glyphImage } from "./glyph.js";
@@ -102,7 +102,7 @@ export function HeldCallBody({ held }: { readonly held: HeldCall }) {
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
-          foregroundStyle(colors.TEXT_MUTED),
+          foregroundStyle(held.waiting ? colors.ATTENTION : colors.TEXT_MUTED),
         ]}
       >
         {held.words}
@@ -141,6 +141,8 @@ export function DeniesWaiting({ onShow }: { readonly onShow?: (() => void) | und
         font({ textStyle: TYPE_ROLE.ROW_LINE }),
         foregroundStyle(colors.TEXT_MUTED),
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        // Note that the shape stands on the words' full-width frame, not on the button, since a plain button takes a press only where its label is hit, and a wide window leaves most of the line past the words.
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
       ]}
     >
       {DENIES_WAITING}
@@ -152,11 +154,7 @@ export function DeniesWaiting({ onShow }: { readonly onShow?: (() => void) | und
   return (
     <SwiftUIButton
       onPress={onShow}
-      modifiers={[
-        buttonStyle("plain"),
-        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-        accessibilityHint(SHOW_WAITING_HINT),
-      ]}
+      modifiers={[buttonStyle("plain"), accessibilityHint(SHOW_WAITING_HINT)]}
     >
       {words}
     </SwiftUIButton>
@@ -181,13 +179,14 @@ type HeldCallBannerProps = Pick<HeldCall, "answering" | "note" | "onAnswer"> & {
 export function HeldCallBanner({ waiting, asks, answering, note, onAnswer }: HeldCallBannerProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
+  const hand = useScaledSize(MARK_SIZE.GLYPH);
 
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       <HStack spacing={SPACE.ROW}>
         <Image
           {...glyphImage(GLYPH.ASK_FIRST)}
-          size={MARK_SIZE.GLYPH}
+          size={hand}
           color={colors.ATTENTION}
           modifiers={[accessibilityHidden()]}
         />

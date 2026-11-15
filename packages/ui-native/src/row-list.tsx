@@ -11,6 +11,7 @@ import {
   accessibilityValue,
   background,
   buttonStyle,
+  environment,
   font,
   foregroundStyle,
   frame,
@@ -21,16 +22,18 @@ import {
   refreshable,
   scrollContentBackground,
   scrollDismissesKeyboard,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { searchTokens } from "@repo/features/search-tokens";
 import { Predicate } from "effect";
-import { type ReactElement, type ReactNode, useState } from "react";
+import { type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
-import { RowOpenContext, RowSelectedContext } from "./row-open.js";
+import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** Whether a foldable section stands open, in VoiceOver's own words for a disclosure. */
@@ -42,8 +45,8 @@ const FOLD_HINT = "Shows or hides the rows it holds";
 /** The fold chevron's size, a little under the header's words. */
 const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
 
-/** The least a section's + answers a press across, in points, wider than it draws so a finger finds it beside the header's small words. */
-const ADD_TARGET = { WIDTH: 36, HEIGHT: 28 } as const;
+/** The least a section's + answers a press across, in points: Apple's least target, wider than it draws so a finger finds it beside the header's small words. */
+const ADD_TARGET = { WIDTH: PRESS_SIZE, HEIGHT: PRESS_SIZE } as const;
 
 /**
  * How a list stands: plain rows on a screen of its own, as the panel's lists
@@ -56,6 +59,16 @@ export const LIST_LOOK = {
 
 export type ListLook = (typeof LIST_LOOK)[keyof typeof LIST_LOOK];
 
+/**
+ * A list's Select mode, as Mail's: the rows chosen, by their ids, and what is
+ * called with every row chosen as a person ticks one, or drags two fingers
+ * down a run of them.
+ */
+export type RowChoosing = {
+  readonly chosen: readonly string[];
+  readonly onChoose: (ids: readonly string[]) => void;
+};
+
 type RowListProps = {
   readonly look: ListLook;
   /** The id of the row drawn selected, in a sidebar. */
@@ -64,6 +77,17 @@ type RowListProps = {
   readonly onSelect?: ((id: string) => void) | undefined;
   /** What a pull down the list reads again, its spinner standing until it settles; none where a pull reads nothing. */
   readonly onRefresh?: (() => Promise<void>) | undefined;
+  /** Its Select mode, while it stands in one; none for a list a tap opens rows in. */
+  readonly choosing?: RowChoosing | undefined;
+  /** What a search typed, whose words each row's title sets in bold; none for a list no search found. */
+  readonly searched?: string | undefined;
+  /**
+   * Starts its Select mode with the rows the system ticked, where it has one:
+   * iPadOS lets a list whose selection is a set tick several rows with no
+   * edit mode of ours, by a two-finger drag, a pointer's ⌘ or Shift click,
+   * or the keyboard. None for a list with no Select mode.
+   */
+  readonly onChooseStart?: ((ids: readonly string[]) => void) | undefined;
   readonly children: ReactNode;
 };
 
@@ -89,17 +113,48 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
  * the row should not stand selected on the way back. A plain list wider than
  * the reading width, such as a pull request's page across an iPad, centers
  * its sections in it, as iOS's readable content guide does, while the list
- * still scrolls from either edge.
+ * still scrolls from either edge. In Select mode the list stands in
+ * SwiftUI's own edit mode, as Mail's Select does: a round check leads each
+ * row, a tap ticks it rather than opening it, two fingers dragged down tick
+ * a run, and the rows' swipes step aside, as the system's do.
  */
-export function RowList({ look, selected, onSelect, onRefresh, children }: RowListProps) {
+export function RowList({
+  look,
+  selected,
+  onSelect,
+  onRefresh,
+  choosing,
+  searched,
+  onChooseStart,
+  children,
+}: RowListProps) {
   const colors = useColors();
+  const searchedWords = useMemo(() => searchTokens(searched ?? ""), [searched]);
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
 
+  // Note that a list in Select mode draws no row as the open one and reads nothing on a pull, since its checks say what is chosen and a pull there would read the rows from under them.
   return (
     <List
-      selection={selected === undefined ? [] : [selected]}
+      selection={
+        choosing !== undefined ? [...choosing.chosen] : selected === undefined ? [] : [selected]
+      }
       onSelectionChange={(selection) => {
+        if (choosing !== undefined) {
+          choosing.onChoose(selection.filter(Predicate.isString));
+
+          return;
+        }
+
+        const ids = selection.filter(Predicate.isString);
+
+        // Note that several rows ticked at once by the system start Select mode with them, as Mail's do, rather than read as a tap on the first, which drew them in the system's own ink and fill and then cleared them as the single selection was laid back.
+        if (ids.length > 1 && onChooseStart !== undefined) {
+          onChooseStart(ids);
+
+          return;
+        }
+
         const id = selectedId(selection);
 
         if (id !== undefined) onSelect?.(id);
@@ -112,11 +167,15 @@ export function RowList({ look, selected, onSelect, onRefresh, children }: RowLi
         ...(sides > 0 ? [listSectionMargins({ edges: "horizontal", length: sides })] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
         scrollDismissesKeyboard("immediately"),
-        ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
+        ...(onRefresh === undefined || choosing !== undefined ? [] : [refreshable(onRefresh)]),
+        // Note that a ticked check is what the reader chose, so Select mode tints it copper, as Mail's checks take its accent, where the screen's ink drew a pale disc in dark.
+        ...(choosing === undefined ? [] : [environment("editMode", "active"), tint(colors.ACCENT)]),
       ]}
     >
       <RowOpenContext value={onSelect}>
-        <RowSelectedContext value={selected}>{children}</RowSelectedContext>
+        <RowSelectedContext value={choosing === undefined ? selected : undefined}>
+          <RowSearchedContext value={searchedWords}>{children}</RowSearchedContext>
+        </RowSelectedContext>
       </RowOpenContext>
     </List>
   );
@@ -330,12 +389,14 @@ export function ListSection({
   children,
 }: ListSectionProps) {
   const [folded, setFolded] = useState(false);
+  // Note that a header holding none shows no count, as Mail's groups stand, rather than a 0 beside its title.
+  const shown = count === 0 ? undefined : count;
 
   const label =
     title === undefined ? undefined : (
       <GroupHeader
         title={title}
-        count={count}
+        count={shown}
         progress={progress}
         mark={mark}
         folded={foldable ? folded : undefined}
@@ -351,7 +412,7 @@ export function ListSection({
         modifiers={[
           buttonStyle("plain"),
           accessibilityAddTraits(["isHeader"]),
-          accessibilityLabel(`${title}${count === undefined ? "" : `, ${count}`}`),
+          accessibilityLabel(`${title}${shown === undefined ? "" : `, ${shown}`}`),
           accessibilityValue(folded ? FOLD_HEARD.SHUT : FOLD_HEARD.OPEN),
           accessibilityHint(FOLD_HINT),
         ]}

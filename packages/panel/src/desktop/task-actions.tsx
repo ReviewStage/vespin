@@ -1,5 +1,6 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { FOLLOWING_WORDS } from "@repo/features/task-followers-model";
 import { type ChildTaskCount, repositoryLabel, taskFinished } from "@repo/features/task-list-model";
 import type { TaskRelationSubject } from "@repo/features/task-relation-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
@@ -11,14 +12,18 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import {
-  DOCUMENT_REGION,
   deleteTaskWords,
   RENAME_FAILED_NOTE,
+  renamedTask,
+  renamedTasks,
   SETTLED_STATUS,
   settleOffered,
+  sidebarTasks,
   TASK_MARK,
+  TASK_REGION,
   type TaskMark,
 } from "@repo/features/tasks-model";
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
@@ -96,10 +101,16 @@ import {
   useShortcutTarget,
   useShortcutTargetOn,
 } from "../shortcut-target.js";
-import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
+import { useSteadyDoors } from "../steady-door.js";
+import {
+  type TaskListRows,
+  useTaskListCollections,
+  useTaskListRow,
+} from "../task-list-collections.js";
 import { lastEditOf } from "../tasks/description-body.js";
 import { EditedBy, type EditPlace, useEditReader } from "../tasks/edit-ref.js";
 import { useTaskSendFailed } from "../tasks/failed-lines.js";
+import { useFollowerWrites } from "../tasks/following-chip.js";
 import { CHOOSE_LABEL, RepositoryMenuPanel } from "../tasks/repository-chip.js";
 import { PlanGlyph } from "../tasks/tab-look.js";
 import { useTaskDelete } from "../tasks/task-delete.js";
@@ -209,31 +220,6 @@ import { useRefusalHeard } from "./use-refusal-heard.js";
  */
 
 /**
- * Each task list's tasks by id, built once for each list the control hands
- * down and let go with it, so every row of a redraw finds its task at once
- * rather than walking the whole list, which made a redraw of the sidebar
- * grow with the square of its rows. Note that a list is never changed in
- * place, since a change hands down a new one, so an index never goes stale.
- */
-const tasksById = new WeakMap<readonly TaskSummary[], ReadonlyMap<string, TaskSummary>>();
-
-/** `list`'s task of `taskId`, from its index, built the first time the list is asked. */
-function listedTask(list: readonly TaskSummary[], taskId: string): TaskSummary | undefined {
-  let index = tasksById.get(list);
-
-  if (index === undefined) {
-    const built = new Map<string, TaskSummary>();
-
-    // Note that the first of an id wins, as a walk of the list finds it.
-    for (const task of list) if (!built.has(task.id)) built.set(task.id, task);
-    index = built;
-    tasksById.set(list, index);
-  }
-
-  return index.get(taskId);
-}
-
-/**
  * What a task's row and its menu read of the tab (`TasksControl`), wherever
  * the row stands: the values that move seldom, and the tab's doors. Note
  * that the tab's tasks, which a delivery moves for any one of them, are read
@@ -248,36 +234,30 @@ export interface TaskRowTab
     | "signedIn"
     | "me"
     | "workspaces"
-    | "drawnTasks"
+    | "typedNamesNow"
     | "onChangeRepository"
     | "onMoveTask"
     | "moveTask"
   > {
   /** New task related to a task, as the add menu's New task asks (`NewTask`'s `onOpenRelated`). */
   readonly onNewRelatedTask: NewTask["onOpenRelated"];
-  /** The tab's tasks as they stand when read. */
-  readonly tasksNow: () => readonly TaskSummary[];
   /** Copies the open description, as Copy description does. */
   readonly onCopyDescription: () => void;
   readonly onOpenHistory: TasksControl["onOpenHistory"];
 }
 
-/** What a task's row reads of `tasks`, its tasks read through `tasksNow`: as `tasks` holds them unless said. */
-export function taskRowTab(
-  tasks: TasksControl,
-  tasksNow: () => readonly TaskSummary[] = () => tasks.tasks,
-): TaskRowTab {
+/** What a task's row reads of `tasks`. */
+export function taskRowTab(tasks: TasksControl): TaskRowTab {
   return {
     shown: tasks.shown,
     signedIn: tasks.signedIn,
     me: tasks.me,
     workspaces: tasks.workspaces,
-    drawnTasks: tasks.drawnTasks,
+    typedNamesNow: tasks.typedNamesNow,
     onNewRelatedTask: tasks.newTask.onOpenRelated,
     onChangeRepository: tasks.onChangeRepository,
     onMoveTask: tasks.onMoveTask,
     moveTask: tasks.moveTask,
-    tasksNow,
     onCopyDescription: tasks.copy.onPress,
     onOpenHistory: tasks.onOpenHistory,
   };
@@ -285,14 +265,12 @@ export function taskRowTab(
 
 /**
  * What a page's rows read of `tasks` (`taskRowTab`), handed back as the one
- * handed back last while it says the same (`useSteadyDoors`), its tasks read
- * as they stand at the moment, so a row held while what it is handed does
- * (`memo`) draws again only as something it reads moves.
+ * handed back last while it says the same (`useSteadyDoors`), so a row held
+ * while what it is handed does (`memo`) draws again only as something it
+ * reads moves.
  */
 export function useTaskRowTab(tasks: TasksControl): TaskRowTab {
-  const tasksNow = useSteadyDoor(() => tasks.tasks);
-
-  return useSteadyDoors(taskRowTab(tasks, tasksNow));
+  return useSteadyDoors(taskRowTab(tasks));
 }
 
 /**
@@ -311,7 +289,7 @@ export function openedTaskOf(
 ): OpenedTask | undefined {
   const { region } = tasks;
 
-  return region.kind === DOCUMENT_REGION.READY
+  return region.kind === TASK_REGION.READY
     ? { task: region.task, agents: tasks.agents }
     : undefined;
 }
@@ -321,18 +299,13 @@ function openedAs(opened: OpenedTask | undefined, taskId: string): OpenedTask | 
   return opened?.task.id === taskId ? opened : undefined;
 }
 
-/** A task as the list or the open document holds it; nothing for a task neither holds. */
-function rowTaskOf(
-  list: readonly TaskSummary[],
-  opened: OpenedTask | undefined,
+/** A task as the list (`rows`) or the open document holds it; nothing for a task neither holds. */
+export function taskOf(
+  tasks: Pick<TasksControl, "region" | "agents">,
+  rows: Pick<TaskListRows, "task">,
   taskId: string,
 ): TaskSummary | undefined {
-  return listedTask(list, taskId) ?? openedAs(opened, taskId)?.task;
-}
-
-/** A task as the list or the open document holds it; nothing for a task neither holds. */
-export function taskOf(tasks: TasksControl, taskId: string): TaskSummary | undefined {
-  return rowTaskOf(tasks.tasks, openedTaskOf(tasks), taskId);
+  return rows.task(taskId) ?? openedAs(openedTaskOf(tasks), taskId)?.task;
 }
 
 /** One way a task can be moved in the sidebar or settled, as a sidebar row's buttons offer it: the list's command and what it does to this task. */
@@ -378,6 +351,33 @@ function pinAction(
   const { item, onSelect } = pinMark(pins, task);
 
   return [commandAction(item, onSelect, subject)];
+}
+
+/**
+ * Follow or Unfollow, offered as whichever way the reader does not stand
+ * yet, as the Following chip's foot offers it, while the task carries its
+ * followers; Unfollow dimmed for the assignee, who follows while assigned.
+ */
+function followAction(
+  task: TaskSummary | undefined,
+  readerId: string | undefined,
+  following: { readonly follow: () => void; readonly unfollow: () => void },
+): MenuAction[] {
+  if (task?.followers === undefined || readerId === undefined) return [];
+  const reader = task.followers.find((each) => each.userId === readerId);
+
+  if (reader === undefined) {
+    return [{ label: FOLLOWING_WORDS.FOLLOW, icon: <GLYPH.SHOW />, onSelect: following.follow }];
+  }
+
+  return [
+    {
+      label: FOLLOWING_WORDS.UNFOLLOW,
+      icon: <GLYPH.HIDE />,
+      onSelect: following.unfollow,
+      ...(reader.assignee ? { disabled: true, detail: FOLLOWING_WORDS.ASSIGNEE_STAYS } : undefined),
+    },
+  ];
 }
 
 /** The keys the open task's page offers on it, which every menu of the open task prints. */
@@ -504,8 +504,8 @@ function SidebarTaskMarks({
   disabled: boolean;
 }): React.JSX.Element {
   const subject = shortcutSubject(SHORTCUT_SUBJECT.TASK, task.id);
-  const pins = usePinWrites(tasks.drawnTasks);
-  const standing = useStandingWrites(tasks.drawnTasks);
+  const pins = usePinWrites(tasks.typedNamesNow);
+  const standing = useStandingWrites(tasks.typedNamesNow);
 
   const marks = placeMarks(standing, pins, task).map(
     ({ key, item, onSelect }): RowMark => ({
@@ -598,12 +598,20 @@ function standingSubmenus(
  */
 function relationDoor(
   tasks: TaskRowTab,
+  listed: TaskListCollections["tasks"],
   writes: TaskRelationWrites,
   task: TaskSummary,
 ): TaskRelationDoor {
+  // Note that the workspace's tasks are read as the panel opens, in the sidebar's order: the pinned first, then the rest newest started first, as the host lists them.
+  const ofWorkspace = listed.toArray
+    .filter((each) => each.workspaceId === task.workspaceId)
+    .sort((one, other) => other.createdAt - one.createdAt || (other.id < one.id ? -1 : 1));
+
+  const { pinned, rest } = sidebarTasks(renamedTasks(ofWorkspace, tasks.typedNamesNow()));
+
   return {
     workspaceName: tasks.workspaces.find((each) => each.id === task.workspaceId)?.name ?? "",
-    tasks: tasks.tasksNow().filter((each) => each.workspaceId === task.workspaceId),
+    tasks: [...pinned, ...rest],
     onChange: (change) => writes.onSetTaskBlock(task.id, change),
     onSetParent: writes.onSetTaskParent,
     onNewTask: (kind) => tasks.onNewRelatedTask(task.id, kind),
@@ -704,8 +712,8 @@ function moveToEntries(
  * Rename, Version history, and Mark as unread or read; then Status,
  * Priority, and Assignee; then Task relation, the add menu as the menu's
  * panel, and Remove parent where the task has one, New sub-task being the
- * add menu's and ⌘K's; then Pin, Move to section, and Move to workspace
- * where the task may be moved; then Change repository, which says Choose a
+ * add menu's and ⌘K's; then Pin, Follow or Unfollow, Move to section, and Move to workspace where the task
+ * may be moved; then Change repository, which says Choose a
  * repository on a task with none. Permanently delete is last and alone.
  * Each item prints its chord where the chord acts on `subject`, the task
  * as the menu draws it (`shortcut-target.ts`): the open task's, and a
@@ -713,6 +721,7 @@ function moveToEntries(
  */
 function taskActionGroups(
   tasks: TaskRowTab,
+  listed: TaskListCollections["tasks"],
   writes: TaskRelationWrites,
   task: TaskSummary | undefined,
   taskId: string,
@@ -728,6 +737,8 @@ function taskActionGroups(
     section: MenuEntry | undefined;
     /** The task's pin, which Pin and Unpin ask. */
     pins: Pick<PinWrites, "onMarkTask">;
+    /** Follow or Unfollow, offered beside Pin. */
+    follow: MenuAction[];
     /** Status, Priority, and Assignee as a row's submenus, where the task has them; none for a task from a service before statuses. */
     standing: readonly MenuSubmenu[];
     /** The id Task relation's search stands under while its panel is drawn. */
@@ -761,7 +772,7 @@ function taskActionGroups(
       ? []
       : [
           taskRelationMenuPanel(doors.relationId, related, () =>
-            relationDoor(tasks, writes, related),
+            relationDoor(tasks, listed, writes, related),
           ),
         ];
 
@@ -810,7 +821,7 @@ function taskActionGroups(
     [rename, ...versions, ...read],
     [...doors.standing],
     [...relate, ...unparent],
-    [...pinAction(doors.pins, task, subject), ...move],
+    [...pinAction(doors.pins, task, subject), ...doors.follow, ...move],
     [repository],
     [remove],
   ];
@@ -940,9 +951,12 @@ export function useTaskMenuItems(
   },
 ) {
   const opened = openedAs(doors.opened, taskId);
-  const task = rowTaskOf(tasks.tasksNow(), opened, taskId);
+  const listed = useTaskListCollections().tasks;
+  const row = useTaskListRow(listed, taskId);
+  // Note that the list's row is drawn again as it moves, its name read as it is being typed, and the open document stands in for a task the list holds not.
+  const task = row === undefined ? opened?.task : renamedTask(row, tasks.typedNamesNow());
   const markRead = useReadMark();
-  const standingWrites = useStandingWrites(tasks.drawnTasks);
+  const standingWrites = useStandingWrites(tasks.typedNamesNow);
 
   // Note that a delete asked is drawn at once, which may take the row the question stands on with it.
   const heard = useRefusalHeard(task !== undefined && tasks.shown, {
@@ -982,11 +996,12 @@ export function useTaskMenuItems(
     task !== undefined ? moveToSectionEntry(task.id, task.workspaceId, sections, name) : undefined;
 
   const standingDoor = useStandingDoor(tasks);
-  const pins = usePinWrites(tasks.drawnTasks);
+  const pins = usePinWrites(tasks.typedNamesNow);
   const relationId = useId();
   const writes = useTaskRelationWrites();
   const descriptions = useWorkspaceExperiment(task?.workspaceId, EXPERIMENT.DESCRIPTIONS);
   const assignees = useAssigneeRows(task?.assignee);
+  const follow = followAction(task, tasks.me, useFollowerWrites(taskId));
 
   const standing =
     task !== undefined
@@ -995,7 +1010,7 @@ export function useTaskMenuItems(
 
   const groups = (): readonly (readonly MenuEntry[])[] => [
     ...withRowMoves(
-      taskActionGroups(tasks, writes, task, taskId, {
+      taskActionGroups(tasks, listed, writes, task, taskId, {
         rename: doors.rename,
         askDelete: deletion.ask,
         askMove: moving.ask,
@@ -1003,6 +1018,7 @@ export function useTaskMenuItems(
         subject,
         section,
         pins,
+        follow,
         standing,
         relationId,
         opened,
@@ -1238,8 +1254,8 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   childCount,
   onOpen,
 }: SidebarTaskProps): React.JSX.Element {
-  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
-  const pins = usePinWrites(tasks.drawnTasks);
+  const renaming = useMutation(useTaskRename(tasks.typedNamesNow));
+  const pins = usePinWrites(tasks.typedNamesNow);
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const reads = useReadMarks();

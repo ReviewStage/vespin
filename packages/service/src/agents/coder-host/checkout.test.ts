@@ -50,7 +50,6 @@ import {
   COMMIT_BY,
   cloneAgentRepository,
   finishCheckoutWith,
-  repositoryCredentialOf,
 } from "./checkout.js";
 
 /**
@@ -290,7 +289,7 @@ const finish = (
   sandbox: ReturnType<typeof sandboxDouble>,
   read: AgentRepositoryRead,
 ) =>
-  Effect.flatMap(agentCheckoutPlan(target, agent, repositoryCredentialOf(read)), (plan) =>
+  Effect.flatMap(agentCheckoutPlan(target, agent, read), (plan) =>
     finishCheckoutWith(sandbox, plan),
   );
 

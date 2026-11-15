@@ -37,7 +37,7 @@ import {
   UsageLimitNoticeSchema,
 } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
-import { recordedVideosOf } from "./agent-pictures-model.js";
+import { calledPicturesOf, recordedVideosOf } from "./agent-pictures-model.js";
 import {
   AGENT_TOOL,
   CLAUDE_CODE_TOOL,
@@ -51,10 +51,13 @@ import {
   PART_CUT_FIELD,
   type PartCut,
 } from "./agent-wire.js";
+import type { KeptPicture } from "./conversation-picture-wire.js";
 import { drawnCall } from "./native-tool-calls.js";
 import { formatBytes } from "./number-format.js";
 import { TOOL_STATE, type ToolState } from "./tool-call-block.js";
 import {
+  type CallMachine,
+  callMachineOf,
   computerAppBundleId,
   computerAppIcon,
   computerAppName,
@@ -62,14 +65,7 @@ import {
   TOOL_TARGET,
   toolTarget,
 } from "./tool-call-model.js";
-import {
-  groupSummary,
-  ROW_PART,
-  type RowReading,
-  TURN_ROW,
-  type TurnRow,
-  turnRows,
-} from "./turn-rows.js";
+import { ROW_PART, type RowReading, TURN_ROW, type TurnRow, turnRows } from "./turn-rows.js";
 import { isAgentTurn, spokenLineOf } from "./voice-call-lines.js";
 
 /** The kinds of part a stored message holds that the tab draws apart. */
@@ -95,7 +91,7 @@ export const AGENT_PART = {
 /** How the SDK spells a tool part's type: the tool's name behind this prefix. */
 const TOOL_PART_TYPE_PREFIX = "tool-";
 
-const TOOL_STATES: ReadonlySet<string> = new Set(Object.values(TOOL_STATE));
+const isToolState = Schema.is(Schema.Literals(Object.values(TOOL_STATE)));
 
 /** A part its page carried cut (`cutParts`): its two ends and its whole size, and the message and index it is fetched whole by. */
 export type AgentPartCut = Omit<PartCut, "field"> & { readonly messageId: string };
@@ -157,10 +153,7 @@ export type AgentPart =
   | { readonly kind: typeof AGENT_PART.ARRIVED; readonly line: AgentTranscriptMessage };
 
 function toolState(value: WireValue | undefined): ToolState {
-  // SAFETY: membership in the set built from TOOL_STATE's values is what the union names.
-  return isWireString(value) && TOOL_STATES.has(value)
-    ? (value as ToolState)
-    : TOOL_STATE.INPUT_AVAILABLE;
+  return isToolState(value) ? value : TOOL_STATE.INPUT_AVAILABLE;
 }
 
 /**
@@ -284,64 +277,250 @@ export function agentParts(message: AgentTranscriptMessage): readonly AgentPart[
   return parts;
 }
 
-/**
- * The icon each `computer` call's row wears, by its call: the one its answer
- * kept, or, where it kept none, the one the newest call before it on the
- * same app kept, as a call the Mac answered as text or with no icon does; a
- * call no call on its app kept an icon for by then is left out, and wears
- * the placeholder.
- */
-export function computerIconsByCall(
-  messages: readonly AgentTranscriptMessage[],
-): ReadonlyMap<string, string> {
-  const byApp = new Map<string, string>();
-  const byCall = new Map<string, string>();
-
-  for (const message of messages) {
-    for (const part of agentParts(message)) {
-      if (part.kind !== AGENT_PART.TOOL || part.tool !== AGENT_TOOL.COMPUTER) continue;
-      const app = computerAppName(part.input, part.output);
-      const kept = computerAppIcon(part.output);
-
-      if (app !== undefined && kept !== undefined) byApp.set(app, kept);
-      const icon = kept ?? (app === undefined ? undefined : byApp.get(app));
-
-      if (icon !== undefined) byCall.set(part.callId, icon);
-    }
-  }
-
-  return byCall;
-}
-
-/** An app a `computer` call used, as its answer named it: its name, and the icon a call kept for it, by the picture's id, where one did. */
-export interface ComputerAppKept {
+/** An app the conversation's `computer` calls used, named once: what tells it apart from every other (the first call that used it, since the same app on two machines is two apps), its name as the Mac newest answered it, else as the agent typed it, its bundle id, the newest icon and window a call on it kept, and the machine its calls ran on, where an answer named one. */
+export interface ComputerApp {
+  readonly id: string;
   readonly name: string;
+  readonly bundleId: string | undefined;
   readonly icon: string | undefined;
+  readonly window: KeptPicture | undefined;
+  readonly machine: CallMachine | undefined;
 }
 
-/**
- * The apps the conversation's `computer` calls used, by the bundle id the
- * Mac answered each with: the name the newest answer gave it, and the icon
- * the newest call that kept one kept. A call the Mac answered no bundle id
- * for, as an app with none, or that it refused, is left out.
- */
-export function computerAppsKept(
-  messages: readonly AgentTranscriptMessage[],
-): ReadonlyMap<string, ComputerAppKept> {
-  const apps = new Map<string, ComputerAppKept>();
+/** The apps a conversation's `computer` calls used: the one each call used, by its call; the one each spelling names, folded to lower case, on the machine it was newest used on; and the one each spelling names on each machine, by the machine's id. */
+export interface ComputerApps {
+  readonly byCall: ReadonlyMap<string, ComputerApp>;
+  readonly bySpelling: ReadonlyMap<string, ComputerApp>;
+  readonly byMachine: ReadonlyMap<string, ReadonlyMap<string, ComputerApp>>;
+}
+
+/** A `computer` call as the resolver reads it, in the transcript's order. */
+interface ComputerCallSeen {
+  readonly callId: string;
+  readonly typed: string | undefined;
+  readonly answered: string | undefined;
+  readonly bundleId: string | undefined;
+  readonly icon: string | undefined;
+  readonly window: KeptPicture | undefined;
+  readonly machine: CallMachine | undefined;
+}
+
+/** Which app each call used, and which app each spelling names, by the resolver's own key for the app. */
+interface AppKeys {
+  readonly byCall: ReadonlyMap<ComputerCallSeen, string>;
+  readonly bySpelling: ReadonlyMap<string, string>;
+}
+
+/** What the calls on one app on one machine kept, the newest of each, and the first call on it, which names it. */
+type AppHeld = Omit<ComputerCallSeen, "callId"> & { readonly firstCallId: string };
+
+/** Every way a call names its app, folded to one case: as its input spelled it, and as its answer named it, by name and by bundle id. */
+function spellingsOf(call: ComputerCallSeen): string[] {
+  return [call.typed, call.answered, call.bundleId].flatMap((spelled) =>
+    spelled === undefined ? [] : [spelled.toLowerCase()],
+  );
+}
+
+/** Every `computer` call of the transcript that names an app, in order: listing the apps names none. */
+function computerCallsSeen(messages: readonly AgentTranscriptMessage[]): ComputerCallSeen[] {
+  const seen: ComputerCallSeen[] = [];
 
   for (const message of messages) {
     for (const part of agentParts(message)) {
       if (part.kind !== AGENT_PART.TOOL || part.tool !== AGENT_TOOL.COMPUTER) continue;
-      const bundleId = computerAppBundleId(part.output);
-      const name = computerAppName(undefined, part.output);
+      const [called] = calledPicturesOf(part.tool, part.input, part.output);
 
-      if (bundleId === undefined || name === undefined) continue;
-      apps.set(bundleId, { name, icon: computerAppIcon(part.output) ?? apps.get(bundleId)?.icon });
+      seen.push({
+        callId: part.callId,
+        typed: computerAppName(part.input, undefined),
+        answered: computerAppName(undefined, part.output),
+        bundleId: computerAppBundleId(part.output),
+        icon: computerAppIcon(part.output),
+        window: called?.kept === true ? called.picture : undefined,
+        machine: callMachineOf(part.output),
+      });
     }
   }
 
-  return apps;
+  return seen.filter((call) => spellingsOf(call).length > 0);
+}
+
+/**
+ * Which app each call used, by a key of the resolver's own: the bundle id
+ * the Mac answered, else the app an earlier spelling already named, else
+ * the call's own name folded to lower case. Note that the bundle ids are
+ * read first, over every call, because a call still running names its app
+ * only as the agent typed it ("calculator"), and must count as the app its
+ * answer, or a later call's, turns out to be.
+ */
+function appKeysOf(calls: readonly ComputerCallSeen[]): AppKeys {
+  const bySpelling = new Map<string, string>();
+  const byCall = new Map<ComputerCallSeen, string>();
+
+  for (const call of calls) {
+    const bundleId = call.bundleId;
+
+    if (bundleId === undefined) continue;
+
+    for (const spelled of spellingsOf(call)) {
+      if (!bySpelling.has(spelled)) bySpelling.set(spelled, bundleId);
+    }
+  }
+
+  for (const call of calls) {
+    const spellings = spellingsOf(call);
+
+    const key =
+      call.bundleId ??
+      spellings.map((spelled) => bySpelling.get(spelled)).find((named) => named !== undefined) ??
+      spellings[0];
+
+    if (key === undefined) continue;
+    byCall.set(call, key);
+
+    for (const spelled of spellings) {
+      if (!bySpelling.has(spelled)) bySpelling.set(spelled, key);
+    }
+  }
+
+  return { byCall, bySpelling };
+}
+
+/**
+ * The machine each app was newest used on, by the resolver's key for the
+ * app, which a call whose answer names none counts as: one still running,
+ * or one answered before machines were named.
+ */
+function newestMachinesOf(
+  calls: readonly ComputerCallSeen[],
+  keys: AppKeys,
+): ReadonlyMap<string, CallMachine> {
+  const newest = new Map<string, CallMachine>();
+
+  for (const call of calls) {
+    const key = keys.byCall.get(call);
+
+    if (key !== undefined && call.machine !== undefined) newest.set(key, call.machine);
+  }
+
+  return newest;
+}
+
+/**
+ * The apps a conversation's `computer` calls used, each named once, which
+ * every place that names one reads: a call's row its icon, the stack of the
+ * apps in use each app and its window, and a mention of an app its name and
+ * icon. An app is one by its bundle id where the Mac answered one, else by
+ * its name, on each machine its calls ran on, so the same app on two
+ * machines is two apps; a call whose answer names no machine counts as the
+ * app on the machine it was newest used on. It is found by every spelling a
+ * call gave it, the agent's, the Mac's, and its bundle id, in any case,
+ * and on a machine by that machine's id. Each keeps the name the Mac newest
+ * answered, else the newest the agent typed, and the newest icon and window
+ * a call on it kept.
+ */
+export function computerAppsOf(messages: readonly AgentTranscriptMessage[]): ComputerApps {
+  const calls = computerCallsSeen(messages);
+  const keys = appKeysOf(calls);
+  const newestOn = newestMachinesOf(calls, keys);
+  // Each app's calls as kept, by its machine's id (none where no answer named one) and then its key.
+  const held = new Map<string | undefined, Map<string, AppHeld>>();
+  // Note that each machine finds an app by the spellings its own calls gave it, since one name may be two apps on two machines.
+  const spelledOnMachine = new Map<string, Map<string, string>>();
+
+  const placeOf = (call: ComputerCallSeen) => {
+    const key = keys.byCall.get(call);
+
+    return key === undefined ? undefined : { key, machine: call.machine ?? newestOn.get(key) };
+  };
+
+  for (const call of calls) {
+    const place = placeOf(call);
+
+    if (place === undefined) continue;
+    const onMachine = held.get(place.machine?.id) ?? new Map<string, AppHeld>();
+    const was = onMachine.get(place.key);
+
+    onMachine.set(place.key, {
+      firstCallId: was?.firstCallId ?? call.callId,
+      typed: call.typed ?? was?.typed,
+      answered: call.answered ?? was?.answered,
+      bundleId: call.bundleId ?? was?.bundleId,
+      icon: call.icon ?? was?.icon,
+      window: call.window ?? was?.window,
+      machine: place.machine,
+    });
+
+    held.set(place.machine?.id, onMachine);
+    const machineId = place.machine?.id;
+
+    if (machineId === undefined) continue;
+    const spelled = spelledOnMachine.get(machineId) ?? new Map<string, string>();
+
+    for (const spelling of spellingsOf(call)) {
+      if (!spelled.has(spelling)) spelled.set(spelling, place.key);
+    }
+
+    spelledOnMachine.set(machineId, spelled);
+  }
+
+  const apps = new Map(
+    [...held].map(([machineId, onMachine]) => [
+      machineId,
+      new Map(
+        [...onMachine].map(([key, { firstCallId, typed, answered, ...kept }]) => [
+          key,
+          { id: firstCallId, name: answered ?? typed ?? key, ...kept } satisfies ComputerApp,
+        ]),
+      ),
+    ]),
+  );
+
+  const appOf = (machineId: string | undefined, key: string | undefined): ComputerApp[] => {
+    const app = key === undefined ? undefined : apps.get(machineId)?.get(key);
+
+    return app === undefined ? [] : [app];
+  };
+
+  const spelledOn = (machineId: string, spelled: ReadonlyMap<string, string>) =>
+    new Map(
+      [...spelled].flatMap(([spelling, key]) =>
+        appOf(machineId, key).map((app) => [spelling, app] as const),
+      ),
+    );
+
+  return {
+    byCall: new Map(
+      calls.flatMap((call) => {
+        const place = placeOf(call);
+
+        return appOf(place?.machine?.id, place?.key).map((app) => [call.callId, app] as const);
+      }),
+    ),
+    bySpelling: new Map(
+      [...keys.bySpelling].flatMap(([spelled, key]) =>
+        appOf(newestOn.get(key)?.id, key).map((app) => [spelled, app] as const),
+      ),
+    ),
+    byMachine: new Map(
+      [...spelledOnMachine].map(
+        ([machineId, spelled]) => [machineId, spelledOn(machineId, spelled)] as const,
+      ),
+    ),
+  };
+}
+
+/** The app a spelling names among the conversation's, in any case: the agent's, the Mac's name, or its bundle id; on the machine named where one is, else on the machine it was newest used on. */
+export function computerAppNamed(
+  apps: ComputerApps,
+  spelled: string,
+  machineId?: string | undefined,
+): ComputerApp | undefined {
+  const folded = spelled.toLowerCase();
+
+  return machineId === undefined
+    ? apps.bySpelling.get(folded)
+    : apps.byMachine.get(machineId)?.get(folded);
 }
 
 /**
@@ -756,21 +935,6 @@ export function agentRows(
   };
 
   return turnRows(parts, reading, { moving });
-}
-
-/** What a whole turn's work holds, in the words its groups' lines say it (`groupSummary`): its calls, a coding agent's start among them, and its subagents; empty where it made none. */
-export function turnWorkSummary(message: AgentTranscriptMessage): string {
-  const held = { calls: 0, subagents: 0, startedAgents: 0 };
-
-  for (const part of agentParts(message)) {
-    const read = AGENT_READING.part(part);
-
-    if (read === ROW_PART.CALL || read === ROW_PART.LONE_CALL) held.calls += 1;
-    else if (read === ROW_PART.SUBAGENT) held.subagents += 1;
-    else if (read === ROW_PART.AGENT) held.startedAgents += 1;
-  }
-
-  return groupSummary(held);
 }
 
 /** One of a transcript's rows as the tab draws it, with the developer's lines that reached it while its turn ran. */

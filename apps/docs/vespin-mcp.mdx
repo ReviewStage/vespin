@@ -3,13 +3,13 @@ title: "MCP"
 description: "Use Vespin from Claude Code, Codex, Cursor, and other agents"
 ---
 
-Vespin MCP is an MCP server that lets an agent outside Vespin work in your workspace as you. It can read and create tasks, start and message agents, answer your Inbox, and merge pull requests.
+Vespin MCP is an MCP server that lets an agent outside Vespin work in your workspace as you. It can read and create tasks, start and message agents, answer your Inbox, review and merge pull requests, and manage automations, repositories, and your workspace. For every tool, see [MCP tools](/mcp-tools).
 
-The server is `https://vespin.dev/api/mcp`. It signs in with OAuth, so you never paste a key.
+The server is `https://vespin.dev/api/mcp`, over streamable HTTP. It signs in with OAuth, so you never paste a key.
 
 ## Connect an agent
 
-Open **Settings › Vespin MCP & CLI**, choose your agent under **Connect an app** in the **MCP** section, and follow its step. The same steps:
+Open **Settings › Vespin MCP & CLI**, choose your agent under **Connect an app** in the **MCP** section, and follow its two steps. The same steps:
 
 <Tabs>
   <Tab title="Claude Code">
@@ -25,7 +25,10 @@ Open **Settings › Vespin MCP & CLI**, choose your agent under **Connect an app
     It opens your browser to sign in. If it doesn't, run `codex mcp login vespin`.
   </Tab>
   <Tab title="Cursor">
-    Choose Cursor under **Connect an app** in Settings › Vespin MCP & CLI, click **Open in Cursor**, then sign in to vespin from Cursor's MCP settings.
+    Click **Open in Cursor** in Settings, then sign in to vespin from Cursor's MCP settings. To add it by hand, put this in `~/.cursor/mcp.json`:
+    ```json
+    { "mcpServers": { "vespin": { "url": "https://vespin.dev/api/mcp" } } }
+    ```
   </Tab>
   <Tab title="VS Code">
     ```sh
@@ -41,14 +44,33 @@ Open **Settings › Vespin MCP & CLI**, choose your agent under **Connect an app
   </Tab>
 </Tabs>
 
-Any other agent that supports remote MCP servers connects the same way: give it the server URL and sign in.
+Any other agent that supports remote MCP servers connects the same way: give it the server URL and sign in. With the [CLI](/cli), `vespin mcp install claude-code`, `codex`, `cursor`, or `vscode` runs the first step for you.
 
 ## Sign in
 
-Signing in opens a Vespin page that names the agent and asks you to **Allow** it. The agent then acts as your account, with your permissions in every workspace you belong to. If you're in more than one workspace, it asks which one when it lists or creates something.
+Signing in opens a Vespin page that names the agent and asks you to **Allow** or **Deny** it. Once allowed, the agent acts as your account, with your permissions in every workspace you belong to.
 
-An agent you start through Vespin MCP doesn't report back to the agent that started it. Ask that agent to check on it.
+| Scope | What it grants |
+| --- | --- |
+| `vespin:mcp` | Your tasks, agents, and Inbox, as you. Every tool needs it. |
+| `offline_access` | A refresh token, so access outlasts the window |
+
+An access token lasts 15 minutes. A refresh token lapses after 30 days unused. Clients register themselves, by dynamic client registration or a client ID metadata document, so there's nothing to set up first.
+
+An agent you start through Vespin MCP doesn't report back to the agent that started it. Ask that agent to check on it with `read_agent`.
 
 ## Disconnect an agent
 
-Connected agents are listed in the **MCP** section of Settings › Vespin MCP & CLI, with when each was allowed and last active. Open an agent's **⋯** menu and choose **Disconnect**. Access it already holds stops working within 15 minutes.
+Connected agents are listed in the **MCP** section of Settings › Vespin MCP & CLI, with when each was allowed and last active. Open an agent's **⋯** menu and choose **Disconnect**. Access it already holds stops working within 15 minutes, and it asks again the next time it signs in.
+
+`vespin mcp clients` and `vespin mcp revoke <client>` do the same from a terminal, and the `revoke_mcp_client` tool from an agent.
+
+## Errors
+
+| Response | Why |
+| --- | --- |
+| `401` | No token, or an expired or invalid one. The response names where to sign in. |
+| `403` | The token lacks `vespin:mcp`. |
+| A tool result marked as an error | The tool refused, with `status: "rejected"` and why, or couldn't run for the moment. |
+
+The server keeps no session, so it answers `POST` only. It refuses a request from a browser page.

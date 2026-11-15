@@ -1,4 +1,4 @@
-// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned, Following, and the member's sections, each a collection of tasks with its count, as Mail lists its mailboxes; and New task, the list column's compose button.
+// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned, Following, and the member's sections, each a collection of tasks with its count, as Mail lists its mailboxes; and New task, the compose button leading the detail's bar.
 
 import {
   AccountBarItem,
@@ -7,7 +7,6 @@ import {
   GLYPH,
   GroupRow,
   LIST_LOOK,
-  type ListLook,
   ListSection,
   MARK_SIZE,
   RowList,
@@ -20,7 +19,6 @@ import { useInboxBadge } from "../inbox/use-inbox.js";
 import { useSettingsAccount } from "../settings-button.js";
 import { keepSidebarPlace, keepTasksCollection, useTasksCollection } from "../sidebar-pick.js";
 import { useSidebarShown } from "../sidebar-shown.js";
-import { useThreeColumns } from "../use-window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 
 /** The places the sidebar's first rows open, each a tab's root. */
@@ -62,7 +60,7 @@ const PLACES = [
   },
 ] as const;
 
-/** New task as a list's bar offers it, under the compose glyph, as the tab bar's round + names it. */
+/** New task as the detail's bar offers it, under the compose glyph, as the tab bar's round + names it. */
 const NEW_TASK = { label: "New task", symbol: GLYPH.NEW_TASK } as const;
 
 /** The collections of tasks the sidebar lists under its places: Pinned, Following, and each of the member's sections. */
@@ -104,15 +102,26 @@ export function placeRoute(place: SidebarPlace): string {
 }
 
 /**
- * New task as every list column's bar offers it in a regular window, its one
- * trailing act beside the list's search and ⋯, as Mail's compose button
- * stands over its list; ⌘N opens it from the menu bar too. A compact
- * window keeps the tab bar's round + instead.
+ * New task as a regular window offers it: the compose button leading the
+ * detail's bar beside Expand, as Mail's stands over its message, or in
+ * Search's own bar where Search stands alone; ⌘N opens it from the menu bar
+ * too. A compact window keeps the tab bar's round + instead.
  */
 export function useComposeAction(): BarAction {
   const router = useRouter();
 
   return { ...NEW_TASK, onPress: () => router.push("/start-task") };
+}
+
+/**
+ * The detail's bar beside a regular window's first column, led by New task's
+ * compose as a landscape window's detail bar is and Mail's stands over its
+ * message, so New task stands in one place in every regular window.
+ */
+export function usePortraitDetailBar(bar: ColumnBar | undefined): ColumnBar {
+  const compose = useComposeAction();
+
+  return { ...bar, lead: [compose] };
 }
 
 /**
@@ -124,7 +133,6 @@ export function useComposeAction(): BarAction {
  * is never out of reach.
  */
 export function useListColumn(list: ListColumn): FirstColumn {
-  const compose = useComposeAction();
   const account = useSettingsAccount();
   const switcher = useWorkspaceSwitcher();
   const { shown, setShown } = useSidebarShown();
@@ -142,7 +150,8 @@ export function useListColumn(list: ListColumn): FirstColumn {
 
   return {
     sidebar: list.view,
-    sidebarBar: { ...list.bar, leading, action: compose },
+    // Note that New task leads the detail's bar instead (`usePortraitDetailBar`), as in a landscape window and Mail, so the narrow list's bar keeps only its own acts, such as Select mode's Done.
+    sidebarBar: { ...list.bar, leading },
     sidebarShown: shown,
     onSidebarShownChange: setShown,
   };
@@ -231,9 +240,4 @@ export function useAppSidebar(
     sidebarShown: shown,
     onSidebarShownChange: setShown,
   };
-}
-
-/** How a tab's list stands: plain beside the app sidebar, in the sidebar's look where it stands first. */
-export function useListLook(): ListLook {
-  return useThreeColumns() ? LIST_LOOK.PLAIN : LIST_LOOK.SIDEBAR;
 }
