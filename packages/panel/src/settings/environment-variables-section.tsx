@@ -6,7 +6,6 @@ import {
   WORKSPACE_ENVIRONMENT_BOUNDS,
   type WorkspaceEnvironmentAnswer,
   type WorkspaceVariable,
-  type WorkspaceVariableEditRequest,
   workspaceVariableNameSchema,
 } from "@repo/features/workspace-environment-wire";
 import { managesWorkspace } from "@repo/features/workspace-role";
@@ -76,7 +75,6 @@ import {
   GLYPH,
   SlidersHorizontalIcon,
 } from "@repo/ui/icons";
-import { inputProblem } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import {
@@ -86,7 +84,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Schema, type Types } from "effect";
+import { Schema } from "effect";
 import { useState } from "react";
 import { actFailureWords, askAct, sendAct } from "../act.js";
 import { ActorLine, ActorRef } from "../actor-ref.js";
@@ -119,7 +117,8 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
  * several at once (Add variables), secrets or configs as the choice heading
  * the dialog says, a `.env` imported or pasted into a Name spread a pair to
  * a line, each line saying what is wrong with its name or that it replaces
- * one saved; edits one from its row's ⋯ (Edit: a new name, a new value);
+ * one saved; edits one's value from its row's ⋯ (Edit), a variable never
+ * renamed but deleted and added again;
  * makes a config secret from the same ⋯, which asks first since it is never
  * undone; and deletes one, which asks first too. Each write answers the variables as they then
  * stand, which the section draws at once, the rows it wrote lit once.
@@ -155,7 +154,6 @@ const WORDS = {
   /** What a save or an edit says once it lands: when the agents already running take it. */
   SAVED: "Saved. Agents pick it up from their next message.",
   NAME_SPELLING: "Use letters, digits, and _, not starting with a digit.",
-  NO_NAME: "A variable needs a name.",
   ADDED: "Added",
   UPDATED: "Updated",
   BY: "by",
@@ -342,7 +340,6 @@ function VariableRow({
   workspaceId,
   variable,
   actor,
-  names,
   manages,
   landed,
   onWritten,
@@ -350,15 +347,13 @@ function VariableRow({
   workspaceId: string;
   variable: WorkspaceVariable;
   actor: Actor | undefined;
-  /** Every variable's name, which an edit's new name may not take. */
-  names: readonly string[];
   manages: boolean;
   landed: boolean;
   onWritten: (names: readonly string[]) => void;
 }): React.JSX.Element {
   const queries = useQueryClient();
   const { name, value } = variable;
-  const edit = useEditDialog(workspaceId, variable, names, onWritten);
+  const edit = useEditDialog(workspaceId, variable, onWritten);
 
   const deleting = useMutation({
     mutationFn: () => sendAct(ACT_KIND.WORKSPACE_ENVIRONMENT_DELETE, { workspaceId, name }),
@@ -377,9 +372,14 @@ function VariableRow({
     confirmFailure(FAILURE_SURFACE.WORKSPACE_VARIABLE_DELETE),
   );
 
+  // Note that a config is made secret by saving its value again as a secret, which the window already holds.
   const sealing = useMutation({
     mutationFn: () =>
-      sendAct(ACT_KIND.WORKSPACE_ENVIRONMENT_EDIT, { workspaceId, name, secret: true }),
+      sendAct(ACT_KIND.WORKSPACE_ENVIRONMENT_SAVE, {
+        workspaceId,
+        secret: true,
+        variables: [{ name, value: value ?? "" }],
+      }),
     onSuccess: async (answer) => {
       await drawAnswer(queries, workspaceId, answer);
       onWritten([name]);
@@ -490,50 +490,32 @@ function VariableRow({
 }
 
 /**
- * A variable's Edit: its name, which renames it, and its value, a secret's
- * left empty to keep what is saved, a config's shown to change in place.
- * What it is stays as it is: a config is made secret from its row's ⋯.
+ * A variable's Edit: its value, a secret's typed afresh, since the saved one
+ * is never shown, a config's shown to change in place, saved as what it is.
+ * A variable is never renamed, as a value sealed under its name cannot
+ * move: it is deleted and added again. A config is made secret from its
+ * row's ⋯.
  */
 function useEditDialog(
   workspaceId: string,
   variable: WorkspaceVariable,
-  names: readonly string[],
   onWritten: (names: readonly string[]) => void,
 ) {
   const queries = useQueryClient();
   const wasSecret = variable.secret !== false;
-  const [name, setName] = useState(variable.name);
   const [value, setValue] = useState(variable.value ?? "");
-  const typed = name.trim();
-  const renamed = typed !== variable.name;
-
-  const problem =
-    typed === ""
-      ? WORDS.NO_NAME
-      : !isVariableName(typed)
-        ? WORDS.NAME_SPELLING
-        : renamed && names.includes(typed)
-          ? `${typed} already exists.`
-          : undefined;
-
   const valueChanged = wasSecret ? value !== "" : value !== (variable.value ?? "");
 
-  /** The edit as it is sent: what changed, and nothing that did not. */
-  const editAsked = (): WorkspaceVariableEditRequest => {
-    const asked: Types.Mutable<WorkspaceVariableEditRequest> = { workspaceId, name: variable.name };
-
-    if (renamed) asked.rename = typed;
-
-    if (valueChanged) asked.value = value;
-
-    return asked;
-  };
-
   const editing = useMutation({
-    mutationFn: () => sendAct(ACT_KIND.WORKSPACE_ENVIRONMENT_EDIT, editAsked()),
+    mutationFn: () =>
+      sendAct(ACT_KIND.WORKSPACE_ENVIRONMENT_SAVE, {
+        workspaceId,
+        secret: wasSecret,
+        variables: [{ name: variable.name, value }],
+      }),
     onSuccess: async (answer) => {
       await drawAnswer(queries, workspaceId, answer);
-      onWritten([typed]);
+      onWritten([variable.name]);
       showToast({
         words: WORDS.SAVED,
         tone: STATUS_TONE.COMPLETE,
@@ -557,16 +539,10 @@ function useEditDialog(
 
   const form = useFormDialog(
     confirm,
-    problem === undefined &&
-      (renamed || valueChanged) &&
-      (wasSecret || value !== "") &&
-      value.length <= WORKSPACE_ENVIRONMENT_BOUNDS.MAX_VALUE_CHARS,
+    valueChanged && value !== "" && value.length <= WORKSPACE_ENVIRONMENT_BOUNDS.MAX_VALUE_CHARS,
   );
 
-  const reset = () => {
-    setName(variable.name);
-    setValue(variable.value ?? "");
-  };
+  const reset = () => setValue(variable.value ?? "");
 
   const dialog = (
     <Dialog
@@ -587,31 +563,6 @@ function useEditDialog(
       }
     >
       <Stack>
-        <FormField
-          label="Name"
-          error={inputProblem(problem)}
-          description={
-            renamed && problem === undefined
-              ? `Agents see ${typed} in place of ${variable.name} when they next start.`
-              : undefined
-          }
-        >
-          {(control) => (
-            <ReplayMask>
-              <TextField
-                field={control}
-                font={TEXT_FIELD_FONT.MONO}
-                autoCorrect={false}
-                spellCheck={false}
-                maxLength={WORKSPACE_ENVIRONMENT_BOUNDS.MAX_NAME_CHARS}
-                disabled={form.settling}
-                value={name}
-                onChange={setName}
-                onEnter={form.submit}
-              />
-            </ReplayMask>
-          )}
-        </FormField>
         {wasSecret ? (
           <SecretField
             label="Value"
@@ -917,7 +868,6 @@ function VariableList({
   const [query, setQuery] = useState("");
   const [kept, setKept] = useState<ReadonlySet<string>>(new Set());
   const [order, setOrder] = useState<Order>(ORDER.NAME);
-  const names = variables.map((variable) => variable.name);
 
   const shown = variables.map((variable): ShownVariable => {
     const changer = changerOf(variable);
@@ -970,7 +920,6 @@ function VariableList({
               workspaceId={workspaceId}
               variable={variable}
               actor={byName.get(variable.name)?.actor}
-              names={names}
               manages={manages}
               landed={landed.has(variable.name)}
               onWritten={onWritten}

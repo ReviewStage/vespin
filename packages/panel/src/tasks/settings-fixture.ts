@@ -1074,10 +1074,10 @@ const ANSWERS: StagedAnswers = {
   },
   [ACT_KIND.ALLOWED_COMMANDS_WRITE]: (write) => allowedCommandWritten(write),
   [ACT_KIND.WORKSPACE_ENVIRONMENT_LIST]: () => ({ variables: acmeVariables }),
-  [ACT_KIND.WORKSPACE_ENVIRONMENT_PUT]: ({ name, value, secret }) =>
+  [ACT_KIND.WORKSPACE_ENVIRONMENT_PUT]: ({ name, value }) =>
     variablesAnswer([
       ...acmeVariables.filter((variable) => variable.name !== name),
-      writtenVariable(name, value, secret),
+      writtenVariable(name, value, undefined),
     ]),
   [ACT_KIND.WORKSPACE_ENVIRONMENT_SAVE]: ({ variables, secret }) => {
     const written = variables.map(({ name, value }) => writtenVariable(name, value, secret));
@@ -1086,27 +1086,6 @@ const ANSWERS: StagedAnswers = {
     return variablesAnswer([
       ...acmeVariables.filter((variable) => !names.has(variable.name)),
       ...written,
-    ]);
-  },
-  [ACT_KIND.WORKSPACE_ENVIRONMENT_EDIT]: ({ name, rename, value, secret }) => {
-    const was = acmeVariables.find((variable) => variable.name === name);
-
-    if (was === undefined) return { variables: acmeVariables };
-    const isSecret = was.secret !== false || secret === true;
-    const nextValue = value ?? was.value ?? "";
-    const { value: _value, ...rest } = was;
-    const kept = isSecret ? {} : { value: nextValue };
-
-    return variablesAnswer([
-      ...acmeVariables.filter((variable) => variable.name !== name),
-      {
-        ...rest,
-        name: rename ?? name,
-        secret: isSecret,
-        updatedAt: NOW,
-        updatedBy: FIXTURE_PERSON.ADA,
-        ...kept,
-      },
     ]);
   },
   [ACT_KIND.WORKSPACE_ENVIRONMENT_DELETE]: ({ name }) =>
