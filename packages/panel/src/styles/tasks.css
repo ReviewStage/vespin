@@ -656,7 +656,7 @@
   height: 100%;
   grid-area: 1 / 1;
   border: 0;
-  background-color: var(--ui-color-code-ground);
+  background-color: var(--code-ground);
 }
 
 /* Pierre's tree draws in a shadow root of its own, which inherits these:

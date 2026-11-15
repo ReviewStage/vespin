@@ -16,6 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { unreadShown } from "../failure-report.js";
+import { CODE_PANE_GROUND_CLASS } from "./code-pane-look.js";
 import {
   FILE_READ,
   type FileRead,
@@ -300,7 +301,11 @@ export function FileTab({
   useAppCommand(APP_COMMAND.MENTION_LINES, mentionLines);
 
   return (
-    <Fill as={FILL_ELEMENT.SECTION} className="file-tab bg-card-code" aria-label={file.path}>
+    <Fill
+      as={FILL_ELEMENT.SECTION}
+      className={`file-tab ${CODE_PANE_GROUND_CLASS}`}
+      aria-label={file.path}
+    >
       {read.kind === FILE_READ.READY ? (
         <FileTextView file={file} held={read} handleRef={handle} />
       ) : read.kind === FILE_READ.READING ? (

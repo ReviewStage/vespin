@@ -114,6 +114,7 @@ import {
   wholeable,
 } from "./changes-model.js";
 import { ChangesStrip } from "./changes-strip.js";
+import { CODE_PANE_GROUND_CLASS } from "./code-pane-look.js";
 import {
   type CommentDraft,
   type CommentDrafts,
@@ -1727,7 +1728,7 @@ function FilesList({
   return (
     <Fill
       as={FILL_ELEMENT.SECTION}
-      className="file-tab bg-card-code"
+      className={`file-tab ${CODE_PANE_GROUND_CLASS}`}
       aria-label="Diffs of the changed files"
     >
       {query === "" || filterShown ? null : (

@@ -200,17 +200,17 @@ const FIND_SKIPPED = "[data-gutter]";
  * The panel's look in the shadow root, from the window's tokens, in
  * Pierre's last layer so it stands over the theme's own tints: the diff
  * tints every place a diff is drawn shares, and lit lines in the code's
- * blue. The ground is the window's code ground (`--ui-color-code-ground`),
- * the one every code surface stands on (a message's code block, a
- * Terminal's screen), rather than the GitHub themes' own white and navy;
+ * blue. The ground is the code's ground where it is drawn (`--code-ground`):
+ * the code ground a message's code block stands on, or the window's own in
+ * a pane that is all code, rather than the GitHub themes' own white and navy;
  * the ink is the themes', and the type is the host's (`typeset`).
  */
 const LOOK_CSS = `
 @layer unsafe {
   :host {
     display: block;
-    --diffs-light-bg: var(--ui-color-code-ground);
-    --diffs-dark-bg: var(--ui-color-code-ground);
+    --diffs-light-bg: var(--code-ground);
+    --diffs-dark-bg: var(--code-ground);
     --diffs-addition-color-override: var(--diff-added-mark);
     --diffs-deletion-color-override: var(--diff-removed-mark);
     --diffs-bg-addition-override: var(--diff-added-ground);
