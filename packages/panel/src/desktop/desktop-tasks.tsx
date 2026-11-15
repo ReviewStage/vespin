@@ -64,7 +64,7 @@ import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-door
 import { renameWrite } from "../rename-write.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { useNamedTask, useNamedTasks } from "../task-list-collections.js";
+import { NAMED_ORDER, useNamedTask, useNamedTasks } from "../task-list-collections.js";
 import { AgentCard, agentSubject } from "../tasks/agent-ref.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
@@ -219,6 +219,9 @@ import { useStandingDoor } from "./task-row-parts.js";
  * task whose repository belongs to another of the account's workspaces says
  * which, with the press that moves it there (`stranded-task-banner.tsx`).
  */
+
+/** No task open: what a task's relation menus offer while none is. */
+const NO_TASKS: readonly TaskSummary[] = [];
 
 /** What the task's page says to a reader while the task is read. */
 const TASK_LOADING_LABEL = readingWords("the task");
@@ -454,7 +457,7 @@ function DescriptionDocument({
   away: TaskHeadBack;
 }): React.JSX.Element {
   const { region } = tasks;
-  const pins = usePins(tasks.drawnTasks);
+  const pins = usePins(tasks.typedNamesNow);
   const account = useWindowAccount();
   // The tab a phone's panel shows past the plan, which its header is named by, and the tab its column shows, whose menu the header's ⋯ offers on the agent's screen (`strip-tabs.tsx`'s `ShownTab`).
   const [shownTab, setShownTab] = useState<ShownTab | undefined>(undefined);
@@ -573,10 +576,10 @@ function DescriptionDocument({
 
   // The task renamed is the one the page stands on, so its rename opens while its description is still read.
   const taskId = opened?.id;
-  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const renaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_TERMS));
   // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
-  const barRenaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const barRenaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_TERMS));
 
   // The open task's one rename door, which its title's menu and ⌘K ask: it opens the field over the task's name where the window heads the task, a phone's head or the title bar.
@@ -595,7 +598,7 @@ function DescriptionDocument({
   // The workspace's agents an `@` offers after the task's own, named by the tasks the window lists.
   const readMentionAgents = useMentionAgentsReader(
     opened?.workspaceId,
-    useNamedTasks(tasks.typedNames),
+    useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED),
     tasks.agents.models,
   );
 
@@ -1019,14 +1022,12 @@ function DescriptionDocument({
   const workspaceName = home?.name ?? "";
   // The task's path and its add menu name and offer the tasks of its own workspace, and a press on the parent's crumb opens it as a list's row would.
   const openedWorkspace = opened?.workspaceId;
-  const { tasks: everyTask, onSelect: selectTask, relationMenu } = tasks;
+  const { onSelect: selectTask, relationMenu } = tasks;
   const onNewRelatedTask = tasks.newTask.onOpenRelated;
   const { onSetTaskBlock, onSetTaskParent } = relationWrites;
-
-  const blockTasks = useMemo(
-    () => everyTask.filter((each) => each.workspaceId === openedWorkspace),
-    [everyTask, openedWorkspace],
-  );
+  const ofWorkspace = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, openedWorkspace);
+  // Note that with no task open there is no workspace whose tasks it may relate.
+  const blockTasks = openedWorkspace === undefined ? NO_TASKS : ofWorkspace;
 
   // A task the head names, a crumb or a related row, opens on its plan, as a list's row does.
   const openTask = useSteadyDoor(selectTask);

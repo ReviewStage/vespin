@@ -84,6 +84,8 @@ repository named.
 [#9160](https://github.com/ReviewStage/vespin/pull/9160),
 [#9184](https://github.com/ReviewStage/vespin/pull/9184)
 
+![Usage-based billing, Theo Walsh's task, open on its Overview with its Following chip's popover open: You, with the laptop mark for letting agents use your machines, Theo Walsh marked Assignee, and Dana Moreno, each checked, above Let agents here use my machines switched on; beside it the sidebar's Following group lists Usage-based billing, Rotate webhook signing secrets, and Onboarding checklist above My tasks](apps/web/public/changelog/0.35.0/following.png)
+
 ### Improvements
 
 - Settings › Machines lists every machine of yours once, This Mac first, each

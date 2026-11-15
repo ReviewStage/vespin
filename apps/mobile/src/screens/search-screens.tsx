@@ -23,6 +23,7 @@ import {
   GLYPH,
   glyphSymbol,
   LIST_LOOK,
+  type ListScopes,
   ListSection,
   NoSelection,
   RowList,
@@ -168,14 +169,18 @@ type SearchWords = {
  */
 function FoundList({
   found,
+  query,
   scope,
   listing,
   selected,
   onOpen,
   remindMenu,
   onArchiveAgent,
+  scopes,
 }: {
   readonly found: SearchFound;
+  /** What was typed, whose words each row's title sets in bold. */
+  readonly query: string;
   readonly scope: SearchScope;
   /** The Tasks listing a task's row acts through, its status asking first where it stops agents. */
   readonly listing: TasksListing;
@@ -186,6 +191,8 @@ function FoundList({
   readonly remindMenu: (item: InboxItem) => RowSubmenu;
   /** Asks to archive an agent found, once it rests, as a task's Agents do. */
   readonly onArchiveAgent: (agentId: string) => void;
+  /** The scopes the results list under, standing as the list's first row. */
+  readonly scopes: ListScopes;
 }) {
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const pictureOf = useMemberPictures();
@@ -196,6 +203,8 @@ function FoundList({
   return (
     <RowList
       look={LIST_LOOK.PLAIN}
+      searched={query}
+      scopes={scopes}
       selected={selected}
       onSelect={onOpen}
       onRefresh={async () => {
@@ -302,25 +311,30 @@ function useSearchScreen(
     onPress: () => setScope(each),
   }));
 
-  // Note that the scopes stand over a scope that found nothing, so another is one tap away.
-  const results = (
+  // Note that a scope that found nothing says so only once the lists it searches have answered and the finding has caught up with what is typed; until then it says what it reads, or keeps the last query's rows, as the panel's ⌘K does.
+  const empty = none && (reading !== undefined || found.current);
+
+  // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away.
+  const results = empty ? (
     <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-      {none && reading !== undefined ? (
+      {reading !== undefined ? (
         <EmptyState title={reading} symbol={GLYPH.SEARCH} loading />
-      ) : none && found.current ? (
-        <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
       ) : (
-        <FoundList
-          found={found}
-          scope={scope}
-          listing={listing}
-          selected={pick?.picked?.id}
-          onOpen={open}
-          remindMenu={(item) => remind.menu([item])}
-          onArchiveAgent={archiveAsk.archive}
-        />
+        <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
       )}
     </ScopePicker>
+  ) : (
+    <FoundList
+      scopes={{ label: SCOPE_LABEL, scopes }}
+      found={found}
+      query={query}
+      scope={scope}
+      listing={listing}
+      selected={pick?.picked?.id}
+      onOpen={open}
+      remindMenu={(item) => remind.menu([item])}
+      onArchiveAgent={archiveAsk.archive}
+    />
   );
 
   return { listing, results, status, deletion, remind, archiveAsk };
@@ -354,7 +368,8 @@ function SearchStackFound({
  * anything is typed, and that nothing matches where nothing does. The field
  * is focused each time the tab opens on nothing typed, as the system's
  * Search tab does, so a query is typed at once; one left typed stands with
- * its results instead.
+ * its results instead. The keyboard's Search key lowers the keyboard, as
+ * Mail's does, so the results stand whole under the field.
  */
 function SearchStackScreen(words: SearchWords) {
   const { query, setQuery, scope } = words;
@@ -382,6 +397,7 @@ function SearchStackScreen(words: SearchWords) {
           ref={field}
           placeholder={placeholder}
           onChangeText={(event) => setQuery(event.nativeEvent.text)}
+          onSearchButtonPress={() => field.current?.blur()}
           onCancelButtonPress={() => setQuery("")}
         />
       </Stack.Screen>

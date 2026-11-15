@@ -35,10 +35,23 @@ import { BUZZ, ConfirmAsk } from "@repo/ui-native";
 import { and, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
-import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
+import {
+  useGlobalSearchParams,
+  useNavigationContainerRef,
+  usePathname,
+  useRootNavigationState,
+  useRouter,
+} from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { useAgentPullRequests } from "../agents/use-agent.js";
-import { PUSHED_PAGE, type PushedPage, useTopPage } from "../detail-stack.js";
+import {
+  DETAIL_FRONT,
+  PUSHED_PAGE,
+  type PushedPage,
+  popDetailFront,
+  useDetailFront,
+  useTopPage,
+} from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useHostActs,
@@ -57,6 +70,7 @@ import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
+import { type NavigatorState, tabStackBacks, tabsInFront } from "./window-back.js";
 
 /** What Sign Out asks first, since it leaves the phone with no account until the next sign-in. */
 const SIGN_OUT_ASK = {
@@ -303,10 +317,22 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const sidebarStands = signedIn && regular;
 
+  // Note that Back pops a page pushed over the detail in front, else a page the tab pushed over the window, as a stack's own Back does; never a sheet, which closes with its own Done or Cancel.
+  const detailFront = useDetailFront();
+  const root: NavigatorState = useRootNavigationState();
+  const navigation = useNavigationContainerRef();
+  const tabs = tabsInFront(root);
+
+  const backs =
+    signedIn &&
+    tabs !== undefined &&
+    (detailFront === DETAIL_FRONT.NONE ? tabStackBacks(tabs) : detailFront === DETAIL_FRONT.PUSHED);
+
   const enabled = [
     ...subject.enabled,
     ...(workspaces.length > 0 ? [MENU_COMMAND.SWITCH_WORKSPACE] : []),
     ...(sidebarStands ? [MENU_COMMAND.SIDEBAR] : []),
+    ...(backs ? [MENU_COMMAND.BACK] : []),
   ];
 
   const toggled =
@@ -403,6 +429,18 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         return router.navigate("/search");
       case MENU_COMMAND.SIDEBAR:
         return sidebar.toggle();
+      case MENU_COMMAND.BACK: {
+        if (detailFront === DETAIL_FRONT.PUSHED) return popDetailFront();
+
+        // Note that the tab's stack is read again at the press, because a held ⌘[ repeats before this render's enablement catches up, and a Back at the tab's root would go to the first tab.
+        const liveRoot: NavigatorState | undefined = navigation.getRootState();
+        const live = tabsInFront(liveRoot);
+
+        if (live !== undefined && tabStackBacks(live)) router.back();
+
+        return;
+      }
+
       case MENU_COMMAND.MARK_DONE:
         if (working > 0) setAsking(ASK.MARK_DONE);
         else markDone();

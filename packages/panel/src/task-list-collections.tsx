@@ -1,5 +1,5 @@
 /**
- * task-list-collections.tsx -- the window's task-list collections handed to every surface beneath, and its reads of them: one row that draws again only when that row moves, a task by id with its typed name, every task in the list's order, and rows looked up by id.
+ * task-list-collections.tsx -- the window's task-list collections handed to every surface beneath, and its reads of them: one row that draws again only when that row moves, a task by id with its typed name, every task in an order, the tasks an address's step names, and rows looked up by id.
  *
  * The collections and the feed the window's follow writes them through are
  * `@repo/host/task-list-following`'s, shared with the iOS app; what is here
@@ -8,9 +8,14 @@
 
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { renamedTask, renamedTasks, type TaskNames } from "@repo/features/tasks-model";
+import {
+  renamedTask,
+  renamedTasks,
+  sidebarTasks,
+  type TaskNames,
+} from "@repo/features/tasks-model";
 import type { TaskListCollections } from "@repo/host/task-list-following";
-import { type Collection, inArray, useLiveQuery } from "@tanstack/react-db";
+import { type Collection, eq, inArray, or, useLiveQuery } from "@tanstack/react-db";
 import {
   createContext,
   type ReactNode,
@@ -22,6 +27,16 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+
+/** The order a read of the whole list lists its tasks in. */
+export const NAMED_ORDER = {
+  /** Newest started first, as the host lists them. */
+  STARTED: "started",
+  /** The sidebar's: the pinned ones first, newest pinned first, then the rest, newest started first. */
+  PINNED_FIRST: "pinned-first",
+} as const;
+
+export type NamedOrder = (typeof NAMED_ORDER)[keyof typeof NAMED_ORDER];
 
 /** Hears that one row moved. */
 type RowHeard = () => void;
@@ -79,6 +94,12 @@ function listenToRow<Row extends object>(
 /** No name typed: what a read of the rows as listed draws over them. */
 const NO_NAMES_TYPED: TaskNames = new Map();
 
+/** A task step naming a task by its number in its workspace, as no id is. */
+const NUMBER_STEP = /^\d+$/u;
+
+/** No step asked: what a read of the tasks a step names answers. */
+const NO_STEPPED: readonly TaskSummary[] = [];
+
 /** The live queries' keys: the rows of each collection a reader by id has asked for. */
 const ROWS_KEY = {
   TASKS: "task-list-rows-tasks",
@@ -131,24 +152,67 @@ export function useNamedTask(
 }
 
 /**
- * Every task the list holds, newest started first as the host lists them,
- * each name drawn as it is being typed where it is (`typedNames`). One live
- * query keeps them, so the list is the same array until a task moves; for a
- * reader that walks the whole list, as the palette's task rows do. Note that
- * these rows are the live query's, never the same objects `.get` answers.
+ * Every task the list holds in `order`, held to the workspace `workspaceId`
+ * names where it names one, each name drawn as it is being typed where it
+ * is (`typedNames`). One live query keeps them, so the list is the same
+ * array until one of them or a typed name moves; for a reader that walks
+ * the whole list, as the palette's task rows, the Tasks page, and the
+ * Inbox's counts do. Note that these rows are the live query's, never the
+ * same objects `.get` answers.
  */
-export function useNamedTasks(typedNames: TaskNames): readonly TaskSummary[] {
+export function useNamedTasks(
+  typedNames: TaskNames,
+  order: NamedOrder,
+  workspaceId?: string | undefined,
+): readonly TaskSummary[] {
   const collections = useTaskListCollections();
 
   const every = useLiveQuery({
-    query: (q) =>
-      q
+    query: (q) => {
+      const all = q
         .from({ task: collections.tasks })
         .orderBy(({ task }) => task.createdAt, "desc")
-        .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" }),
+        .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" });
+
+      return workspaceId === undefined
+        ? all
+        : all.where(({ task }) => eq(task.workspaceId, workspaceId));
+    },
   }).data;
 
-  return useMemo(() => renamedTasks(every, typedNames), [every, typedNames]);
+  return useMemo(() => {
+    const named = renamedTasks(every, typedNames);
+
+    if (order === NAMED_ORDER.STARTED) return named;
+    const { pinned, rest } = sidebarTasks(named);
+
+    return [...pinned, ...rest];
+  }, [every, typedNames, order]);
+}
+
+/**
+ * The tasks an address's step may name, as the list holds them: the one
+ * whose id it is, and, for a step reading as a number, each numbered so in
+ * any workspace, for the reader to hold to the workspace the address names;
+ * none while no step is given. One live query over those rows keeps them,
+ * so the list is the same array across a delivery moving any other task.
+ */
+export function useSteppedTasks(step: string | undefined): readonly TaskSummary[] {
+  const collections = useTaskListCollections();
+
+  const stepped = useLiveQuery({
+    query: (q) => {
+      if (step === undefined) return undefined;
+      const from = q.from({ task: collections.tasks });
+
+      if (!NUMBER_STEP.test(step)) return from.where(({ task }) => eq(task.id, step));
+      const number = Number(step);
+
+      return from.where(({ task }) => or(eq(task.id, step), eq(task.number, number)));
+    },
+  }).data;
+
+  return stepped ?? NO_STEPPED;
 }
 
 /** The task list's rows read by id, as the collections hold them now. */
