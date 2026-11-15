@@ -457,7 +457,8 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     );
 
     /** An agent as the task list holds it now; none where it lists no such agent. */
-    const { agentListed } = tasks;
+    const agentListed = (agentId: string) =>
+      tasks.agentsListed()?.find((agent) => agent.id === agentId);
 
     /** Waits until the task list says an agent's sandbox stands open, answering whether it waited: false at once where it already says so, or does not know. */
     const sandboxOpened = (agentId: string) =>
@@ -931,6 +932,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       }),
       drain,
       taskListMoves: tasks.taskListMoves,
+      agentsListed: tasks.agentsListed,
     };
 
     return assembly;
