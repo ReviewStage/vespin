@@ -63,7 +63,7 @@ function listed(
 test("starting, naming, and ending a shell target its session exactly and carry a name as one argument", () => {
   const exact = `=terminal-${SHELL_A}`;
   const hostile = "dev server; rm -rf / $(id) 'q'";
-  const started = startTerminal(SHELL_A, hostile);
+  const started = startTerminal(SHELL_A, hostile, {});
   const renamed = renameTerminal(SHELL_A, hostile);
   const killed = killTerminal(SHELL_A);
 
@@ -76,11 +76,11 @@ test("starting, naming, and ending a shell target its session exactly and carry 
   assert.ok(killed.args.includes(exact));
   assert.equal(started.args.at(-1), hostile);
   assert.equal(renamed.args.at(-1), hostile);
-  assert.ok(startTerminal(SHELL_A, undefined).args.includes(TMUX.START_DIRECTORY));
-  assert.ok(!startTerminal(SHELL_A, undefined).args.includes(TMUX.TITLE_OPTION));
+  assert.ok(startTerminal(SHELL_A, undefined, {}).args.includes(TMUX.START_DIRECTORY));
+  assert.ok(!startTerminal(SHELL_A, undefined, {}).args.includes(TMUX.TITLE_OPTION));
 });
 
-test("a run action's command, label, and variables reach tmux as written where they end in a semicolon, which tmux would read as the end of its command", () => {
+test("a run action's command, label, and variables, and a shell's variables, reach tmux as written where they end in a semicolon, which tmux would read as the end of its command", () => {
   // Note that tmux 3.6 reads `find . -exec rm {} \;` as `find . -exec rm {} ;` and `pnpm dev;` as `pnpm dev`: a backslash before the last `;` hands each back whole.
   const run = {
     actionId: SHELL_A,
@@ -97,6 +97,7 @@ test("a run action's command, label, and variables reach tmux as written where t
   assert.ok(started.args.includes("MODE=a\\;"));
   assert.ok(rerun.args.includes("pnpm dev\\;"));
   assert.ok(rerun.args.includes("MODE=a\\;"));
+  assert.ok(startTerminal(SHELL_A, undefined, run.environment).args.includes("MODE=a\\;"));
 });
 
 test("a run action's command is its pane's own process, handed to its shell as an argument rather than typed or spliced into a script", () => {
@@ -129,7 +130,7 @@ test("every command runs on a tmux server of its own, even where it execs tmux, 
 
   const asks = [
     listTerminals(),
-    startTerminal(SHELL_A, "dev server"),
+    startTerminal(SHELL_A, "dev server", {}),
     startRunAction(SHELL_A, run),
     rerunAction(SHELL_A, run),
     attachTerminal(SHELL_A),
