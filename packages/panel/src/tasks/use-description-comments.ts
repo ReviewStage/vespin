@@ -94,7 +94,7 @@ export function useDescriptionComments(
   const toast = useToast();
   const drafts = useDraftWriter();
   const [notes, setNotes] = useState<ReadonlyMap<string, string>>(new Map());
-  const planId = subject?.taskId;
+  const taskId = subject?.taskId;
 
   /** Says in a toast that a write the host drew was taken back, and why. */
   const takenBack = useCallback(
@@ -106,10 +106,10 @@ export function useDescriptionComments(
         failure: {
           surface,
           cause: "refused" in answer ? FAILURE_CONDITION.REFUSED : FAILURE_CONDITION.NOT_KEPT,
-          about: { taskId: planId },
+          about: { taskId: taskId },
         },
       }),
-    [toast, planId],
+    [toast, taskId],
   );
 
   const note = useCallback((threadId: string, words: string | undefined) => {
@@ -125,9 +125,9 @@ export function useDescriptionComments(
 
   const start = useCallback(
     async (begun: DescriptionCommentStart) => {
-      if (planId === undefined) return { note: COMMENT_NOTE.NOT_POSTED };
+      if (taskId === undefined) return { note: COMMENT_NOTE.NOT_POSTED };
 
-      const answer = await sendStart({ planId, start: begun }).catch(
+      const answer = await sendStart({ taskId, start: begun }).catch(
         (): TasksCommentAnswer => UNANSWERED,
       );
 
@@ -144,15 +144,15 @@ export function useDescriptionComments(
 
       return { thread: answer.thread };
     },
-    [planId, sendStart, note, takenBack],
+    [taskId, sendStart, note, takenBack],
   );
 
   const act = useCallback(
     async (threadId: string, action: DescriptionCommentActionRequest): Promise<boolean> => {
-      if (planId === undefined) return false;
+      if (taskId === undefined) return false;
       note(threadId, undefined);
 
-      const answer = await sendCommentAct({ planId, threadId, action }).catch(
+      const answer = await sendCommentAct({ taskId, threadId, action }).catch(
         (): TasksCommentAnswer => UNANSWERED,
       );
 
@@ -180,7 +180,7 @@ export function useDescriptionComments(
         drafts.update(
           {
             kind: DRAFT_PLACE.DESCRIPTION_COMMENT,
-            planId,
+            taskId,
             on: { threadId, entryId: action.entry },
           },
           (was) => ({ ...was, text: action.words }),
@@ -189,7 +189,7 @@ export function useDescriptionComments(
 
       return false;
     },
-    [planId, sendCommentAct, note, takenBack, drafts],
+    [taskId, sendCommentAct, note, takenBack, drafts],
   );
 
   const rows = read.data;
@@ -198,16 +198,16 @@ export function useDescriptionComments(
   const pageId = subject?.pageId;
 
   const retry = useCallback(() => {
-    if (planId === undefined) return;
-    retryComments(pageId === undefined ? { taskId: planId } : { taskId: planId, pageId });
-  }, [retryComments, planId, pageId]);
+    if (taskId === undefined) return;
+    retryComments(pageId === undefined ? { taskId: taskId } : { taskId: taskId, pageId });
+  }, [retryComments, taskId, pageId]);
 
   return useMemo(
     () =>
-      planId === undefined
+      taskId === undefined
         ? undefined
         : {
-            planId,
+            taskId,
             threads: rows ?? NO_THREADS,
             read: isSuccess,
             failed: isError,
@@ -216,6 +216,6 @@ export function useDescriptionComments(
             start,
             act,
           },
-    [planId, rows, isSuccess, isError, retry, notes, start, act],
+    [taskId, rows, isSuccess, isError, retry, notes, start, act],
   );
 }

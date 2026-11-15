@@ -27,7 +27,7 @@ import { TranscriptWords } from "./transcript-blocks.js";
  * stay words. Synthetic workspaces and tasks.
  */
 
-const PLAN_ID = "3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b";
+const TASK_ID = "3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b";
 
 /** A workspace of the reader's, its slug its name in lower case. */
 function workspace(id: string, name: string): Workspace {
@@ -83,13 +83,13 @@ function listTasks(): void {
 /** What a plan's page hands its places, each task a chip opened kept. */
 function planPage(opened: Mention[]): TaskMentionsValue {
   return {
-    holder: { taskId: PLAN_ID },
+    holder: { taskId: TASK_ID },
     taskName: "Rollout",
     workspace: STAGE.slug ?? "",
     repository: null,
     text: () => "",
     doors: {
-      holder: { taskId: PLAN_ID },
+      holder: { taskId: TASK_ID },
       place: { workspace: STAGE.slug ?? "", repository: null },
       anchors: new Set(),
       onOpenTask: (mention) => opened.push(mention),

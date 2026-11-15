@@ -27,11 +27,7 @@ import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppHostRead, AppStateSnapshot, AppTranscript } from "@repo/host/app-state";
-import {
-  type FollowedAgent,
-  selectFollowedAgent,
-  selectTranscript,
-} from "@repo/host/app-state-reads";
+import { type FollowedAgent, selectTranscript } from "@repo/host/app-state-reads";
 import {
   BUZZ,
   latestStep,
@@ -47,7 +43,12 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cachedFile, cachedVideo } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs, useHostFollow } from "../host/host-provider.js";
+import {
+  useHostActs,
+  useHostFollow,
+  useTaskListCollections,
+  useTaskListRow,
+} from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
 
 /** What an agent's recordings are named under among the app's caches. */
@@ -108,9 +109,7 @@ function agentOfAnswer(answer: AgentPageAnswerView): ListedAgent | undefined {
 
 /** The agent as the task list follows it, by its id; none until the list holds it. */
 export function useFollowedAgent(agentId: string): FollowedAgent | undefined {
-  const select = useMemo(() => selectFollowedAgent(agentId), [agentId]);
-
-  return useQuery({ ...appStateQuery, select }).data;
+  return useTaskListRow(useTaskListCollections().agents, agentId);
 }
 
 /**
@@ -159,15 +158,9 @@ const NO_PULL_REQUESTS: readonly AgentPullRequest[] = [];
 
 /** The pull requests the agent opened, as the task list holds them now; none before it holds them. */
 export function useAgentPullRequests(agentId: string): readonly AgentPullRequest[] {
-  const select = useMemo(
-    () => (state: AppStateSnapshot) =>
-      (state.tasks.agentPullRequests ?? [])
-        .filter((each) => each.agentId === agentId)
-        .map(({ pullRequest }) => pullRequest),
-    [agentId],
-  );
+  const listed = useTaskListRow(useTaskListCollections().agentPullRequests, agentId);
 
-  return useQuery({ ...appStateQuery, select }).data ?? NO_PULL_REQUESTS;
+  return useMemo(() => (listed === undefined ? NO_PULL_REQUESTS : [listed.pullRequest]), [listed]);
 }
 
 /**
@@ -545,10 +538,19 @@ export type PageRead =
   | { readonly html: string; readonly title: string }
   | { readonly failed: true };
 
-/** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known. */
-export function usePageHtml(taskId: string | undefined, pageId: string, version: number): PageRead {
+/** A page's read as it stands, and the ask to read it again after it failed. */
+export interface PageHtml {
+  readonly read: PageRead;
+  readonly again: () => void;
+}
+
+/** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known, and read again on `again` after a read that failed. */
+export function usePageHtml(taskId: string | undefined, pageId: string, version: number): PageHtml {
   const acts = useHostActs();
   const [read, setRead] = useState<PageRead>({ reading: true });
+  // Note that each ask to read again counts up, which the read below depends on, so Try again reads the page anew rather than leaving the failure standing.
+  const [asked, setAsked] = useState(0);
+  const again = useCallback(() => setAsked((was) => was + 1), []);
   useEffect(() => {
     let current = true;
     setRead({ reading: true });
@@ -573,9 +575,9 @@ export function usePageHtml(taskId: string | undefined, pageId: string, version:
     return () => {
       current = false;
     };
-  }, [acts, taskId, pageId, version]);
+  }, [acts, taskId, pageId, version, asked]);
 
-  return read;
+  return { read, again };
 }
 
 /** The older read asked last: of which agent, below where, and whether it failed. */
