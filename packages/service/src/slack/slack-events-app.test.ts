@@ -16,7 +16,7 @@ import { readTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { slackAgentThread } from "@repo/database/schemas/slack-installation";
-import { messages } from "@repo/database/schemas/storage";
+import { messages, turns } from "@repo/database/schemas/storage";
 import {
   CONVERSATION_RUNTIME,
   type ConversationRuntime,
@@ -28,7 +28,7 @@ import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_MESSAGE_AUTHOR } from "@repo/feature
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import type { WireRecord } from "@repo/wire";
+import { TURN_STATUS, type WireRecord } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { Clock, ConfigProvider, DateTime, Effect, Layer, Option, Result } from "effect";
 import { HttpRouter } from "effect/http";
@@ -47,6 +47,7 @@ import {
   openGithubUser,
 } from "../testing/github-app-fake.js";
 import { recordingHarness } from "../testing/native-harness-fake.js";
+import { postTurnToSlack } from "./slack-agent-starts.js";
 import { SlackBot, type SlackFileTransfer, type SlackWebApi, slackBotOver } from "./slack-bot.js";
 import { slackEventsApp } from "./slack-events-app.js";
 import { dmThreadPost } from "./thread-dms.js";
@@ -344,8 +345,13 @@ function mention(slackUserId: string, eventId: string): Request {
   return slackEvent(payload);
 }
 
-/** Slack's mention of the bot in the thread given by the Slack user given, as Slack sends it. */
-function threadMention(slackUserId: string, eventId: string, threadTs: string): Request {
+/** Slack's mention of the bot in the thread given by the Slack user given, at the timestamp given, as Slack sends it. */
+function threadMention(
+  slackUserId: string,
+  eventId: string,
+  threadTs: string,
+  ts = "1700000003.000400",
+): Request {
   const payload = {
     type: "event_callback",
     team_id: "T0001",
@@ -355,7 +361,7 @@ function threadMention(slackUserId: string, eventId: string, threadTs: string): 
       type: "app_mention",
       user: slackUserId,
       text: "<@UBOT> now make it faster",
-      ts: "1700000003.000400",
+      ts,
       thread_ts: threadTs,
       channel: "C0001",
     },
@@ -806,7 +812,7 @@ it.layer(SUITE)("our Slack route", (it) => {
   );
 
   it.effect(
-    "a message in the thread of an archived agent brings it back, hands it the message, and reacts with 👀",
+    "a message in the thread of an archived agent brings it back, hands it the message, reacts with 👀, and takes 💤 off the message that started it",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
@@ -834,6 +840,58 @@ it.layer(SUITE)("our Slack route", (it) => {
         assert.deepEqual(
           calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
           [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
+        );
+        assert.deepEqual(
+          calls.flatMap((call) => (call.method === "reactions.remove" ? [call.args] : [])),
+          [{ channel: "C0001", timestamp: threadTs, name: "zzz" }],
+        );
+      });
+    },
+  );
+
+  it.effect(
+    "a message the agent takes into a turn already running is marked with 👍, and the turn's end takes 👀 off the message that started it",
+    () => {
+      const calls: SlackCall[] = [];
+      const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
+
+      return Effect.gen(function* () {
+        const { owner, agent, threadTs, slackUserId } = yield* openThreadAgent(
+          CONVERSATION_RUNTIME.CLAUDE_CODE,
+          false,
+        );
+
+        const first = "1700000003.000400";
+        const second = "1700000004.000500";
+        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs, first));
+        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs, second));
+
+        const added = (name: string) =>
+          calls.flatMap((call) =>
+            call.method === "reactions.add" && call.args.name === name ? [call.args.timestamp] : [],
+          );
+
+        assert.deepEqual(added("eyes"), [first]);
+        assert.deepEqual(added("+1"), [second]);
+
+        const [turn] = yield* (yield* Database)
+          .select({ id: turns.id })
+          .from(turns)
+          .where(eq(turns.conversationId, agent.conversationId));
+
+        assert.ok(turn !== undefined, "the first message started a turn");
+        yield* postTurnToSlack({
+          userId: owner,
+          conversationId: agent.conversationId,
+          turnId: turn.id,
+          status: TURN_STATUS.SETTLED,
+          failure: null,
+          ranMs: 1,
+        }).pipe(Effect.provide(bot));
+
+        assert.deepEqual(
+          calls.flatMap((call) => (call.method === "reactions.remove" ? [call.args] : [])),
+          [{ channel: "C0001", timestamp: first, name: "eyes" }],
         );
       });
     },

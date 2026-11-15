@@ -99,6 +99,7 @@ const SLACK_METHOD = {
   CONVERSATIONS_JOIN: "conversations.join",
   CONVERSATIONS_LEAVE: "conversations.leave",
   REACTIONS_ADD: "reactions.add",
+  REACTIONS_REMOVE: "reactions.remove",
   FILES_GET_UPLOAD_URL_EXTERNAL: "files.getUploadURLExternal",
   FILES_COMPLETE_UPLOAD_EXTERNAL: "files.completeUploadExternal",
 } as const;
@@ -242,6 +243,8 @@ export interface SlackWorkspaceBot {
   readonly leave: (channel: string) => Effect.Effect<boolean>;
   /** Reacts to a message with the emoji Slack names `emoji`; a failure is logged and answers nothing. */
   readonly react: (channel: string, ts: string, emoji: string) => Effect.Effect<void>;
+  /** Takes the bot's reaction with the emoji Slack names `emoji` off a message; a failure, one the bot never added among them, is logged and answers nothing. */
+  readonly unreact: (channel: string, ts: string, emoji: string) => Effect.Effect<void>;
   /** Shares the files in the thread under the message `threadTs` names, each sent apart; a file that failed is logged and left out. */
   readonly upload: (
     channel: string,
@@ -574,6 +577,7 @@ function slackWorkspaceBotOver(
       join: () => Effect.succeed(false),
       leave: () => Effect.succeed(false),
       react: () => Effect.void,
+      unreact: () => Effect.void,
       upload: () => Effect.void,
       download: () => Effect.succeedNone,
     };
@@ -716,6 +720,12 @@ function slackWorkspaceBotOver(
       api(SLACK_METHOD.REACTIONS_ADD, { channel, timestamp: ts, name: emoji }).pipe(
         Effect.asVoid,
         Effect.catch(swallowed<void>("react to a message")),
+        Effect.asVoid,
+      ),
+    unreact: (channel, ts, emoji) =>
+      api(SLACK_METHOD.REACTIONS_REMOVE, { channel, timestamp: ts, name: emoji }).pipe(
+        Effect.asVoid,
+        Effect.catch(swallowed<void>("take a reaction off a message")),
         Effect.asVoid,
       ),
     upload: (channel, threadTs, files) =>
