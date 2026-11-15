@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import type { Task, TaskSummary } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { HOST_CAPABILITY, type HostCapability } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { agentTab, STRIP_TAB_KIND, type StripTab } from "@repo/ui/tab-strip-model";
@@ -59,7 +59,7 @@ const SUMMARY: TaskSummary = {
 function agent(id: string, title: string, status: AgentSummary["status"]): AgentSummary {
   return {
     id,
-    planId: TASK.id,
+    taskId: TASK.id,
     model: "openai/gpt-5.6-sol",
     effort: "high",
     title,
@@ -117,10 +117,10 @@ async function mount(input: {
   const agentTabs = listed.map((each) => agentTab(each.id));
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     tasks: [SUMMARY],
     activeTaskId: TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: TASK },
+    region: { kind: TASK_REGION.READY, task: TASK },
     mainTabs: {
       ...base.mainTabs,
       tabs: agentTabs,

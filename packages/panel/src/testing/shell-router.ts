@@ -110,7 +110,7 @@ function standingOf(shell: ReactElement): string {
 
   if (agent !== undefined) return agentAt(agent);
 
-  return props.tasks?.page === TASKS_PAGE.DOCUMENT ? SHELL_AT.TASK : SHELL_AT.PLACES;
+  return props.tasks?.page === TASKS_PAGE.TASK ? SHELL_AT.TASK : SHELL_AT.PLACES;
 }
 
 /** A router over the shell, the places, and the routed places, standing at `at`. */

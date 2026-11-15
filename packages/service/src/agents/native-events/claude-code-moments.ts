@@ -3,7 +3,12 @@ import { CLAUDE_CODE_TOOL, claudeCodeWorkspaceTool } from "@repo/features/agent-
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { integrationOfRemoteTool } from "@repo/features/integration-wire";
 import type { ToolCallSettlement } from "@repo/features/turn-run";
-import { type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
+import {
+  type UnparsedWireValue,
+  type WireRecord,
+  type WireValue,
+  WireValueSchema,
+} from "@repo/wire";
 import { GOAL_EVENT, type GoalNotice, USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 import { storedServerCall } from "../../integrations/connection-tools.js";
@@ -20,6 +25,7 @@ import {
   runnerMoments,
   toolAnswerSettlement,
   usageLimitSettlement,
+  watchedOfMeta,
   workspaceAnswerText,
 } from "./runner-moments.js";
 
@@ -467,6 +473,9 @@ function answerText(content: string | readonly WireValue[] | undefined, pictures
     .join("\n");
 }
 
+/** A result's `_meta`, which the CLI hands its SDK's consumer on the message's `tool_use_result`, beside the content, and never to the model. */
+const readMcpMeta = Schema.decodeUnknownOption(Schema.Struct({ _meta: WireValueSchema }));
+
 /**
  * A tool's answer as the transcript settles its call: an error the CLI
  * flagged is a refusal carrying the text, and any other answer is available,
@@ -481,6 +490,7 @@ function settlementOf(
   storedName: string,
   content: string | readonly WireValue[] | undefined,
   isError: boolean,
+  watched: WireRecord | undefined,
 ): ToolCallSettlement {
   const workspaceTool =
     !CLI_TOOL_NAMES.has(storedName) && integrationOfRemoteTool(storedName) === undefined;
@@ -492,7 +502,7 @@ function settlementOf(
       : workspaceAnswerText(content ?? []);
 
   return workspaceTool
-    ? toolAnswerSettlement({ workspaceTool: true, name: storedName, text }, isError)
+    ? toolAnswerSettlement({ workspaceTool: true, name: storedName, text, watched }, isError)
     : toolAnswerSettlement({ workspaceTool: false, text, output: text }, isError);
 }
 
@@ -673,6 +683,16 @@ function userMoments(message: WireValue, held: NativeHeld): readonly NativeMomen
   if (Predicate.isString(content)) return verdicts;
   const moments: NativeMoment[] = [];
 
+  // Note that the result's `_meta` stands on the message, so it is read only where the message answers one call.
+  const answers = content.filter((block) => Option.isSome(readToolResultBlock(block)));
+
+  const watched =
+    answers.length === 1
+      ? Option.getOrUndefined(
+          Option.map(readMcpMeta(read.value.tool_use_result), ({ _meta }) => watchedOfMeta(_meta)),
+        )
+      : undefined;
+
   for (const block of content) {
     const answer = readToolResultBlock(block);
 
@@ -698,7 +718,7 @@ function userMoments(message: WireValue, held: NativeHeld): readonly NativeMomen
       settlement:
         failed && name === CLAUDE_CODE_TOOL.AGENT && held.planLimited
           ? usageLimitSettlement(USAGE_LIMIT_AGENT.CLAUDE)
-          : settlementOf(name, answer.value.content, failed),
+          : settlementOf(name, answer.value.content, failed, watched),
     });
   }
 

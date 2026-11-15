@@ -68,6 +68,15 @@ export const TOPIC = {
    */
   WORKSPACE_SKILLS: "workspace-skills",
   TASK: "task",
+  /**
+   * A task's parent, by the parent's id, named by each write to a child of
+   * it, before and after, so a reparented child names the parent it left
+   * too: narrower than the task's own topic, so no read is woken on it and
+   * the parent's open reads never wake for a child's write, and the task
+   * list's delta read finds in the log the parents whose sub-task counts
+   * moved.
+   */
+  TASK_PARENT: "task-parent",
   AGENT: "agent",
   CONVERSATION: "conversation",
 } as const;

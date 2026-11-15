@@ -29,6 +29,7 @@ import {
 import { handState, stateWith } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
+import { type StandingTaskList, standingTaskList } from "../testing/history-rows.js";
 import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
 import { SidebarPinnedTab } from "./sidebar-pinned-tab.js";
 
@@ -64,8 +65,12 @@ const PIN: SidebarPin = {
 let reads: string[] = [];
 let root: Root | undefined;
 
+/** The task list's collections the pin's row reads its task's pull requests from. */
+let listed: StandingTaskList = standingTaskList({ tasks: [] });
+
 beforeEach(() => {
   reads = [];
+  listed = standingTaskList({ tasks: [] });
   fakeActs({
     act: (): Promise<FakeActAnswer> =>
       Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not in this test." }),
@@ -98,16 +103,18 @@ function drawPin(
   act(() =>
     root?.render(
       withQueryClient(
-        createElement(SidebarPinnedTab, {
-          tasks: control,
-          pin,
-          on: { task },
-          current: false,
-          inSight: true,
-          onOpen: () => undefined,
-          onOpenHolder: () => undefined,
-          onUnpin: () => undefined,
-        }),
+        listed.provide(
+          createElement(SidebarPinnedTab, {
+            tasks: control,
+            pin,
+            on: { task },
+            current: false,
+            inSight: true,
+            onOpen: () => undefined,
+            onOpenHolder: () => undefined,
+            onUnpin: () => undefined,
+          }),
+        ),
       ),
     ),
   );
@@ -115,14 +122,9 @@ function drawPin(
   return list.querySelector<HTMLElement>("button.ui-list-row-main") ?? assert.fail("the row");
 }
 
-/** Lays the task's pull requests on the window's document, as the list followed live holds them. */
+/** Lays the task's pull requests on the window's task list, as the list followed live holds them. */
 function holdPullRequests(pullRequests: readonly TaskPullRequestLine[]): void {
-  writeAppState(
-    stateWith(
-      {},
-      { tasks: { ...IDLE_TASKS_VIEW, taskPullRequests: [{ taskId: TASK.id, pullRequests }] } },
-    ),
-  );
+  listed.stand({ tasks: [], taskPullRequests: [{ taskId: TASK.id, pullRequests }] });
 }
 
 async function settled(): Promise<void> {
@@ -204,7 +206,7 @@ test("a pinned agent's tab of a task not open says its agent's name as the list 
 
   const followed = listedAgent({
     id: AGENT,
-    planId: TASK.id,
+    taskId: TASK.id,
     title: "Expire stale invitations",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
@@ -310,7 +312,7 @@ describe("a pinned Changes tab's card", () => {
 
   const summary: AgentSummary = {
     id: AGENT,
-    planId: TASK.id,
+    taskId: TASK.id,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Expiry job",
@@ -356,7 +358,7 @@ describe("a pinned Changes tab's card", () => {
   test("is the pin's own card, naming the pull request the task list holds without asking the service, where the task is not open", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
 
-    const listed = {
+    const view = {
       tasks: {
         ...IDLE_TASKS_VIEW,
         tasks: [TASK],
@@ -364,9 +366,10 @@ describe("a pinned Changes tab's card", () => {
       },
     };
 
-    handState({}, listed);
-    // Note that the test's Query client is handed the document at once, since its timers are held still.
-    writeAppState(stateWith({}, listed));
+    handState({}, view);
+    // Note that the test's Query client and task list are handed the document at once, since its timers are held still.
+    writeAppState(stateWith({}, view));
+    listed.stand(view.tasks);
     restOn(drawPin(pin));
     await settled();
     assert.match(card()?.textContent ?? "", /Newer title/u);

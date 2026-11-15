@@ -27,6 +27,7 @@ import {
   GLYPH,
   glyphSymbol,
   ListSection,
+  SCREEN_GROUND,
   ScopePicker,
   Screen,
   SettingsForm,
@@ -253,7 +254,7 @@ export default function FeedbackScreen() {
         }}
         onDismiss={kept.stay}
       />
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <ScopePicker label={FEEDBACK_WORDS.KIND} scopes={scopes}>
           <SettingsForm>
             {/* Note that the field's count stands under it once its words near the bound, as the panel's counter does, and a refusal stands there instead in the danger's ink. */}

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
@@ -46,9 +46,9 @@ function drawn(
   const base = tasksControl();
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: DOCUMENT_TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     history: { ...base.history, open: true, list, selected: undefined },
   });
 

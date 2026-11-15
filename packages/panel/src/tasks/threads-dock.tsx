@@ -64,7 +64,7 @@ export interface AgentThreads {
 }
 
 /** Another agent of the task whose threads wait on the developer. */
-export interface OtherAgentWaiting {
+interface OtherAgentWaiting {
   readonly agentId: string;
   readonly name: string;
   readonly waiting: number;

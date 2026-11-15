@@ -80,7 +80,7 @@ export function TaskCrumbMenu({
   children: (held: CrumbHeld) => React.ReactNode;
 }): React.JSX.Element {
   const menu = useMenu(tasks.shown);
-  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const renaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const unread = useUnreadTasks({ staged: false })(task);
