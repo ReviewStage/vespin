@@ -32,7 +32,14 @@ import {
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { type ReactElement, type ReactNode, useEffect, useLayoutEffect, useRef } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { StyleSheet, View } from "react-native";
 import { BarContent } from "./bar-content.js";
 import type { Scope } from "./button.js";
@@ -563,20 +570,40 @@ export function HostedFill({ children }: { readonly children: ReactNode }) {
   );
 }
 
-/** How long after the page stops standing alone the system's reports of the columns it passes through are its own, a little past its column slide. */
+/** How long after the page stops standing alone the system's reports of the columns are its own, a little past its column slide. */
 const LEAVE_SETTLE_MS = 700;
 
+/** What a split view's columns stand as, by `NavigationSplitView`'s own names. */
+type ColumnVisibility = "automatic" | "all" | "doubleColumn" | "detailOnly";
+
 /**
- * Marks the stretch after a split view's detail stops standing alone, while
- * the system slides the columns back and reports the ones it passes through,
- * such as two columns on the way to three. Note that the mark is set before
- * the system answers the change, as the commit lays out, and goes once the
- * columns asked for are reported or the slide has had time to end, so a
- * later press on the sidebar button still counts.
+ * The stretch after a split view's detail stops standing alone, while the
+ * system slides the columns back: the report it sent, and whether the
+ * columns have been asked for again.
  */
-function useLeavingDetailOnly(detailOnly: boolean) {
-  const leaving = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+type Leaving = { reported: ColumnVisibility | undefined; reasked: boolean };
+
+/**
+ * Brings the columns back as the detail stops standing alone, and marks the
+ * stretch while the system does it. Note that iPadOS answers the ask for all
+ * three columns from the detail alone with two, the sidebar left hidden, and
+ * reports only that; and that `@expo/ui` never reports the value it was asked
+ * for. So two columns reported in the stretch are the system's step down, not
+ * the reader hiding the sidebar: the split view asks for two, which already
+ * stand, then for all three on the next frame, which the system then shows,
+ * as it does for the sidebar button. Note that a report after that ask, once
+ * the stretch ends, is taken as what stands, so the sidebar's state never
+ * reads shown while the system keeps it hidden.
+ */
+function useColumnsBack(detailOnly: boolean, settle: (reported: ColumnVisibility) => void) {
+  const leaving = useRef<Leaving | undefined>(undefined);
+  const settleNow = useRef(settle);
   const was = useRef(detailOnly);
+  const [stepped, setStepped] = useState(false);
+
+  useLayoutEffect(() => {
+    settleNow.current = settle;
+  });
 
   useLayoutEffect(() => {
     const left = was.current && !detailOnly;
@@ -585,18 +612,41 @@ function useLeavingDetailOnly(detailOnly: boolean) {
 
     if (!left) return;
 
-    clearTimeout(leaving.current);
+    const stretch: Leaving = { reported: undefined, reasked: false };
+
+    leaving.current = stretch;
 
     const timer = setTimeout(() => {
-      if (leaving.current === timer) leaving.current = undefined;
+      if (leaving.current !== stretch) return;
+
+      leaving.current = undefined;
+
+      if (stretch.reported !== undefined) settleNow.current(stretch.reported);
     }, LEAVE_SETTLE_MS);
 
-    leaving.current = timer;
+    return () => clearTimeout(timer);
   }, [detailOnly]);
 
-  useEffect(() => () => clearTimeout(leaving.current), []);
+  /** Takes a report the system sent while the columns come back; false once the stretch is over, so the report counts as the reader's. */
+  const tookReport = (reported: ColumnVisibility, stepsDown: boolean): boolean => {
+    const stretch = leaving.current;
 
-  return leaving;
+    if (stretch === undefined) return false;
+
+    if (stepsDown && !stretch.reasked) {
+      stretch.reasked = true;
+      setStepped(true);
+      requestAnimationFrame(() => setStepped(false));
+
+      return true;
+    }
+
+    stretch.reported = reported;
+
+    return true;
+  };
+
+  return { stepped, tookReport };
 }
 
 /**
@@ -625,19 +675,21 @@ export function SplitView({
   detailStack,
 }: SplitViewProps) {
   const hidden = content === undefined ? "detailOnly" : "doubleColumn";
-  const shown = detailOnly ? "detailOnly" : sidebarShown ? "all" : hidden;
-  const leaving = useLeavingDetailOnly(detailOnly);
+
+  // Note that a two-column split view names both columns standing "doubleColumn", which is its "all".
+  const sidebarStands = (visibility: ColumnVisibility) =>
+    visibility === "all" || (content === undefined && visibility === "doubleColumn");
+
+  const back = useColumnsBack(detailOnly, (reported) =>
+    onSidebarShownChange(sidebarStands(reported)),
+  );
+
+  const shown = detailOnly ? "detailOnly" : sidebarShown && !back.stepped ? "all" : hidden;
 
   return (
     <NavigationSplitView
       columnVisibility={shown}
       onColumnVisibilityChange={(visibility) => {
-        // PROBE (j9001b, dropped before arming): each report the system sends, with the state it meets.
-        console.log(
-          `[columns] got=${visibility} asked=${shown} detailOnly=${detailOnly} leaving=${leaving.current !== undefined} sidebarShown=${sidebarShown}`,
-        );
-
-        // Note that a two-column split view names both columns standing "doubleColumn", which is its "all".
         if (visibility === "automatic") return;
 
         // Note that the detail standing alone leaves the sidebar's own choice as it was, and columns brought back by the system's button end it.
@@ -647,16 +699,12 @@ export function SplitView({
           return;
         }
 
-        // Note that the columns the system passes through as the page stops standing alone are its way back to the columns left, never the reader hiding the sidebar.
-        if (leaving.current !== undefined) {
-          if (visibility === shown) leaving.current = undefined;
+        // Note that a report while the columns come back is the system's, never the reader hiding the sidebar.
+        const stepsDown = sidebarShown && !sidebarStands(visibility);
 
-          return;
-        }
+        if (back.tookReport(visibility, stepsDown)) return;
 
-        onSidebarShownChange(
-          visibility === "all" || (content === undefined && visibility === "doubleColumn"),
-        );
+        onSidebarShownChange(sidebarStands(visibility));
       }}
       modifiers={[navigationSplitViewStyle("balanced")]}
     >
