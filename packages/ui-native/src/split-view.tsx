@@ -19,7 +19,6 @@ import {
   accessibilityHidden,
   background,
   buttonStyle,
-  containerBackground,
   disabled,
   frame,
   hidden,
@@ -360,7 +359,6 @@ function Column({
   sidebar = false,
   clear = false,
   searchKey,
-  stacked: inStack = false,
 }: {
   readonly view: ReactNode;
   readonly bar?: ColumnBar | undefined;
@@ -370,8 +368,6 @@ function Column({
   readonly clear?: boolean | undefined;
   /** Names whose search the bar holds; the field takes that one's query as it changes, and keeps what is typed otherwise. */
   readonly searchKey?: string | undefined;
-  /** Whether it stands inside the detail's own navigation stack, as its root or a page pushed over it, whose ground the stack paints too. */
-  readonly stacked?: boolean | undefined;
 }) {
   const colors = useColors();
   const text = useSearchWords(bar.search, searchKey);
@@ -386,8 +382,7 @@ function Column({
               frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
               background(colors.GROUND),
             ]),
-        // Note that a page in the detail's own stack paints the stack's ground too, because a navigation stack stands the system's own color behind each of its pages.
-        ...(inStack ? [containerBackground(colors.GROUND, "navigation")] : []),
+        // Note that a page in the detail's own stack paints no navigation container background, because that fill stood over a thread's React Native hosts as the stack's root and drew their words blank; the column's own ground fills it instead.
         // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, compose, ⋯ and the sidebar button, and a leading title folds them into an overflow. A page pushed over the detail names itself small and inline, as a stack's page does. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title !== undefined
           ? [
@@ -489,7 +484,7 @@ function DetailStackColumn({
 
   return (
     <NavigationStack path={pages.map((page) => page.key)} onPathChange={onPathChange}>
-      <Column view={root} bar={rootBar} stacked />
+      <Column view={root} bar={rootBar} />
       {pages.map((page) => (
         <NavigationDestination key={page.key} value={page.key}>
           {page.view}
@@ -545,7 +540,6 @@ export function DetailPage({
         )
       }
       bar={bar}
-      stacked
     />
   );
 }
