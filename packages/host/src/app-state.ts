@@ -57,7 +57,12 @@ import type { ProviderKeysAnswer } from "@repo/features/provider-key-wire";
 import type { PullRequestChaptersAnswer } from "@repo/features/pull-request-chapters-wire";
 import type { SlackListedChannel } from "@repo/features/slack-bot-wire";
 import type { DescriptionRevisionsAnswer } from "@repo/features/task-wire";
-import { COMMENT_SUBJECT, type HeldTask, type TasksView } from "@repo/features/tasks-view";
+import {
+  COMMENT_SUBJECT,
+  type HeldTask,
+  type TaskListParts,
+  type TasksView,
+} from "@repo/features/tasks-view";
 import type { StandingCall } from "@repo/features/voice-wire";
 import type { WorkspaceIntegrations } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
@@ -1031,8 +1036,8 @@ export const KEYS_ON = {
   ROWS: "rows",
 } as const;
 
-/** One list of rows in the task list's view, by its name in `TasksView`. */
-type TasksRows<Part extends keyof TasksView> = NonNullable<TasksView[Part]>;
+/** One list of rows of the task list, by its name in `TaskListParts`. */
+type TasksRows<Part extends keyof TaskListParts> = NonNullable<TaskListParts[Part]>;
 
 /** How one slice is laid out, which is all its delivery reads of it. */
 interface HostReadSliceEntry {
@@ -1111,16 +1116,6 @@ export const HOST_READ_SLICE = {
   },
   // Note that a history crosses whole, since each save lands a newest page that replaces its head.
   [LIVE_READ.HISTORY]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
-  tasks: {
-    keys: READ_KEYS.PARTS,
-    on: KEYS_ON.SLICE,
-    rowIds: {
-      tasks: "id" satisfies keyof TasksRows<"tasks">[number],
-      taskAgents: "id" satisfies keyof TasksRows<"taskAgents">[number],
-      taskPullRequests: "taskId" satisfies keyof TasksRows<"taskPullRequests">[number],
-      agentPullRequests: "agentId" satisfies keyof TasksRows<"agentPullRequests">[number],
-    } satisfies { readonly [Part in keyof TasksView]?: string },
-  },
   [LIVE_READ.BROWSER_TABS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.DEVICE_PRESENCE]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.HOSTS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
@@ -1546,7 +1541,8 @@ function withSliceMoved<Slice extends object>(
 }
 
 /**
- * The delivery that brings a window holding `sent` to `next`, or none where
+ * The delivery that brings a window holding `sent` to `next`, the task
+ * list's rows that moved beside it (`taskListDelivery`), or none where
  * nothing it is handed moved. Note that the document keeps the identity of
  * every part a patch did not move, so an untouched entry is answered at its
  * first comparison and only an entry that moved is walked.
@@ -1554,6 +1550,7 @@ function withSliceMoved<Slice extends object>(
 export function appStateDelivery(
   sent: AppStateSnapshot | undefined,
   next: AppStateSnapshot,
+  taskList?: TaskListDelivery,
 ): AppStateDelivery | undefined {
   // SAFETY: `Object.keys` of a snapshot names its own entries and its version, the last dropped here.
   const names = [...new Set([...Object.keys(sent ?? {}), ...Object.keys(next)])].filter(
@@ -1578,7 +1575,6 @@ export function appStateDelivery(
 
   const keys = patched.filter(([, keysOf]) => keysOf.length > 0);
   const gone = moved.filter((name) => next[name] === undefined);
-  const taskList = taskListDelivery(sent, next);
 
   if (sent !== undefined && moved.length === 0 && keys.length === 0 && taskList === undefined) {
     return undefined;
@@ -1595,18 +1591,31 @@ export function appStateDelivery(
   };
 }
 
-/** The task list's lists of rows, each a live query of the list draws (`HOST_READ_SLICE`'s `tasks`), by its name in `TasksView`. */
+/** The task list's lists of rows, each a live query of the list draws, by its name in `TaskListParts`. */
 export const TASK_LIST_PARTS = [
   "tasks",
   "taskAgents",
   "taskPullRequests",
   "agentPullRequests",
-] as const satisfies readonly (keyof TasksView)[];
+] as const satisfies readonly (keyof TaskListParts)[];
 
-export type TaskListPart = (typeof TASK_LIST_PARTS)[number];
+type TaskListPart = (typeof TASK_LIST_PARTS)[number];
 
-/** The task list's lists as one drawing holds them, each absent where the view carries none. */
-export type TaskListParts = Pick<TasksView, TaskListPart>;
+/**
+ * How the task list's lists cross to a window beside the document
+ * (`taskListDelivery`): keyed by part, each a list of rows crossing as the
+ * rows that moved in it, told apart by the field named here.
+ */
+const TASK_LIST_ENTRY = {
+  keys: READ_KEYS.PARTS,
+  on: KEYS_ON.SLICE,
+  rowIds: {
+    tasks: "id" satisfies keyof TasksRows<"tasks">[number],
+    taskAgents: "id" satisfies keyof TasksRows<"taskAgents">[number],
+    taskPullRequests: "taskId" satisfies keyof TasksRows<"taskPullRequests">[number],
+    agentPullRequests: "agentId" satisfies keyof TasksRows<"agentPullRequests">[number],
+  } satisfies { readonly [Part in TaskListPart]: string },
+} as const satisfies HostReadSliceEntry;
 
 /** One part of the task list that moved: its list whole, or null where it is gone; or its rows that moved, with its ids in order where they moved. */
 export type TaskListPartMoved = KeyMoved;
@@ -1628,45 +1637,34 @@ export interface TaskListDelivery {
   readonly moved?: readonly TaskListPartMoved[];
 }
 
-/** The task list's lists `view` holds, each the very list it holds, so what moved in one is told by its drawing (`list-moves.ts`). */
-function taskListPartsOf(view: TasksView): TaskListParts {
-  const { tasks, taskAgents, taskPullRequests, agentPullRequests } = view;
+/**
+ * The task list's rows that bring a window handed the lists `sent` to
+ * `next`, under the document's `version`: its lists whole where it was
+ * handed none, the parts that moved otherwise, or none where no part moved.
+ * A part crosses as the rows its drawing says moved rather than a walk of
+ * the list (`TASK_LIST_ENTRY`).
+ */
+export function taskListDelivery(
+  sent: TaskListParts | undefined,
+  next: TaskListParts,
+  version: number,
+): TaskListDelivery | undefined {
+  if (sent === undefined) return { version, whole: next };
 
-  return {
-    tasks,
-    ...(taskAgents === undefined ? undefined : { taskAgents }),
-    ...(taskPullRequests === undefined ? undefined : { taskPullRequests }),
-    ...(agentPullRequests === undefined ? undefined : { agentPullRequests }),
-  };
+  if (sent === next) return undefined;
+  // SAFETY: the task list's parts are its lists of rows, which `TASK_LIST_ENTRY` keys by part.
+  const moved = idsMoved(TASK_LIST_ENTRY, [], sent as Keyed, next as Keyed);
+
+  return moved.length === 0 ? undefined : { version, moved };
 }
 
 /**
- * The task list's rows that bring a window handed `sent` to `next`: its
- * lists whole where it was handed none, the parts that moved otherwise, or
- * none where no part moved. Worked out as `appStateDelivery` works out the
- * document's task list (`HOST_READ_SLICE`'s `tasks`), so a part crosses as
- * the rows its drawing says moved rather than a walk of the list.
+ * The document as a whole read answers it: the snapshot, and the task
+ * list's lists beside it rather than in it, which the window's task-list
+ * collections are laid from (`task-list-following.ts`); none where the
+ * bridge holds none, as a test's may not.
  */
-export function taskListDelivery(
-  sent: AppStateSnapshot | undefined,
-  next: AppStateSnapshot,
-): TaskListDelivery | undefined {
-  const after = taskListPartsOf(next.tasks);
-
-  if (sent === undefined) return { version: next.version, whole: after };
-
-  if (sent.tasks === next.tasks) return undefined;
-  // SAFETY: the task list's parts are its lists of rows, which `HOST_READ_SLICE`'s `tasks` keys by part.
-
-  const moved = idsMoved(
-    HOST_READ_SLICE.tasks,
-    [],
-    taskListPartsOf(sent.tasks) as Keyed,
-    after as Keyed,
-  );
-
-  return moved.length === 0 ? undefined : { version: next.version, moved };
-}
+export type AppStateRead = AppStateSnapshot & { readonly taskList?: TaskListParts };
 
 /**
  * The document a window holds once a delivery lands on it: each entry named

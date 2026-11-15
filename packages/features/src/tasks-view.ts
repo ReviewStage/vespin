@@ -175,31 +175,6 @@ export const codeLinesSchema = EffectSchema.Array(EffectSchema.Array(codeTokenSc
 export type CodeLines = typeof codeLinesSchema.Type;
 
 export const tasksViewSchema = EffectSchema.Struct({
-  /** The account's tasks, newest started first, as the last list read answered. */
-  tasks: EffectSchema.Array(taskSummarySchema),
-  /**
-   * Every agent on a plan, the archived ones among them, each as its plan's
-   * own list names it, with the workspace and repository its own row names,
-   * the first started first: present only while the list
-   * is followed live over Neon Realtime, when it is what the open plan's
-   * tabs draw, and an agent's page, and what the notices' ledger reads, the archived left out, in
-   * place of listing each plan's agents again on a clock.
-   */
-  taskAgents: EffectSchema.optionalKey(EffectSchema.Array(listedAgentSchema)),
-  /**
-   * Every pull request of each plan that has one, those still open first:
-   * present only while the list is followed live, when it is what every
-   * reader of a task's pull requests reads, its row's mark and chips and its
-   * card among them, the row itself only counting them.
-   */
-  taskPullRequests: EffectSchema.optionalKey(EffectSchema.Array(taskPullRequestsSchema)),
-  /**
-   * The pull request of every agent that opened one, on a plan or none, the
-   * archived among them, as its row keeps it: present only while the list
-   * is followed live, when it is what a plan's or an agent's tabs offer each
-   * agent's Changes by, in place of reading each agent of it apart.
-   */
-  agentPullRequests: EffectSchema.optionalKey(EffectSchema.Array(listedPullRequestSchema)),
   /**
    * The reader's pins of agents on a plan, the archived ones left out: present
    * only while the list is followed live, when the sidebar's Pinned section
@@ -245,15 +220,79 @@ export const tasksViewSchema = EffectSchema.Struct({
 
 export type TasksView = typeof tasksViewSchema.Type;
 
-/** What a tasks view holds but the list itself, which a window reads from its task list's collections rather than the document. */
-export type TaskListStanding = Omit<TasksView, "tasks">;
+/**
+ * The task list's lists, each a live query of the list draws: held beside
+ * the app-state document, never in it, and carried to a window beside it
+ * (`@repo/host`'s `AppStateRead` and `TaskListDelivery`), where its task-list
+ * collections hold them.
+ */
+export const taskListPartsSchema = EffectSchema.Struct({
+  /** The account's tasks, newest started first, as the last list read answered. */
+  tasks: EffectSchema.Array(taskSummarySchema),
+  /**
+   * Every agent on a plan, the archived ones among them, each as its plan's
+   * own list names it, with the workspace and repository its own row names,
+   * the first started first: present only while the list
+   * is followed live over Neon Realtime, when it is what the open plan's
+   * tabs draw, and an agent's page, and what the notices' ledger reads, the archived left out, in
+   * place of listing each plan's agents again on a clock.
+   */
+  taskAgents: EffectSchema.optionalKey(EffectSchema.Array(listedAgentSchema)),
+  /**
+   * Every pull request of each plan that has one, those still open first:
+   * present only while the list is followed live, when it is what every
+   * reader of a task's pull requests reads, its row's mark and chips and its
+   * card among them, the row itself only counting them.
+   */
+  taskPullRequests: EffectSchema.optionalKey(EffectSchema.Array(taskPullRequestsSchema)),
+  /**
+   * The pull request of every agent that opened one, on a plan or none, the
+   * archived among them, as its row keeps it: present only while the list
+   * is followed live, when it is what a plan's or an agent's tabs offer each
+   * agent's Changes by, in place of reading each agent of it apart.
+   */
+  agentPullRequests: EffectSchema.optionalKey(EffectSchema.Array(listedPullRequestSchema)),
+});
 
-/** The view before anything is asked: no tasks read, none active. */
+export type TaskListParts = typeof taskListPartsSchema.Type;
+
+/** The tasks view as the host draws it: what the document carries, and the task list's lists beside it. */
+export const listedTasksViewSchema = EffectSchema.Struct({
+  ...tasksViewSchema.fields,
+  ...taskListPartsSchema.fields,
+});
+
+export type ListedTasksView = typeof listedTasksViewSchema.Type;
+
+/** The view before anything is asked: nothing read, none active. */
 export const IDLE_TASKS_VIEW: TasksView = {
-  tasks: [],
   listStatus: TASKS_READ.IDLE,
   workspaces: [],
 };
+
+/** No task list drawn yet: no tasks, and none of their agents or pull requests followed. */
+export const NO_TASK_LIST: TaskListParts = { tasks: [] };
+
+/** A tasks view held apart: the slice the document carries, and the task list's lists beside it. */
+export interface ListedApart {
+  readonly tasks: TasksView;
+  readonly lists: TaskListParts;
+}
+
+/** `listed` held apart, as the host holds it: the tasks slice the document carries, and the task list's lists beside it, each the very list `listed` holds. */
+export function listedApart(listed: ListedTasksView): ListedApart {
+  const { tasks, taskAgents, taskPullRequests, agentPullRequests, ...standing } = listed;
+
+  return {
+    tasks: standing,
+    lists: {
+      tasks,
+      ...(taskAgents === undefined ? undefined : { taskAgents }),
+      ...(taskPullRequests === undefined ? undefined : { taskPullRequests }),
+      ...(agentPullRequests === undefined ? undefined : { agentPullRequests }),
+    },
+  };
+}
 
 /**
  * How many of `agents` are working, starting or running a turn. Note that
