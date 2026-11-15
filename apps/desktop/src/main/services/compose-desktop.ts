@@ -224,9 +224,6 @@ export function composeDesktop(
     DesktopTag,
     Effect.gen(function* () {
       const host = yield* HostAssemblyTag;
-      // The services this launch stands on, read back out of the fiber
-      // building it rather than assembled again: every act's Effect runs
-      // under them, never under a context of their own.
       const services: Context.Context<never> = yield* Effect.context();
 
       const run = <A>(effect: Effect.Effect<A>): Promise<A> =>
@@ -244,7 +241,6 @@ export function composeDesktop(
         initialAppState(
           config,
           updateEngine !== undefined,
-          // The desktop answers every capability a client can, beside the concerns its host runs.
           hostCapabilities(host.concerns, desktopClientCapabilities(config.launch.fixtureMode)),
         ),
         services,
@@ -282,10 +278,7 @@ export function composeDesktop(
       });
 
       const colorCode = yield* colorCodeInUtilityProcess(config.resourceDirectory);
-      // A quit, a restart to update, and a sign-out asked for while a panel
-      // holds unsaved work ask first, with Cancel the default, as a Mac app
-      // asks before it loses anything; while nothing would be lost none of
-      // them asks at all.
+      // A quit, a restart to update, and a sign-out ask first while a panel holds unsaved work.
       const unsavedWork = unsavedWorkHolders<WebContents>((sender) => sender.isDestroyed());
       // The menu bar dims the commands the focused panel offers none of, drawn again as the focus moves.
       const offers = menuOffers(config.showMenuBar);
@@ -319,7 +312,6 @@ export function composeDesktop(
 
       config.showMenuBar({
         reload: {
-          // Note that only a browser window has a page to reload.
           onReload: (window) => {
             if (!(window instanceof BrowserWindow)) return;
             void askBeforeReload(window).then((reload) => {
