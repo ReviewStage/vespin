@@ -1823,14 +1823,30 @@ function OverviewPage({
   // Note that a page pushed over a split view's detail leaves its tab focused, so the started agent waits for this overview itself to stand in front.
   const covered = useDetailCovered();
 
+  // Note that an agent landing while the page still slides in, before it first stands in front, waits for that moment rather than being let go, since a start the service answers at once lands then.
+  const [arriving, setArriving] = useState(true);
+  const [waitingAgent, setWaitingAgent] = useState<string | undefined>(undefined);
+
   // Note that New task and New agent sheets give way to this page before the service answers, so the overview every layout draws, the iPad's split detail among them, opens the started agent while the page stands in front, and opens New agent again on the words of one refused.
   useStartLanded(task.id, OVERVIEW_HEARS, (landed) => {
-    if (!navigation.isFocused()) return;
+    const shown = navigation.isFocused();
 
     if (landed.kind === START_LANDED.AGENT) {
-      if (!covered) router.push(onTab(iosAgentRoute(landed.agentId)));
-    } else router.push({ pathname: "/start-agent", params: { task: task.id } });
+      if (shown && !covered) router.push(onTab(iosAgentRoute(landed.agentId)));
+      else if (!shown && arriving) setWaitingAgent(landed.agentId);
+    } else if (shown) router.push({ pathname: "/start-agent", params: { task: task.id } });
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      setArriving(false);
+
+      if (waitingAgent === undefined) return;
+
+      setWaitingAgent(undefined);
+      router.push(onTab(iosAgentRoute(waitingAgent)));
+    }, [waitingAgent, router, onTab]),
+  );
 
   const { data: descriptions = false } = useQuery({
     ...appStateQuery,
