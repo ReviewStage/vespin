@@ -47,6 +47,8 @@ type ConfirmAskProps = {
    * an act that cannot be undone.
    */
   readonly gate?: string | undefined;
+  /** What the gate's words are, which picks the keyboard its field raises, such as the address keyboard for an account's address. */
+  readonly gateKind?: WordsAskKind | undefined;
   readonly presented: boolean;
   readonly onAct: () => void;
   /** Called as the ask goes, by its act or Cancel. */
@@ -73,6 +75,7 @@ function AlertConfirm({
   act,
   destructive = false,
   gate,
+  gateKind = WORDS_ASK_KIND.NAME,
   presented,
   onAct,
   onDismiss,
@@ -105,7 +108,11 @@ function AlertConfirm({
               text={typed}
               placeholder={gate}
               onTextChange={setWords}
-              modifiers={[autocorrectionDisabled(), textInputAutocapitalization("never")]}
+              modifiers={[
+                ...(gateKind === WORDS_ASK_KIND.EMAIL ? [keyboardType("email-address")] : []),
+                autocorrectionDisabled(),
+                textInputAutocapitalization("never"),
+              ]}
             />
           )}
           <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />

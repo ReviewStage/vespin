@@ -18,20 +18,19 @@ import {
 } from "@repo/features/task-wire";
 import { repositoryChangeFailureNote } from "@repo/features/tasks-model";
 import {
-  IDLE_TASKS_VIEW,
   TASK_CALL_FAILURE,
   type TasksBlockAnswer,
   type TasksChangeRelationAnswer,
   type TasksSetParentAnswer,
-  type TasksView,
 } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE } from "@repo/ui";
-import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { type Unreached, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import { drawnTask, heldTask, pressWrite, type TaskRows, type UndoWrite } from "../undo-stack.js";
 import {
@@ -156,18 +155,6 @@ const RELATION_WRITE = {
   >,
 } as const;
 
-/**
- * The tasks the window lists as they stand now, a fixture run's among them.
- * Note that a name being typed is not drawn over them, as the Tasks tab's
- * own view draws it, because a relation's rows read its parent and blocks
- * alone.
- */
-function listedIn(queryClient: QueryClient): TasksView {
-  const state = appStateIn(queryClient);
-
-  return state === undefined ? IDLE_TASKS_VIEW : selectListedTasks(state);
-}
-
 /** A task's repository and relation writes, each said in a toast where the service refused it. */
 export interface TaskRelationWrites {
   /** Gives a task its repository, or takes it away with null; answers why the service refused, or nothing once it is kept. */
@@ -200,17 +187,15 @@ export interface TaskRelationWrites {
  * it again, while the task still stands as the removal left it.
  */
 export function useTaskRelationWrites(): TaskRelationWrites {
-  const queryClient = useQueryClient();
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
 
   const { mutateAsync: sendTaskRepository } = useMutation(
     actMutation(ACT_KIND.TASKS_SET_REPOSITORY),
   );
 
-  // ⌘Z reads a removal's rows off the tasks listed as it runs (`task-row-doors.ts`).
-  const listedNow = useCallback(() => listedIn(queryClient), [queryClient]);
-  const blockDoors = useTaskRowDoors(ACT_KIND.TASKS_BLOCK, listedNow);
-  const parentDoors = useTaskRowDoors(ACT_KIND.TASKS_SET_PARENT, listedNow);
+  // ⌘Z reads a removal's rows off the task list as it runs (`task-row-doors.ts`). Note that no name being typed is drawn over them, because a relation's rows read its parent and blocks alone.
+  const blockDoors = useTaskRowDoors(ACT_KIND.TASKS_BLOCK);
+  const parentDoors = useTaskRowDoors(ACT_KIND.TASKS_SET_PARENT);
   const { mutateAsync: sendRelation } = useMutation(actMutation(ACT_KIND.TASKS_CHANGE_RELATION));
   const toast = useToast();
   const { send: sendBlock } = blockDoors;
@@ -272,17 +257,17 @@ export function useOpenWorkspaceGitHub(
   onOpenSettings: (link: SettingsLink) => void,
 ): (taskId: string) => void {
   const queryClient = useQueryClient();
+  const collections = useTaskListCollections();
 
   return useCallback(
     (taskId: string) => {
-      const listed = listedIn(queryClient);
-      const held = appStateIn(queryClient)?.[LIVE_READ.HELD_TASK];
+      const state = appStateIn(queryClient);
+      const held = state?.[LIVE_READ.HELD_TASK];
+      const open = state === undefined ? undefined : selectListedTasks(state).activeTaskId;
 
       const workspaceId =
-        listed.tasks.find((task) => task.id === taskId)?.workspaceId ??
-        (listed.activeTaskId === taskId
-          ? heldTask({ tasks: listed, held }, taskId)?.workspaceId
-          : undefined);
+        collections.tasks.get(taskId)?.workspaceId ??
+        (open === taskId ? heldTask({ held }, taskId)?.workspaceId : undefined);
 
       onOpenSettings({
         page: SETTINGS_VIEW.WORKSPACE,
@@ -290,6 +275,6 @@ export function useOpenWorkspaceGitHub(
         ...(workspaceId === undefined ? undefined : { workspaceId }),
       });
     },
-    [queryClient, onOpenSettings],
+    [queryClient, collections, onOpenSettings],
   );
 }

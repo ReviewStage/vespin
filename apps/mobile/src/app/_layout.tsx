@@ -16,6 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import { useMemo } from "react";
 import { useColorScheme } from "react-native";
+import { MachineAsks } from "../agents/machine-asks.js";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -128,6 +129,8 @@ function GuardedScreens() {
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
+      {/* An ask one of the developer's machines holds for an agent, over whatever screen stands. */}
+      <MachineAsks signedIn={signedIn && !updateNeeded} />
       {/* Note that every sheet's bar takes the ink here as its default, so a sheet that sets no ink of its own never stands its title in the system's black on the dark ground; a sheet's own options still win, key by key. */}
       <Stack
         screenOptions={{

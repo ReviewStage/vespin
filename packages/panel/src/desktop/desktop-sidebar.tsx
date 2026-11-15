@@ -1982,14 +1982,15 @@ interface DesktopSidebarProps {
  */
 function useFirstUsableSpan(tasks: TasksControl): void {
   const { listRead, listFailed } = tasks;
-  const listed = tasks.tasks.length;
+  const collections = useTaskListCollections();
+  // Note that the count is read as the span ends, since the collections hold the read the moment it answers.
   useEffect(() => {
     if (listFailed) leaveWindowSpan(PANEL_SPAN.WINDOW_FIRST_USABLE);
     else if (listRead)
       endWindowSpan(PANEL_SPAN.WINDOW_FIRST_USABLE, () => ({
-        [PANEL_SPAN_ATTRIBUTE.TASK_COUNT]: listed,
+        [PANEL_SPAN_ATTRIBUTE.TASK_COUNT]: collections.tasks.size,
       }));
-  }, [listRead, listFailed, listed]);
+  }, [listRead, listFailed, collections]);
 }
 
 /**
@@ -2046,7 +2047,7 @@ function SidebarColumn({
   room = SHELL_ROOM.WIDE,
 }: DesktopSidebarProps): React.JSX.Element {
   // Note that the column's tasks stand while neither the window's nor the pins change, because every row is handed them, and a new one draws every row again.
-  const pins = useSteadyDoors(usePins(control.drawnTasks));
+  const pins = useSteadyDoors(usePins(control.typedNamesNow));
   const tasks: SidebarTasks = useMemo(() => ({ ...control, ...pins }), [control, pins]);
   const pictures = useRepositoryPictures();
   const connected = useConnected();
