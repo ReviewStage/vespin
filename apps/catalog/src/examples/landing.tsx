@@ -83,7 +83,7 @@ function Landing(): React.JSX.Element {
         scene={LANDING_SCENE.INBOX}
       />
       <LandingSection
-        title="Bring your own keys."
+        title="Bring your own subscriptions and keys."
         lead="Run agents on your Codex or Claude plan, or bring your own API keys."
         scene={LANDING_SCENE.KEYS}
         codexArt={{ oneX: codexOneX, twoX: codexTwoX, threeX: codexThreeX }}

@@ -147,7 +147,7 @@ export function App(): React.JSX.Element {
         scene={LANDING_SCENE.AGENTS}
       />
       <LandingSection
-        title="Bring your own keys."
+        title="Bring your own subscriptions and keys."
         lead="Run agents on your Codex or Claude plan, or bring your own API keys."
         more={{ label: "Connect an agent", href: `${DOCS_URL}/install#connect-an-agent` }}
         scene={LANDING_SCENE.KEYS}
