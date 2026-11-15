@@ -1,6 +1,6 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
-import type { IntegrationProvider } from "@repo/features/integration-wire";
+import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -307,6 +307,8 @@ function CallRow({
   const lines = large ? undefined : 1;
   const { line, chip } = item;
   const subject = line.subject === undefined || line.subject === "" ? undefined : line.subject;
+  // Note that the integration's mark is hidden from VoiceOver, so its name is heard in the mark's place.
+  const mark = item.provider === undefined ? undefined : INTEGRATION_NAME[item.provider];
   const standing = held?.waiting === true ? HELD_HEARD : CALL_STANDING_HEARD[item.standing];
 
   return (
@@ -316,7 +318,7 @@ function CallRow({
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
-        accessibilityLabel={[line.verb, chip, subject, item.runOn].filter(Boolean).join(" ")}
+        accessibilityLabel={[line.verb, chip, subject, mark, item.runOn].filter(Boolean).join(" ")}
         accessibilityValue={{
           text: item.open ? standing : `${standing}, ${COLLAPSED_HEARD}`,
         }}
