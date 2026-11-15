@@ -1,0 +1,55 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow f8971
+Set orientation ${ORIENT}...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Run flow when "Reminders" is visible...
+  Tap on "Reminders"... COMPLETED
+Run flow when "Reminders" is visible... COMPLETED
+Run flow when "No reminders" is not visible...
+Run flow when "No reminders" is not visible... SKIPPED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-0-inbox-reminders-empty... COMPLETED
+Assert that "No reminders" is visible... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-1-inbox-at-rest... COMPLETED
+Swipe from (50%, 75%) to (50%, 35%) in 600 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-2-inbox-scrolled... COMPLETED
+Swipe from (50%, 35%) to (50%, 85%) in 600 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-3-inbox-back-to-top... COMPLETED
+Run flow when id: search-tab is visible...
+  Tap on id: search-tab... COMPLETED
+Run flow when id: search-tab is visible... COMPLETED
+Run flow when "Find a task, an Inbox item, or an agent." is not visible...
+Run flow when "Find a task, an Inbox item, or an agent." is not visible... SKIPPED
+Tap on "Search Vespin"... COMPLETED
+Input text e... COMPLETED
+Wait for animation to end... COMPLETED
+Hide Keyboard... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-4-search-at-rest... COMPLETED
+Swipe from (50%, 75%) to (50%, 35%) in 600 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-5-search-scrolled... COMPLETED
+Swipe from (50%, 35%) to (50%, 85%) in 600 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Search Vespin|e"... COMPLETED
+Erase text... COMPLETED
+Input text csv... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Agents"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-6-empty-scope-keeps-scopes... COMPLETED
+Assert that "All" is visible... COMPLETED
+Assert that "Tasks" is visible... COMPLETED
