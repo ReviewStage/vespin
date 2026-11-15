@@ -1,0 +1,6 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "process == "Vespin" AND (composedMessage CONTAINS[c] "present" OR composedMessage CONTAINS[c] "QuickLook" OR composedMessage CONTAINS[c] "window hierarchy")"
+Timestamp               Ty Process[PID:TID]
+2026-11-14 19:39:28.668 Df Vespin[23351:16c63e3] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneHostingSheetPresentationSettings> on FBSSceneSettings
+2026-11-14 19:39:28.669 Df Vespin[23351:16c63e3] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneHostingSheetPresentationClientSettings> on FBSSceneClientSettings
+Child process terminated with signal 9: Killed

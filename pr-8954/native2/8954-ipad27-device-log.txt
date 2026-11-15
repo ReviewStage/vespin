@@ -1,0 +1,15 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "process == "Vespin" AND (composedMessage CONTAINS[c] "present" OR composedMessage CONTAINS[c] "QuickLook" OR composedMessage CONTAINS[c] "window hierarchy")"
+Timestamp               Ty Process[PID:TID]
+2026-11-14 19:42:34.414 Df Vespin[69104:16df1ae] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneHostingSheetPresentationSettings> on FBSSceneSettings
+2026-11-14 19:42:34.415 Df Vespin[69104:16df1ae] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneHostingSheetPresentationClientSettings> on FBSSceneClientSettings
+2026-11-14 19:42:34.920 E  Vespin[69104:16df162] [com.apple.Accessibility:AXAppAccessibility] Got a keyboard will change frame notification, but keyboard was not even present.
+2026-11-14 19:42:34.920 E  Vespin[69104:16df162] [com.apple.Accessibility:AXAppAccessibility] Got a keyboard will hide notification, but keyboard was not even present.
+2026-11-14 19:42:35.009 Df Vespin[69104:16df162] [com.apple.UIKit:KeyboardUI] -[_UIKeyboardStateManager initWithPresentationDelegateView:forCustomInputView:] UIDevice.currentDevice._hardwareKeyboardAvailable = YES
+2026-11-14 19:45:48.778 Df Vespin[27072:16fc6b8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneHostingSheetPresentationSettings> on FBSSceneSettings
+2026-11-14 19:45:48.778 Df Vespin[27072:16fc6b8] [com.apple.FrontBoard:SceneExtension] Realizing settings extension <_UISceneHostingSheetPresentationClientSettings> on FBSSceneClientSettings
+2026-11-14 19:45:49.184 E  Vespin[27072:16fc646] [com.apple.Accessibility:AXAppAccessibility] Got a keyboard will change frame notification, but keyboard was not even present.
+2026-11-14 19:45:49.184 E  Vespin[27072:16fc646] [com.apple.Accessibility:AXAppAccessibility] Got a keyboard will hide notification, but keyboard was not even present.
+2026-11-14 19:45:49.223 Df Vespin[27072:16fc646] [com.apple.UIKit:KeyboardUI] -[_UIKeyboardStateManager initWithPresentationDelegateView:forCustomInputView:] UIDevice.currentDevice._hardwareKeyboardAvailable = YES
+2026-11-14 19:47:05.085 Df Vespin[27072:16fc646] [com.apple.UIKit:PointerLockState] preferredPointerLockStatus updated: scene: <UIWindowScene: 0x10adaa300; role: UIWindowSceneSessionRoleApplication; persistentIdentifier: 648D6038-4BB4-4387-BAB2-B60B603C4ED7; activationState: UISceneActivationStateForegroundActive>; viewController: <_TtGC7SwiftUI29PresentationHostingControllerVS_7AnyView_: 0x108269c00>; preferredPointerLockStatus: _UIPointerLockStatusUnlocked
+Child process terminated with signal 9: Killed
