@@ -1,0 +1,66 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow r9141x
+Set orientation ${ORIENT}...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, refuseWrites=true})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Tap on id: workspace-switcher... COMPLETED
+Tap on ".*, Settings"... COMPLETED
+Wait for animation to end... COMPLETED
+Scrolling DOWN until "Memory" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Memory"... COMPLETED
+Assert that "The staging database is reset every Sunday night." is visible... COMPLETED
+Tap on "The staging database is reset every Sunday night."... COMPLETED
+Assert that "Edit memory" is visible... COMPLETED
+Tap on id: memory-words... COMPLETED
+Erase 60 characters... COMPLETED
+Input text The staging database is reset every Saturday night.... COMPLETED
+Tap on "Save"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-1-edit-saved-at-once... COMPLETED
+Assert that "Edit memory" is not visible... COMPLETED
+Assert that id: failure-notice-retry is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-2-save-refused-notice... COMPLETED
+Tap on id: failure-notice-retry... COMPLETED
+Assert that "Edit memory" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-3-reopened-with-refusal... COMPLETED
+Tap on id: memory-words... COMPLETED
+Input text  ... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-4-refusal-cleared... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, refuseWrites=true})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Tap on "Tasks"... COMPLETED
+Scrolling DOWN until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Tap on "More"... COMPLETED
+Tap on "Version history"... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Earlier"... COMPLETED
+Assert that "Context" is visible... COMPLETED
+Tap on "Restore this version"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-5-restore-at-once... COMPLETED
+Assert that "The version could not be restored. Try again." is visible... FAILED
+
+Assertion is false: "The version could not be restored. Try again." is visible
+
+Assertion '"The version could not be restored. Try again." is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state
+- This could be a real regression that needs to be addressed
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/j9141x/9141/9141-iphone-dark/2026-11-15_112815
