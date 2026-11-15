@@ -25,6 +25,7 @@ import {
   type CallMachine,
   type MachineNotRun,
   machineNotRunLabel,
+  NOT_RUN_OUTCOME,
   type SentWords,
   todosCount,
 } from "@repo/features/tool-call-model";
@@ -1422,6 +1423,14 @@ export function useMacOwner(): Actor | undefined {
 /** The machine a terminal command or an action on an app made now would go to, as the agent's standing names it (`workspaceTools.runOnMac.machine`), which a call still unanswered names; none where it names none. */
 const RoutedMachineContext = createContext<Pick<CallMachine, "id" | "name"> | undefined>(undefined);
 
+/** Whether a call that ran nothing has a card under its row naming its machine: the refused call's card for one no machine could take, or the note for one that lacked a grant. */
+function notRunNamesMachine(notRun: MachineNotRun | undefined): boolean {
+  return (
+    notRun?.outcome === NOT_RUN_OUTCOME.UNREACHED ||
+    notRun?.outcome === NOT_RUN_OUTCOME.MISSING_PERMISSIONS
+  );
+}
+
 /** Where a call ran, as its row ends: the machine's chip, named as every list of machines names it (This Mac among them), its card and its press the chip's own. */
 export function OnMachine({ machine }: { machine: Pick<CallMachine, "id" | "name"> }): ReactNode {
   const thisMac = useThisMac();
@@ -1617,10 +1626,12 @@ export function TranscriptTool({
   const routed = useContext(RoutedMachineContext);
   const unanswered = state === TOOL_STATE.INPUT_STREAMING || state === TOOL_STATE.INPUT_AVAILABLE;
   const onMachine = machine ?? (unanswered ? routed : undefined);
+  const machineCall = kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER;
+  // Note that a call no machine could take, or that lacked a grant, ends in its status alone, since the card under it names the machine by its chip, so a narrow row keeps its own words.
+  const namedBelow = machineCall && machine !== undefined && notRunNamesMachine(notRun);
 
   const onMachineChip =
-    (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
-    onMachine !== undefined ? (
+    machineCall && onMachine !== undefined && !namedBelow ? (
       <OnMachine machine={onMachine} />
     ) : undefined;
 
@@ -1663,8 +1674,7 @@ export function TranscriptTool({
         subjectInBody={(command && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject)}
         placeChip={onMachineChip ?? serverChip}
         place={
-          (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
-          macOwner !== undefined ? (
+          namedBelow ? undefined : machineCall && macOwner !== undefined ? (
             <ActorLine>
               {"On "}
               <ActorRef actor={macOwner} sentence possessive />

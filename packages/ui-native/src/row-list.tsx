@@ -28,14 +28,22 @@ import {
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { searchTokens } from "@repo/features/search-tokens";
 import { Predicate } from "effect";
-import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
+import {
+  createContext,
+  type ReactElement,
+  type ReactNode,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 import { useReduceMotion } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
-import { RowOpenContext, RowSelectedContext } from "./row-open.js";
+import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -93,6 +101,8 @@ type RowListProps = {
   readonly onRefresh?: (() => Promise<void>) | undefined;
   /** Its Select mode, while it stands in one; none for a list a tap opens rows in. */
   readonly choosing?: RowChoosing | undefined;
+  /** What a search typed, whose words each row's title sets in bold; none for a list no search found. */
+  readonly searched?: string | undefined;
   /**
    * Starts its Select mode with the rows the system ticked, where it has one:
    * iPadOS lets a list whose selection is a set tick several rows with no
@@ -136,10 +146,12 @@ export function RowList({
   onSelect,
   onRefresh,
   choosing,
+  searched,
   onChooseStart,
   children,
 }: RowListProps) {
   const colors = useColors();
+  const searchedWords = useMemo(() => searchTokens(searched ?? ""), [searched]);
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.SIDEBAR ? 0 : Math.max(0, (width - READING_WIDTH) / 2);
 
@@ -187,7 +199,7 @@ export function RowList({
       <ListLookContext value={look}>
         <RowOpenContext value={onSelect}>
           <RowSelectedContext value={choosing === undefined ? selected : undefined}>
-            {children}
+            <RowSearchedContext value={searchedWords}>{children}</RowSearchedContext>
           </RowSelectedContext>
         </RowOpenContext>
       </ListLookContext>
