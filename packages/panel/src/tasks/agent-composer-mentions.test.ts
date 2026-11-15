@@ -31,7 +31,7 @@ import {
 import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { TASK_SKILL_SOURCE, TASK_TREE_ENTRY } from "@repo/features/task-wire";
-import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, TASKS_READ } from "@repo/features/tasks-view";
 import {
   WORKSPACE_ROLE,
   type WorkspaceMachine,
@@ -63,6 +63,7 @@ import {
   holdIntegrationTools,
   holdMembers,
   stateWith,
+  type WrittenTasksView,
 } from "../testing/app-state.js";
 import {
   composerEditor,
@@ -210,14 +211,14 @@ let newest: readonly AgentSummary[] = NEWEST_AGENTS;
 let listFailed = false;
 
 /** Lays the task list on the window again, as the host does once it reads it. */
-let deliverTasks: (next: TasksView) => void = () => undefined;
+let deliverTasks: (next: WrittenTasksView) => void = () => undefined;
 
 /**
  * The task list as the host lays it: the newest agents and the archived
  * one, each on its task, in the workspace the plan stands in,
  * or failed before it carried any.
  */
-function tasksView(): TasksView {
+function tasksView(): WrittenTasksView {
   if (listFailed) return { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.FAILED };
 
   const listed = [...newest, OLD_AGENT].map((agent) => ({
