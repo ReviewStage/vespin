@@ -255,12 +255,19 @@ export function useAttachedPictures(
       setPictures(next);
       onNote(undefined);
     },
+    // Note that `take` and `putBack` write the held pictures at once too, so a paste landing before the next render builds on what they left.
     take: () => {
+      const taken = held.current;
+      held.current = [];
       setPictures([]);
 
-      return pictures;
+      return taken;
     },
-    putBack: (carried) => setPictures((held) => [...carried, ...held]),
+    putBack: (carried) => {
+      const next = [...carried, ...held.current];
+      held.current = next;
+      setPictures(next);
+    },
     pasteText,
   };
 }
