@@ -40,7 +40,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useDetailStack } from "../detail-stack.js";
+import { useDetailStack, useStackRoot } from "../detail-stack.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useHandColumns } from "../place-columns.js";
@@ -101,7 +101,7 @@ const SEARCH_PICK = {
   AGENT: "agent",
 } as const;
 
-/** A row a wide window's Search picked, by its kind and its id, with the route its own tab opens it on, which a narrower window pushes in its place; none for a thread a pick's box started. */
+/** A row a wide window's Search picked, by its kind and its id, with the route its own tab opens it on, which a narrower window pushes in its place; none where no route names it. */
 type SearchPick = {
   readonly kind: (typeof SEARCH_PICK)[keyof typeof SEARCH_PICK];
   readonly id: string;
@@ -238,6 +238,7 @@ const SEARCH_IDLE = (
 function useSearchScreen(
   { query, scope, setScope }: SearchWords,
   pick?: SearchPicking | undefined,
+  leave?: () => void,
 ) {
   const router = useRouter();
   const found = useSearchFound(query);
@@ -259,7 +260,11 @@ function useSearchScreen(
 
     const route = routes.get(id);
 
-    if (route !== undefined) router.push(onTab(route));
+    if (route === undefined) return;
+
+    // Note that the search is ended before the route opens, because a regular window opens it on its own tab, and the iPad's top tab bar, folded into the field while it is searched, stood folded over the tab it switched to, with no way back to Search; blurring the field alone left it folded.
+    leave?.();
+    router.push(onTab(route));
   };
 
   const shown = scopedFound(found, scope);
@@ -294,8 +299,15 @@ function useSearchScreen(
 }
 
 /** What a typed query finds under the Stack's bar, with the questions and sheets its rows' acts raise beside it. */
-function SearchStackFound(words: SearchWords) {
-  const { results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
+function SearchStackFound({
+  leave,
+  ...words
+}: SearchWords & { readonly leave: (() => void) | undefined }) {
+  const { results, status, deletion, remind, archiveAsk } = useSearchScreen(
+    words,
+    undefined,
+    leave,
+  );
 
   return (
     <>
@@ -355,7 +367,15 @@ function SearchStackScreen(words: SearchWords) {
           />
         </Stack.Toolbar>
       ) : null}
-      {query.trim() === "" ? <Screen>{SEARCH_IDLE}</Screen> : <SearchStackFound {...words} />}
+      {query.trim() === "" ? (
+        <Screen>{SEARCH_IDLE}</Screen>
+      ) : (
+        <SearchStackFound
+          {...words}
+          // Note that only a regular window ends the search, since it opens the pick on another tab, while a compact one pushes it on Search's own stack, whose results Back returns to.
+          leave={regular ? () => field.current?.cancelSearch() : undefined}
+        />
+      )}
     </>
   );
 }
@@ -373,7 +393,12 @@ function useSearchDetail(
   remindMenu: (item: InboxItem) => BarMenu,
   choose: Dispatch<SetStateAction<SearchPick | undefined>>,
 ) {
-  const task = useTaskDetail(picked?.kind === SEARCH_PICK.TASK ? picked.id : undefined, listing);
+  const task = useTaskDetail(
+    picked?.kind === SEARCH_PICK.TASK ? picked.id : undefined,
+    listing,
+    undefined,
+    SIDEBAR_PLACE.SEARCH,
+  );
 
   if (picked === undefined)
     return { detail: <NoSelection title={CHOOSE_AN_ITEM_WORDS} />, asks: null };
@@ -388,7 +413,13 @@ function useSearchDetail(
             key={picked.id}
             id={picked.id}
             remindMenu={remindMenu}
-            onOpen={(id) => choose({ kind: SEARCH_PICK.THREAD, id, route: undefined })}
+            onOpen={(id) =>
+              choose({
+                kind: SEARCH_PICK.THREAD,
+                id,
+                route: iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id }),
+              })
+            }
           />
         ),
         asks: null,
@@ -457,7 +488,7 @@ function SearchSplitColumns({
   readonly root?: string | undefined;
 }) {
   const { query, setQuery, scope } = words;
-
+  useStackRoot(SIDEBAR_PLACE.SEARCH, root);
   useHandColumns(SIDEBAR_PLACE.SEARCH, {
     content,
     contentBar: {

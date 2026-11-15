@@ -14,7 +14,6 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
-import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
@@ -39,6 +38,7 @@ import {
 } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
+  followListedTasks,
   handHostReads,
   handMembers,
   readExperiments,
@@ -949,6 +949,8 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
     },
   });
   const tasks = tasksControl({ tasks: [resting] });
+  // Note that a settle reads its task off main's document, as the window's surfaces read it (`task-row-doors.ts`).
+  followListedTasks({ tasks: [resting] });
 
   const asked: Asked = {
     opened: [],
@@ -961,6 +963,7 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
     container.querySelector('button[aria-label="Mark done"]');
 
   const row = mount(withQueryClient(sidebarTask(tasks, resting, asked)));
+  await act(async () => undefined);
   const check = doneButton(row);
   assert.ok(check instanceof HTMLButtonElement, "the row offers Mark done as its button");
   act(() => check.click());
@@ -1292,24 +1295,21 @@ test("a sidebar task whose rename was refused reopens its field holding the name
 test("⌘Z takes back a sidebar task's rename the service kept, sending its name before", async () => {
   forgetUndo();
   const { tasks, asked } = openTab();
-  // Note that main draws the name the service kept, which ⌘Z reads before it sends the old one back.
-  let drawnName = OTHER.name;
+  // Note that main draws the name the service kept, which ⌘Z reads off the window's list before it sends the old one back.
+  const deliver = followListedTasks({ tasks: [OTHER] });
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_RENAME]: ({ taskId, name }) => {
       asked.renamed.push([taskId, name]);
-      drawnName = name;
+      deliver({ tasks: [{ ...OTHER, name }] });
 
       return Promise.resolve(true);
     },
   });
 
-  const drawn: TasksControl = {
-    ...tasks,
-    drawnTasks: () => ({ ...IDLE_TASKS_VIEW, tasks: [{ ...OTHER, name: drawnName }] }),
-  };
-
-  rightClick(mountSidebarTask(drawn, OTHER, asked), 40, 60);
+  const row = mountSidebarTask(tasks, OTHER, asked);
+  await act(async () => undefined);
+  rightClick(row, 40, 60);
   choose("Rename");
   const field = document.querySelector<HTMLInputElement>('input[aria-label="Task name"]');
   assert.ok(field, "the row's name is its field");
