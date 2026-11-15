@@ -1,13 +1,13 @@
 /**
  * in-process-bridge.ts -- the window's bridge for a shell that runs the host in the page it draws: the document straight from the store, and the one-shot events from an emitter the shell drives.
  */
+import type { TaskListParts } from "@repo/features/tasks-view";
 import { Effect, type Scope } from "effect";
 import {
   type AppStateDelivery,
   type AppStateSnapshot,
   type AppWindowFacts,
   appStateDelivery,
-  type TaskListParts,
   taskListDelivery,
 } from "../app-state.js";
 import type { AppBridge, PushPayloadFor } from "../bridge.js";
