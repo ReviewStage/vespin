@@ -62,16 +62,20 @@ export function agentPullRequestWrite(
 }
 
 /**
- * The source of an agent's Pull request tab: the pull request from the
- * branch the agent stands on, or the one of its repository the tab names by
- * its number. The agent is found among the archived too, since an archived
- * agent's pull request keeps its tab.
+ * The source of an agent's Pull request tab: the agent's own pull request,
+ * or the one of its repository the tab names by its number. The agent's own
+ * is the one the task list names for it, read from the branch it stands on,
+ * or by its number where the list names one apart from that branch
+ * (`offBranchNumbers`), so the tab shows what its name and chip say. The
+ * agent is found among the archived too, since an archived agent's pull
+ * request keeps its tab.
  */
 export function useAgentPullRequestSource(
   control: AgentsControl,
   agentId: string,
-  number: number | undefined,
+  named: number | undefined,
 ): PullRequestSource {
+  const number = named ?? control.offBranchNumbers.get(agentId);
   const write = useMemo(() => agentPullRequestWrite(agentId, number), [agentId, number]);
 
   const agent =
@@ -80,7 +84,8 @@ export function useAgentPullRequestSource(
 
   const ended = !agentStillWriting(agent?.status ?? AGENT_STATUS.RUNNING);
   const taskId = agent?.taskId ?? null;
-  const published = pullRequestOfTab(control, { changes: agentId, number });
+  // Note that the pull request as last read is the tab's own, so an off-branch one draws the list's line until its read by number lands.
+  const published = pullRequestOfTab(control, { changes: agentId, number: named });
   const { generateChapters } = control;
 
   // Note that the doors are kept while what they name stands, because every part under the tab that hears the source draws anew on a new one.

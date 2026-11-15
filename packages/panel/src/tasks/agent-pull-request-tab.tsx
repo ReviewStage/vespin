@@ -3231,10 +3231,10 @@ export function AgentPullRequestTab({
 
   // Note that the number and the source are handed down before any of the tab's own hooks run, its writes among them.
   return (
-    <PullRequestNumberProvider value={props.number}>
+    <PullRequestNumberProvider value={source.number}>
       <PullRequestSourceProvider value={source}>
         <WritePlaceProvider value={source.place}>
-          <PullRequestTabBody {...props} source={source} />
+          <PullRequestTabBody {...props} number={source.number} source={source} />
         </WritePlaceProvider>
       </PullRequestSourceProvider>
     </PullRequestNumberProvider>

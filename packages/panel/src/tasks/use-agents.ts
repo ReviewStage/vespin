@@ -119,7 +119,7 @@ import type { SkillSource } from "./skill-picker.js";
 import { useSuggestionSender } from "./suggestion-send.js";
 import type { MessageSender, MessageUnsender } from "./use-agent-composer.js";
 import type { ChoiceWriter } from "./use-agent-model.js";
-import { useListedPullRequests } from "./use-agent-pull-request.js";
+import { useListedPullRequests, useOffBranchNumbers } from "./use-agent-pull-request.js";
 import type { ServersWriter } from "./use-agent-servers.js";
 import type {
   InboxAnswerer,
@@ -581,6 +581,8 @@ export interface AgentsControl {
   readTranscript: TranscriptReader;
   /** Each of the task's agents' pull requests, by agent, of those that have one, as the task list carries them (`useListedPullRequests`). */
   pullRequests: ReadonlyMap<string, AgentPullRequest>;
+  /** The number of each agent's pull request of `pullRequests` that is not the one from the branch it stands on, by agent, which its Pull request tab reads it by (`useOffBranchNumbers`). */
+  offBranchNumbers: ReadonlyMap<string, number>;
   /** Each pull request a Pull request tab names by its number, by agent and then by number (`pull-request-number.ts`), as the host holds what was published of it while a surface holds it. */
   numberedPullRequests: ByPullRequestTab<AgentPullRequest>;
   /**
@@ -1979,6 +1981,7 @@ export function useAgents(input: {
   // Note that every agent's pull request, an archived one's among them, is the task list's, so
   // choosing a task reads none of them.
   const pullRequests = useListedPullRequests(listedPullRequests, taskId);
+  const offBranchNumbers = useOffBranchNumbers(listedPullRequests, taskId);
 
   // A pull request a tab names by its number is kept by agent and number,
   // apart from the agents' own, so it never stands for what an agent published.
@@ -2094,6 +2097,7 @@ export function useAgents(input: {
     readAgent,
     readTranscript,
     pullRequests,
+    offBranchNumbers,
     numberedPullRequests,
     generateChapters,
     keywords: input.keywords ?? NO_KEYWORDS,

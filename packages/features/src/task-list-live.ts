@@ -953,11 +953,19 @@ export function agentPinOf(row: AgentLiveRow): TaskAgentPin | undefined {
   return pinPosition === null ? at : { ...at, pinPosition };
 }
 
-/** The pull request an agent's row names of every one it opened (`agentMarkedPullRequest`), as the service last read it on GitHub; none where it opened none. */
+/**
+ * The pull request an agent's row names of every one it opened
+ * (`agentMarkedPullRequest`), as the service last read it on GitHub, marked
+ * where it is not the one from the branch the agent stands on (`published`);
+ * none where it opened none.
+ */
 export function agentPullRequestOf(row: AgentLiveRow): ListedPullRequest | undefined {
   const marked = markedOfRow(row);
 
-  return marked === null ? undefined : { agentId: row.id, taskId: row.taskId, pullRequest: marked };
+  if (marked === null) return undefined;
+  const listed = { agentId: row.id, taskId: row.taskId, pullRequest: marked };
+
+  return marked.url === row.published?.url ? listed : { ...listed, offBranch: true };
 }
 
 /** The agents started from each agent by its id (`continuedByOf`); none for an agent nothing was started from. */

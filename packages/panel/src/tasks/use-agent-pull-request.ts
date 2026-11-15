@@ -86,6 +86,31 @@ export function useListedPullRequests(
   }, [listed, taskId]);
 }
 
+/** No agent's pull request stands apart from its branch, one map so a render that has none hands down the same one. */
+const NO_OFF_BRANCH: ReadonlyMap<string, number> = new Map();
+
+/**
+ * The number of each of a task's agents' pull requests the list names
+ * apart from the branch the agent stands on (`ListedPullRequest.offBranch`),
+ * by agent: an older one still open while a newer one merged. Its Pull
+ * request tab reads it by that number, since the agent's own read follows
+ * its branch and would show the other.
+ */
+export function useOffBranchNumbers(
+  listed: readonly ListedPullRequest[] | undefined,
+  taskId: string | undefined,
+): ReadonlyMap<string, number> {
+  return useMemo(() => {
+    const apart = (listed ?? []).filter(
+      (each) => each.taskId === taskId && each.offBranch === true,
+    );
+
+    if (apart.length === 0) return NO_OFF_BRANCH;
+
+    return new Map(apart.map((each) => [each.agentId, each.pullRequest.number]));
+  }, [listed, taskId]);
+}
+
 /**
  * The pull request one agent opened, as the service last synced it onto the
  * agent's row and the task list carries it, a hover card's whole source of

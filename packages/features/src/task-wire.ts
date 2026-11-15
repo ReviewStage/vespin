@@ -879,6 +879,8 @@ export const listedPullRequestSchema = EffectSchema.Struct({
   /** The task the agent stands on. */
   taskId: EffectSchema.String,
   pullRequest: agentPullRequestSchema,
+  /** True where it is not the pull request from the branch the agent stands on, as an older one still open while a newer merged; its Pull request tab then names it by its number, since the agent's own read follows its branch. Absent otherwise. */
+  offBranch: EffectSchema.optionalKey(EffectSchema.Literal(true)),
 });
 
 export type ListedPullRequest = typeof listedPullRequestSchema.Type;

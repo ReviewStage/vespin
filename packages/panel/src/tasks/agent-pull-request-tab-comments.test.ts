@@ -371,6 +371,44 @@ test("a tab naming another pull request of the agent's repository by its number 
   assert.deepEqual(world.changeNumbers, [41]);
 });
 
+test("an agent's own tab reads the pull request the list names for it by its number where that one is not from the branch the agent stands on", async () => {
+  const asked: unknown[] = [];
+
+  const recorded =
+    <A>(kind: string, answer: A) =>
+    (agentId: string, number?: number) => {
+      asked.push([kind, agentId, number]);
+
+      return Promise.resolve(answer);
+    };
+
+  // The agent's older pull request, #41, still waits while the newer one from the branch it now stands on merged.
+  const control = {
+    ...controlAnswering({
+      pullRequest: recorded("pull request", { pullRequest: { ...PULL_REQUEST, number: 41 } }),
+      conversation: recorded("conversation", { pullRequest: CONVERSATION }),
+    }),
+    offBranchNumbers: new Map([[AGENT.id, 41]]),
+  };
+
+  await drawn(
+    createElement(AgentPullRequestTab, {
+      agentId: AGENT.id,
+      control,
+      shown: true,
+      repository: "acme/relay",
+      tree: { open: false, onToggle: () => undefined },
+      view: PULL_REQUEST_VIEW.CONVERSATION,
+      onView: () => undefined,
+    }),
+  );
+
+  assert.deepEqual(asked, [
+    ["pull request", AGENT.id, 41],
+    ["conversation", AGENT.id, 41],
+  ]);
+});
+
 test("a numbered pull request nothing published shows how its checks went on its Checks tab from the merge read, before they are read, where the merge control draws no chip for them", async () => {
   const control = controlAnswering({
     pullRequest: () =>
