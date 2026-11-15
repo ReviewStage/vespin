@@ -45,6 +45,7 @@ import type { InstalledSkillSummary } from "@repo/features/installed-skill-route
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import type { IntegrationToolsAnswer } from "@repo/features/integration-wire";
 import { LIVE_READ, type LiveRead } from "@repo/features/live-wire";
+import type { MachineAskLine } from "@repo/features/machine-ask-live";
 import type { MachineLine } from "@repo/features/machine-live";
 import type { McpClientsAnswer } from "@repo/features/mcp-client-wire";
 import type { MemorySummary } from "@repo/features/memory-wire";
@@ -56,7 +57,12 @@ import type { ProviderKeysAnswer } from "@repo/features/provider-key-wire";
 import type { PullRequestChaptersAnswer } from "@repo/features/pull-request-chapters-wire";
 import type { SlackListedChannel } from "@repo/features/slack-bot-wire";
 import type { DescriptionRevisionsAnswer } from "@repo/features/task-wire";
-import { COMMENT_SUBJECT, type HeldTask, type TasksView } from "@repo/features/tasks-view";
+import {
+  COMMENT_SUBJECT,
+  type HeldTask,
+  type TaskListParts,
+  type TasksView,
+} from "@repo/features/tasks-view";
 import type { StandingCall } from "@repo/features/voice-wire";
 import type { WorkspaceIntegrations } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
@@ -502,6 +508,9 @@ export type AppHosts = Readonly<Record<string, AppHostRead<AppHostsHeld>>>;
 /** The account's machines the windows hold, by the account, as the host's read of them stands: each by name, with its own settings for agents, every change still out drawn over it and a removal drawn gone. */
 export type AppMachines = Readonly<Record<string, AppHostRead<readonly MachineLine[]>>>;
 
+/** The asks the account's machines hold for its answer, by the account, as the host's read of them stands. */
+export type AppMachineAsks = Readonly<Record<string, AppHostRead<readonly MachineAskLine[]>>>;
+
 /**
  * Each workspace's pending invitations the host holds for an owner's or an
  * admin's windows (`workspace-invitations-read.ts`): those a window draws,
@@ -738,6 +747,7 @@ export interface AppHostReads {
   [LIVE_READ.DEVICE_PRESENCE]: AppDevicePresence;
   [LIVE_READ.HOSTS]: AppHostsHeld;
   [LIVE_READ.MACHINES]: readonly MachineLine[];
+  [LIVE_READ.MACHINE_ASKS]: readonly MachineAskLine[];
   [LIVE_READ.WORKSPACE_INVITATIONS]: readonly WorkspaceInvitation[];
   [LIVE_READ.THIS_MAC_HOST]: AppThisMacHost;
   [LIVE_READ.TRANSCRIPT]: AppTranscript;
@@ -913,6 +923,8 @@ export interface AppState {
   [LIVE_READ.HOSTS]: AppHosts;
   /** The account's machines with their own settings for agents' commands and apps, held while Settings › Machines draws them and a while after: what its settings for every machine read. */
   [LIVE_READ.MACHINES]: AppMachines;
+  /** The asks the account's machines hold for its answer, held while a window could draw one: what an agent's tab asks over its box, and what a row counts as needing you. */
+  [LIVE_READ.MACHINE_ASKS]: AppMachineAsks;
   /** Each workspace's pending invitations an owner's or an admin's windows draw, held while a window draws them and a while after: what Settings › Workspace lists under Invitations. */
   [LIVE_READ.WORKSPACE_INVITATIONS]: AppWorkspaceInvitations;
   /** Which machine This Mac is and the device its host's record names, held for the signed-in session and told as it moves: what Settings › Hosts and Runs on name This Mac by. */
@@ -1024,8 +1036,8 @@ export const KEYS_ON = {
   ROWS: "rows",
 } as const;
 
-/** One list of rows in the task list's view, by its name in `TasksView`. */
-type TasksRows<Part extends keyof TasksView> = NonNullable<TasksView[Part]>;
+/** One list of rows of the task list, by its name in `TaskListParts`. */
+type TasksRows<Part extends keyof TaskListParts> = NonNullable<TaskListParts[Part]>;
 
 /** How one slice is laid out, which is all its delivery reads of it. */
 interface HostReadSliceEntry {
@@ -1104,20 +1116,11 @@ export const HOST_READ_SLICE = {
   },
   // Note that a history crosses whole, since each save lands a newest page that replaces its head.
   [LIVE_READ.HISTORY]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
-  tasks: {
-    keys: READ_KEYS.PARTS,
-    on: KEYS_ON.SLICE,
-    rowIds: {
-      tasks: "id" satisfies keyof TasksRows<"tasks">[number],
-      taskAgents: "id" satisfies keyof TasksRows<"taskAgents">[number],
-      taskPullRequests: "taskId" satisfies keyof TasksRows<"taskPullRequests">[number],
-      agentPullRequests: "agentId" satisfies keyof TasksRows<"agentPullRequests">[number],
-    } satisfies { readonly [Part in keyof TasksView]?: string },
-  },
   [LIVE_READ.BROWSER_TABS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.DEVICE_PRESENCE]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.HOSTS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.MACHINES]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
+  [LIVE_READ.MACHINE_ASKS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.WORKSPACE_INVITATIONS]: {
     keys: READ_KEYS.ONE,
     on: KEYS_ON.SLICE,
@@ -1203,6 +1206,12 @@ export interface AppStateDelivery {
   readonly gone?: readonly AppStateEntry[];
   /** Each keyed slice's keys that moved since the window's last delivery, in place of its entry, where the window held the slice and still does (`HOST_READ_SLICE`). */
   readonly moved?: { readonly [Slice in HostReadSlice]?: readonly KeyMoved[] };
+  /**
+   * The task list's rows that moved since the window's last delivery, beside
+   * the document rather than in it, for the window's task-list collections
+   * (`taskListDelivery`); none where no part of the list moved.
+   */
+  readonly taskList?: TaskListDelivery;
 }
 
 /** A value the document holds: a record or list, a primitive, or nothing. */
@@ -1532,7 +1541,8 @@ function withSliceMoved<Slice extends object>(
 }
 
 /**
- * The delivery that brings a window holding `sent` to `next`, or none where
+ * The delivery that brings a window holding `sent` to `next`, the task
+ * list's rows that moved beside it (`taskListDelivery`), or none where
  * nothing it is handed moved. Note that the document keeps the identity of
  * every part a patch did not move, so an untouched entry is answered at its
  * first comparison and only an entry that moved is walked.
@@ -1540,6 +1550,7 @@ function withSliceMoved<Slice extends object>(
 export function appStateDelivery(
   sent: AppStateSnapshot | undefined,
   next: AppStateSnapshot,
+  taskList?: TaskListDelivery,
 ): AppStateDelivery | undefined {
   // SAFETY: `Object.keys` of a snapshot names its own entries and its version, the last dropped here.
   const names = [...new Set([...Object.keys(sent ?? {}), ...Object.keys(next)])].filter(
@@ -1565,7 +1576,9 @@ export function appStateDelivery(
   const keys = patched.filter(([, keysOf]) => keysOf.length > 0);
   const gone = moved.filter((name) => next[name] === undefined);
 
-  if (sent !== undefined && moved.length === 0 && keys.length === 0) return undefined;
+  if (sent !== undefined && moved.length === 0 && keys.length === 0 && taskList === undefined) {
+    return undefined;
+  }
 
   return {
     version: next.version,
@@ -1574,8 +1587,84 @@ export function appStateDelivery(
     ),
     ...(gone.length === 0 ? undefined : { gone }),
     ...(keys.length === 0 ? undefined : { moved: Object.fromEntries(keys) }),
+    ...(taskList === undefined ? undefined : { taskList }),
   };
 }
+
+/** The task list's lists of rows, each a live query of the list draws, by its name in `TaskListParts`. */
+export const TASK_LIST_PARTS = [
+  "tasks",
+  "taskAgents",
+  "taskPullRequests",
+  "agentPullRequests",
+] as const satisfies readonly (keyof TaskListParts)[];
+
+type TaskListPart = (typeof TASK_LIST_PARTS)[number];
+
+/**
+ * How the task list's lists cross to a window beside the document
+ * (`taskListDelivery`): keyed by part, each a list of rows crossing as the
+ * rows that moved in it, told apart by the field named here.
+ */
+const TASK_LIST_ENTRY = {
+  keys: READ_KEYS.PARTS,
+  on: KEYS_ON.SLICE,
+  rowIds: {
+    tasks: "id" satisfies keyof TasksRows<"tasks">[number],
+    taskAgents: "id" satisfies keyof TasksRows<"taskAgents">[number],
+    taskPullRequests: "taskId" satisfies keyof TasksRows<"taskPullRequests">[number],
+    agentPullRequests: "agentId" satisfies keyof TasksRows<"agentPullRequests">[number],
+  } satisfies { readonly [Part in TaskListPart]: string },
+} as const satisfies HostReadSliceEntry;
+
+/** One part of the task list that moved: its list whole, or null where it is gone; or its rows that moved, with its ids in order where they moved. */
+export type TaskListPartMoved = KeyMoved;
+
+/**
+ * The task list's rows as one delivery of the document hands them to a
+ * window, beside the document rather than in it (`AppStateDelivery`'s
+ * `taskList`): what one drawing moved in each part since the last this
+ * window was handed, under the document's version it moved to. A window's
+ * first is its lists whole, so a window's collections stand on these alone;
+ * each after it names the parts that moved, as the rows that moved in them
+ * where they can be told so.
+ */
+export interface TaskListDelivery {
+  readonly version: number;
+  /** The task list's lists whole, as a window's first carries them. */
+  readonly whole?: TaskListParts;
+  /** Each part that moved since the window's last delivery. */
+  readonly moved?: readonly TaskListPartMoved[];
+}
+
+/**
+ * The task list's rows that bring a window handed the lists `sent` to
+ * `next`, under the document's `version`: its lists whole where it was
+ * handed none, the parts that moved otherwise, or none where no part moved.
+ * A part crosses as the rows its drawing says moved rather than a walk of
+ * the list (`TASK_LIST_ENTRY`).
+ */
+export function taskListDelivery(
+  sent: TaskListParts | undefined,
+  next: TaskListParts,
+  version: number,
+): TaskListDelivery | undefined {
+  if (sent === undefined) return { version, whole: next };
+
+  if (sent === next) return undefined;
+  // SAFETY: the task list's parts are its lists of rows, which `TASK_LIST_ENTRY` keys by part.
+  const moved = idsMoved(TASK_LIST_ENTRY, [], sent as Keyed, next as Keyed);
+
+  return moved.length === 0 ? undefined : { version, moved };
+}
+
+/**
+ * The document as a whole read answers it: the snapshot, and the task
+ * list's lists beside it rather than in it, which the window's task-list
+ * collections are laid from (`task-list-following.ts`); none where the
+ * bridge holds none, as a test's may not.
+ */
+export type AppStateRead = AppStateSnapshot & { readonly taskList?: TaskListParts };
 
 /**
  * The document a window holds once a delivery lands on it: each entry named

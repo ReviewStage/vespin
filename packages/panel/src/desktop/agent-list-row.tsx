@@ -1,5 +1,6 @@
 import { AGENT_BOUNDS, type AgentPullRequest, type AgentSummary } from "@repo/features/agent-wire";
 import { openerOf } from "@repo/features/link-standing-model";
+import { machineAsksByAgent } from "@repo/features/machine-ask-live";
 import {
   InlineEdit,
   RowHint,
@@ -13,6 +14,7 @@ import {
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { type ReactNode, useRef } from "react";
+import { useMachineAsks } from "../machine-asks.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
 import type { AgentSubject } from "../tasks/agent-ref.js";
 import { useChangesPeople } from "../tasks/changes-people.js";
@@ -129,6 +131,8 @@ export function AgentListRow({
     terminals: { onOpenTerminal: undefined },
   });
 
+  // Note that the developer's machines' asks for the agent count as needing them beside its threads.
+  const asked = machineAsksByAgent(useMachineAsks()).get(agent.id) ?? 0;
   const press = useRef<HTMLButtonElement | null>(null);
   const { rename } = actions;
   const editing = rename?.editing === true;
@@ -145,7 +149,7 @@ export function AgentListRow({
             <AgentGlyph agent={agent} />
           </TaskRowGlyph>
         ),
-        [TASK_ROW_CELL.WAITING]: <WaitingCount count={waits} />,
+        [TASK_ROW_CELL.WAITING]: <WaitingCount count={waits + asked} />,
         [TASK_ROW_CELL.PULL_REQUESTS]:
           pullRequest === undefined ? null : (
             <ReplayMask>

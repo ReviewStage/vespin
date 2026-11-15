@@ -18,6 +18,7 @@ import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { OverviewHead } from "./overview-head.js";
 
@@ -120,15 +121,18 @@ function draw(
   act(() =>
     root?.render(
       withQueryClient(
-        createElement(OverviewHead, {
-          task,
+        overEveryTask(
           tasks,
-          door: { workspaceName: ACME.name, tasks: listed },
-          room: { scroller: { current: container }, column: { current: container } },
-          agents: null,
-          pages: null,
-          onOpenTask: tasks.onSelect,
-        }),
+          createElement(OverviewHead, {
+            task,
+            tasks,
+            door: { workspaceName: ACME.name, tasks: listed },
+            room: { scroller: { current: container }, column: { current: container } },
+            agents: null,
+            pages: null,
+            onOpenTask: tasks.onSelect,
+          }),
+        ),
       ),
     ),
   );

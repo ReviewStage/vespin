@@ -3,7 +3,7 @@
  */
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
-import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, NO_TASK_LIST, type TaskListParts } from "@repo/features/tasks-view";
 import type { HostCapability } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { NOTIFICATIONS_STATUS } from "@repo/settings/settings-controls";
@@ -28,6 +28,21 @@ import type { RunMode } from "../run-mode.js";
 import { idleUpdateSnapshot } from "../update-service.js";
 
 type AppStateSlice = Exclude<keyof AppState, "version">;
+
+/**
+ * Whether two drawings of the task list hold the very same lists. Note that
+ * each list is compared by identity, never walked or laid anew, because a
+ * list is tied to the drawing it came from, which is how its moves are told
+ * (`list-moves.ts`).
+ */
+function sameLists(one: TaskListParts, other: TaskListParts): boolean {
+  return (
+    one.tasks === other.tasks &&
+    one.taskAgents === other.taskAgents &&
+    one.taskPullRequests === other.taskPullRequests &&
+    one.agentPullRequests === other.agentPullRequests
+  );
+}
 
 /**
  * One shallow slice replacement per key; a slice is replaced whole, never
@@ -77,6 +92,8 @@ export class AppStateStore {
   readonly #ref: SubscriptionRef.SubscriptionRef<AppState>;
   readonly #services: Context.Context<never>;
   #queued: (() => void)[] | undefined;
+  /** The task list's lists, held beside the document rather than in it, moved with it under its version. */
+  #taskList: TaskListParts = NO_TASK_LIST;
 
   constructor(initial: Omit<AppState, "version">, services: Context.Context<never>) {
     this.#services = services;
@@ -89,8 +106,14 @@ export class AppStateStore {
     return Effect.runSyncWith(this.#services)(SubscriptionRef.get(this.#ref));
   }
 
-  update(patch: AppStatePatch): void {
-    this.#write(() => this.#apply(patch));
+  /** The task list's lists as they stand beside the document: what a window's whole read answers beside it, and its deliveries carry the moves in. */
+  taskList(): TaskListParts {
+    return this.#taskList;
+  }
+
+  /** Applies `patch`, and lays `taskList` as the task list's lists beside the document where it is given, under one version. */
+  update(patch: AppStatePatch, taskList?: TaskListParts): void {
+    this.#write(() => this.#apply(patch, taskList));
   }
 
   /**
@@ -129,8 +152,11 @@ export class AppStateStore {
     }
   }
 
-  #apply(patch: AppStatePatch): void {
+  #apply(patch: AppStatePatch, taskList: TaskListParts | undefined): void {
     const previous = this.snapshot();
+
+    const listed =
+      taskList === undefined || sameLists(this.#taskList, taskList) ? this.#taskList : taskList;
 
     // Note that a slice kept whole is one that says nothing new, which is the
     // one walk that both decides that and shares what did not move.
@@ -140,7 +166,8 @@ export class AppStateStore {
       return kept === previous[slice] ? [] : [[slice, kept] as const];
     });
 
-    if (moved.length === 0) return;
+    if (moved.length === 0 && listed === this.#taskList) return;
+    this.#taskList = listed;
 
     const next: AppState = {
       ...previous,
@@ -269,6 +296,7 @@ export function initialAppState(
     [LIVE_READ.DEVICE_PRESENCE]: NO_KEYS_HELD,
     [LIVE_READ.HOSTS]: NO_KEYS_HELD,
     [LIVE_READ.MACHINES]: NO_KEYS_HELD,
+    [LIVE_READ.MACHINE_ASKS]: NO_KEYS_HELD,
     [LIVE_READ.WORKSPACE_INVITATIONS]: NO_KEYS_HELD,
     [LIVE_READ.THIS_MAC_HOST]: NO_KEYS_HELD,
     [LIVE_READ.TRANSCRIPT]: NO_TRANSCRIPTS,

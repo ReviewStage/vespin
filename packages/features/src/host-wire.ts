@@ -420,8 +420,6 @@ export const machineChangeRequestSchema = EffectSchema.Struct({
   makeDefault: EffectSchema.optionalKey(EffectSchema.Literal(true)),
 });
 
-export type MachineChangeRequest = typeof machineChangeRequestSchema.Type;
-
 /** The command that installs the host program on a box and pairs it, which prints the link and the code a member approves: public, with no secret in it. */
 export function hostInstallCommand(installScriptUrl: string): string {
   return `curl -fsSL ${installScriptUrl} | sh`;

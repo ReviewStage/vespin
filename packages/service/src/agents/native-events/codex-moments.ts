@@ -18,6 +18,7 @@ import {
   runnerMoments,
   toolAnswerSettlement,
   usageLimitSettlement,
+  watchedOfMeta,
   workspaceAnswerText,
 } from "./runner-moments.js";
 
@@ -188,7 +189,12 @@ const McpToolCallSchema = Schema.Struct({
   status: Schema.String,
   arguments: Schema.optionalKey(WireValueSchema),
   result: Schema.optionalKey(
-    Schema.NullOr(Schema.Struct({ content: Schema.Array(WireValueSchema) })),
+    Schema.NullOr(
+      Schema.Struct({
+        content: Schema.Array(WireValueSchema),
+        _meta: Schema.optionalKey(Schema.NullOr(WireValueSchema)),
+      }),
+    ),
   ),
   error: Schema.optionalKey(Schema.NullOr(Schema.Struct({ message: Schema.String }))),
 });
@@ -353,7 +359,12 @@ function mcpCall(item: WireValue): Option.Option<Answered> {
       callId: call.id,
       ...stored,
       answer: workspaceTool
-        ? { workspaceTool: true, name: stored.name, text }
+        ? {
+            workspaceTool: true,
+            name: stored.name,
+            text,
+            watched: watchedOfMeta(call.result?._meta),
+          }
         : { workspaceTool: false, text, output: text },
       failed:
         call.error !== undefined && call.error !== null ? true : FAILED_STATUSES.has(call.status),

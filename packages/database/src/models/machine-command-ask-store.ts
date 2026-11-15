@@ -231,6 +231,25 @@ const findAnswer = SqlSchema.findOneOption({
     ),
 });
 
+/** The answer that stood on the account's ask before its window was said closed; none for one given after, which is a grant, not this ask's answer. */
+const findAnswerInTime = SqlSchema.findOneOption({
+  Request: AskKeySchema,
+  Result: Schema.Struct({ decision: DecisionSchema, note: Schema.NullOr(Schema.String) }),
+  execute: ({ userId, id }) =>
+    Database.use((db) =>
+      db
+        .select({ decision: machineCommandAsk.decision, note: machineCommandAsk.note })
+        .from(machineCommandAsk)
+        .where(
+          and(
+            eq(machineCommandAsk.id, id),
+            eq(machineCommandAsk.userId, userId),
+            isNull(machineCommandAsk.lapsedAt),
+          ),
+        ),
+    ),
+});
+
 /** Writes the answer a grant carried onto the new ask. */
 const writeGranted = SqlSchema.void({
   Request: Schema.Struct({ ...AskKeySchema.fields, decision: machineAskDecisionSchema }),
@@ -367,7 +386,10 @@ export function lapseMachineAsk(
 
     if (lapsed !== undefined) return undefined;
 
-    return yield* standingAnswer(userId, id);
+    // Note that a close said again, as a retried request is, never answers with an answer given after the first.
+    const found = yield* findAnswerInTime({ userId, id });
+
+    return Option.isNone(found) ? undefined : standingOf(found.value);
   });
 }
 
