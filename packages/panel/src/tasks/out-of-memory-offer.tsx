@@ -4,10 +4,9 @@
  * The call's own answer already ends in the line saying it was killed and
  * how much memory the sandbox had, which every reader sees. Under it, an
  * owner or admin of the agent's workspace is offered the next size up, one
- * press away where the most the workspace may have allows it
- * (`useChooseSandboxSize`), and told a larger one is available on request
- * where it does not; once the workspace opens its sandboxes larger than the
- * command ran with, the line says the size it moved to. Anyone else sees the
+ * press away (`useChooseSandboxSize`), and nothing past the largest; once
+ * the workspace opens its sandboxes larger than the command ran with, the
+ * card says the size it moved to. Anyone else sees the
  * answer's line alone. What the offer is comes from `outOfMemoryOffer`, over
  * the workspace's size as the service answers it (`sandboxSizeQuery`). It
  * is drawn as a refused machine call's card is (`machine-refusal-card.tsx`):
@@ -45,20 +44,14 @@ import { useWordsWorkspace } from "./use-link-standing.js";
 /** What the card says, as it says it. */
 const OUT_OF_MEMORY_WORDS = {
   KILLED: "The sandbox ran out of memory.",
-  ON_REQUEST: "A larger sandbox is available on request.",
   USING: "Using…",
 } as const;
 
-/** What the card says under its first line: the size the workspace now opens with, the size it stands at, or that a larger one is on request. */
+/** What the card says under its first line: the size the workspace now opens with, or the size it stands at. */
 function captionOf(offer: ReturnType<typeof outOfMemoryOffer>, standingGb: number): string {
-  switch (offer.kind) {
-    case OUT_OF_MEMORY_OFFER.RAISED:
-      return `This workspace now uses ${offer.memoryGb} GB.`;
-    case OUT_OF_MEMORY_OFFER.ON_REQUEST:
-      return OUT_OF_MEMORY_WORDS.ON_REQUEST;
-    default:
-      return `This workspace's sandboxes have ${standingGb} GB.`;
-  }
+  return offer.kind === OUT_OF_MEMORY_OFFER.RAISED
+    ? `This workspace now uses ${offer.memoryGb} GB.`
+    : `This workspace's sandboxes have ${standingGb} GB.`;
 }
 
 /** The card under a call killed out of memory: the offer of the next size up to the members who manage the agent's workspace, and nothing to anyone else. */
@@ -76,7 +69,7 @@ export function OutOfMemoryOffer({ outOfMemory }: { outOfMemory: OutOfMemory }):
   const choose = useChooseSandboxSize(workspaceId);
 
   if (!manages || size === undefined) return null;
-  const offer = outOfMemoryOffer(outOfMemory.memoryGb, size);
+  const offer = outOfMemoryOffer(outOfMemory.memoryGb, size.vcpus);
 
   if (offer.kind === OUT_OF_MEMORY_OFFER.NONE) return null;
 
