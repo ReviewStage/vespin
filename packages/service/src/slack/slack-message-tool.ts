@@ -36,6 +36,8 @@ const SLACK_MESSAGE_REFUSAL = {
   UNREADABLE: `Not sent: pass text, one short message of at most ${SLACK_MESSAGE_CHARS} characters.`,
   NO_THREAD:
     "Not sent: no Slack thread speaks for you, so answer in your final message as you would anywhere else.",
+  NO_BOT:
+    "Not sent: this deployment has no Slack bot, so answer in your final message as you would anywhere else.",
   NOT_POSTED: "Not sent: Slack did not take the message; send it again.",
   NOT_AGENT: "Not sent: only a coding agent sends a Slack message.",
 } as const;
@@ -79,11 +81,11 @@ export function runSendSlackMessage(
   return orStoreRefusal(
     Effect.gen(function* () {
       const bot = yield* SlackBot;
+
+      if (!bot.configured) return agentToolRejected(SLACK_MESSAGE_REFUSAL.NO_BOT);
       const thread = yield* currentSlackThread(agent.id);
 
-      if (!bot.configured || Option.isNone(thread)) {
-        return agentToolRejected(SLACK_MESSAGE_REFUSAL.NO_THREAD);
-      }
+      if (Option.isNone(thread)) return agentToolRejected(SLACK_MESSAGE_REFUSAL.NO_THREAD);
 
       const posted = yield* bot.reply(thread.value.channelId, thread.value.threadTs, {
         text: slackClipped(text, NOTIFICATION_CHARS),
