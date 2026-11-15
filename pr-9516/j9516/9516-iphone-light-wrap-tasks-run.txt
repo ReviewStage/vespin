@@ -1,0 +1,194 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow wrap-tasks
+  > On Flow Complete
+Set orientation ${ORIENT}...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Run tasks.yaml...
+  Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+  Tap on "Tasks"... COMPLETED
+  Assert that "Pinned" is visible... COMPLETED
+  Assert that "Weekly digest email" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot tasks-list... COMPLETED
+  Tap on "Launch, [0-9]+"... COMPLETED
+  Assert that "Launch checklist" is not visible... COMPLETED
+  Tap on "Launch, [0-9]+"... COMPLETED
+  Assert that "Launch checklist" is visible... COMPLETED
+  Scrolling DOWN until "Launch checklist" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+  Long press on "Launch checklist"... COMPLETED
+  Assert that "Mark done" is visible... COMPLETED
+  Take screenshot tasks-menu... COMPLETED
+  Tap on "Mark done"... COMPLETED
+  Assert that "Launch checklist" is not visible... COMPLETED
+  Scrolling DOWN until "Usage alerts" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+  Run flow when "Choose an item" is not visible...
+    Swiping in LEFT direction on "Usage alerts"... COMPLETED
+    Tap on (Optional) "Mark done"... COMPLETED
+  Run flow when "Choose an item" is not visible... COMPLETED
+  Run flow when "Choose an item" is visible...
+  Run flow when "Choose an item" is visible... SKIPPED
+  Assert that "Usage alerts" is not visible... COMPLETED
+  Take screenshot tasks-marked-done... COMPLETED
+  Scrolling UP until "Weekly digest email" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+  Run flow when "Choose an item" is not visible...
+    Swipe from (8%, 21%) to (38%, 21%) in 900 ms... COMPLETED
+    Take screenshot tasks-swipe-leading... COMPLETED
+    Tap on "Tasks"... COMPLETED
+    Wait for animation to end... COMPLETED
+  Run flow when "Choose an item" is not visible... COMPLETED
+  Long press on "Weekly digest email"... COMPLETED
+  Run flow when "Open" is not visible...
+    Long press on "Weekly digest email"... COMPLETED
+  Run flow when "Open" is not visible... COMPLETED
+  Assert that "Open" is visible... COMPLETED
+  Assert that "Status" is visible... COMPLETED
+  Assert that "Copy link" is visible... COMPLETED
+  Assert that "Rename" is visible... COMPLETED
+  Assert that "Mark as unread" is visible... COMPLETED
+  Assert that "Unpin" is visible... COMPLETED
+  Assert that "Open in browser" is visible... COMPLETED
+  Assert that "Permanently delete" is visible... COMPLETED
+  Take screenshot tasks-row-menu... COMPLETED
+  Tap on "Rename"... COMPLETED
+  Assert that "Rename task" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot tasks-rename... COMPLETED
+  Tap on "Cancel"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Long press on "Weekly digest email"... COMPLETED
+  Tap on "Permanently delete"... COMPLETED
+  Assert that "Permanently delete task?" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot tasks-delete-ask... COMPLETED
+  Tap on "Cancel"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "Weekly digest email" is visible... COMPLETED
+  Long press on "Weekly digest email"... COMPLETED
+  Tap on "Copy link"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "Weekly digest email" is visible... COMPLETED
+  Take screenshot tasks-copy-link... COMPLETED
+  Long press on "Weekly digest email"... COMPLETED
+  Tap on "Mark as unread"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot tasks-row-unread... COMPLETED
+  Long press on "Weekly digest email"... COMPLETED
+  Tap on "Mark done"... COMPLETED
+  Assert that "Mark as Done?" is visible... COMPLETED
+  Assert that "Stop agent" is visible... COMPLETED
+  Take screenshot tasks-mark-done-ask... COMPLETED
+  Tap on "Cancel"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "Weekly digest email" is visible... COMPLETED
+  Tap on "Weekly digest email"... COMPLETED
+  Assert that "Created by .*" is visible... COMPLETED
+  Tap on "Tasks"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot tasks-row-read... COMPLETED
+  Scrolling UP until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+  Tap on "Teammate invitations"... COMPLETED
+  Assert that "Created by .*" is visible... COMPLETED
+  Assert that "Agents" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot task-overview... COMPLETED
+  Long press on "Build teammate invitations"... COMPLETED
+  Assert that "Open" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot task-agent-preview... COMPLETED
+  Tap on point (50%, 30%)... COMPLETED
+  Wait for animation to end... COMPLETED
+  Run flow when "Choose an item" is not visible...
+    Swipe from (85%, 66%) to (50%, 66%) in 900 ms... COMPLETED
+    Take screenshot task-agent-swipe... COMPLETED
+    Tap on "Created by .*"... COMPLETED
+    Wait for animation to end... COMPLETED
+  Run flow when "Choose an item" is not visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Scrolling DOWN until "Goal" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Take screenshot task-description... COMPLETED
+  Scrolling UP until "Invite funnel" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Tap on "Invite funnel"... COMPLETED
+  Assert that "Invites sent in the staging workspace.*" is visible... COMPLETED
+  Take screenshot task-page... COMPLETED
+  Tap on "More"... COMPLETED
+  Assert that "Open in browser" is visible... COMPLETED
+  Take screenshot task-page-menu... COMPLETED
+  Tap on point (50%, 90%)... COMPLETED
+  Wait for animation to end... COMPLETED
+  Tap on id: BackButton... COMPLETED
+  Wait for animation to end... COMPLETED
+  Scrolling DOWN until "Goal" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Scrolling UP until "Created by .*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Tap on "Status, .*"... COMPLETED
+  Take screenshot task-status-menu... COMPLETED
+  Tap on "Todo"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "Status, Todo" is visible... COMPLETED
+  Take screenshot task-status-set... COMPLETED
+  Tap on "Priority, .*"... COMPLETED
+  Assert that "Urgent" is visible... COMPLETED
+  Take screenshot task-priority-menu... COMPLETED
+  Tap on point (50%, 90%)... COMPLETED
+  Wait for animation to end... COMPLETED
+  Tap on "Assignee, .*"... COMPLETED
+  Assert that "No assignee" is visible... COMPLETED
+  Take screenshot task-assignee-menu... COMPLETED
+  Tap on point (50%, 90%)... COMPLETED
+  Wait for animation to end... COMPLETED
+  Tap on "More"... COMPLETED
+  Assert that "Copy link" is visible... COMPLETED
+  Assert that "New sub-task" is visible... COMPLETED
+  Assert that "Permanently delete" is visible... COMPLETED
+  Take screenshot task-more-menu... COMPLETED
+  Tap on "Permanently delete"... COMPLETED
+  Assert that "Permanently delete task?" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot task-delete-ask... COMPLETED
+  Tap on "Cancel"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Scrolling DOWN until "Add sub-task" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Tap on "Add sub-task"... COMPLETED
+  Assert that "Link existing task" is visible... COMPLETED
+  Take screenshot task-sub-task-add... COMPLETED
+  Tap on "New sub-task"... COMPLETED
+  Assert that "Describe the task" is visible... COMPLETED
+  Assert that "Sub-task of.*" is visible... COMPLETED
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot new-sub-task... COMPLETED
+  Tap on "Cancel"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Scrolling DOWN until "Comments" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot task-comments... COMPLETED
+  Tap on "Should an owner be able to resend.*"... COMPLETED
+  Assert that "Yes: Resend stands beside each expired invite.*" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot task-comment-thread... COMPLETED
+  Tap on "Reply"... COMPLETED
+  Input text Thanks, that covers it.... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot task-comment-reply... COMPLETED
+  Tap on "Send"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Tap on id: BackButton... COMPLETED
+  Wait for animation to end... COMPLETED
+  Tap on "Tasks"... COMPLETED
+  Run flow when "Pinned" is not visible...
+    Tap on "Tasks"... COMPLETED
+    Wait for animation to end... COMPLETED
+  Run flow when "Pinned" is not visible... COMPLETED
+  Set orientation LANDSCAPE_LEFT... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot tasks-wide... COMPLETED
+  Set orientation PORTRAIT...
