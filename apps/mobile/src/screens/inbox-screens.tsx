@@ -78,7 +78,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
 import { PUSHED_PAGE, useDetailPush, useStackRoot, useStandDetailFront } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -241,12 +241,78 @@ type InboxRowActs = {
  */
 export function InboxItemRows({
   listed,
-  ...acts
+  readerId,
+  pictureOf,
+  ...given
 }: InboxRowActs & { readonly listed: readonly InboxListed[] }) {
+  const acts = useSteadyRowActs(given);
+  // Note that the rows are drawn again at most once a minute for the clock alone, so Remind me's times beside each never stand long out of date.
+  const minute = Math.floor(Date.now() / MINUTE_MS);
+
   return (
     <RowForEach data={listed} keyOf={(each) => each.item.id}>
-      {(each) => <InboxRow listed={each} {...acts} />}
+      {(each) => (
+        <InboxRow
+          listed={each}
+          readerId={readerId}
+          pictureOf={pictureOf}
+          minute={minute}
+          {...acts}
+        />
+      )}
     </RowForEach>
+  );
+}
+
+/** What a row is handed to act with, by the screen it stands on. */
+type RowActs = Pick<InboxRowActs, "onMark" | "remindMenu" | "onResolve">;
+
+/**
+ * The row's acts, the same functions from draw to draw, each calling the
+ * screen's newest, so a row whose thread did not move is not drawn again
+ * because its screen made its acts anew. Note that the newest are kept as
+ * each draw commits, before any press can reach them.
+ */
+function useSteadyRowActs(given: RowActs): RowActs {
+  const newest = useRef(given);
+
+  useLayoutEffect(() => {
+    newest.current = given;
+  });
+
+  return useMemo(
+    () => ({
+      onMark: (itemId, unread) => newest.current.onMark(itemId, unread),
+      remindMenu: (item) => newest.current.remindMenu(item),
+      onResolve: (item) => newest.current.onResolve(item),
+    }),
+    [],
+  );
+}
+
+/** A minute, in milliseconds, which a row's times are drawn again by at most. */
+const MINUTE_MS = 60_000;
+
+/**
+ * Whether a row stands as it was drawn: the same thread and holder, reader,
+ * pictures and minute, and the same acts. Note that every delivery to the
+ * Inbox drew every row again, the rows of a list off screen among them,
+ * which held the JS thread under a working agent's posts; a row is now drawn
+ * again only where its own thread moved.
+ */
+function sameRow(
+  before: Parameters<typeof InboxRowView>[0],
+  after: Parameters<typeof InboxRowView>[0],
+): boolean {
+  return (
+    before.listed.item === after.listed.item &&
+    before.listed.holder === after.listed.holder &&
+    before.readerId === after.readerId &&
+    before.pictureOf === after.pictureOf &&
+    before.minute === after.minute &&
+    before.onMark === after.onMark &&
+    before.remindMenu === after.remindMenu &&
+    before.onResolve === after.onResolve
   );
 }
 
@@ -259,14 +325,14 @@ export function InboxItemRows({
  * press lifts its preview, the thread's newest messages, over the same acts.
  * On an iPad it drags out as its vespin.dev link.
  */
-function InboxRow({
+function InboxRowView({
   listed,
   readerId,
   pictureOf,
   onMark,
   remindMenu,
   onResolve,
-}: InboxRowActs & { readonly listed: InboxListed }) {
+}: InboxRowActs & { readonly listed: InboxListed; readonly minute: number }) {
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
@@ -344,6 +410,9 @@ function InboxRow({
     />
   );
 }
+
+/** An Inbox item's row, drawn again only where its own thread moved (`sameRow`). */
+const InboxRow = memo(InboxRowView, sameRow);
 
 /**
  * What the list stands where it lists nothing: that the account's feed is
