@@ -11,6 +11,18 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       authServer: stub
+# Note that a prompt standing over the sign-in screen, as one AX5 run showed,
+# is answered before the screen's title is looked for, since it hides the
+# title from the tree; the app asks only once an account is signed in, so
+# this is for a prompt that rose a beat late, never a second one.
+- extendedWaitUntil:
+    visible: "Sign in to Vespin|Don.t Allow"
+    timeout: 10000
+- runFlow:
+    when:
+      visible: "Don.t Allow"
+    commands:
+      - tapOn: "Don.t Allow"
 - assertVisible: "Sign in to Vespin"
 - waitForAnimationToEnd
 - takeScreenshot: sign-in
