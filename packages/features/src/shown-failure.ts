@@ -1,16 +1,17 @@
 /**
- * shown-failure.ts -- what Sentry is told of a failure the app showed a person: a log line for every one, and an issue besides for one nothing named shown online unless its call got no answer, each carrying where it was shown, its code, its cause, the ids it was about, and the app's state, never the words a person wrote.
+ * shown-failure.ts -- what Sentry is told of a failure the app showed a person: a log line for every one, and an issue besides for one nothing named shown online unless its call got no answer or the service refused this build, each carrying where it was shown, its code, its cause, the ids it was about, and the app's state, never the words a person wrote.
  *
  * The panel hands every failure it shows here (`@repo/panel/failure-report`),
  * an error toast and a failure drawn in place of what could not be read
  * alike. Each becomes one Sentry log line, searchable by every attribute
  * below: at `warn` for a refusal something named, such as a limit or a
  * refusal the service or the host worded, or for any failure shown while the
- * machine had no network or of a call that got no answer, and at `error` for
- * anything else. One nothing named, shown while online and not of a call
- * that got no answer, becomes an issue besides, grouped by where it was
- * shown and its code rather than by its stack, since one surface shows the
- * same failure from many paths.
+ * machine had no network, of a call that got no answer, or while the service
+ * refused this build as older than it serves, and at `error` for anything
+ * else. One nothing named, shown while online, not of a call that got no
+ * answer, and not while the build was refused, becomes an issue besides,
+ * grouped by where it was shown and its code rather than by its stack, since
+ * one surface shows the same failure from many paths.
  *
  * What it carries is chosen here rather than read from the failure whole:
  * names, tags, codes, HTTP statuses, faults, ids, the app's state, and the
@@ -299,6 +300,8 @@ interface FailureState {
   readonly account: string;
   /** The live stream's state, where one stands. */
   readonly live?: string | undefined;
+  /** Whether the service's last answer refused this build as older than it serves (`network.updateNeeded`). */
+  readonly updateNeeded?: boolean | undefined;
 }
 
 /** A failure as it is reported: where it was shown, whether it was named, what failed, what it was about, by which act, and the app's state then. */
@@ -414,6 +417,7 @@ const FAILURE_ATTRIBUTE = {
   ONLINE: "app.online",
   ACCOUNT: "app.account",
   LIVE: "app.live",
+  UPDATE_NEEDED: "app.update_needed",
   /** The trace the hosted call that failed traveled under, which the service's log lines for it carry. */
   HOSTED_TRACE: "hosted.trace_id",
 } as const;
@@ -615,6 +619,7 @@ function attributesOf(
     [FAILURE_ATTRIBUTE.ONLINE]: report.state.online,
     [FAILURE_ATTRIBUTE.ACCOUNT]: report.state.account,
     ...(report.state.live !== undefined && { [FAILURE_ATTRIBUTE.LIVE]: report.state.live }),
+    ...(report.state.updateNeeded === true && { [FAILURE_ATTRIBUTE.UPDATE_NEEDED]: true }),
   } satisfies FailureAttributes;
 }
 
@@ -709,15 +714,18 @@ export function failureAboutOf<Payload>(payload: Payload): FailureAbout {
 
 /**
  * Sends Sentry a failure the app showed: a log line, at `warn` for a refusal
- * something named, a failure shown offline, or a failure of a call that got
- * no answer, and at `error` for anything else, and for anything else an
- * issue besides, grouped by where it was shown and its code. Answers the
- * issue's event id, where it opened one, and the trace both went in. Note
- * that a failure shown while the machine had no network, or whose own facts
- * say its call got no answer, opens no issue, because a read or a write that
- * could not reach the service is the network's failure rather than the
- * app's, as a Mac waking from sleep, or a phone with no signal that still
- * reads online, shows every live read failed before the service answers.
+ * something named, a failure shown offline, a failure of a call that got
+ * no answer, or one shown while the service refused this build, and at
+ * `error` for anything else, and for anything else an issue besides, grouped
+ * by where it was shown and its code. Answers the issue's event id, where it
+ * opened one, and the trace both went in. Note that a failure shown while the
+ * machine had no network, or whose own facts say its call got no answer,
+ * opens no issue, because a read or a write that could not reach the service
+ * is the network's failure rather than the app's, as a Mac waking from sleep,
+ * or a phone with no signal that still reads online, shows every live read
+ * failed before the service answers. Nor does one shown while the service
+ * refused this build as older than it serves, because every read then fails
+ * by design until the update lands, which the app already asks for.
  */
 export function sendShownFailure(
   sentry: ShownFailureSentry,
@@ -730,7 +738,12 @@ export function sendShownFailure(
     sentry.getActiveSpan()?.spanContext().traceId ??
     sentry.getCurrentScope().getPropagationContext().traceId;
 
-  if (report.kind === FAILURE_KIND.REFUSED || !report.state.online || unansweredOf(facts)) {
+  if (
+    report.kind === FAILURE_KIND.REFUSED ||
+    !report.state.online ||
+    report.state.updateNeeded === true ||
+    unansweredOf(facts)
+  ) {
     sentry.logger.warn(line, attributes);
 
     return { traceId };

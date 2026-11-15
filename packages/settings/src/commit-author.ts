@@ -42,10 +42,10 @@ export const COMMIT_AUTHOR_LABEL = {
 
 /** What the row says under its name for each choice. */
 export const COMMIT_AUTHOR_DETAIL = {
-  [COMMIT_AUTHOR.DEVELOPER_WITH_APP]: `Your GitHub account authors, ${PRODUCT_NAME} credited as co-author`,
-  [COMMIT_AUTHOR.DEVELOPER]: "Your GitHub account authors, no co-author",
-  [COMMIT_AUTHOR.APP_WITH_DEVELOPER]: `The ${PRODUCT_NAME} bot authors, you credited as co-author`,
-  [COMMIT_AUTHOR.APP]: `The ${PRODUCT_NAME} bot authors, no co-author`,
+  [COMMIT_AUTHOR.DEVELOPER_WITH_APP]: `Your GitHub account authors, ${PRODUCT_NAME} credited as co-author.`,
+  [COMMIT_AUTHOR.DEVELOPER]: "Your GitHub account authors, no co-author.",
+  [COMMIT_AUTHOR.APP_WITH_DEVELOPER]: `The ${PRODUCT_NAME} bot authors, you credited as co-author.`,
+  [COMMIT_AUTHOR.APP]: `The ${PRODUCT_NAME} bot authors, no co-author.`,
 } as const satisfies Record<CommitAuthor, string>;
 
 /** Whether the choice has the bot author, so the developer's account is never asked to. */

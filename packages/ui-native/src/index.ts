@@ -17,6 +17,8 @@ export {
 
 export { AuthPage } from "./auth-page.js";
 
+export { type BarSubtitle, StackBarTitle } from "./bar-title.js";
+
 export { BRAND_MARK_ASSET, BrandMark } from "./brand-mark.js";
 
 export {
@@ -28,6 +30,7 @@ export {
   Chip,
   FieldChip,
   FollowingChip,
+  LabelChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -66,7 +69,7 @@ export {
   SkillSuggestions,
 } from "./composer-head.js";
 
-export { EmptyState, NoSelection } from "./empty-state.js";
+export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
 export {
   FailureNoticeProvider,
@@ -76,7 +79,9 @@ export {
 
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
 
-export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
+export { releaseFields } from "./field-focus.js";
+
+export { AttachRow, MenuPickRow, WORDS_LOOK, WordsField } from "./form-rows.js";
 
 export { GlassBar, GlassDock } from "./glass-bar.js";
 
@@ -118,6 +123,7 @@ export {
 export {
   NO_WRITES,
   newestValue,
+  takesRowBack,
   type WriteSent,
   type WritesBook,
   writeSent,
@@ -134,6 +140,8 @@ export {
   type TaskFold,
   TaskRow,
 } from "./list-row.js";
+
+export { MachineAskSheet } from "./machine-ask-sheet.js";
 
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 
@@ -159,7 +167,7 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { monogramOf } from "./monogram.js";
 
-export { RenameAsk, SwitchRow } from "./option-rows.js";
+export { SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
@@ -210,7 +218,7 @@ export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./r
 
 export { latestStep, type PreviewMessage, previewMessages } from "./row-preview-model.js";
 
-export { Screen, Spacer } from "./screen.js";
+export { SCREEN_GROUND, Screen, type ScreenGround, Spacer } from "./screen.js";
 
 export { ScreenFailure } from "./screen-failure.js";
 
@@ -226,6 +234,7 @@ export {
   FORM_SPACING,
   FollowerRow,
   type FormSpacing,
+  LoadingRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,
@@ -253,6 +262,10 @@ export {
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  DetailPage,
+  type DetailStack,
+  type DetailStackPage,
+  HostedFill,
   isBarMenu,
   KeptColumns,
   type KeptView,
@@ -267,7 +280,7 @@ export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
-export { askForName, type NameAsk, shareLink, shareWords } from "./system-asks.js";
+export { askForName, type NameAsk, shareWords } from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,
@@ -307,7 +320,6 @@ export { MARK_SIZE, SPACE } from "./tokens/space.js";
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
 export {
-  AgentHead,
   AgentTranscript,
   type OlderPages,
   type TranscriptReveal,
