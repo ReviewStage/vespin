@@ -12,7 +12,6 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
-  accessibilityHidden,
   accessibilityHint,
   accessibilityIdentifier,
   accessibilityLabel,
@@ -65,6 +64,7 @@ import {
   WorkingMark,
 } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
+import { ProblemLine } from "./problem-line.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -456,40 +456,24 @@ type FailedReadRowProps = {
 };
 
 /**
- * A row saying a part of a page could not be read: the failed glyph in the
- * attention ink, the one look of every problem line in the app (a status
- * mark such as an agent's failed ring keeps its red), hidden from VoiceOver
- * since the words say it, the words muted, and its one
- * act at the line's end as the system's small bordered capsule in the ink, as
- * Mail says a message could not be loaded. Note that only the capsule takes a press, so the row reads
- * as a line that says, with the act beside it.
+ * A row saying a part of a page could not be read, as `ProblemLine` says
+ * every problem in the app: the alert glyph in the attention ink standing
+ * where a row's mark does, and the muted words beside it; then its one act at
+ * the row's end as the system's small bordered capsule in the ink, as Mail
+ * says a message could not be loaded. Note that only the capsule takes a
+ * press, so the row reads as a line that says, with the act beside it.
  */
 export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
   const colors = useColors();
 
   return (
-    <HStack modifiers={rowPlacement(colors)}>
-      <RowHead
-        unread={false}
-        faded={false}
-        lead={
-          <Image
-            {...glyphImage(GLYPH.FAILED)}
-            color={colors.ATTENTION}
-            modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), accessibilityHidden(true)]}
-          />
-        }
-        title={label}
-        ink={colors.TEXT_MUTED}
-        end={
-          <Button
-            label={act}
-            look={BUTTON_LOOK.BORDERED}
-            size={BUTTON_SIZE.SMALL}
-            onPress={onPress}
-          />
-        }
-      />
+    <HStack spacing={SPACE.ROW} modifiers={rowPlacement(colors)}>
+      {/* Note that the line steps past the unread dot's margin, so its glyph stands where a row's lead mark does. */}
+      <HStack modifiers={[padding({ leading: MARK_SIZE.DOT + SPACE.TIGHT })]}>
+        <ProblemLine text={label} />
+      </HStack>
+      <Spacer />
+      <Button label={act} look={BUTTON_LOOK.BORDERED} size={BUTTON_SIZE.SMALL} onPress={onPress} />
     </HStack>
   );
 }
