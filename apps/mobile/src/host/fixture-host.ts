@@ -13,7 +13,9 @@
  * the host wrote it, and a document already staged is handed nothing new.
  */
 
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
+  FOLLOWER_CALL_FAILURE,
   type ListedApart,
   listedApart,
   TASK_CALL_FAILURE,
@@ -37,6 +39,7 @@ import {
   inboxAppState,
   inboxRemindersAppState,
   inboxTasksView,
+  MEMORY_SAVE_REFUSED,
   machineAskAppState,
   NEW_MEMORY_ID,
   olderPageAnswer,
@@ -272,17 +275,23 @@ function olderRead(
 /**
  * The writes `-refuseWrites true` refuses, each answered as the host
  * answers once the service has refused it: a task's status and its pin
- * not kept, so the screens put the row back and say why, and a task's
- * start not taken, so New task opens again on what it held, as they would
- * of a live refusal.
+ * not kept, so the screens put the row back and say why, as they would
+ * of a live refusal, a task's start not taken, so New task opens again on
+ * what it held, and a follower added or a memory deleted unanswered, so a
+ * flow sees the notice over Add a follower's sheet and Settings'.
  */
 const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>> = new Map<
   PortActKind,
   () => PortActResult<PortActKind>
 >([
+  // Note that a memory's save and a version's restore are refused too, so their notices and Try again show.
+  [ACT_KIND.MEMORIES_SAVE, () => MEMORY_SAVE_REFUSED],
+  [ACT_KIND.TASKS_RESTORE, () => false],
   [ACT_KIND.TASKS_SET_STANDING, () => false],
   [ACT_KIND.TASKS_PIN, () => false],
   [ACT_KIND.TASKS_START, () => ({ failure: TASK_CALL_FAILURE.UNANSWERED })],
+  [ACT_KIND.TASKS_ADD_FOLLOWER, () => ({ failure: FOLLOWER_CALL_FAILURE.UNANSWERED })],
+  [ACT_KIND.MEMORIES_FORGET, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
 ]);
 
 /** A member of `members` by a key known only at run time, as the fixture reads each one of the port before it answers or forwards it. */

@@ -485,6 +485,34 @@ test("a pick before closing punctuation leaves it standing, no space before it, 
   assert.equal(box.drafts.at(-1), `See ${STORE_LINK} `);
 });
 
+test("the space a pick lays is provisional: closing punctuation takes its place, a typed space merges into it, undo brings it back, and a moved caret makes it ordinary", () => {
+  const box = mountedWithMentions("");
+  const store = { name: "session-store.ts", target: "luke://file/apps/web/session-store.ts" };
+
+  typeInComposer(box.host, "Fix @ses");
+  box.handle.chooseMention(store);
+  typeKeysInComposer(box.host, ", now");
+  assert.equal(box.drafts.at(-1), `Fix ${STORE_LINK}, now`);
+
+  chord(box.host, "z");
+  assert.equal(box.drafts.at(-1), `Fix ${STORE_LINK} `, "one undo brings the space back");
+
+  box.handle.replace("cc @ses");
+  box.caretAt(1 + "cc @ses".length);
+  box.handle.chooseMention(store);
+  typeKeysInComposer(box.host, " thanks");
+  assert.equal(box.drafts.at(-1), `cc ${STORE_LINK} thanks`);
+
+  box.handle.replace("See @ses");
+  box.caretAt(1 + "See @ses".length);
+  box.handle.chooseMention(store);
+  // The caret steps back onto the chip's end and on again, past the space: the paragraph opens at 1, the chip one place long.
+  box.caretAt(1 + "See ".length + 1);
+  box.caretAt(1 + "See ".length + 2);
+  typeKeysInComposer(box.host, ".");
+  assert.equal(box.drafts.at(-1), `See ${STORE_LINK} .`);
+});
+
 test("words laid in with a mention's link hold it as its chip, and hand the same words back", () => {
   const box = mountedWithMentions("");
 
