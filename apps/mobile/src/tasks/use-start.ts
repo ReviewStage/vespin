@@ -59,14 +59,13 @@ import {
   selectAgentDefault,
   selectModels,
   selectRepositoryList,
-  selectTasks,
 } from "@repo/host/app-state-reads";
 import type { PickOption } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import { useHostActs, useListedTasks } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 
 /** No models read yet. */
@@ -306,9 +305,9 @@ export function useRepositoryPick(
   drafted?: string | undefined,
 ): RepositoryPick {
   const { listed, read, failed, retry } = useWorkspaceRepositories(workspace?.id);
-  const { data: tasks } = useQuery({ ...appStateQuery, select: selectTasks });
+  const tasks = useListedTasks();
   const [picked, setPicked] = useState<string | undefined>(drafted);
-  const recent = useMemo(() => recentRepositories(tasks?.tasks ?? []), [tasks]);
+  const recent = useMemo(() => recentRepositories(tasks), [tasks]);
 
   const reached = (repository: string) =>
     workspace !== undefined &&

@@ -81,6 +81,14 @@ workspace" on acme/ledger), "Retry failed webhook deliveries" (Webhook retries,
 Claude Opus 5.5; PR #209, merged), and "Build the onboarding checklist"
 (Onboarding checklist, GPT-6.1 Sol; PR #131 on acme/web).
 
+Since 0.35.0 Usage-based billing (ACME-40, urgent, in progress) is Theo's,
+followed by Dean and Dana, with sub-tasks Daily usage rollup (Theo),
+Projected invoice in Settings › Billing (Dana), and 30-day notice email for
+plan changes (Priya), and agents Meter API calls per workspace and Show
+usage on the invoice. Dean also follows Rotate webhook signing secrets
+(Dana's) and Onboarding checklist (Priya's), so the three stand under the
+sidebar's Following group.
+
 Subagents: "Find unfiltered membership reads" (Claude Sonnet 5.5, medium),
 and Vespin's own "Invite link expiry". The next pull request in this world is
 #217. Model ids come from the release's own model catalog, never invented.

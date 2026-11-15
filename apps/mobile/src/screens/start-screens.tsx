@@ -19,7 +19,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { filedTaskOf } from "@repo/features/tasks-model";
-import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
   type BarMenu,
@@ -47,6 +47,7 @@ import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-sugges
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useListedTasks } from "../host/host-provider.js";
 import { useOnTab } from "../tab-route.js";
 import {
   CLOUD,
@@ -522,7 +523,6 @@ export interface NewTaskDraft {
 }
 
 /** No task list read yet. */
-const NO_TASKS: readonly TaskSummary[] = [];
 
 /** The kinds New task's relation offers, in the panel's order: a sub-task of another, or one waiting on or holding up another. */
 const RELATION_ORDER: readonly TaskCreateRelationKind[] = [
@@ -692,8 +692,7 @@ export function NewTaskScreen({
   const [prompt, setPrompt] = useState(draft?.prompt ?? "");
   const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
-  const listed = view?.tasks ?? NO_TASKS;
+  const listed = useListedTasks();
   const chosen = useChosenWorkspace(workspaces).chosen;
   const own = workspaces.find(({ id }) => id === draft?.workspaceId) ?? chosen;
   // Note that a sub-task starts in its parent's workspace by the id its row holds, read before the workspace list may be, and holds its start until that row is read.

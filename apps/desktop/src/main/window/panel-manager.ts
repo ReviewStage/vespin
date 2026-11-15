@@ -95,10 +95,9 @@ const DESKTOP_WINDOW = {
   MIN_HEIGHT: 520,
   // Small enough that a 13-inch display's work area still fits the full size.
   MARGIN: 24,
-  // The window's native ground is the Mac's own sidebar material, which
-  // follows the window's appearance and the Reduce transparency setting by
-  // itself; the page draws on it in clear, so the shell's gray frame is a
-  // tint over the frosted wallpaper, and the work sheet is laid over that.
+  // The Mac's own sidebar material follows the window's appearance and the
+  // Reduce transparency setting by itself. The page draws on it in clear, so
+  // the shell's gray frame is a tint over the frosted wallpaper.
   MATERIAL: "sidebar",
   CLEAR: "#00000000",
 } as const;
@@ -409,12 +408,9 @@ export class PanelManager {
       title: this.#instance === undefined ? PRODUCT_NAME : `${PRODUCT_NAME} (${this.#instance})`,
       show: false,
       backgroundColor: DESKTOP_WINDOW.CLEAR,
-      // On Tahoe the window is clear for the Liquid Glass laid behind its
-      // page once it loads; before it, it is drawn on the sidebar material
-      // (`@repo/host/appearance`). Note that the glass window still names the
-      // material's state, because Electron keeps it from construction and has
-      // no setter: the sidebar material a failed lay falls back to then
-      // follows the window too.
+      // Note that the glass window still names the material's state, because
+      // Electron keeps it from construction and has no setter, so a failed
+      // lay's sidebar fallback follows the window too.
       ...(material === WINDOW_MATERIAL.LIQUID_GLASS
         ? { transparent: true, visualEffectState: SIDEBAR_VIBRANCY.visualEffectState }
         : SIDEBAR_VIBRANCY),
@@ -436,9 +432,8 @@ export class PanelManager {
 
     refuseForeignNavigation(window, this.#rendererUrl);
     this.#followVisibility(window);
-    // A page that stops answering is reported once per stretch, as it answers
-    // again or the window closes on it; it is not reloaded, since it may
-    // answer again and the panel holds what the developer was doing. One whose renderer died has lost that already.
+    // A page that stops answering is never reloaded, since it may answer
+    // again and the panel holds what the developer was doing.
     this.#followResponsiveness?.(window);
     const revival = this.#followDeaths(window);
 
