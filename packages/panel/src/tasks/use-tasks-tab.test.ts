@@ -31,9 +31,10 @@ import {
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import {
   IDLE_TASKS_VIEW,
+  type ListedTasksView,
   TASK_CALL_FAILURE,
   TASKS_READ,
-  type TasksView,
+  type TaskListParts,
 } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -126,6 +127,7 @@ import {
   holdRepositoryLists,
   readExperiments,
   stateWith,
+  type WrittenTasksView,
   writeExperiments,
 } from "../testing/app-state.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
@@ -171,7 +173,7 @@ const TASK: Task = {
   description: { body: "# Teammate invitations", assumptions: [] },
 };
 
-const OPEN: TasksView = {
+const OPEN: WrittenTasksView = {
   tasks: [],
   listStatus: TASKS_READ.READY,
   workspaces: [],
@@ -179,7 +181,7 @@ const OPEN: TasksView = {
 };
 
 /** The open task's view with its own workspace listed, whose choices a task its list holds none of stands by. */
-const LISTING: TasksView = {
+const LISTING: WrittenTasksView = {
   ...OPEN,
   workspaces: [
     { id: TASK.workspaceId, name: "Personal", role: WORKSPACE_ROLE.OWNER, github: null },
@@ -219,7 +221,7 @@ const readShown = Schema.decodeUnknownOption(
 
 interface Standing {
   shown: boolean;
-  tasks: TasksView;
+  tasks: WrittenTasksView;
   profile: string;
   fixtureMode: boolean;
   unseenAgents: readonly string[];
@@ -349,10 +351,15 @@ function inboxNow(): InboxView {
 }
 
 /** The task list the window lists from as a test stands it: main's, or a fixture run's synthetic one, as the window's follow writes it (`selectListedTasks`). */
-function listedOf(standing: Standing): TasksView {
+function listedOf(standing: Standing): ListedTasksView {
   const run = { fixtureMode: standing.fixtureMode, profile: standing.profile };
 
-  return loadedTasksFixture()?.fixtureTasksView(run) ?? standing.tasks;
+  return (
+    loadedTasksFixture()?.fixtureTasksView(run) ?? {
+      ...standing.tasks,
+      tasks: standing.tasks.tasks ?? [],
+    }
+  );
 }
 
 function mount(
@@ -733,7 +740,7 @@ const ACME = {
 };
 
 /** The account's tasks across its two workspaces: two of its own, and one of the team's. */
-const TWO_WORKSPACES: TasksView = {
+const TWO_WORKSPACES: ListedTasksView = {
   ...IDLE_TASKS_VIEW,
   listStatus: TASKS_READ.READY,
   workspaces: [PERSONAL, ACME],
@@ -1144,7 +1151,7 @@ test("a task last viewed on an agent's tab shows nothing until its agents are re
   assert.equal(tab.control().agents.agents, undefined, "the agents are still being read");
   assert.equal(tab.control().mainTabs.tab, undefined, "nothing stands in the agent's place");
 
-  tab.stand({ tasks: { ...listed, taskAgents: [listedAgent(RUNNING_AGENT)] } });
+  tab.stand({ tasks: { ...listed, taskAgents: [listedAgent(RUNNING_AGENT)], listed: true } });
   await settle();
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the agent once they are read");
 });
@@ -1318,10 +1325,11 @@ test("a task opened from a list, gone back to from the sidebar, or named by a ch
     }),
   );
 
-  const elsewhere = (tasks: TasksView["tasks"]) => ({
+  const elsewhere = (tasks: TaskListParts["tasks"]) => ({
     ...OPEN,
     tasks,
     taskAgents: followed,
+    listed: true,
     activeTaskId: OTHER_TASK_ID,
   });
 
@@ -1340,17 +1348,17 @@ test("a task opened from a list, gone back to from the sidebar, or named by a ch
   );
 
   act(() => tab.control().onSelect(TASK.id));
-  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed } });
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(WAITING), "from a list, the agent waiting");
 
   tab.stand({ tasks: elsewhere([waitingRow]) });
   act(() => tab.control().onShowMention({ kind: MENTION_KIND.TASK, taskId: TASK.id }));
-  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed } });
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(WAITING), "from a chip, the agent waiting");
 
   tab.stand({ tasks: elsewhere([waitingRow]) });
   act(() => tab.control().onResume(TASK.id));
-  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed } });
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
   assert.deepEqual(
     tab.control().mainTabs.tab,
     agentTab(WAITING),
@@ -1856,7 +1864,7 @@ test("a link to an agent's Pull request tab, on a pull request another of the ta
   const archived = { ...EARLIER, archivedAt: 5 };
 
   // Both agents' rows keep the pull request they share, which the list carries beside them.
-  const sharing = (agents: readonly AgentSummary[]): TasksView => ({
+  const sharing = (agents: readonly AgentSummary[]): WrittenTasksView => ({
     ...withAgents(agents),
     agentPullRequests: agents.map((agent) => ({
       agentId: agent.id,
@@ -3612,19 +3620,24 @@ test("an agent profile opens its task on the agent it stages, beside the agent's
 });
 
 /** The task as the list names it. */
-function listed(): TasksView["tasks"][number] {
+function listed(): TaskListParts["tasks"][number] {
   const { description: _document, ...summary } = TASK;
 
   return summary;
 }
 
 /** The task listed and open, its agents as the list followed live carries them. */
-function withAgents(agents: readonly AgentSummary[]): TasksView {
-  return { ...OPEN, tasks: [listed()], taskAgents: agents.map((agent) => listedAgent(agent)) };
+function withAgents(agents: readonly AgentSummary[]): WrittenTasksView {
+  return {
+    ...OPEN,
+    tasks: [listed()],
+    taskAgents: agents.map((agent) => listedAgent(agent)),
+    listed: true,
+  };
 }
 
 /** The view once the list is read with nothing open, holding `plans`. */
-function listRead(tasks: TasksView["tasks"]): TasksView {
+function listRead(tasks: TaskListParts["tasks"]): WrittenTasksView {
   return { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.READY, tasks };
 }
 
@@ -4175,7 +4188,7 @@ const readAgentNamed = Schema.decodeUnknownOption(
 );
 
 /** The task New task's Agent mode starts, as the host opens it once started. */
-const AGENT_TASK: TasksView = { ...OPEN, activeTaskId: OTHER_TASK_ID };
+const AGENT_TASK: WrittenTasksView = { ...OPEN, activeTaskId: OTHER_TASK_ID };
 
 /** The descriptions the host holds once Agent mode's task started: the started task's beside the open one's. */
 const AGENT_DESCRIPTIONS: AppHeldTasks = {
@@ -4591,6 +4604,7 @@ test("an agent refused as New task's Agent mode started its task opens the task 
             ...AGENT_TASK,
             tasks: [{ ...listed(), id: OTHER_TASK_ID }],
             taskAgents: [listedAgent(started)],
+            listed: true,
           },
         });
 

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import type { TaskListParts } from "@repo/features/tasks-view";
 import { it } from "vitest";
 import type { AppStateDelivery, AppStateSnapshot, TaskListDelivery } from "../app-state.js";
 import { initialAppState } from "../client/app-state-store.js";
@@ -27,6 +28,9 @@ const RUN = {
   platform: "darwin",
 } as const;
 
+/** No task list drawn: the lists pushed beside a document where a case moves none. */
+const NO_LISTS: TaskListParts = { tasks: [] };
+
 /** The document at `version`, whose coding agents' unseen dots move with it, so every version moves a slice. */
 function documentAt(version: number): AppStateSnapshot {
   return {
@@ -52,8 +56,7 @@ function heard(read: IteratorResult<PushEvent>): number | string | undefined {
 it("a stream's first document carries the task list whole beside it, and each after it the rows that moved", async () => {
   const pushes = new WindowPushes();
   const stream = pushes.stream(WINDOW, undefined);
-  const first = documentAt(1);
-  pushes.pushState(WINDOW, first);
+  pushes.pushState(WINDOW, documentAt(1), NO_LISTS);
   const opening = await stream.next();
 
   const task = {
@@ -65,7 +68,7 @@ it("a stream's first document carries the task list whole beside it, and each af
     repository: null,
   };
 
-  pushes.pushState(WINDOW, { ...documentAt(2), tasks: { ...first.tasks, tasks: [task] } });
+  pushes.pushState(WINDOW, documentAt(2), { tasks: [task] });
   const moved = await stream.next();
 
   assert.deepEqual(taskListOf(opening), { version: 1, whole: { tasks: [] } });
@@ -79,7 +82,7 @@ it("three documents pushed before a slow reader reads are one delivery, the thir
   const pushes = new WindowPushes();
   const stream = pushes.stream(WINDOW, undefined);
 
-  for (const version of [1, 2, 3]) pushes.pushState(WINDOW, documentAt(version));
+  for (const version of [1, 2, 3]) pushes.pushState(WINDOW, documentAt(version), NO_LISTS);
   pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);
 
   assert.equal(heard(await stream.next()), 3);
@@ -90,12 +93,12 @@ it("three documents pushed before a slow reader reads are one delivery, the thir
 it("every event is sent in order, each after a document at least as new as the one pushed before it", async () => {
   const pushes = new WindowPushes();
   const stream = pushes.stream(WINDOW, undefined);
-  pushes.pushState(WINDOW, documentAt(1));
+  pushes.pushState(WINDOW, documentAt(1), NO_LISTS);
   pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);
-  pushes.pushState(WINDOW, documentAt(2));
+  pushes.pushState(WINDOW, documentAt(2), NO_LISTS);
   pushes.push(WINDOW, PUSH.MENU_COMMAND, "settings");
   const reads = [await stream.next(), await stream.next(), await stream.next()].map(heard);
-  pushes.pushState(WINDOW, documentAt(3));
+  pushes.pushState(WINDOW, documentAt(3), NO_LISTS);
 
   assert.deepEqual(reads, [2, PUSH.SHOW_LINK, PUSH.MENU_COMMAND]);
   // A document pushed once the last was sent is sent in its own turn.
@@ -105,10 +108,10 @@ it("every event is sent in order, each after a document at least as new as the o
 it("each stream of a reloading window keeps its own unsent document", async () => {
   const pushes = new WindowPushes();
   const before = pushes.stream(WINDOW, undefined);
-  pushes.pushState(WINDOW, documentAt(1));
+  pushes.pushState(WINDOW, documentAt(1), NO_LISTS);
   assert.equal(heard(await before.next()), 1);
   const after = pushes.stream(WINDOW, undefined);
-  pushes.pushState(WINDOW, documentAt(2));
+  pushes.pushState(WINDOW, documentAt(2), NO_LISTS);
 
   assert.equal(heard(await after.next()), 2);
   assert.equal(heard(await before.next()), 2);
@@ -121,8 +124,8 @@ it("a held window's reload stays held, and its release sends the newest document
   const pushes = new WindowPushes();
   pushes.holdState(WINDOW, true);
   const page = pushes.stream(WINDOW, undefined);
-  pushes.pushState(WINDOW, documentAt(1));
-  pushes.pushState(WINDOW, documentAt(2));
+  pushes.pushState(WINDOW, documentAt(1), NO_LISTS);
+  pushes.pushState(WINDOW, documentAt(2), NO_LISTS);
   let read: number | string | undefined;
 
   const reading = page.next().then((result) => {
@@ -142,9 +145,9 @@ it("a document queued but unread as its window is held waits for the release, an
   const pushes = new WindowPushes();
   const page = pushes.stream(WINDOW, undefined);
   pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);
-  pushes.pushState(WINDOW, documentAt(1));
+  pushes.pushState(WINDOW, documentAt(1), NO_LISTS);
   pushes.holdState(WINDOW, true);
-  pushes.pushState(WINDOW, documentAt(2));
+  pushes.pushState(WINDOW, documentAt(2), NO_LISTS);
   assert.equal(heard(await page.next()), PUSH.SHOW_LINK);
   let read: number | string | undefined;
 
@@ -167,9 +170,9 @@ it("a document queued but unread as its window is held waits for the release, an
 it("an event pushed to a held window goes out behind the document held before it", async () => {
   const pushes = new WindowPushes();
   const page = pushes.stream(WINDOW, undefined);
-  pushes.pushState(WINDOW, documentAt(1));
+  pushes.pushState(WINDOW, documentAt(1), NO_LISTS);
   pushes.holdState(WINDOW, true);
-  pushes.pushState(WINDOW, documentAt(2));
+  pushes.pushState(WINDOW, documentAt(2), NO_LISTS);
   pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);
 
   const reads = [await page.next(), await page.next()].map(heard);
@@ -190,7 +193,7 @@ it("a stream's first document names every entry, and each after it names only th
   const pushes = new WindowPushes();
   const stream = pushes.stream(WINDOW, undefined);
   const first = documentAt(1);
-  pushes.pushState(WINDOW, first);
+  pushes.pushState(WINDOW, first, NO_LISTS);
   assert.deepEqual(
     Object.keys((await delivered(stream)).entries).sort(),
     Object.keys(first)
@@ -198,7 +201,11 @@ it("a stream's first document names every entry, and each after it names only th
       .sort(),
   );
 
-  pushes.pushState(WINDOW, { ...first, version: 2, network: { online: false, reachable: true } });
+  pushes.pushState(
+    WINDOW,
+    { ...first, version: 2, network: { online: false, reachable: true } },
+    NO_LISTS,
+  );
   assert.deepEqual(await delivered(stream), {
     version: 2,
     entries: { network: { online: false, reachable: true } },
@@ -209,12 +216,12 @@ it("a document replaced unsent takes nothing it moved with it: the one sent name
   const pushes = new WindowPushes();
   const stream = pushes.stream(WINDOW, undefined);
   const first = documentAt(1);
-  pushes.pushState(WINDOW, first);
+  pushes.pushState(WINDOW, first, NO_LISTS);
   await delivered(stream);
 
   const offline = { ...first, version: 2, network: { online: false, reachable: true } };
-  pushes.pushState(WINDOW, offline);
-  pushes.pushState(WINDOW, { ...offline, version: 3, agents: { unseen: [] } });
+  pushes.pushState(WINDOW, offline, NO_LISTS);
+  pushes.pushState(WINDOW, { ...offline, version: 3, agents: { unseen: [] } }, NO_LISTS);
   assert.deepEqual(await delivered(stream), {
     version: 3,
     entries: { network: { online: false, reachable: true }, agents: { unseen: [] } },
@@ -225,10 +232,10 @@ it("a document in which nothing the window is handed moved is not sent", async (
   const pushes = new WindowPushes();
   const stream = pushes.stream(WINDOW, undefined);
   const first = documentAt(1);
-  pushes.pushState(WINDOW, first);
+  pushes.pushState(WINDOW, first, NO_LISTS);
   await delivered(stream);
 
-  pushes.pushState(WINDOW, { ...first, version: 2 });
+  pushes.pushState(WINDOW, { ...first, version: 2 }, NO_LISTS);
   pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);
   assert.equal(heard(await stream.next()), PUSH.SHOW_LINK);
 });

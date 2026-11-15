@@ -50,7 +50,11 @@ it.effect(
     Effect.gen(function* () {
       const { bridge, state } = yield* bridgeFixture;
       const read = yield* Effect.promise(() => bridge.requestAppState());
-      assert.deepEqual(read, { ...state.snapshot(), window: { fullScreen: false } });
+      assert.deepEqual(read, {
+        ...state.snapshot(),
+        window: { fullScreen: false },
+        taskList: state.taskList(),
+      });
 
       const heard: AppStateDelivery[] = [];
       bridge.onAppState((delivery) => heard.push(delivery));

@@ -6,16 +6,30 @@
  * open the task they are about first.
  */
 
-import type { TaskRelationKind } from "@repo/features/task-wire";
+import type { TaskRelationKind, TaskSummary } from "@repo/features/task-wire";
 import { recentRepositories, workspaceReaches } from "@repo/features/tasks-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { managesWorkspace } from "@repo/features/workspace-role";
+import { isNull, not, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { appPlatform } from "../app-platform.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { appStateQuery, selectListedTasks } from "../use-app-state.js";
 import type { RepositoryChooser } from "./repository-chip.js";
+
+/** The tasks about a repository, newest started first: one live query, so a task about none moving leaves the same array. */
+function useRepositoryTasks(): readonly TaskSummary[] {
+  const { tasks } = useTaskListCollections();
+
+  return useLiveQuery((q) =>
+    q
+      .from({ task: tasks })
+      .where(({ task }) => not(isNull(task.repository)))
+      .orderBy(({ task }) => task.createdAt, "desc"),
+  ).data;
+}
 
 /** The ask standing for the open task's chip to open its menu: which task it is about, and how many asks so far. */
 export type RepositoryMenuAsk = { readonly taskId: string; readonly request: number };
@@ -48,7 +62,7 @@ export function useRepositoriesIn(): (workspaceId: string | undefined) => Reposi
   const listed = useQuery({ ...appStateQuery, select: selectListedTasks }).data;
   const pictures = useRepositoryPictures();
   const workspaces = listed?.workspaces;
-  const tasks = listed?.tasks;
+  const tasks = useRepositoryTasks();
   const listStatus = listed?.listStatus;
 
   return useCallback(
@@ -57,8 +71,8 @@ export function useRepositoriesIn(): (workspaceId: string | undefined) => Reposi
 
       const own =
         workspaceId === undefined
-          ? (tasks ?? [])
-          : (tasks ?? []).filter((task) => task.workspaceId === workspaceId);
+          ? tasks
+          : tasks.filter((task) => task.workspaceId === workspaceId);
 
       // Note that the tasks are filtered before the recent ones are counted,
       // because a few newer stranded tasks would otherwise crowd out an older

@@ -119,7 +119,7 @@ import {
   selectRun,
   selectSessionReplay,
   selectSettingsHeld,
-  selectTaskListStanding,
+  selectTasks,
 } from "./use-app-state.js";
 import { useSignIn } from "./use-sign-in.js";
 import { usePrefetchBundles, useSessionReplay } from "./use-startup-work.js";
@@ -278,7 +278,7 @@ function AppWindow(): React.JSX.Element {
   // window, and the tasks it holds, as they were.
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const run = useQuery({ ...appStateQuery, select: selectRun }).data;
-  const planning = useQuery({ ...appStateQuery, select: selectTaskListStanding }).data;
+  const planning = useQuery({ ...appStateQuery, select: selectTasks }).data;
   const taskListCollections = useTaskListCollections();
 
   const unseenAgents =
