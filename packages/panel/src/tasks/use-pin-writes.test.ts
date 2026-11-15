@@ -3,7 +3,6 @@
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { TASK_SECTION_WRITE, type TaskSectionWrite } from "@repo/features/task-section-wire";
-import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActResult } from "@repo/host/contract";
 import { act, createElement, Fragment } from "react";
@@ -36,7 +35,7 @@ function mountWrites(procedures: Partial<FakeActPort>): () => PinWrites {
   let writes: PinWrites | undefined;
 
   const Probe = () => {
-    writes = usePinWrites(() => IDLE_TASKS_VIEW);
+    writes = usePinWrites(() => new Map());
 
     return null;
   };

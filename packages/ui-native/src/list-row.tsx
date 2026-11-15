@@ -221,8 +221,12 @@ type TaskRowProps = RowActs & {
   readonly depth?: number | undefined;
 };
 
-/** A row's act as a button of its long press menu or its swipe: red where it takes something away, and in the muted ink otherwise. */
-export function actionButton(action: RowAction, colors: BrandColors) {
+/** A row's act as a button of its long press menu or its swipe: red where it takes something away, and otherwise in `ink`, the muted ink a menu's glyph takes unless a swipe asks for its fill. */
+export function actionButton(
+  action: RowAction,
+  colors: BrandColors,
+  ink: string = colors.TEXT_MUTED,
+) {
   const destructive = action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
 
   return (
@@ -231,7 +235,7 @@ export function actionButton(action: RowAction, colors: BrandColors) {
       {...menuActContent(action.label, action.symbol, action.detail)}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
-      modifiers={destructive ? [] : [tint(colors.TEXT_MUTED)]}
+      modifiers={destructive ? [] : [tint(ink)]}
     />
   );
 }
@@ -318,7 +322,9 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
  * draws a row's background across the whole column, and on iPadOS 26 a
  * split view's list column runs on under the floating sidebar, so the gray
  * stood under the sidebar's glass to the window's edge. A row's own view
- * stays inside the column's safe area, as Mail's rows do.
+ * stays inside the column's safe area, as Mail's rows do. Note that a row
+ * draws no hairline over itself, only the one under it, because a list
+ * column's first row drew one under its search field, where Mail draws none.
  */
 export function rowPlacement(
   colors: BrandColors,
@@ -330,6 +336,7 @@ export function rowPlacement(
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
     padding({ leading: ROW_INSET.LEADING, trailing: SPACE.EDGE, top: vertical, bottom: vertical }),
     ...(selected ? [background(colors.SELECTED)] : []),
+    listRowSeparator("hidden", "top"),
     listRowSeparatorTint(colors.CHIP_EDGE),
     alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT),
   ];
@@ -340,7 +347,12 @@ export function rowPlacement(
  * glyph and words padded inside a rounded fill set in from the sidebar's
  * edges, the fill drawn only while it is selected. Note that the fill is
  * the row's own rather than the system's selection, because the system's
- * takes the list's tint, the ink, and would draw a near-black capsule.
+ * takes the list's tint, the ink, and would draw a near-black capsule. Note
+ * that the fill is the panel's translucent `FILL_STRONG` rather than the
+ * opaque `SELECTED` gray, because the sidebar stands on the system's glass,
+ * which iPadOS 27 tints from what lies behind it: the gray matched that
+ * warm pane's shade and the selection vanished, where a translucent fill
+ * darkens whatever the pane shows, as Mail's selected mailbox does.
  */
 export function sidebarRowPlacement(colors: BrandColors, selected = false) {
   return [
@@ -351,7 +363,7 @@ export function sidebarRowPlacement(colors: BrandColors, selected = false) {
     ...(selected
       ? [
           background(
-            colors.SELECTED,
+            colors.FILL_STRONG,
             SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
           ),
         ]
@@ -372,11 +384,14 @@ function fullSwipes(swipes: readonly RowSwipe[]): boolean {
   return first !== undefined && !isSubmenu(first) && first.tone !== ROW_ACTION_TONE.DESTRUCTIVE;
 }
 
-/** A swipe's piece as SwiftUI draws it behind the row: an act's button, or a menu's, in the muted ink. */
-function swipeButton(swipe: RowSwipe, colors: BrandColors) {
-  return isSubmenu(swipe)
-    ? rowSubmenu(swipe, colors, colors.TEXT_MUTED)
-    : actionButton(swipe, colors);
+/**
+ * A swipe's piece: an act's button, or a menu's, in `ink`. Behind the row
+ * it fills with the action gray, which holds 4.5:1 under the swipe's white
+ * words in both themes where the muted ink, light in dark, did not; in the
+ * long press menu it stands in the muted ink a menu's glyph takes.
+ */
+function swipeButton(swipe: RowSwipe, colors: BrandColors, ink: string) {
+  return isSubmenu(swipe) ? rowSubmenu(swipe, colors, ink) : actionButton(swipe, colors, ink);
 }
 
 /**
@@ -458,7 +473,7 @@ export function RowFrame({
     <ContextMenu>
       <ContextMenu.Items>
         {opening.map((action) => actionButton(action, colors))}
-        {swiped.map((swipe) => swipeButton(swipe, colors))}
+        {swiped.map((swipe) => swipeButton(swipe, colors, colors.TEXT_MUTED))}
         {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
         {menuActions.map((action) => actionButton(action, colors))}
       </ContextMenu.Items>
@@ -475,12 +490,12 @@ export function RowFrame({
       {menu}
       {trailingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="trailing" allowsFullSwipe={fullSwipes(trailingActions)}>
-          {trailingActions.map((swipe) => swipeButton(swipe, colors))}
+          {trailingActions.map((swipe) => swipeButton(swipe, colors, colors.ACTION_FILL))}
         </SwipeActions.Actions>
       )}
       {leadingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="leading" allowsFullSwipe={fullSwipes(leadingActions)}>
-          {leadingActions.map((swipe) => swipeButton(swipe, colors))}
+          {leadingActions.map((swipe) => swipeButton(swipe, colors, colors.ACTION_FILL))}
         </SwipeActions.Actions>
       )}
     </SwipeActions>
@@ -667,7 +682,7 @@ export function ListRow(props: ListRowProps) {
         end={
           <HStack spacing={SPACE.TIGHT + 2}>
             {face === undefined ? null : (
-              <Avatar name={face.name} picture={face.picture} size={MARK_SIZE.FACE} />
+              <Avatar name={face.name} id={face.id} picture={face.picture} size={MARK_SIZE.FACE} />
             )}
             {due !== undefined ? (
               <RowDue due={due} now={now} />

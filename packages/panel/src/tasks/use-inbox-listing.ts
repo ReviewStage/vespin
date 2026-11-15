@@ -22,6 +22,7 @@ import { afterPaint } from "../after-paint.js";
 import { useInboxViewChoices } from "../desktop/folded-groups.js";
 import { useInboxView } from "../inbox-route.js";
 import { useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
+import { useNamedTask, useNamedTasks } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { useInboxResolver } from "./inbox-close.js";
 import { useAgents } from "./use-agents.js";
@@ -249,10 +250,10 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     clear,
   } = useChoiceFirst(inbox.chosen, onChoose, onClear);
 
-  const chosenTask =
-    asked !== undefined && "taskId" in asked
-      ? tasks.tasks.find((task) => task.id === asked.taskId)
-      : undefined;
+  const chosenTask = useNamedTask(
+    asked !== undefined && "taskId" in asked ? asked.taskId : undefined,
+    tasks.typedNames,
+  );
 
   const taskId = chosenTask?.id;
 
@@ -302,7 +303,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   );
 
   // Note that every read here draws the window's own marks, answers, and messages already, as the host draws them into each (`@repo/host`'s `inbox-collections.ts`).
-  const everyTask = tasks.tasks;
+  const everyTask = useNamedTasks(tasks.typedNames);
 
   const everyItem: readonly InboxGroup[] = useMemo(
     () => inboxGroups(held, { tasks: holdings, listed: everyTask }),

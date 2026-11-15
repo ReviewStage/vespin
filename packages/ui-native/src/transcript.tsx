@@ -30,7 +30,7 @@ import {
 } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
-import { useDockKeyboard, useDockRoom } from "./glass-bar.js";
+import { DOCK_FOLLOWS_KEYBOARD, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
@@ -980,9 +980,10 @@ export function AgentTranscript({
   const keyboard = useDockKeyboard();
   const dock = useDockRoom();
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript. While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the tab bar and the bar stands right on it.
-  const foot = (keyboard > 0 ? 0 : bottom + TAB_BAR_ROOM) + dock;
-  // Note that Jump to latest stands just over the composer, on the keyboard while it stands, rather than over the tab bar's room, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`).
-  const jumpFoot = (keyboard > 0 ? 0 : bottom) + keyboard + dock + SPACE.ROW;
+  // Note that a keyboard standing only partway over that room, as one an interactive drag is pulling down, takes only the part it covers, since the bar stands clear of the safe area until the keyboard rises past it.
+  const foot = Math.max(0, bottom + TAB_BAR_ROOM - keyboard) + dock;
+  // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area, rather than over the tab bar's room, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`).
+  const jumpFoot = Math.max(bottom, keyboard) + dock + SPACE.ROW;
 
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
@@ -1094,8 +1095,8 @@ export function AgentTranscript({
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         // Note that the list stands its end clear of the keyboard with the system's own inset, moved on the keyboard's own curve, so the newest rows never sit behind it.
         automaticallyAdjustKeyboardInsets
-        // Note that a drag lowers the keyboard, since the composer docked over the list holds no key that does. It lowers it at once rather than under the finger, because the docked composer follows the keyboard's announced moves alone, and so stood still while an interactive drag pulled the keyboard away, then jumped.
-        keyboardDismissMode="on-drag"
+        // Note that a drag lowers the keyboard, since the composer docked over the list holds no key that does: under the finger, as Messages' does, where the dock follows the keyboard frame by frame, and at once where it follows only the keyboard's announced moves, since its composer would stand still through the drag, then jump.
+        keyboardDismissMode={DOCK_FOLLOWS_KEYBOARD ? "interactive" : "on-drag"}
         onContentSizeChange={onContentSizeChange}
         onScrollToIndexFailed={onScrollToIndexFailed}
         onScroll={onScroll}
