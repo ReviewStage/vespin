@@ -22,4 +22,4 @@ Possible causes:
 
 ==== Debug output (logs & screenshots) ====
 
-/Users/deanstratakos/vespin-ipad-agent/out/jb1c/9353/9353-iphone-dark-transparency/2026-11-15_072101
+/Users/deanstratakos/vespin-ipad-agent/out/jb1c/9353/9353-iphone-dark-transparency/2026-11-15_100104
