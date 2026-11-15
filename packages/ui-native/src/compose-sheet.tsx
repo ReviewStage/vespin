@@ -235,7 +235,7 @@ export type ComposeAdd = {
 };
 
 type ComposeSheetProps = {
-  /** The line over the words, such as who suggested them; none for a draft of the member's own. */
+  /** The line over the words, such as who suggested them or the task an agent starts on; none for a new task of the member's own. */
   readonly title?: string | undefined;
   /** What stands over the words, such as the task the new one is related to, as capsules. */
   readonly head?: ReactNode;

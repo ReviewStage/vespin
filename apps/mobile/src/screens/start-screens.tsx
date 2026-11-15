@@ -464,6 +464,8 @@ export function NewAgentScreen({
   const kept = useKeptWords(drafted);
   const { starting, pending, go } = useSheetStart(kept, setNote);
   const skills = useSkillOffer(prompt, setPrompt, { taskId: taskId });
+  // Note that the sheet names the task its agent starts on, since it covers that task's page, as the panel's draft tab stands under its task.
+  const taskName = useListedTasks().find((task) => task.id === taskId)?.name;
 
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
   const startSuggested = async (
@@ -508,7 +510,7 @@ export function NewAgentScreen({
         busy={starting ? { says: pending } : undefined}
         title={
           opened === undefined
-            ? undefined
+            ? taskName
             : WORDS.SUGGESTED_BY(
                 suggester === undefined ? undefined : agentName(suggester),
                 opened.suggestion.label,
