@@ -20,7 +20,7 @@
 import type { TurnFilesSummary } from "./protocol.js";
 
 /** The variables the script reads the two sides from: the commit before the turn, and the commit after it, empty for the working tree as it stands. */
-export const CHECKOUT_DIFF_VARIABLE = {
+const CHECKOUT_DIFF_VARIABLE = {
   FROM: "APP_DIFF_FROM",
   TO: "APP_DIFF_TO",
   FORMAT: "APP_DIFF_FORMAT",

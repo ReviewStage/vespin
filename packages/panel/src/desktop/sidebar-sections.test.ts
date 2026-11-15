@@ -21,14 +21,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
 import { appCommandOffered, runAppCommand } from "../app-commands.js";
 import { QUERY_ROOT } from "../query-keys.js";
-import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handState, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { playListMotions } from "../testing/pane-motion.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { type TasksControlOverrides, tasksControl } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 
@@ -226,7 +225,7 @@ function dialogField(label: string): HTMLInputElement {
 function sidebarOver(
   sections: TaskSections,
   writes: TaskSectionWrite[],
-  rest: Partial<TasksControl> = {},
+  rest: TasksControlOverrides = {},
 ) {
   writeListedTasks({ taskSections: sections });
   hearWrites({ writes });
@@ -245,7 +244,7 @@ function sidebarOver(
 async function mountSidebarRedrawn(
   writes: TaskSectionWrite[],
   sections = SECTIONS,
-  rest: Partial<TasksControl> = {},
+  rest: TasksControlOverrides = {},
 ) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -276,7 +275,7 @@ async function mountSidebarRedrawn(
 async function mountSidebar(
   writes: TaskSectionWrite[],
   sections = SECTIONS,
-  rest: Partial<TasksControl> = {},
+  rest: TasksControlOverrides = {},
 ): Promise<HTMLElement> {
   return (await mountSidebarRedrawn(writes, sections, rest)).container;
 }
@@ -1141,7 +1140,7 @@ async function mountDraggable(
   summaries: readonly TaskSummary[],
   sections: TaskSections,
   asked: Asked,
-  rest: Partial<TasksControl> = {},
+  rest: TasksControlOverrides = {},
 ): Promise<HTMLElement> {
   writeListedTasks({ taskSections: sections });
   hearWrites(asked);

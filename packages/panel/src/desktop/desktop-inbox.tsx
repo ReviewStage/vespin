@@ -37,6 +37,12 @@ import { HERE, placeAddress, ROUTE, THING } from "../places/pressed-address.js";
 import { useInboxDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
+import {
+  NAMED_ORDER,
+  useNamedTask,
+  useNamedTasks,
+  useTaskListCollections,
+} from "../task-list-collections.js";
 import { agentName } from "../tasks/agent-model.js";
 import {
   INBOX_COLUMNS,
@@ -194,7 +200,8 @@ export const DesktopInbox = memo(function DesktopInbox({
   const inbox = useInboxDoor(tasks);
   // A task chosen narrows the Inbox to its own items, which a chip over the list names and clears.
   const narrowedTask = useInboxView(tasks).narrowed;
-  const narrowedTaskRow = tasks.tasks.find((task) => task.id === narrowedTask);
+  const narrowedTaskRow = useNamedTask(narrowedTask, tasks.typedNames);
+  const collections = useTaskListCollections();
   const narrowedTaskName = narrowedTaskRow?.name;
 
   const {
@@ -281,7 +288,12 @@ export const DesktopInbox = memo(function DesktopInbox({
       : (tasks.workspaces.find((each) => each.id === chosenWorkspaceId)?.slug ?? chosenWorkspaceId);
 
   // What the chosen item's box offers an `@`, read under that workspace and repository.
-  const readMentionAgents = useMentionAgentsReader(place?.workspaceId, tasks.tasks, named.models);
+  const readMentionAgents = useMentionAgentsReader(
+    place?.workspaceId,
+    useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED),
+    named.models,
+  );
+
   // An item's box starts a new thread with its agent, which opens in its place.
   const { startInboxThread } = agents;
 
@@ -292,7 +304,7 @@ export const DesktopInbox = memo(function DesktopInbox({
         const taskId =
           (chosen?.item.id === item.id ? chosen.holder.task.id : undefined) ??
           standing.find(({ items }) => items.some((each) => each.id === item.id))?.holder.task.id ??
-          tasks.liveAgents?.find((agent) => agent.id === item.agentId)?.planId;
+          tasks.liveAgents?.find((agent) => agent.id === item.agentId)?.taskId;
 
         inbox.choose(
           taskId === undefined
@@ -341,8 +353,8 @@ export const DesktopInbox = memo(function DesktopInbox({
     if (routed.kind === ROUTE.GO) {
       const { place: at } = routed.link;
 
-      if (at.kind !== LINK_DESTINATION.AGENT || at.planId === undefined) return false;
-      tasks.onShowAgent(at.planId, at.agentId);
+      if (at.kind !== LINK_DESTINATION.AGENT || at.taskId === undefined) return false;
+      tasks.onShowAgent(at.taskId, at.agentId);
 
       return true;
     }
@@ -411,7 +423,7 @@ export const DesktopInbox = memo(function DesktopInbox({
 
         // Note that the Inbox lists the listed workspace's tasks alone, so an item of a task listed
         // elsewhere is the window's, which lists that task's workspace before opening it.
-        if (holder !== taskId && !tasks.tasks.some((each) => each.id === holder)) return false;
+        if (holder !== taskId && !collections.tasks.has(holder)) return false;
 
         const choice: InboxChoice = {
           taskId: holder,
@@ -880,7 +892,7 @@ function InboxSidePanel({
 
         if (taskId === undefined) return;
 
-        return openPlace({ kind: LINK_DESTINATION.AGENT, planId: taskId, agentId: agent }, () =>
+        return openPlace({ kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId: agent }, () =>
           tasks.onShowAgent(taskId, agent),
         );
       }
@@ -888,7 +900,7 @@ function InboxSidePanel({
       case TOOL_TARGET.DESCRIPTION:
         if (taskId === undefined) return;
 
-        return openPlace({ kind: LINK_DESTINATION.TASK, planId: taskId }, () =>
+        return openPlace({ kind: LINK_DESTINATION.TASK, taskId: taskId }, () =>
           tasks.onShowTask(taskId),
         );
       case TOOL_TARGET.INBOX:
@@ -901,8 +913,7 @@ function InboxSidePanel({
   // through the agents the Inbox read of the item's task, its plan's card naming the task, whose
   // press opens the plan. Note that no press opens one here any more, since an agent opens in its own
   // tab on the task (`inbox-item-links.ts`); it is drawn only for a tab an earlier version kept.
-  const listedTask =
-    taskId === undefined ? undefined : tasks.tasks.find((each) => each.id === taskId);
+  const listedTask = useNamedTask(taskId, tasks.typedNames);
 
   const cards = taskCards({
     agents,
@@ -1009,13 +1020,13 @@ export function paneDoors(
   // An agent the item or its task's card names reads beside it, as a link to it does.
   // Note that an archived agent's tab is not drawn beside the item, so the window opens it on its task.
   const openAgent = (taskId: string, agentId: string) =>
-    seams.openPlace({ kind: LINK_DESTINATION.AGENT, planId: taskId, agentId }, () =>
+    seams.openPlace({ kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId }, () =>
       tasks.onShowAgent(taskId, agentId),
     );
 
   // A task the card names, its parent or a sub-task, opens as a link to it does.
   const openTask = (taskId: string) =>
-    seams.openPlace({ kind: LINK_DESTINATION.TASK, planId: taskId }, () => tasks.onSelect(taskId));
+    seams.openPlace({ kind: LINK_DESTINATION.TASK, taskId: taskId }, () => tasks.onSelect(taskId));
 
   return {
     tasks,

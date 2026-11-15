@@ -7,7 +7,6 @@ import {
   memorySaveRefusal,
 } from "@repo/features/memory-settings-words";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
-import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaceMemories, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
@@ -17,6 +16,7 @@ import {
   GLYPH,
   ListSection,
   NOTICE_KIND,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   useColors,
@@ -27,6 +27,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useRef, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
+import { useCloseSheet } from "../../close-sheet.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
@@ -102,6 +103,7 @@ function MemoryEditor({
 }) {
   const colors = useColors();
   const router = useRouter();
+  const close = useCloseSheet();
   const acts = useHostActs();
   const write = useWrite();
   const notices = useFailureNotices();
@@ -185,7 +187,7 @@ function MemoryEditor({
 
     // Note that the page goes back as the save is sent rather than once it lands, as the panel's declared writes act at once: a correction draws over its memory at once, and a refusal says why in the failure notice.
     kept.release();
-    router.back();
+    close();
   };
 
   const title = memoryId === undefined ? MEMORY_EDITOR_WORDS.ADD : MEMORY_EDITOR_WORDS.EDIT;
@@ -211,15 +213,12 @@ function MemoryEditor({
         onAct={kept.discard}
         onDismiss={kept.stay}
       />
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         {failed ? (
           <EmptyState
             title={MEMORY_PAGE_WORDS.FAILED}
             symbol={GLYPH.FAILED}
-            action={{
-              label: VERB.RETRY,
-              onPress: () => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost),
-            }}
+            retry={() => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost)}
           />
         ) : reading ? (
           <EmptyState title={MEMORY_PAGE_WORDS.READING} symbol={MEMORY_SYMBOL} loading />

@@ -47,8 +47,8 @@ import {
 import { WorkspaceDriveFills, workspaceFolderOf } from "../workspace-drive.js";
 import { workspaceDriveBuildPublished } from "../workspace-drive-builds.js";
 import { agentFailureSaid, agentLogIds } from "./agent-log.js";
-import { type QueueSessions, queueAtTouch } from "./agent-queue.js";
-import { routedSessions } from "./runtime-sessions.js";
+import { queueAtTouch } from "./agent-queue.js";
+import { type QueueSessions, routedSessions } from "./runtime-sessions.js";
 
 /** The attempt a Start's boot runs under, which `beginAgentBoot` writes; each Retry begins the next. */
 const FIRST_ATTEMPT = 1;

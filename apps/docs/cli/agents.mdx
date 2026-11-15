@@ -1,0 +1,689 @@
+---
+title: "Agents"
+description: "vespin agent and its subcommands"
+---
+
+Start, follow, message, and manage coding agents, and reach their branches, ports, shells, and browser tabs. Every command also takes the global flags `--json`, `-q`, `-w`, and `--url`, described in [CLI](/cli#scripts-and-coding-agents).
+
+## vespin agent start
+
+Start an agent on a task
+
+```sh
+vespin agent start [flags] <task>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+| `--file, -F string` | The prompt, from a file or - for stdin |
+| `--model string` | The model to run on, by its catalog id, with `--effort` |
+| `--effort string` | The reasoning effort, with `--model` |
+| `--cloud` | Run in the cloud |
+| `--on string` | Run on one of your devices, by its name or id |
+| `--branch string` | The branch to clone the agent's checkout at, already on GitHub (default: the repository's default branch) |
+| `--follow` | Stream the agent's turn until it ends |
+| `--wait` | Wait until the turn ends; the exit code says how |
+
+```sh
+# An agent in the cloud, on a branch already on GitHub
+vespin agent start ACME-42 --branch fix/login --cloud
+
+# An agent on a prompt from stdin, waited on
+echo "Add a test for the redirect" | vespin agent start ACME-42 -F - --wait
+
+# Choose the model, and stream the turn
+vespin agent start ACME-42 --model anthropic/claude-opus-5.5 --effort high --follow
+```
+
+## vespin agent continue
+
+Continue an agent as a new one on its task, handed its brief and transcript, as the app's Continue does; the agent is stopped, and the new one runs as you, on your own plan. --at forks it at a message instead, and it goes on
+
+```sh
+vespin agent continue [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `--file, -F string` | A note handed to the new agent after the transcript, from a file or - for stdin |
+| `--at string` | Fork at this assistant message of the agent's transcript, by its id (agent logs `--json`), instead of continuing: the agent goes on |
+| `--model string` | The model to run on, with `--effort` (default: the agent's) |
+| `--effort string` | The reasoning effort, with `--model` |
+| `--cloud` | Run in the cloud |
+| `--on string` | Run on one of your devices, by its name or id (default: where the agent runs) |
+| `--follow` | Stream the agent's turn until it ends |
+| `--wait` | Wait until the turn ends; the exit code says how |
+
+```sh
+# A new agent picks up where this one stopped, failed, or ran out of context
+vespin agent continue <id>
+
+# Continue in the cloud with a note, and wait on it
+echo "Now add the tests" | vespin agent continue <id> -F - --cloud --wait
+
+# Fork at one of its messages, and stream the new agent's turn
+vespin agent continue <id> --at <message-id> --follow
+```
+
+## vespin agent list
+
+List a task's agents, or the workspace's a page at a time, newest first
+
+```sh
+vespin agent list [flags] [<task>]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 (optional) |
+| `--offset integer` | How many of the workspace's agents to pass over: the nextOffset an earlier list printed |
+
+```sh
+# One task's agents
+vespin agent list ACME-42
+
+# The workspace's agents' ids
+vespin agent list -q
+
+# The workspace's next page, from the nextOffset a list printed
+vespin agent list --offset 50
+```
+
+## vespin agent view
+
+Show an agent: where it stands, its branch, pull request, and checks
+
+```sh
+vespin agent view [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+
+```sh
+# One agent
+vespin agent view <id>
+
+# The same, as JSON
+vespin agent view <id> --json
+```
+
+## vespin agent logs
+
+Print an agent's transcript, or one of its workers' with --worker, or one call of it whole with --call; --follow streams the turn under way (with --json, the whole transcript once it ends)
+
+```sh
+vespin agent logs [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `--follow, -f` | Stream the turn under way until it ends |
+| `--worker string` | Read one of its workers' transcript instead, by the toolCallId of the call that started it (agent logs `--json`) |
+| `--call string` | Print one call whole, its input and its output, by its toolCallId (agent logs `--json`) |
+
+```sh
+# The transcript so far
+vespin agent logs <id>
+
+# Stream the turn live
+vespin agent logs <id> --follow
+
+# A worker's transcript
+vespin agent logs <id> --worker <callId>
+
+# One call, its output whole
+vespin agent logs <id> --call <callId>
+```
+
+## vespin agent send
+
+Message an agent; it reads it at its next step, or starts a turn on it
+
+```sh
+vespin agent send [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `--file, -F string` | The message, from a file or - for stdin |
+| `--queue` | Queue it behind the agent's turn, as ⌘↩ does, rather than steer the turn under way; only the agent's starter queues, and a paused queue sends nothing until `vespin agent queue resume` |
+| `--message-id string` | With `--queue`, the queued message's id, a UUID you mint, so a script addresses it with `vespin agent queue` even where this send's answer was lost; sent again under the same id while that message still waits, it queues nothing more, though once it went or was deleted it queues again |
+
+```sh
+# A follow-up from stdin
+echo "Also update the README" | vespin agent send <id> -F -
+
+# Queued to go once the turn under way ends
+vespin agent send <id> --queue -F next.md
+```
+
+## vespin agent queue
+
+List the messages queued behind an agent's turn, and resume, hold, release, edit, delete, reorder, or steer them (your own agents only)
+
+## vespin agent queue resume
+
+Resume an agent's paused queue, which a Stop, a failed turn, or a refused hand-off pauses
+
+```sh
+vespin agent queue resume [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+
+```sh
+# Let the queue go on
+vespin agent queue resume <id>
+```
+
+## vespin agent queue hold
+
+Hold a queued message, as the app's Edit does: the queue sends what stands ahead of it and stops there
+
+```sh
+vespin agent queue hold [flags] <agent> <message>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `message string` | The queued message's id, as `vespin agent queue &lt;id&gt;` lists it |
+
+```sh
+# Stop the queue at it
+vespin agent queue hold <id> <message>
+```
+
+## vespin agent queue release
+
+Let a held message go again, so the queue sends on past it
+
+```sh
+vespin agent queue release [flags] <agent> <message>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `message string` | The queued message's id, as `vespin agent queue &lt;id&gt;` lists it |
+
+```sh
+# Let it go
+vespin agent queue release <id> <message>
+```
+
+## vespin agent queue edit
+
+Write a queued message again in its place; it goes without the files it carried
+
+```sh
+vespin agent queue edit [flags] <agent> <message>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `message string` | The queued message's id, as `vespin agent queue &lt;id&gt;` lists it |
+| `--file, -F string` | The new words, from a file or - for stdin |
+
+```sh
+# New words for the message
+vespin agent queue edit <id> <message> -F next.md
+```
+
+## vespin agent queue delete
+
+Delete a queued message before it goes
+
+```sh
+vespin agent queue delete [flags] <agent> <message>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `message string` | The queued message's id, as `vespin agent queue &lt;id&gt;` lists it |
+
+```sh
+# Drop the message
+vespin agent queue delete <id> <message>
+```
+
+## vespin agent queue reorder
+
+Put an agent's queue in a new order
+
+```sh
+vespin agent queue reorder [flags] <agent> <message...>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `message... string` | Every queued message's id, each once, in the order they are to go |
+
+```sh
+# Swap two messages
+vespin agent queue reorder <id> <second> <first>
+```
+
+## vespin agent queue steer
+
+Send a queued message now, into the turn under way, and take it out of the queue; -F replaces its words and drops its files
+
+```sh
+vespin agent queue steer [flags] <agent> <message>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `message string` | The queued message's id, as `vespin agent queue &lt;id&gt;` lists it |
+| `--file, -F string` | The new words, from a file or - for stdin |
+
+```sh
+# Send it as it stands
+vespin agent queue steer <id> <message>
+```
+
+## vespin agent stop
+
+Stop an agent's turn; what it pushed stays
+
+```sh
+vespin agent stop [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+
+```sh
+# Stop the turn
+vespin agent stop <id>
+```
+
+## vespin agent update
+
+Change an agent, one change a call: rename it, move it to another model, pin or unpin it, archive it or bring it back, or switch its MCP servers off
+
+```sh
+vespin agent update [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `--title string` | Rename it; empty clears the title, so the model's name shows |
+| `--model string` | Move it to this model from its next step, with `--effort` |
+| `--effort string` | The reasoning effort, with `--model` |
+| `--pin` | Pin it in your sidebar; the pin is yours alone |
+| `--unpin` | Unpin it from your sidebar |
+| `--archive` | Archive it, stopping a turn still running; its transcript, branch, and pull request stay |
+| `--unarchive` | Bring an archived agent back |
+| `--reason string` | Why it is archived, shown on its archived banner, with `--archive` |
+| `--disabled-servers string` | The MCP servers switched off for it, comma-separated, replacing the list; "" switches every one on |
+
+```sh
+# Rename it
+vespin agent update <id> --title "Fix the login"
+
+# Move it to another model from its next step
+vespin agent update <id> --model anthropic/claude-opus-5.5 --effort high
+
+# Archive it, saying why
+vespin agent update <id> --archive --reason "Its pull request merged"
+
+# Switch two MCP servers off for it
+vespin agent update <id> --disabled-servers linear,notion
+```
+
+## vespin agent rewind
+
+Take an agent back to the moment before one of the lines sent to it, stopping it first; its checkout stays
+
+```sh
+vespin agent rewind [flags] <agent> <message>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `message string` | The line to go back to the moment before, by its message id (vespin agent logs &lt;id&gt; `--json`) |
+
+```sh
+# Drop that line and everything after it
+vespin agent rewind <id> <message-id>
+```
+
+## vespin agent delete
+
+Delete an agent for good, stopping it first; its branch and pull request on GitHub stay
+
+```sh
+vespin agent delete [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `--yes, -y` | Delete without asking; needed where there is no terminal to ask |
+
+```sh
+# Asks before it deletes
+vespin agent delete <id>
+
+# From a script
+vespin agent delete <id> --yes
+```
+
+## vespin agent wake
+
+Resume an agent's stopped cloud sandbox and start its runner, so it answers at once
+
+```sh
+vespin agent wake [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+
+```sh
+# Wake it up
+vespin agent wake <id>
+```
+
+## vespin agent forward
+
+Serve an agent's cloud ports on localhost until Ctrl-C or until its sandbox stops
+
+```sh
+vespin agent forward [flags] <agent> [<port...>]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `port... integer` | The sandbox's ports to forward (default: the ones it listens on now) (optional) |
+| `--local integer` | The local port to serve the one port named on (default: the same) |
+
+```sh
+# Every port the sandbox listens on now, each on the same local port
+vespin agent forward <id>
+
+# The ports named
+vespin agent forward <id> 3000 5173
+
+# The sandbox's 3000 on localhost:3001
+vespin agent forward <id> 3000 --local 3001
+```
+
+## vespin agent wait
+
+Wait until an agent's turn ends: exit 0 when it completed, 5 when it failed or was stopped, 6 on --timeout
+
+```sh
+vespin agent wait [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `--timeout integer` | Give up after this many seconds, exiting 6 |
+
+```sh
+# Block until the turn ends
+vespin agent wait <id>
+
+# Bring the work here once it completed
+vespin agent wait <id> --timeout 600 && vespin agent checkout <id>
+```
+
+## vespin agent checkout
+
+Fetch an agent's branch from GitHub and check it out in this folder, as gh pr checkout does
+
+```sh
+vespin agent checkout [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+
+```sh
+# Bring the agent's work here
+vespin agent checkout <id>
+```
+
+## vespin agent diff
+
+Print the diff of an agent's pull request, as GitHub holds it; --stat lists its files
+
+```sh
+vespin agent diff [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `--number integer` | Another pull request of the agent's repository, by its number |
+| `--stat` | Each file as one line, with the lines it adds and removes |
+
+```sh
+# Every file's patch
+vespin agent diff <id>
+
+# The files, with lines added and removed
+vespin agent diff <id> --stat
+
+# The changed paths alone
+vespin agent diff <id> -q
+```
+
+## vespin agent pr
+
+Change an agent's pull request on GitHub as you: mark it ready, turn it back into a draft, merge it, or turn auto-merge on or off
+
+```sh
+vespin agent pr [flags] <agent> <change>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `change choice` | ready, draft, merge, or auto-merge |
+| `--number integer` | Another pull request of the agent's repository, by its number |
+| `--method choice` | How a merge or auto-merge merges (default: the first the repository allows) (choices: merge, squash, rebase) |
+| `--head string` | The head commit a merge or auto-merge is made against (default: the head now) |
+| `--off` | With auto-merge, turn it off |
+
+```sh
+# Mark the draft ready for review
+vespin agent pr <id> ready
+
+# Squash and merge now
+vespin agent pr <id> merge --method squash
+
+# Merge once its checks pass
+vespin agent pr <id> auto-merge
+
+# Turn auto-merge off
+vespin agent pr <id> auto-merge --off
+```
+
+## vespin agent ports
+
+List the ports a server listens on in an agent's cloud sandbox, each with what serves it, and the one shared by link
+
+```sh
+vespin agent ports [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+
+```sh
+# The ports and what serves each, the shared one with its link
+vespin agent ports <id>
+
+# The port numbers alone
+vespin agent ports <id> -q
+```
+
+## vespin agent share
+
+Share a port of an agent's running cloud sandbox by public link, show the link, or stop sharing
+
+```sh
+vespin agent share [flags] <agent> [<port>]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `port integer` | The port to share, replacing any shared before (optional) |
+| `--stop` | Stop sharing; the link closes |
+
+```sh
+# Share port 3000, printing its link
+vespin agent share <id> 3000
+
+# The link shared now, alone
+vespin agent share <id> -q
+
+# Close the link
+vespin agent share <id> --stop
+```
+
+## vespin agent tabs
+
+List the tabs open in an agent's cloud browser, and open, take over, or hand one back
+
+## vespin agent tabs open
+
+Open a tab in an agent's cloud browser, taken over for you until you hand it back
+
+```sh
+vespin agent tabs open [flags] <agent> <address>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `address string` | The http or https address to open |
+
+```sh
+# Open a sign-in page for the agent
+vespin agent tabs open <id> https://example.com/login
+```
+
+## vespin agent tabs take
+
+Take over a tab in an agent's cloud browser so the agent leaves it alone, or renew your takeover; it lapses a minute after
+
+```sh
+vespin agent tabs take [flags] <agent> <tab>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `tab string` | The tab's id, as `vespin agent tabs &lt;id&gt;` lists it |
+
+```sh
+# Take the tab over
+vespin agent tabs take <id> <tab>
+```
+
+## vespin agent tabs hand-back
+
+Hand a tab you drive in an agent's cloud browser back to the agent
+
+```sh
+vespin agent tabs hand-back [flags] <agent> <tab>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `tab string` | The tab's id, as `vespin agent tabs &lt;id&gt;` lists it |
+
+```sh
+# Give the tab back
+vespin agent tabs hand-back <id> <tab>
+```
+
+## vespin agent shell
+
+Open a shell in an agent's sandbox, or attach to one of its Terminal tab's shells; Ctrl-] detaches
+
+```sh
+vespin agent shell [flags] <agent> [<shell>]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `shell string` | The shell's id, from vespin agent shells (default: a new shell) (optional) |
+| `--title string` | The new shell's name in the Terminal tab |
+
+```sh
+# A new shell in the agent's sandbox
+vespin agent shell <id>
+
+# Attach to a shell that stands, from vespin agent shells
+vespin agent shell <id> <shell>
+
+# A new shell, named
+vespin agent shell <id> --title "dev server"
+```
+
+## vespin agent shells
+
+List an agent's shells: its Terminal tab's, oldest first
+
+```sh
+vespin agent shells [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+
+```sh
+# The shells to attach to
+vespin agent shells <id>
+```
+
+## vespin agent run
+
+Run one of a cloud agent's repository's run actions in its sandbox, or stop it with --stop
+
+```sh
+vespin agent run [flags] <agent> <action>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `action string` | The run action's id, as `vespin setup actions` lists it |
+| `--stop` | Interrupt what the action runs, leaving its Terminal tab open |
+
+```sh
+# Run it in its own shell
+vespin agent run <id> <action-id>
+
+# Interrupt it
+vespin agent run <id> <action-id> --stop
+```

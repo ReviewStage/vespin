@@ -56,3 +56,8 @@ const readsActionResult = readEither(ActionResultSchema, { excess: EXCESS_KEYS.R
 export function isActionResult(value: UnparsedWireValue): value is ActionResult {
   return Result.isSuccess(readsActionResult(value));
 }
+
+/** Why an action did not land, in the words of whoever refused it; none where it was accepted. */
+export function actionRefused(answer: ActionResult): string | undefined {
+  return answer.status === ACTION_RESULT_STATUS.ACCEPTED ? undefined : answer.reason;
+}
