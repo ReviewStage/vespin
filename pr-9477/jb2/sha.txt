@@ -1,0 +1,4 @@
+  SKIPPED #9351 type error: apps/mobile/src/screens/start-screens.tsx(538,6): error TS2304: Cannot find name 'FieldChip'.
+== bundle Z2 base 6f15936135
+  merged #9477 1dbda86cf8
+  built 9a9f7f12e0
