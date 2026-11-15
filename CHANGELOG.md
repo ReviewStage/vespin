@@ -87,6 +87,8 @@ its next turn the agent is told that its sandbox grew.
 [#9488](https://github.com/ReviewStage/vespin/pull/9488),
 [#9489](https://github.com/ReviewStage/vespin/pull/9489)
 
+![Settings › Cloud environment in acme, its Sandbox section's Size menu open on 2 vCPUs · 4 GB marked Default, 4 vCPUs · 8 GB checked, and 8 vCPUs · 16 GB, over the Size row and the section's caption](apps/web/public/changelog/0.36.0/cloud-sandbox-size.png)
+
 ### Improvements
 
 - When the service no longer takes your build of Vespin, an Update required
