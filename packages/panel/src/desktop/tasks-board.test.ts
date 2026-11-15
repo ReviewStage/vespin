@@ -33,6 +33,7 @@ import { followListedTasks, handMembers, writeListedTasks } from "../testing/app
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { layScrollerOut } from "../testing/scroller.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
@@ -201,28 +202,31 @@ async function mountBoard(
   const draw = (shown: TasksDisplay, changed: Partial<typeof control> = {}) =>
     root.render(
       withQueryClient(
-        provide(
-          createElement(
-            Fragment,
-            null,
-            leavingBy(() => (closed += 1)),
-            createElement(MemberDirectory, {
-              workspace: ACME,
-              readerId: DEAN,
-              children: createElement(TasksBoard, {
-                tasks: { ...control, ...changed },
-                room,
-                title: "Tasks",
-                frame: {
-                  toolbar: null,
-                  chips: null,
-                  filter: NO_TASKS_FILTER,
-                  display: shown,
-                  onDisplay: (next) => displayed.push(next),
-                },
+        overEveryTask(
+          { tasks: changed.tasks ?? control.tasks },
+          provide(
+            createElement(
+              Fragment,
+              null,
+              leavingBy(() => (closed += 1)),
+              createElement(MemberDirectory, {
+                workspace: ACME,
+                readerId: DEAN,
+                children: createElement(TasksBoard, {
+                  tasks: { ...control, ...changed },
+                  room,
+                  title: "Tasks",
+                  frame: {
+                    toolbar: null,
+                    chips: null,
+                    filter: NO_TASKS_FILTER,
+                    display: shown,
+                    onDisplay: (next) => displayed.push(next),
+                  },
+                }),
               }),
-            }),
-            createElement(ToastHost),
+              createElement(ToastHost),
+            ),
           ),
         ),
       ),

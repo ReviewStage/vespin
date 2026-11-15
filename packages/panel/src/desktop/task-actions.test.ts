@@ -45,6 +45,7 @@ import {
   writeExperiments,
 } from "../testing/app-state.js";
 import { startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { peopleRead, withPeopleRead } from "../testing/people-read.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { openTaskMenu } from "../testing/task-menu.js";
@@ -186,7 +187,7 @@ function mountDescriptionTab(tasks: TasksControl): HTMLElement {
     tasks,
   });
 
-  return mount(withQueryClient(page));
+  return mount(withQueryClient(overEveryTask(tasks, page)));
 }
 
 function sidebarTask(
@@ -209,17 +210,20 @@ function sidebarTask(
   );
 }
 
+/** The row drawn, its task read from collections standing on `tasks`'s list, or, given `followed`, from the window's own, which the test's follow writes. */
 function mountSidebarTask(
   tasks: TasksControl,
   task: TaskSummary,
   asked: Asked,
   current = false,
+  followed = false,
 ): HTMLButtonElement {
-  const container = mount(withQueryClient(sidebarTask(tasks, task, asked, current)));
-  const row = container.querySelector("ul > li > button");
-  assert.ok(row instanceof HTMLButtonElement);
+  const row = sidebarTask(tasks, task, asked, current);
+  const container = mount(withQueryClient(followed ? row : overEveryTask(tasks, row)));
+  const press = container.querySelector("ul > li > button");
+  assert.ok(press instanceof HTMLButtonElement);
 
-  return row;
+  return press;
 }
 
 function openMenu(more: HTMLButtonElement): void {
@@ -1307,7 +1311,7 @@ test("⌘Z takes back a sidebar task's rename the service kept, sending its name
     },
   });
 
-  const row = mountSidebarTask(tasks, OTHER, asked);
+  const row = mountSidebarTask(tasks, OTHER, asked, false, true);
   await act(async () => undefined);
   rightClick(row, 40, 60);
   choose("Rename");

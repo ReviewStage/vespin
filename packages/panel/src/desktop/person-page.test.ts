@@ -56,6 +56,7 @@ import {
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { playListMotions } from "../testing/pane-motion.js";
 import {
   agentsControl,
@@ -459,7 +460,10 @@ function mountWith(
               OpenSettingsProvider,
               { value: (link: SettingsLink) => opened.settings.push(link) },
               createElement(HoldsPersonRoute),
-              createElement(PersonPage, { tasks, userId, name, away }),
+              overEveryTask(
+                { tasks: tasks.listed.tasks },
+                createElement(PersonPage, { tasks, userId, name, away }),
+              ),
             ),
           ),
         ),

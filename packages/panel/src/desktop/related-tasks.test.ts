@@ -176,6 +176,8 @@ test("a related task's row leads its trailing run with its stop sign and says ho
     listRead: true,
   });
 
+  listed.stand({ tasks: tasks.tasks });
+
   act(() =>
     root.render(
       withQueryClient(
