@@ -30,27 +30,36 @@ env:
     file: subflows/dismiss.yaml
 # The scopes' segmented control over the list, Open chosen: All lists the settled threads
 # too. A regular window's list column holds them as a menu picker instead,
-# named for the scope chosen, so the flow opens it first there.
+# its Filter button, so the flow opens it first there. Note that it is found
+# by "Filter", which it is named on iOS 26.5, where it is a glyph alone, and
+# begins its name with on iOS 27, where the scope chosen follows.
 - runFlow:
     when:
       visible: "Choose an item"
     commands:
-      - tapOn: "Open.*"
+      - tapOn: "Filter.*"
 - tapOn: "All"
 - scrollUntilVisible:
     element: "Which day the digest goes out"
     direction: DOWN
 - waitForAnimationToEnd
 - takeScreenshot: inbox-all
-- scrollUntilVisible:
-    element: "Recorded the invite flow"
-    direction: UP
+# Note that a compact window's list is scrolled up to its scopes rather than
+# to its first row, which a scroll up stands under the bar with the scopes
+# above it, out of sight.
+- runFlow:
+    when:
+      notVisible: "Choose an item"
+    commands:
+      - scrollUntilVisible:
+          element: "Open.*"
+          direction: UP
 - waitForAnimationToEnd
 - runFlow:
     when:
       visible: "Choose an item"
     commands:
-      - tapOn: "All"
+      - tapOn: "Filter.*"
 - tapOn: "Open.*"
 # The thread comes first, before the row's swipes and its long press: a row
 # a swipe opened takes the next tap to close its actions, and its files, the
@@ -236,7 +245,7 @@ env:
     when:
       visible: "Choose an item"
     commands:
-      - tapOn: "Open.*"
+      - tapOn: "Filter.*"
 - tapOn: "Reminders"
 - assertVisible: "Recorded the invite flow"
 - assertVisible: "Reminder .*"
@@ -246,7 +255,7 @@ env:
     when:
       visible: "Choose an item"
     commands:
-      - tapOn: "Reminders"
+      - tapOn: "Filter.*"
 - tapOn: "Open.*"
 - waitForAnimationToEnd
 # The search, a round glass button in the bar, narrows the list to
