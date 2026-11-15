@@ -18,6 +18,7 @@ import { type ClientIdentity, clientNamedOnService } from "@repo/features/client
 import { HostedInstalledSkillClient } from "@repo/features/installed-skill-client";
 import { INTEGRATION_LANDING } from "@repo/features/integration-wire";
 import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
+import { agentName } from "@repo/features/model-label";
 import {
   carried,
   GATEWAY_EVENT,
@@ -614,6 +615,11 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
               credential: account.credential,
             }),
             turnEnded,
+            agentName: (agentId) => {
+              const agent = agentListed(agentId);
+
+              return agent === undefined ? undefined : agentName(agent);
+            },
             ...Option.match(computerHelper, {
               onNone: () => ({}),
               onSome: (helper) => ({ computer: macComputerUse(settings, helper) }),
