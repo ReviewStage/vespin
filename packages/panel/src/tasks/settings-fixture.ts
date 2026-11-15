@@ -71,6 +71,7 @@ import {
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
+import type { WorkspaceSandboxSizeAnswer } from "@repo/features/workspace-sandbox-size-wire";
 import {
   WORKSPACE_ROLE,
   type WorkspaceMachine,
@@ -829,6 +830,9 @@ const SETUP_RUN_AGENT = {
   },
 } as const;
 
+/** Acme's sandbox size, as a choice leaves it: four vCPUs. */
+let acmeSandboxSize: WorkspaceSandboxSizeAnswer = { vcpus: 4 };
+
 /**
  * Acme's sandbox setup, as a save leaves it: an install script, setup
  * scripts for two of its repositories, and run actions for one, each script
@@ -1025,6 +1029,12 @@ const ANSWERS: StagedAnswers = {
     ),
   }),
   [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
+  [ACT_KIND.WORKSPACE_SANDBOX_SIZE_READ]: () => acmeSandboxSize,
+  [ACT_KIND.WORKSPACE_SANDBOX_SIZE_PUT]: ({ vcpus }) => {
+    acmeSandboxSize = { ...acmeSandboxSize, vcpus };
+
+    return acmeSandboxSize;
+  },
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
   [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script }) =>
     sandboxSetupAnswer(repository, script),

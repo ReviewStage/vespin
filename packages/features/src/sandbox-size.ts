@@ -43,3 +43,13 @@ export const SANDBOX_SIZE = {
 export function sandboxMemoryGb(vcpus: number): number {
   return vcpus * SANDBOX_SIZE.MEMORY_GB_PER_VCPU;
 }
+
+/** A size as Settings and the admin dashboard name it: its vCPUs and the memory they bring, "4 vCPUs · 8 GB". */
+export function sandboxSizeWords(vcpus: number): string {
+  return `${vcpus} vCPUs · ${sandboxMemoryGb(vcpus)} GB`;
+}
+
+/** The size an option's id names, as a picker hands it back, or none where it names none a workspace may have. */
+export function sandboxVcpusOf(raw: string): SandboxVcpus | undefined {
+  return SANDBOX_VCPU_SIZES.find((size) => String(size) === raw);
+}
