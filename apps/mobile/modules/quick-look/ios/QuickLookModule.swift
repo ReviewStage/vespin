@@ -5,11 +5,12 @@
 // here. Quick Look brings what the app's own viewers lacked: a swipe down to
 // close, a double tap and a pinch to zoom, every kind of file the system
 // reads (a PDF, a text file, an image, a spreadsheet), Markup, and its own
-// share button, whose sheet holds Copy and Save Image. Note that a press on a
-// thumbnail hands its frame in the window, so the preview grows from the
-// thumbnail and shrinks back into it as the system's own do on the iPhone; a
-// frame of none, and every iPad, open it with the system's plain transition.
-// A file Quick Look can't read answers false, and the app shares it instead.
+// share button, whose sheet holds Copy and Save Image. Note that it opens with
+// the system's plain transition rather than growing from the thumbnail
+// pressed, since grown from one Quick Look stood in its immersive mode, its
+// bar and Done hidden until a tap, on the iOS 27.2 iPhone as on the iPad. A
+// file Quick Look can't read, or one UIKit would not present it over, answers
+// false, and the app shares it instead.
 
 import ExpoModulesCore
 import QuickLook
@@ -26,17 +27,13 @@ private final class PreviewItem: NSObject, QLPreviewItem {
   }
 }
 
-/// What Quick Look reads while it stands: its one item, the thumbnail it grows from, and what to do once it closes.
+/// What Quick Look reads while it stands: its one item, and what to do once it closes.
 private final class Preview: NSObject, QLPreviewControllerDataSource, QLPreviewControllerDelegate {
   let item: PreviewItem
-  let from: CGRect?
-  weak var window: UIWindow?
   let onDismiss: (Preview) -> Void
 
-  init(item: PreviewItem, from: CGRect?, window: UIWindow?, onDismiss: @escaping (Preview) -> Void) {
+  init(item: PreviewItem, onDismiss: @escaping (Preview) -> Void) {
     self.item = item
-    self.from = from
-    self.window = window
     self.onDismiss = onDismiss
   }
 
@@ -44,16 +41,6 @@ private final class Preview: NSObject, QLPreviewControllerDataSource, QLPreviewC
 
   func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
     item
-  }
-
-  func previewController(
-    _ controller: QLPreviewController,
-    frameFor item: QLPreviewItem,
-    inSourceView view: AutoreleasingUnsafeMutablePointer<UIView?>
-  ) -> CGRect {
-    guard let from, let window else { return .zero }
-    view.pointee = window
-    return from
   }
 
   func previewControllerDidDismiss(_ controller: QLPreviewController) {
@@ -84,27 +71,43 @@ public final class QuickLookModule: Module {
   public func definition() -> ModuleDefinition {
     Name("QuickLook")
 
-    AsyncFunction("preview") { (uri: String, title: String?, from: [Double]?) -> Bool in
+    AsyncFunction("preview") { (uri: String, title: String?) -> Bool in
       guard let url = URL(string: uri), url.isFileURL else { return false }
       let item = PreviewItem(url: url, title: title)
-      guard QLPreviewController.canPreview(item), let window = keyWindow(),
-        let presenter = topmost(window)
-      else { return false }
 
-      // Note that an iPad opened the preview grown from its thumbnail in Quick Look's immersive mode, its bar and Done hidden with no tap bringing them back, so there it opens from no frame, full screen. It's presented itself rather than inside a navigation controller of the app's, since Quick Look draws its own Done only where it finds itself presented; pushed into another's stack it has none, and a Done added to its bar showed in some runs and not others on the iOS 26.5 iPad.
-      let pad = UIDevice.current.userInterfaceIdiom == .pad
-      let frame = pad ? nil : from.flatMap { rect in
-        rect.count == 4 ? CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]) : nil
+      guard QLPreviewController.canPreview(item) else {
+        NSLog("Quick Look can't read the file it was asked to open.")
+        return false
       }
-      let preview = Preview(item: item, from: frame, window: window) { [weak self] closed in
+
+      guard let window = keyWindow(), let presenter = topmost(window) else {
+        NSLog("Quick Look found no window to stand over.")
+        return false
+      }
+
+      let preview = Preview(item: item) { [weak self] closed in
         self?.shown.removeAll { $0 === closed }
       }
       let controller = QLPreviewController()
       controller.dataSource = preview
       controller.delegate = preview
-      if pad { controller.modalPresentationStyle = .fullScreen }
+      // Note that it's presented itself, full screen, rather than inside a navigation controller of the app's, since Quick Look draws its own Done only where it finds itself presented; pushed into another's stack it has none, and a Done added to its bar showed in some runs and not others on the iOS 26.5 iPad.
+      controller.modalPresentationStyle = .fullScreen
       shown.append(preview)
       presenter.present(controller, animated: true)
+
+      // Note that UIKit refuses a presentation only in its log, such as over a controller whose view stands in no window or that already presents another, so a refusal is told here, and the app shares the file rather than nothing opening.
+      guard presenter.presentedViewController === controller else {
+        NSLog(
+          "Quick Look was not presented over %@ (in a window: %@), which presents %@.",
+          String(describing: type(of: presenter)),
+          presenter.viewIfLoaded?.window == nil ? "no" : "yes",
+          presenter.presentedViewController.map { String(describing: type(of: $0)) } ?? "nothing"
+        )
+        shown.removeAll { $0 === preview }
+        return false
+      }
+
       return true
     }.runOnQueue(.main)
   }

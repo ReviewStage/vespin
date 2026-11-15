@@ -32,7 +32,6 @@ import {
   type Kept,
   NOTICE_KIND,
   useFailureNotices,
-  type WindowFrame,
 } from "@repo/ui-native";
 import { StringFormat, setImageAsync, setStringAsync } from "expo-clipboard";
 import { randomUUID } from "expo-crypto";
@@ -174,15 +173,14 @@ function previewFile(kept: Kept): Promise<string> {
 }
 
 /**
- * Opens a picture or a file full screen in the system's Quick Look, grown
- * from the thumbnail's frame (`modules/quick-look/`). Note that a file
- * Quick Look can't read, and every file in a build without the module, opens
- * the share sheet instead, which offers an app that reads it.
+ * Opens a picture or a file full screen in the system's Quick Look
+ * (`modules/quick-look/`). Note that a file Quick Look can't read, one UIKit
+ * would not present it over, and every file in a build without the module,
+ * opens the share sheet instead, which offers an app that reads it.
  */
-async function opened(kept: Kept, from: WindowFrame | undefined): Promise<void> {
+async function opened(kept: Kept): Promise<void> {
   const file = await previewFile(kept);
-  const frame = from === undefined ? null : [from.x, from.y, from.width, from.height];
-  const shown = quickLookModule !== null && (await quickLookModule.preview(file, kept.name, frame));
+  const shown = quickLookModule !== null && (await quickLookModule.preview(file, kept.name));
 
   if (!shown) await Share.share({ url: file, title: kept.name });
 }
@@ -223,7 +221,7 @@ export function useKeeping(): Keeping {
     };
 
     return {
-      open: (kept, from) => run(() => opened(kept, from), OPEN_FAILED, false),
+      open: (kept) => run(() => opened(kept), OPEN_FAILED, false),
       keep: (kept, act) =>
         run(() => KEEP_WORK[act](kept), KEEP_FAILED[act], act !== KEEP_ACT.SHARE),
       copyWords: (words) =>

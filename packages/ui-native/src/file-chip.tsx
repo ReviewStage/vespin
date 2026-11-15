@@ -80,7 +80,7 @@ type FileChipProps = {
  * its glyph, its name on one line, cut in its middle so its extension
  * stays, and its kind and its size under it as muted words apart, on
  * `SURFACE` inside a hairline. A press opens it full screen in the
- * system's Quick Look, grown from the chip, which draws a PDF, a text file,
+ * system's Quick Look, which draws a PDF, a text file,
  * a spreadsheet or any other kind the system reads, and whose share button
  * opens it in another app; a file Quick Look can't read opens the share
  * sheet instead. While its bytes are on their way the system's spinner
@@ -98,12 +98,11 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
     source === undefined ? undefined : { kind: KEPT_KIND.FILE, source, name, mediaType };
 
   const acts = useKeptActs(kept);
-  const { mark, open } = useQuickLook(kept);
+  const open = useQuickLook(kept);
 
   return (
     <HeldMenu acts={acts}>
       <Press
-        ref={mark}
         onPress={open}
         disabled={open === undefined}
         accessibilityRole="button"

@@ -2,16 +2,8 @@
 
 import { Button, ContextMenu, RNHostView } from "@expo/ui/swift-ui";
 import type { DraftCopy } from "@repo/features/draft-text";
-import {
-  createContext,
-  type ReactElement,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useRef,
-  useState,
-} from "react";
-import { type HostInstance, StyleSheet, View } from "react-native";
+import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
+import { StyleSheet, View } from "react-native";
 import type { Glyph } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { InlineHost } from "./inline-host.js";
@@ -22,7 +14,6 @@ import {
   type KeepAct,
   type Kept,
   keepActs,
-  type WindowFrame,
 } from "./keep-model.js";
 
 /** What a message's own Copy is called, as the panel's Copy under a message names it. */
@@ -42,7 +33,7 @@ export interface HeldAct {
 
 /**
  * What the app does with what is held: opens a picture or a file full
- * screen in the system's Quick Look, grown from the thumbnail pressed;
+ * screen in the system's Quick Look;
  * copies a picture or a text file's words, saves a picture or a recording to
  * Photos, or shares any of them in the system's share sheet; copies a
  * message's words; and copies a draft's body as rich text, its marks and
@@ -51,7 +42,7 @@ export interface HeldAct {
  * here reaches the device.
  */
 export interface Keeping {
-  readonly open: (kept: Kept, from: WindowFrame | undefined) => void;
+  readonly open: (kept: Kept) => void;
   readonly keep: (kept: Kept, act: KeepAct) => void;
   readonly copyWords: (words: string) => void;
   readonly copyRich: (copy: DraftCopy) => void;
@@ -83,42 +74,20 @@ export function useKeptActs(kept: Kept | undefined): readonly HeldAct[] {
   }));
 }
 
-/** A thumbnail's callback ref, which marks where it stands, and its press, which opens what it shows in Quick Look; no press where nothing is held yet or no app answers it. */
-interface QuickLook {
-  readonly mark: (view: HostInstance | null) => void;
-  readonly open: (() => void) | undefined;
-}
-
 /**
  * A thumbnail's press that opens a picture or a file full screen in the
- * system's Quick Look, as Messages and Mail open one. Note that the
- * thumbnail's frame in its window is measured at the press, so the preview
- * grows from where the thumbnail stands now, scrolled or not; one never laid
- * out opens with the system's plain transition.
+ * system's Quick Look, as Messages and Mail open one; none where nothing is
+ * held yet or no app answers it. Note that the preview opens with the
+ * system's plain transition rather than growing from the thumbnail, since
+ * grown from it Quick Look stood in its immersive mode, its bar and Done
+ * hidden until a tap, on the iOS 27.2 iPhone and the iPad alike.
  */
-export function useQuickLook(kept: Kept | undefined): QuickLook {
+export function useQuickLook(kept: Kept | undefined): (() => void) | undefined {
   const keeping = useContext(KeepingDoor);
-  const thumbnail = useRef<HostInstance>(null);
 
-  const mark = useCallback((view: HostInstance | null) => {
-    thumbnail.current = view;
-  }, []);
+  if (keeping === undefined || kept === undefined) return undefined;
 
-  if (keeping === undefined || kept === undefined) return { mark, open: undefined };
-
-  const open = () => {
-    const thumb = thumbnail.current;
-
-    if (thumb === null) {
-      keeping.open(kept, undefined);
-
-      return;
-    }
-
-    thumb.measureInWindow((x, y, width, height) => keeping.open(kept, { x, y, width, height }));
-  };
-
-  return { mark, open };
+  return () => keeping.open(kept);
 }
 
 /** A message's Copy, which copies its words as they were written, Markdown and all, as the panel's does; none for a message of no words. */
