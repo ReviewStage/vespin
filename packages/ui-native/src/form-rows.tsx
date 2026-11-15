@@ -1,6 +1,15 @@
 // form-rows.tsx -- the rows a sheet's Form holds: the words to send, the pictures attached to them, and a choice among many in the system's menu picker; and the words on a compose sheet's own page.
 
-import { Button, HStack, Image, Picker, Text, TextField, useNativeState } from "@expo/ui/swift-ui";
+import {
+  Button,
+  HStack,
+  Image,
+  Picker,
+  Text,
+  TextField,
+  type TextFieldRef,
+  useNativeState,
+} from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
@@ -18,6 +27,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { useEffect, useRef } from "react";
 import { type AttachedPicture, AttachedPictures } from "./composer-head.js";
+import { forgetField, noteFieldFocus } from "./field-focus.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { dropPictures } from "./interactions.js";
 import type { PickOption } from "./settings-form.js";
@@ -28,9 +38,10 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** How many lines the words take before anything is typed, and the most they grow to before they scroll. */
 const WORDS_LINES = { min: 4, max: 12 } as const;
 
-/** Where a sheet's words stand: a row of a Form on the surface, or the sheet's own page, growing with no bound as Mail's message body does. */
+/** Where a sheet's words stand: a row of a Form on the surface, a row holding one line such as a name, or the sheet's own page, growing with no bound as Mail's message body does. */
 export const WORDS_LOOK = {
   ROW: "row",
+  LINE: "line",
   PAGE: "page",
 } as const;
 
@@ -55,7 +66,7 @@ type WordsFieldProps = {
   readonly disabled?: boolean | undefined;
   /** Whether the words are taken as typed, such as a command or a name, with no correction, capital, or smart dash or quote. */
   readonly verbatim?: boolean | undefined;
-  /** Where the words stand: a Form's row, or the sheet's own page. */
+  /** Where the words stand: a Form's row, a row of one line, or the sheet's own page. */
   readonly look?: WordsLook | undefined;
 };
 
@@ -82,6 +93,16 @@ export function WordsField({
   const colors = useColors();
   const text = useNativeState(words ?? initialWords);
   const shown = useRef(words ?? initialWords);
+  const field = useRef<TextFieldRef>(null);
+
+  // Note that a field that leaves the screen is forgotten, so a later close never lowers a handle no longer drawn.
+  useEffect(() => {
+    const drawn = field.current;
+
+    return () => {
+      if (drawn !== null) forgetField(drawn);
+    };
+  }, []);
 
   // Note that the field is handed the holder's words only where they moved apart from what was typed, so typing never fights its own echo.
   useEffect(() => {
@@ -95,18 +116,30 @@ export function WordsField({
     onWords(next);
   };
 
+  // Note that a row of one line, such as a name, stands as one line, as Settings' name fields do, rather than in a box a few lines tall.
+  const bounds = {
+    [WORDS_LOOK.ROW]: [lineLimit(WORDS_LINES), listRowBackground(colors.RAISED)],
+    [WORDS_LOOK.LINE]: [listRowBackground(colors.RAISED)],
+    [WORDS_LOOK.PAGE]: [
+      lineLimit(),
+      frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+    ],
+  }[look];
+
   return (
     <TextField
+      ref={field}
       text={text}
+      onFocusChange={(holds) => {
+        if (field.current !== null) noteFieldFocus(field.current, holds);
+      }}
       placeholder={placeholder}
-      axis="vertical"
+      axis={look === WORDS_LOOK.LINE ? "horizontal" : "vertical"}
       autoFocus={autoFocus}
       onTextChange={type}
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-        ...(look === WORDS_LOOK.ROW
-          ? [lineLimit(WORDS_LINES), listRowBackground(colors.RAISED)]
-          : [lineLimit(), frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]),
+        ...bounds,
         SwiftModifiers.disabled(disabled),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
         ...(label === undefined ? [] : [accessibilityLabel(label)]),

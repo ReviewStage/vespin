@@ -26,7 +26,7 @@ import {
   workspaceMachinesOf,
 } from "../device-store.js";
 import { enrollOwnDevice, hostsOf, removeHost } from "../host-store.js";
-import { markMachineListening } from "../machine-command-store.js";
+import { commandMachinesOf, markMachineListening } from "../machine-command-store.js";
 
 /**
  * An account's Macs, over a real dialect: a Mac is registered, beaten, and
@@ -255,6 +255,64 @@ it.layer(getTestDB())("the device store", (it) => {
         );
         assert.ok(removed !== undefined);
         assert.equal(changedOnceRemoved, undefined, "a removed machine is no longer changed");
+      }),
+  );
+
+  it.effect(
+    "an account's default machine is the first whose app joined until it picks another, which it alone can, and which no other account reads",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const settings = { commandMode: MACHINE_COMMAND_MODE.ASK, alwaysAllowedApps: [] };
+
+        const join = (userId: string, name: string, joinedAt: Date) =>
+          Effect.gen(function* () {
+            const deviceId = randomUUID();
+            const machine = { deviceId, name, platform: DEVICE_PLATFORM.DARWIN };
+            yield* joinCommandDevice(userId, { ...machine, arch: DEVICE_ARCH.ARM64, settings });
+
+            yield* Database.use((db) =>
+              db.update(device).set({ createdAt: joinedAt }).where(eq(device.id, deviceId)),
+            );
+
+            return deviceId;
+          });
+
+        const defaultsOf = (userId: string) =>
+          Effect.map(commandMachinesOf([userId]), (machines) =>
+            machines.filter((machine) => machine.isDefault).map((machine) => machine.id),
+          );
+
+        // A box that only runs agents never joined for commands, so it takes no call and is never the default.
+        const box = randomUUID();
+        yield* registerDevice(owner, { id: box, name: "Box", ...DEVICE_LAYOUT });
+        const laptop = yield* join(owner, "Laptop", new Date(1_000));
+        const alone = yield* defaultsOf(owner);
+        const studio = yield* join(owner, "Studio", new Date(2_000));
+        const bens = yield* join(other, "Ben's Mac", new Date(500));
+        const beforePick = yield* defaultsOf(owner);
+        const pickedByOther = yield* changeMachine(other, studio, { makeDefault: true });
+        const pickedOfOther = yield* changeMachine(owner, bens, { makeDefault: true });
+        const afterOthers = yield* defaultsOf(owner);
+        const picked = yield* changeMachine(owner, studio, { makeDefault: true });
+        const afterPick = yield* defaultsOf(owner);
+        yield* removeMachine(owner, studio);
+        const afterRemove = yield* defaultsOf(owner);
+
+        assert.deepEqual(alone, [laptop], "one machine is the default on its own");
+        assert.deepEqual(beforePick, [laptop], "the first stays the default as another joins");
+        assert.equal(pickedByOther, undefined, "another account picks none of the owner's");
+        assert.equal(pickedOfOther, undefined, "nor does the owner pick another account's");
+        assert.deepEqual(afterOthers, [laptop]);
+        assert.ok(picked !== undefined);
+        assert.deepEqual(afterPick, [studio]);
+        assert.deepEqual(afterRemove, [laptop], "a removed default leaves the first standing");
+        assert.deepEqual(
+          yield* defaultsOf(other),
+          [bens],
+          "each account reads its own default alone",
+        );
+        assert.ok(!(yield* commandMachinesOf([other])).some((machine) => machine.id === laptop));
       }),
   );
 

@@ -1,12 +1,13 @@
 /**
- * client-notices.ts -- the agent notices as a client links them: read from the document and the host, written back into the document, and shown through the doors and the presenter the platform hands in.
+ * client-notices.ts -- the agent notices as a client links them: read from the document, the host, and the host's task list as each drawing moves it, written back into the document, and shown through the doors and the presenter the platform hands in.
  */
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentAccountInboxAnswerView } from "@repo/features/agent-view";
+import type { ListedAgent } from "@repo/features/agent-wire";
 import type { LinkDestination } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { APP_SETTING_DEFAULTS } from "@repo/settings";
-import { Effect, FiberSet, Queue, type Scope, Stream } from "effect";
+import { Duration, Effect, FiberSet, Queue, type Scope, Stream } from "effect";
 import {
   AgentNoticeDoors,
   type AgentNotices,
@@ -16,6 +17,8 @@ import {
 } from "../agent-notices.js";
 import { type AppTranscripts, OWN_TRANSCRIPT } from "../app-state.js";
 import type { HostOperator } from "../host-operator.js";
+import type { ListMove } from "../list-moves.js";
+import type { TaskListMoved } from "../task-list-moved.js";
 import type { AppStateStore } from "./app-state-store.js";
 
 /** Where a notice's click takes the developer, as the platform brings its window forward on it. */
@@ -27,6 +30,9 @@ interface NoticePresenter {
 }
 
 /** What the notification of a command waiting says: nothing of the command, which the prompt shows. */
+/** How long an ask waits unanswered before it is announced, so one answered at once never is. */
+const ASK_NOTICE_AFTER = Duration.seconds(10);
+
 const MACHINE_COMMAND_ASK_NOTICE = {
   title: "Run a command on your Mac?",
   body: "An agent is waiting for you to allow or deny a command.",
@@ -46,6 +52,8 @@ export interface ClientNoticesDependencies {
   /** The document the notices read from and write the unseen agents and the inbox into. */
   state: AppStateStore;
   host: NoticeHost;
+  /** The host's task list as each drawing of it moves its tasks and agents, the list as last drawn told whole first (`HostAssembly.taskListMoves`): where the notices read each task's name and every agent on a task. */
+  taskList: Effect.Effect<Stream.Stream<TaskListMoved>, never, Scope.Scope>;
   presenter: NoticePresenter;
   /** The panel coming forward or going behind, for as long as the subscription stands. */
   onPanelFocusChanged: AgentNoticesDependencies["onPanelFocusChanged"];
@@ -74,6 +82,52 @@ function accountInboxOf(host: NoticeHost): Stream.Stream<AgentAccountInboxAnswer
       );
     }),
   );
+}
+
+/** The agent as the followed list names it: none where it is archived, which the list names no longer. */
+function namedOf(agent: ListedAgent | undefined): ListedAgent | undefined {
+  return agent?.archivedAt === undefined ? agent : undefined;
+}
+
+/** An agent's move as the followed list names it, the archived left out; none where it was named neither before nor now. */
+function namedMove({ was, now }: ListMove<ListedAgent>): ListMove<ListedAgent>[] {
+  const named = { was: namedOf(was), now: namedOf(now) };
+
+  return named.was === undefined && named.now === undefined ? [] : [named];
+}
+
+/**
+ * Each task's name as the followed list draws it, kept from one drawing to
+ * the next, and every agent on a task, the archived left out, handed to the
+ * notices to hold in place of the watch's own reads: the drawing whole where
+ * it starts the list anew, and otherwise only the tasks and agents it moved,
+ * so a drawing costs what it moved whatever the account's size. A task the
+ * list no longer holds takes its agents with it.
+ */
+function observeList(
+  moved: TaskListMoved,
+  names: Map<string, string>,
+  notices: Pick<AgentNotices, "observeFollowed" | "observeFollowedMoved">,
+): void {
+  if (moved.whole) {
+    const { tasks, taskAgents } = moved.drawn;
+    names.clear();
+
+    for (const task of tasks) names.set(task.id, task.name);
+    notices.observeFollowed(
+      taskAgents.filter((agent) => agent.archivedAt === undefined),
+      tasks.map((task) => task.id),
+    );
+
+    return;
+  }
+
+  for (const { was, now } of moved.tasks) {
+    if (now !== undefined) names.set(now.id, now.name);
+    else if (was !== undefined) names.delete(was.id);
+  }
+
+  notices.observeFollowedMoved(moved.agents.flatMap(namedMove), moved.tasks);
 }
 
 /**
@@ -122,10 +176,12 @@ function observeTranscripts(
 export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNotices")(function* (
   dependencies: ClientNoticesDependencies,
 ): Effect.fn.Return<AgentNotices, never, Scope.Scope | AgentNoticeDoors> {
-  const { state, host, presenter, onPanelFocusChanged, report } = dependencies;
+  const { state, host, taskList, presenter, onPanelFocusChanged, report } = dependencies;
   const doors = yield* AgentNoticeDoors;
   const fork = yield* FiberSet.makeRuntime();
   let focused = false;
+  /** Each task's name as the followed list last drew it, by task id. */
+  const names = new Map<string, string>();
 
   // Note that a defect is reported here, because nothing joins the set a refresh is forked into.
   const forkReported = (refresh: Effect.Effect<void>, what: string): void => {
@@ -163,34 +219,22 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
     },
     notify: () =>
       state.snapshot().settings?.stored.turnNotifications ?? APP_SETTING_DEFAULTS.turnNotifications,
-    taskName: (taskId) => state.snapshot().tasks.tasks.find((task) => task.id === taskId)?.name,
+    taskName: (taskId) => names.get(taskId),
     open: presenter.openPlace,
     report,
   });
 
-  // Every agent on a task, the archived left out, while the list is followed
-  // live, is the notices' to hold in place of the watch's own reads, and a
-  // task the list no longer holds takes its agents with it.
   yield* Effect.forkScoped(
-    Stream.runForEach(
-      Stream.changes(Stream.map(state.changes, (document) => document.tasks.taskAgents)),
-      (agents) =>
-        Effect.catchDefect(
-          Effect.sync(() => {
-            if (agents === undefined) return;
-            const taskIds = state.snapshot().tasks.tasks.map((each) => each.id);
-            notices.observeFollowed(
-              agents.filter((agent) => agent.archivedAt === undefined),
-              taskIds,
-            );
-          }),
-          (defect) =>
-            Effect.sync(() =>
-              report(
-                `the agents on tasks could not be noted: ${defect instanceof Error ? defect.message : String(defect)}`,
-              ),
+    Stream.runForEach(yield* taskList, (moved) =>
+      Effect.catchDefect(
+        Effect.sync(() => observeList(moved, names, notices)),
+        (defect) =>
+          Effect.sync(() =>
+            report(
+              `the agents on tasks could not be noted: ${defect instanceof Error ? defect.message : String(defect)}`,
             ),
-        ),
+          ),
+      ),
     ),
   );
   // An agent's own transcript a window holds says where the agent stands as
@@ -214,11 +258,28 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
     ),
   );
   // A command asked while the window is behind would otherwise wait unseen
-  // until its timeout denies it, so each new ask is announced once, whatever the
-  // account's notifications switch, since Ask every time is the developer's own ask
-  // to be asked; the window in front shows the prompt itself. Each is news
-  // the notices chime for as well, where the account turned a sound on.
+  // until its timeout denies it, so each new ask still waiting after a few
+  // seconds is announced once, whatever the account's notifications switch,
+  // since Ask every time is the developer's own ask to be asked; one answered
+  // by then, here or on another device, is not. The window in front shows the
+  // prompt itself. Each is news the notices chime for as well, where the
+  // account turned a sound on.
   const told = new Set<string>();
+
+  const announced = (askId: string) =>
+    Effect.sync(() => {
+      if (!state.snapshot().machineCommands.asks.some((ask) => ask.id === askId)) return;
+      const subject = { kind: NOTICE_KIND.MACHINE_COMMAND_ASK, askId } as const;
+      notices.heard(subject);
+
+      if (focused) return;
+      doors.post({
+        ...MACHINE_COMMAND_ASK_NOTICE,
+        subject,
+        onClick: presenter.openMachineCommandAsk,
+      });
+    });
+
   yield* Effect.forkScoped(
     Stream.runForEach(
       Stream.changes(Stream.map(state.changes, (document) => document.machineCommands.asks)),
@@ -231,15 +292,7 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
           for (const ask of asks) {
             if (told.has(ask.id)) continue;
             told.add(ask.id);
-            const subject = { kind: NOTICE_KIND.MACHINE_COMMAND_ASK, askId: ask.id } as const;
-            notices.heard(subject);
-
-            if (focused) continue;
-            doors.post({
-              ...MACHINE_COMMAND_ASK_NOTICE,
-              subject,
-              onClick: presenter.openMachineCommandAsk,
-            });
+            fork(Effect.andThen(Effect.sleep(ASK_NOTICE_AFTER), announced(ask.id)));
           }
         }),
     ),

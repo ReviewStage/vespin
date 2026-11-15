@@ -20,6 +20,7 @@ import {
 } from "@repo/features/task-wire";
 import {
   COMMENT_SUBJECT,
+  type ListedTasksView,
   TASK_CALL_FAILURE,
   TASKS_READ,
   type TasksView,
@@ -32,8 +33,8 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppDescriptionComments,
-  type AppDescriptionDocuments,
   type AppHeldById,
+  type AppHeldTasks,
   type AppHistories,
   type AppRepositoryLists,
   type AppStateSnapshot,
@@ -424,7 +425,7 @@ function repositoriesAppState(state: AppStateSnapshot): AppStateSnapshot {
   return { ...state, [LIVE_READ.REPOSITORY_LISTS]: staged };
 }
 
-const FIXTURE_TASK_LIST: TasksView = {
+const FIXTURE_TASK_LIST: ListedTasksView = {
   tasks: [
     {
       id: FIXTURE_TASK.id,
@@ -445,10 +446,11 @@ const FIXTURE_TASK_LIST: TasksView = {
   github: { connected: true, login: null },
   // Every task's agents as the list followed live carries them: none, where no profile stages one.
   taskAgents: [],
+  listed: true,
 };
 
 /** The open task, whose description main's document holds as read (`fixtureAppState`). */
-const FIXTURE_OPEN_TASK: TasksView = {
+const FIXTURE_OPEN_TASK: ListedTasksView = {
   ...FIXTURE_TASK_LIST,
   activeTaskId: FIXTURE_TASK.id,
 };
@@ -641,7 +643,7 @@ const FIXTURE_CLOSED_PANEL: SidePanelState = { ...FIXTURE_OPEN_PANEL, open: fals
 export function fixtureTasksView(run: {
   readonly fixtureMode: boolean;
   readonly profile: string;
-}): TasksView | undefined {
+}): ListedTasksView | undefined {
   if (!run.fixtureMode) return undefined;
   const agent = agentTasksView(run.profile, FIXTURE_OPEN_TASK);
 
@@ -720,7 +722,7 @@ export function fixtureActAnswer(
 }
 
 /** Main's held descriptions with the fixture's task's description held, one object for each of main's. */
-const STAGED_DESCRIPTIONS = new WeakMap<AppDescriptionDocuments, AppDescriptionDocuments>();
+const STAGED_DESCRIPTIONS = new WeakMap<AppHeldTasks, AppHeldTasks>();
 
 /** Main's held histories with the fixture's task's history held, one object for each of main's. */
 const STAGED_HISTORIES = new WeakMap<AppHistories, AppHistories>();
@@ -742,7 +744,7 @@ function stagedOn<Rows>(
 
 /**
  * Main's document with the fixture's task's description and its history held as the
- * window's reads of them hold them (`LIVE_READ.DESCRIPTION_DOCUMENT`,
+ * window's reads of them hold them (`LIVE_READ.HELD_TASK`,
  * `LIVE_READ.HISTORY`), under the profiles that open the task
  * (`fixtureTasksView`), so it opens on its description and its version history on
  * its versions; the very document under any other.
@@ -752,13 +754,9 @@ function plannedAppState(state: AppStateSnapshot): AppStateSnapshot {
 
   return {
     ...state,
-    [LIVE_READ.DESCRIPTION_DOCUMENT]: stagedOn(
-      STAGED_DESCRIPTIONS,
-      state[LIVE_READ.DESCRIPTION_DOCUMENT],
-      {
-        task: FIXTURE_TASK,
-      },
-    ),
+    [LIVE_READ.HELD_TASK]: stagedOn(STAGED_DESCRIPTIONS, state[LIVE_READ.HELD_TASK], {
+      task: FIXTURE_TASK,
+    }),
     [LIVE_READ.HISTORY]: stagedOn(
       STAGED_HISTORIES,
       state[LIVE_READ.HISTORY],

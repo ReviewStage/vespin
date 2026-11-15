@@ -1,5 +1,6 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { markAwayDevices, markCommandsAwayDevices } from "@repo/database/models/device-store";
+import { pruneMachineAsks } from "@repo/database/models/machine-command-ask-store";
 import { pruneSyncLog } from "@repo/database/models/sync-log";
 import { MAC_PRESENCE } from "@repo/features/agent-wire";
 import type { Sandbox } from "@repo/sandbox";
@@ -57,6 +58,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
     markAwayHosts: (now) => markAwayDevices(now, MAC_PRESENCE.FRESH_MS),
     markCommandsAway: (now) =>
       markCommandsAwayDevices(now, Duration.toMillis(MACHINE_LISTENER_FRESH)),
+    pruneMachineAsks,
     releaseSandboxes: releaseUnusedSandboxes,
   });
 });

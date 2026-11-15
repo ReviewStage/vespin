@@ -69,7 +69,7 @@ import {
 import { skillWord } from "@repo/features/skill-word";
 import { GOAL_LINE } from "@repo/features/slash-command";
 import { sentOf } from "@repo/features/suggestion-model";
-import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { workingTime } from "@repo/features/time-format";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
@@ -224,6 +224,7 @@ import { useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
@@ -773,6 +774,8 @@ function ToolCallView({
         provider={view.provider}
         appIcon={appIcon}
         server={server}
+        connection={view.connection}
+        account={view.account}
         machine={view.machine}
         subject={view.subject}
         description={view.description}
@@ -985,9 +988,6 @@ function TodosDock({
   );
 }
 
-/** Every task's pull requests the window's task list carries. */
-const selectTaskPullRequests = (state: AppStateSnapshot) => state.tasks.taskPullRequests;
-
 /** Every pull request the agent opened, pinned over the box under the to-do list for as long as one stands, whether the agent works or has ended: the one it stands on as its tab read it, and the others its task's list names it as having opened (`dockedPullRequests`); nothing before it opened one. */
 function PublishedDock({
   published,
@@ -1000,16 +1000,11 @@ function PublishedDock({
   taskId: string | null;
   doors: PublishedDoors;
 }): ReactNode {
-  const listed = useQuery({ ...appStateQuery, select: selectTaskPullRequests }).data;
+  const listed = useTaskListRow(useTaskListCollections().taskPullRequests, taskId ?? undefined);
 
   const docked = useMemo(
-    () =>
-      dockedPullRequests(
-        published,
-        taskId === null ? [] : pullRequestsOfTask(listed, taskId),
-        agentId,
-      ),
-    [published, listed, taskId, agentId],
+    () => dockedPullRequests(published, listed?.pullRequests ?? [], agentId),
+    [published, listed, agentId],
   );
 
   // Note that one pull request is drawn only as the row of the branch the agent stands on, so the dock stands only where that row or the split bar draws.
@@ -3574,7 +3569,7 @@ function AgentTabView({
       <AgentBootLine
         line={bootLine}
         machine={agent.machine ?? AGENT_MACHINE.VERCEL}
-        host={agent.mac?.name}
+        host={agent.mac}
         retry={startedByReader ? agent.id : undefined}
       />
     );
@@ -3585,7 +3580,7 @@ function AgentTabView({
   const signIn: GitHubSignInDoors | undefined =
     onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined
       ? {
-          host: agent.mac?.name,
+          host: agent.mac,
           repository: published?.repository ?? undefined,
           onRetry,
           onMoveToCloud: onMoveToCloud === undefined ? undefined : () => onMoveToCloud(),
@@ -3744,7 +3739,7 @@ function AgentTabView({
                                 readerId={readerId}
                                 agentId={agent.id}
                                 payerSubscriptionId={transcript.payerSubscriptionId}
-                                taskId={agent.planId}
+                                taskId={agent.taskId}
                                 replay={replay}
                                 delegation={{
                                   models,
@@ -3830,12 +3825,12 @@ function AgentTabView({
         <PublishedDock
           published={published}
           agentId={agent.id}
-          taskId={agent.planId}
+          taskId={agent.taskId}
           doors={doors}
         />
         <ThreadsDock threads={threads} />
         <FollowOfferDock
-          taskId={agent.planId}
+          taskId={agent.taskId}
           messages={kept}
           pending={pendingWords}
           readerId={readerId}
@@ -3901,7 +3896,7 @@ function AgentTabView({
                 <ComputerAppsProvider value={computerApps}>
                   <AgentComposer
                     {...box}
-                    talksIn={agent.planId}
+                    talksIn={agent.taskId}
                     composer={composer}
                     usage={transcript.usage}
                     payer={transcript.payer}
@@ -4114,7 +4109,7 @@ function AgentTabBody({
     lead,
     onLeadSent: () => setTicks(undefined),
     agentId: agent.id,
-    taskId: agent.planId,
+    taskId: agent.taskId,
     messages: transcript.messages,
     sending: transcript.sending,
     running: agent.status === AGENT_STATUS.RUNNING,
@@ -4136,7 +4131,7 @@ function AgentTabBody({
           sent: sentOf(suggestion, words, attachments),
         },
         false,
-        agent.planId,
+        agent.taskId,
       ),
   });
 
@@ -4229,7 +4224,7 @@ function AgentTabBody({
   const carry = {
     words: composer.unsent.words,
     attachments: composer.unsent.attachments,
-    taskId: agent.planId,
+    taskId: agent.taskId,
   };
 
   // The failed end line holds the press, Continue again once another agent continued this one.
@@ -4487,7 +4482,7 @@ export function AgentSubagentTab({
                 ended={
                   transcript.pages === 0 ? undefined : endLineParts(status, transcript.failure)
                 }
-                failureAbout={{ agentId, taskId: owner?.planId, callId }}
+                failureAbout={{ agentId, taskId: owner?.taskId, callId }}
                 onRetry={transcript.onRetry}
                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                 olderFailed={transcript.olderFailed}

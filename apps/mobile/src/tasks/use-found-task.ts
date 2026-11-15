@@ -20,10 +20,10 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import { useHostActs, useListedTasks } from "../host/host-provider.js";
 
 /** The key a number's find is held under, by the account, the workspace and the number. */
 const TASK_BY_NUMBER_QUERY = "task-by-number";
@@ -52,7 +52,7 @@ const SEEKING: FoundTask = { taskId: undefined, seeking: true };
  * host reads it again, so a passing failure never says Task not found.
  */
 function documentUnread(state: AppStateSnapshot, taskId: string): boolean {
-  return state[LIVE_READ.DESCRIPTION_DOCUMENT][taskId]?.rows === undefined;
+  return state[LIVE_READ.HELD_TASK][taskId]?.rows === undefined;
 }
 
 /** The account signed in, whose finds are held under it; none while signed out, or for an account stored with no id. */
@@ -68,19 +68,19 @@ function selectAccountId(state: AppStateSnapshot): string | undefined {
  */
 export function useFoundTask(named: string | undefined, workspace: string | undefined): FoundTask {
   const acts = useHostActs();
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const tasks = useListedTasks();
   const { data: workspaces } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
 
   const number =
-    named === undefined ? undefined : taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: named });
+    named === undefined ? undefined : taskNumberOf({ kind: LINK_DESTINATION.TASK, taskId: named });
 
   const home = workspace === undefined ? undefined : workspaceOfSlug(workspaces ?? [], workspace);
 
   const listed =
     number === undefined
-      ? view?.tasks.find((task) => task.id === named)
-      : view?.tasks.find(
+      ? tasks.find((task) => task.id === named)
+      : tasks.find(
           (task) =>
             task.number === number && (workspace === undefined || task.workspaceId === home?.id),
         );

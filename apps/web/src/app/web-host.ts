@@ -537,6 +537,7 @@ const composedWeb = (
       const notices = yield* linkClientNotices({
         state,
         host: operator.host,
+        taskList: assembly.taskListMoves,
         // No command runs in a tab, so no ask is ever announced here. A notification of news opens
         // its place as a link handed the tab does, under the workspace the tab stands in; the bridge
         // it is said through is made below, before any notification can be clicked.

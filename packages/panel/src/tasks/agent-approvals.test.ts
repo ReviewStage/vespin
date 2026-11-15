@@ -39,7 +39,7 @@ const CALL = "toolu_01ResendTest";
 
 const CLAUDE_AGENT: AgentSummary = {
   id: AGENT,
-  planId: TASK,
+  taskId: TASK,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Resend invitations",

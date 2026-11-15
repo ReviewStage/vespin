@@ -51,7 +51,6 @@ import { ACT_KIND } from "@repo/host/acts";
 import {
   selectAppSettingsView,
   selectExperiment,
-  selectFollowedAgent,
   selectTranscript,
 } from "@repo/host/app-state-reads";
 import { EXPERIMENT } from "@repo/settings";
@@ -69,7 +68,12 @@ import { useRouter } from "expo-router";
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import { type MediaStream, mediaDevices, RTCPeerConnection } from "react-native-webrtc";
 import { appStateQuery } from "./host/app-state-query.js";
-import { useHostActs, useHostFollow } from "./host/host-provider.js";
+import {
+  useHostActs,
+  useHostFollow,
+  useTaskListCollections,
+  useTaskListRow,
+} from "./host/host-provider.js";
 import { useCallLiveActivity } from "./live-activity/call-activity.js";
 import { voiceAudioModule } from "./voice-audio-module.js";
 
@@ -208,19 +212,9 @@ async function connect(events: VoiceCallPeerEvents): Promise<VoiceCallConnected>
 /** The call's agent and task by name, and what the agent does, as the task list and its transcript hold them. */
 function useStandingFacts(call: VoiceCallState | undefined) {
   const agentId = call?.agentId ?? "";
-  const selectAgent = useMemo(() => selectFollowedAgent(agentId), [agentId]);
-
-  const agent = useQuery({
-    ...appStateQuery,
-    select: selectAgent,
-    enabled: call !== undefined,
-  }).data;
-
-  const taskName = useQuery({
-    ...appStateQuery,
-    enabled: call !== undefined,
-    select: (state) => state.tasks.tasks.find(({ id }) => id === call?.taskId)?.name,
-  }).data;
+  const collections = useTaskListCollections();
+  const agent = useTaskListRow(collections.agents, call?.agentId);
+  const taskName = useTaskListRow(collections.tasks, call?.taskId)?.name;
 
   const selectRows = useMemo(
     () => selectTranscript({ kind: TRANSCRIPT_KIND.AGENT, agentId }),

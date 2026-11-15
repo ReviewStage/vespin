@@ -64,7 +64,7 @@ import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { PROVIDER_KEY_KIND, PROVIDER_KEY_STATUS } from "@repo/features/provider-key-wire";
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
-import type { TasksView } from "@repo/features/tasks-view";
+import type { ListedTasksView } from "@repo/features/tasks-view";
 import type { WorkspaceVariable } from "@repo/features/workspace-environment-wire";
 import {
   RUN_ACTION_AVAILABILITY,
@@ -246,7 +246,10 @@ const MEMBERS: ReadonlyMap<string, readonly WorkspaceMember[]> = new Map([
  * The workspaces as the Settings profiles list them, from the list the tasks
  * profiles draw: each counting its members.
  */
-export function settingsTasksView(profile: string, list: TasksView): TasksView | undefined {
+export function settingsTasksView(
+  profile: string,
+  list: ListedTasksView,
+): ListedTasksView | undefined {
   if (!SETTINGS_LINKS.has(profile)) return undefined;
 
   return {
@@ -489,7 +492,7 @@ const MEMORY_AGENT = {
 function memoryAgent(id: string, title: string, model: string, agoDays: number): ListedAgent {
   return {
     id,
-    planId: USAGE_ALERTS.taskId,
+    taskId: USAGE_ALERTS.taskId,
     model,
     effort: "high",
     title,
@@ -1190,9 +1193,9 @@ const STAGED_LAPTOP = "7d3c2a10-0000-4000-8000-0000000000a1";
 /**
  * The account's staged machines with their own settings for agents, as the
  * host holds them for Settings › Machines: the Mac that runs its agents,
- * online, asking before each command and always allowing two apps, and a
- * laptop that only runs the app, offline, running no commands and using no
- * apps.
+ * online, asking before each command and always allowing two apps, the
+ * default machine, and a laptop that only runs the app, offline, running
+ * no commands and using no apps.
  */
 const STAGED_MACHINES: AppMachines = {
   [ACCOUNT_ID]: {
@@ -1203,6 +1206,7 @@ const STAGED_MACHINES: AppMachines = {
         platform: DEVICE_PLATFORM.DARWIN,
         host: true,
         listening: true,
+        isDefault: true,
         settings: {
           commandMode: MACHINE_COMMAND_MODE.ASK,
           computerUse: true,
@@ -1215,6 +1219,7 @@ const STAGED_MACHINES: AppMachines = {
         platform: DEVICE_PLATFORM.DARWIN,
         host: false,
         listening: false,
+        isDefault: false,
         settings: {
           commandMode: MACHINE_COMMAND_MODE.NEVER,
           computerUse: false,

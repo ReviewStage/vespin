@@ -5,7 +5,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
 /** Where one action stands. */
-export const ASYNC_ACTION_STAGE = {
+const ASYNC_ACTION_STAGE = {
   /** Nothing out, and nothing refused. */
   IDLE: "idle",
   /** Pressed, and waiting on what the press started. */
@@ -14,10 +14,8 @@ export const ASYNC_ACTION_STAGE = {
   REFUSED: "refused",
 } as const;
 
-export type AsyncActionStage = (typeof ASYNC_ACTION_STAGE)[keyof typeof ASYNC_ACTION_STAGE];
-
 /** One action's stage, with why it was refused where it was. */
-export type AsyncActionState<Refusal> =
+type AsyncActionState<Refusal> =
   | { readonly stage: typeof ASYNC_ACTION_STAGE.IDLE }
   | { readonly stage: typeof ASYNC_ACTION_STAGE.RUNNING }
   | { readonly stage: typeof ASYNC_ACTION_STAGE.REFUSED; readonly refusal: Refusal };
@@ -26,7 +24,7 @@ export type AsyncActionState<Refusal> =
  * What a press starts: nothing to wait on, or a promise answering why it was
  * refused, or nothing once it went.
  */
-export type AsyncActionAct<Refusal> = () => PromiseLike<Refusal | undefined | void> | void;
+type AsyncActionAct<Refusal> = () => PromiseLike<Refusal | undefined | void> | void;
 
 /** One action as its surface holds it. */
 export interface AsyncAction<Refusal> {
