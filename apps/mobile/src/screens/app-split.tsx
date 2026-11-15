@@ -9,14 +9,7 @@ import {
   SplitView,
 } from "@repo/ui-native";
 import { useEffect, useState } from "react";
-import {
-  clearDetail,
-  DetailPlaceProvider,
-  type HeldPage,
-  keepDetailPath,
-  PageKeyProvider,
-  useDetailStack,
-} from "../detail-stack.js";
+import { useStandDetailFront } from "../detail-stack.js";
 import { InFrontProvider, type PlaceColumns, usePlaceColumns } from "../place-columns.js";
 import {
   SIDEBAR_PLACE,
@@ -24,7 +17,7 @@ import {
   useAppSidebar,
   useComposeAction,
 } from "./app-sidebar.js";
-import { PushedPageView } from "./pushed-pages.js";
+import { useDetailStackColumn } from "./detail-stack-column.js";
 import { useSidebarTasks } from "./task-screens.js";
 
 /** A sidebar pick's place, and the place the route stood in when it was made. */
@@ -57,27 +50,6 @@ function keptViews(
 }
 
 /**
- * The pages a place pushed over its detail, each in its place and standing
- * in front only where it is the one on top and the split view stands.
- */
-function stackPages(place: SidebarPlace, pages: readonly HeldPage[], front: boolean) {
-  const top = pages.at(-1)?.key;
-
-  return pages.map(({ key, page }) => ({
-    key,
-    view: (
-      <DetailPlaceProvider value={place}>
-        <PageKeyProvider value={key}>
-          <InFrontProvider value={front && key === top}>
-            <PushedPageView page={page} />
-          </InFrontProvider>
-        </PageKeyProvider>
-      </DetailPlaceProvider>
-    ),
-  }));
-}
-
-/**
  * The tabs' one split view: the app sidebar, with the place `place` names
  * selected, beside the list and the detail that place's root hands over
  * (`useHandColumns`), the list's bar ending in New task. Note that every place handed so far keeps its list drawn, hidden
@@ -98,11 +70,16 @@ function stackPages(place: SidebarPlace, pages: readonly HeldPage[], front: bool
  * Mail's expand button, which stands the page alone across the window and
  * back, with New task's compose beside it, as Mail keeps both over the
  * message rather than over its list; the page's main acts stand in the same
- * bar. A page opened from the detail, such as a task's agent or its pull
- * request, is pushed over it inside the detail's own column, with a Back
- * there, as Mail opens a message's related pages, so the sidebar and the
- * list stand beside it; each place keeps its own pages, which go as another
- * row is picked (`detail-stack.ts`).
+ * bar. Expanded, the bar keeps only Collapse and the page's own acts, as
+ * Mail's full-screen message does, since New task belongs to the list the
+ * page stands beside and stays on ⌘N. With nothing picked the bar holds
+ * New task alone, since a lone page has nothing to stand across the window,
+ * as Mail shows expand only over an open message. A page opened from the
+ * detail, such as a task's agent or its pull request, is pushed over it
+ * inside the detail's own column, with a Back there, as Mail opens a
+ * message's related pages, so the sidebar and the list stand beside it; each
+ * place keeps its own pages, which go as another row is picked
+ * (`detail-stack.ts`).
  */
 export function AppSplit({
   place,
@@ -143,14 +120,18 @@ export function AppSplit({
     hold({ place: picked, over: place }),
   );
 
-  const stack = useDetailStack(standing);
-  const root = columns?.root;
-  // Note that pages pushed over a detail no longer standing are let go, so a row picked again later opens on its own page alone.
-  const stale = stack.pages.length > 0 && stack.over !== root;
-  useEffect(() => {
-    if (stale) clearDetail(standing);
-  }, [stale, standing]);
-  const pages = stale ? [] : stack.pages;
+  // Note that a place whose root has handed nothing yet names no root, so the pages it pushed while the window stood two columns stay over its detail.
+  const stack = useDetailStackColumn(
+    standing,
+    columns === undefined ? undefined : { id: columns.root },
+    front,
+  );
+
+  // Note that the menu bar's Back pops this place's pages only while the split view stands in front, so it never acts on a detail the reader can't see.
+  useStandDetailFront(standing, front);
+
+  // Note that Collapse stays while the page stands alone even once nothing is picked, so the columns always have a way back.
+  const lead = detailOnly ? [expand] : columns?.root === undefined ? [compose] : [expand, compose];
 
   return (
     <Screen>
@@ -158,16 +139,9 @@ export function AppSplit({
         {...sidebar}
         content={<KeptColumns shown={standing} views={keptViews(kept, standing, front)} />}
         contentBar={columns?.contentBar}
-        detail={
-          <DetailPlaceProvider value={standing}>
-            <InFrontProvider value={front && pages.length === 0}>{columns?.detail}</InFrontProvider>
-          </DetailPlaceProvider>
-        }
-        detailBar={{ ...columns?.detailBar, lead: [expand, compose] }}
-        detailStack={{
-          pages: stackPages(standing, pages, front),
-          onPathChange: (path) => keepDetailPath(standing, path),
-        }}
+        detail={stack.wrap(columns?.detail)}
+        detailBar={{ ...columns?.detailBar, lead }}
+        detailStack={stack.detailStack}
         searchKey={standing}
         detailOnly={detailOnly}
         onDetailOnlyChange={setDetailOnly}
