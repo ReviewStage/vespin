@@ -437,7 +437,10 @@ const itemLines = new WeakMap<InboxItem, ItemLine>();
  * once and kept with the item, as its search words are (`inboxItemWords`),
  * because every row of a long Inbox asks for it as it draws, and an item
  * that changes arrives as a new one; who said it, and the steps a draft
- * ticks, are the row's to add (`inboxPreview`).
+ * ticks, are the row's to add (`inboxPreview`). Note that a thread that is
+ * its agent's turn (`inboxAgentsTurn`) says the member's follow-up rather than
+ * the ask still open, because it waits on no reader and no count holds it, and
+ * a row saying the ask would read as one more waiting than the Inbox counts.
  */
 function itemLine(item: InboxItem): ItemLine {
   const held = itemLines.get(item);
@@ -462,7 +465,7 @@ function itemLine(item: InboxItem): ItemLine {
         member: undefined,
         pieces: [INBOX_SETTLED_STANDING.RESOLVED],
       }
-    : asking !== undefined && knownAsk(asking.ask)
+    : asking !== undefined && knownAsk(asking.ask) && !inboxAgentsTurn(item)
       ? {
           kind: ASK_LINE[asking.ask.type],
           ask: asking.ask,
