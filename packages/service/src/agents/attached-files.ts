@@ -74,8 +74,11 @@ const INLINED_FILE = /^Attached file: ([^\n]+)\n(`{3,})\n([\s\S]*)\n\2$/u;
 /** The most lines of a written text file the line naming it inlines. */
 const WRITTEN_HEAD_LINES = 40;
 
-/** The most characters of a written text file the line naming it inlines, so a file of long lines inlines a few. */
-const WRITTEN_HEAD_CHARS = 4_000;
+/** The most UTF-8 bytes of a written text file the line naming it inlines, so a file of long lines inlines a few. */
+const WRITTEN_HEAD_BYTES = 4_000;
+
+/** Room for the path a written file's line names, which the machine's attachments folder, the line's id, and the file's cut name make. */
+const WRITTEN_PATH_BYTES = 512;
 
 /** One part of what a session is handed for a message. */
 type ContentPart = Exclude<UserContent, string>[number];
@@ -185,11 +188,20 @@ function lineCount(text: string): number {
   return text.replace(/\n$/u, "").split("\n").length;
 }
 
-/** The start of a text: its first lines, held to a few thousand characters, cut by code point. */
+/** The start of a text: its first lines, held to a few thousand UTF-8 bytes, cut by code point. */
 function headOf(text: string): string {
   const lines = text.split("\n").slice(0, WRITTEN_HEAD_LINES).join("\n");
+  let head = "";
+  let bytes = 0;
 
-  return Array.from(lines).slice(0, WRITTEN_HEAD_CHARS).join("");
+  for (const char of lines) {
+    bytes += Buffer.byteLength(char);
+
+    if (bytes > WRITTEN_HEAD_BYTES) break;
+    head += char;
+  }
+
+  return head;
 }
 
 /**
@@ -207,6 +219,13 @@ export function writtenTextLine(name: string, path: string, bytes: Uint8Array): 
   const intro = `[${name} (${AGENT_ATTACHMENT_TYPE.TEXT}, ${size}) was attached: it is at ${path}, too large to inline, so read it from there. Its first ${shown === 1 ? "line" : `${shown} lines`}:]`;
 
   return `${intro}\n${inlinedFile(name, head)}`;
+}
+
+/** The UTF-8 bytes the line naming a written text file takes (`writtenTextLine`), with room for the path it names, which only its machine decides. */
+export function writtenTextBytes(file: AgentAttachment): number {
+  const line = writtenTextLine(file.name, "", Buffer.from(file.data, "base64"));
+
+  return Buffer.byteLength(line) + WRITTEN_PATH_BYTES;
 }
 
 /**
