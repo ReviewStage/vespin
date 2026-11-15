@@ -487,6 +487,9 @@ function DetailStackColumn({
 }) {
   const { pages, onPathChange } = stack;
 
+  // Note that a detail with nothing pushed over it stands as a plain column, since a thread's React Native hosts drew no words as a stack's root.
+  if (pages.length === 0) return <Column view={root} bar={rootBar} />;
+
   return (
     <NavigationStack path={pages.map((page) => page.key)} onPathChange={onPathChange}>
       <Column view={root} bar={rootBar} stacked />
