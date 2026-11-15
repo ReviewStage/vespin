@@ -687,6 +687,8 @@ export function useCommentStart(
       }
 
       const files = pictures.files ?? [];
+      // The pictures this start carries, by id, so only they come off once it lands and any picked while it was out stay.
+      const carried = new Set(pictures.attached.map(({ id }) => id));
       inFlight.current = true;
       const again = sameSend(sent, kept, files) ? sent : undefined;
       const key = again?.key ?? randomUUID();
@@ -738,24 +740,38 @@ export function useCommentStart(
       });
 
       if (!went) return undefined;
-      // Note that the pictures that went are taken off before the draft is settled, so the draft never keeps them.
-      pictures.take();
+
+      // Note that only the pictures that went come off, so one picked while the start was out stays in the field and the draft.
+      for (const id of carried) pictures.detach(id);
       const now = heldDraftAt(taskId, block);
+      const left = (now?.pictures ?? []).filter(({ id }) => !carried.has(id));
       // Note that a newer send's key, kept by a screen a rotation drew, stays with the draft until that send settles.
       const pending = now?.sent?.threadId === threadId ? undefined : now?.sent;
 
-      // Note that the draft goes only while it still holds the words this send carried, so words typed meanwhile, on this screen or one a rotation drew, stay in the field and kept; and a draft another block's words now stand under at these offsets is left as it is.
+      // Note that the draft's words go only while they are still the words this send carried, so words typed meanwhile, on this screen or one a rotation drew, stay in the field and kept; and a draft another block's words now stand under at these offsets is left as it is.
       if (now === undefined || now.revision === revision) {
         setSentLocal(pending);
         setLocal("");
-        keepStartDraft(taskId, block, undefined);
+        keepStartDraft(
+          taskId,
+          block,
+          left.length === 0
+            ? undefined
+            : {
+                quote: block.quote,
+                words: "",
+                pictures: left,
+                sent: pending,
+                revision: nextEdit(),
+              },
+        );
       } else if (now.quote !== block.quote) {
         setSentLocal(undefined);
         setLocal("");
       } else {
         setSentLocal(pending);
         setLocal(now.words);
-        keepStartDraft(taskId, block, { ...now, sent: pending });
+        keepStartDraft(taskId, block, { ...now, pictures: left, sent: pending });
       }
 
       return threadId;

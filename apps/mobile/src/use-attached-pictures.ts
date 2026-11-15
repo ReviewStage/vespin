@@ -226,10 +226,13 @@ export function useAttachedPictures(
       setPictures(next);
       onNote(undefined);
     },
+    // Note that the held pictures are taken at once, so a second send before the next render takes none and can't hand them back twice.
     take: () => {
+      const taken = held.current;
+      held.current = [];
       setPictures([]);
 
-      return pictures;
+      return taken;
     },
     // Note that the pictures are numbered again in order, since a picture attached while the send was out was named from none held, and two of one name would both go.
     putBack: (carried) => {
