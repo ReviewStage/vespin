@@ -450,6 +450,8 @@ function OriginFrom({
 /** A webhook call's body under the prompt it rode in with, folded under its own line, as the caller sent it. */
 function OriginBody({ body }: { readonly body: string }) {
   const colors = useColors();
+  const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const column = useScaledSize(MARK_SIZE.GLYPH);
   const [open, setOpen] = useState(false);
 
   return (
@@ -464,9 +466,9 @@ function OriginBody({ body }: { readonly body: string }) {
       >
         <SymbolView
           name={glyphSymbol(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
-          size={MARK_SIZE.GLYPH - 3}
+          size={chevron}
           tintColor={colors.TEXT_MUTED}
-          style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
+          style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
         <Text style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
@@ -487,6 +489,8 @@ function FoldRow({
   readonly onToggle: (item: TranscriptItem) => void;
 }) {
   const colors = useColors();
+  const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const column = useScaledSize(MARK_SIZE.GLYPH);
   const large = useAccessibilitySize();
 
   const heard = [
@@ -508,9 +512,9 @@ function FoldRow({
       >
         <SymbolView
           name={glyphSymbol(item.open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
-          size={MARK_SIZE.GLYPH - 3}
+          size={chevron}
           tintColor={colors.TEXT_MUTED}
-          style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
+          style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
         <Text
@@ -569,6 +573,8 @@ function TranscriptRow({
 }) {
   const colors = useColors();
   const large = useAccessibilitySize();
+  const pageMark = useScaledSize(MARK_SIZE.WRITER);
+  const pageChevron = useScaledSize(MARK_SIZE.GLYPH - 3);
 
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID:
@@ -694,7 +700,7 @@ function TranscriptRow({
           >
             <SymbolView
               name={glyphSymbol(GLYPH.PAGE)}
-              size={MARK_SIZE.WRITER}
+              size={pageMark}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
@@ -711,7 +717,7 @@ function TranscriptRow({
             </View>
             <SymbolView
               name={glyphSymbol(GLYPH.FOLDED)}
-              size={MARK_SIZE.GLYPH - 3}
+              size={pageChevron}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
