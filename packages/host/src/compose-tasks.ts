@@ -68,6 +68,8 @@ import {
   type FollowerCallFailure,
   HOST_LIVE,
   IDLE_TASKS_VIEW,
+  type ListedTasksView,
+  NO_TASK_LIST,
   TASK_CALL_FAILURE,
   TASKS_READ,
   type TasksAddFollowerParams,
@@ -95,7 +97,6 @@ import {
   type TasksSetStandingParams,
   type TasksStartAnswer,
   type TasksStartRequest,
-  type TasksView,
   tasksMarkReadParamsSchema,
   tasksPageParamsSchema,
   tasksPinParamsSchema,
@@ -451,7 +452,7 @@ export interface TasksComposer extends Composer {
   /** The Tasks tab's plain asks and live follows, answered directly as the panel's port asks them, but GitHub's connection's and the admin dashboard's (`compose-workspaces.ts`). */
   readonly acts: TasksActs;
   /** The view as this Mac holds it now. */
-  snapshot: () => TasksView;
+  snapshot: () => ListedTasksView;
   /** Links what the tasks reach of a concern built after them; the first link stands. */
   link: (links: TasksLinks) => Effect.Effect<void>;
   /** The view's workspaces and GitHub's connection, which the workspaces' concern draws, and what a workspace's move asks of the tasks. */
@@ -732,7 +733,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           : sealed,
     );
 
-  const idleView = (): TasksView => IDLE_TASKS_VIEW;
+  const idleView = (): ListedTasksView => ({ ...IDLE_TASKS_VIEW, ...NO_TASK_LIST });
   const gate = () => kernel.runMode.sendsNetwork && account.capabilitiesActive();
 
   /** The link reads kept for every window (`LINK_READ_KEPT`); a read already out is joined, never asked twice. */
@@ -884,8 +885,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   const serial = (yield* Semaphore.make(1)).withPermits(1);
   const late = yield* lateService<TasksLinks>();
 
-  let view: TasksView = idleView();
-  let published: TasksView = view;
+  let view: ListedTasksView = idleView();
+  let published: ListedTasksView = view;
   /**
    * Every ask to change the task on screen, an open, a close, or a start
    * that opens its task, counted as it arrives. Note that a start opens its
@@ -909,7 +910,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     kernel.emit(GATEWAY_EVENT.TASKS_CHANGED, carried(view));
   }
 
-  function write(next: Partial<TasksView>): void {
+  function write(next: Partial<ListedTasksView>): void {
     view = { ...view, ...next };
     publish();
   }

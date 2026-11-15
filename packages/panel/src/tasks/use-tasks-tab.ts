@@ -34,7 +34,7 @@ import {
   type TasksPage,
   tasksPage,
 } from "@repo/features/tasks-model";
-import { TASK_CALL_FAILURE, TASKS_READ, type TaskListStanding } from "@repo/features/tasks-view";
+import { TASK_CALL_FAILURE, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxTask } from "@repo/host/app-state";
@@ -713,7 +713,7 @@ function readInboxItemHome(
 
 export function useTasksTab(input: {
   /** What main holds of the account's tasks but the list itself, which the window reads from its collections (`task-list-collections.tsx`); a fixture run's own stand in for them. */
-  tasks: TaskListStanding;
+  tasks: TasksView;
   run: { readonly fixtureMode: boolean; readonly profile: string };
   signedIn: boolean;
   /** The signed-in account's email, which the task last open is kept under; none while signed out. */

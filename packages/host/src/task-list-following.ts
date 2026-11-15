@@ -37,9 +37,10 @@
 
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { ListedPullRequest, TaskPullRequests, TaskSummary } from "@repo/features/task-wire";
+import type { TaskListParts } from "@repo/features/tasks-view";
 import { keepIdentity } from "@repo/wire";
 import { type Collection, type CollectionConfig, createCollection } from "@tanstack/db";
-import type { TaskListDelivery, TaskListPartMoved, TaskListParts } from "./app-state.js";
+import type { TaskListDelivery, TaskListPartMoved } from "./app-state.js";
 
 /** One row a change writes, and whether the part held it before. */
 interface RowWritten<Row> {

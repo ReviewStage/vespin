@@ -13,14 +13,14 @@
  * the host wrote it, and a document already staged is handed nothing new.
  */
 
-import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
-import { ACT_KIND } from "@repo/host/acts";
 import {
-  type AppStateSnapshot,
-  RUN_PROFILE,
-  type RunProfile,
-  taskListPartsOf,
-} from "@repo/host/app-state";
+  type ListedApart,
+  listedApart,
+  TASK_CALL_FAILURE,
+  type TaskListParts,
+} from "@repo/features/tasks-view";
+import { ACT_KIND } from "@repo/host/acts";
+import { type AppStateSnapshot, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import type { AppStateStore } from "@repo/host/client";
 import type {
   ActPortClient,
@@ -54,18 +54,20 @@ import { Predicate } from "effect";
 const FIXTURE_WORKSPACE_IDS: readonly string[] = [FIXTURE_IDS.WORKSPACE];
 
 /** Each task list as staged, so a list staged already is never staged twice, which would list its tasks twice. */
-const stagedLists = new WeakSet<AppStateSnapshot["tasks"]>();
+const stagedLists = new WeakSet<TaskListParts>();
 
-/** The fixture's tasks laid over the list held, or the list held where it is staged already, its agents on the choices the run made; the list held where nothing moves. */
-function stagedTasks(held: AppStateSnapshot, choices: AgentChoices): AppStateSnapshot["tasks"] {
-  const listed = stagedLists.has(held.tasks)
-    ? held.tasks
-    : inboxTasksView(held.run.profile, held.tasks);
+/** The fixture's tasks laid over the list held beside the document, or the list held where it is staged already, its agents on the choices the run made: the tasks slice, and the lists beside it. */
+function stagedTasks(
+  held: AppStateSnapshot,
+  lists: TaskListParts,
+  choices: AgentChoices,
+): ListedApart {
+  const view = { ...held.tasks, ...lists };
+  const listed = stagedLists.has(lists) ? view : inboxTasksView(held.run.profile, view);
+  const apart = listedApart(chosenTasksView(listed, choices));
+  stagedLists.add(apart.lists);
 
-  const staged = chosenTasksView(listed, choices);
-  stagedLists.add(staged);
-
-  return staged;
+  return apart;
 }
 
 /** The moves each run's changes made to the fixture's pull requests, by the store the run stages, each map replaced whole as a change lands so a staging reads it anew. */
@@ -136,7 +138,7 @@ function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateS
  * Ada's MacBook for an agent's command from then on (`maestro/machine-ask.yaml`).
  */
 export function stageFixture(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   updateNeeded = false,
   machineAsk = false,
 ): void {
@@ -164,18 +166,20 @@ export function stageFixture(
     ? machineAskAppState(saved, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
     : saved;
 
+  const listed = stagedTasks(held, state.taskList(), CHOICES.get(state) ?? NO_CHOICES);
+
   const staged = {
     ...reminded,
-    tasks: stagedTasks(held, CHOICES.get(state) ?? NO_CHOICES),
+    tasks: listed.tasks,
     network: stagedNetwork(held, updateNeeded),
   };
 
-  state.update(stagedPatch(held, staged), taskListPartsOf(staged.tasks));
+  state.update(stagedPatch(held, staged), listed.lists);
 }
 
 /** Keeps a reminder the fixture took, set or cleared, and lays it over the document at once, as the host draws one; nothing for any other act. */
 function keepReminder(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
@@ -188,7 +192,7 @@ function keepReminder(
 
 /** Keeps a machine's ask the fixture answered and takes it off the document at once, as the service's read drops it (`machineAskAppState`); nothing for any other act. */
 function keepMachineAnswer(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
@@ -201,7 +205,7 @@ function keepMachineAnswer(
 
 /** Keeps the words of a memory the fixture saved, over one of its own or as a new one, and lays them over the document at once (`savedMemoriesAppState`); nothing for any other act. */
 function keepMemory(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
@@ -216,7 +220,7 @@ function keepMemory(
 
 /** Keeps a change of one of its agents the fixture took, its model, mode, servers, name, or pin, and lays it over the document at once, as the host draws one; nothing for any other act. */
 function keepChoice(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
@@ -231,7 +235,7 @@ function keepChoice(
 
 /** Keeps how a change the fixture took moved its pull request, and lays it over the document at once; nothing for any other act. */
 function keepMove(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
@@ -247,7 +251,7 @@ function keepMove(
 
 /** What a read of the invitations agent's older page answers, counted, its page laid over the document at once where it lands; none for any other act or transcript. */
 function olderRead(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   profile: RunProfile,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
@@ -310,7 +314,7 @@ function memberAt<Member>(
 export function fixtureActs(
   acts: ActPortClient,
   profile: RunProfile,
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   refusesWrites = false,
 ): ActPortClient {
   return new Proxy(acts, {
