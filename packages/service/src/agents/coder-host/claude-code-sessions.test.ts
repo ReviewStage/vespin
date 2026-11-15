@@ -66,7 +66,7 @@ import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { queuedTurnOf, recordTurnSnapshot } from "@repo/database/models/turn-state";
 import { workspaceDriveRepositories } from "@repo/database/models/workspace-drive-repositories";
-import { setWorkspaceVariable } from "@repo/database/models/workspace-environment-store";
+import { setWorkspaceVariables } from "@repo/database/models/workspace-environment-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { listScriptRuns } from "@repo/database/models/workspace-sandbox-script-run-store";
 import {
@@ -4252,14 +4252,20 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* runnerTook(agent.id);
         sequence.next = 2;
         // A member sets a variable while the runner stands warm.
-        yield* setWorkspaceVariable(
+        yield* setWorkspaceVariables(
           workspace,
-          "DATABASE_URL",
-          sealWorkspaceVariable(
-            ring.success,
-            { organizationId: workspace, name: "DATABASE_URL" },
-            Redacted.make("postgres://fixture"),
-          ),
+          [
+            {
+              name: "DATABASE_URL",
+              sealed: sealWorkspaceVariable(
+                ring.success,
+                { organizationId: workspace, name: "DATABASE_URL" },
+                Redacted.make("postgres://fixture"),
+              ),
+            },
+          ],
+          undefined,
+          userId,
           new Date(yield* Clock.currentTimeMillis),
         );
 
@@ -4846,14 +4852,20 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           "pnpm install",
           new Date(0),
         );
-        yield* setWorkspaceVariable(
+        yield* setWorkspaceVariables(
           workspace,
-          "DATABASE_URL",
-          sealWorkspaceVariable(
-            ring.success,
-            { organizationId: workspace, name: "DATABASE_URL" },
-            Redacted.make("postgres://fixture"),
-          ),
+          [
+            {
+              name: "DATABASE_URL",
+              sealed: sealWorkspaceVariable(
+                ring.success,
+                { organizationId: workspace, name: "DATABASE_URL" },
+                Redacted.make("postgres://fixture"),
+              ),
+            },
+          ],
+          undefined,
+          agent.userId,
           new Date(0),
         );
 
