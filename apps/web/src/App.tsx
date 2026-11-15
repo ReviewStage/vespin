@@ -30,8 +30,8 @@ const CODEX_ART = {
 
 /** The people the landing's mockups are drawn for: our own, their pictures served by the site. */
 const LANDING_CAST = {
-  member: { name: "Charles Pan", picture: "/landing/charles-pan.jpg" },
-  teammate: { name: "Dean Stratakos", picture: "/landing/dean-stratakos.jpg" },
+  member: { name: "Charles Pan", picture: "/assets/charles-pan.jpeg" },
+  teammate: { name: "Dean Stratakos", picture: "/assets/dean-stratakos.jpeg" },
 };
 
 /** Our page among Y Combinator's companies, which the hero's backing chip opens. */
