@@ -226,14 +226,32 @@ export function updateRow(update: UpdateSnapshot, build: RunningBuild): UpdateRo
 }
 
 /**
- * What the update row says where the service refuses this build as older
- * than it serves (`network.updateNeeded`): the same row, but that a build the
- * updater found current is no news there, since the service refuses it all
- * the same. No release newer than it is out yet, so the row says so and
- * offers to check again.
+ * The one line the update-required screen says under its title, which
+ * stands while the service refuses this build as older than it serves
+ * (`network.updateNeeded`): where the update stands, in a few plain words,
+ * or nothing where the screen's button says it all, as Restart to update
+ * does. A build the updater found current says the update is not out yet,
+ * since the service refuses it all the same.
  */
-export function updateNeededRow(update: UpdateSnapshot, build: RunningBuild): UpdateRow {
+export function updateNeededLine(update: UpdateSnapshot, build: RunningBuild): string | undefined {
   const row = updateRow(update, build);
 
-  return row.current ? { ...row, detail: "No newer release is out yet", current: false } : row;
+  switch (row.action) {
+    case UPDATE_ROW_ACTION.CHECKING:
+      return "Checking for updates…";
+    case UPDATE_ROW_ACTION.DOWNLOADING:
+      return row.progress === undefined || row.progress === 0
+        ? "Downloading…"
+        : `Downloading… ${Math.round(row.progress)}%`;
+    case UPDATE_ROW_ACTION.GET:
+      return row.failed ? "Couldn't install the update." : undefined;
+    case UPDATE_ROW_ACTION.MOVE:
+      return `Move ${PRODUCT_NAME} to Applications to install the update.`;
+    case UPDATE_ROW_ACTION.RETRY:
+      return "Couldn't check for updates.";
+    case UPDATE_ROW_ACTION.CHECK:
+      return row.current ? "The update isn't out yet." : undefined;
+    default:
+      return undefined;
+  }
 }

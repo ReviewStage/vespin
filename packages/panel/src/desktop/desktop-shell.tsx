@@ -854,8 +854,8 @@ export function DesktopShell({
 }): React.JSX.Element {
   const { account } = settings;
   const shell = useRef<HTMLDivElement>(null);
-  // While the service refuses this build, the sign-in and setup give way to the update screen in the work's place
-  // (`ShellPlaces`), since every call either would make is refused until the build is updated.
+  // While the service refuses this build, the update screen takes the whole window, the sign-in, setup, and New workspace
+  // among what it stands over, since every call any of them would make is refused until the build is updated.
   const updateNeeded = useUpdateNeeded();
 
   const gated =
@@ -942,9 +942,7 @@ export function DesktopShell({
       ? undefined
       : columnTab.agent;
 
-  // Note that the update screen standing in the work's place shows no agent, so a call into one keeps its card.
-  const agentShown =
-    tab === PANEL_TAB.TASKS && !updateNeeded ? (tasks.agentView.agentId ?? columnAgent) : undefined;
+  const agentShown = tab === PANEL_TAB.TASKS ? (tasks.agentView.agentId ?? columnAgent) : undefined;
 
   // Note that while the plan's description is read, the window is named by the task as the list holds it.
   const namedTask =
@@ -956,7 +954,7 @@ export function DesktopShell({
   useWindowTitle(titleSubject(tab, tasks, namedTask, place, inAutomations));
 
   // The plan is looked at the moment it is on screen, whichever of its column's tabs is chosen,
-  // from the mark and the agents' activity its row in the list carries; not while the update screen stands in its place.
+  // from the mark and the agents' activity its row in the list carries; not while the update screen stands over the window.
   const looks = useTaskLooks(
     updateNeeded ? undefined : shownTask,
     tasks.me,
@@ -1071,6 +1069,10 @@ export function DesktopShell({
     );
   }
 
+  // The update screen takes the whole window but for Settings, which stays to reach the account and the build.
+  if (updateNeeded && tab !== PANEL_TAB.SETTINGS)
+    return <UpdateNeeded updates={settings.updates} />;
+
   // New workspace takes the whole window on setup's own ground, its cards being setup's.
   if (founding) {
     return (
@@ -1155,8 +1157,6 @@ export function ShellPlaces(): React.JSX.Element {
   const inboxOpen = bar.inbox.open;
   const boardOpen = bar.place === ROUTED_PLACE.BOARD;
   const inboxItemShown = bar.inbox.chosen !== undefined;
-  // While the service refuses this build, the work's place says so and offers the update; Settings stays, to reach the account and the build.
-  const updateNeeded = useUpdateNeeded() && tab !== PANEL_TAB.SETTINGS;
 
   // A phone's task is headed by a row of its own, whose ⋯ stands for the panel's toggle (`task-pane-switcher.tsx`).
   const panelToggle =
@@ -1169,9 +1169,8 @@ export function ShellPlaces(): React.JSX.Element {
   const drawerOver = room === SHELL_ROOM.NARROW && sidebar.overlay !== SIDEBAR_OVERLAY.CLOSED;
   // A phone goes between its places by a bar at the screen's foot, standing on their lists alone (`mobile-bar.tsx`).
   const barShown = mobileBarShown(room, tasks, bar);
-  // A phone's Tasks page is the sidebar's tree, pinned in the work's place rather than floating in as a drawer (`mobile-bar.tsx`),
-  // but for while the update screen stands there, which the tree would cover and leave inert.
-  const phoneTasks = barShown && boardOpen && !updateNeeded;
+  // A phone's Tasks page is the sidebar's tree, pinned in the work's place rather than floating in as a drawer (`mobile-bar.tsx`).
+  const phoneTasks = barShown && boardOpen;
 
   const placed = phoneTasks
     ? { ...sidebar, collapsed: false, overlay: SIDEBAR_OVERLAY.CLOSED }
@@ -1206,19 +1205,15 @@ export function ShellPlaces(): React.JSX.Element {
         data-inbox-shown={String(inboxOpen)}
       >
         {/* A chip of an agent off its task's page names its model and its starter as the agent's tab does. */}
-        {updateNeeded ? (
-          <UpdateNeeded updates={settings.updates} />
-        ) : (
-          <MentionedAgents value={mentionedAgents}>
-            <ChipCards value={chipCards}>
-              <Outlet />
-            </ChipCards>
-          </MentionedAgents>
-        )}
+        <MentionedAgents value={mentionedAgents}>
+          <ChipCards value={chipCards}>
+            <Outlet />
+          </ChipCards>
+        </MentionedAgents>
         {/* Note that the Inbox kept stands after the place shown, so a lookup of the place's first box finds the place's,
             and beside every place's route rather than in one, so another place standing, Admin, the Board, or a person's
             page, lets go of nothing it held; its own route draws nothing in the `Outlet` (`InboxPlace`). */}
-        {!updateNeeded && (inboxOpen || inboxKept) ? (
+        {inboxOpen || inboxKept ? (
           <KeptPage shown={inboxOpen} chipCards={chipCards} mentionedAgents={mentionedAgents}>
             <DesktopInbox tasks={tasks} room={room} phoneStart={phoneAccount} />
           </KeptPage>
