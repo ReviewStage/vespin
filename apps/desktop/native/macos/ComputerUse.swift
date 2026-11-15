@@ -785,9 +785,16 @@ private let CURSOR_SWAY_SECONDS = 2.0
 private let CURSOR_FRAME_NANOSECONDS: UInt64 = 33_333_333
 /// How many frames pass between restacks of the cursor over its app's window: about two a second.
 private let CURSOR_RESTACK_FRAMES = 15
-/// The cursor's box, and where in it the arrow's tip stands.
-private let CURSOR_BOX = CGSize(width: 36, height: 36)
-private let CURSOR_TIP = CGPoint(x: 8, y: 6)
+/// A press's ring about the arrow's tip: its radius as it starts, the scale it grows from and to, and its line.
+private let RIPPLE_RADIUS: CGFloat = 12
+private let RIPPLE_FROM: CGFloat = 0.4
+private let RIPPLE_TO: CGFloat = 1.4
+private let RIPPLE_LINE: CGFloat = 1.5
+/// The room the ring takes about the tip at its widest, which the cursor's window leaves it on every side, so the window never cuts it.
+private let RIPPLE_ROOM = ceil(RIPPLE_RADIUS * RIPPLE_TO + RIPPLE_LINE)
+/// The cursor's box, and where in it the arrow's tip stands: in the middle of the ring's room, which also holds the arrow, its edge and its shadow down and right of the tip.
+private let CURSOR_BOX = CGSize(width: RIPPLE_ROOM * 2, height: RIPPLE_ROOM * 2)
+private let CURSOR_TIP = CGPoint(x: RIPPLE_ROOM, y: RIPPLE_ROOM)
 
 /// The pointer's copper over a light window and the brighter amber over a dark one: the brand's accent in either theme (`@repo/brand`'s `BRAND_PALETTE`), as the browser's pointer is drawn (`recording-cursor.ts`).
 private let POINTER_LIGHT = NSColor(srgbRed: 0xa7 / 255, green: 0x61 / 255, blue: 0x1b / 255, alpha: 1)
@@ -925,17 +932,19 @@ private final class AgentCursorView: NSView {
         wantsLayer = true
         guard let layer else { return }
         let ring = CAShapeLayer()
-        ring.path = CGPath(ellipseIn: CGRect(x: -12, y: -12, width: 24, height: 24), transform: nil)
+        ring.path = CGPath(
+            ellipseIn: CGRect(x: -RIPPLE_RADIUS, y: -RIPPLE_RADIUS, width: RIPPLE_RADIUS * 2, height: RIPPLE_RADIUS * 2),
+            transform: nil)
         ring.position = CURSOR_TIP
         ring.fillColor = nil
         ring.strokeColor = pointerColor().cgColor
-        ring.lineWidth = 1.5
+        ring.lineWidth = RIPPLE_LINE
         layer.addSublayer(ring)
         CATransaction.begin()
         CATransaction.setCompletionBlock { ring.removeFromSuperlayer() }
         let grow = CABasicAnimation(keyPath: "transform.scale")
-        grow.fromValue = 0.4
-        grow.toValue = 1.4
+        grow.fromValue = RIPPLE_FROM
+        grow.toValue = RIPPLE_TO
         let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = 1
         fade.toValue = 0
@@ -1706,9 +1715,9 @@ private func drawCursor(
     context.scaleBy(x: scale, y: scale)
     if let since = cursor.sincePress, since < RIPPLE_SECONDS {
         let share = since / RIPPLE_SECONDS
-        let radius = 12 * (0.4 + share)
+        let radius = RIPPLE_RADIUS * (RIPPLE_FROM + (RIPPLE_TO - RIPPLE_FROM) * share)
         context.setStrokeColor(color.copy(alpha: 1 - share) ?? color)
-        context.setLineWidth(1.5)
+        context.setLineWidth(RIPPLE_LINE)
         context.strokeEllipse(in: CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2))
     }
     // Note that the arrow sways about its tip as the cursor's window draws it, while its ring stays centered there.
