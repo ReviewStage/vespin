@@ -169,10 +169,11 @@ export interface Drawn<T> {
   readonly leaving: boolean;
 }
 
-/** A leaving entry as handed to the motion: its key, and what lets it go once its exit has played. */
+/** A leaving entry as handed to the motion: its key, what lets it go once its exit has played, and whether its list lists it again. */
 interface Leaver {
   readonly key: string;
   readonly onLeft: () => void;
+  readonly listed: () => boolean;
 }
 
 /** What the lists under one motion hand it in a commit: the entries that began to leave, the keys listed again before they had gone, and what asks it to read a commit it would not draw. */
@@ -210,10 +211,11 @@ interface Batch {
   readonly leavers: Leaver[];
 }
 
-/** A leaving element as the motion takes it, and what lets its entry go. */
+/** A leaving element as the motion takes it, what lets its entry go, and whether its list lists it again. */
 interface Exit {
   readonly element: HTMLElement;
   readonly onLeft: () => void;
+  readonly listed: () => boolean;
 }
 
 const LeavesContext = createContext<Leaves | undefined>(undefined);
@@ -319,7 +321,10 @@ export function useLeaving<T>(
   }
 
   const told = useRef(new Set<string>());
+  // The entries as last committed, by which a leaver tells whether its list lists it again.
+  const latest = useRef(drawn);
   useLayoutEffect(() => {
+    latest.current = drawn;
     const leaving = new Set(drawn.filter((entry) => entry.leaving).map((entry) => entry.key));
 
     for (const key of told.current) {
@@ -344,7 +349,8 @@ export function useLeaving<T>(
         continue;
       }
 
-      const leaver = { key, onLeft };
+      const listed = () => latest.current.some((entry) => entry.key === key && !entry.leaving);
+      const leaver = { key, onLeft, listed };
       leaves.pending.push(leaver);
       // A list that drew on its own, its motion not drawn with it, lets the entry go at once.
       queueMicrotask(() => {
@@ -630,7 +636,7 @@ function playExits(
   });
 
   for (const { each, top, left, width, opacity } of placed) {
-    const { element, onLeft } = each;
+    const { element, onLeft, listed } = each;
     element.style.setProperty(LEAVING_PLACE.TOP, `${top}px`);
     element.style.setProperty(LEAVING_PLACE.LEFT, `${left}px`);
     element.style.setProperty(LEAVING_PLACE.WIDTH, `${width}px`);
@@ -645,8 +651,10 @@ function playExits(
     );
 
     // Note that the motion reads the commit that lets the entry go, because a row a run places itself (`VirtualRows`) keeps its room until then, and what closes over it glides there.
+    // Note too that an entry its list lists again by the time the exit ends stands again, because no later change lets go of a row its list still lists, which would stay drawn unseen.
     out.onfinish = () => {
-      onLeft();
+      if (listed()) standAgain(element);
+      else onLeft();
       replay();
     };
 
@@ -948,7 +956,9 @@ class ListMotionPlayer extends Component<
 
     const leaving: Exit[] = [];
 
-    for (const { key, onLeft } of leavers) {
+    for (const { key, onLeft, listed } of leavers) {
+      // Note that an entry its list lists again before its exit was taken, as a list drawing a change of its own and then another, stays as it stands.
+      if (listed()) continue;
       const element = before.keyed.get(key);
 
       if (!(element instanceof HTMLElement) || !element.isConnected) {
@@ -965,7 +975,7 @@ class ListMotionPlayer extends Component<
         continue;
       }
 
-      leaving.push({ element, onLeft });
+      leaving.push({ element, onLeft, listed });
     }
 
     return leaving;
