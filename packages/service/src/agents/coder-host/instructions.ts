@@ -30,23 +30,18 @@ import { INBOX_TOOLS } from "./inbox.js";
  * mention forms its own reply is drawn with.
  */
 
-/** What the agent is told of what it was handed: a description, a prompt, or nothing, for one started blank. */
-const BRIEF_WORDS = {
-  [AGENT_BRIEF.DESCRIPTION]: {
-    job: "implement the task's description given as the first message of this conversation",
-    start: "If the code has moved past the description, say so rather than guess at a larger job.",
-  },
-  [AGENT_BRIEF.PROMPT]: {
-    job: "carry out the prompt the developer gave as the first message of this conversation",
-    start:
-      "If the prompt names a goal but nothing to build, ask in a thread before you build anything; otherwise make its choices yourself and name them.",
-  },
-  [AGENT_BRIEF.BLANK]: {
-    job: "do what the developer asks of you in this conversation",
-    start:
-      "If a request names a goal but nothing to build, ask in a thread before you build anything; otherwise make its choices yourself and name them.",
-  },
-} as const satisfies Record<AgentBrief, { job: string; start: string }>;
+/** What the agent is told its job is, by what it was handed: a description, a prompt, or nothing, for one started blank. */
+const BRIEF_JOB = {
+  [AGENT_BRIEF.DESCRIPTION]:
+    "implement the task's description given as the first message of this conversation",
+  [AGENT_BRIEF.PROMPT]:
+    "carry out the prompt the developer gave as the first message of this conversation",
+  [AGENT_BRIEF.BLANK]: "do what the developer asks of you in this conversation",
+} as const satisfies Record<AgentBrief, string>;
+
+/** What the agent does with a request it cannot read, whatever it was handed. */
+const UNCLEAR_LINE =
+  "If something doesn't make sense, or you can't tell what to build, ask in a thread.";
 
 export const CODER_HARNESS = {
   CLAUDE_CODE: CONVERSATION_RUNTIME.CLAUDE_CODE,
@@ -81,27 +76,20 @@ const EXAMPLE_WORKSPACE = "acme";
 const EXAMPLE_REPOSITORY = "acme/app";
 
 /**
- * What the machine is: the developer's own, already signed in, whose one
- * clone its other agents' worktrees share; or a sandbox whose firewall
- * holds the GitHub credential, where there is one.
+ * What a local agent is told of its machine: the developer's own, whose one
+ * clone its other agents' worktrees share. A sandbox is told nothing, since
+ * `gh` and `git` there already reach GitHub through its firewall.
  */
 function machineLines(machine: CoderMachine, repository: boolean): string[] {
-  if (machine.local) {
-    return [
-      "You run straight on the developer's own machine, with full access to it, so leave what is not yours alone.",
-      "`gh` and `git` are already signed in.",
-      ...(repository
-        ? [
-            "Your checkout is a git worktree of the machine's one clone; if git says a branch is checked out in another worktree, work detached with `git switch --detach origin/<branch>` and push with `git push origin HEAD:<branch>`.",
-          ]
-        : []),
-    ];
-  }
+  if (!machine.local) return [];
 
   return [
-    repository
-      ? "`gh` and `git` reach GitHub with a credential held at the sandbox's firewall, so never put a token in a command or try to sign in."
-      : "No GitHub credential is set here, so never try to sign in.",
+    "You run straight on the developer's own machine, with full access to it, so leave what is not yours alone.",
+    ...(repository
+      ? [
+          "Your checkout is a git worktree of the machine's one clone; if git says a branch is checked out in another worktree, work detached with `git switch --detach origin/<branch>` and push with `git push origin HEAD:<branch>`.",
+        ]
+      : []),
   ];
 }
 
@@ -192,7 +180,6 @@ export function coderInstructions(
   machine: CoderMachine = SANDBOX_MACHINE,
   workspace: string = EXAMPLE_WORKSPACE,
 ): string {
-  const words = BRIEF_WORDS[brief];
   const describes = offers(standing, EDIT_DESCRIPTION_TOOL.name);
   const publishes = repository !== null && offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST);
   const shell = harness === CODER_HARNESS.CODEX ? "your shell" : "Bash";
@@ -202,12 +189,12 @@ export function coderInstructions(
     brief === AGENT_BRIEF.DESCRIPTION ? "" : ` (read it first with \`${AGENT_TOOL.READ_TASK}\`)`;
 
   const lines = [
-    `You are working inside ${PRODUCT_NAME}, where the developer works through a task with coding agents. Your job is to ${words.job}.`,
+    `You are working inside ${PRODUCT_NAME}, where the developer works through a task with coding agents. Your job is to ${BRIEF_JOB[brief]}.`,
     repository === null
       ? `You work in no repository. Your folder is \`${machine.checkoutPath}\`; ${shell} starts there.`
       : `The GitHub repository \`${repository}\` is checked out at \`${machine.checkoutPath}\`${branch}; ${shell} starts there.`,
     ...machineLines(machine, repository !== null),
-    words.start,
+    UNCLEAR_LINE,
     ...(publishes ? publishLines(authorship, startBranch, memberToken) : []),
     `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\` and post it in a thread.`,
     "The developer reads your last message before you stop as your reply, so put everything essential in it.",
