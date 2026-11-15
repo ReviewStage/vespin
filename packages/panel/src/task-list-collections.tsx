@@ -8,7 +8,12 @@
 
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { renamedTask, renamedTasks, type TaskNames } from "@repo/features/tasks-model";
+import {
+  renamedTask,
+  renamedTasks,
+  sidebarTasks,
+  type TaskNames,
+} from "@repo/features/tasks-model";
 import type { TaskListCollections } from "@repo/host/task-list-following";
 import { type Collection, eq, inArray, useLiveQuery } from "@tanstack/react-db";
 import {
@@ -85,12 +90,6 @@ const ROWS_KEY = {
   AGENTS: "task-list-rows-agents",
 } as const;
 
-/** The live query's key: the tasks of one workspace, or of every one. */
-const WORKSPACE_TASKS_KEY = "task-list-workspace-tasks";
-
-/** No task held: what a workspace's read answers before its live query has. */
-const NO_TASKS: readonly TaskSummary[] = [];
-
 /** Nothing to listen for: what a read with no key subscribes with. */
 const LISTEN_TO_NOTHING = (): (() => void) => () => {};
 
@@ -158,35 +157,39 @@ export function useNamedTasks(typedNames: TaskNames): readonly TaskSummary[] {
 }
 
 /**
- * The tasks of the workspace `workspaceId` names, or of every workspace
- * where none is named, newest started first as the host lists them, each
- * name drawn as it is being typed where it is (`typedNames`). One live query
- * keeps them, so the list is the same array until one of that workspace's
- * tasks moves, and a delivery moving another workspace's draws nothing here.
+ * The tasks the sidebar lists: those of the workspace `workspaceId` names,
+ * every task while it names none, in the sidebar's order (the pinned ones
+ * first, newest pinned first, then the rest newest started first as the host
+ * lists them), each name drawn as it is being typed where it is
+ * (`typedNames`). One live query keeps them, so the list is the same array
+ * until one of the workspace's tasks or a typed name moves; for a reader that
+ * walks the listed workspace's whole list, as the Tasks page and the Inbox's
+ * counts do.
  */
-export function useWorkspaceTasks(
+export function useListedTasks(
   workspaceId: string | undefined,
   typedNames: TaskNames,
 ): readonly TaskSummary[] {
   const collections = useTaskListCollections();
 
-  const held = useLiveQuery({
-    queryKey: [WORKSPACE_TASKS_KEY, workspaceId ?? null],
+  const listed = useLiveQuery({
     query: (q) => {
-      const every = q.from({ task: collections.tasks });
-
-      const of =
-        workspaceId === undefined
-          ? every
-          : every.where(({ task }) => eq(task.workspaceId, workspaceId));
-
-      return of
+      const every = q
+        .from({ task: collections.tasks })
         .orderBy(({ task }) => task.createdAt, "desc")
         .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" });
+
+      return workspaceId === undefined
+        ? every
+        : every.where(({ task }) => eq(task.workspaceId, workspaceId));
     },
   }).data;
 
-  return useMemo(() => renamedTasks(held ?? NO_TASKS, typedNames), [held, typedNames]);
+  return useMemo(() => {
+    const { pinned, rest } = sidebarTasks(listed);
+
+    return renamedTasks([...pinned, ...rest], typedNames);
+  }, [listed, typedNames]);
 }
 
 /** The task list's rows read by id, as the collections hold them now. */
