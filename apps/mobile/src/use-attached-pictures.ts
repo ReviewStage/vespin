@@ -19,7 +19,7 @@ import {
   base64Bytes,
 } from "@repo/features/agent-wire";
 import { pictureName } from "@repo/features/file-marker";
-import { encodeWithin, fitWithin } from "@repo/features/picture-fit";
+import { encodeWithin, PICTURE_LONG_EDGE } from "@repo/features/picture-fit";
 import type { AttachedPicture } from "@repo/ui-native";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
@@ -69,21 +69,33 @@ function nextName(pictures: readonly HeldPicture[], offset: number): string {
   return pictureName(pictures.length + offset + 1);
 }
 
+/** Deletes a JPEG the manipulator saved, once its bytes are read; one that stays only costs the cache. */
+function deleteSaved(uri: string) {
+  try {
+    const file = new File(uri);
+
+    if (file.exists) file.delete();
+  } catch (error: unknown) {
+    console.error("A resized picture's file was not deleted.", error);
+  }
+}
+
 /**
- * A picture at `uri` as JPEG base64: drawn with its long edge within the
- * fit, then encoded at the bounds' quality, stepping down only until it
- * stands within the bound for one picture. Note that a camera's photo is
- * read from its full size, since the picker's own quality compresses but
- * never resizes, so a 12-megapixel photo would stand past the bound at any
- * quality the panel would draw it at.
+ * A picture at `uri` as JPEG base64: decoded with its long edge within
+ * `PICTURE_LONG_EDGE`, then encoded at the bounds' quality, stepping down
+ * only until it stands within the bound for one picture. Note that the
+ * picture is drawn smaller as it is decoded, never after, since the
+ * picker's own quality compresses but never resizes, and several
+ * full-size camera photos read at once would stand in memory together.
  */
 async function readPicture(uri: string, bounds: PictureBounds): Promise<string> {
-  const context = ImageManipulator.manipulate(uri);
+  const context = ImageManipulator.manipulate(uri, {
+    maxWidth: PICTURE_LONG_EDGE,
+    maxHeight: PICTURE_LONG_EDGE,
+  });
 
   try {
-    const whole = await context.renderAsync();
-    const fit = fitWithin(whole);
-    const image = fit === undefined ? whole : await context.resize(fit).renderAsync();
+    const image = await context.renderAsync();
 
     return await encodeWithin(
       async (quality) => {
@@ -92,6 +104,8 @@ async function readPicture(uri: string, bounds: PictureBounds): Promise<string> 
           format: SaveFormat.JPEG,
           base64: true,
         });
+
+        deleteSaved(saved.uri);
 
         if (saved.base64 === undefined) throw new Error("The picture was saved without its bytes.");
 
@@ -156,12 +170,12 @@ export function useAttachedPictures(
   const [pictures, setPictures] = useState<readonly HeldPicture[]>([]);
   // The pictures held now, which a picker answering later adds to, so pictures a refused send put back while it stood open are kept.
   const held = useRef(pictures);
-
-  // How many picks and drops are still being read.
-  const [reads, setReads] = useState(0);
   useEffect(() => {
     held.current = pictures;
   }, [pictures]);
+
+  // How many picks and drops are still being read.
+  const [reads, setReads] = useState(0);
 
   // Pictures read as base64, or none for one that could not be, named past every picture held now and added after them, saying the first that could not be read, or else what a bound refuses. Note that the held pictures are written at once, so a second drop landing before the next render adds after this one rather than over it.
   const add = (contents: readonly (string | null | undefined)[], unreadable = 0) => {

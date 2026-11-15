@@ -7,17 +7,11 @@ import { base64Bytes } from "./agent-wire.js";
  * 4032 by 3024 comes down to 2048 by 1536, as Messages sends a photo, which
  * still reads sharp on any screen the panel draws it on.
  */
-const PICTURE_LONG_EDGE = 2048;
+export const PICTURE_LONG_EDGE = 2048;
 
 /** How far each try lowers a picture's JPEG quality, and the least it goes to before it stops trying. */
 const QUALITY_STEP = 0.15;
 const LEAST_QUALITY = 0.3;
-
-/** A picture's size, in pixels. */
-export interface PictureSize {
-  readonly width: number;
-  readonly height: number;
-}
 
 /** The qualities a picture is tried at, from `first` down by a step to the least, `first` alone where it is already under it. */
 function qualityLadder(first: number): readonly number[] {
@@ -32,22 +26,6 @@ function qualityLadder(first: number): readonly number[] {
   }
 
   return ladder;
-}
-
-/** The size a picture is drawn at so its longest edge stands within `longEdge`, its shape kept; none where it already does. */
-export function fitWithin(
-  size: PictureSize,
-  longEdge = PICTURE_LONG_EDGE,
-): PictureSize | undefined {
-  const longest = Math.max(size.width, size.height);
-
-  if (longest <= longEdge) return undefined;
-  const scale = longEdge / longest;
-
-  return {
-    width: Math.max(1, Math.round(size.width * scale)),
-    height: Math.max(1, Math.round(size.height * scale)),
-  };
 }
 
 /**

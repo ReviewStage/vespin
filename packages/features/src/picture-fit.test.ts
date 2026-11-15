@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodeWithin, fitWithin } from "./picture-fit.js";
+import { encodeWithin } from "./picture-fit.js";
 
 /** A JPEG's base64 as long as a picture of `bytes` bytes, a multiple of 3 so it carries no padding. */
 function base64Of(bytes: number): string {
@@ -8,16 +8,6 @@ function base64Of(bytes: number): string {
 
 /** An encoder whose picture weighs 900 bytes at full quality, less in step with the quality asked. */
 const encode = (quality: number) => Promise.resolve(base64Of(Math.round(quality * 900)));
-
-describe("fitWithin", () => {
-  it("brings a camera photo's longest edge down to 2048, keeping its shape", () => {
-    expect(fitWithin({ width: 4032, height: 3024 })).toEqual({ width: 2048, height: 1536 });
-  });
-
-  it("leaves a picture already within the edge as it is", () => {
-    expect(fitWithin({ width: 1600, height: 1200 })).toBeUndefined();
-  });
-});
 
 describe("encodeWithin", () => {
   it("steps the quality down until the picture stands within the bound", async () => {
