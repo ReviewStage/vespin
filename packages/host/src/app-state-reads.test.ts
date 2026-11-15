@@ -1,5 +1,11 @@
+import type { TaskSummary } from "@repo/features/task-wire";
 import { describe, expect, it } from "vitest";
-import { answerKeeper, shareAppState } from "./app-state-reads.js";
+import {
+  answerKeeper,
+  type InboxHoldings,
+  inboxGroupsIn,
+  shareAppState,
+} from "./app-state-reads.js";
 
 describe("shareAppState", () => {
   it("answers a reader's changed slice with the document's own nodes, not copies of them", () => {
@@ -59,5 +65,28 @@ describe("answerKeeper", () => {
     expect(same).toBe(first);
     expect(moved.rows.map(({ id }) => id)).toEqual(["a", "c"]);
     expect(moved.rows[0]).toBe(first.rows[0]);
+  });
+});
+
+describe("inboxGroupsIn", () => {
+  it("answers every screen grouping one Inbox the same groups over its own read of the same task list", () => {
+    const task: TaskSummary = {
+      id: "8be6a192-b4c5-46d7-8c73-9eafb0c1d2e8",
+      workspaceId: "9cf7b2a3-c5d6-47e8-9d84-afb0c1d2e3f9",
+      name: "Invite flow",
+      createdAt: 1_000,
+      updatedAt: 1_000,
+    };
+    const holdings: InboxHoldings = {
+      read: new Map([[task.id, []]]),
+      tasks: [{ taskId: task.id, items: 0, updatedAt: 1_000 }],
+    };
+
+    const first = inboxGroupsIn(holdings, [task], task.workspaceId);
+
+    expect(inboxGroupsIn(holdings, [task], task.workspaceId)).toBe(first);
+    expect(inboxGroupsIn(holdings, [{ ...task, name: "Renamed" }], task.workspaceId)).not.toBe(
+      first,
+    );
   });
 });

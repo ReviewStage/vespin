@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { inboxAttachmentAddress } from "./inbox-attachment-link.js";
-import { INBOX_MEDIA, inboxThreadMessages } from "./inbox-list-model.js";
+import {
+  INBOX_MEDIA,
+  inboxAtNow,
+  inboxCounts,
+  inboxGroup,
+  inboxThreadMessages,
+  MINE,
+  taskHolder,
+} from "./inbox-list-model.js";
 import {
   INBOX_MESSAGE_AUTHOR,
   INBOX_REPLY,
@@ -9,6 +17,7 @@ import {
   type InboxItem,
 } from "./inbox-wire.js";
 import { LINK_DESTINATION } from "./link-grammar.js";
+import type { TaskSummary } from "./task-wire.js";
 
 /**
  * inbox-list-model.test.ts -- a thread's message as a client draws it: what
@@ -147,5 +156,38 @@ describe("inboxThreadMessages", () => {
       { label: "Invites a day", words: "20" },
       { label: "Admins only", words: "no" },
     ]);
+  });
+});
+
+describe("inboxAtNow and inboxCounts", () => {
+  it("answer every reader of one Inbox the same object until a reminder in it comes due, which moves its thread", () => {
+    const task: TaskSummary = {
+      id: PLAN,
+      workspaceId: "7ad59081-a3b4-45c6-9b62-8d9eafb0c1d7",
+      name: "Invite flow",
+      createdAt: 1_000,
+      updatedAt: 1_000,
+    };
+    const item: InboxItem = {
+      id: ITEM,
+      agentId: "agent-1",
+      key: "reminded",
+      revision: 1,
+      version: INBOX_WIRE_VERSION,
+      title: "Check the invite flow",
+      needsReply: false,
+      status: INBOX_STATUS.OPEN,
+      thread: [],
+      createdAt: 1_000,
+      updatedAt: 2_000,
+      remindAt: 10_000,
+    };
+    const groups = [inboxGroup(taskHolder(task), [item])];
+
+    const standing = inboxAtNow(groups, 5_000);
+
+    expect(inboxAtNow(groups, 9_999)).toBe(standing);
+    expect(inboxCounts(standing, "reader", MINE)).toBe(inboxCounts(standing, "reader", MINE));
+    expect(inboxAtNow(groups, 10_000)[0]?.items[0]?.updatedAt).toBe(10_000);
   });
 });

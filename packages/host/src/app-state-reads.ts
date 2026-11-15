@@ -596,6 +596,27 @@ export const selectInboxHoldings = memoizedSelect(
   (feed, tasks): InboxHoldings => ({ read: feedReads(feed), tasks }),
 );
 
+/** One workspace's groups, and the task list they were grouped over. */
+interface Grouped {
+  readonly listed: readonly TaskSummary[];
+  readonly groups: readonly InboxGroup[];
+}
+
+/**
+ * Each holdings' groups, by workspace, kept with the holdings themselves.
+ * Note that every screen reading the Inbox groups it again on each
+ * delivery, each over its own read of the task list, so the groups are kept
+ * for any list that holds the same rows, and every reader shares one answer.
+ */
+const GROUPED = new WeakMap<InboxHoldings, Map<string | undefined, Grouped>>();
+
+/** Whether two reads of the task list hold the very same rows, in the same order. */
+function sameRows(held: readonly TaskSummary[], next: readonly TaskSummary[]): boolean {
+  return (
+    held === next || (held.length === next.length && held.every((row, at) => row === next[at]))
+  );
+}
+
 /**
  * Every holder of Inbox items in one workspace as the window's Inbox groups
  * them (`@repo/features/inbox-list-model`'s `inboxGroups`): each task of the
@@ -606,6 +627,23 @@ export const selectInboxHoldings = memoizedSelect(
  * alone, does. No workspace named groups every workspace's.
  */
 export function inboxGroupsIn(
+  holdings: InboxHoldings,
+  listed: readonly TaskSummary[],
+  workspaceId: string | undefined,
+): readonly InboxGroup[] {
+  const byWorkspace = GROUPED.get(holdings) ?? new Map<string | undefined, Grouped>();
+  GROUPED.set(holdings, byWorkspace);
+  const kept = byWorkspace.get(workspaceId);
+
+  if (kept !== undefined && sameRows(kept.listed, listed)) return kept.groups;
+  const groups = groupedIn(holdings, listed, workspaceId);
+  byWorkspace.set(workspaceId, { listed, groups });
+
+  return groups;
+}
+
+/** The groups `inboxGroupsIn` answers, worked out. */
+function groupedIn(
   holdings: InboxHoldings,
   listed: readonly TaskSummary[],
   workspaceId: string | undefined,

@@ -1190,13 +1190,51 @@ function itemAtNow(item: InboxItem, now: number): InboxItem {
   return { ...rest, updatedAt: Math.max(item.updatedAt, remindAt) };
 }
 
-/** Every holder's items as they stand for the reader at `now` (`itemAtNow`), each group handed in kept where none of its items moved. */
+/** The groups' standing as last worked out, from the moment it was read until the next reminder comes due after it. */
+interface Standing {
+  readonly from: number;
+  readonly until: number;
+  readonly standing: readonly InboxGroup[];
+}
+
+/** Each list of groups' standing, kept with the groups themselves, so every reader of one Inbox shares it. */
+const STANDINGS = new WeakMap<readonly InboxGroup[], Standing>();
+
+/** The first moment after `now` that one of the groups' reminders comes due, which moves where its item stands; never where none does. */
+function nextReminder(groups: readonly InboxGroup[], now: number): number {
+  let next = Number.POSITIVE_INFINITY;
+
+  for (const { items } of groups) {
+    for (const { remindAt } of items) {
+      if (remindAt !== undefined && remindAt > now && remindAt < next) next = remindAt;
+    }
+  }
+
+  return next;
+}
+
+/**
+ * Every holder's items as they stand for the reader at `now` (`itemAtNow`),
+ * each group handed in kept where none of its items moved. Note that the
+ * answer is the same object for the same groups until a reminder among them
+ * comes due, because every screen reading the Inbox asks it on each
+ * delivery, and each one working it out again cost the app's JS thread a
+ * share of every tap.
+ */
 export function inboxAtNow(groups: readonly InboxGroup[], now: number): readonly InboxGroup[] {
-  return groups.map((group) => {
+  const kept = STANDINGS.get(groups);
+
+  if (kept !== undefined && now >= kept.from && now < kept.until) return kept.standing;
+
+  const standing = groups.map((group) => {
     const items = group.items.map((item) => itemAtNow(item, now));
 
     return items.every((item, index) => item === group.items[index]) ? group : { ...group, items };
   });
+
+  STANDINGS.set(groups, { from: now, until: nextReminder(groups, now), standing });
+
+  return standing;
 }
 
 /**
@@ -1249,11 +1287,41 @@ function showsItem(show: InboxShow, item: InboxItem, readerId: string | undefine
   }
 }
 
-/** How many of every task's items each scope lists, of those addressed to whom Addressed to names where it narrows the scope (`scopedItem`). */
+/** Each list of groups' counts, by whose items and then by the reader, kept with the groups, so every badge of one Inbox shares them. */
+const COUNTS = new WeakMap<
+  readonly InboxGroup[],
+  Map<InboxWhose, Map<string | undefined, InboxCounts>>
+>();
+
+/**
+ * How many of every task's items each scope lists, of those addressed to
+ * whom Addressed to names where it narrows the scope (`scopedItem`). Note
+ * that the same groups, whose and reader answer the same counts, which the
+ * Inbox and every badge read on each delivery.
+ */
 export function inboxCounts(
   tasks: readonly InboxGroup[],
   readerId: string | undefined,
   whose: InboxWhose = EVERYONES,
+): InboxCounts {
+  const byWhose = COUNTS.get(tasks) ?? new Map<InboxWhose, Map<string | undefined, InboxCounts>>();
+  COUNTS.set(tasks, byWhose);
+  const byReader = byWhose.get(whose) ?? new Map<string | undefined, InboxCounts>();
+  byWhose.set(whose, byReader);
+  const kept = byReader.get(readerId);
+
+  if (kept !== undefined) return kept;
+  const counts = countedItems(tasks, readerId, whose);
+  byReader.set(readerId, counts);
+
+  return counts;
+}
+
+/** The counts `inboxCounts` answers, worked out. */
+function countedItems(
+  tasks: readonly InboxGroup[],
+  readerId: string | undefined,
+  whose: InboxWhose,
 ): InboxCounts {
   const items = tasks.flatMap(({ holder, items }) =>
     items.map((item) => inboxListed(holder, item)),
