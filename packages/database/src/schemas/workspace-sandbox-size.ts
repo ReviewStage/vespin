@@ -5,7 +5,7 @@ import { updatedAt } from "./_helpers.js";
 import { organization } from "./auth.js";
 
 /**
- * workspace-sandbox-size.ts -- how large a workspace's cloud agents' sandboxes open: the vCPUs its owners and admins chose, and the most Vespin's own admins let it have.
+ * workspace-sandbox-size.ts -- how large a workspace's cloud agents' sandboxes open: the vCPUs its owners and admins chose, and the most our own admins let it have.
  *
  * One row per workspace that chose or was allowed a size, written again on
  * each change; a workspace with no row opens its agents' sandboxes at
@@ -27,7 +27,7 @@ export const workspaceSandboxSize = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     /** The vCPUs the workspace's owners and admins chose for its agents' sandboxes. */
     vcpus: integer("vcpus").$type<SandboxVcpus>().notNull().default(SANDBOX_SIZE.VCPUS),
-    /** The most vCPUs the workspace may choose, which only Vespin's own admins raise. */
+    /** The most vCPUs the workspace may choose, which only our own admins raise. */
     maxVcpus: integer("max_vcpus").$type<SandboxVcpus>().notNull().default(SANDBOX_SIZE.VCPUS),
     updatedAt: updatedAt(),
   },

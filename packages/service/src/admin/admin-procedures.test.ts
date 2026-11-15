@@ -168,7 +168,7 @@ function request(path: string, method = "GET"): Request {
 }
 
 /** A PUT of a workspace's sandbox cap, its body as given. */
-function capRequest(path: string, body: unknown): Request {
+function capRequest(path: string, body: { readonly maxVcpus: number }): Request {
   return new Request(new URL(path, ORIGIN), {
     method: "PUT",
     headers: { "content-type": JSON_TYPE },

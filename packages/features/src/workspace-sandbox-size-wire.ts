@@ -1,9 +1,9 @@
 /**
- * workspace-sandbox-size-wire.ts -- a workspace's cloud sandbox size on the wire: read it as a member, and choose it as an owner or admin, at most what Vespin's admins let the workspace have.
+ * workspace-sandbox-size-wire.ts -- a workspace's cloud sandbox size on the wire: read it as a member, and choose it as an owner or admin, at most what our admins let the workspace have.
  *
  * The size is the vCPUs every agent's sandbox in the workspace opens with,
  * each with its memory (`sandbox-size.ts`). A choice is one of the sizes a
- * workspace may choose and no more than its most, which only Vespin's admins
+ * workspace may choose and no more than its most, which only our admins
  * raise (`admin-wire.ts`'s `WORKSPACE_SANDBOX`); one above it is not
  * permitted. An answer reads its sizes as numbers, so a size a newer service
  * offers never fails an older client's read.

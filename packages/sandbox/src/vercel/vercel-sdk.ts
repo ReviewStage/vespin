@@ -914,7 +914,9 @@ function vercelSandbox(
       }).catch(absentIfNotFound);
 
       if (standing === undefined || standing.vcpus === vcpus) return;
+
       if (STATUS_OF_VERCEL.get(standing.status) !== SANDBOX_STATUS.STOPPED) return;
+
       await standing.update({ resources: { vcpus } }, { signal });
     }).pipe(
       Effect.catch((failure) =>

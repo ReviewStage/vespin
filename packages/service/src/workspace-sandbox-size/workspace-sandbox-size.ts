@@ -1,5 +1,5 @@
 /**
- * workspace-sandbox-size.ts -- a workspace's cloud sandbox size, as every door reads and chooses it: read it as a member, and choose it as an owner or admin, at most the most Vespin's admins let the workspace have.
+ * workspace-sandbox-size.ts -- a workspace's cloud sandbox size, as every door reads and chooses it: read it as a member, and choose it as an owner or admin, at most the most our admins let the workspace have.
  *
  * The hosted procedures (`workspace-sandbox-size-procedures.ts`) go through
  * these, so one rule holds for each: a workspace the account is not a
@@ -54,6 +54,7 @@ export const chooseSandboxSize = Effect.fn("web/chooseSandboxSize")(function* (
 
   if (vcpus > standing.maxVcpus) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   const now = yield* DateTime.nowAsDate;
+
   const chosen = yield* hostedStoreOrUnavailable(
     setWorkspaceSandboxVcpus(workspace.id, vcpus, now),
   );

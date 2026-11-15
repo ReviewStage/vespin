@@ -1,5 +1,5 @@
 /**
- * workspace-sandbox-size-store.ts -- a workspace's sandbox size: read it, set the vCPUs its owners and admins chose, and set the most Vespin's admins let it have.
+ * workspace-sandbox-size-store.ts -- a workspace's sandbox size: read it, set the vCPUs its owners and admins chose, and set the most our admins let it have.
  *
  * Every function is an effect over the ambient `SqlClient`, keyed by the
  * workspace, so no workspace reads or writes another's size; who may call
