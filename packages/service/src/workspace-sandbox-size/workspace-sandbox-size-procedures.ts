@@ -4,8 +4,8 @@
  * Every procedure resolves the caller (`accountMiddleware`, on the resource
  * so it runs before an input is read), then runs the operation every door
  * shares (`workspace-sandbox-size.ts`): a workspace the caller is not in is
- * not found, and a choice by a member who is no owner or admin, or above the
- * most the workspace may have, is not permitted. Every answer is the size as
+ * not found, and a choice by a member who is no owner or admin is not
+ * permitted. Every answer is the size as
  * it then stands.
  */
 

@@ -300,7 +300,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     user: INTERNAL,
     users: INTERNAL,
     workspace: INTERNAL,
-    workspaceSandbox: INTERNAL,
     workspaces: INTERNAL,
   },
   agentPages: { frame: SCREEN_ONLY },

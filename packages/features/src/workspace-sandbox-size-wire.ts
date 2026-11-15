@@ -1,12 +1,10 @@
 /**
- * workspace-sandbox-size-wire.ts -- a workspace's cloud sandbox size on the wire: read it as a member, and choose it as an owner or admin, at most what our admins let the workspace have.
+ * workspace-sandbox-size-wire.ts -- a workspace's cloud sandbox size on the wire: read it as a member, and choose it as an owner or admin.
  *
  * The size is the vCPUs every agent's sandbox in the workspace opens with,
- * each with its memory (`sandbox-size.ts`). A choice is one of the sizes a
- * workspace may choose and no more than its most, which only our admins
- * raise (`admin-wire.ts`'s `WORKSPACE_SANDBOX`); one above it is not
- * permitted. An answer reads its sizes as numbers, so a size a newer service
- * offers never fails an older client's read.
+ * each with its memory (`sandbox-size.ts`); a choice is one of the sizes a
+ * workspace may choose. An answer reads its size as a number, so a size a
+ * newer service offers never fails an older client's read.
  */
 
 import { Schema as EffectSchema } from "effect";
@@ -21,15 +19,13 @@ export const sandboxVcpusSchema = EffectSchema.Literals(SANDBOX_VCPU_SIZES);
 
 /** A workspace's sandbox size as its members read it. */
 export const workspaceSandboxSizeAnswerSchema = EffectSchema.Struct({
-  /** The vCPUs its agents' sandboxes open with: what its owners and admins chose, held under `maxVcpus`. */
+  /** The vCPUs its agents' sandboxes open with. */
   vcpus: countedNumber,
-  /** The most vCPUs the workspace may choose. */
-  maxVcpus: countedNumber,
 });
 
 export type WorkspaceSandboxSizeAnswer = typeof workspaceSandboxSizeAnswerSchema.Type;
 
-/** Choosing the workspace's sandbox size (PUT), at most its `maxVcpus`. */
+/** Choosing the workspace's sandbox size (PUT). */
 export const workspaceSandboxSizePutRequestSchema = EffectSchema.Struct({
   workspaceId: workspaceIdSchema,
   vcpus: sandboxVcpusSchema,

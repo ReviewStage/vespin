@@ -29,8 +29,6 @@ export const ADMIN_ROUTE_PATH = {
   DAY: "/api/admin/day",
   WORKSPACES: "/api/admin/workspaces",
   WORKSPACE: "/api/admin/workspace",
-  /** The most vCPUs a workspace's sandboxes may be given, set (PUT, the workspace named in the query). */
-  WORKSPACE_SANDBOX: "/api/admin/workspace/sandbox",
   RELIABILITY: "/api/admin/reliability",
   CATALOG: "/api/admin/catalog",
 } as const;

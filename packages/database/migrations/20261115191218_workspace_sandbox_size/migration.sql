@@ -5,10 +5,8 @@ DROP TRIGGER IF EXISTS "app_sync_write" ON "workspace_sandbox_size";
 CREATE TABLE "workspace_sandbox_size" (
 	"organization_id" text PRIMARY KEY,
 	"vcpus" integer DEFAULT 2 NOT NULL,
-	"max_vcpus" integer DEFAULT 2 NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "workspace_sandbox_size_vcpus" CHECK ("vcpus" in (2, 4, 8)),
-	CONSTRAINT "workspace_sandbox_size_max_vcpus" CHECK ("max_vcpus" in (2, 4, 8))
+	CONSTRAINT "workspace_sandbox_size_vcpus" CHECK ("vcpus" in (2, 4, 8))
 );
 --> statement-breakpoint
 ALTER TABLE "workspace_sandbox_size" ADD CONSTRAINT "workspace_sandbox_size_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;
@@ -55,4 +53,4 @@ $app_sync$;
 --> statement-breakpoint
 CREATE TRIGGER "app_sync_write" AFTER INSERT OR DELETE ON "workspace_sandbox_size" FOR EACH ROW EXECUTE FUNCTION "app_sync_workspace_sandbox_size"();
 --> statement-breakpoint
-CREATE TRIGGER "app_sync_update" AFTER UPDATE ON "workspace_sandbox_size" FOR EACH ROW WHEN (OLD."organization_id" IS DISTINCT FROM NEW."organization_id" OR OLD."vcpus" IS DISTINCT FROM NEW."vcpus" OR OLD."max_vcpus" IS DISTINCT FROM NEW."max_vcpus" OR OLD."updated_at" IS DISTINCT FROM NEW."updated_at") EXECUTE FUNCTION "app_sync_workspace_sandbox_size"();
+CREATE TRIGGER "app_sync_update" AFTER UPDATE ON "workspace_sandbox_size" FOR EACH ROW WHEN (OLD."organization_id" IS DISTINCT FROM NEW."organization_id" OR OLD."vcpus" IS DISTINCT FROM NEW."vcpus" OR OLD."updated_at" IS DISTINCT FROM NEW."updated_at") EXECUTE FUNCTION "app_sync_workspace_sandbox_size"();

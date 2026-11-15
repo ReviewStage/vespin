@@ -1,5 +1,5 @@
 /**
- * sandbox-size.ts -- how large a cloud agent's sandbox opens: the vCPUs its workspace chose, held under the most we let that workspace have, and the memory each brings.
+ * sandbox-size.ts -- how large a cloud agent's sandbox opens: the vCPUs its workspace chose, and the memory each brings.
  *
  * The service opens an agent's sandbox at this size (`sandbox-machine.ts`),
  * and the panel names it on the agent's Runs on card, so both read it here.
@@ -27,8 +27,7 @@ export const SANDBOX_VCPU_SIZES: readonly SandboxVcpus[] = Object.values(SANDBOX
 
 export const SANDBOX_SIZE = {
   /**
-   * The sandbox's vCPUs where its workspace chose no other, and the most a
-   * workspace may choose until one of our admins raises it; also the size a
+   * The sandbox's vCPUs where its workspace chose no other; also the size a
    * workspace's drive and its repositories' snapshots are built at, since
    * Vercel opens a snapshot at whatever size the create asks. Two, because
    * provisioned memory and active CPU are most of the sandboxes' bill and
@@ -39,28 +38,6 @@ export const SANDBOX_SIZE = {
   /** The memory Vercel gives a sandbox per vCPU, in GB. */
   MEMORY_GB_PER_VCPU: 2,
 } as const;
-
-/**
- * A workspace's sandbox size as it is kept: the vCPUs its owners and admins
- * chose, and the most our admins let it have. The choice may stand
- * above the most where an admin lowered it after, and is then held under it
- * (`sandboxVcpus`).
- */
-export interface WorkspaceSandboxSize {
-  readonly vcpus: SandboxVcpus;
-  readonly maxVcpus: SandboxVcpus;
-}
-
-/** A workspace's size where nothing was chosen or allowed for it. */
-export const DEFAULT_WORKSPACE_SANDBOX_SIZE: WorkspaceSandboxSize = {
-  vcpus: SANDBOX_SIZE.VCPUS,
-  maxVcpus: SANDBOX_SIZE.VCPUS,
-};
-
-/** The vCPUs an agent's sandbox in the workspace opens with: what its workspace chose, held under the most it may have. */
-export function sandboxVcpus(size: WorkspaceSandboxSize): SandboxVcpus {
-  return size.vcpus <= size.maxVcpus ? size.vcpus : size.maxVcpus;
-}
 
 /** A sandbox's memory, in GB, at its vCPUs. */
 export function sandboxMemoryGb(vcpus: number): number {

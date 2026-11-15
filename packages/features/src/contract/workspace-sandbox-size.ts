@@ -9,7 +9,7 @@
  * Each declares the refusals its handler answers
  * (`packages/service/src/workspace-sandbox-size/`): a workspace the account
  * is not a member of is not found, and a choice by a member who is no owner
- * or admin, or above the most the workspace may have, is not permitted.
+ * or admin is not permitted.
  */
 
 import { openapi } from "@orpc/openapi";

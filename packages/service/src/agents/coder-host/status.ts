@@ -348,7 +348,7 @@ export interface AgentTurnStanding {
   readonly sandboxOpen?: boolean | undefined;
   /** Where its first launch stands while its boot record does (`agentBootsOf`); none where it has none or the read named none. */
   readonly boot?: BootPhase | undefined;
-  /** The vCPUs its sandbox opens with, its workspace's size (`sandboxVcpus`); none where the read named none, which reads as the default. */
+  /** The vCPUs its sandbox opens with, its workspace's size; none where the read named none, which reads as the default. */
   readonly sandboxVcpus?: SandboxVcpus | undefined;
 }
 

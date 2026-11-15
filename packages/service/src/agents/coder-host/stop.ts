@@ -15,12 +15,11 @@ import { cancelAgentWakeup } from "@repo/database/models/agent-wakeups";
 import { devicesNamed } from "@repo/database/models/device-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import type { TaskStandingAgent } from "@repo/database/models/task-store";
-import { workspaceSandboxSizesOf } from "@repo/database/models/workspace-sandbox-size-store";
+import { workspaceSandboxVcpusOf } from "@repo/database/models/workspace-sandbox-size-store";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import type { StoreWriter } from "@repo/database/models/writer";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import { AGENT_STATUS, type AgentStatus, type AgentSummary } from "@repo/features/agent-wire";
-import { sandboxVcpus } from "@repo/features/sandbox-size";
 import type { Sandbox } from "@repo/sandbox";
 import { Clock, DateTime, Effect, Exit, Result } from "effect";
 import type { HttpClient } from "effect/http";
@@ -92,15 +91,15 @@ export const standingsOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const sandboxes = yield* hostedStoreOrUnavailable(openSandboxesOfReached(conversationIds));
   const boots = yield* hostedStoreOrUnavailable(agentBootsOf(booting.map((agent) => agent.id)));
 
-  const sizes = yield* hostedStoreOrUnavailable(
-    workspaceSandboxSizesOf(booting.flatMap((agent) => agent.organizationId ?? [])),
+  const vcpusOfWorkspace = yield* hostedStoreOrUnavailable(
+    workspaceSandboxVcpusOf(booting.flatMap((agent) => agent.organizationId ?? [])),
   );
 
   const vcpusOf = new Map(
     booting.flatMap((agent) =>
       agent.organizationId === undefined
         ? []
-        : [[agent.conversationId, sandboxVcpus(sizes(agent.organizationId))] as const],
+        : [[agent.conversationId, vcpusOfWorkspace(agent.organizationId)] as const],
     ),
   );
 

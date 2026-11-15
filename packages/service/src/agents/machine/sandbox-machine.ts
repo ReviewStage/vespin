@@ -101,10 +101,10 @@ import {
   writeAgentRunnerRecord,
 } from "@repo/database/models/agent-runner-record";
 import { type Agent, hasRepository, type WithRepository } from "@repo/database/models/agent-store";
-import { readWorkspaceSandboxSize } from "@repo/database/models/workspace-sandbox-size-store";
+import { readWorkspaceSandboxVcpus } from "@repo/database/models/workspace-sandbox-size-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
-import { type SandboxVcpus, sandboxVcpus } from "@repo/features/sandbox-size";
+import type { SandboxVcpus } from "@repo/features/sandbox-size";
 import {
   CLOUD_SETUP_SCRIPT,
   type CloudSetupScript,
@@ -461,17 +461,15 @@ function setupExits(
 }
 
 /**
- * The vCPUs an agent's sandbox opens with: its workspace's size, held under
- * the most it may have (`sandboxVcpus`). Note that a size that could not be
- * read is none, logged, so the open asks for no size: a create opens at
- * Vercel's default and a standing sandbox resumes at its own, never resized
- * on a read that failed.
+ * The vCPUs an agent's sandbox opens with: its workspace's size. Note that a
+ * size that could not be read is none, logged, so the open asks for no
+ * size: a create opens at Vercel's default and a standing sandbox resumes
+ * at its own, never resized on a read that failed.
  */
 const workspaceVcpusOf = (
   agent: Agent,
 ): Effect.Effect<SandboxVcpus | undefined, never, DatabaseServices> =>
-  readWorkspaceSandboxSize(agent.organizationId).pipe(
-    Effect.map(sandboxVcpus),
+  readWorkspaceSandboxVcpus(agent.organizationId).pipe(
     Effect.catch((failure) =>
       Effect.as(
         Effect.logWarning(`an agent's sandbox size was not read: ${failure._tag}`),

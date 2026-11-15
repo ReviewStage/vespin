@@ -32,11 +32,11 @@ export interface AdminWorkspaceDetailSource {
   installations: readonly AdminWorkspaceInstallation[];
 }
 
-/** Shapes one queried workspace into the page's answer, its owner the earliest owner, as the table names it, all but its sandbox size, which its own store answers. */
+/** Shapes one queried workspace into the page's answer, its owner the earliest owner, as the table names it. */
 export function buildAdminWorkspaceDetail(
   source: AdminWorkspaceDetailSource,
   now: number,
-): Omit<AdminWorkspaceDetail, "sandbox"> {
+): AdminWorkspaceDetail {
   const owner = source.members.find((each) => each.role === WORKSPACE_ROLE.OWNER);
 
   return {

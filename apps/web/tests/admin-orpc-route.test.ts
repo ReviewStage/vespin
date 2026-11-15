@@ -78,7 +78,6 @@ function seams(viewer: AdminViewer | null, written: string[]): AdminProcedureSea
     readDay: unread,
     readWorkspaces: unread,
     readWorkspace: unread,
-    writeSandboxCap: unread,
     readReliability: unread,
   };
 }

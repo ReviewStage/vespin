@@ -444,13 +444,12 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
 }
 
 /**
- * The vCPUs the agent's sandbox opens with: its workspace's size held under
- * the most it may have, as `sandboxVcpus` reads it, or the default where the
- * workspace keeps none. Note that a change of the size wakes the list on
+ * The vCPUs the agent's sandbox opens with: its workspace's size, or the
+ * default where the workspace chose none. Note that a change of the size wakes the list on
  * the workspace's topic (`movedAgents`), and reaches the agent's sandbox at
  * its next open after it stops.
  */
-const SANDBOX_VCPUS_OF_AGENT = sql<number>`coalesce((select least(${workspaceSandboxSize.vcpus}, ${workspaceSandboxSize.maxVcpus}) from ${workspaceSandboxSize} where ${workspaceSandboxSize.organizationId} = ${agentTable.organizationId}), ${SANDBOX_SIZE.VCPUS})`;
+const SANDBOX_VCPUS_OF_AGENT = sql<number>`coalesce((select ${workspaceSandboxSize.vcpus} from ${workspaceSandboxSize} where ${workspaceSandboxSize.organizationId} = ${agentTable.organizationId}), ${SANDBOX_SIZE.VCPUS})`;
 
 /**
  * Where the agent's current sandbox stands as its row in `agent_sandbox`

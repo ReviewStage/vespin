@@ -1,10 +1,9 @@
 /**
- * admin-procedures.ts -- the admin dashboard's reads, its star write, and a workspace's sandbox cap, as one hosted resource.
+ * admin-procedures.ts -- the admin dashboard's reads and its one star write, as one hosted resource.
  *
  * The reads answer the dashboard's screens (the catalog, metrics, cost, reliability, the
- * roster, one account, one day, the workspaces, and one workspace); the writes are the Users
- * tab's star, PUT to set it and DELETE to take it back, and the most vCPUs a
- * workspace's sandboxes may be given, PUT. Each answers for its
+ * roster, one account, one day, the workspaces, and one workspace); the write is the Users
+ * tab's star, PUT to set it and DELETE to take it back. Each answers for its
  * own query and its own refusals (`admin-*.ts`) and is answered as it was
  * built.
  *
@@ -27,10 +26,6 @@ import { type AdminReliabilityOptions, handleAdminReliability } from "./admin-re
 import { type AdminUserOptions, handleAdminUser } from "./admin-user.js";
 import { type AdminUsersOptions, handleAdminUsers } from "./admin-users.js";
 import { type AdminWorkspaceOptions, handleAdminWorkspace } from "./admin-workspace.js";
-import {
-  type AdminWorkspaceSandboxOptions,
-  handleAdminWorkspaceSandbox,
-} from "./admin-workspace-sandbox.js";
 import { type AdminWorkspacesOptions, handleAdminWorkspaces } from "./admin-workspaces.js";
 import { type AdminViewerResolver, adminGateMiddleware } from "./gate.js";
 
@@ -50,7 +45,6 @@ export interface AdminProcedureSeams {
   readWorkspace: AdminWorkspaceOptions["readWorkspace"];
   readReliability: AdminReliabilityOptions["readReliability"];
   writeFavorite: AdminFavoriteOptions["writeFavorite"];
-  writeSandboxCap: AdminWorkspaceSandboxOptions["writeSandboxCap"];
 }
 
 export function adminProcedures(seams: AdminProcedureSeams) {
@@ -103,13 +97,6 @@ export function adminProcedures(seams: AdminProcedureSeams) {
     }),
     workspace: gated.workspace.effect(function* ({ input }) {
       return yield* handleAdminWorkspace({ query: input, readWorkspace: seams.readWorkspace });
-    }),
-    workspaceSandbox: gated.workspaceSandbox.effect(function* ({ input }) {
-      return yield* handleAdminWorkspaceSandbox({
-        query: input.query,
-        maxVcpus: input.body.maxVcpus,
-        writeSandboxCap: seams.writeSandboxCap,
-      });
     }),
     workspaces: gated.workspaces.effect(function* ({ input }) {
       return yield* handleAdminWorkspaces({ query: input, readWorkspaces: seams.readWorkspaces });

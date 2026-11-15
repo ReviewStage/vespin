@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "b7c930e6-95f8-4140-aa3e-a200ae92941b",
+  "id": "77cff798-7fc9-4e79-85e9-6c67406a23f9",
   "prevIds": ["26a712ef-ddc3-432c-8186-94758a054ce3"],
   "ddl": [
     {
@@ -14419,19 +14419,6 @@
       "table": "workspace_sandbox_size"
     },
     {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "2",
-      "generated": null,
-      "identity": null,
-      "name": "max_vcpus",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "workspace_sandbox_size"
-    },
-    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -22510,13 +22497,6 @@
     {
       "value": "\"vcpus\" in (2, 4, 8)",
       "name": "workspace_sandbox_size_vcpus",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "workspace_sandbox_size"
-    },
-    {
-      "value": "\"max_vcpus\" in (2, 4, 8)",
-      "name": "workspace_sandbox_size_max_vcpus",
       "entityType": "checks",
       "schema": "public",
       "table": "workspace_sandbox_size"

@@ -31,7 +31,6 @@ import type { GitHubInstallationStatus } from "./github-installation-wire.js";
 import type { IntegrationRowStatus } from "./integration-row-wire.js";
 import type { IntegrationProvider } from "./integration-wire.js";
 import type { FastAccess, ProviderKeyProvider, ProviderKeyStatus } from "./provider-key-wire.js";
-import type { WorkspaceSandboxSizeAnswer } from "./workspace-sandbox-size-wire.js";
 import type { WorkspaceRole } from "./workspace-wire.js";
 
 /* ----- The Overview's metrics (`@repo/service/admin/admin-metrics`) ----- */
@@ -623,8 +622,6 @@ export interface AdminWorkspaceDetail {
   workspace: AdminWorkspaceRow;
   /** Every member, owners first, then the earliest to join. */
   members: AdminWorkspaceMember[];
-  /** Its agents' sandbox size as its members read it, with the most it may choose, which an admin sets (`ADMIN_ROUTE_PATH.WORKSPACE_SANDBOX`). */
-  sandbox: WorkspaceSandboxSizeAnswer;
 }
 
 /* ----- One account's support sections (`@repo/service/admin/admin-account`) ----- */
