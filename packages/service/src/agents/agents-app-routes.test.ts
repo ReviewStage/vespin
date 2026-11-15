@@ -1261,12 +1261,12 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
   );
 
   it.effect(
-    "an SVG of the agent's own repository that its pull request's overview names is served as its bytes, sandboxed so it never runs as a page of the service",
+    "an SVG of the agent's own repository that its pull request's overview names is served as its bytes, sandboxed so it never runs as a page of the service, to whoever may read the agent",
     () =>
       Effect.gen(function* () {
         const contents = `/repos/${RELAY_FULL_NAME}/contents/docs%2Fdiagram.svg`;
 
-        const { owner, task, ask, fetch } = yield* openTask({
+        const { owner, other, task, ask, fetch } = yield* openTask({
           github: (sent) =>
             new URL(sent.url).pathname === contents
               ? new Response(SCRIPTED_SVG, {
@@ -1277,12 +1277,13 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
 
         const { agent } = yield* startedAgent(owner, task.id, ask);
 
-        const served = yield* fetch(
-          request(AGENT_GITHUB_IMAGE, owner, {
+        const at = (bearer: string | undefined) =>
+          request(AGENT_GITHUB_IMAGE, bearer, {
             id: agent.id,
             src: `https://raw.githubusercontent.com/${RELAY_FULL_NAME}/main/docs/diagram.svg`,
-          }),
-        );
+          });
+
+        const served = yield* fetch(at(owner));
 
         assert.equal(served.status, HOSTED_HTTP_STATUS.OK);
         assert.equal(served.headers.get("content-type"), "image/svg+xml");
@@ -1294,6 +1295,16 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         assert.deepEqual(
           new Uint8Array(yield* Effect.promise(() => served.arrayBuffer())),
           SCRIPTED_SVG,
+        );
+
+        assert.deepEqual(
+          yield* ask(at(other)),
+          refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
+          "not a member",
+        );
+        assert.deepEqual(
+          yield* ask(at(undefined)),
+          refusal(HOSTED_HTTP_STATUS.UNAUTHORIZED, HOSTED_API_ERROR.INVALID_TOKEN),
         );
       }),
   );

@@ -26,6 +26,7 @@ import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { useSteadyDoor } from "../steady-door.js";
+import { type TaskListRows, useTaskListRows } from "../task-list-collections.js";
 import { useTasksDelete } from "../tasks/task-delete.js";
 import { type StandingWrites, useStandingWrites } from "../tasks/use-standing-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -114,6 +115,7 @@ export interface ChosenRows {
  */
 function selectionActs(
   tasks: TasksControl,
+  rows: TaskListRows,
   latest: () => TaskSections,
   taskIds: readonly string[],
   doors: {
@@ -133,7 +135,7 @@ function selectionActs(
     onActed();
   };
 
-  const chosen = tasks.tasks.filter((task) => taskIds.includes(task.id));
+  const chosen = taskIds.flatMap((taskId) => rows.task(taskId) ?? []);
   const status = statusSubmenu(doors.standing, taskIds, sharedStatus(chosen), onActed);
   const workspaceId = tasks.workspace?.id;
   const sections = workspaceId === undefined ? [] : workspaceSections(doors.sections, workspaceId);
@@ -307,7 +309,9 @@ export function useTasksSelection(
 ): TasksSelection {
   // The sections as they stand, which New section's answer reads renders after its act.
   const sections = useSectionDialogs(tasks, tasks.shown);
-  const standing = useStandingWrites(tasks.drawnTasks);
+  const standing = useStandingWrites(tasks.typedNamesNow);
+  // The tasks chosen, read by id from the list with the names being typed, so the bar draws again as one of them moves.
+  const rows = useTaskListRows(tasks.typedNames);
   const latest = useRef(sections.sections);
   latest.current = sections.sections;
   const { regionId, selected, setChosen, onClear } = useChosen(drawn, held);
@@ -354,7 +358,7 @@ export function useTasksSelection(
     confirmFailure(FAILURE_SURFACE.TASK_DELETE),
   );
 
-  const acts = selectionActs(tasks, () => latest.current, [...selected], {
+  const acts = selectionActs(tasks, rows, () => latest.current, [...selected], {
     sections: sections.sections,
     standing,
     onActed: onClear,

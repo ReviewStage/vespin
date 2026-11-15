@@ -31,14 +31,14 @@ import {
   type StopAgentsWords,
 } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
-import { selectAgentPinned, selectFollowedAgent } from "@repo/host/app-state-reads";
+import { selectAgentPinned } from "@repo/host/app-state-reads";
 import { BUZZ, buzz } from "@repo/ui-native";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
 import { useFollowedAgent, useReadAgent } from "./use-agent.js";
 
@@ -100,14 +100,13 @@ export interface ArchiveAsk {
  */
 export function useArchiveAsk(agentId: string): ArchiveAsk {
   const readAgent = useReadAgent();
-  const queryClient = useQueryClient();
+  const { agents } = useTaskListCollections();
   const [askedWorking, setAskedWorking] = useState(false);
   const latest = useRef(0);
 
   /** Whether the agent `asked` names works as the task list holds it now; none where the list doesn't hold it. */
   const heldWorks = (asked: string): boolean | undefined => {
-    const state = queryClient.getQueryData(appStateQuery.queryKey);
-    const held = state === undefined ? undefined : selectFollowedAgent(asked)(state);
+    const held = agents.get(asked);
 
     return held === undefined ? undefined : agentStillWriting(held.status);
   };
