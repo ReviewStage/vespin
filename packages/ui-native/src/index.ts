@@ -167,6 +167,8 @@ export {
 
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
 
+export { useMinute } from "./minute-clock.js";
+
 export { monogramOf } from "./monogram.js";
 
 export { SwitchRow } from "./option-rows.js";

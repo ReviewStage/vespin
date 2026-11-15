@@ -75,10 +75,11 @@ import {
   ThreadPreview,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useMinute,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
 import { PUSHED_PAGE, useDetailPush, useStackRoot, useStandDetailFront } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -241,78 +242,12 @@ type InboxRowActs = {
  */
 export function InboxItemRows({
   listed,
-  readerId,
-  pictureOf,
-  ...given
+  ...acts
 }: InboxRowActs & { readonly listed: readonly InboxListed[] }) {
-  const acts = useSteadyRowActs(given);
-  // Note that the rows are drawn again at most once a minute for the clock alone, so Remind me's times beside each never stand long out of date.
-  const minute = Math.floor(Date.now() / MINUTE_MS);
-
   return (
     <RowForEach data={listed} keyOf={(each) => each.item.id}>
-      {(each) => (
-        <InboxRow
-          listed={each}
-          readerId={readerId}
-          pictureOf={pictureOf}
-          minute={minute}
-          {...acts}
-        />
-      )}
+      {(each) => <InboxRow listed={each} {...acts} />}
     </RowForEach>
-  );
-}
-
-/** What a row is handed to act with, by the screen it stands on. */
-type RowActs = Pick<InboxRowActs, "onMark" | "remindMenu" | "onResolve">;
-
-/**
- * The row's acts, the same functions from draw to draw, each calling the
- * screen's newest, so a row whose thread did not move is not drawn again
- * because its screen made its acts anew. Note that the newest are kept as
- * each draw commits, before any press can reach them.
- */
-function useSteadyRowActs(given: RowActs): RowActs {
-  const newest = useRef(given);
-
-  useLayoutEffect(() => {
-    newest.current = given;
-  });
-
-  return useMemo(
-    () => ({
-      onMark: (itemId, unread) => newest.current.onMark(itemId, unread),
-      remindMenu: (item) => newest.current.remindMenu(item),
-      onResolve: (item) => newest.current.onResolve(item),
-    }),
-    [],
-  );
-}
-
-/** A minute, in milliseconds, which a row's times are drawn again by at most. */
-const MINUTE_MS = 60_000;
-
-/**
- * Whether a row stands as it was drawn: the same thread and holder, reader,
- * pictures and minute, and the same acts. Note that every delivery to the
- * Inbox drew every row again, the rows of a list off screen among them,
- * which held the JS thread under a working agent's posts; a row is now drawn
- * again only where its own thread moved.
- */
-function sameRow(
-  before: Parameters<typeof InboxRowView>[0],
-  after: Parameters<typeof InboxRowView>[0],
-): boolean {
-  return (
-    before.listed.item === after.listed.item &&
-    before.listed.holder === after.listed.holder &&
-    before.readerId === after.readerId &&
-    before.pictureOf === after.pictureOf &&
-    before.minute === after.minute &&
-    before.onMark === after.onMark &&
-    before.remindMenu === after.remindMenu &&
-    before.onResolve === after.onResolve
   );
 }
 
@@ -332,7 +267,9 @@ function InboxRowView({
   onMark,
   remindMenu,
   onResolve,
-}: InboxRowActs & { readonly listed: InboxListed; readonly minute: number }) {
+}: InboxRowActs & { readonly listed: InboxListed }) {
+  // Note that the row reads the minute itself, so a row whose thread did not move still moves its time and Remind me's times as the minute turns.
+  const now = useMinute();
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
@@ -387,6 +324,7 @@ function InboxRowView({
       }
       at={item.updatedAt}
       due={item.remindAt}
+      now={now}
       trailingActions={[...resolve, remindMenu(item)]}
       leadingActions={[
         {
@@ -411,8 +349,15 @@ function InboxRowView({
   );
 }
 
-/** An Inbox item's row, drawn again only where its own thread moved (`sameRow`). */
-const InboxRow = memo(InboxRowView, sameRow);
+/**
+ * An Inbox item's row, drawn again only where its props moved. Note that
+ * every delivery to the Inbox drew every row again, a list off screen's
+ * among them, which held the JS thread under a working agent's posts; its
+ * props keep their identity while its own thread stands (`inboxListed`, the
+ * acts' and the menus' hooks), so a row is now drawn again only where its
+ * thread moved.
+ */
+const InboxRow = memo(InboxRowView);
 
 /**
  * What the list stands where it lists nothing: that the account's feed is
@@ -712,7 +657,7 @@ function ThreadDetail({
   const inboxActs = useInboxActs();
   const keeping = useKeeping();
   const inStack = place.inStack;
-  const remindMenu = place.inStack ? (on: InboxItem) => remind.menu([on]) : place.remindMenu;
+  const remindMenu = place.inStack ? remind.itemMenu : place.remindMenu;
 
   const doors = {
     onMark: (unread: boolean) => inboxActs.mark(item.id, unread),
@@ -1109,7 +1054,7 @@ function InboxStackList(words: InboxSearch) {
             }
             onRefresh={acts.refresh}
             onMark={acts.mark}
-            remindMenu={(item) => remind.menu([item])}
+            remindMenu={remind.itemMenu}
             onResolve={acts.resolve}
             choosing={choosing?.rows}
             onChooseStart={chooseStart}
@@ -1164,7 +1109,7 @@ function InboxSplitScreen({
         onSelect={select}
         onRefresh={acts.refresh}
         onMark={acts.mark}
-        remindMenu={(item) => remind.menu([item])}
+        remindMenu={remind.itemMenu}
         onResolve={acts.resolve}
         choosing={choosing?.rows}
         onChooseStart={chooseStart}
@@ -1200,12 +1145,7 @@ function InboxSplitScreen({
     selected === undefined ? (
       <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
     ) : (
-      <ThreadColumn
-        key={selected}
-        id={selected}
-        remindMenu={(item) => remind.menu([item])}
-        onOpen={select}
-      />
+      <ThreadColumn key={selected} id={selected} remindMenu={remind.itemMenu} onOpen={select} />
     );
 
   // Note that with no thread picked the detail's bar keeps the thread's acts, dimmed, as Mail's bar stands over No Message Selected; a picked thread's page stands its own.

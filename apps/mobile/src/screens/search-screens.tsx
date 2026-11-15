@@ -299,7 +299,7 @@ function useSearchScreen(
       listing={listing}
       selected={pick?.picked?.id}
       onOpen={open}
-      remindMenu={(item) => remind.menu([item])}
+      remindMenu={remind.itemMenu}
       onArchiveAgent={archiveAsk.archive}
     />
   );
@@ -527,7 +527,7 @@ function SearchSplitFound({
   const { detail, detailBar, asks } = useSearchDetail(
     picking.picked,
     listing,
-    (item) => remind.menu([item]),
+    remind.itemMenu,
     picking.choose,
   );
 
