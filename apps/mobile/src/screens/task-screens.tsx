@@ -133,11 +133,11 @@ import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import {
   PUSHED_PAGE,
+  topPageOf,
   useDetailLeave,
   useDetailPush,
   useStackRoot,
   useStandDetailFront,
-  useTopPage,
 } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
@@ -2024,18 +2024,21 @@ export function TaskColumnPage({ taskId }: { readonly taskId: string }) {
  */
 function useSplitStartLanded(selected: string | undefined, focused: boolean): void {
   const router = useRouter();
+  const navigation = useNavigation();
   const onTab = useOnTab();
-  // Note that a page pushed over the task's detail leaves Tasks focused, so the agent waits for the detail itself to stand in front.
-  const covered = useTopPage(SIDEBAR_PLACE.TASKS) !== undefined;
 
   useStartLanded(selected, (landed) => {
     if (landed.kind === START_LANDED.AGENT) {
-      if (focused && !covered) router.push(onTab(iosAgentRoute(landed.agentId)));
+      // Note that a page pushed over the task's detail leaves Tasks focused, so the agent waits for the detail itself to stand in front, read as the answer lands.
+      if (focused && topPageOf(SIDEBAR_PLACE.TASKS) === undefined) {
+        router.push(onTab(iosAgentRoute(landed.agentId)));
+      }
 
       return;
     }
 
-    router.setParams({ selected: undefined });
+    // Note that the Tasks root's own route lets go of the task, whichever tab stands in front.
+    navigation.setParams({ selected: undefined });
   });
 }
 
