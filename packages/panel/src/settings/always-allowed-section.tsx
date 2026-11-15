@@ -46,10 +46,10 @@ import { actMutation } from "../act-mutations.js";
 import { ActorLine, ActorRef } from "../actor-ref.js";
 import { refusedShown } from "../failure-report.js";
 import { allowedCommandsQuery, allowedCommandsRetryMutation } from "../live-reads.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { agentActor } from "../tasks/agent-model.js";
-import { listedAgentIn } from "../tasks/use-workspace-agents.js";
 import { pressWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
-import { appStateQuery, selectAccount, selectTasks } from "../use-app-state.js";
+import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-sections.js";
@@ -188,8 +188,7 @@ const REMOVE_UNDO = {
 
 /** The agent whose Always allow kept a command, as the window's lists name it; a plain agent's chip where none does. */
 function useAddedBy(agentId: string): Actor {
-  const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
-  const listed = listedAgentIn(tasks, agentId);
+  const listed = useTaskListRow(useTaskListCollections().agents, agentId);
 
   if (listed === undefined) {
     return {

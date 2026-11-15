@@ -114,30 +114,57 @@ function serverSub(row: ServerRow): React.JSX.Element | undefined {
   return <span>{parts.join(" · ")}</span>;
 }
 
-/** The card a mention of a server, or of one of its tools, hangs. */
+/**
+ * The card a mention of a server, or of one of its tools, hangs; or a call's
+ * account chip, naming the account the call ran on (`account`) over its
+ * provider. Note that only the account's owner is told where it stands,
+ * its switch and its problem, since they say what the owner's own settings
+ * hold; a reader who holds no account of that name is told its name alone.
+ */
 export function ServerCard({
   provider,
   connection = provider,
+  account,
 }: {
   provider: IntegrationProvider;
   /** The account at the provider by its connection name, where it is not the provider's first. */
   connection?: string | undefined;
+  /** The account's name as the call it ran on keeps it, which the card names in the server's place; none for a mention. */
+  account?: string | undefined;
 }): React.JSX.Element {
   const place = useContext(MentionedServersContext);
   const statuses = useIntegrationStatuses();
   const rows = useServerRows(statuses, place?.disabled ?? [], connection);
+  const held = rows.find((each) => each.connection === connection);
+  const providerName = INTEGRATION_NAME[provider];
+  // Note that a reader holds the account a call ran on only where their own of that connection goes by its name.
+  const own = account === undefined || held?.name === `${providerName} · ${account}`;
+  const row = own ? (held ?? unreadRow(provider, connection)) : unreadRow(provider, connection);
 
-  const row =
-    rows.find((each) => each.connection === connection) ?? unreadRow(provider, connection);
+  // Note that a call's chip is no mention, so its card says nothing of what a mention hands the agent.
+  const note =
+    account === undefined
+      ? serverMentionNote(row, place === undefined ? undefined : { handed: place.handed })
+      : undefined;
 
-  const note = serverMentionNote(row, place === undefined ? undefined : { handed: place.handed });
+  const standing = serverSub(row);
 
   return (
     <HoverCard data-server-card="">
       <HoverCardHead
         glyph={<ProviderMark provider={row.provider} />}
-        name={row.name}
-        sub={serverSub(row)}
+        name={account ?? row.name}
+        sub={
+          account === undefined ? (
+            standing
+          ) : (
+            <span>
+              {providerName}
+              {standing === undefined ? null : " · "}
+              {standing}
+            </span>
+          )
+        }
         corner={
           place !== undefined && row.kind === SERVER_ROW.SWITCH
             ? row.on

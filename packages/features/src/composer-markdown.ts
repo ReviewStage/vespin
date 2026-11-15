@@ -65,7 +65,7 @@ export interface InlinePiece {
 }
 
 /** Where a stretch of a piece's words landed in the written line. */
-export interface WrittenSegment {
+interface WrittenSegment {
   readonly piece: number;
   readonly from: number;
   readonly offset: number;

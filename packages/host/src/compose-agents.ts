@@ -152,7 +152,8 @@ import {
   type ScopeInboxes,
   scopeInboxes,
 } from "./scope-inbox-follow.js";
-import { AGENT, type AgentRow } from "./task-list-collections.js";
+import { AGENT } from "./task-list-collections.js";
+import type { AgentRow } from "./task-list-rows.js";
 import {
   followTranscript,
   HELD_BYTES,

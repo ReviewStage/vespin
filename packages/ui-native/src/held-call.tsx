@@ -102,7 +102,7 @@ export function HeldCallBody({ held }: { readonly held: HeldCall }) {
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
-          foregroundStyle(colors.TEXT_MUTED),
+          foregroundStyle(held.waiting ? colors.ATTENTION : colors.TEXT_MUTED),
         ]}
       >
         {held.words}

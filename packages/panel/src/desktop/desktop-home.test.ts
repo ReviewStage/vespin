@@ -33,8 +33,9 @@ import {
 } from "../testing/app-state.js";
 import { composerEditor, editorBundleLanded, installEditorLayout } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { tasksControl, waitingOf } from "../testing/tasks-control.js";
+import { type TasksControlOverrides, tasksControl, waitingOf } from "../testing/tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { DesktopHome } from "./desktop-home.js";
 
@@ -137,7 +138,10 @@ function home(
       createElement(
         OpenSettingsProvider,
         { value: onSettings },
-        createElement(DesktopHome, { tasks, room, accountName: DEAN.name, staged: true }),
+        overEveryTask(
+          tasks,
+          createElement(DesktopHome, { tasks, room, accountName: DEAN.name, staged: true }),
+        ),
       ),
     ),
   );
@@ -147,7 +151,7 @@ type Opened = { tasks: string[]; settings: SettingsLink[] };
 
 /** Home over Acme with `items` waiting on `RETRIES`, read by Dean, with `overrides`, their feed refused where `refused` says; each task and place of Settings it opens recorded, and the window's router, where an item it opens takes it. */
 function mount(
-  overrides: Partial<TasksControl> = {},
+  overrides: TasksControlOverrides = {},
   items: readonly InboxItem[] = [RETRY_429],
   room: ShellRoom = SHELL_ROOM.WIDE,
   refused = false,
@@ -175,7 +179,6 @@ function mount(
     listRead: true,
     workspace: ACME,
     tasks: TASKS,
-    listed: { tasks: TASKS },
     onSelect: (taskId) => opened.tasks.push(taskId),
     onResume: (taskId) => opened.tasks.push(taskId),
     ...overrides,
@@ -396,12 +399,11 @@ test("nothing waiting draws no Inbox section, but an Inbox that could not be rea
 });
 
 /** A new account, its one model connected, over a workspace that reaches no repository. */
-function newAccount(): Partial<TasksControl> {
+function newAccount(): TasksControlOverrides {
   const base = tasksControl();
 
   return {
     tasks: [],
-    listed: { tasks: [] },
     newTask: {
       ...base.newTask,
       workspaceId: ACME.id,

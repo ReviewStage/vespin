@@ -58,7 +58,7 @@ export interface BarStanding {
 }
 
 /** Where the window stands, as the bar reads it, the Inbox's choice as the listed workspace's list holds it. */
-export function useBarStanding(tasks: Pick<TasksControl, "tasks" | "workspace">): BarStanding {
+export function useBarStanding(tasks: Pick<TasksControl, "workspace">): BarStanding {
   const { place } = useWindowPlace();
   const automations = useAutomationsPlace();
 
