@@ -1,0 +1,3 @@
+jb1, #9357's iPhone lane (r9357), step 10: New agent drew the error boundary ("Something went wrong / This screen could not be drawn").
+JS console at 03:37:04 ET (08:37:04 UTC): ReferenceError: Property 'selectTasks' doesn't exist ('A screen did not draw.').
+Cause: apps/mobile/src/screens/start-screens.tsx. #9351 adds `select: selectTasks` (line 421) and keeps line 26 `import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads"` unchanged from its merge-base. Main's #9446 (b57a70abd6) changed that line to `import { selectWorkspaces } ...`. Git's 3-way merge takes main's line, so main + #9351 alone already loses the import: a clean textual merge with a runtime ReferenceError. Reproduced by merging #9351 alone onto origin/main (repo, 08:41 UTC).
