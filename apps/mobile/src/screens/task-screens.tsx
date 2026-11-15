@@ -2015,6 +2015,11 @@ export function TaskColumnPage({ taskId }: { readonly taskId: string }) {
   );
 }
 
+/** The Tasks root's own navigation, as far as it sets the task it selects. */
+type TasksRootNavigation = {
+  readonly setParams: (params: { readonly selected?: string | undefined }) => void;
+};
+
 /**
  * Hears what a New task start came to for the task a regular window's split
  * view shows, since the task's own page hands itself to the split view and
@@ -2024,7 +2029,7 @@ export function TaskColumnPage({ taskId }: { readonly taskId: string }) {
  */
 function useSplitStartLanded(selected: string | undefined, focused: boolean): void {
   const router = useRouter();
-  const navigation = useNavigation();
+  const navigation = useNavigation<TasksRootNavigation>();
   const onTab = useOnTab();
 
   useStartLanded(selected, (landed) => {
