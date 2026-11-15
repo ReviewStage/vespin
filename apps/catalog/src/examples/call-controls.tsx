@@ -1,5 +1,5 @@
 /**
- * call-controls.tsx -- Talk at rest and with no OpenAI API key; each mute round and square, off and on, and ringed as its voice speaks, Stop, and the one red End call; a call bar at a card's width and at its narrowest, connecting, idle, while the agent thinks and works, and muted; and the call card at the sidebar's foot, narrow, and in the floating window, its agent's chip over its task.
+ * call-controls.tsx -- Talk at rest and with no OpenAI API key; each mute round and square, off and on, and ringed as its voice speaks, and the one red End call; a call bar at a card's width and at its narrowest, connecting, idle, while the agent thinks and works, and muted; and the call card at the sidebar's foot, narrow, and in the floating window, its agent's chip over its task.
  */
 
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -22,7 +22,6 @@ import {
   HarnessMark,
   Inline,
   Stack,
-  StopAgentButton,
   TalkButton,
   WorkingMark,
 } from "@repo/ui";
@@ -73,7 +72,7 @@ function OwnedBar({
 
   return (
     <div style={{ width }}>
-      <CallBar status={status} {...mutes} onStop={stay} onEnd={stay} />
+      <CallBar status={status} {...mutes} onEnd={stay} />
     </div>
   );
 }
@@ -115,7 +114,6 @@ function OwnedCard({
         {...mutes}
         surface={surface}
         onReturn={stay}
-        onStop={stay}
         onEnd={stay}
       />
     </div>
@@ -163,10 +161,7 @@ function CallControls(): React.JSX.Element {
           <TalkButton keyMissing onPress={stay} />
         </Inline>
       </CatalogSection>
-      <CatalogSection
-        id="call-controls"
-        title="Mutes round and square, both muted, Stop, and End call"
-      >
+      <CatalogSection id="call-controls" title="Mutes round and square, both muted, and End call">
         <Inline gap={GAP.CONTROL}>
           <OwnedMute device={CALL_DEVICE.SPEAKER} corners={BUTTON_CORNERS.ROUND} />
           <OwnedMute device={CALL_DEVICE.MICROPHONE} corners={BUTTON_CORNERS.ROUND} />
@@ -174,7 +169,6 @@ function CallControls(): React.JSX.Element {
           <OwnedMute device={CALL_DEVICE.MICROPHONE} corners={BUTTON_CORNERS.SQUARE} />
           <OwnedMute device={CALL_DEVICE.SPEAKER} corners={BUTTON_CORNERS.ROUND} on />
           <OwnedMute device={CALL_DEVICE.MICROPHONE} corners={BUTTON_CORNERS.ROUND} on />
-          <StopAgentButton onPress={stay} />
           <EndCallButton onPress={stay} />
         </Inline>
       </CatalogSection>

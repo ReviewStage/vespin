@@ -439,7 +439,7 @@ function scheduleSpelling(schedule: ScheduleDraft): string {
 }
 
 /** The schedule a trigger reads as in the picker's terms: its date and time where it runs once, its cron read as `scheduleDraftOf` reads one otherwise. */
-export function scheduleDraftOfTrigger(trigger: ScheduleTrigger): ScheduleDraft {
+function scheduleDraftOfTrigger(trigger: ScheduleTrigger): ScheduleDraft {
   if (!scheduleRunsOnce(trigger)) return scheduleDraftOf(trigger.cron);
   const spelled = ONCE_AT.exec(trigger.at);
 
@@ -580,7 +580,7 @@ export function automationDraft(
 
 /** Whether the automation a draft opened as needs no repository chosen: one on a task, whose repository is its task's. */
 export function repositoryHeld(automation: AutomationSummary | undefined): boolean {
-  return automation !== undefined && automation.planId !== null;
+  return automation !== undefined && automation.taskId !== null;
 }
 
 /**
@@ -799,7 +799,7 @@ export function changeOf(
     !sameSet(draft.disabledServers, was.disabledServers);
 
   const targetMoved = draft.target !== was.target || landingAgent(draft) !== landingAgent(was);
-  const repositoryMoved = automation.planId === null && draft.repository !== was.repository;
+  const repositoryMoved = automation.taskId === null && draft.repository !== was.repository;
   const change: ChangeDraft = {};
 
   if (draft.name.trim() !== was.name) change.name = draft.name.trim();

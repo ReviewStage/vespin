@@ -3,12 +3,12 @@
 import assert from "node:assert/strict";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import type { AppStateDelivery, AppStateSnapshot } from "@repo/host/app-state";
+import type { AppStateDelivery } from "@repo/host/app-state";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { fakeAppBridge, fakeAppBridgeCalls } from "../testing/app-bridge.js";
-import { deliveryOf, handState, stateWith } from "../testing/app-state.js";
+import { deliveryOf, handState, type ListedAppState, stateWith } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
@@ -133,7 +133,7 @@ function handTasks(
 ): (version: number, next: readonly TaskSummary[]) => void {
   const listeners = new Set<(delivery: AppStateDelivery) => void>();
 
-  const documentOf = (version: number, listed: readonly TaskSummary[]): AppStateSnapshot => {
+  const documentOf = (version: number, listed: readonly TaskSummary[]): ListedAppState => {
     const idle = stateWith({}, {});
 
     return { ...idle, version, tasks: { ...idle.tasks, tasks: listed } };

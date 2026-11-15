@@ -11,7 +11,7 @@ import {
 } from "@repo/features/provider-key-wire";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import type { AppStateDelivery, AppStateSnapshot } from "@repo/host/app-state";
+import type { AppStateDelivery } from "@repo/host/app-state";
 import { type AppBridge, bridgeEntries } from "@repo/host/bridge";
 import { PUSH_METHOD } from "@repo/host/contract";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -26,7 +26,7 @@ import { runAppCommand } from "./app-commands.js";
 import "./desktop/desktop-settings.js";
 import { fakeActPortAnswering, fakeAppBridge, refusedOnPort } from "./testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
-import { deliveryOf, signedInAs } from "./testing/app-state.js";
+import { deliveryOf, type ListedAppState, signedInAs } from "./testing/app-state.js";
 import { withQueryClient, writeHandedAppState } from "./testing/copy-feedback.js";
 import { windowRouter } from "./testing/window-router.js";
 
@@ -40,7 +40,7 @@ import { windowRouter } from "./testing/window-router.js";
 const REQUIRED = { accountRequired: true } as const;
 
 /** Main's document for `account` signed in, where the window needs an account. */
-function signedIn(account: { id: string; email: string; name: string }): AppStateSnapshot {
+function signedIn(account: { id: string; email: string; name: string }): ListedAppState {
   const snapshot = signedInAs(account);
 
   return { ...snapshot, run: { ...snapshot.run, ...REQUIRED } };
@@ -75,7 +75,7 @@ const ANTHROPIC_KEY: ProviderKeySummary = {
 };
 
 /** Grace signed in as a member of a team's workspace, past setup's survey, with an agent connected or none yet. */
-function graceInvited(connected: boolean): AppStateSnapshot {
+function graceInvited(connected: boolean): ListedAppState {
   return {
     ...GRACE,
     // Note that the survey was skipped, as her account keeps the place it moved setup to.
@@ -102,7 +102,7 @@ declare global {
 }
 
 let root: Root | undefined;
-let listeners = new Set<(snapshot: AppStateSnapshot) => void>();
+let listeners = new Set<(snapshot: ListedAppState) => void>();
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -125,7 +125,7 @@ beforeEach(() => {
     ...quiet,
     requestAppState: () => Promise.resolve(structuredClone(ADA)),
     onAppState: (heard: (delivery: AppStateDelivery) => void) => {
-      const listener = (snapshot: AppStateSnapshot) => heard(deliveryOf(snapshot));
+      const listener = (snapshot: ListedAppState) => heard(deliveryOf(snapshot));
       listeners.add(listener);
 
       return () => listeners.delete(listener);
@@ -148,7 +148,7 @@ async function settle(): Promise<void> {
 }
 
 /** Delivers `snapshot` as main would, and lets the window draw what it draws. */
-async function deliver(snapshot: AppStateSnapshot, version: number): Promise<void> {
+async function deliver(snapshot: ListedAppState, version: number): Promise<void> {
   act(() => {
     for (const listener of listeners) listener(structuredClone({ ...snapshot, version }));
   });
@@ -175,7 +175,7 @@ function button(name: string): HTMLButtonElement {
 
 test("signed out from Settings, a fresh account that finishes setup lands on Home", async () => {
   // Grace has walked setup to its last step, Connect your tools, and her account carries the place.
-  const graceMidway: AppStateSnapshot = {
+  const graceMidway: ListedAppState = {
     ...GRACE,
     settings: appSettingsWire(settingsView({ setupPlace: '{"audience":"me","at":4}' })),
   };

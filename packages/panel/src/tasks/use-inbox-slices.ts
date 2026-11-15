@@ -2,6 +2,7 @@ import type { AccountFailedRun } from "@repo/features/account-inbox-wire";
 import type { AppInboxTask, AppInboxTaskHolding } from "@repo/host/app-state";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { type TaskListRows, useTaskListRows } from "../task-list-collections.js";
 import {
   appStateQuery,
   selectFailedRuns,
@@ -30,16 +31,12 @@ const NO_FAILED_RUNS: readonly AccountFailedRun[] = [];
 /** The entries of the tasks in `workspaceId`, or every entry while no workspace is listed. */
 function inWorkspace<Entry extends { readonly taskId: string }>(
   entries: readonly Entry[],
-  tasks: TasksControl["tasks"],
+  rows: Pick<TaskListRows, "task">,
   workspaceId: string | undefined,
 ): readonly Entry[] {
   if (workspaceId === undefined) return entries;
 
-  const listed = new Set(
-    tasks.filter((task) => task.workspaceId === workspaceId).map((task) => task.id),
-  );
-
-  return entries.filter((entry) => listed.has(entry.taskId));
+  return entries.filter((entry) => rows.task(entry.taskId)?.workspaceId === workspaceId);
 }
 
 /** What waits on the developer across the account's tasks, as main's read last answered: each task with an open inbox item, and its items. */
@@ -53,20 +50,22 @@ export function useInboxTaskHoldings(): readonly AppInboxTaskHolding[] {
 }
 
 /** The listed workspace's share of what waits on the developer (`inbox`) and of the tasks holding items (`inboxTasks`), which alone the Inbox, its count, and Home list; everything while no workspace is listed. */
-export function useListedInbox(control: Pick<TasksControl, "tasks" | "workspace">): {
+export function useListedInbox(control: Pick<TasksControl, "workspace">): {
   readonly inbox: readonly AppInboxTask[];
   readonly inboxTasks: readonly AppInboxTaskHolding[];
 } {
   const waiting = useInboxWaitingTasks();
   const holdings = useInboxTaskHoldings();
+  // The tasks the entries name, read by id, so only a move of one of them sorts the entries again.
+  const rows = useTaskListRows();
   const workspaceId = control.workspace?.id;
 
   return useMemo(
     () => ({
-      inbox: inWorkspace(waiting, control.tasks, workspaceId),
-      inboxTasks: inWorkspace(holdings, control.tasks, workspaceId),
+      inbox: inWorkspace(waiting, rows, workspaceId),
+      inboxTasks: inWorkspace(holdings, rows, workspaceId),
     }),
-    [waiting, holdings, control.tasks, workspaceId],
+    [waiting, holdings, rows, workspaceId],
   );
 }
 

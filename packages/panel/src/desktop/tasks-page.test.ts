@@ -38,6 +38,7 @@ import {
   writeListedTasks,
 } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
 import { relayout } from "../testing/resize-observer.js";
 import { layScrollerOut } from "../testing/scroller.js";
@@ -278,7 +279,7 @@ async function mountPage(
             Fragment,
             null,
             leavingBy(() => (closed += 1)),
-            createElement(TasksPage, { tasks: control, room }),
+            overListedTasks(control, createElement(TasksPage, { tasks: control, room })),
             createElement(ToastHost),
           ),
         ),
@@ -367,14 +368,16 @@ test("a row and a card count the threads waiting on the reader, as the sidebar c
   const sidebar = { count: -1 };
 
   function Sidebar() {
-    sidebar.count = useInboxWaiting(tasksControl({ tasks: [...TASKS], me: DEAN }));
+    sidebar.count = useInboxWaiting(control);
 
     return null;
   }
 
+  const control = tasksControl({ tasks: [...TASKS], me: DEAN });
+
   const sidebarRoot = createRoot(document.createElement("div"));
   roots.push(sidebarRoot);
-  act(() => sidebarRoot.render(withQueryClient(createElement(Sidebar))));
+  act(() => sidebarRoot.render(withQueryClient(overListedTasks(control, createElement(Sidebar)))));
 
   // Note that the count's words are read as an element's own, since a row's key runs into them.
   const says = (holder: Element | undefined) => {
