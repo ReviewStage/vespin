@@ -716,6 +716,66 @@ test("a WebM the agent showed plays where it stands, above the picture shown wit
   }
 });
 
+test("a sound clip the agent showed with show_media plays where it stands as its player, above the picture shown with it, and its Expand opens the viewer playing it", async () => {
+  const own = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+  // Note that jsdom makes no object URLs, so the window's own are stood in for, and put back after.
+  URL.createObjectURL = () => "blob:clip";
+  URL.revokeObjectURL = () => undefined;
+
+  try {
+    const clip = { ...picture(0, 0), mediaType: CONVERSATION_MEDIA_TYPE.WAV };
+    const still = picture(1200, 720);
+
+    const { container } = await drawn(
+      finished([
+        toolPart(
+          "show_media",
+          "call-show",
+          {
+            images: [
+              { path: "sounds/chime.wav", caption: "The new chime" },
+              { path: "shots/after.png", caption: "The settings row" },
+            ],
+          },
+          { status: "accepted", pictures: [clip, still] },
+        ),
+      ]),
+      false,
+      (id) =>
+        Promise.resolve(
+          id === clip.id
+            ? { contentType: CONVERSATION_MEDIA_TYPE.WAV, base64: "UklGRg==" }
+            : { contentType: INBOX_IMAGE_TYPE.PNG, base64: "iVBORw==" },
+        ),
+    );
+
+    const inline = container.querySelector(
+      '[role="group"][aria-label="Sound clip: The new chime"]',
+    );
+
+    assert.ok(inline, "the clip plays where it stands, named by its caption");
+    assert.deepEqual(
+      [...inline.querySelectorAll("button")].map((each) => each.getAttribute("aria-label")),
+      ["Play", "Expand"],
+    );
+    assert.deepEqual(
+      [...container.querySelectorAll("img")].map((image) => image.getAttribute("src")),
+      ["data:image/png;base64,iVBORw=="],
+      "the clip is never drawn as a picture, and the picture shown with it is",
+    );
+
+    act(() => inline.querySelector<HTMLButtonElement>('button[aria-label="Expand"]')?.click());
+    assert.ok(
+      document.querySelector('[role="dialog"] [role="group"][aria-label^="Sound clip"]'),
+      "its Expand opens the viewer, which plays the clip",
+    );
+    assert.equal(viewerPlace(document), "1 of 2");
+  } finally {
+    URL.createObjectURL = own.create;
+    URL.revokeObjectURL = own.revoke;
+  }
+});
+
 test("a call that shows a recording between two pictures draws it first, and the viewer walks the call as it is drawn", async () => {
   const own = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
   // Note that jsdom makes no object URLs, so the window's own are stood in for, and put back after.

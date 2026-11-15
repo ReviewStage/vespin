@@ -32,6 +32,8 @@ export * from "./components/attachment-ref/attachment-ref.js";
 
 export * from "./components/attention-mark/attention-mark.js";
 
+export * from "./components/audio-player/audio-player.js";
+
 export * from "./components/auth-page/auth-mark.js";
 
 export * from "./components/auth-page/auth-page.js";

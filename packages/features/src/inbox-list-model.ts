@@ -17,7 +17,7 @@
 
 import { Predicate } from "effect";
 import { ATTACHMENT_VIEW, attachmentView } from "./attachment-model.js";
-import { isVideoType } from "./conversation-picture-wire.js";
+import { isPlayedType } from "./conversation-picture-wire.js";
 import { fileMarker, fileMarkers, isPictureName, markersAsNames } from "./file-marker.js";
 import { fillInWords, WRITE_AN_ANSWER } from "./inbox-ask-words.js";
 import {
@@ -1381,8 +1381,9 @@ export interface InboxCommentFiles {
  * attached: a picture its words already draw left out, since it stands
  * where they draw it, as an agent's pictures do, then the pictures and
  * every other file apart, as each is drawn in its own way. A WebM an agent
- * recorded is drawn as a picture is, played in its place (`inbox-pictures.tsx`),
- * so one the words draw is not named again as a file. Note that only
+ * recorded, or a sound clip it made, is drawn as a picture is, played in its
+ * place (`inbox-pictures.tsx`), so one the words draw is not named again as a
+ * file. Note that only
  * a picture the words draw as one is left out (`picturesDrawn`): a file
  * they only link to, quote in code, or name as a picture though it is
  * none is still drawn here, so it can still be opened.
@@ -1394,7 +1395,7 @@ export function inboxCommentFiles(
 ): InboxCommentFiles {
   const picture = (file: InboxMessageFile) =>
     attachmentView({ name: file.name, mediaType: file.mediaType, url: "" }) ===
-      ATTACHMENT_VIEW.IMAGE || isVideoType(file.mediaType);
+      ATTACHMENT_VIEW.IMAGE || isPlayedType(file.mediaType);
 
   const drawn = new Set(
     words === undefined ? [] : picturesDrawn(words, itemId).map((each) => each.attachmentId),

@@ -1,6 +1,7 @@
 import {
   Activity,
   AppWindow,
+  AudioWaveform,
   BookBookmark,
   BookOpen,
   Bot,
@@ -174,6 +175,8 @@ export const GLYPH = {
   MEMORY: MemoryIcon,
   MCP_SERVER: McpIcon,
   CALL: WaveformIcon,
+  // A sound clip an agent made, where a thumb has no frame of it to draw.
+  SOUND_CLIP: lucideGlyph(AudioWaveform),
   SETTINGS: GearIcon,
   TIME: lucideGlyph(Clock),
   // A day, as a date's chip and its picker name it; a time of day is TIME's.

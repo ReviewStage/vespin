@@ -958,6 +958,10 @@
   /* A video played in place (`components/video-player/`): no taller than a
      picture is drawn, and full screen as wide as the stage. */
   --spacing-video-player: 520px; /* off-scale: a picture's drawn height */
+  /* A sound clip played in place (`components/audio-player/`): as wide as a
+     picture stands before its bytes are read, its waveform a control's
+     height, and in the viewer a taller one. */
+  --spacing-audio-player: 480px; /* off-scale: a picture's stand-in width */
   --spacing-stage: var(--ui-stage-width);
   /* A sign-in gate's provider button (`components/provider-button/`): the
      height a devtool's sign-in button stands at, a finger's at least under
