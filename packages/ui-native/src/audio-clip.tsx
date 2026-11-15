@@ -29,6 +29,9 @@ const PLAYBACK_WORD = { PLAY: "Play", PAUSE: "Pause" } as const;
 /** What the strip stands as to a flow that drives the app, once the player has read the clip's file and can play it. */
 const AUDIO_CLIP_ID = "audio-clip";
 
+/** How far, in seconds, VoiceOver's swipe up or down moves a clip, as a podcast app's skip does. */
+const SEEK_STEP_SECONDS = 5;
+
 /** How often, in seconds, the player says where it stands while it plays, often enough that the bar moves smoothly under a short clip. */
 const TIME_STEP_SECONDS = 0.25;
 
@@ -86,9 +89,10 @@ type AudioClipProps = {
  * its AAC copy, says so in its place rather than standing as a button that
  * never plays; and one whose bytes are on their way, or that the player
  * still reads, stands the system's spinner where its button will be. To
- * VoiceOver the strip is one element, its label, valued by its time, whose
- * activation and magic tap play and pause it, and whose actions name Play
- * or Pause. Its long press offers what `keep-model.ts` offers a clip.
+ * VoiceOver the strip is one adjustable element, its label, valued by its
+ * time: a double tap or the magic tap plays and pauses it, a swipe up or down
+ * moves it five seconds on or back, and its actions name Play or Pause. Its
+ * long press offers what `keep-model.ts` offers a clip.
  */
 export function AudioClip({ source, label }: AudioClipProps) {
   const colors = useColors();
@@ -147,20 +151,26 @@ export function AudioClip({ source, label }: AudioClipProps) {
     else player.play();
   };
 
-  // A press on the bar moves the clip to where it was pressed.
-  const seek = (x: number) => {
-    if (!ready || barWidth <= 0 || duration <= 0) return;
-    const at = (Math.max(0, Math.min(x, barWidth)) / barWidth) * duration;
+  // The clip moved to `seconds` in, held inside its length.
+  const seekTo = (seconds: number) => {
+    if (!ready || duration <= 0) return;
+    const at = Math.max(0, Math.min(seconds, duration));
     player.currentTime = at;
     setPlayback((held) => ({ ...held, at }));
   };
 
+  // A press on the bar moves the clip to where it was pressed.
+  const seekAt = (x: number) => {
+    if (barWidth > 0) seekTo((Math.max(0, Math.min(x, barWidth)) / barWidth) * duration);
+  };
+
+  // Note that a double tap and the magic tap reach `onAccessibilityTap` and `onMagicTap` alone, since React Native's iOS view lists every named action as a custom one; a swipe up or down reaches here as increment or decrement.
   const heard = (event: AccessibilityActionEvent) => {
     const { actionName } = event.nativeEvent;
 
-    if (actionName === "activate" || actionName === "magicTap" || actionName === playWord) {
-      toggle();
-    }
+    if (actionName === playWord) toggle();
+    else if (actionName === "increment") seekTo(playback.at + SEEK_STEP_SECONDS);
+    else if (actionName === "decrement") seekTo(playback.at - SEEK_STEP_SECONDS);
   };
 
   if (failed) {
@@ -184,15 +194,14 @@ export function AudioClip({ source, label }: AudioClipProps) {
       <View
         style={[styles.strip, large ? styles.stacked : null, { backgroundColor: colors.WELL }]}
         accessible
+        accessibilityRole="adjustable"
         accessibilityLabel={label}
         accessibilityValue={{ text: ready ? time : undefined }}
         accessibilityState={{ busy: !ready }}
-        accessibilityActions={
-          ready
-            ? [{ name: "activate" }, { name: "magicTap" }, { name: playWord, label: playWord }]
-            : []
-        }
+        accessibilityActions={ready ? [{ name: playWord, label: playWord }] : []}
         onAccessibilityAction={heard}
+        onAccessibilityTap={toggle}
+        onMagicTap={toggle}
         testID={ready ? AUDIO_CLIP_ID : undefined}
       >
         <View style={[styles.button, { width: buttonSize, height: buttonSize }]}>
@@ -216,7 +225,7 @@ export function AudioClip({ source, label }: AudioClipProps) {
           )}
         </View>
         <Press
-          onPress={(event) => seek(event.nativeEvent.locationX)}
+          onPress={(event) => seekAt(event.nativeEvent.locationX)}
           onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
           style={styles.barPress}
         >
