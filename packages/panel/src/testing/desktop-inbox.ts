@@ -820,8 +820,7 @@ export function mount({
       if (laid.current?.tasks === inListed && laid.current.agents === onTasks) return;
 
       laid.current = { tasks: inListed, agents: onTasks };
-      const { taskAgents: _held, ...rest } = heldList;
-      const tasks = { ...rest, tasks: inListed };
+      const tasks = { ...heldList, tasks: inListed };
       reads.deliverTasks(onTasks === undefined ? tasks : { ...tasks, taskAgents: onTasks });
     }, [heldList, inListed, onTasks]);
 
