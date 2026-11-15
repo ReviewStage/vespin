@@ -1,0 +1,82 @@
+---
+title: "MCP and API"
+description: "vespin mcp and vespin api"
+---
+
+Connect coding agents to Vespin MCP, and call any hosted procedure. Every command also takes the global flags `--json`, `-q`, `-w`, and `--url`, described in [CLI](/cli#scripts-and-coding-agents).
+
+## vespin mcp install
+
+Connect a coding agent to Vespin's MCP server
+
+```sh
+vespin mcp install [flags] <client>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `client choice` | The coding agent to connect: claude-code, codex, cursor, or vscode |
+
+```sh
+# Add the server to Claude Code
+vespin mcp install claude-code
+
+# Add it to ~/.cursor/mcp.json
+vespin mcp install cursor
+```
+
+## vespin mcp clients
+
+List the coding agents you allowed on Vespin's MCP server; mcp revoke revokes one
+
+```sh
+vespin mcp clients [flags]
+```
+
+```sh
+# Your connected clients
+vespin mcp clients
+```
+
+## vespin mcp revoke
+
+Revoke a coding agent you allowed on Vespin's MCP server: your consent and its tokens
+
+```sh
+vespin mcp revoke [flags] <client>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `client string` | The client, by its id as mcp clients prints it |
+| `--yes, -y` | Revoke without asking; required where stdin is no terminal |
+
+```sh
+# After you confirm
+vespin mcp revoke <client>
+
+# From a script
+vespin mcp revoke <client> --yes
+```
+
+## vespin api
+
+Call any hosted procedure by its route and print its JSON answer
+
+```sh
+vespin api [flags] <method> <path>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `method string` | GET, POST, PUT, PATCH, or DELETE |
+| `path string` | The procedure's route, its query included, such as /api/plans |
+| `--input, -F string` | The JSON body, from a file or - for stdin |
+
+```sh
+# List your workspaces
+vespin api GET /api/workspaces
+
+# Create a workspace from a body on stdin
+echo '{"name":"Research"}' | vespin api POST /api/workspaces -F -
+```

@@ -594,13 +594,6 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   transcriptsUrl: Schema.optionalKey(Schema.String),
   /** The integrations the agent is handed, one MCP server each; none in a config written before them. */
   integrations: Schema.optionalKey(Schema.Array(IntegrationServerSchema)),
-  /**
-   * Read by no runner since Claude Code's command sandbox went: written empty
-   * for a host whose release bundles a runner from before, which refuses a
-   * config without it, and dropped once the service's host version floor
-   * (`HOST_VERSION.FLOOR`) passes that release.
-   */
-  allowedDomains: Schema.optionalKey(Schema.Array(Schema.String)),
   /** Where the member's installed skills are (`INSTALLED_SKILLS`), loaded as a local plugin where the folder holds one. */
   installedSkills: Schema.optionalKey(Schema.String),
   /** Whether the launch stays warm while no turn of it runs (`RUNNER_WARM`): from its start until a message comes, and once the agent's turn is over, posting IDLE rather than ending; it ends there where absent. */

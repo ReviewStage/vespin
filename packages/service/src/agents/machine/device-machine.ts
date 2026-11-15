@@ -13,11 +13,9 @@
  * folder, or under its home folder where it named none, holds its worktree,
  * which the Mac makes as it takes the launch line; the files a message carries stand under the
  * attachments folder it registered, and what the agent saves for us to read
- * back under its temp folder (`deviceAgentLayoutIn`). A Mac whose release bundles a runner that keeps the
- * CLI's transcript at the service (`MAC_MACHINE.TRANSCRIPTS_SINCE`), by the
- * host version it last called with, has it kept there, as a sandbox's is,
- * its runner mirroring Codex's threads from their default under the
- * machine's own home; an older one keeps its sessions on its disk alone. Either resumes
+ * back under its temp folder (`deviceAgentLayoutIn`). A Mac's runner keeps the
+ * CLI's transcript at the service, as a sandbox's does, mirroring Codex's
+ * threads from their default under the machine's own home, and resumes
  * a session the store does not hold whole from its disk (`diskSessions`).
  * `launchRunner` queues the launch line, its runner's
  * environment and first lines sealed together under the deployment's key
@@ -101,7 +99,6 @@ import {
   deviceAgentRestorePayloadSchema,
   deviceAgentsFolder,
 } from "@repo/features/device-agent-wire";
-import { hostVersionMeets } from "@repo/features/host-wire";
 import {
   COMMAND_GONE,
   type CommandExit,
@@ -158,13 +155,6 @@ export const MAC_MACHINE = {
   RESTORE_WAIT: Duration.minutes(2),
   /** How long a diff of the worktree waits for its Mac's answer, as long as the Mac gives the diff (`DEVICE_AGENT_BOUNDS.DIFF_WAIT_MS`). */
   DIFF_WAIT: Duration.millis(DEVICE_AGENT_BOUNDS.DIFF_WAIT_MS),
-  /**
-   * The first host release whose bundled runner keeps the CLI's transcript
-   * at the service where its config names `transcriptsUrl`, and reads a
-   * session's chain through that store for a cut; a Mac on an older one
-   * keeps its sessions on its disk alone, as before.
-   */
-  TRANSCRIPTS_SINCE: "0.11.0",
 } as const;
 
 /**
@@ -197,11 +187,6 @@ const encodeLaunchPayload = Schema.encodeSync(deviceAgentLaunchPayloadSchema);
 const encodeRestorePayload = Schema.encodeSync(deviceAgentRestorePayloadSchema);
 const encodeSecrets = Schema.encodeSync(Schema.fromJsonString(deviceAgentLaunchSecretsSchema));
 
-/** Whether the Mac's host, by the version it last called with, runs a runner that keeps the CLI's transcript at the service (`MAC_MACHINE.TRANSCRIPTS_SINCE`). */
-function keepsTranscripts(version: string | null): boolean {
-  return version !== null && hostVersionMeets(version, MAC_MACHINE.TRANSCRIPTS_SINCE);
-}
-
 /** The agent's things on the Mac its layout was read off, under the folders that Mac registered, its agents folder under its home where it named none. */
 function macFolders(
   device: {
@@ -224,9 +209,8 @@ function macFolders(
 }
 
 /**
- * Whether the account's Mac given keeps its runners' CLI transcripts at the
- * service, and where an agent's checkout stands on it, by the agent's id;
- * none where the account holds no such Mac standing, which no launch lays
+ * Where an agent's checkout stands on the account's Mac given, by the
+ * agent's id; none where the account holds no such Mac standing, which no launch lays
  * out either. A continue or fork reads this to carry a session to or from a
  * Mac (`../coder-host/takeover.ts`).
  */
@@ -234,7 +218,6 @@ export const macCheckoutsOf = (userId: string, deviceId: string) =>
   Effect.map(
     deviceLayout(userId, deviceId),
     Option.map((device) => ({
-      transcriptsKept: keepsTranscripts(device.version),
       checkoutPathOf: (agentId: string) => macFolders(device, agentId).checkoutPath,
     })),
   );
@@ -351,7 +334,6 @@ function deviceMachineOver(
       }
 
       const folders = macFolders(device.value, agentId);
-      const kept = keepsTranscripts(device.value.version);
 
       const layout: MachineLayout = {
         checkoutPath: folders.checkoutPath,
@@ -369,7 +351,6 @@ function deviceMachineOver(
         codexHome: undefined,
         // Note that the Mac's follower writes its lines to the stdin of the runner its release bundled.
         linesRead: false,
-        transcriptsKept: kept,
         diskSessions: true,
         permissionModes: device.value.capabilities.includes(DEVICE_CAPABILITY.PERMISSION_MODES),
       };

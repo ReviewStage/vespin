@@ -232,10 +232,8 @@ export function DraftAgentTab({
   };
 
   const composer: AgentComposerControl = {
-    draft: draft.prompt,
-    setDraft: (prompt) => control.onDraftChange({ prompt }),
-    attachments: draft.attachments,
-    setAttachments: control.onDraftAttachments,
+    held: { text: draft.prompt, attachments: draft.attachments },
+    updateHeld: control.onDraftHeld,
     sending: sending || control.start.busy,
     note: shownNote,
     closed: undefined,

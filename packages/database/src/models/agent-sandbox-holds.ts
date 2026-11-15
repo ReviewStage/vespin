@@ -29,7 +29,7 @@ import {
   agentSandboxTerminalTable,
 } from "../schemas/agent-sandbox.js";
 
-export const AGENT_SANDBOX_HOLD = {
+const AGENT_SANDBOX_HOLD = {
   /** How long a heartbeat holds the sandbox: two beats, so one lost on its way never lets it go. */
   FRESH: Duration.minutes(2),
   /** The most often a heartbeat is written: a minute, whatever its caller beats at. */

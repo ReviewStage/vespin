@@ -13,7 +13,6 @@ import {
   type Workspace,
   type WorkspaceMember,
 } from "@repo/features/workspace-wire";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -21,7 +20,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { MemberDirectory } from "../member-directory.js";
 import { FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { handMembers, signedInAs } from "../testing/app-state.js";
+import { handMembers, type ListedAppState, signedInAs } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { listedAgent } from "../testing/tasks-control.js";
@@ -80,7 +79,7 @@ const TASK: TaskSummary = {
 };
 
 /** Main's document holding the task, its agent, its page, and an Inbox item waiting on it. */
-const STATE: AppStateSnapshot = (() => {
+const STATE: ListedAppState = (() => {
   const snapshot = signedInAs({ id: SAM, email: "sam@example.com", name: "Sam Okafor" });
 
   return {
@@ -93,7 +92,7 @@ const STATE: AppStateSnapshot = (() => {
       taskAgents: [
         {
           id: AGENT,
-          planId: TASK_ID,
+          taskId: TASK_ID,
           title: "Expire old invitations",
           model: "anthropic/claude-opus-5.5",
           effort: "high",
@@ -105,7 +104,7 @@ const STATE: AppStateSnapshot = (() => {
         },
         {
           id: TRIAGE_AGENT,
-          planId: TASK_ID,
+          taskId: TASK_ID,
           turnId: null,
           title: "Triage new Sentry issues",
           model: "anthropic/claude-opus-5.5",
@@ -151,7 +150,7 @@ afterEach(() => {
 async function drawn(
   text: string,
   opened: LinkDestination[],
-  state: AppStateSnapshot = STATE,
+  state: ListedAppState = STATE,
 ): Promise<HTMLElement> {
   fakeActs({
     onAppState: () => () => undefined,
@@ -271,16 +270,16 @@ test("a press on a place's chip opens the place in the window", async () => {
   }
 
   assert.deepEqual(opened, [
-    { kind: LINK_DESTINATION.AGENT, planId: TASK_ID, agentId: AGENT },
+    { kind: LINK_DESTINATION.AGENT, taskId: TASK_ID, agentId: AGENT },
     { kind: LINK_DESTINATION.PERSON, userId: SAM },
   ]);
 });
 
 /** An archived agent as the task list carries it, on the task given, on the model given. */
-function archivedAgent(id: string, planId: string, model: string) {
+function archivedAgent(id: string, taskId: string, model: string) {
   return {
     id,
-    planId,
+    taskId,
     model,
     effort: "high",
     title: "Retired sweep",

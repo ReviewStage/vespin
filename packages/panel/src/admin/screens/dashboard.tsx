@@ -18,7 +18,12 @@ import {
 } from "../accounts-table/accounts-table.js";
 import { useAdminDoors } from "../admin-doors.js";
 import { adminMetricsQuery, useAdminSignOut } from "../admin-queries.js";
-import { adminReadView } from "../admin-read-view.js";
+import {
+  type AdminRosterChoice,
+  type AdminScreenShell,
+  type AdminWindowChoice,
+  adminReadView,
+} from "../admin-read-view.js";
 import { ActivityChart, ActivityChartSkeleton } from "../charts/activity-chart.js";
 import { CHART_PAIR_WIDE, TrendMove } from "../charts/chart-frame.js";
 import { RetentionGrid, RetentionGridSkeleton } from "../charts/retention-grid.js";
@@ -40,7 +45,7 @@ import {
   retiredTitle,
   TopAccountsNote,
 } from "../chrome/notes.js";
-import { AdminPage, type ViewerAccount } from "../chrome/page-header.js";
+import { AdminPage } from "../chrome/page-header.js";
 import { PageSkeleton } from "../chrome/page-skeleton.js";
 import { windowedReadQuery } from "../routing.js";
 
@@ -279,18 +284,12 @@ export function DashboardScreen({
   onOpenAccount,
   onOpenDay,
   frame,
-}: {
-  hideAdmins: boolean;
-  onHideAdminsChange: (hide: boolean) => void;
-  windowDays: AdminMetricsWindow;
-  onWindowDaysChange: (windowDays: AdminMetricsWindow) => void;
-  account: ViewerAccount | undefined;
-  onSignOut: () => Promise<void>;
-  onOpenAccount: (id: string) => void;
-  onOpenDay: (day: string) => void;
-  /** Applied around every answer but the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
-}): React.JSX.Element {
+}: AdminScreenShell &
+  AdminRosterChoice &
+  AdminWindowChoice & {
+    onOpenAccount: (id: string) => void;
+    onOpenDay: (day: string) => void;
+  }): React.JSX.Element {
   const { reads, gate } = useAdminDoors();
 
   const read = useQuery({
