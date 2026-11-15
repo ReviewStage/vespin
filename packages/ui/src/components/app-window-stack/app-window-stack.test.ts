@@ -4,13 +4,13 @@ import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test } from "vitest";
-import { PICTURE_STATE } from "../../picture-read.js";
+import { PICTURE_STATE, type PictureState } from "../../picture-read.js";
 import { AppWindowStack } from "./app-window-stack.js";
 
 /**
  * app-window-stack.test.ts -- the window in front opens when pressed, named
- * for its app, a title behind it brings its app forward, and a stack of no
- * apps draws nothing.
+ * for its app, keeps its last picture while the next is read, a title behind
+ * it brings its app forward, and a stack of no apps draws nothing.
  */
 
 const roots: Root[] = [];
@@ -26,11 +26,16 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function draw(props: Parameters<typeof AppWindowStack>[0]): void {
+/** Draws the stack, and answers how to draw it again in place with new props. */
+function draw(
+  props: Parameters<typeof AppWindowStack>[0],
+): (next: Parameters<typeof AppWindowStack>[0]) => void {
   const host = document.body.appendChild(document.createElement("div"));
   const root = createRoot(host);
   roots.push(root);
   act(() => root.render(createElement(AppWindowStack, props)));
+
+  return (next) => act(() => root.render(createElement(AppWindowStack, next)));
 }
 
 /** What every stack drawn here hears, but where a test listens. */
@@ -65,6 +70,25 @@ test("the window in front opens when pressed, named for its app", () => {
 
   act(() => press("Enlarge Simulator")?.click());
   assert.deepEqual(opened, ["open"]);
+});
+
+test("the window in front keeps its last picture while the next one is read", () => {
+  const simulator = (state: PictureState) => ({
+    label: "Apps in use",
+    apps: [
+      {
+        id: "com.apple.iphonesimulator",
+        name: "Simulator",
+        window: { state, width: 1180, height: 2556 },
+      },
+    ],
+    ...QUIET,
+  });
+
+  const redraw = draw(simulator({ kind: PICTURE_STATE.READY, url: "data:image/png;base64,AA==" }));
+
+  redraw(simulator({ kind: PICTURE_STATE.READING }));
+  assert.equal(document.querySelector("img")?.getAttribute("src"), "data:image/png;base64,AA==");
 });
 
 test("a title behind the window in front brings its own app forward, though another app shares its name", () => {
