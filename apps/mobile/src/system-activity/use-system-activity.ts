@@ -29,13 +29,13 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import {
   selectInboxGroupsIn,
   selectInboxReader,
-  selectTasks,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useListedTasks } from "../host/host-provider.js";
 import { openInSafari } from "../open-link.js";
 import { useInFront } from "../place-columns.js";
 import { useOnTab } from "../tab-route.js";
@@ -127,8 +127,7 @@ const spotlightIndex =
  */
 function useSpotlightIndex(signedIn: boolean): void {
   const workspace = useTasksWorkspace();
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
-  const tasks = view?.tasks ?? NONE;
+  const tasks = useListedTasks();
 
   const { data: groups = NONE } = useQuery({
     ...appStateQuery,
