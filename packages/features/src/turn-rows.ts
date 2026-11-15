@@ -402,6 +402,18 @@ export function madeCallLine(kind: MadeCallKind): CallLine {
   return { verb: MADE_CALL_WORDS[kind], subject: undefined, code: false };
 }
 
+/**
+ * How the line of a search of a server's tools reads where the server's chip
+ * follows its verb: "Searched", then "tools for" and the query in quotes,
+ * so the row reads "Searched" then the server's chip then "tools for “send
+ * message”"; "tools" alone for a search that named no query.
+ */
+export function searchToolsLine(query: string | undefined): CallLine {
+  const subject = query === undefined || query === "" ? "tools" : `tools for “${query}”`;
+
+  return { verb: "Searched", subject, code: false };
+}
+
 /** Whether a call is a shell command, wherever it ran: its line may say its description, and its body draws it behind a prompt. */
 export function isCommandKind(kind: CallKind): boolean {
   return kind === CALL_KIND.COMMAND || kind === CALL_KIND.MACHINE_COMMAND;

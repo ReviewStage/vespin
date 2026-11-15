@@ -7,7 +7,7 @@ import {
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
-import type { IntegrationProvider } from "@repo/features/integration-wire";
+import { type IntegrationProvider, integrationConnectionOf } from "@repo/features/integration-wire";
 import { GITHUB_DEFAULT_BRANCH, GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import { machineName } from "@repo/features/machine-name";
 import { encodeMention, MENTION_KIND, mayNameChip } from "@repo/features/mention-link";
@@ -46,6 +46,7 @@ import {
   moreFiles,
   sameFieldsBy,
   sameTurnRow,
+  searchToolsLine,
   siteName,
   TURN_ROW,
   type TurnRow,
@@ -68,6 +69,7 @@ import {
   GlyphSlot,
   INLINE_REF_LOOK,
   InlineRef,
+  type InlineRefLook,
   LAYOUT_ELEMENT,
   LineButton,
   LineRow,
@@ -1461,29 +1463,33 @@ export function CallPlaceProvider({
 }
 
 /**
- * Where a call of an MCP server's tool ran, as its row ends: the account's
- * chip, its provider's mark and the account's name, where the call keeps
- * one, hanging the account's card; a server of no integration's by its name
- * beside the server's glyph, since no mark of its own says which; and
- * nothing for an integration's lone account, whose mark leads the row
- * already. The chip takes no press of its own, so a press on it opens the
- * row as a press anywhere on the line does.
+ * The server a call ran on or searched, as its chip: an integration's by its
+ * provider's mark and the account's name where the call keeps one, or the
+ * server's name as its card gives it otherwise, hanging the account's card;
+ * a server of no integration's by its name beside the server's glyph, since
+ * no mark of its own says which. An MCP row ends in it only where it says
+ * more than the mark leading the row (`TranscriptTool`), and a search of a
+ * server's tools names the server by it after its verb, as a pill as every
+ * chip after a verb is. The chip takes no press of its own, so a press on it
+ * opens the row as a press anywhere on the line does.
  */
 function CallServerChip({
   provider,
   connection,
   account,
   server,
+  look = INLINE_REF_LOOK.WASH,
 }: {
   provider: IntegrationProvider | undefined;
   connection: string | undefined;
   account: string | undefined;
   server: string | undefined;
+  look?: InlineRefLook;
 }): ReactNode {
   if (provider === undefined) {
     return server === undefined ? null : (
       <InlineRef
-        look={INLINE_REF_LOOK.WASH}
+        look={look}
         glyph={<EntityGlyph kind={ENTITY_KIND.SERVER} />}
         label={server}
         hint={false}
@@ -1491,11 +1497,13 @@ function CallServerChip({
     );
   }
 
-  return account === undefined ? null : (
+  const label = account ?? server;
+
+  return label === undefined ? null : (
     <InlineRef
-      look={INLINE_REF_LOOK.WASH}
+      look={look}
       glyph={<ProviderMark provider={provider} />}
-      label={account}
+      label={label}
       card={<ServerCard provider={provider} connection={connection} account={account} />}
     />
   );
@@ -1617,8 +1625,26 @@ export function TranscriptTool({
   const Icon = CALL_ICON[kind];
   const called = calledChip(kind, files, page, useMentionDoors());
 
-  const { line, chip } =
-    made !== undefined
+  const search = kind === CALL_KIND.SEARCH_TOOLS;
+
+  // Note that a search of a server's tools names the server by its chip after the verb, so its row ends in no tag, and its words stand whole as it opens.
+  const { line, chip } = search
+    ? {
+        line: searchToolsLine(subject),
+        chip:
+          server === undefined ? undefined : (
+            <CallServerChip
+              provider={
+                connection === undefined ? undefined : integrationConnectionOf(connection)?.provider
+              }
+              connection={connection}
+              account={account}
+              server={server}
+              look={INLINE_REF_LOOK.PILL}
+            />
+          ),
+      }
+    : made !== undefined
       ? { line: madeCallLine(made.kind), chip: made.chip }
       : called === undefined
         ? chippedLine(kind, subject, description, agent, undefined, agentCard)
@@ -1675,7 +1701,9 @@ export function TranscriptTool({
         subject={line.subject}
         chip={chip}
         subjectIsCode={line.code}
-        subjectInBody={(command && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject)}
+        subjectInBody={
+          (command && input.kind === TOOL_BLOCK.COMMAND) || (!search && blockSays(input, subject))
+        }
         placeChip={onMachineChip ?? serverChip}
         place={
           namedBelow ? undefined : machineCall && macOwner !== undefined ? (
@@ -1684,7 +1712,7 @@ export function TranscriptTool({
               <ActorRef actor={macOwner} sentence possessive />
               {" Mac"}
             </ActorLine>
-          ) : mcp ? undefined : (
+          ) : mcp || search ? undefined : (
             callPlace({ kind, server }, CALL_MARK.LEADS)
           )
         }
