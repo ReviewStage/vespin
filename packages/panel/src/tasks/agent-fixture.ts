@@ -80,7 +80,7 @@ import {
   type TaskSummary,
   type TaskTreeEntry,
 } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
+import type { ListedTasksView } from "@repo/features/tasks-view";
 import {
   TERMINAL_CONNECTION,
   TERMINAL_PORT_CHANNEL,
@@ -1368,7 +1368,10 @@ const ANSWERS: StagedAnswers = {
  * request, and the page it showed, with no call under way and no code
  * shown on one; none under any other profile.
  */
-export function agentTasksView(profile: string, open: TasksView): TasksView | undefined {
+export function agentTasksView(
+  profile: string,
+  open: ListedTasksView,
+): ListedTasksView | undefined {
   const taskId = open.activeTaskId;
 
   if (!AGENT_STAGES.has(profile) || taskId === undefined) return undefined;
