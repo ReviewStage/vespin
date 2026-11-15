@@ -460,7 +460,7 @@ interface AwaitingLineWrite {
  * session's event whose words it took last, which the call's next holder
  * resumes after.
  */
-export interface VoiceLineWrite {
+interface VoiceLineWrite {
   readonly key: string;
   readonly callId: string;
   readonly speaker: VoiceSpeaker;

@@ -31,7 +31,6 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type DraftSuggestion, sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { ListedPullRequest } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
 import type { TranscriptReader } from "@repo/features/transcript-copy";
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
@@ -266,16 +265,6 @@ function useTaskRows(
   return {
     listedHere: followed ? agents : undefined,
     listedPullRequests: pullRequests,
-  };
-}
-
-/** What a fixture run's staged list carries of one task, as the collections carry a followed list's. */
-function stagedRows(staged: TasksView, taskId: string | undefined): TaskRows {
-  const carried = taskId !== undefined && staged.tasks.some((task) => task.id === taskId);
-
-  return {
-    listedHere: carried ? staged.taskAgents?.filter((agent) => agent.taskId === taskId) : undefined,
-    listedPullRequests: staged.agentPullRequests,
   };
 }
 
@@ -923,8 +912,6 @@ export function useAgents(input: {
   repository: string | null;
   /** Whether the task list follows the open task's agents live, so a task with none has none, rather than none read yet. */
   agentsFollowed: boolean;
-  /** A fixture run's staged task list, which stands in for the task list's collections, which never carry it; none outside one. */
-  staged?: TasksView | undefined;
   /** Where the task list's read stands, which an answer on the task's Inbox reads again where it failed: failed, and its Try again; none where nothing reads it again. */
   list?: { readonly failed: boolean; readonly onRetry: () => void } | undefined;
   /** Opens Settings on its Integrations page. */
@@ -1045,15 +1032,7 @@ export function useAgents(input: {
   // The task's agents and their pull requests as the task list's collections carry them, read by the task alone, so a
   // delivery that moves another task's rows draws nothing here; none where the list does not carry the task.
   const collections = useTaskListCollections();
-  const followedRows = useTaskRows(collections, taskId, input.agentsFollowed);
-  const { staged } = input;
-
-  const stagedHere = useMemo(
-    () => (staged === undefined ? undefined : stagedRows(staged, taskId)),
-    [staged, taskId],
-  );
-
-  const { listedHere, listedPullRequests } = stagedHere ?? followedRows;
+  const { listedHere, listedPullRequests } = useTaskRows(collections, taskId, input.agentsFollowed);
 
   // Note that an agent New task holds stands beside the list's until the list first carries it,
   // and leaves with it once it no longer does, so a tab never leaves between the two.

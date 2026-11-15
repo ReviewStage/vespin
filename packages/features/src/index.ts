@@ -6,6 +6,8 @@ export {
   type CallCredential,
   callAnswered,
   fixedBearer,
+  type HostedServiceOptions,
+  type HostedServiceTarget,
   lateCredential,
   NO_CREDENTIAL,
   resolvedCredential,
@@ -22,21 +24,14 @@ export {
 
 export { HostedAdminClient } from "./admin-client.js";
 
-export {
-  HostedAgentClient,
-  type HostedAgentClientOptions,
-} from "./agent-client.js";
+export { HostedAgentClient } from "./agent-client.js";
 
 export {
   HostedAgentPortsClient,
-  type HostedAgentPortsClientOptions,
   portForwardAddress,
 } from "./agent-ports-client.js";
 
-export {
-  HostedAutomationClient,
-  type HostedAutomationClientOptions,
-} from "./automation-client.js";
+export { HostedAutomationClient } from "./automation-client.js";
 
 export {
   DEVICE_AGENT_NOT_CLAIMED,
@@ -46,7 +41,6 @@ export {
   type DeviceAgentUpdate,
   HOST_PAIRING_FAILURE,
   HostedDeviceAgentClient,
-  type HostedDeviceAgentClientOptions,
   type HostPairingFailed,
   type HostPairingOutcome,
   OWN_ENROLL_FAILURE,
@@ -89,23 +83,16 @@ export {
   githubRepositorySchema,
 } from "./github-repositories-wire.js";
 
-export {
-  HostedIntegrationsClient,
-  type HostedIntegrationsClientOptions,
-} from "./integration-client.js";
+export { HostedIntegrationsClient } from "./integration-client.js";
 
 export {
   HostedMachineCommandClient,
-  type HostedMachineCommandClientOptions,
   MACHINE_COMMAND_CALL_FAILURE,
   MACHINE_COMMAND_NOT_CLAIMED,
   type MachineCommandCallFailure,
 } from "./machine-command-client.js";
 
-export {
-  HostedMcpClientsClient,
-  type HostedMcpClientsClientOptions,
-} from "./mcp-clients-client.js";
+export { HostedMcpClientsClient } from "./mcp-clients-client.js";
 
 export {
   automationPath,
@@ -132,7 +119,6 @@ export { webSocketOrigin } from "./socket-origin.js";
 export {
   type FollowersWritten,
   HostedTaskClient,
-  type HostedTaskClientOptions,
   type TaskCallResult,
   type TaskMarks,
   type TaskStarted,
@@ -141,7 +127,6 @@ export {
 
 export {
   HostedTerminalClient,
-  type HostedTerminalClientOptions,
   type TerminalRelayAsk,
   terminalRelayAddress,
 } from "./terminal-client.js";

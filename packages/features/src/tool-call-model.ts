@@ -311,8 +311,9 @@ const NOT_RUN_LABEL = {
 
 /**
  * The one quiet label a call that ran nothing wears at its line's end,
- * after the chip of the machine it was meant for: "Not answered",
- * "Declined", "Offline", or "Needs Screen Recording".
+ * after the chip of the machine it was meant for, or alone where the card
+ * under the row names that machine: "Not answered", "Declined",
+ * "Offline", or "Needs Screen Recording".
  */
 export function machineNotRunLabel(notRun: MachineNotRun): string {
   switch (notRun.outcome) {
@@ -502,7 +503,7 @@ export interface CallMachine {
 }
 
 /** The machine a `run_on_mac` or `computer` answer names it went to, or was refused on (`machine`); none where it names none. */
-function callMachineOf(output: WireValue | undefined): CallMachine | undefined {
+export function callMachineOf(output: WireValue | undefined): CallMachine | undefined {
   const machine = isRecord(output) ? output.machine : undefined;
   const id = stringAt(machine, "id");
   const name = stringAt(machine, "name");
@@ -1253,12 +1254,15 @@ function nativeMcpView(
   const call = nativeMcpCall(tool);
 
   if (call === undefined) return undefined;
+  // Note that a server that is an integration's connection wears its provider's mark, as a call of the integration's own tool does.
+  const provider = integrationConnectionOf(call.connection)?.provider;
 
   return {
     kind: CALL_KIND.MCP_TOOL,
     subject: call.name,
     server: call.server,
     connection: call.connection,
+    ...(provider === undefined ? undefined : { provider }),
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: output === undefined ? undefined : jsonBlock(output),
   };

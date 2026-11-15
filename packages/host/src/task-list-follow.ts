@@ -39,7 +39,7 @@ import {
  */
 
 /** What an answer says beside its rows (`TASK_LIST_READ.beside`). */
-export type TaskListBeside = Pick<TaskListLiveAnswer, "taskWorkspaces" | "liveSince">;
+type TaskListBeside = Pick<TaskListLiveAnswer, "taskWorkspaces" | "liveSince">;
 
 /** A read as the follow asks for it, its rows inline; a failure where the service answered none, `gone` where it never will again. */
 type Sealed = TaskListLiveAnswer | LiveFailure;
