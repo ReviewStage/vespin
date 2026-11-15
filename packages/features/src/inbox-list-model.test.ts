@@ -77,8 +77,8 @@ describe("inboxThreadMessages", () => {
     ]);
     expect(message?.media.map(({ kind, attachmentId }) => ({ kind, attachmentId }))).toEqual([
       { kind: INBOX_MEDIA.PICTURE, attachmentId: SHOT },
-      { kind: INBOX_MEDIA.FILE, attachmentId: PLAN_PDF },
       { kind: INBOX_MEDIA.AUDIO, attachmentId: ALARM },
+      { kind: INBOX_MEDIA.FILE, attachmentId: PLAN_PDF },
     ]);
   });
 
