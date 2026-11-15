@@ -345,9 +345,9 @@ function callBody(
   ];
 }
 
-/** Where a call stands by its state. */
-function standingOf(state: ToolState): CallStanding {
-  if (state === TOOL_STATE.OUTPUT_ERROR) return CALL_STANDING.FAILED;
+/** Where a call stands by its state, a call the service answered without doing it (`refused`) standing as failed. */
+function standingOf(state: ToolState, refused: boolean): CallStanding {
+  if (state === TOOL_STATE.OUTPUT_ERROR || refused) return CALL_STANDING.FAILED;
 
   return state === TOOL_STATE.OUTPUT_AVAILABLE ? CALL_STANDING.DONE : CALL_STANDING.RUNNING;
 }
@@ -682,7 +682,7 @@ function callItems(
     callKind: view.kind,
     ...callNaming(view),
     runOn: callPlace(view.kind, view.server),
-    standing: standingOf(part.state),
+    standing: standingOf(part.state, view.refused === true),
     open,
     body: open
       ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)
