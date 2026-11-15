@@ -89,11 +89,11 @@ const REMINDERS = new WeakMap<object, InboxReminders>();
 /** No reminder set yet. */
 const NO_REMINDERS: InboxReminders = new Map();
 
-/** The read marks each fixture run made, by its store. */
-const READ_MARKS = new WeakMap<object, InboxReadMarks>();
+/** The Inbox read marks each fixture run made, by its store. */
+const INBOX_READ_MARKS = new WeakMap<object, InboxReadMarks>();
 
-/** No read mark made. */
-const NO_READ_MARKS: InboxReadMarks = new Map();
+/** No Inbox read mark made. */
+const NO_INBOX_READ_MARKS: InboxReadMarks = new Map();
 
 /** The runs that hold a machine's ask, as `-machineAsk true` asks, by the store each stages, since a stage after a press is asked with none of the launch's own. */
 const MACHINE_ASKED = new WeakSet<object>();
@@ -170,7 +170,7 @@ export function stageFixture(
   const saved = savedMemoriesAppState(
     inboxReadMarksAppState(
       inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS),
-      READ_MARKS.get(state) ?? NO_READ_MARKS,
+      INBOX_READ_MARKS.get(state) ?? NO_INBOX_READ_MARKS,
     ),
     MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
   );
@@ -203,8 +203,8 @@ function keepReminder(
   stageFixture(state);
 }
 
-/** Keeps a read mark the fixture took and lays it over the document at once, as the host draws one; nothing for any other act. */
-function keepReadMark(
+/** Keeps an Inbox read mark the fixture took and lays it over the document at once, as the host draws one; nothing for any other act. */
+function keepInboxReadMark(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
@@ -212,7 +212,10 @@ function keepReadMark(
   if (kind !== ACT_KIND.AGENTS_INBOX_READ_STATE) return;
   // SAFETY: the payload is the kind's, which the guard above names.
   const { itemId, unread } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_READ_STATE>;
-  READ_MARKS.set(state, new Map(READ_MARKS.get(state) ?? NO_READ_MARKS).set(itemId, unread));
+  INBOX_READ_MARKS.set(
+    state,
+    new Map(INBOX_READ_MARKS.get(state) ?? NO_INBOX_READ_MARKS).set(itemId, unread),
+  );
   stageFixture(state);
 }
 
@@ -373,7 +376,7 @@ export function fixtureActs(
         // SAFETY: as above.
         keepReminder(state, kind as PortActKind, payload);
         // SAFETY: as above.
-        keepReadMark(state, kind as PortActKind, payload);
+        keepInboxReadMark(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepChoice(state, kind as PortActKind, payload);
         // SAFETY: as above.
