@@ -4495,7 +4495,8 @@ export function AgentSubagentTab({
                 onRetry={transcript.onRetry}
                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                 olderFailed={transcript.olderFailed}
-                fromStart={transcript.pages > 0 && !transcript.hasOlder}
+                // Note that a worker's lines always open on the task it was handed (`workerLines`), so its start is always held.
+                fromStart
               />
             </WholePartsProvider>
           </ComputerAppsProvider>
