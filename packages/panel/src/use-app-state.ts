@@ -1,5 +1,5 @@
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
-import type { AppStateSnapshot } from "@repo/host/app-state";
+import type { AppStateDelivery, AppStateSnapshot } from "@repo/host/app-state";
 import {
   type AppStateBridgeReads,
   followAppStateOver,
@@ -51,6 +51,7 @@ export {
   selectSettingsHeld,
   selectSignedIn,
   selectStoredExperimentChoices,
+  selectTaskListStanding,
   selectTaskSendRefused,
   selectTasks,
   selectVoiceCall,
@@ -160,25 +161,31 @@ export interface AppStateFollowing {
  * into, whose staged acts read the run from it (`act.ts`).
  *
  * Every document written into the client is handed on to the task list's
- * collections in the same breath, the list it lists from (`selectListedTasks`)
- * under its version, so they and the client never disagree and the bridge
- * is still heard once; a staging that throws leaves their rows standing and
- * says so on them.
+ * collections in the same breath, so they and the client never disagree and
+ * the bridge is still heard once: a delivery as the rows it moved, and a
+ * whole read or a fixture run's staging as the list it lists from
+ * (`selectListedTasks`) under its version; a staging that throws leaves
+ * their rows standing and says so on them.
  */
 export function followAppState(client: QueryClient): AppStateFollowing {
   let following = true;
   let staging: Promise<void> | undefined;
   const taskList = taskListFollowing();
 
-  const shown = (state: AppStateSnapshot): void => {
+  const shown = (state: AppStateSnapshot, delivery?: AppStateDelivery): void => {
     client.setQueryData(appStateQuery.queryKey, state);
-    taskList.write(state.version, selectListedTasks(state));
+
+    if (delivery === undefined) taskList.write(state.version, selectListedTasks(state));
+    else taskList.deliver(delivery);
   };
 
   // Answers the staging the state waits on in a fixture run, and nothing where it is written at once.
-  const write = (state: AppStateSnapshot): Promise<void> | undefined => {
+  const write = (
+    state: AppStateSnapshot,
+    delivery?: AppStateDelivery,
+  ): Promise<void> | undefined => {
     if (!state.run.fixtureMode && staging === undefined) {
-      shown(state);
+      shown(state, delivery);
 
       return undefined;
     }
@@ -245,6 +252,28 @@ export const selectListedTasks = (state: AppStateSnapshot): TasksView =>
 /** Whether a fixture run's synthetic tasks stand in for the account's, so its writes go nowhere. */
 export const selectFixtureStaged = (state: AppStateSnapshot): boolean =>
   loadedTasksFixture()?.fixtureTasksView(state.run) !== undefined;
+
+/** Where the task list stands on its agents: carried, which it is only once followed live, failed before it was, or still being read. */
+export const AGENTS_LISTED = {
+  CARRIED: "carried",
+  FAILED: "failed",
+  READING: "reading",
+} as const;
+
+export type AgentsListed = (typeof AGENTS_LISTED)[keyof typeof AGENTS_LISTED];
+
+/**
+ * Where the task list the window lists from stands on its agents, which the
+ * collections (`task-list-collections.tsx`) cannot say, since they hold a
+ * list not yet carried as one with no rows.
+ */
+export const selectAgentsListed = (state: AppStateSnapshot): AgentsListed => {
+  const listed = selectListedTasks(state);
+
+  if (listed.taskAgents !== undefined) return AGENTS_LISTED.CARRIED;
+
+  return listed.listStatus === TASKS_READ.FAILED ? AGENTS_LISTED.FAILED : AGENTS_LISTED.READING;
+};
 
 /** Whether the last read of the workspaces the window lists did not land, those held still drawn. */
 export const selectWorkspacesFailed = (state: AppStateSnapshot): boolean =>
