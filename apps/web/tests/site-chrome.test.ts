@@ -107,8 +107,8 @@ test("the landing offers the web app beside the download, and nothing in its sce
     `Continue on web -> ${PANEL_PATH}`,
     "Learn more → -> /docs/quickstart",
     "Learn more → -> /docs",
-    "Get the apps → -> /docs/install",
     "Connect an agent → -> /docs/install",
+    "Get the apps → -> /docs/install",
     "Download for macOS -> https://github.com/ReviewStage/vespin/releases/latest/download/Vespin.dmg",
     "GitHub -> https://github.com/ReviewStage/vespin",
   ]);

@@ -89,17 +89,17 @@ export function App(): React.JSX.Element {
         scene={LANDING_SCENE.AGENTS}
       />
       <LandingSection
-        title="Check in from anywhere."
-        lead="Use the Mac app at your desk, or the web app on your phone."
-        more={{ label: "Get the apps", href: `${DOCS_URL}/install` }}
-        scene={LANDING_SCENE.DEVICES}
-      />
-      <LandingSection
         title="Bring your own keys."
         lead="Run agents on your Codex or Claude plan, or bring your own API keys."
         more={{ label: "Connect an agent", href: `${DOCS_URL}/install` }}
         scene={LANDING_SCENE.KEYS}
         codexArt={CODEX_ART}
+      />
+      <LandingSection
+        title="Check in from anywhere."
+        lead="Use the Mac app at your desk, or the web app on your phone."
+        more={{ label: "Get the apps", href: `${DOCS_URL}/install` }}
+        scene={LANDING_SCENE.DEVICES}
       />
     </LandingPage>
   );
