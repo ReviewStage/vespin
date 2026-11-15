@@ -171,7 +171,7 @@ async function inbox(options: {
     },
     [LIVE_READ.LINK_STANDINGS]: Object.fromEntries(workspaces.map(({ id }) => [id, STANDINGS])),
     [LIVE_READ.INBOX_ITEMS]: {
-      rows: { [INBOX_SCOPE_KIND.PLAN]: { [task.id]: options.taskItems } },
+      rows: { [INBOX_SCOPE_KIND.TASK]: { [task.id]: options.taskItems } },
     },
   };
 

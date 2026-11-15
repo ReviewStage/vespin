@@ -5,7 +5,7 @@ import { playheadText } from "@repo/features/time-format";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
 import { useVideoPlayer, type VideoPlayer, type VideoPlayerStatus, VideoView } from "expo-video";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize, useReduceTransparency } from "./accessibility.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
@@ -36,6 +36,9 @@ const OPENS_IN_SAFARI = "Opens the video in Safari";
 
 /** What opens a video the player cannot play where it plays. */
 const OPEN_IN_SAFARI = "Open in Safari";
+
+/** What a playable video is heard to do, as a video in Messages opens: the system's player full screen, whose controls VoiceOver reads there. */
+const OPENS_FULL_SCREEN = "Opens the video full screen";
 
 const styles = StyleSheet.create({
   frame: { width: "100%", borderRadius: RADIUS.MEDIA, overflow: "hidden" },
@@ -113,16 +116,16 @@ function usePlayedOnce(player: VideoPlayer, source: string): boolean {
  */
 function PlayMark({
   label,
-  length,
+  runs,
   onPress,
 }: {
   readonly label: string;
-  readonly length: number | undefined;
+  /** How long the video runs, as a player says it ("0:12"); none where it isn't known. */
+  readonly runs: string | undefined;
   readonly onPress: () => void;
 }) {
   const colors = useColors();
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
-  const runs = length === undefined ? undefined : playheadText(length * 1000);
 
   const face = (
     <>
@@ -202,12 +205,15 @@ type VideoProps = {
  * plays, rather than standing as a player that never starts; and one whose
  * bytes are on their way, or that the player still reads, stands the
  * system's spinner in its well, as Photos does, so it never reads as an
- * empty box.
+ * empty box. To VoiceOver, a player that can play is one element, the
+ * video's name, which opens the system's player full screen, where its
+ * controls are read, as a video in Messages is.
  */
 export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: VideoProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
   const player = useVideoPlayer(source ?? null);
+  const view = useRef<VideoView>(null);
   const [status, setStatus] = useState<VideoPlayerStatus>(player.status);
   const [natural, setNatural] = useState<MediaSize | null | undefined>(undefined);
   useEffect(() => {
@@ -302,19 +308,30 @@ export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: V
     );
   }
 
+  // Note that the player stands as one element, its name, which opens it full screen, as a video in Messages does, because the system's inline player nests a dozen views under it, and a thread's video in an iPad's split view stood past the depth XCTest can serialize (Foundation's "Too many nested arrays or dictionaries"), so no flow could read that screen.
+  // Note that the frame is heard with the video's length while its play mark stands, since the frame is the one element and the mark inside it isn't heard on its own.
+  const marked = status === "readyToPlay" && !played;
+  const runs = length === undefined ? undefined : playheadText(length * 1000);
+
   return (
     <MediaBox frame={frame}>
       <HeldMenu acts={acts}>
-        <View style={[styles.frame, tiled]}>
+        <View
+          style={[styles.frame, tiled]}
+          accessible
+          accessibilityLabel={marked && runs !== undefined ? `${label}, ${runs}` : label}
+          accessibilityHint={OPENS_FULL_SCREEN}
+          onAccessibilityTap={() => void view.current?.enterFullscreen()}
+          testID={status === "readyToPlay" ? VIDEO_PLAYER_ID : undefined}
+        >
           <VideoView
+            ref={view}
             player={player}
             // Note that the system's controls stand only once the video has played, so its own play button never shows under the play mark.
             nativeControls={played}
             contentFit="contain"
             fullscreenOptions={{ enable: true }}
             allowsPictureInPicture
-            accessibilityLabel={label}
-            testID={status === "readyToPlay" ? VIDEO_PLAYER_ID : undefined}
             style={[StyleSheet.absoluteFill, { backgroundColor: colors.WELL }]}
           />
           {status === "readyToPlay" ? null : (
@@ -322,9 +339,7 @@ export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: V
               <ActivityIndicator color={colors.TEXT_MUTED} />
             </View>
           )}
-          {status === "readyToPlay" && !played ? (
-            <PlayMark label={label} length={length} onPress={() => player.play()} />
-          ) : null}
+          {marked ? <PlayMark label={label} runs={runs} onPress={() => player.play()} /> : null}
         </View>
       </HeldMenu>
     </MediaBox>
