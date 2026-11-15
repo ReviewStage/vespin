@@ -338,6 +338,7 @@ import {
   useMessageReveal,
 } from "./message-links.js";
 import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
+import { OutOfMemoryOffer } from "./out-of-memory-offer.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
 import { REWIND_ACTION, RewindProvider, rewindPoints, useMessageEdit } from "./rewind-action.js";
@@ -730,7 +731,7 @@ function calledAgentActor(
   };
 }
 
-/** One tool call: its row, and its input and answer under it once opened, a stop naming the worker it stopped by its job where `jobs` knows it, and a call about an agent naming it by its chip where `cards` or its answer know it; an answer its page carried cut drawn as `cut` says. */
+/** One tool call: its row, and its input and answer under it once opened, a stop naming the worker it stopped by its job where `jobs` knows it, a call about an agent naming it by its chip where `cards` or its answer know it, and a command killed out of memory offering a larger sandbox (`OutOfMemoryOffer`); an answer its page carried cut drawn as `cut` says. */
 function ToolCallView({
   part,
   jobs,
@@ -805,6 +806,7 @@ function ToolCallView({
       {inBody ? null : <CallPictures tool={part.tool} input={part.input} output={part.output} />}
       <ComputerPermissionNote tool={part.tool} output={part.output} />
       <MachineRefusalCard tool={part.tool} output={part.output} />
+      {part.outOfMemory === undefined ? null : <OutOfMemoryOffer outOfMemory={part.outOfMemory} />}
       {limit === undefined ? null : (
         <UsageLimitNotice notice={limit} look={USAGE_LIMIT_NOTICE_LOOK.TITLE} />
       )}

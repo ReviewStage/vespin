@@ -33,6 +33,7 @@ import {
   writeAgentRunnerRecord,
 } from "@repo/database/models/agent-runner-record";
 import {
+  recordAgentSandboxBeat,
   recordAgentSandboxTerminalEnded,
   recordAgentSandboxTerminalOpened,
 } from "@repo/database/models/agent-sandbox-holds";
@@ -75,7 +76,7 @@ import {
 } from "@repo/database/models/workspace-sandbox-script-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable, type StoredStartedFrom } from "@repo/database/schemas/agent";
-import { agentSandboxTable } from "@repo/database/schemas/agent-sandbox";
+import { AGENT_SANDBOX_BEAT_KIND, agentSandboxTable } from "@repo/database/schemas/agent-sandbox";
 import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
@@ -172,6 +173,7 @@ import {
   runnerTook,
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
+import { sandboxesMovedTo } from "../../workspace-sandbox-size/workspace-sandbox-size.js";
 import { warmedAgent } from "../agent-lifecycle.js";
 import {
   AGENT_TAG,
@@ -2515,6 +2517,76 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.ok(read.some((line) => line.text.includes("Now the emails.")));
         assert.equal(api.commands.length, 1);
+      }),
+  );
+
+  it.effect(
+    "a new workspace size stops an idle sandbox whose chat is shown but not one a Terminal tab holds, and the next message resumes it and tells the agent its new memory",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const { sessionId } = opened;
+        const sandboxName = agentSandboxName(sessionId);
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        const at = new Date(yield* Clock.currentTimeMillis);
+
+        // The member watches the agent's chat, which keeps its sandbox up past the turn's end.
+        yield* recordAgentSandboxBeat(
+          sandboxName,
+          { kind: AGENT_SANDBOX_BEAT_KIND.CHAT, holder: "window-1" },
+          at,
+        );
+        yield* runnerTook(agent.id);
+        yield* settleRunnerLostTurns(writer, agent.conversationId, at.getTime());
+
+        yield* runnerIdled({
+          target: { userId, conversationId: agent.conversationId },
+          sessionId,
+          sequence: 41,
+        }).pipe(Effect.provide(api.layer));
+
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+        const moved = sandboxesMovedTo(agent.organizationId, 2, 4).pipe(Effect.provide(api.layer));
+
+        yield* recordAgentSandboxTerminalOpened(sandboxName, "tab-1", at);
+        yield* moved;
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running", "a Terminal tab holds it");
+
+        yield* recordAgentSandboxTerminalEnded(sandboxName, "tab-1");
+        yield* moved;
+        assert.equal(sandboxOfAgent(api, agent)?.status, "stopped", "a chat shown holds nothing");
+
+        const sent = yield* sentAndDelivered(
+          sessions,
+          sessionId,
+          agent,
+          "Run the typecheck again.",
+        );
+
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+        // Note that the relaunch hands its runner the session's lines so far, the message last.
+        const resumed = (yield* textsOf(api.commands[1])).at(-1);
+
+        assert.ok(
+          resumed?.[0]?.startsWith(
+            "The sandbox now has 8 GB of memory, up from 4 GB, as its workspace's sandbox size changed since your last turn. Run again any command",
+          ),
+          resumed?.[0] ?? "",
+        );
       }),
   );
 
