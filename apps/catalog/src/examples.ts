@@ -8,6 +8,7 @@ import { APPROVAL_ACTIONS_EXAMPLE } from "./examples/approval-actions";
 import { ARRIVALS_EXAMPLE } from "./examples/arrivals";
 import { ARTWORK_EXAMPLE } from "./examples/artwork";
 import { ATTACHMENT_CHIPS_EXAMPLE } from "./examples/attachment-chips";
+import { AUDIO_PLAYER_EXAMPLE } from "./examples/audio-player";
 import { AUTH_PAGE_EXAMPLE } from "./examples/auth-page";
 import { AVATARS_EXAMPLE } from "./examples/avatars";
 import { BACK_BUTTONS_EXAMPLE } from "./examples/back-buttons";
@@ -326,6 +327,7 @@ export const EXAMPLES: readonly Example[] = [
   SKELETONS_EXAMPLE,
   SLIDER_EXAMPLE,
   VIDEO_PLAYER_EXAMPLE,
+  AUDIO_PLAYER_EXAMPLE,
   SETTINGS_ORDERED_ROWS_EXAMPLE,
   SETTINGS_ROW_EXAMPLE,
   ACCOUNT_WORDS_EXAMPLE,

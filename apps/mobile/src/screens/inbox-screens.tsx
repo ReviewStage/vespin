@@ -77,10 +77,15 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
-import { PUSHED_PAGE, useDetailPush, useStackRoot, useStandDetailFront } from "../detail-stack.js";
+import {
+  PUSHED_PAGE,
+  useDetailPush,
+  useStackRoot,
+  useStandFocusedDetailFront,
+} from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
@@ -1090,7 +1095,6 @@ function InboxSplitScreen({
     useInboxScreen(words, selected);
 
   const threeColumns = useThreeColumns();
-  const focused = useIsFocused();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
   const rows =
@@ -1163,7 +1167,7 @@ function InboxSplitScreen({
   // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
   const stack = useDetailStackColumn(SIDEBAR_PLACE.INBOX, { id: selected }, true);
   // Note that the menu bar's Back pops the pages over this two-column detail while it's shown; three columns name theirs in `AppSplit`.
-  useStandDetailFront(SIDEBAR_PLACE.INBOX, focused && !threeColumns);
+  useStandFocusedDetailFront(SIDEBAR_PLACE.INBOX, !threeColumns);
   const firstDetailBar = usePortraitDetailBar(detailBar);
   useHandColumns(
     SIDEBAR_PLACE.INBOX,
