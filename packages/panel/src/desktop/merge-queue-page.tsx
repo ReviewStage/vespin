@@ -61,20 +61,28 @@ import {
   EmptyState,
   ErrorState,
   GAP,
-  GLYPH_INK,
-  GlyphSlot,
   GROUP_ACTIONS,
   GROUP_LOOK,
   GroupHeader,
-  LIST_ROW_CURRENT,
-  List,
   ListMotion,
-  ListRow,
   PAGE_FRAME,
+  ProgressCount,
   RepositoryPicture,
   Stack,
+  TASK_ROW_CELL,
+  TASK_ROW_EDGES,
+  TaskRow,
+  type TaskRowCell,
+  TaskRowGlyph,
+  TaskRows,
+  TEXT_ELEMENT,
+  TEXT_FONT,
+  TEXT_TONE,
+  TEXT_VARIANT,
+  Text,
   TIME_LOOK,
   Time,
+  taskRowFit,
   VisuallyHidden,
 } from "@repo/ui";
 import {
@@ -83,19 +91,17 @@ import {
   DELETED_ACCOUNT_ACTOR,
   githubLoginActor,
 } from "@repo/ui/actor-model";
-import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
+import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { queryOptions, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { Duration } from "effect";
-import { useRef } from "react";
+import { type CSSProperties, useMemo, useRef } from "react";
 import { askAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { failureShown } from "../failure-report.js";
 import { MERGE_QUEUE_WORDS } from "../history-titles.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
-import { HOME_ROW_CONTEXT, HOME_ROW_META } from "../tasks/home-row.js";
 import { OpenOnGitHubButton } from "../tasks/open-on-github-button.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
@@ -158,7 +164,7 @@ function checksWords(checks: MergeQueueChecks | null | undefined): string | unde
   return `${checks.passed} of ${checks.total} ${checks.total === 1 ? "check" : "checks"} passed`;
 }
 
-/** Where a pull request stands in the queue, as its row leads with it: its queued mark while it waits its turn, else the glyph for how its merge group's checks stand; either in a glyph's slot, so every row's title starts on one edge. */
+/** Where a pull request stands in the queue, as its row's status column draws it (`TaskRowGlyph`): its queued mark while it waits its turn, else the glyph for how its merge group's checks stand. */
 function StageGlyph({
   stage,
   number,
@@ -169,7 +175,7 @@ function StageGlyph({
   const check = STAGE_CHECK[stage];
 
   return (
-    <GlyphSlot ink={GLYPH_INK.INHERIT} size={ICON_SIZE.MEDIUM}>
+    <TaskRowGlyph>
       {check === undefined ? (
         <PullRequestMark
           pullRequest={{
@@ -182,7 +188,48 @@ function StageGlyph({
       ) : (
         <CheckGlyph state={check} />
       )}
-    </GlyphSlot>
+    </TaskRowGlyph>
+  );
+}
+
+/** A pull request's number as its key column says it. */
+function numberWords(number: number): string {
+  return `#${number}`;
+}
+
+/** A pull request's number in its row's key column, as a task's key stands there. */
+function PullRequestKey({ number }: { number: number }): React.JSX.Element {
+  return (
+    <Text
+      as={TEXT_ELEMENT.SPAN}
+      variant={TEXT_VARIANT.CAPTION}
+      tone={TEXT_TONE.MUTED}
+      font={TEXT_FONT.MONO}
+      aria-hidden
+    >
+      {numberWords(number)}
+    </Text>
+  );
+}
+
+/** How the merge group's checks stand, as a task's row counts its sub-tasks (`ProgressCount`); none before GitHub reports any. */
+function ChecksCount({ entry }: { entry: MergeQueueEntry }): React.JSX.Element | null {
+  const { checks } = entry;
+  const words = checksWords(checks);
+
+  if (checks === null || checks === undefined || words === undefined) return null;
+
+  return <ProgressCount done={checks.passed} total={checks.total} label={words} />;
+}
+
+/** What a reader hears after a row's name that the eye reads in its cells: its number, its stage, and who opened it. */
+function RowSaid({ entry, author }: { entry: MergeQueueEntry; author: Actor }): React.JSX.Element {
+  const stage = MERGE_QUEUE_STAGE_LABEL[mergeQueueStage(entry.state)];
+
+  return (
+    <VisuallyHidden>
+      <ReplayMask>{`, #${entry.pullRequest.number}, ${stage}, ${actorName(author)}`}</ReplayMask>
+    </VisuallyHidden>
   );
 }
 
@@ -193,33 +240,28 @@ function MergeEstimate({ entry }: { entry: MergeQueueEntry }): React.JSX.Element
   return at === null || at === undefined ? null : <Time at={at} look={TIME_LOOK.UNTIL} />;
 }
 
-/** What a row says at its end: its stage, spoken only, how its checks stand where it has any, who opened it, by their mark and to a reader by their name, and when GitHub estimates it merges. */
-function RowMeta({ entry }: { entry: MergeQueueEntry }): React.JSX.Element {
-  const checks = checksWords(entry.checks);
-  const author = authorActor(entry);
-
-  return (
-    <span className={HOME_ROW_META}>
-      <VisuallyHidden>{`${MERGE_QUEUE_STAGE_LABEL[mergeQueueStage(entry.state)]}, `}</VisuallyHidden>
-      {checks === undefined ? null : (
-        <span className={HOME_ROW_CONTEXT}>
-          <ReplayMask>{checks}</ReplayMask>
-        </span>
-      )}
-      <ActorMark actor={author} size={ACTOR_SIZE.INLINE} />
-      <VisuallyHidden>
-        <ReplayMask>{`, ${actorName(author)}, `}</ReplayMask>
-      </VisuallyHidden>
-      <MergeEstimate entry={entry} />
-    </span>
-  );
-}
+/**
+ * The cells a pull request's row draws, in a task's row's order: its number
+ * where a task's key stands, its stage where a task's status does, how its
+ * merge group's checks stand where a task counts its sub-tasks, who opened
+ * it where a task's creator stands, and when it should merge where a task's
+ * time does, so its columns line up as the rows of a task's Overview, Home,
+ * and a person's page do.
+ */
+const QUEUE_ROW_CELLS = [
+  TASK_ROW_CELL.KEY,
+  TASK_ROW_CELL.STATUS,
+  TASK_ROW_CELL.SUB_TASKS,
+  TASK_ROW_CELL.CREATOR,
+  TASK_ROW_CELL.UPDATED,
+] as const satisfies readonly TaskRowCell[];
 
 /** One repository's line: its section's head over its pull requests, front first. */
 function RepositoryQueue({
   queue,
   label,
   pictures,
+  fit,
   marked,
   onOpen,
 }: {
@@ -228,6 +270,8 @@ function RepositoryQueue({
   label: string;
   /** Whether owners' pictures are drawn at all: not in a fixture run. */
   pictures: boolean;
+  /** How wide the number column stands, the widest on the page (`taskRowFit`). */
+  fit: CSSProperties;
   marked: string | undefined;
   onOpen: (url: string) => void;
 }): React.JSX.Element {
@@ -254,26 +298,44 @@ function RepositoryQueue({
         actionsShown={GROUP_ACTIONS.AT_REST}
         actions={<OpenOnGitHubButton url={queue.url} />}
       >
-        <List label={queue.repository} moves>
-          {queue.entries.map((entry) => (
-            <ListRow
-              key={entry.pullRequest.url}
-              motionKey={entry.pullRequest.url}
-              leading={
-                <StageGlyph
-                  stage={mergeQueueStage(entry.state)}
-                  number={entry.pullRequest.number}
-                />
-              }
-              title={pullRequestLabelOf(entry.pullRequest)}
-              titleReplayMasked
-              meta={<RowMeta entry={entry} />}
-              current={entry.pullRequest.url === marked ? LIST_ROW_CURRENT.ITEM : undefined}
-              linkHref={entry.pullRequest.url}
-              onPress={() => onOpen(entry.pullRequest.url)}
-            />
-          ))}
-        </List>
+        <TaskRows
+          label={queue.repository}
+          cells={QUEUE_ROW_CELLS}
+          more={false}
+          edges={TASK_ROW_EDGES.UNCHOSEN}
+          moves
+          fit={fit}
+        >
+          {queue.entries.map((entry) => {
+            const author = authorActor(entry);
+
+            return (
+              <TaskRow
+                key={entry.pullRequest.url}
+                taskId={entry.pullRequest.url}
+                name={entry.pullRequest.title}
+                said={<RowSaid entry={entry} author={author} />}
+                cells={QUEUE_ROW_CELLS}
+                content={{
+                  [TASK_ROW_CELL.KEY]: <PullRequestKey number={entry.pullRequest.number} />,
+                  [TASK_ROW_CELL.STATUS]: (
+                    <StageGlyph
+                      stage={mergeQueueStage(entry.state)}
+                      number={entry.pullRequest.number}
+                    />
+                  ),
+                  [TASK_ROW_CELL.SUB_TASKS]: <ChecksCount entry={entry} />,
+                  [TASK_ROW_CELL.CREATOR]: <ActorMark actor={author} size={ACTOR_SIZE.INLINE} />,
+                  [TASK_ROW_CELL.UPDATED]: <MergeEstimate entry={entry} />,
+                }}
+                more={false}
+                edges={TASK_ROW_EDGES.UNCHOSEN}
+                current={entry.pullRequest.url === marked}
+                onOpen={() => onOpen(entry.pullRequest.url)}
+              />
+            );
+          })}
+        </TaskRows>
       </GroupHeader>
     </div>
   );
@@ -324,6 +386,17 @@ function Queues({
   const root = useRef<HTMLElement>(null);
   const pictures = useRepositoryPictures();
 
+  // Note that every repository's numbers stand as wide as the widest on the page, so the titles start on one edge from list to list.
+  const fit = useMemo(
+    () =>
+      taskRowFit(
+        repositories.flatMap((queue) =>
+          queue.entries.map((entry) => ({ key: numberWords(entry.pullRequest.number) })),
+        ),
+      ),
+    [repositories],
+  );
+
   return (
     <ListMotion root={root} change={repositories}>
       <Stack ref={root} gap={GAP.BLOCK}>
@@ -333,6 +406,7 @@ function Queues({
             queue={queue}
             label={repositoryLabel(queue.repository, repositories)}
             pictures={pictures}
+            fit={fit}
             marked={marked}
             onOpen={onOpen}
           />
