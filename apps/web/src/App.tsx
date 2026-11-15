@@ -64,7 +64,7 @@ const MORE_FEATURES: readonly LandingMoreItem[] = [
     id: "mcp",
     icon: <TerminalIcon />,
     title: "MCP and CLI",
-    words: `Work in ${PRODUCT_NAME} from Claude Code, Codex, Cursor, or your terminal.`,
+    words: `Drive ${PRODUCT_NAME} from your favorite harness.`,
   },
   {
     id: "host",
