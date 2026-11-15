@@ -496,6 +496,8 @@ export interface DescriptionEditorHandle extends EditorFormatting {
   readonly take: (sent: string, merged: string) => { readonly base: string; readonly text: string };
   /** The `@` word the caret ends written as the mention chosen, a space after it, the caret after the space. */
   readonly chooseMention: (mention: MentionNode) => void;
+  /** The `@` word the caret ends written as `@` and `words`, the caret after them, as the `@` list narrowing to a kind writes its `kind:`. */
+  readonly retypeMention: (words: string) => void;
   /** The `/` word the caret ends deleted, and `block` run on the block the caret stands in, or a document's own Markdown laid in there; with no `/` word, a document's own Markdown laid in after the caret's block. */
   readonly insertBlock: (block: SlashChoice) => void;
   /** The text as the editor holds it now, ahead of the draft it hands over once typing pauses. */
@@ -731,6 +733,8 @@ export interface ComposerEditorHandle extends EditorFormatting {
   readonly chooseMention: (mention: MentionNode) => void;
   /** The `@` word the caret ends written as the skill named, as a `/` word's pick writes it. */
   readonly chooseSkillAtMention: (name: string) => void;
+  /** The `@` word the caret ends written as `@` and `words`, the caret after them, as the `@` list narrowing to a kind writes its `kind:`. */
+  readonly retypeMention: (words: string) => void;
   /** A mention made elsewhere (a File tab's ⌥K) laid in where the caret stands, a space after it, the box focused; nothing where it has no room under the bound. */
   readonly insertMention: (mention: MentionNode) => void;
   /** The skills a `/name` names: each such word is drawn as a chip from now on. */

@@ -1381,6 +1381,14 @@ function choseChip(editor: Editor, word: ReturnType<typeof triggerAt>, chip: PmN
   editor.view.dispatch(spacedChip(tr, word.from, word.from + chip.nodeSize).scrollIntoView());
 }
 
+/** The `@` word written as `@` and `words`, the caret after them. */
+function retypedWord(editor: Editor, word: ReturnType<typeof triggerAt>, words: string): void {
+  if (word === undefined) return;
+  const typed = `@${words}`;
+  const tr = editor.state.tr.insertText(typed, word.from, word.to);
+  editor.view.dispatch(tr.setSelection(TextSelection.create(tr.doc, word.from + typed.length)));
+}
+
 /**
  * A mention made elsewhere laid in where the caret stands, over what is
  * selected, spaced as every chip is (`chipOverSelection`), and the box
@@ -1563,6 +1571,7 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
     insertQuote: (words) => laidInQuote(editor, state, props.maxLength, words),
     chooseSkillAtMention: (name) =>
       choseChip(editor, state.mentionTrigger, editor.schema.node(SKILL_NODE, { name })),
+    retypeMention: (words) => retypedWord(editor, state.mentionTrigger, words),
     setSkills: (skills) => {
       state.skills = skills;
       const tr = chipped(editor.state, state, true);

@@ -1822,19 +1822,19 @@ test("a bare End and Home take the highlight to the last row and the first, a mo
 });
 
 test.each([
-  ["⌫", "Backspace"],
-  ["←", "ArrowLeft"],
-  ["Escape", "Escape"],
+  ["Escape", true, "See @"],
+  ["Backspace", false, "See @files"],
 ])(
-  "Enter on a kind's row narrows the list to it, and %s on its empty words widens it again, deleting nothing and closing nothing",
-  async (_, key) => {
+  "Enter on a kind's row found by its word writes the word and a colon, as typing them would, and %s on its empty words widens the list again",
+  async (key, taken, after) => {
     const { container } = await wideBox();
 
-    typeInComposer(container, "See @");
+    typeInComposer(container, "See @file");
     await settle();
     highlightRow(container, "Browse", "Files and folders");
     pressInComposer(container, "Enter");
     await settle();
+    const written = composerEditor(container).textContent;
     const narrowed = groupsListed(container);
     const narrowedCrumb = crumb(container);
     // Note that whether the key bubbled is read off the document, since an event forgets it was stopped once its dispatch ends.
@@ -1843,14 +1843,18 @@ test.each([
     document.addEventListener("keydown", listen);
     const pressed = pressInComposer(container, key);
     document.removeEventListener("keydown", listen);
+
+    // Note that a ⌫ the list leaves to the editor is laid in by hand, since a key pressed here writes nothing.
+    if (!pressed.defaultPrevented) eraseInComposer(container, 1);
     await settle();
 
+    assert.equal(written, "See @files:");
     assert.equal(narrowedCrumb, "Files and folders");
     assert.deepEqual(narrowed, [["Files and folders", ["apps/", "README.md"]]]);
-    assert.equal(pressed.defaultPrevented, true);
+    assert.equal(pressed.defaultPrevented, taken);
     // An Escape the list takes is kept from the surface behind it, as one that closes the list is, so a dialog around the box stays open.
     assert.equal(behind.includes("Escape"), false);
-    assert.equal(composerEditor(container).textContent, "See @");
+    assert.equal(composerEditor(container).textContent, after);
     assert.equal(crumb(container), undefined);
     assert.ok(kindsListed(container).length > 0, "the kinds' rows stand again");
   },
@@ -1927,7 +1931,7 @@ test("files found by a word typed on are those the longer word finds, and the wo
   assert.deepEqual(listed(container), typed);
 });
 
-test("a group holding more than four ends in the row saying how many more, which opens its kind searched by the same words, as typing @files: does", async () => {
+test("a group holding more than four ends in the row saying how many more, which writes its kind's word before the same words, as typing @files: does", async () => {
   const { container } = await wideBox();
 
   typeInComposer(container, "See @invite");
@@ -1943,7 +1947,7 @@ test("a group holding more than four ends in the row saying how many more, which
 
   assert.equal(wide?.[1].length, 5);
   assert.match(more, /^Show \d+ more$/u);
-  assert.deepEqual(opened, ["Files and folders", 50, "See @invite"]);
+  assert.deepEqual(opened, ["Files and folders", 50, "See @files:invite"]);
   assert.equal(crumb(container), "Files and folders");
   assert.equal(listedCount(container), 50);
   assert.ok(listed(container).every((name) => name.startsWith("invite-")));

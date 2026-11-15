@@ -1,7 +1,13 @@
 import type { Editor } from "@tiptap/core";
 import type { MarkdownManager } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
-import { type EditorState, Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
+import {
+  type EditorState,
+  Plugin,
+  PluginKey,
+  TextSelection,
+  type Transaction,
+} from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { atWordAround, spacedChip } from "./chip-spacing.js";
 import {
@@ -257,5 +263,15 @@ export function descriptionMentions(
     editor.view.focus();
   };
 
-  return { plugin, choose };
+  const retype = (editor: Editor, words: string): void => {
+    const word = state.found;
+
+    if (word === undefined) return;
+    const typed = `@${words}`;
+    const tr = editor.state.tr.insertText(typed, word.from, word.to);
+    editor.view.dispatch(tr.setSelection(TextSelection.create(tr.doc, word.from + typed.length)));
+    editor.view.focus();
+  };
+
+  return { plugin, choose, retype };
 }
