@@ -1,7 +1,8 @@
 import { AUTOMATION_TRIGGER } from "@repo/features/automation-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
-import { type ReactNode, type RefObject, useRef } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import { cssCustomProperties } from "../../css.js";
 import {
   CheckIcon,
   GLYPH,
@@ -110,7 +111,7 @@ import { MINUTE, STORY_NOW, still, useStory } from "./landing-story.js";
  */
 
 /** How long each scene holds a step, in milliseconds. */
-const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700 } as const;
+const BEAT = { INBOX: 1100, AGENTS: 1800, RUNS: 1700 } as const;
 
 /**
  * A window's story: how many steps it plays, the last it draws (held for the
@@ -118,7 +119,6 @@ const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700 } as const;
  * cut to the panel that moment happens in.
  */
 const STORY = {
-  INBOX: { STEPS: 7, LAST: 5, FROM: 1 },
   AGENTS: { STEPS: 9, LAST: 6, FROM: 0 },
 } as const;
 
@@ -297,6 +297,24 @@ const OTHER_ITEMS: readonly InboxItem[] = [
     line: "Approve (recommended) / Decline",
     kind: LINE.DECIDE,
     ago: 40,
+  },
+  {
+    id: "alerts",
+    task: "Usage alerts",
+    status: TASK_STATUS.IN_PROGRESS,
+    title: "Which threshold alerts first?",
+    line: "80% of the plan (recommended) / 90% / 100%",
+    kind: LINE.DECIDE,
+    ago: 48,
+  },
+  {
+    id: "webhook",
+    task: "Billing export",
+    status: TASK_STATUS.IN_PROGRESS,
+    title: "Add the billing webhook's signing secret",
+    line: "2 steps left · Copy it from the payment provider's dashboard",
+    kind: LINE.DO,
+    ago: 55,
   },
   {
     id: "subject",
@@ -572,69 +590,191 @@ function ColumnCard({
   );
 }
 
-/** The Inbox's list at `step`: the question arriving on top of the others, opened, and settled. */
-function InboxListCard({ step }: { step: number }): React.JSX.Element {
-  return (
-    <ColumnCard
-      aside
-      bar={
-        <Toolbar
-          title="Inbox"
-          end={TOOLBAR_INSET.COLUMN}
-          actions={
-            <IconButton icon={<SlidersHorizontalIcon />} label="View options" onClick={still} />
-          }
-        />
-      }
-    >
-      <div className="ui-landing-rows">
-        <List label="Inbox items">
-          {inboxItems(step).map((item) => (
-            <InboxRow key={item.id} item={item} />
-          ))}
-        </List>
-      </div>
-    </ColumnCard>
-  );
+/**
+ * The Inbox demo's beats, in order: the list, the question arriving, the
+ * pointer going to it and pressing, the thread opening, the pointer picking
+ * an option, the note written, the send pressed, and the list again with the
+ * question settled, held before the loop starts over.
+ */
+const INBOX_BEAT = {
+  LIST: 0,
+  ARRIVE: 1,
+  AIM_ROW: 2,
+  PRESS_ROW: 3,
+  OPEN: 4,
+  AIM_PICK: 5,
+  PICK: 6,
+  NOTE: 7,
+  SEND: 8,
+  BACK: 9,
+  HOLD: 10,
+} as const;
+
+/** How many beats the Inbox demo plays before it loops. */
+const INBOX_BEATS = 11;
+
+/** What the pointer rests on at each beat: the row, the picked option, the send, or nothing. */
+const POINTER_AIM = {
+  REST: "rest",
+  ROW: "row",
+  PICK: "pick",
+  SEND: "send",
+} as const;
+
+type PointerAim = (typeof POINTER_AIM)[keyof typeof POINTER_AIM];
+
+/** Where the pointer is at `beat`. */
+function pointerAim(beat: number): PointerAim {
+  if (beat === INBOX_BEAT.AIM_ROW || beat === INBOX_BEAT.PRESS_ROW) return POINTER_AIM.ROW;
+
+  if (beat === INBOX_BEAT.AIM_PICK || beat === INBOX_BEAT.PICK) return POINTER_AIM.PICK;
+
+  if (beat === INBOX_BEAT.NOTE || beat === INBOX_BEAT.SEND) return POINTER_AIM.SEND;
+
+  return POINTER_AIM.REST;
 }
 
-/** The question's thread at `step`, under its path: the ask, the pick, the note, and the send. */
-function QuestionCard({ step }: { step: number }): React.JSX.Element {
+/** The element the pointer goes to for `aim`, found in the scene's own markup. */
+const AIM_TARGET: Readonly<Record<Exclude<PointerAim, typeof POINTER_AIM.REST>, string>> = {
+  [POINTER_AIM.ROW]: ".ui-landing-demo-list li",
+  [POINTER_AIM.PICK]: `.ui-landing-demo-thread [data-value="${QUESTION.PICK}"]`,
+  [POINTER_AIM.SEND]: '.ui-landing-demo-thread button[aria-label="Send"]',
+};
+
+/** The Inbox list's step (`inboxItems`) at a beat of the demo. */
+function listStep(beat: number): number {
+  if (beat < INBOX_BEAT.ARRIVE) return 0;
+
+  if (beat < INBOX_BEAT.PRESS_ROW) return 1;
+
+  if (beat < INBOX_BEAT.BACK) return 2;
+
+  return 5;
+}
+
+/** The thread's step (`QuestionThread`) at a beat of the demo. */
+function threadStep(beat: number): number {
+  if (beat < INBOX_BEAT.PICK) return 2;
+
+  if (beat < INBOX_BEAT.NOTE) return 3;
+
+  if (beat < INBOX_BEAT.SEND) return 4;
+
+  return 5;
+}
+
+/** A point in the scene, in pixels from its top left. */
+type Point = { readonly x: number; readonly y: number };
+
+/**
+ * Where the pointer stands at `aim`: the middle of its target as the scene
+ * draws it now, or a corner of the screen at rest. Note that we measure
+ * after each beat draws, because the target moves as the thread opens.
+ */
+function usePointer(scene: RefObject<HTMLDivElement | null>, aim: PointerAim, beat: number): Point {
+  const [point, setPoint] = useState<Point>({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const root = scene.current;
+
+    if (!root) return;
+    const box = root.getBoundingClientRect();
+    const target = aim === POINTER_AIM.REST ? null : root.querySelector(AIM_TARGET[aim]);
+
+    if (target === null) {
+      setPoint({ x: box.width * 0.82, y: box.height * 0.84 });
+
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    setPoint({
+      x: rect.left - box.left + Math.min(rect.width / 2, 120),
+      y: rect.top - box.top + rect.height / 2,
+    });
+  }, [scene, aim, beat]);
+
+  return point;
+}
+
+/** The demo's pointer: an arrow at `point`, pressing where `pressed`. A picture, never a control. */
+function DemoPointer({ point, pressed }: { point: Point; pressed: boolean }): React.JSX.Element {
   return (
-    <ColumnCard
-      bar={
-        <Toolbar
-          start={TOOLBAR_INSET.COLUMN}
-          title={<ThreadPath />}
-          actions={<MoreButton thing="thread" onClick={still} />}
-        />
-      }
+    <svg
+      className="ui-landing-pointer"
+      viewBox="0 0 16 20"
+      aria-hidden="true"
+      focusable="false"
+      data-pressed={pressed || undefined}
+      style={cssCustomProperties({
+        "--ui-landing-pointer-x": `${point.x}px`,
+        "--ui-landing-pointer-y": `${point.y}px`,
+      })}
     >
-      <QuestionThread step={step} />
-    </ColumnCard>
+      <path d="M1 1v15.5l4.2-4.1 2.9 6.6 2.6-1.1-2.9-6.5H14L1 1z" />
+    </svg>
   );
 }
 
 /**
- * The Inbox close up: its list behind, the question arriving on top of it,
- * and the question's thread in front, answered in the draft under it.
+ * The Inbox as one screen, looping: the list, a question arriving on top,
+ * the pointer opening it, picking an option, writing a note, and sending,
+ * then the list again with the question settled. The thread slides in over
+ * the list as the panel opens an item at this width.
  */
 function InboxScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
-  const step = useWindowStory(ref, STORY.INBOX, BEAT.INBOX);
+  const beat = useStory(ref, INBOX_BEATS, BEAT.INBOX);
+  const open = beat >= INBOX_BEAT.OPEN && beat < INBOX_BEAT.BACK;
+  const aim = pointerAim(beat);
+  const point = usePointer(ref, aim, beat);
+
+  const pressed =
+    beat === INBOX_BEAT.PRESS_ROW || beat === INBOX_BEAT.PICK || beat === INBOX_BEAT.SEND;
 
   return (
     <div
       ref={ref}
       className="ui-landing-scene ui-landing-closeup"
       role="img"
-      aria-label="The Inbox, where an agent's question is answered"
+      aria-label="The Inbox: a question arrives, is opened, answered, and settled"
       {...DESKTOP_SURFACE}
     >
       <div className="ui-landing-closeup-cards" inert>
-        <InboxListCard step={step} />
-        <QuestionCard step={step} />
+        <ColumnCard
+          bar={
+            <Toolbar
+              start={TOOLBAR_INSET.COLUMN}
+              title={open ? <ThreadPath /> : "Inbox"}
+              actions={
+                open ? (
+                  <MoreButton thing="thread" onClick={still} />
+                ) : (
+                  <IconButton
+                    icon={<SlidersHorizontalIcon />}
+                    label="View options"
+                    onClick={still}
+                  />
+                )
+              }
+            />
+          }
+        >
+          <div className="ui-landing-demo" data-open={open}>
+            <div className="ui-landing-demo-list ui-landing-rows">
+              <List label="Inbox items">
+                {inboxItems(listStep(beat)).map((item) => (
+                  <InboxRow key={item.id} item={item} />
+                ))}
+              </List>
+            </div>
+            <div className="ui-landing-demo-thread">
+              <QuestionThread step={threadStep(beat)} />
+            </div>
+          </div>
+        </ColumnCard>
       </div>
+      <DemoPointer point={point} pressed={pressed} />
     </div>
   );
 }

@@ -925,20 +925,62 @@
       0 1px 2px var(--ui-color-shadow-soft);
   }
 
-  /* The Inbox: its list behind at the left, the thread in front, lower;
-     the stage keeps the thread's tallest step, so nothing under it moves. */
-  .ui-landing-stage[data-scene="inbox"] .ui-landing-closeup-cards {
-    min-height: 720px;
+  /* The Inbox: one screen across the stage, the thread sliding in over the
+     list as the panel opens an item at this width, a pointer playing the
+     reader over it. */
+  .ui-landing-stage[data-scene="inbox"] .ui-landing-card {
+    grid-column: 1 / -1;
+    height: 540px;
   }
 
-  .ui-landing-stage[data-scene="inbox"] .ui-landing-card[data-aside="true"] {
-    grid-column: 1 / span 5;
+  .ui-landing-stage[data-scene="inbox"] .ui-landing-card-sheet {
+    overflow: clip;
   }
 
-  .ui-landing-stage[data-scene="inbox"] .ui-landing-card[data-aside="false"] {
-    z-index: 1;
-    grid-column: 4 / -1;
-    margin-top: 72px;
+  .ui-landing-demo {
+    position: relative;
+    height: 100%;
+  }
+
+  .ui-landing-demo-thread {
+    position: absolute;
+    inset: 0;
+    background: var(--ui-color-ground);
+    transform: translateX(100%);
+    transition: transform var(--ui-duration-pane) var(--ui-motion-pane);
+  }
+
+  .ui-landing-demo[data-open="true"] .ui-landing-demo-thread {
+    transform: none;
+  }
+
+  .ui-landing-demo-list {
+    transition: opacity var(--ui-duration-pane) var(--ui-motion-pane);
+  }
+
+  .ui-landing-demo[data-open="true"] .ui-landing-demo-list {
+    opacity: 0;
+  }
+
+  /* off-scale: the pointer's own size, a desktop arrow's */
+  .ui-landing-pointer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    width: 16px;
+    height: 20px;
+    fill: var(--ui-color-text);
+    stroke: var(--ui-color-ground);
+    stroke-width: 1.2;
+    filter: drop-shadow(0 2px 4px var(--ui-color-shadow-deep));
+    pointer-events: none;
+    transform: translate(var(--ui-landing-pointer-x), var(--ui-landing-pointer-y));
+    transition: transform var(--ui-duration-shape) var(--ui-motion-pane);
+  }
+
+  .ui-landing-pointer[data-pressed] {
+    transform: translate(var(--ui-landing-pointer-x), var(--ui-landing-pointer-y)) scale(0.85);
   }
 
   /* A task: its log, and the plan's sub-tasks over its foot's corner,
@@ -1820,10 +1862,6 @@
       .ui-landing-card[data-aside="false"] {
       grid-column: 1 / -1;
       margin-top: 0;
-    }
-
-    .ui-landing-stage[data-scene="inbox"] .ui-landing-closeup-cards {
-      min-height: 0;
     }
 
     .ui-landing-stage[data-scene="devices"] {
