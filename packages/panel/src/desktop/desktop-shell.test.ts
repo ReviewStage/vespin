@@ -929,10 +929,13 @@ async function mountNarrow(
             Fragment,
             null,
             held === undefined ? null : holdingInboxChoice(held),
-            createElement(DesktopShell, {
-              ...shellProps(tasks, PANEL_TAB.TASKS, ignore, sidebarPatch),
-              room,
-            }),
+            overListedTasks(
+              tasks,
+              createElement(DesktopShell, {
+                ...shellProps(tasks, PANEL_TAB.TASKS, ignore, sidebarPatch),
+                room,
+              }),
+            ),
           ),
           at,
         ),

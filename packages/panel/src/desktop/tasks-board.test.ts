@@ -31,9 +31,9 @@ import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { followListedTasks, handMembers, writeListedTasks } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
-import { overEveryTask } from "../testing/history-rows.js";
 import { layScrollerOut } from "../testing/scroller.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
@@ -202,17 +202,17 @@ async function mountBoard(
   const draw = (shown: TasksDisplay, changed: Partial<typeof control> = {}) =>
     root.render(
       withQueryClient(
-        overEveryTask(
-          { tasks: changed.tasks ?? control.tasks },
-          provide(
-            createElement(
-              Fragment,
-              null,
-              leavingBy(() => (closed += 1)),
-              createElement(MemberDirectory, {
-                workspace: ACME,
-                readerId: DEAN,
-                children: createElement(TasksBoard, {
+        provide(
+          createElement(
+            Fragment,
+            null,
+            leavingBy(() => (closed += 1)),
+            createElement(MemberDirectory, {
+              workspace: ACME,
+              readerId: DEAN,
+              children: overListedTasks(
+                { ...control, ...changed },
+                createElement(TasksBoard, {
                   tasks: { ...control, ...changed },
                   room,
                   title: "Tasks",
@@ -224,9 +224,9 @@ async function mountBoard(
                     onDisplay: (next) => displayed.push(next),
                   },
                 }),
-              }),
-              createElement(ToastHost),
-            ),
+              ),
+            }),
+            createElement(ToastHost),
           ),
         ),
       ),
