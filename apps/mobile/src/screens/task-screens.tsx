@@ -5,12 +5,7 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
-import {
-  iosAgentRoute,
-  iosAppRouteOf,
-  iosPullRequestRoute,
-  iosRouteTab,
-} from "@repo/features/ios-app-links";
+import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
 import {
   LINK_DESTINATION,
@@ -125,27 +120,12 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
-import {
-  Stack,
-  useFocusEffect,
-  useIsFocused,
-  useLocalSearchParams,
-  useNavigation,
-  useRouter,
-} from "expo-router";
-import {
-  type ReactElement,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
+import { type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import {
   PUSHED_PAGE,
-  topPageOf,
   useDetailLeave,
   useDetailPush,
   useStackRoot,
@@ -162,7 +142,7 @@ import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useOnOwnTab, useOnTab, useOwnTab } from "../tab-route.js";
+import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import {
   threadComments,
   threadOpen,
@@ -174,12 +154,6 @@ import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
-import {
-  keepStartLanded,
-  START_LANDED,
-  takeStartLanded,
-  useStartLanded,
-} from "../tasks/use-start.js";
 import {
   type ReadListing,
   type StatusQuestion,
@@ -2032,46 +2006,6 @@ export function TaskColumnPage({ taskId }: { readonly taskId: string }) {
   );
 }
 
-/** The Tasks root's own navigation, as far as it sets the task it selects. */
-type TasksRootNavigation = {
-  readonly setParams: (params: { readonly selected?: string | undefined }) => void;
-};
-
-/**
- * Hears what a New task start came to for the task a regular window's split
- * view shows, since the task's own page hands itself to the split view and
- * leaves: its agent opens beside it while the task's detail stands in front, and
- * a refused start, whose task was never made, leaves the detail empty, as
- * New task opens again over it.
- */
-function useSplitStartLanded(selected: string | undefined, focused: boolean): void {
-  const router = useRouter();
-  const navigation = useNavigation<TasksRootNavigation>();
-  const onTab = useOnTab();
-
-  useStartLanded(selected, (landed) => {
-    if (landed.kind === START_LANDED.AGENT) {
-      // Note that a page pushed over the task's detail leaves Tasks focused, so the agent waits for the detail itself to stand in front, read as the answer lands, and one landing before it does is kept for that moment.
-      if (focused && topPageOf(SIDEBAR_PLACE.TASKS) === undefined) {
-        router.push(onTab(iosAgentRoute(landed.agentId)));
-      } else if (selected !== undefined) keepStartLanded(selected, landed);
-
-      return;
-    }
-
-    // Note that the Tasks root's own route lets go of the task, whichever tab stands in front.
-    navigation.setParams({ selected: undefined });
-  });
-
-  // Note that an agent kept while Tasks came in front opens as it does, while nothing covers the task's detail.
-  useEffect(() => {
-    if (!focused || topPageOf(SIDEBAR_PLACE.TASKS) !== undefined) return;
-    const kept = takeStartLanded(selected);
-
-    if (kept?.kind === START_LANDED.AGENT) router.push(onTab(iosAgentRoute(kept.agentId)));
-  }, [focused, selected, router, onTab]);
-}
-
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the tree
 // and the picked task side by side. Where the window is wide enough for three
 // columns, the two are handed to the tabs' one split view, which stands them
@@ -2123,7 +2057,6 @@ function TasksSplitScreen({
   };
 
   const first = useListColumn(list);
-  useSplitStartLanded(selected, focused);
   useStackRoot(SIDEBAR_PLACE.TASKS, selected);
   // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
   const stack = useDetailStackColumn(SIDEBAR_PLACE.TASKS, { id: selected }, true);
@@ -2189,47 +2122,7 @@ function numberedIn(id: string, workspace: string | undefined): boolean {
 export function TaskScreen() {
   const { id, workspace } = useLocalSearchParams<{ id: string; workspace?: string }>();
   const router = useRouter();
-  const navigation = useNavigation();
-  const onTab = useOnTab();
   const colors = useColors();
-  // Note that a page New task opened before its task was made hears what the start came to: its agent opens while the page still stands in front, and a refused start takes the page back, at once or as soon as it stands in front again.
-  const [gone, setGone] = useState(false);
-  // Note that a page that hands its task to the split view and leaves, as `useHandToSplit` decides, never opens the agent itself: a push it made would be popped by its own hand-off, and the agent lost, so the split view opens it.
-  const own = useOwnTab();
-
-  const handsOff =
-    useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR &&
-    (own === undefined || own === iosRouteTab(SPLIT_TAB.TASKS));
-
-  // Note that an agent landing before the page stands in front, as a start the service answers at once does while the page still slides in or hands itself to the split view, is kept for the next page of the task in front.
-  useStartLanded(id, (landed) => {
-    const shown = navigation.isFocused();
-
-    if (landed.kind === START_LANDED.AGENT) {
-      if (shown && !handsOff) router.push(onTab(iosAgentRoute(landed.agentId)));
-      else keepStartLanded(id, landed);
-
-      return;
-    }
-
-    if (shown) router.back();
-    else setGone(true);
-  });
-
-  useFocusEffect(
-    useCallback(() => {
-      if (gone) {
-        router.back();
-
-        return;
-      }
-
-      if (handsOff) return;
-      const kept = takeStartLanded(id);
-
-      if (kept?.kind === START_LANDED.AGENT) router.push(onTab(iosAgentRoute(kept.agentId)));
-    }, [gone, handsOff, id, router, onTab]),
-  );
   const found = useFoundTask(id, workspace);
   const held = useTaskOverview(found.taskId);
 
@@ -2265,7 +2158,7 @@ export function TaskScreen() {
   useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
 
-  if (handed || gone) return null;
+  if (handed) return null;
 
   return (
     <>

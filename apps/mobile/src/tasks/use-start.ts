@@ -62,11 +62,10 @@ import {
 import type { PickOption } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useListedTasks } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
-import type { HeldPicture } from "../use-attached-pictures.js";
 
 /** No models read yet. */
 const NO_MODELS: readonly CatalogModel[] = [];
@@ -313,149 +312,6 @@ export function useRepositoryPick(
   };
 }
 
-/* ----- A start that opened its task at once ----- */
-
-/** The id New task makes its task under, minted on the phone as the sheet opens, so the task opens the moment Start is pressed, as the panel's does. */
-interface MintedTask {
-  readonly id: string;
-}
-
-/** What a New task start came to after its sheet closed, which its task's page hears. */
-export const START_LANDED = {
-  /** Its agent started, which the task's page opens while it still stands in front. */
-  AGENT: "agent",
-  /** The start was refused, so the task the page opened on was never made. */
-  REFUSED: "refused",
-} as const;
-
-export type StartLanded =
-  | { readonly kind: typeof START_LANDED.AGENT; readonly agentId: string }
-  | { readonly kind: typeof START_LANDED.REFUSED };
-
-/** The pages of each task that stand, by its task, the newest last, which hears what its start came to. */
-const hearing = new Map<string, readonly ((landed: StartLanded) => void)[]>();
-
-/** The tasks a start opened whose answer is still on its way. */
-const awaiting = new Set<string>();
-
-/**
- * How long an answer that found no page standing is kept for one that
- * mounts: long enough for a page a moment late, as a task handed to the
- * iPad's split view stands again in its detail column, and short enough
- * that a visit to the task later on never acts on it.
- */
-const UNHEARD_FOR_MS = 5000;
-
-/** When each task's start last landed, which every keeping of its answer counts its wait from. */
-const landedAt = new Map<string, number>();
-
-/** What a start came to while no page of its task stood to hear it, by its task, and when it landed. */
-const unheard = new Map<string, { readonly landed: StartLanded; readonly at: number }>();
-
-/** Marks the task a start just opened as awaiting what the start comes to. */
-export function awaitStart(taskId: string): void {
-  awaiting.add(taskId);
-}
-
-/**
- * Tells the page of the task a New task start opened what the start came
- * to, or keeps it a moment for a page about to mount. Note that it is kept
- * only for a page that mounts soon after, so a later visit to the task never
- * opens its agent or steps back.
- */
-export function startLanded(taskId: string, landed: StartLanded): void {
-  if (!awaiting.delete(taskId)) return;
-  const at = Date.now();
-  landedAt.set(taskId, at);
-  const hear = hearing.get(taskId)?.at(-1);
-
-  if (hear === undefined) unheard.set(taskId, { landed, at });
-  else hear(landed);
-}
-
-/**
- * Keeps what a start came to for the next page of its task that stands in
- * front, as a page still arriving, or handing itself to the iPad's split
- * view, hears it before it can act on it.
- */
-export function keepStartLanded(taskId: string, landed: StartLanded): void {
-  // Note that it is kept from the moment it landed, however often a page keeps it again, so a page remounting out of sight never stretches the wait.
-  unheard.set(taskId, { landed, at: landedAt.get(taskId) ?? Date.now() });
-}
-
-/** What a start came to that waits for a page of its task in front, taken once; none once it has waited past `UNHEARD_FOR_MS`. */
-export function takeStartLanded(taskId: string | undefined): StartLanded | undefined {
-  if (taskId === undefined) return undefined;
-  const waiting = unheard.get(taskId);
-  unheard.delete(taskId);
-
-  return waiting !== undefined && Date.now() - waiting.at < UNHEARD_FOR_MS
-    ? waiting.landed
-    : undefined;
-}
-
-/**
- * Hears what the start of the task `taskId` came to while its page stands,
- * including an answer that landed a moment before the page mounted, as an
- * answer to a start refused at once does, or one landing while a task's
- * page hands itself to the iPad's split view.
- */
-export function useStartLanded(
-  taskId: string | undefined,
-  hear: (landed: StartLanded) => void,
-): void {
-  const heard = useEffectEvent(hear);
-
-  useEffect(() => {
-    if (taskId === undefined) return;
-    const listener = (landed: StartLanded) => heard(landed);
-    hearing.set(taskId, [...(hearing.get(taskId) ?? []), listener]);
-    const waiting = unheard.get(taskId);
-    unheard.delete(taskId);
-
-    if (waiting !== undefined && Date.now() - waiting.at < UNHEARD_FOR_MS) listener(waiting.landed);
-
-    // Note that a page leaving leaves its start awaited, so a page standing again in its place, as the split view's detail does, still hears it, and only the newest page of the task still standing hears it.
-    return () => {
-      const left = (hearing.get(taskId) ?? []).filter((each) => each !== listener);
-
-      if (left.length === 0) hearing.delete(taskId);
-      else hearing.set(taskId, left);
-    };
-  }, [taskId]);
-}
-
-/** New task as it pressed Start, which a start refused after the sheet closed opens New task again on, with why it was refused. */
-export interface RefusedStart {
-  readonly prompt: string;
-  readonly parent: string | undefined;
-  readonly workspaceId: string | undefined;
-  readonly repository: string | undefined;
-  readonly relation: TaskCreateRelation | undefined;
-  readonly picked: ModelChoice | undefined;
-  readonly runsOn: string;
-  readonly pictures: readonly HeldPicture[];
-  readonly note: string;
-}
-
-/** The start refused after its sheet closed, which the next New task opens on; none once it has. */
-let refusedStart: RefusedStart | undefined;
-
-/** Keeps a start refused after its sheet closed for New task to open on. */
-export function keepRefusedStart(refused: RefusedStart): void {
-  refusedStart = refused;
-}
-
-/** The start refused after its sheet closed that New task opens on, if any. */
-export function heldRefusedStart(): RefusedStart | undefined {
-  return refusedStart;
-}
-
-/** Lets go of `refused` once New task has opened on it, unless a newer one was kept since. */
-export function forgetRefusedStart(refused: RefusedStart | undefined): void {
-  if (refused !== undefined && refusedStart === refused) refusedStart = undefined;
-}
-
 /* ----- The starts ----- */
 
 /** The words, pictures, and choices a start carries. */
@@ -532,11 +388,13 @@ function unanswered(what: string) {
  */
 export function useStartTask(
   workspaceId: string | undefined,
-): (ask: StartAsk & TaskPlace & MintedTask) => Promise<StartAnswer> {
+): (ask: StartAsk & TaskPlace) => Promise<StartAnswer> {
   const acts = useHostActs();
   const [key] = useState(randomUUID);
+  // Note that the task's id is minted once, as the agent's key is, so a start sent again makes no second task.
+  const [id] = useState(randomUUID);
 
-  return async ({ id, prompt, attachments, picked, runsOn, ...place }) => {
+  return async ({ prompt, attachments, picked, runsOn, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
       id,
       ...placeOf(workspaceId, place),
@@ -572,10 +430,12 @@ export function useStartTask(
  */
 export function useFileTask(
   workspaceId: string | undefined,
-): (ask: { readonly filed: FiledTask } & TaskPlace & MintedTask) => Promise<StartAnswer> {
+): (ask: { readonly filed: FiledTask } & TaskPlace) => Promise<StartAnswer> {
   const acts = useHostActs();
+  // Note that the task's id is minted once per sheet, so a filing sent again files no second task.
+  const [id] = useState(randomUUID);
 
-  return async ({ id, filed, ...place }) => {
+  return async ({ filed, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
       id,
       ...placeOf(workspaceId, place),
