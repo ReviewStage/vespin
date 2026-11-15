@@ -1,0 +1,12 @@
+9024-native-iphone-light-r9024: fails 0 shots 5 
+9024-native-iphone-dark-r9024: fails 0 shots 5 
+9024-native-ipad26-light-r9024: fails 0 shots 6 
+9024-native-ipad26-dark-r9024: fails 0 shots 6 
+8949-native-iphone-light-m8949: fails 0 shots 2 
+8949-native-iphone-dark-m8949: fails 0 shots 2 
+9024-native-iphone-ax3-light-r9024: fails 1 shots 3 Tap on "Teammate invitations"... FAILED
+8949-native-ipad26-light-m8949: fails 0 shots 2 
+8949-native-ipad26-dark-m8949: fails 0 shots 2 
+9399-native-ipad26-light-r9399: fails 0 shots 2 
+9399-native-ipad27-light-r9399: fails 0 shots 3 
+9399-native-iphone-light-r9399: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
