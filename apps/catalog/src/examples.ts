@@ -23,6 +23,7 @@ import { CALL_CONTROLS_EXAMPLE } from "./examples/call-controls";
 import { CAPTION_FIELDS_EXAMPLE } from "./examples/caption-fields";
 import { CARD_PRESSES_EXAMPLE } from "./examples/card-presses";
 import { CARDS_EXAMPLE } from "./examples/cards";
+import { CHECK_GLYPHS_EXAMPLE } from "./examples/check-glyphs";
 import { CHECKBOXES_EXAMPLE } from "./examples/checkboxes";
 import { CHIP_POPOVERS_EXAMPLE } from "./examples/chip-popovers";
 import { CHIPS_EXAMPLE } from "./examples/chips";
@@ -52,6 +53,7 @@ import { DISCLOSURES_EXAMPLE } from "./examples/disclosures";
 import { DRAFT_CARDS_EXAMPLE } from "./examples/draft-cards";
 import { DRAWER_SWIPES_EXAMPLE } from "./examples/drawer-swipes";
 import { DROP_SLOTS_EXAMPLE } from "./examples/drop-slots";
+import { EDGE_CLIPS_EXAMPLE } from "./examples/edge-clips";
 import { EDITABLE_DOCUMENT_EXAMPLE } from "./examples/editable-document";
 import { EMAIL_CHIPS_EXAMPLE } from "./examples/email-chips";
 import { EMPTY_STATES_EXAMPLE } from "./examples/empty-states";
@@ -109,7 +111,6 @@ import { PROGRESS_RINGS_EXAMPLE } from "./examples/progress-rings";
 import { PROSE_EXAMPLE } from "./examples/prose";
 import { PROVIDER_BUTTONS_EXAMPLE } from "./examples/provider-buttons";
 import { PUBLIC_PAGE_EXAMPLE } from "./examples/public-page";
-import { QUEUE_LINES_EXAMPLE } from "./examples/queue-lines";
 import { READABLE_CONTROLS_EXAMPLE } from "./examples/readable-controls";
 import { RECT_FLOAT_EXAMPLE } from "./examples/rect-float";
 import { REMOTE_SURFACE_EXAMPLE } from "./examples/remote-surface";
@@ -202,6 +203,7 @@ export const EXAMPLES: readonly Example[] = [
   CALL_CONTROLS_EXAMPLE,
   LENGTH_COUNTERS_EXAMPLE,
   CARDS_EXAMPLE,
+  CHECK_GLYPHS_EXAMPLE,
   SOCIAL_SIGN_IN_EXAMPLE,
   CARD_PRESSES_EXAMPLE,
   BLOCK_LISTS_EXAMPLE,
@@ -233,6 +235,7 @@ export const EXAMPLES: readonly Example[] = [
   DRAFT_CARDS_EXAMPLE,
   DRAWER_SWIPES_EXAMPLE,
   DROP_SLOTS_EXAMPLE,
+  EDGE_CLIPS_EXAMPLE,
   EMAIL_CHIPS_EXAMPLE,
   EMPTY_STATES_EXAMPLE,
   ERROR_LINES_EXAMPLE,
@@ -305,7 +308,6 @@ export const EXAMPLES: readonly Example[] = [
   ROLLING_NUMBER_EXAMPLE,
   PUBLIC_PAGE_EXAMPLE,
   LANDING_EXAMPLE,
-  QUEUE_LINES_EXAMPLE,
   SCROLL_AREA_EXAMPLE,
   SAVED_TICKS_EXAMPLE,
   SEARCH_FIELDS_EXAMPLE,

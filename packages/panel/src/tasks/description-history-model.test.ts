@@ -30,7 +30,7 @@ import {
 const HOUR = 3_600_000;
 const AGENT_ID = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 const NOW = Date.UTC(2026, 9, 11, 18, 0);
-const DOCUMENT_TEXT = DOCUMENT_TASK.document.body.trimEnd();
+const DOCUMENT_TEXT = DOCUMENT_TASK.description.body.trimEnd();
 const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
 const CHARLES = { userId: "user-charles", name: "Charles Pan" };
 

@@ -155,20 +155,24 @@ export interface ToolHeaderProps {
   subjectInBody?: boolean;
   /** Where the call ran, as a quiet tag at the line's end, for a call that ran somewhere other than its tab says ("On your Mac", or whose Mac by their disc and name); none for the rest. */
   place?: ReactNode | undefined;
-  /** Where the call stands in a word or two of the muted ink at the line's end, as a held call's "Waiting for approval" and its answer's "Allowed"; none for the rest. */
-  status?: string | undefined;
+  /** Where the call ran as a chip, drawn as itself at the line's end with no tag around it, as a machine's mention chip is (`place`'s stand-in where given); none for the rest. */
+  placeChip?: ReactNode | undefined;
+  /** Where the call stands in a word or two of the muted ink at the line's end, as a held call's "Waiting for approval" and its answer's "Allowed", or a call waiting on the Mac's ask, "Waiting for you · 4:12"; none for the rest. */
+  status?: ReactNode | undefined;
   /** Whether the call is held, not working, so the working mark gives way to its status. */
   paused?: boolean | undefined;
+  /** Whether the service answered the call without doing it, which the line marks as it marks a failure. */
+  refused?: boolean | undefined;
 }
 
 /**
  * What a call's line says: its icon, what it did, who it was about where it
  * names someone by their chip, and where it stands. Note that the chip
  * gives way before the label does, since a name cut at its end still reads,
- * and that the subject after it takes only what is left. A failure's mark
- * stands right after the label, by what failed, rather than at the line's
- * far end, where a reader scanning the verbs would miss it; the working
- * mark keeps the end, where it moves nothing as the call settles.
+ * and that the subject after it takes only what is left. A failure's mark,
+ * or a refusal's, stands at the line's end, where the working mark stood
+ * while the call ran, so the sentence stays whole and the icon keeps its
+ * place to say what kind of call failed.
  */
 export function ToolLine({
   state,
@@ -178,14 +182,26 @@ export function ToolLine({
   chip,
   subjectIsCode = true,
   place,
+  placeChip,
   status,
   paused = false,
+  refused = false,
 }: Pick<
   ToolHeaderProps,
-  "state" | "icon" | "label" | "subject" | "chip" | "subjectIsCode" | "place" | "status" | "paused"
+  | "state"
+  | "icon"
+  | "label"
+  | "subject"
+  | "chip"
+  | "subjectIsCode"
+  | "place"
+  | "placeChip"
+  | "status"
+  | "paused"
+  | "refused"
 >): ReactNode {
   const trailing = subject !== undefined || chip !== undefined;
-  const failed = state === TOOL_STATE.OUTPUT_ERROR;
+  const failed = state === TOOL_STATE.OUTPUT_ERROR || refused;
 
   return (
     <>
@@ -200,11 +216,6 @@ export function ToolLine({
             {trailing ? `${label} ` : label.replace(/:$/u, "")}
           </OneLine>
         )}
-        {failed ? (
-          <span className="flex flex-none self-center">
-            <ToolStateMark state={state} />
-          </span>
-        ) : null}
         {chip === undefined ? null : (
           <span className="tool-chip flex min-w-0 max-w-tool-chip flex-initial whitespace-nowrap">
             {chip}
@@ -220,7 +231,9 @@ export function ToolLine({
           </span>
         )}
       </span>
-      {place === undefined ? null : (
+      {placeChip !== undefined ? (
+        <span className="tool-place flex flex-none items-center"> {placeChip}</span>
+      ) : place === undefined ? null : (
         <span className="tool-place flex flex-none">
           {" "}
           <Badge>{place}</Badge>
@@ -232,7 +245,7 @@ export function ToolLine({
           {status}
         </span>
       )}
-      {failed || paused ? null : <ToolStateMark state={state} />}
+      {paused ? null : <ToolStateMark state={failed ? TOOL_STATE.OUTPUT_ERROR : state} />}
     </>
   );
 }
@@ -268,8 +281,10 @@ export function ToolHeader({
   subjectIsCode = true,
   subjectInBody = false,
   place,
+  placeChip,
   status,
   paused,
+  refused,
 }: ToolHeaderProps): ReactNode {
   const previewed = useDisclosurePreviewShown(subjectInBody);
 
@@ -283,8 +298,10 @@ export function ToolHeader({
         chip={chip}
         subjectIsCode={subjectIsCode}
         place={place}
+        placeChip={placeChip}
         status={status}
         paused={paused}
+        refused={refused}
       />
     </ToolSummary>
   );

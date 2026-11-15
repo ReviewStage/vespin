@@ -174,9 +174,10 @@
    opening the text moves no block: the same type, inset, colors, and gaps.
    Note that the header stays put while long lines scroll sideways under it. */
 .description-document-text .description-code-block {
-  border: 1px solid var(--ui-color-border);
+  border: 1px solid var(--ui-color-card-edge);
   border-radius: var(--ui-control-radius);
   background: var(--ui-color-code-ground);
+  box-shadow: var(--ui-shadow-card);
 }
 
 /* Note that the frame clips nothing, as the drawn card does, so the language
@@ -582,178 +583,6 @@
   text-align: center;
 }
 
-/* The agent's pointer over a cloud Browser tab (cloud-browser-cursor.tsx):
-   an arrow over the drawn page, never in its frame, taking no pointer
-   events. It stands at the agent's point, scaled onto the page by the
-   component, and glides to each new one over --ui-duration-fast on
-   --ui-spring-fast, about the beat its action waits; a still pointer jumps.
-   While the agent is active it rocks about its tip, and fades once it is
-   not. A click presses it once it has arrived, with a ripple at the point;
-   typing bobs it, with a glow of its amber under it. It is a compact
-   arrowhead in the accent, the dark mode's brighter amber over a dark page,
-   with a white edge and a small shadow, so it reads on any page, an accent
-   button included. The rock and the bob are endless loops held by
-   --ui-loop-motion, so their periods may be literals (docs/DESIGN.md). */
-.cloud-browser-cursor {
-  position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-  opacity: 0;
-  translate: var(--cloud-browser-cursor-x) var(--cloud-browser-cursor-y);
-  transition:
-    translate var(--ui-duration-fast) var(--ui-spring-fast),
-    opacity var(--ui-duration-quick) var(--ui-motion-exit);
-}
-
-.cloud-browser-cursor[data-shown] {
-  opacity: 1;
-}
-
-.cloud-browser-cursor[data-still] {
-  transition: opacity var(--ui-duration-quick) var(--ui-motion-exit);
-}
-
-.cloud-browser-cursor-rock {
-  transform-origin: 0 0;
-}
-
-/* Near the page's right or bottom edge the arrow is mirrored about its tip,
-   so its body stays on the page; the rock turns it with `rotate` alone. */
-.cloud-browser-cursor[data-flip-x] .cloud-browser-cursor-rock {
-  scale: -1 1;
-}
-
-.cloud-browser-cursor[data-flip-y] .cloud-browser-cursor-rock {
-  scale: 1 -1;
-}
-
-.cloud-browser-cursor[data-flip-x][data-flip-y] .cloud-browser-cursor-rock {
-  scale: -1 -1;
-}
-
-.cloud-browser-cursor[data-shown]:not([data-still]) .cloud-browser-cursor-rock {
-  animation: cloud-browser-cursor-rock 1.2s ease-in-out infinite;
-  animation-play-state: var(--ui-loop-motion);
-}
-
-.cloud-browser-cursor-arrow {
-  display: block;
-  width: var(--ui-space-16);
-  height: var(--ui-space-16);
-  overflow: visible;
-  fill: var(--agent-pointer);
-  stroke: var(--agent-pointer-edge);
-  stroke-width: 2.4;
-  stroke-linejoin: round;
-  paint-order: stroke;
-  filter: drop-shadow(
-    0 calc(var(--ui-space-2) / 2) calc(var(--ui-space-2) * 0.75) var(--agent-pointer-shadow)
-  );
-  transform-origin: 0 0;
-}
-
-.cloud-browser-cursor[data-ground="dark"] .cloud-browser-cursor-arrow {
-  fill: var(--agent-pointer-on-dark);
-}
-
-.cloud-browser-cursor[data-ground="dark"] .cloud-browser-cursor-ripple {
-  border-color: var(--agent-pointer-on-dark);
-}
-
-/* The glow behind the arrowhead while the agent types, centered a little
-   inside it from the tip, in the arrow's own amber. */
-.cloud-browser-cursor-halo {
-  position: absolute;
-  top: calc(var(--ui-space-6) - var(--ui-space-40) / 2);
-  left: calc(var(--ui-space-6) - var(--ui-space-40) / 2);
-  width: var(--ui-space-40);
-  height: var(--ui-space-40);
-  border-radius: 50%;
-  background: radial-gradient(closest-side, var(--agent-pointer-glow), transparent);
-  opacity: 0;
-  transition: opacity var(--ui-duration-fast) var(--ui-motion-exit);
-}
-
-.cloud-browser-cursor[data-ground="dark"] .cloud-browser-cursor-halo {
-  background: radial-gradient(closest-side, var(--agent-pointer-glow-on-dark), transparent);
-}
-
-.cloud-browser-cursor[data-shown][data-kind="type"] .cloud-browser-cursor-halo {
-  opacity: 1;
-}
-
-.cloud-browser-cursor[data-shown][data-kind="click"]:not([data-still]) .cloud-browser-cursor-arrow {
-  animation: cloud-browser-cursor-press var(--ui-duration-fast) var(--ui-motion-exit)
-    var(--ui-duration-fast) backwards;
-}
-
-.cloud-browser-cursor[data-shown][data-kind="type"]:not([data-still]) .cloud-browser-cursor-arrow {
-  animation: cloud-browser-cursor-type 0.6s ease-in-out infinite;
-  animation-play-state: var(--ui-loop-motion);
-}
-
-.cloud-browser-cursor-ripple {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: var(--ui-space-24);
-  height: var(--ui-space-24);
-  margin: calc(var(--ui-space-24) / -2);
-  border: calc(var(--ui-space-2) * 0.75) solid var(--agent-pointer);
-  border-radius: 50%;
-  opacity: 0;
-  animation: cloud-browser-cursor-ripple var(--ui-duration-shape) var(--ui-motion-exit)
-    var(--ui-duration-fast) backwards;
-}
-
-@keyframes cloud-browser-cursor-rock {
-  0%,
-  100% {
-    rotate: 0deg;
-  }
-  25% {
-    rotate: -6deg;
-  }
-  75% {
-    rotate: 6deg;
-  }
-}
-
-@keyframes cloud-browser-cursor-press {
-  0%,
-  100% {
-    scale: 1;
-  }
-  45% {
-    scale: 0.82;
-  }
-}
-
-@keyframes cloud-browser-cursor-type {
-  0%,
-  100% {
-    translate: 0 0;
-  }
-  50% {
-    translate: 0 calc(var(--ui-space-2) * -1);
-  }
-}
-
-@keyframes cloud-browser-cursor-ripple {
-  0% {
-    opacity: 0;
-    scale: 0.3;
-  }
-  15% {
-    opacity: 0.6;
-  }
-  100% {
-    opacity: 0;
-    scale: 1.6;
-  }
-}
-
 /* The Comment press floating over code selected as text (diff-list.tsx),
    on `@repo/ui`'s toolbar: above the words' middle, or under them where the
    list's top leaves no room, at the point the list measured. */
@@ -767,6 +596,14 @@
 
 .diff-list-offer[data-below] {
   transform: translate(-50%, var(--ui-space-4));
+}
+
+/* The list of changed files (diff-list.tsx) stands on the side panel's own
+   ground (`--side-panel-ground`, desktop.css), as the rest of its tab does,
+   its files' cards on it; a ground named here would draw the list as a sheet
+   of another color wherever the panel stands on the other. */
+.diff-list {
+  background: var(--side-panel-ground);
 }
 
 /* Pierre's own container, which it draws the files into inside the scroller. */
@@ -976,7 +813,7 @@
   z-index: 1;
   inset-block: 0;
   left: 0;
-  background: var(--ui-color-well);
+  background: var(--side-panel-ground);
 }
 
 /* Note that the rail hidden beside the chapter is hidden only where it can
@@ -1263,7 +1100,7 @@
 
 .pull-request-tab[data-header-fold] > .pull-request-header {
   z-index: 3;
-  background: var(--ui-color-well);
+  background: var(--side-panel-ground);
   clip-path: inset(var(--pull-request-fold, 0px) -100vmax -100vmax);
 }
 
@@ -1274,7 +1111,7 @@
   z-index: 2;
   margin-bottom: calc(-1 * var(--pull-request-fold-room, 0px));
   background: linear-gradient(var(--ui-color-fill-hover), var(--ui-color-fill-hover))
-    var(--ui-color-well);
+    var(--side-panel-ground);
 }
 
 /* The room stands at the top of what the shown view's scroller holds where
@@ -1307,7 +1144,7 @@
   inset-inline: 0;
   bottom: 0;
   padding-block: var(--ui-item-gap);
-  background: var(--ui-color-well);
+  background: var(--side-panel-ground);
   opacity: var(--pull-request-fold-title, 0);
   pointer-events: none;
 }
@@ -1345,7 +1182,7 @@
   z-index: 1;
   box-sizing: border-box;
   height: var(--ui-scroll-band);
-  background: var(--ui-color-ground);
+  background: var(--side-panel-ground);
 }
 
 .pull-request-section-fold > .ui-disclosure-summary {
@@ -1381,7 +1218,7 @@
   height: var(--ui-scroll-band);
   align-self: start;
   padding-inline-end: var(--ui-tight-gap);
-  background: var(--ui-color-ground);
+  background: var(--side-panel-ground);
 }
 
 /* A tab's page (a `DetailPage` at the tabs' inset) opens its own gap under
@@ -2185,15 +2022,16 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   min-width: 0;
 }
 
-/* Too narrow for every press: the ⋯ takes in the context ring and the
-   microphone, but only where the ring stands, since a ⋯ holding the
+/* Too narrow for every press: the ⋯ takes in the context ring, the
+   microphone, and Talk, but only where the ring stands, since a ⋯ holding the
    microphone alone is one press behind two. The ring's box stays, out of
    the row at its right end, so the popover the ⋯ opens for it hangs where
    the ⋯ stands. */
 /* off-scale: 400px, a card under which the box folds its own presses into its ⋯ (composer-foot.css) */
 @container composer (width < 400px) {
   .message-box .agent-context-button,
-  .message-box-actions:has(.agent-context-button) .dictate-button {
+  .message-box-actions:has(.agent-context-button) .dictate-button,
+  .message-box-actions:has(.agent-context-button) .talk-button {
     display: none;
   }
 
@@ -2210,11 +2048,12 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
 }
 
 /* The narrowest: the + goes into the ⋯ too, its menu's rows with it, and
-   the microphone with them, leaving what the agent published, the model,
+   the microphone and Talk with them, leaving what the agent published, the model,
    the ⋯, and Send. */
 @container composer (width < 240px) {
   .message-box .message-box-attach,
-  .message-box .dictate-button {
+  .message-box .dictate-button,
+  .message-box .talk-button {
     display: none;
   }
 
@@ -2925,13 +2764,15 @@ blockquote.comment-quote {
   margin-bottom: var(--ui-control-gap);
 }
 
-/* The apps' windows an agent is using float over the end of what docks
-   over its box, above every dock's row, over the transcript's foot, as a
-   picture in a picture does (`computer-dock.tsx`), and while they do the
-   transcript's end makes room for the tallest stack of them, so its newest
-   line stands clear of them. */
+/* The apps an agent is using float over the end of what docks over its
+   box, above every dock's row, over the transcript's foot, as a picture in
+   a picture does (`computer-dock.tsx`); the transcript's end makes room for
+   them as they say how much they take (`Conversation`'s `overEnd`), so its
+   newest line stands clear of them. Under 480px of the foot's room the
+   stack stands across the column rather than at its end. */
 .agent-tab-foot {
   position: relative;
+  container: agent-tab-foot / inline-size;
 }
 .agent-computer-float {
   position: absolute;
@@ -2940,12 +2781,9 @@ blockquote.comment-quote {
   inset-inline-end: var(--ui-space-16);
   margin-block-end: var(--ui-space-8);
 }
-.agent-tab:has(.agent-computer-float) .agent-log-over-composer {
-  padding-bottom: calc(
-    var(--ui-scroll-fade) +
-    var(--ui-space-4) +
-    var(--spacing-app-window-tall) +
-    var(--spacing-app-window-peek-twice) +
-    var(--ui-space-8)
-  );
+@container agent-tab-foot (width < 480px) {
+  .agent-computer-float {
+    inset-inline-start: var(--ui-space-16);
+    --ui-app-window-width: 100%;
+  }
 }

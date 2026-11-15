@@ -83,7 +83,7 @@ const createTask = (userId: string, organizationId: string, createdAt: string) =
       organizationId,
       name: "Synthetic task",
       number: taskNumbers,
-      document: "",
+      description: "",
       createdAt: at(createdAt),
     });
 
@@ -98,7 +98,7 @@ const writeRevision = (taskId: string, userId: string, actor: DescriptionActor, 
       seq: 1,
       actor,
       userId,
-      document: "",
+      description: "",
       changes: 1,
       startedAt: at(when),
       at: at(when),

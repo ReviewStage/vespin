@@ -7,7 +7,7 @@ import {
   writeInline,
 } from "@repo/features/composer-markdown";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
-import { fenceAfter } from "@repo/features/description-document";
+import { fenceAfter } from "@repo/features/description-sections";
 import { fileMarker, fileMarkers, isPictureName } from "@repo/features/file-marker";
 import {
   cutReply,
@@ -45,7 +45,13 @@ import {
 import type { EditorProps, EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import { enterKeyHint, enterSends, modEnterSends } from "../enter-sends.js";
-import { atWordAround, chipOverSelection, spacedChip } from "./chip-spacing.js";
+import {
+  atWordAround,
+  chipOverSelection,
+  chipSpacing,
+  spacedChip,
+  typedAtChipSpace,
+} from "./chip-spacing.js";
 import {
   COMPOSER_INPUT,
   type ComposerEditorHandle,
@@ -1197,8 +1203,10 @@ function composerProps(state: ComposerState, props: ComposerEditorProps): Editor
       return true;
     },
     // Note that words typed in a fenced block are the code's, so no Markdown rule makes a mark of them, as none is read from its lines (`paragraphsOf`).
-    handleTextInput: (view, from, _to, _text, typed) => {
+    handleTextInput: (view, from, to, text, typed) => {
       const { doc } = view.state;
+
+      if (typedAtChipSpace(view, from, to, text)) return true;
 
       if (!inFence(textOf(doc), offsetAt(doc, from))) return false;
       view.dispatch(typed());
@@ -1530,6 +1538,7 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
         (name) => state.files.has(name),
       ),
       Extension.create({ name: "composerGuard", addProseMirrorPlugins: () => [guard] }),
+      chipSpacing,
     ],
     editorProps: composerProps(state, props),
   });

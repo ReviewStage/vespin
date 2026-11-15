@@ -4,6 +4,8 @@ export * from "./components/account-words/account-words.js";
 
 export * from "./components/address-field/address-field.js";
 
+export * from "./components/agent-pointer/agent-pointer.js";
+
 export * from "./components/anchored-popover/anchored-popover.js";
 
 export * from "./components/anchored-popover/press-away.js";
@@ -19,6 +21,10 @@ export * from "./components/app-window-stack/app-window-stack.js";
 export * from "./components/approval-actions/approval-actions.js";
 
 export * from "./components/arrival/arrival.js";
+
+export * from "./components/ask-deadline/ask-deadline.js";
+
+export * from "./components/ask-note/ask-note.js";
 
 export * from "./components/attachment-chip/attachment-chip.js";
 
@@ -73,6 +79,8 @@ export * from "./components/caption-field/caption-field.js";
 export * from "./components/card/card.js";
 
 export * from "./components/card-press/card-press.js";
+
+export * from "./components/check-glyph/check-glyph.js";
 
 export * from "./components/checkbox/checkbox.js";
 
@@ -141,6 +149,8 @@ export * from "./components/drawer-swipe/use-drawer-swipe.js";
 export * from "./components/drop-line/drop-line.js";
 
 export * from "./components/drop-slot/drop-slot.js";
+
+export * from "./components/edge-clip/edge-clip.js";
 
 export * from "./components/edit-actions/edit-actions.js";
 
@@ -212,7 +222,11 @@ export * from "./components/list-row/list-row.js";
 
 export * from "./components/list-row/list-row-hint.js";
 
+export * from "./components/mac-app-card/mac-app-card.js";
+
 export * from "./components/mark-strip/mark-strip.js";
+
+export type { WordsMark } from "./components/marked-words/marked-words.js";
 
 export * from "./components/menu/context-menu.js";
 
@@ -429,8 +443,6 @@ export * from "./components/toolbar/toolbar.js";
 export * from "./components/tooltip/hint.js";
 
 export * from "./components/tooltip/tooltip.js";
-
-export * from "./components/track-list/track-list.js";
 
 export * from "./components/transcript-rail/transcript-rail.js";
 

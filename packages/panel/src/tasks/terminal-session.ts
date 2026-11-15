@@ -188,11 +188,6 @@ export class TerminalSession {
     if (this.state.kind === TERMINAL_STATE.STOPPED) this.#enter(this.state);
   }
 
-  /** Says on the shell's port that its tab is shown in the window the developer is using; nothing while no port stands. */
-  sayShown(): void {
-    this.#post({ type: TERMINAL_PORT_MESSAGE.SHOWN });
-  }
-
   /** Takes the screen out of its box; the shell and the screen go on. */
   hide(): void {
     this.#shown = false;
@@ -212,7 +207,7 @@ export class TerminalSession {
     const size = this.#size;
 
     if (size === undefined) return;
-    // Note that the port standing is let go, because each attach opens a host connection of its own, and the one before would run on until its idle bound.
+    // Note that the port standing is let go, because each attach opens a host connection of its own, and the one before would run on, holding its sandbox, until the tab closed.
     this.#letGo();
     this.#enter({ kind: TERMINAL_STATE.CONNECTING });
     const terminalId = this.#terminalId;

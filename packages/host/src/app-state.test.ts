@@ -15,7 +15,7 @@ import { appSettingsWire, settingsView } from "@repo/settings/testing";
 import type { WireValue } from "@repo/wire";
 import { describe, test } from "vitest";
 import {
-  type AppDescriptionDocuments,
+  type AppHeldTasks,
   type AppHolderInboxes,
   type AppInboxItems,
   type AppPages,
@@ -153,16 +153,16 @@ describe("a delivery that crosses the wire", () => {
     item("charlie", "Charlie?"),
   ];
 
-  const feed = (plans: AppInboxItems["plan"]): AppStateSnapshot => ({
+  const feed = (tasks: AppInboxItems["task"]): AppStateSnapshot => ({
     ...document,
     [LIVE_READ.INBOX_ITEMS]: {
-      rows: { [INBOX_SCOPE_KIND.PLAN]: plans },
+      rows: { [INBOX_SCOPE_KIND.TASK]: tasks },
     },
   });
 
-  const held = (plans: AppHolderInboxes["plan"]): AppStateSnapshot => ({
+  const held = (tasks: AppHolderInboxes["task"]): AppStateSnapshot => ({
     ...document,
-    [LIVE_READ.HOLDER_INBOX]: { [INBOX_SCOPE_KIND.PLAN]: plans },
+    [LIVE_READ.HOLDER_INBOX]: { [INBOX_SCOPE_KIND.TASK]: tasks },
   });
 
   const pages = (tasks: AppPages["task"]): AppStateSnapshot => ({
@@ -180,27 +180,19 @@ describe("a delivery that crosses the wire", () => {
     repository: null,
   });
 
-  const [invites, billing] = [
-    {
-      ...summary("invites", "Teammate invitations"),
-      agents: { total: 0, working: 0, pullRequestTotal: 0 },
-    },
-    summary("billing", "Billing usage alerts"),
-  ];
+  const invites = {
+    ...summary("invites", "Teammate invitations"),
+    agents: { total: 0, working: 0, pullRequestTotal: 0 },
+  };
 
   const openDescription: Task = {
     ...invites,
-    document: { body: "# Billing alerts fire at ninety percent", assumptions: [] },
+    description: { body: "# Billing alerts fire at ninety percent", assumptions: [] },
   };
 
-  const taskList = (tasks: readonly TaskSummary[]): AppStateSnapshot => ({
+  const descriptions = (held: AppHeldTasks): AppStateSnapshot => ({
     ...document,
-    tasks: { ...document.tasks, tasks, activeTaskId: openDescription.id },
-  });
-
-  const descriptions = (held: AppDescriptionDocuments): AppStateSnapshot => ({
-    ...document,
-    [LIVE_READ.DESCRIPTION_DOCUMENT]: held,
+    [LIVE_READ.HELD_TASK]: held,
   });
 
   const quietDescription = { rows: { task: openDescription } };
@@ -231,7 +223,7 @@ describe("a delivery that crosses the wire", () => {
 
   const quietLine = line("m-1", "Read the invites.");
   /** A task's description holding `body` alone. */
-  const draft = (body: string): Task["document"] => ({ body, assumptions: [] });
+  const draft = (body: string): Task["description"] => ({ body, assumptions: [] });
   const quietList = [quietItem];
   const quietInbox = { rows: quietList };
   const quietPages = { rows: [quietPage] };
@@ -242,7 +234,7 @@ describe("a delivery that crosses the wire", () => {
       sent: feed({ quiet: quietList, moved: [item("moved", "Ship?")], gone: [alpha] }),
       next: feed({ quiet: quietList, moved: [item("moved", "Ship tonight?")] }),
       kept: (state: AppStateSnapshot) => [
-        state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.PLAN].quiet,
+        state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.TASK].quiet,
       ],
       quiet: [quietItem.title],
     },
@@ -251,7 +243,7 @@ describe("a delivery that crosses the wire", () => {
       sent: held({ quiet: quietInbox, moved: { rows: [alpha] }, gone: { failed: true } }),
       next: held({ quiet: quietInbox, moved: { rows: [] } }),
       kept: (state: AppStateSnapshot) => [
-        state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.PLAN].quiet,
+        state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.TASK].quiet,
       ],
       quiet: [quietItem.title],
     },
@@ -276,39 +268,29 @@ describe("a delivery that crosses the wire", () => {
         moved: { rows: [item("delta", "Delta?"), alpha, item("bravo", "Bravo now?")] },
       }),
       kept: (state: AppStateSnapshot) => [
-        state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.PLAN].moved?.rows?.find(
+        state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.TASK].moved?.rows?.find(
           (row) => row.id === alpha.id,
         ),
       ],
       quiet: [alpha.title],
     },
     {
-      name: "the task list, one task renamed and one come at the head, and the rest kept",
-      sent: taskList([invites, billing]),
-      next: taskList([
-        summary("delta", "Quarterly review"),
-        { ...invites, name: "Invites now" },
-        billing,
-      ]),
-      kept: (state: AppStateSnapshot) => [
-        state.tasks.tasks.find((row) => row.id === billing.id),
-        state.tasks.tasks.find((row) => row.id === invites.id)?.agents,
-      ],
-      quiet: [billing.name],
-    },
-    {
       name: "the held descriptions, a task's saved, one let go, and one kept",
       sent: descriptions({
         quiet: quietDescription,
-        moved: { rows: { task: { ...summary("moved", "Rollout"), document: draft("# Draft") } } },
+        moved: {
+          rows: { task: { ...summary("moved", "Rollout"), description: draft("# Draft") } },
+        },
         gone: { failed: true },
       }),
       next: descriptions({
         quiet: quietDescription,
-        moved: { rows: { task: { ...summary("moved", "Rollout"), document: draft("# Final") } } },
+        moved: {
+          rows: { task: { ...summary("moved", "Rollout"), description: draft("# Final") } },
+        },
       }),
-      kept: (state: AppStateSnapshot) => [state[LIVE_READ.DESCRIPTION_DOCUMENT].quiet],
-      quiet: [openDescription.document.body],
+      kept: (state: AppStateSnapshot) => [state[LIVE_READ.HELD_TASK].quiet],
+      quiet: [openDescription.description.body],
     },
     {
       name: "a held transcript, its journal grown, a message come, and its word moved with them",

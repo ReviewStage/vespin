@@ -13,8 +13,9 @@ import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
  * is, `@repo/features/sandbox-size`, aside): how often the repository credential at its firewall is renewed, where
  * its checkout stands, how a transcript read waits, how full its context
  * grows before its harness compacts it, and how much a worker it delegates to
- * may spend. How long an idle sandbox lives is `@repo/sandbox`'s
- * (`SANDBOX_IDLE`).
+ * may spend. An agent's sandbox stops as its turn ends where nothing holds
+ * it (`runner-sessions.ts`'s `sandboxStoppedIfUnheld`), and otherwise as
+ * `@repo/sandbox`'s `SANDBOX_IDLE` says.
  */
 export const CODER = {
   /** An installation token is good for an hour from its mint; the one at the firewall is renewed this long after, inside that hour, as a host renews its agents' (`@repo/features/host-wire`). */
@@ -46,8 +47,6 @@ export const CODER = {
    * reviews, comments, and checks must still wake their agents.
    */
   LEGACY_BRANCH_PREFIX: "luke/",
-  /** The most times an agent fixes a failing check on its pull request and pushes again before it stops and says so; an instruction to the model, enforced by nothing. */
-  CI_FIX_ROUNDS: 3,
   /** How long a transcript read is held open for a new message while the agent runs, inside the function's own duration. */
   MESSAGES_HOLD: Duration.seconds(20),
   /** How often a held transcript read looks for a new message. */
@@ -120,9 +119,10 @@ export const CODER = {
    * warm runners while it waits (`@repo/host`'s `compose-local-agents.ts`).
    *
    * A sandbox's runner has no window of its own: it is launched warm and
-   * lives until its sandbox stops, five idle minutes after its last touch
-   * (`@repo/sandbox`'s `SANDBOX_IDLE`), bounded only by the runner's own cap
-   * (`RUNNER_WARM.IDLE_CAP_MS`).
+   * lives until its sandbox stops, at its turn's IDLE where nothing holds the
+   * sandbox (`sandboxStoppedIfUnheld`), or else once its last hold lets go,
+   * or `@repo/sandbox`'s `SANDBOX_IDLE` after its last touch, bounded only by
+   * the runner's own cap (`RUNNER_WARM.IDLE_CAP_MS`).
    */
   RUNNER_WARM: Duration.minutes(30),
   /**

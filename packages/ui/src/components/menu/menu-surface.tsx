@@ -1,7 +1,8 @@
-import { createElement } from "react";
+import type { HTMLAttributes } from "react";
 import { cn } from "../../cn.js";
 import { REPLAY_MASKED } from "../../session-replay-marks.js";
 import { DROPDOWN_MENU_SURFACE } from "../../shadcn/dropdown-menu.js";
+import { CARD_ELEMENT, MenuCardFrame } from "../card/card.js";
 
 /**
  * menu-surface.tsx -- the menu's surface for a list an app hangs itself: its ground, edge, corner, shadow, inset, entrance, and exit, with the owner's place and keys.
@@ -70,13 +71,13 @@ export function MenuSurface({
   /** It is on its way out: fading, inert, and taking nothing. */
   leaving?: boolean | undefined;
 }): React.JSX.Element {
-  // Note that the element is made rather than written, because a ref typed
-  // for a div is no ref for a span.
-  return createElement(
-    Element,
-    {
-      ...rest,
-      className: cn(
+  // Note that the surface is a floating card, so it wears the one edge every card does.
+  // SAFETY: the rest props are a div's, which the span form shares, and the frame takes them as an element's.
+  return (
+    <MenuCardFrame
+      {...(rest as HTMLAttributes<HTMLElement>)}
+      as={Element === MENU_SURFACE_ELEMENT.SPAN ? CARD_ELEMENT.SPAN : CARD_ELEMENT.DIV}
+      className={cn(
         "ui-menu-surface",
         DROPDOWN_MENU_SURFACE,
         inset === MENU_SURFACE_INSET.NONE && "p-[0]",
@@ -85,14 +86,15 @@ export function MenuSurface({
         flow === MENU_SURFACE_FLOW.TOOLBAR && "w-max rounded-menu-toolbar p-ui-2 whitespace-nowrap",
         flow === MENU_SURFACE_FLOW.TOOLBAR && !leaving && "animate-none",
         className,
-      ),
-      "data-inset": inset,
-      "data-flow": flow === MENU_SURFACE_FLOW.COLUMN ? undefined : flow,
-      "data-placed": placed === undefined ? undefined : String(placed),
-      "data-leaving": leaving ? "true" : undefined,
-      inert: leaving,
-    },
-    children,
+      )}
+      data-inset={inset}
+      data-flow={flow === MENU_SURFACE_FLOW.COLUMN ? undefined : flow}
+      data-placed={placed === undefined ? undefined : String(placed)}
+      data-leaving={leaving ? "true" : undefined}
+      inert={leaving}
+    >
+      {children}
+    </MenuCardFrame>
   );
 }
 

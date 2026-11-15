@@ -1,4 +1,4 @@
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
 import { sectionAnchors } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
@@ -12,7 +12,7 @@ import {
   useAutomation,
   useAutomationsLanded,
 } from "../automation-directory.js";
-import { descriptionDocumentQuery, pagesQuery } from "../live-reads.js";
+import { heldTaskQuery, pagesQuery } from "../live-reads.js";
 import { MemberDirectory, useMemberDirectory, usePerson } from "../member-directory.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { useMentionedReader } from "./mentioned-place.js";
@@ -86,12 +86,12 @@ export function UnreadPageCard({ glyph, name }: { glyph: ReactNode; name: string
 /**
  * The heading a section's anchor names in a description the window holds the
  * words of: the plan's page's, or one the host holds for a window that
- * opened it (`LIVE_READ.DESCRIPTION_DOCUMENT`); none where it holds neither, no
+ * opened it (`LIVE_READ.HELD_TASK`); none where it holds neither, no
  * heading spells the anchor, or no plan is asked for.
  */
 export function useSectionHeading(taskId: string | undefined, anchor: string): string | undefined {
   const page = useTaskMentions();
-  const held = useQuery({ ...descriptionDocumentQuery(taskId), enabled: false }).data;
+  const held = useQuery({ ...heldTaskQuery(taskId), enabled: false }).data;
 
   const text =
     taskId === undefined
@@ -99,7 +99,7 @@ export function useSectionHeading(taskId: string | undefined, anchor: string): s
       : page?.holder?.taskId === taskId
         ? page?.text()
         : held !== undefined && "task" in held
-          ? held.task.document.body
+          ? held.task.description.body
           : undefined;
 
   if (text === undefined) return undefined;

@@ -18,6 +18,7 @@ import {
   accessibilityElement,
   accessibilityHidden,
   accessibilityLabel,
+  defaultScrollAnchorForRole,
   disabled,
   font,
   foregroundStyle,
@@ -44,7 +45,7 @@ import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
 import {
   BAR_ITEM_MENU,
-  type BarAction,
+  type BarFootItem,
   type BarMenu,
   BarMenuItem,
   barActItems,
@@ -112,8 +113,6 @@ export type ThreadMessage = {
   /** Who wrote it: a member's face, or the agent, whose tile wears its harness's mark where it is known. */
   readonly writer: Face & {
     readonly agent: boolean;
-    /** The member's account or the agent, which a run of messages is grouped by; the name alone where none is known. */
-    readonly id?: string | undefined;
     readonly harness?: ModelProvider | undefined;
   };
   /** When it was written, in epoch milliseconds. */
@@ -124,6 +123,8 @@ export type ThreadMessage = {
   readonly media: readonly ThreadMedia[];
   /** What the answer it carries says it was, "Chose Both", and whether it went ahead, a check in the done tone, or held back, a turn back in the muted ink. */
   readonly stamp?: { readonly words: string; readonly ahead: boolean } | undefined;
+  /** The form's values the answer filled, each field's name and what was put in it, which stand under the stamp, as the panel lists them. */
+  readonly values?: readonly { readonly label: string; readonly words: string }[] | undefined;
 };
 
 type ThreadPageProps = {
@@ -153,7 +154,7 @@ type ThreadPageProps = {
   /** The open ask's card, such as its options, steps, or fields, under the messages. */
   readonly ask?: ReactNode | undefined;
   /** The thread's main acts as glyphs before its ⋯ in a split view's detail bar, such as Resolve; none in a compact window, whose ⋯ holds them. */
-  readonly acts?: readonly BarAction[] | undefined;
+  readonly acts?: readonly BarFootItem[] | undefined;
   /** The thread's ⋯ menu, such as Copy link, in a split view's detail bar; a compact window's stack holds it in its own bar. */
   readonly menu?: BarMenu | undefined;
   /** What stands at the page's foot under its scroll, such as a split view's composer (`ComposerFoot`). */
@@ -302,6 +303,57 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
   );
 }
 
+/** The values an answer filled, one a line under its stamp, where the message's words start: each field's name muted, then what was put in it, as the panel's answered thread lists them; past an accessibility size the value stands under its name rather than beside it, so neither wraps to a narrow column, and each is heard as one element. */
+function AnswerValues({ values }: { readonly values: NonNullable<ThreadMessage["values"]> }) {
+  const colors = useColors();
+  const stacked = useAccessibilitySize();
+
+  const label = (words: string) => (
+    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}>
+      {words}
+    </Text>
+  );
+
+  const value = (words: string) => (
+    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}>
+      {words}
+    </Text>
+  );
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
+    >
+      {values.map(({ label: name, words }) =>
+        stacked ? (
+          <VStack
+            key={name}
+            alignment="leading"
+            spacing={2}
+            modifiers={[accessibilityElement("combine")]}
+          >
+            {label(name)}
+            {value(words)}
+          </VStack>
+        ) : (
+          <HStack
+            key={name}
+            alignment="firstTextBaseline"
+            spacing={SPACE.TIGHT * 2}
+            modifiers={[accessibilityElement("combine")]}
+          >
+            {label(name)}
+            {value(words)}
+            <Spacer />
+          </HStack>
+        ),
+      )}
+    </VStack>
+  );
+}
+
 /** One message, flat on the page: the writer's face or tile, name in 13 pt semibold and time where it leads its run, and under them its words and files. */
 function MessageView({
   message,
@@ -353,7 +405,12 @@ function MessageView({
             {writer.agent ? (
               <AgentTile name={writer.name} harness={writer.harness} size={MARK_SIZE.WRITER} />
             ) : (
-              <Avatar name={writer.name} picture={writer.picture} size={MARK_SIZE.WRITER} />
+              <Avatar
+                name={writer.name}
+                id={writer.id}
+                picture={writer.picture}
+                size={MARK_SIZE.WRITER}
+              />
             )}
             <Text
               modifiers={[
@@ -377,6 +434,7 @@ function MessageView({
           </HStack>
         ) : null}
         {message.stamp === undefined ? null : <AnswerStamp stamp={message.stamp} />}
+        {message.values === undefined ? null : <AnswerValues values={message.values} />}
         <RNHostView matchContents={{ vertical: true }}>
           <View style={styles.words}>
             {message.words.trim() === "" ? null : (
@@ -407,7 +465,8 @@ function MessageView({
  * page and as tall as they are, since SwiftUI has no piece that draws the
  * panel's Markdown. The path stands in the bar: a compact window's stack
  * names it as the screen's title, and a split view's detail column draws it
- * here. A message that lands while it is open is drawn at its foot, as the
+ * here. It opens at its newest message, as Messages and the panel's board
+ * do. A message that lands while it is open is drawn at its foot, as the
  * thread's document moves, and the open ask's card stands under the last.
  */
 export function ThreadPage(props: ThreadPageProps) {
@@ -428,10 +487,18 @@ export function ThreadPage(props: ThreadPageProps) {
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
 
+  // Note that a thread opens at its newest message and keeps to its foot as it grows or the keyboard rises, as Messages does and the panel's board does, while one too short to scroll stands under its heading.
   return (
     <Toolbar>
       <VStack spacing={0}>
-        <ScrollView modifiers={[scrollDismissesKeyboard("interactively")]}>
+        <ScrollView
+          modifiers={[
+            scrollDismissesKeyboard("interactively"),
+            defaultScrollAnchorForRole("bottom", "initialOffset"),
+            defaultScrollAnchorForRole("bottom", "sizeChanges"),
+            defaultScrollAnchorForRole("top", "alignment"),
+          ]}
+        >
           <VStack
             alignment="leading"
             spacing={SPACE.EDGE}

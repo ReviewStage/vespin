@@ -1,4 +1,5 @@
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { base64Of } from "@repo/features/attached-files";
 import {
   descriptionAttachmentAddress,
   descriptionAttachmentOf,
@@ -63,7 +64,6 @@ import {
 } from "../picture-block.js";
 import { isPdfUpload } from "../picture-files.js";
 import { keepPictureRead, pictureQuery } from "../picture-query.js";
-import { base64Of } from "./attached-files.js";
 import {
   type DescriptionPicturesDoor,
   useDescriptionPicturesDoor,
@@ -575,7 +575,7 @@ export function useEditorPictures(
       const failed = (reason: string) =>
         settled(taken.upload, { kind: UPLOAD.FAILED, url, reason, taken, again: true });
 
-      const kept = await sendKeep({ planId: taskId, picture: url }).catch(() => undefined);
+      const kept = await sendKeep({ taskId: taskId, picture: url }).catch(() => undefined);
 
       if (kept === undefined || "failure" in kept) {
         return failed(keepFailedWords(kept?.failure, url));

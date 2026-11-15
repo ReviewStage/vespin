@@ -225,6 +225,15 @@ describe("a stylesheet", () => {
     ).toEqual([STYLE_RULE.BAR_CORNER]);
   });
 
+  it("refuses a box that rounds, draws a border, and clips, and passes one missing any of them", () => {
+    const sheet = `.frame { border: 1px solid var(--ui-color-border); border-radius: var(--ui-radius-8); overflow: clip; }
+      .edge { border: 1px solid var(--ui-color-border); border-radius: var(--ui-radius-8); }
+      .clip { border-width: 0 !important; border-radius: var(--ui-radius-8); overflow: hidden; }
+      .sides { border-width: 0 1px; border-radius: var(--ui-radius-8); overflow: hidden; }
+      .square { border: 1px solid var(--ui-color-border); overflow: hidden; }`;
+    expect(sheetRules(sheet)).toEqual([STYLE_RULE.EDGE_CLIP, STYLE_RULE.EDGE_CLIP]);
+  });
+
   it("refuses a grid placing its items with no columns named, and passes one naming them", () => {
     const sheet = `.room { display: grid; place-items: center; }
       .named { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; }
@@ -335,6 +344,15 @@ describe("a module's class strings", () => {
       STYLE_RULE.GRID_COLUMNS,
       STYLE_RULE.GRID_COLUMNS,
     ]);
+  });
+
+  it("refuses a class list that rounds, draws a border, and clips one box, under one set of variants", () => {
+    const source = `const FRAME = "overflow-hidden rounded-menu border border-border";
+      const CARD = "rounded-menu data-[open=true]:border data-[open=true]:overflow-clip";
+      const EDGE = "rounded-menu border border-border";
+      const SPLIT = "rounded-menu hover:border data-[open=true]:overflow-clip";
+      const BARE = "overflow-hidden rounded-menu border-0";`;
+    expect(classRules(source)).toEqual([STYLE_RULE.EDGE_CLIP, STYLE_RULE.EDGE_CLIP]);
   });
 
   it("refuses a radius beside a bar's own class", () => {

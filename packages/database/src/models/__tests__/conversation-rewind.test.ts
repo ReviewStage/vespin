@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { APPROVAL_STATUS } from "@repo/features/agent-approval-wire";
-import { MESSAGE_ROLE, TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
+import {
+  MESSAGE_AUTHOR,
+  MESSAGE_CHANNEL,
+  MESSAGE_ROLE,
+  TURN_ORIGIN,
+  TURN_STATUS,
+} from "@repo/wire";
 import { and, asc, eq } from "drizzle-orm";
 import { Duration, Effect, Fiber, Option, Result } from "effect";
 import { TestClock } from "effect/testing";
@@ -454,6 +460,45 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
           yield* readForkCut(rewound, yield* rowOf(rewound, 2)),
           Result.succeed("client-3"),
         );
+      }),
+  );
+
+  it.effect(
+    "cuts the harness before the next line it heard, past a line said on a call that no turn took, at a fork and at a rewind",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const first = yield* turnAt(target, 1_000);
+        yield* rowAt(target, 1, MESSAGE_ROLE.USER, first, 1_000);
+        const answer = yield* rowAt(target, 2, MESSAGE_ROLE.ASSISTANT, first, 1_001);
+        const smallTalk = yield* rowAt(target, 3, MESSAGE_ROLE.USER, null, 1_500);
+        yield* (yield* Database)
+          .update(messages)
+          .set({
+            metadata: {
+              author: MESSAGE_AUTHOR.DEVELOPER,
+              channel: MESSAGE_CHANNEL.VOICE,
+              voice_session_id: "call-1",
+            },
+          })
+          .where(eq(messages.id, smallTalk));
+        const second = yield* turnAt(target, 2_000);
+        yield* rowAt(target, 6, MESSAGE_ROLE.USER, second, 2_000);
+        yield* rowAt(target, 7, MESSAGE_ROLE.ASSISTANT, second, 2_001);
+
+        const forked = yield* readForkCut(target, answer);
+        // A typed line its hand-over withdrew, standing between the small talk and the next ask.
+        const withdrawn = yield* rowAt(target, 4, MESSAGE_ROLE.USER, null, 1_600);
+        yield* (yield* Database)
+          .update(messages)
+          .set({ withdrawnAt: new Date(1_700) })
+          .where(eq(messages.id, withdrawn));
+        // And a line the first turn took after the small talk, which opened no turn.
+        yield* rowAt(target, 5, MESSAGE_ROLE.USER, first, 1_800);
+        yield* rewindConversation(target, smallTalk);
+
+        assert.deepEqual(forked, Result.succeed("client-6"));
+        assert.deepEqual(yield* readNativeRewind(target), Option.some("client-6"));
       }),
   );
 

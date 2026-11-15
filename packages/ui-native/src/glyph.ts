@@ -87,9 +87,17 @@ export const GLYPH = {
   ISSUE_OPEN: lucide(LUCIDE_SYMBOL.CIRCLE_DOT),
   ISSUE_CLOSED: lucide(LUCIDE_SYMBOL.CIRCLE_CHECK),
   ISSUE_NOT_PLANNED: lucide(LUCIDE_SYMBOL.CIRCLE_SLASH),
-  COMPUTER: lucide(LUCIDE_SYMBOL.MONITOR),
+  COMPUTER_USE: lucide(LUCIDE_SYMBOL.MOUSE_POINTER_CLICK),
   PLUG: lucide(LUCIDE_SYMBOL.PLUG),
+  // Settings' pages, each the glyph the panel's Settings sidebar leads it with, and About's rows.
+  NOTIFICATIONS: lucide(LUCIDE_SYMBOL.BELL),
+  ENVIRONMENT: lucide(LUCIDE_SYMBOL.CLOUD_COG),
+  WHATS_NEW: lucide(LUCIDE_SYMBOL.SCROLL_TEXT),
+  HELP: lucide(LUCIDE_SYMBOL.CIRCLE_QUESTION_MARK),
+  FEEDBACK: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE),
+  EMAIL: lucide(LUCIDE_SYMBOL.MAIL),
   GLOBE: lucide(LUCIDE_SYMBOL.GLOBE),
+  BROWSER: lucide(LUCIDE_SYMBOL.APP_WINDOW_MAC),
   DATE: lucide(LUCIDE_SYMBOL.CALENDAR),
   PERSON: lucide(LUCIDE_SYMBOL.USER),
   PEOPLE: lucide(LUCIDE_SYMBOL.USERS),
@@ -123,6 +131,13 @@ export const GLYPH = {
   MORE: lucide(LUCIDE_SYMBOL.ELLIPSIS),
   SEND: lucide(LUCIDE_SYMBOL.ARROW_UP),
   DICTATE: lucide(LUCIDE_SYMBOL.MIC),
+  // A voice call's presses, as the panel's call controls draw them.
+  TALK: lucide(LUCIDE_SYMBOL.AUDIO_LINES),
+  MICROPHONE: lucide(LUCIDE_SYMBOL.MIC),
+  MICROPHONE_MUTED: lucide(LUCIDE_SYMBOL.MIC_OFF),
+  SPEAKER: lucide(LUCIDE_SYMBOL.VOLUME_2),
+  SPEAKER_MUTED: lucide(LUCIDE_SYMBOL.VOLUME_OFF),
+  END_CALL: lucide(LUCIDE_SYMBOL.PHONE_OFF),
   ATTACH: lucide(LUCIDE_SYMBOL.PAPERCLIP),
   OPTIONS: lucide(LUCIDE_SYMBOL.SLIDERS_HORIZONTAL),
   REMOVE: lucide(LUCIDE_SYMBOL.X),
@@ -184,7 +199,13 @@ export const GLYPH = {
   // A split view's expand, which stands the page alone across the window and back, is the system's own, as Mail draws it.
   EXPAND: system("arrow.up.left.and.arrow.down.right"),
   COLLAPSE: system("arrow.down.right.and.arrow.up.left"),
+  // A list's filter, Mail's own button over its list, filled while the list stands narrowed from its default.
+  FILTER: system("line.3.horizontal.decrease.circle"),
+  FILTERED: system("line.3.horizontal.decrease.circle.fill"),
   DISCLOSURE: system("chevron.forward"),
+  // A Settings row that leaves the app ends in iOS's own small arrow out, and a row that opens a menu in its up-and-down chevron, as a menu picker's value does.
+  GOES_OUT: system("arrow.up.forward"),
+  MENU_OPENS: system("chevron.up.chevron.down"),
   STOP_TURN: system("stop.fill"),
   // A task's status ring, the panel's own mark.
   STATUS_BACKLOG: statusMark(TASK_STATUS_SYMBOL.BACKLOG),

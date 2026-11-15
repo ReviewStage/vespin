@@ -10,7 +10,6 @@ import { countWords, readFailedWords, readingWords, TERM } from "./words.js";
 
 /** What the page says while it cannot read or write, and with nothing to show. */
 export const MEMORY_PAGE_WORDS = {
-  TITLE: "Memories",
   READING: readingWords(`${PRODUCT_NAME}'s memory`),
   FAILED: readFailedWords(`${PRODUCT_NAME}'s memory`),
   EMPTY: `${PRODUCT_NAME} hasn't remembered anything yet.`,
@@ -36,6 +35,8 @@ export const MEMORY_EDITOR_WORDS = {
   PLACEHOLDER: "A fact your agents should remember",
   SAVE: "Save",
   GONE: "This memory no longer exists.",
+  /** What a refused memory's Try again says once the workspace it was for is no longer the reader's. */
+  WORKSPACE_GONE: "That workspace is gone, or you're no longer a member of it.",
   TOO_LONG: `A memory holds at most ${MEMORY_BOUNDS.MAX_CHARS.toLocaleString("en-US")} characters.`,
 } as const;
 

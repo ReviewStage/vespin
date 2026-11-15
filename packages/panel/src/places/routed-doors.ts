@@ -23,7 +23,8 @@
  */
 
 import { taskLinkStep } from "@repo/features/link-grammar";
-import { DOCUMENT_REGION } from "@repo/features/tasks-model";
+import type { TaskSummary } from "@repo/features/task-wire";
+import { TASK_REGION } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { useAdminRoute } from "../admin/admin-route.js";
 import type { AdminView } from "../admin/routing.js";
@@ -31,6 +32,7 @@ import { useAutomationsRoute } from "../automations-route.js";
 import { type InboxAt, useInboxRoute } from "../inbox-route.js";
 import { useMergeQueueRoute } from "../merge-queue-route.js";
 import { beginPanelSpan, PANEL_SPAN } from "../panel-spans.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useVersionHistoryRoute } from "../version-history-route.js";
@@ -50,20 +52,26 @@ export interface VersionHistoryAddress {
   readonly task: string;
 }
 
+/** What a version history's address is named from: the task list's task by id, the open document, and the workspaces. */
+export type VersionHistoryHeld = Pick<TasksControl, "region" | "workspaces" | "workspace"> & {
+  /** The task the list holds under `taskId`; none where it holds none. */
+  readonly task: (taskId: string) => TaskSummary | undefined;
+};
+
 /**
  * The address of `taskId`'s version history, named as its links name it, under its workspace: the one `named` where the
  * window holds no such task, else the listed one; a workspace not yet read is named by its id, as a link names one.
  */
 export function versionHistoryAddressOf(
-  held: Pick<TasksControl, "tasks" | "region" | "workspaces" | "workspace">,
+  held: VersionHistoryHeld,
   taskId: string,
   named?: string,
 ): VersionHistoryAddress | undefined {
   const { region } = held;
 
   const task =
-    held.tasks.find((each) => each.id === taskId) ??
-    (region.kind === DOCUMENT_REGION.READY && region.task.id === taskId ? region.task : undefined);
+    held.task(taskId) ??
+    (region.kind === TASK_REGION.READY && region.task.id === taskId ? region.task : undefined);
 
   const home = held.workspaces.find((each) => each.id === task?.workspaceId);
   const listedStep = held.workspace === undefined ? undefined : stepOf(held.workspace);
@@ -255,15 +263,16 @@ export interface VersionHistoryDoor {
 
 /** A version history's doors, its task named as the tab holds it. */
 export function useVersionHistoryDoor(
-  tasks: Pick<TasksControl, "tasks" | "region" | "workspaces" | "workspace">,
+  tasks: Pick<TasksControl, "region" | "workspaces" | "workspace">,
 ): VersionHistoryDoor {
   // Note that the room reaches only the moves within the history standing, which no door here makes.
   const route = useVersionHistoryRoute({ narrow: false });
+  const listed = useTaskListCollections().tasks;
 
   return {
     close: route.onClose,
     preload: (taskId) => {
-      const address = versionHistoryAddressOf(tasks, taskId);
+      const address = versionHistoryAddressOf({ ...tasks, task: (id) => listed.get(id) }, taskId);
 
       if (address !== undefined) route.onPreload(address.workspace, address.task);
     },

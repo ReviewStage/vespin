@@ -1,4 +1,13 @@
 import { createElement, type HTMLAttributes, type ReactNode, type Ref } from "react";
+import {
+  CARD_CORNER,
+  CARD_DROP_TARGET,
+  CARD_ELEMENT,
+  CARD_LOOK,
+  CARD_PADDING,
+  CARD_SHADOW,
+  Card,
+} from "../card/card.js";
 
 /**
  * composer-frame.tsx -- the frame a message is written in: its edge, its corner, and its ground, and the edge brightened while files are dragged over it.
@@ -16,8 +25,11 @@ import { createElement, type HTMLAttributes, type ReactNode, type Ref } from "re
  * div where it does not (`COMPOSER_ELEMENT`); a form the browser never checks,
  * so no browser bubble is drawn over it, and its owner says what is wrong.
  *
- * It is drawn in Tailwind utilities over the theme, each look's edge,
- * corner, and ground picked here; shadcn/ui has no composer.
+ * The window's message box is a card (`Card`), on the surface's ground at a
+ * card's corner with Geist's card shadow, so it stands as every other card
+ * does and drops its edge where it stands inside one. The other looks are
+ * drawn in Tailwind utilities over the theme, each look's edge, corner, and
+ * ground picked here; shadcn/ui has no composer.
  */
 
 /** How a composer stands: the window's message box, a field in a card's well, a text field's ground, or no frame of its own. */
@@ -39,14 +51,12 @@ export const COMPOSER_ELEMENT = {
 export type ComposerElement = (typeof COMPOSER_ELEMENT)[keyof typeof COMPOSER_ELEMENT];
 
 /**
- * Each look's edge, corner, and ground: the card on the surface's ground at
- * the dialog's corner, lifted by a soft shadow rather than ringed by a dark
- * edge; the field, the input, and the bare look flat in what holds them, the
- * input brightening once the caret is in it. Any look is edged in the
- * danger ink while what it holds stops its form (`invalid`).
+ * Each look's edge, corner, and ground but the card's, which `Card` draws:
+ * the field, the input, and the bare look flat in what holds them, the input
+ * brightening once the caret is in it. Any look is edged in the danger ink
+ * while what it holds stops its form (`invalid`).
  */
-const LOOK_CLASS: Record<ComposerLook, string> = {
-  [COMPOSER_LOOK.CARD]: "rounded-dialog border border-border bg-surface shadow-composer",
+const LOOK_CLASS: Record<Exclude<ComposerLook, typeof COMPOSER_LOOK.CARD>, string> = {
   [COMPOSER_LOOK.FIELD]: "rounded-control border border-border bg-ground",
   [COMPOSER_LOOK.INPUT]:
     "rounded-control border border-border-strong bg-field transition-[background-color] duration-(--ui-duration-hover) ease-motion-exit focus-within:bg-field-focus",
@@ -82,21 +92,37 @@ export function ComposerFrame({
   ref?: Ref<HTMLElement> | undefined;
   children: ReactNode;
 }): React.JSX.Element {
+  const owner = ["ui-composer-frame group/composer", className ?? ""]
+    .filter((part) => part !== "")
+    .join(" ");
+
+  // Note that a card's drop is the card's own ring and wash, as a board's column takes a dragged row.
+  if (look === COMPOSER_LOOK.CARD) {
+    return (
+      <Card
+        {...rest}
+        as={Element === COMPOSER_ELEMENT.FORM ? CARD_ELEMENT.FORM : CARD_ELEMENT.DIV}
+        look={CARD_LOOK.SURFACE}
+        corner={CARD_CORNER.CARD}
+        padding={CARD_PADDING.NONE}
+        shadow={CARD_SHADOW.CARD}
+        invalid={invalid}
+        className={owner}
+        ref={ref}
+        {...{ [CARD_DROP_TARGET]: dropping ? "true" : undefined }}
+      >
+        {children}
+      </Card>
+    );
+  }
+
   // Note that the element is made rather than written, as a card's is.
   return createElement(
     Element,
     {
       ...rest,
       ref,
-      className: [
-        "ui-composer-frame group/composer",
-        LOOK_CLASS[look],
-        DROPPING,
-        INVALID,
-        className ?? "",
-      ]
-        .filter((part) => part !== "")
-        .join(" "),
+      className: [LOOK_CLASS[look], DROPPING, INVALID, owner].join(" "),
       noValidate: Element === COMPOSER_ELEMENT.FORM ? true : undefined,
       "data-look": look,
       "data-dropping": dropping ? "true" : undefined,

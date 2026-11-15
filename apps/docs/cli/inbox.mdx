@@ -1,0 +1,170 @@
+---
+title: "Inbox"
+description: "vespin inbox"
+---
+
+Read and answer the threads your agents post. Every command also takes the global flags `--json`, `-q`, `-w`, and `--url`, described in [CLI](/cli#scripts-and-coding-agents).
+
+## vespin inbox list
+
+List the open threads of the workspace, unread marked ●
+
+```sh
+vespin inbox list [flags]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `--unread` | Only the threads you have not read |
+
+```sh
+# Every open thread
+vespin inbox list
+
+# The ids of the unread ones
+vespin inbox list --unread -q
+```
+
+## vespin inbox view
+
+Show a thread: its messages and its open ask
+
+```sh
+vespin inbox view [flags] <thread>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `thread string` | The thread's id, as inbox list prints it |
+
+```sh
+# Read a thread and what it asks
+vespin inbox view <thread>
+```
+
+## vespin inbox answer
+
+Answer a thread's open ask, or acknowledge a thread that asks nothing
+
+```sh
+vespin inbox answer [flags] <thread> [<answer...>]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `thread string` | The thread's id, as inbox list prints it |
+| `answer... string` | A decide's option, done or not-done for a to-do, or your words (optional) |
+| `--input, -F string` | A form's values as a JSON object by field, or your words, from a file or - for stdin |
+
+```sh
+# Pick a decide's option
+vespin inbox answer <thread> Approve
+
+# Mark a to-do done
+vespin inbox answer <thread> done
+
+# Fill in a form from stdin
+echo '{"Region":"us-east-1"}' | vespin inbox answer <thread> -F -
+```
+
+## vespin inbox reply
+
+Write a message on a thread, which reaches its agent
+
+```sh
+vespin inbox reply [flags] <thread>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `thread string` | The thread's id, as inbox list prints it |
+| `--input, -F string` | The message, from a file or - for stdin |
+
+```sh
+# Reply from stdin
+echo "Use the staging database." | vespin inbox reply <thread> -F -
+```
+
+## vespin inbox close
+
+Close a thread without answering it
+
+```sh
+vespin inbox close [flags] <thread>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `thread string` | The thread's id, as inbox list prints it |
+| `--input, -F string` | A note saying why, from a file or - for stdin |
+
+```sh
+# Close a thread
+vespin inbox close <thread>
+```
+
+## vespin inbox read
+
+Mark a thread read for you
+
+```sh
+vespin inbox read [flags] <thread>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `thread string` | The thread's id, as inbox list prints it |
+
+```sh
+# Mark it read
+vespin inbox read <thread>
+```
+
+## vespin inbox unread
+
+Mark a thread unread for you, until you read it again
+
+```sh
+vespin inbox unread [flags] <thread>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `thread string` | The thread's id, as inbox list prints it |
+
+```sh
+# Mark it unread
+vespin inbox unread <thread>
+```
+
+## vespin inbox read-all
+
+Mark every thread of the workspace read for you
+
+```sh
+vespin inbox read-all [flags]
+```
+
+```sh
+# Clear the workspace's unread marks
+vespin inbox read-all
+```
+
+## vespin inbox start
+
+Start a thread with an agent, which reaches it as a message
+
+```sh
+vespin inbox start [flags] <agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `agent string` | The agent's id |
+| `--title, -t string` | The thread's subject; titled from the message where none is named |
+| `--input, -F string` | The first message, from a file or - for stdin |
+
+```sh
+# Start a thread from stdin
+echo "Can you check the flaky test?" | vespin inbox start <agent> -t "Flaky test" -F -
+```

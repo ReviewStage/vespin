@@ -59,6 +59,7 @@ import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
   connectWorkspaceGitHub,
   type FakeGitHub,
+  fixtureGitHubApp,
   GITHUB_APP_SETTINGS,
   GITHUB_FIXTURE,
   GITHUB_FIXTURE_MEMBER,
@@ -1573,7 +1574,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         yield* connectWorkspaceGitHub(workspaceId, installation);
         // A slug spelled with a hyphen, as the deployed App's is.
         const slug = "luke-agent";
-        const app = GitHubApp.layer({ ...GITHUB_APP_SETTINGS, slug });
+        const app = fixtureGitHubApp({ ...GITHUB_APP_SETTINGS, slug });
         const github = githubReaching([installation], app);
         const commentId = 31_337;
 

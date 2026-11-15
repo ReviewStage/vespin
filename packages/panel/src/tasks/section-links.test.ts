@@ -41,7 +41,7 @@ const PLACE = { workspace: WORKSPACE, repository: "acme/relay" } as const;
 /** A description whose last section mentions an earlier one, and one since renamed. */
 const TASK: Task = {
   ...DOCUMENT_TASK,
-  document: {
+  description: {
     body: [
       "## Goal",
       "Invite a teammate by email.",
@@ -222,7 +222,7 @@ test("a section whose heading is formatted is copied as a link that is drawn as 
 
   const task: Task = {
     ...TASK,
-    document: {
+    description: {
       body: `## ${heading}\nStore first.\n\n## Notes\nSee ${mentionMarkdown({ kind: MENTION_KIND.SECTION, taskId: TASK_ID, anchor: "rollout-draft" }, heading, PLACE)}.`,
       assumptions: [],
     },
@@ -327,7 +327,7 @@ test("on a description that cannot be edited, where no block is a Tab stop, ever
 /** A description whose words mention a file and a folder of its repository. */
 const FILES_TASK: Task = {
   ...TASK,
-  document: {
+  description: {
     body: "## Goal\nMove [@session-store.ts](luke://file/apps/web/session-store.ts) out of [@auth/](luke://folder/apps/web/auth/).",
     assumptions: [],
   },
@@ -373,7 +373,7 @@ test("a mention of a file as its page on GitHub opens its tab, at the lines it p
   const task: Task = {
     ...TASK,
     repository: PLACE.repository,
-    document: {
+    description: {
       body: [
         "## Goal",
         "Move [@session-store.ts](https://github.com/acme/relay/blob/HEAD/apps/web/session-store.ts)",
@@ -407,7 +407,7 @@ test("where no File tab opens it, a mention of a file as its page on GitHub, wri
   const task: Task = {
     ...TASK,
     repository: PLACE.repository,
-    document: { body: `## Goal\nMove [@session-store.ts](${page}).`, assumptions: [] },
+    description: { body: `## Goal\nMove [@session-store.ts](${page}).`, assumptions: [] },
   };
 
   const onWeb: string[] = [];
@@ -422,7 +422,7 @@ test("where no File tab opens it, a mention of a file as its page on GitHub, wri
 test("a heading the description bears twice: a mention of the second opens the second, and each ⋯ copies its own", async () => {
   const task: Task = {
     ...TASK,
-    document: {
+    description: {
       body: `## Notes\nfirst\n\n## Notes\nsecond, see [@Notes](https://vespin.dev/acme/task/${TASK_ID}#notes-1)`,
       assumptions: [],
     },

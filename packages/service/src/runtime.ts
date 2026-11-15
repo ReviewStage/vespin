@@ -26,7 +26,7 @@ import { webSqlClient } from "./db/sql-client.js";
 import { hostedEnvironment } from "./environment.js";
 import { productAnalyticsFromEnvironment } from "./events/server-events.js";
 import { githubAppFromEnvironment } from "./github/github-app.js";
-import { githubRateGate } from "./github/github-rate-gate.js";
+import { githubHoldStoreLayer } from "./github/github-hold-store.js";
 import { githubDeliveryReadsFromEnvironment } from "./github/github-webhook-app.js";
 import { pullRequestLinksLayer } from "./github/pull-request-links.js";
 import { integrationConnectFromEnvironment } from "./integrations/integration-connect.js";
@@ -64,13 +64,21 @@ const webConfigProvider = ConfigProvider.layer(Effect.sync(() => ConfigProvider.
  */
 const webLogger = Logger.layer([Logger.consoleJson, Logger.tracerLogger, sentryLogger]);
 
-/** The one gated GitHub client of the instance, named once so every layer that reaches GitHub shares its gate. */
-const gatedGitHubClient = githubRateGate.pipe(
-  Layer.provide(Layer.merge(FetchHttpClient.layer, webSqlClient)),
+/**
+ * Our GitHub App as the environment names it, named once so every layer that
+ * reaches it shares one. Every request to GitHub's API goes through its
+ * `@repo/github` client, which queues, spaces, and holds its requests itself,
+ * and keeps its holds in the database over `webSqlClient`.
+ */
+const githubApp = githubAppFromEnvironment.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      hostedEnvironment,
+      FetchHttpClient.layer,
+      githubHoldStoreLayer.pipe(Layer.provide(webSqlClient)),
+    ),
+  ),
 );
-
-/** Our GitHub App as the environment names it, named once so every layer that reaches it shares one. */
-const githubApp = githubAppFromEnvironment.pipe(Layer.provide(hostedEnvironment));
 
 /** Our Slack bot as the environment names it, named once so every layer that reaches it shares one. */
 const slackBot = slackBotFromEnvironment.pipe(
@@ -119,13 +127,14 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
  * `PullRequestLinks` is here on the same terms: one instance reads a pull
  * request a link draws once a minute, however many links ask for it.
  *
- * The client every route and agent reaches GitHub through is wrapped in
- * `githubRateGate` (`github/github-rate-gate.ts`), so one instance sends
- * GitHub's API a few requests at a time, a second apart where they write,
- * and none while GitHub says it is rate limited to any instance. The gate
- * keeps its holds in the database over `webSqlClient`, the very layer below,
- * which a build of this layer builds once however many name it, so the gate
- * holds no pool of its own.
+ * Every request to GitHub's API goes through `@repo/github`, on the clients
+ * the App hands out (`github/github-app.ts`'s `GitHubBearer`), so one
+ * instance sends GitHub one request at a time per identity, spaced where it
+ * writes, and none while GitHub says that identity is rate limited to any
+ * instance, the holds kept in the database over `webSqlClient`, the very
+ * layer below (`github/github-hold-store.ts`). The plain `HttpClient` here
+ * carries only what is not GitHub's API: GitHub's OAuth endpoints, an
+ * image's address, codeload, and every other provider.
  *
  * `Sync` is here for the same reason: Sync's hub holds one `LISTEN`
  * per instance, shared by every held read and wait on it (`sync/hub.ts`),
@@ -166,14 +175,14 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
 export const webServices = Layer.mergeAll(
   // The sandboxes are the edge's to pick, which provides its provider's adapter beneath these.
   Layer.effect(Sandbox, Effect.service(Sandbox)),
-  gatedGitHubClient,
+  FetchHttpClient.layer,
   webSqlClient,
   hostedEnvironment,
   githubApp,
   signInRevocationFromEnvironment.pipe(Layer.provide(githubApp)),
   settledTurnListener.pipe(
     Layer.provide(
-      Layer.mergeAll(gatedGitHubClient, githubApp, hostedEnvironment, slackBot, apnsSender),
+      Layer.mergeAll(FetchHttpClient.layer, githubApp, hostedEnvironment, slackBot, apnsSender),
     ),
   ),
   sentryAppFromEnvironment,

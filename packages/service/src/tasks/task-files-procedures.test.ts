@@ -60,7 +60,7 @@ const keepAs = (userId: string, taskId: string) =>
 
     const response = yield* Effect.promise(() =>
       handle(
-        new Request(new URL(`/api/plans/${taskId}/attachments`, ORIGIN), {
+        new Request(new URL(`/api/tasks/${taskId}/attachments`, ORIGIN), {
           method: "POST",
           headers: { "content-type": "application/json", authorization: `Bearer ${userId}` },
           body: JSON.stringify({ picture: PNG }),

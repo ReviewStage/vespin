@@ -4,9 +4,9 @@
  * A find reads the number off a key as the command-line tool does
  * (`cliTaskRefOf`), the prefix never checked, since it follows the
  * workspace's name, and finds the task holding that number in the caller's
- * workspace as a link's step does (`taskIdOfNumber`, `plans.find`); the task
+ * workspace as a link's step does (`taskIdOfNumber`, `tasks.find`); the task
  * is then answered as `read_task` reads it. A relation's move is the one the
- * task head's menu and `plans.relation` make (`moveTaskRelation`), in one
+ * task head's menu and `tasks.relation` make (`moveTaskRelation`), in one
  * transaction, answered as `update_task` answers a change of the task's
  * parent and blocks.
  */

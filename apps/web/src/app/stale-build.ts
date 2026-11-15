@@ -6,7 +6,11 @@
  * deployment serves only its own: once a newer one is live, an older tab's
  * chunks answer 404, and every import of one it has not loaded yet fails for
  * good, Retry included, since the browser keeps a failed module for the
- * document's life (`lazy-boundary.tsx`). Vite's preload helper, which wraps every
+ * document's life (`lazy-boundary.tsx`). The build names its deployment on
+ * every chunk's address (`scripts/skew-protection.ts`), so Vercel answers a
+ * tab its own build's chunks for as long as the project's Skew Protection
+ * keeps that deployment, and what is left here is a tab older than that, or
+ * a dropped connection. Vite's preload helper, which wraps every
  * `import()` the build writes, says each such failure on the window as
  * `vite:preloadError` before the import rejects, so the one listener the
  * tab's root stands (`web-host.ts`) hears every lazy surface's, and leaves
