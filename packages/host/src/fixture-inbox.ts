@@ -96,6 +96,8 @@ import {
 } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { MachineAskLine } from "@repo/features/machine-ask-live";
+import type { MachineLine } from "@repo/features/machine-live";
 import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
@@ -120,6 +122,8 @@ import {
 import {
   COMMENT_SUBJECT,
   DESCRIPTION_COMMENT_CALL_FAILURE,
+  type ListedTasksView,
+  type TaskListParts,
   type TasksView,
 } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -976,7 +980,10 @@ function listedTask(
  * in a second repository, so the list draws its repositories' headings,
  * one the account keeps in a section of its own, a teammate's it
  * follows, which the list draws under Following, and one filed for later
- * and one canceled, so the list draws every status's mark.
+ * and one canceled, so the list draws every status's mark. Note that those
+ * last two are named with Markdown's marks, and with letters beyond Latin
+ * and an emoji, so a search's bold title shows every mark as typed and
+ * lands on the right letters.
  */
 const LISTED_TASKS: readonly TaskSummary[] = [
   listedTask(LISTED.COPY, "Invite email copy", {
@@ -1017,14 +1024,14 @@ const LISTED_TASKS: readonly TaskSummary[] = [
       { userId: ADA.userId, assignee: false, machines: false },
     ],
   }),
-  listedTask(LISTED.EXPORT, "Ledger CSV export", {
+  listedTask(LISTED.EXPORT, "Ledger *CSV* export (v2_final)", {
     repository: "ada/ledger",
     status: TASK_STATUS.BACKLOG,
     number: 48,
     updatedAt: LANDED - 2 * DAY,
     priority: TASK_PRIORITY.LOW,
   }),
-  listedTask(LISTED.DIGEST_V1, "Daily digest email", {
+  listedTask(LISTED.DIGEST_V1, "Daily digest 日報 for Zoë 📬", {
     repository: "ada/relay",
     status: TASK_STATUS.CANCELED,
     number: 49,
@@ -1220,6 +1227,29 @@ const HOSTS: readonly HostLine[] = [
     platform: DEVICE_PLATFORM.LINUX,
     calledIn: true,
     away: true,
+  },
+];
+
+/** Ada's machines as the account's machines read names them, her MacBook first, which the ask below is held by. */
+const MACHINES: readonly MachineLine[] = HOSTS.map((host, index) => ({
+  id: host.id,
+  name: host.name,
+  ...(host.platform === undefined ? undefined : { platform: host.platform }),
+  host: true,
+  listening: host.away !== true,
+  isDefault: index === 0,
+}));
+
+/** What the invitations agent's run on Ada's MacBook waits on her for: a command its Mac asks before it runs, about four minutes left in its window. */
+const MACHINE_ASKS: readonly MachineAskLine[] = [
+  {
+    id: "c41d7a2e-9b3f-4e15-8a6c-0d2f4b6e8a91",
+    deviceId: HOSTS[0]?.id ?? "",
+    agentId: AGENT.INVITES,
+    subject: { command: "pnpm --filter @app/members test -- invite.test.ts" },
+    askedAt: LANDED - 52_000,
+    expiresAt: LANDED + 248_000,
+    lapsed: false,
   },
 ];
 
@@ -1447,7 +1477,7 @@ function ownInvites(task: TaskSummary): TaskSummary {
  * tasks after it, so every task holding an item is listed. The same list
  * under any other profile.
  */
-export function inboxTasksView(profile: string, list: TasksView): TasksView {
+export function inboxTasksView(profile: string, list: ListedTasksView): ListedTasksView {
   if (!STAGED_PROFILES.has(profile)) return list;
 
   const listed = list.tasks.some((task) => task.id === TASK.INVITES)
@@ -1484,6 +1514,7 @@ export function inboxTasksView(profile: string, list: TasksView): TasksView {
   return {
     ...list,
     tasks,
+    listed: true,
     taskAgents: [
       ...(list.taskAgents ?? []).filter((agent) => !followed.some(({ id }) => id === agent.id)),
       ...followed,
@@ -1633,37 +1664,33 @@ const INVITES_PAGES: readonly PageLine[] = [
   },
 ];
 
-/** A descriptions slice with the reference journey's laid over it, and the listed task it was laid from. */
-interface StagedDocuments {
-  readonly from: TaskSummary;
-  readonly laid: AppStateSnapshot[typeof LIVE_READ.HELD_TASK];
-}
-
 /**
  * Each held descriptions slice with the reference journey's laid over it, by
- * the slice, so a slice staged is never staged anew while the task it was
- * laid from stands as it was.
+ * the slice, so a slice staged is never staged anew.
  */
 const STAGED_DOCUMENTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.HELD_TASK],
-  StagedDocuments
+  AppStateSnapshot[typeof LIVE_READ.HELD_TASK]
 >();
 
 /**
  * The descriptions slice with the reference journey's laid over it, its
- * fields the task's as the list stands it (`ownInvites`), so its page and its
- * row say the same; the stand-in where the document lists none of it, as the
- * panel's fixture run, which lists its own on the window's side, does.
+ * fields the task's as these profiles list it (`ownInvites` of the
+ * stand-in, `inboxTasksView`), so its page and its row say the same.
  */
 function stagedDocuments(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.HELD_TASK] {
   const held = state[LIVE_READ.HELD_TASK];
-  const from = state.tasks.tasks.find((task) => task.id === TASK.INVITES) ?? INVITES_TASK;
   const staged = STAGED_DOCUMENTS.get(held);
 
-  if (staged !== undefined && staged.from === from) return staged.laid;
-  const laid = { ...held, [TASK.INVITES]: { rows: { task: invitesDocument(ownInvites(from)) } } };
-  STAGED_DOCUMENTS.set(held, { from, laid });
-  STAGED_DOCUMENTS.set(laid, { from, laid });
+  if (staged !== undefined) return staged;
+
+  const laid = {
+    ...held,
+    [TASK.INVITES]: { rows: { task: invitesDocument(ownInvites(INVITES_TASK)) } },
+  };
+
+  STAGED_DOCUMENTS.set(held, laid);
+  STAGED_DOCUMENTS.set(laid, laid);
 
   return laid;
 }
@@ -2138,6 +2165,27 @@ export function inboxRemindersAppState(
 export type SavedMemoryWords = ReadonlyMap<string, string>;
 
 /**
+ * The document with Ada's MacBook asking before the invitations agent's test
+ * command runs, and her machines that name it, those of the asks a fixture
+ * run answered taken off, as the service's read drops an ask once answered.
+ * Only a run that asks for it lays this over (the mobile app's
+ * `-machineAsk true`), since the ask's card opens over every screen.
+ */
+export function machineAskAppState(
+  state: AppStateSnapshot,
+  answered: ReadonlySet<string>,
+): AppStateSnapshot {
+  return {
+    ...state,
+    [LIVE_READ.MACHINES]: { ...state[LIVE_READ.MACHINES], [ADA.userId]: { rows: MACHINES } },
+    [LIVE_READ.MACHINE_ASKS]: {
+      ...state[LIVE_READ.MACHINE_ASKS],
+      [ADA.userId]: { rows: MACHINE_ASKS.filter((ask) => !answered.has(ask.id)) },
+    },
+  };
+}
+
+/**
  * The fixture workspace's memories with the words a run saved: a
  * correction over its own row, as the host draws one the moment it is sent,
  * and a new memory at the head, as the memories' live read carries one in
@@ -2275,7 +2323,7 @@ function standsOn(agent: AgentSummary, change: AgentChange): boolean {
 /** The reader's pins with each pin the run set or took off laid over, by the agent's task. */
 function pinnedAgents(
   pins: NonNullable<TasksView["taskAgentPins"]>,
-  agents: NonNullable<TasksView["taskAgents"]>,
+  agents: NonNullable<TaskListParts["taskAgents"]>,
   choices: AgentChoices,
 ): NonNullable<TasksView["taskAgentPins"]> {
   const kept = pins.filter(({ agentId }) => choices.get(agentId)?.pinned !== false);
@@ -2301,7 +2349,7 @@ function pinsStand(pins: NonNullable<TasksView["taskAgentPins"]>, choices: Agent
  * draws a change the moment it is asked; the list handed in where every
  * agent already stands so, so laying it again changes nothing.
  */
-export function chosenTasksView(list: TasksView, choices: AgentChoices): TasksView {
+export function chosenTasksView(list: ListedTasksView, choices: AgentChoices): ListedTasksView {
   const agents = list.taskAgents ?? [];
   const pins = list.taskAgentPins ?? [];
 
@@ -2350,6 +2398,9 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
+  // Note that an ask is answered as the service answers the first answer given, which stands; the mobile fixture takes the ask off the document itself (`machineAskAppState`).
+  [ACT_KIND.MACHINE_ASK_ANSWER]: ({ decision, note }) =>
+    note === undefined ? { decision } : { decision, note },
   // Note that a pairing is read, approved, and denied as the service would answer, though nothing here makes a machine.
   [ACT_KIND.HOSTS_PAIRING_READ]: ({ code }) => pairingAnswer(code, PENDING_PAIRING),
   [ACT_KIND.HOSTS_PAIRING_APPROVE]: ({ code }) =>

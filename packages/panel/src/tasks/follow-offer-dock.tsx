@@ -24,14 +24,13 @@ import {
   STATUS_TONE,
 } from "@repo/ui";
 import { personActor } from "@repo/ui/actor-model";
-import { useQuery } from "@tanstack/react-query";
 import { Schema } from "effect";
-import { type ReactNode, useCallback, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { askAct, toastActFailure } from "../act.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { showToast } from "../toast.js";
-import { appStateQuery, selectListedTasks } from "../use-app-state.js";
 import { keptKey, useKept } from "../use-kept.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { type FollowOfferInput, followOffer } from "./follow-offer.js";
@@ -73,20 +72,9 @@ function addRefused(
   });
 }
 
-/** The task's workspace and followers, as the listed tasks hold them; none for a task not listed. */
+/** The task as the listed tasks hold it, its workspace and followers read; none for a task not listed. */
 function useListedTask(taskId: string) {
-  const select = useCallback(
-    (state: Parameters<typeof selectListedTasks>[0]) => {
-      const task = selectListedTasks(state).tasks.find((each) => each.id === taskId);
-
-      return task === undefined
-        ? undefined
-        : { workspaceId: task.workspaceId, followers: task.followers };
-    },
-    [taskId],
-  );
-
-  return useQuery({ ...appStateQuery, select }).data;
+  return useTaskListRow(useTaskListCollections().tasks, taskId);
 }
 
 /**

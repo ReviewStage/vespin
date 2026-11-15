@@ -22,15 +22,15 @@ import {
   font,
   foregroundStyle,
   frame,
-  glassEffect,
   lineLimit,
+  opacity,
   padding,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
-import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glass-bar.js";
+import { BAR_EDGE, BAR_ROW_SPACING, BarHead, GlassBar, useBarGlass } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
@@ -61,20 +61,34 @@ function roundMark(round: number) {
   return [frame({ width: round - ROUND_EDGE, height: round - ROUND_EDGE })];
 }
 
-/**
- * The round button's look: the system's prominent circle in the ink, its mark
- * in the ground, inside the composer's press frame. Note that a disabled
- * circle drops the tint for the system's faint fill, which in light mode
- * matched the composer's own ground, so a Send with nothing to send vanished:
- * it stands on a hairline-gray disc of ours instead, its mark muted.
- */
-function roundModifiers(colors: ReturnType<typeof useColors>, enabled = true) {
+/** How much of Send's look stands while there is nothing to send, as Messages' gray arrow stands before a word is typed. */
+const IDLE_OPACITY = 0.2;
+
+/** The round button's look: the system's prominent circle in the ink, its mark in the ground, inside the composer's press frame. */
+function roundModifiers(colors: ReturnType<typeof useColors>) {
   return [
     buttonStyle("borderedProminent"),
     SwiftModifiers.buttonBorderShape("circle"),
     tint(colors.TEXT),
-    foregroundStyle(enabled ? colors.GROUND : colors.TEXT_MUTED),
-    ...(enabled ? [] : [background(colors.CHIP_EDGE, SwiftModifiers.shapes.circle())]),
+    foregroundStyle(colors.GROUND),
+    ...PRESS_FRAME,
+  ];
+}
+
+/**
+ * Send with nothing to send: the same circle and mark, faint, so it reads as
+ * one button waiting in either scheme. Note that we draw the circle
+ * ourselves, because a disabled prominent button drops its tint for the
+ * system's own fill, which in light vanished into the composer's ground and
+ * in dark stood as a black disc that read as a live button.
+ */
+function idleRoundModifiers(colors: ReturnType<typeof useColors>, round: number) {
+  return [
+    buttonStyle("plain"),
+    foregroundStyle(colors.GROUND),
+    frame({ width: round, height: round }),
+    background(colors.TEXT, SwiftModifiers.shapes.circle()),
+    opacity(IDLE_OPACITY),
     ...PRESS_FRAME,
   ];
 }
@@ -165,6 +179,7 @@ function SendButton({
   const round = useScaledSize(SEND_SIZE);
   const stopSize = useScaledSize(MARK_SIZE.GLYPH - 2);
   const sendSize = useScaledSize(MARK_SIZE.GLYPH);
+  const dictateSize = useScaledSize(MARK_SIZE.LEAD + 2);
 
   if (empty && onStop !== undefined && stopping) {
     return (
@@ -193,7 +208,7 @@ function SendButton({
         onPress={onDictate}
         modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel("Dictate")]}
       >
-        <Image {...glyphImage(GLYPH.DICTATE)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+        <Image {...glyphImage(GLYPH.DICTATE)} size={dictateSize} color={colors.TEXT_MUTED} />
       </Button>
     );
   }
@@ -204,7 +219,7 @@ function SendButton({
     <Button
       onPress={() => onSend?.()}
       modifiers={[
-        ...roundModifiers(colors, sendable),
+        ...(sendable ? roundModifiers(colors) : idleRoundModifiers(colors, round)),
         disabled(!sendable),
         accessibilityLabel("Send"),
       ]}
@@ -217,14 +232,13 @@ function SendButton({
 /** The + as a menu, as SwiftUI draws one from a press: its acts, a rule, then its choices within and its switches. */
 function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testId: string }) {
   const colors = useColors();
+  const addSize = useScaledSize(MARK_SIZE.LEAD + 2);
   const submenus = menu.submenus ?? [];
   const switches = menu.switches ?? [];
 
   return (
     <Menu
-      label={
-        <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
-      }
+      label={<Image {...glyphImage(GLYPH.ADD)} size={addSize} color={colors.TEXT_MUTED} />}
       modifiers={[...PRESS_FRAME, accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
     >
       {menu.actions.map((action) => (
@@ -271,6 +285,7 @@ export function AddPress({
   readonly testId?: string | undefined;
 }) {
   const colors = useColors();
+  const addSize = useScaledSize(MARK_SIZE.LEAD + 2);
 
   if (menu !== undefined) return <AddMenu menu={menu} testId={testId} />;
 
@@ -286,7 +301,7 @@ export function AddPress({
         accessibilityIdentifier(testId),
       ]}
     >
-      <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+      <Image {...glyphImage(GLYPH.ADD)} size={addSize} color={colors.TEXT_MUTED} />
     </Button>
   );
 }
@@ -388,6 +403,7 @@ export function Composer(props: ComposerProps) {
 
   return (
     <GlassBar
+      field
       head={props.head}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
     >
@@ -399,18 +415,18 @@ export function Composer(props: ComposerProps) {
 /**
  * The same composer at the foot of a SwiftUI column, such as a split view's
  * detail, where no React Native bar can stand: its pieces in a row of the
- * system's own glass, rounded as the bar is.
+ * system's own glass, rounded as the bar is, or solid where the reader
+ * reduces transparency, as the bar stands (`useBarGlass`), taking pictures
+ * dropped on it as the bar does.
  */
 export function ComposerFoot(props: ComposerProps) {
+  const { onDropPictures } = props;
+
   const glass = [
     padding({ all: BAR_EDGE }),
-    glassEffect({
-      glass: { variant: "regular" },
-      // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-      shape: "roundedRectangle",
-      cornerRadius: BAR_RADIUS,
-    }),
+    ...useBarGlass(),
     padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
+    ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
   ];
 
   if (props.head === undefined) {

@@ -26,13 +26,15 @@ import {
   TASK_CREATE_RELATION_KIND,
   TASK_STATUS,
   type Task,
+  type TaskSummary,
 } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import {
   IDLE_TASKS_VIEW,
+  type ListedTasksView,
   TASK_CALL_FAILURE,
   TASKS_READ,
-  type TasksView,
+  type TaskListParts,
 } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -106,6 +108,7 @@ import {
   type WindowHistory,
 } from "../places/window-history.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { useTaskRoute } from "../task-route.js";
 import {
   FAKE_ANSWER,
@@ -124,6 +127,7 @@ import {
   holdRepositoryLists,
   readExperiments,
   stateWith,
+  type WrittenTasksView,
   writeExperiments,
 } from "../testing/app-state.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
@@ -148,7 +152,7 @@ import { NEW_TASK_PURPOSE } from "./new-task-purpose.js";
 import { ofPullRequestTab } from "./pull-request-number.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW, SIDE_PANEL_TAB } from "./task-tab-model.js";
-import { loadTasksFixture } from "./tasks-fixture-loader.js";
+import { loadedTasksFixture, loadTasksFixture } from "./tasks-fixture-loader.js";
 import { HISTORY_READ } from "./use-description-history.js";
 import { useListedInbox } from "./use-inbox-slices.js";
 import { type TasksControl, useTasksTab } from "./use-tasks-tab.js";
@@ -169,7 +173,7 @@ const TASK: Task = {
   description: { body: "# Teammate invitations", assumptions: [] },
 };
 
-const OPEN: TasksView = {
+const OPEN: WrittenTasksView = {
   tasks: [],
   listStatus: TASKS_READ.READY,
   workspaces: [],
@@ -177,7 +181,7 @@ const OPEN: TasksView = {
 };
 
 /** The open task's view with its own workspace listed, whose choices a task its list holds none of stands by. */
-const LISTING: TasksView = {
+const LISTING: WrittenTasksView = {
   ...OPEN,
   workspaces: [
     { id: TASK.workspaceId, name: "Personal", role: WORKSPACE_ROLE.OWNER, github: null },
@@ -217,7 +221,7 @@ const readShown = Schema.decodeUnknownOption(
 
 interface Standing {
   shown: boolean;
-  tasks: TasksView;
+  tasks: WrittenTasksView;
   profile: string;
   fixtureMode: boolean;
   unseenAgents: readonly string[];
@@ -346,6 +350,18 @@ function inboxNow(): InboxView {
   return inboxStanding ?? assert.fail("the Inbox's route stands");
 }
 
+/** The task list the window lists from as a test stands it: main's, or a fixture run's synthetic one, as the window's follow writes it (`selectListedTasks`). */
+function listedOf(standing: Standing): ListedTasksView {
+  const run = { fixtureMode: standing.fixtureMode, profile: standing.profile };
+
+  return (
+    loadedTasksFixture()?.fixtureTasksView(run) ?? {
+      ...standing.tasks,
+      tasks: standing.tasks.tasks ?? [],
+    }
+  );
+}
+
 function mount(
   initial: Partial<Standing> = {},
   answers: { [Kind in PortActKind]?: (...args: unknown[]) => Promise<PortActResult<Kind>> } = {},
@@ -366,6 +382,8 @@ function mount(
   };
 
   let control: TasksControl | undefined;
+  let listedNow: readonly TaskSummary[] = [];
+  let everyNow: readonly TaskSummary[] = [];
   let restand: ((next: Standing) => void) | undefined;
 
   let standing: Standing = {
@@ -506,6 +524,9 @@ function mount(
       startStands: () => windowHistory?.onStartStands(),
       leaveStart: () => windowHistory?.onLeaveStart() ?? false,
     });
+    // What the sidebar lists, the listed workspace's tasks, and every task, as the window's surfaces read them.
+    listedNow = useNamedTasks(control.typedNames, NAMED_ORDER.PINNED_FIRST, control.workspace?.id);
+    everyNow = useNamedTasks(control.typedNames, NAMED_ORDER.PINNED_FIRST);
     // The routed places' doors, and how they stand, as the window's surfaces hold them.
     boardDoor = useBoardDoor(control);
     personDoor = usePersonDoor(control);
@@ -556,7 +577,7 @@ function mount(
   // The window's toast stands beside the tab, as the app draws it.
   const surface = createElement(Fragment, null, createElement(Probe), createElement(ToastHost));
   // The window's task-list collections, standing on the tasks the tab lists, as the window's follow writes them.
-  const taskList = standingTaskList(standing.tasks);
+  const taskList = standingTaskList(listedOf(standing));
   const root = createRoot(container);
   roots.push(root);
 
@@ -596,6 +617,12 @@ function mount(
 
       return control;
     },
+    /** The ids of the tasks the sidebar lists, the listed workspace's, pinned first. */
+    listed: () => listedNow.map((task) => task.id),
+    /** The names of the tasks the sidebar lists. */
+    listedNames: () => listedNow.map((task) => task.name),
+    /** The ids of every task the window's list holds, pinned first, as the palette and the Inbox find a task among them. */
+    every: () => everyNow.map((task) => task.id),
     /** The router arriving at `address`, as a browser's own move lands it. */
     arrive: (address: string) => act(() => held.history.push(address)),
     /** The router taking `address` in the step's place, as a door that replaces moves it. */
@@ -605,7 +632,7 @@ function mount(
     stand: (patch: Partial<Standing>) => {
       standing = { ...standing, ...patch };
       act(() => {
-        taskList.stand(standing.tasks);
+        taskList.stand(listedOf(standing));
         const client = testQueryClientNow();
         const held = client.getQueryData(appStateQuery.queryKey) ?? stateWith({}, {});
         client.setQueryData(appStateQuery.queryKey, {
@@ -713,7 +740,7 @@ const ACME = {
 };
 
 /** The account's tasks across its two workspaces: two of its own, and one of the team's. */
-const TWO_WORKSPACES: TasksView = {
+const TWO_WORKSPACES: ListedTasksView = {
   ...IDLE_TASKS_VIEW,
   listStatus: TASKS_READ.READY,
   workspaces: [PERSONAL, ACME],
@@ -1124,7 +1151,7 @@ test("a task last viewed on an agent's tab shows nothing until its agents are re
   assert.equal(tab.control().agents.agents, undefined, "the agents are still being read");
   assert.equal(tab.control().mainTabs.tab, undefined, "nothing stands in the agent's place");
 
-  tab.stand({ tasks: { ...listed, taskAgents: [listedAgent(RUNNING_AGENT)] } });
+  tab.stand({ tasks: { ...listed, taskAgents: [listedAgent(RUNNING_AGENT)], listed: true } });
   await settle();
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the agent once they are read");
 });
@@ -1298,10 +1325,11 @@ test("a task opened from a list, gone back to from the sidebar, or named by a ch
     }),
   );
 
-  const elsewhere = (tasks: TasksView["tasks"]) => ({
+  const elsewhere = (tasks: TaskListParts["tasks"]) => ({
     ...OPEN,
     tasks,
     taskAgents: followed,
+    listed: true,
     activeTaskId: OTHER_TASK_ID,
   });
 
@@ -1320,17 +1348,17 @@ test("a task opened from a list, gone back to from the sidebar, or named by a ch
   );
 
   act(() => tab.control().onSelect(TASK.id));
-  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed } });
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(WAITING), "from a list, the agent waiting");
 
   tab.stand({ tasks: elsewhere([waitingRow]) });
   act(() => tab.control().onShowMention({ kind: MENTION_KIND.TASK, taskId: TASK.id }));
-  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed } });
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(WAITING), "from a chip, the agent waiting");
 
   tab.stand({ tasks: elsewhere([waitingRow]) });
   act(() => tab.control().onResume(TASK.id));
-  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed } });
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
   assert.deepEqual(
     tab.control().mainTabs.tab,
     agentTab(WAITING),
@@ -1836,7 +1864,7 @@ test("a link to an agent's Pull request tab, on a pull request another of the ta
   const archived = { ...EARLIER, archivedAt: 5 };
 
   // Both agents' rows keep the pull request they share, which the list carries beside them.
-  const sharing = (agents: readonly AgentSummary[]): TasksView => ({
+  const sharing = (agents: readonly AgentSummary[]): WrittenTasksView => ({
     ...withAgents(agents),
     agentPullRequests: agents.map((agent) => ({
       agentId: agent.id,
@@ -2740,28 +2768,19 @@ test("a tab its strip no longer draws, its page gone since, is passed over for t
   assert.equal(tab.control().onReopenClosedTab, undefined, "the page's tab is not kept to reopen");
 });
 
-test("a render that hands the same plans keeps the lists the tab hands out, and a new list of plans hands out new ones", () => {
+test("a delivery moving a task the tab reads nothing of leaves the tab's answer the same object, as the sidebar lists the task moved", () => {
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
+  const before = tab.control();
 
-  const lists = () => {
-    const control = tab.control();
+  tab.stand({
+    tasks: {
+      ...TWO_WORKSPACES,
+      tasks: [row("launch", 5), ...TWO_WORKSPACES.tasks],
+    },
+  });
 
-    return [control.tasks, control.listed.tasks, control.newTask.tasks];
-  };
-
-  const before = lists();
-
-  tab.stand({ unseenAgents: ["agent-1"] });
-  const after = lists();
-  tab.stand({ tasks: { ...TWO_WORKSPACES, tasks: [row("launch", 5), ...TWO_WORKSPACES.tasks] } });
-
-  for (const [index, list] of after.entries())
-    assert.equal(list, before[index], `list ${index} kept`);
-  assert.notEqual(tab.control().tasks, before[0]);
-  assert.deepEqual(
-    tab.control().listed.tasks.map((task) => task.id),
-    ["launch", "notes", "billing"],
-  );
+  assert.equal(tab.control(), before);
+  assert.deepEqual(tab.listed(), ["launch", "notes", "billing"]);
 });
 
 test("the sidebar lists the first workspace's plans first, a workspace chosen lists its own alone while every plan stays findable, and New plan starts in the one chosen", async () => {
@@ -2769,7 +2788,7 @@ test("the sidebar lists the first workspace's plans first, a workspace chosen li
 
   const personal = {
     workspace: tab.control().workspace?.id,
-    tasks: tab.control().listed.tasks.map((task) => task.id),
+    tasks: tab.listed(),
   };
 
   await tab.control().newTask.start("Invites", null, tab.control().newTask.workspaceId);
@@ -2781,13 +2800,10 @@ test("the sidebar lists the first workspace's plans first, a workspace chosen li
     tasks: ["notes", "billing"],
   });
   assert.equal(tab.control().workspace?.id, ACME.id);
-  assert.deepEqual(
-    tab.control().listed.tasks.map((task) => task.id),
-    ["alerts"],
-  );
+  assert.deepEqual(tab.listed(), ["alerts"]);
   assert.deepEqual(startedIn(tab.payloads), [PERSONAL.id, ACME.id]);
   assert.deepEqual(
-    tab.control().tasks.map((task) => task.id),
+    tab.every(),
     ["notes", "alerts", "billing"],
     "the palette, the inbox, and the history find every workspace's plans",
   );
@@ -2817,10 +2833,7 @@ test("opening a plan of another workspace lists that workspace once it opened, o
   assert.equal(keptAfterRefusal, null, "and keeps nothing for the next launch");
   assert.equal(stayed, PERSONAL.id);
   assert.equal(tab.control().workspace?.id, ACME.id);
-  assert.deepEqual(
-    tab.control().listed.tasks.map((task) => task.id),
-    ["alerts"],
-  );
+  assert.deepEqual(tab.listed(), ["alerts"]);
 });
 
 /** A task's inbox waiting on the developer: `count` open items, each asked by one agent. */
@@ -3362,10 +3375,7 @@ test("a workspace chosen is chosen again on the next launch, and one the account
 
   assert.equal(kept, ACME.id);
   assert.equal(relaunched.control().workspace?.id, PERSONAL.id);
-  assert.deepEqual(
-    relaunched.control().listed.tasks.map((task) => task.id),
-    ["notes", "billing"],
-  );
+  assert.deepEqual(relaunched.listed(), ["notes", "billing"]);
 });
 
 test("before the workspaces are read every plan is listed and New plan names no workspace, so the service starts it in the first one", async () => {
@@ -3374,10 +3384,7 @@ test("before the workspaces are read every plan is listed and New plan names no 
   await tab.control().newTask.start("Invites", null, tab.control().newTask.workspaceId);
 
   assert.equal(tab.control().workspace, undefined);
-  assert.deepEqual(
-    tab.control().listed.tasks.map((task) => task.id),
-    ["notes", "alerts", "billing"],
-  );
+  assert.deepEqual(tab.listed(), ["notes", "alerts", "billing"]);
   assert.deepEqual(startedIn(tab.payloads), [undefined]);
 });
 
@@ -3570,14 +3577,11 @@ test("a fixture run lists its first workspace's plans under the switcher, and a 
   // The window is drawn once the synthetic tasks have landed (`App`).
   await loadTasksFixture();
   const fixture = mount({ shown: true, fixtureMode: true, profile: RUN_PROFILE.IDLE });
-  const staged = fixture.control().listed.tasks.map((task) => task.name);
+  const staged = fixture.listedNames();
   act(() => fixture.control().onChooseWorkspace("workspace-acme"));
 
   assert.deepEqual(staged, ["Teammate invitations", "Billing export"]);
-  assert.deepEqual(
-    fixture.control().listed.tasks.map((task) => task.name),
-    ["Usage alerts"],
-  );
+  assert.deepEqual(fixture.listedNames(), ["Usage alerts"]);
   assert.equal(fixture.control().workspaces.length, 2);
   assert.equal(window.localStorage.length, 0);
 });
@@ -3616,19 +3620,24 @@ test("an agent profile opens its task on the agent it stages, beside the agent's
 });
 
 /** The task as the list names it. */
-function listed(): TasksView["tasks"][number] {
+function listed(): TaskListParts["tasks"][number] {
   const { description: _document, ...summary } = TASK;
 
   return summary;
 }
 
 /** The task listed and open, its agents as the list followed live carries them. */
-function withAgents(agents: readonly AgentSummary[]): TasksView {
-  return { ...OPEN, tasks: [listed()], taskAgents: agents.map((agent) => listedAgent(agent)) };
+function withAgents(agents: readonly AgentSummary[]): WrittenTasksView {
+  return {
+    ...OPEN,
+    tasks: [listed()],
+    taskAgents: agents.map((agent) => listedAgent(agent)),
+    listed: true,
+  };
 }
 
 /** The view once the list is read with nothing open, holding `plans`. */
-function listRead(tasks: TasksView["tasks"]): TasksView {
+function listRead(tasks: TaskListParts["tasks"]): WrittenTasksView {
   return { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.READY, tasks };
 }
 
@@ -4179,7 +4188,7 @@ const readAgentNamed = Schema.decodeUnknownOption(
 );
 
 /** The task New task's Agent mode starts, as the host opens it once started. */
-const AGENT_TASK: TasksView = { ...OPEN, activeTaskId: OTHER_TASK_ID };
+const AGENT_TASK: WrittenTasksView = { ...OPEN, activeTaskId: OTHER_TASK_ID };
 
 /** The descriptions the host holds once Agent mode's task started: the started task's beside the open one's. */
 const AGENT_DESCRIPTIONS: AppHeldTasks = {
@@ -4595,6 +4604,7 @@ test("an agent refused as New task's Agent mode started its task opens the task 
             ...AGENT_TASK,
             tasks: [{ ...listed(), id: OTHER_TASK_ID }],
             taskAgents: [listedAgent(started)],
+            listed: true,
           },
         });
 

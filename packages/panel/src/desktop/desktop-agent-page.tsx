@@ -37,8 +37,8 @@ import { unreadShown } from "../failure-report.js";
 import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TaskHeadBack } from "./phone-head.js";
 import { PhoneBack, PhoneHead, phoneBar } from "./phone-head.js";
-import type { TaskHeadBack } from "./task-pane-switcher.js";
 
 /** What the page says where the agent could not be read. */
 const NOT_READ = "This agent could not be read.";

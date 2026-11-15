@@ -59,11 +59,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useAdminDoors } from "../admin-doors.js";
 import { adminCatalogQuery, useAdminSignOut } from "../admin-queries.js";
-import { adminReadView } from "../admin-read-view.js";
+import { type AdminScreenShell, adminReadView } from "../admin-read-view.js";
 import { AdminSection } from "../charts/stat-card.js";
 import { PageSections } from "../chrome/controls.js";
 import { PageNote } from "../chrome/notes.js";
-import { AdminCollectionPage, AdminPage, type ViewerAccount } from "../chrome/page-header.js";
+import { AdminCollectionPage, AdminPage } from "../chrome/page-header.js";
 
 /** One limit: what it bounds, its figure, and the constant that holds it. */
 interface Limit {
@@ -529,16 +529,7 @@ function LimitsPage({
 
 const unwrapped = (sections: React.JSX.Element) => sections;
 
-export function LimitsScreen({
-  account,
-  onSignOut,
-  frame,
-}: {
-  account: ViewerAccount | undefined;
-  onSignOut: () => Promise<void>;
-  /** Applied around the page, past the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
-}): React.JSX.Element {
+export function LimitsScreen({ account, onSignOut, frame }: AdminScreenShell): React.JSX.Element {
   const { reads, gate } = useAdminDoors();
   // Note that the page reads the catalog for the service's own limits, which also holds it behind the admin gate as every admin read is.
   const read = useQuery({ ...adminCatalogQuery(reads), enabled: !gate.heldAtGate() });

@@ -260,8 +260,8 @@ async function inbox(
   fakeAppPlatform({ ...QUIET_PANEL, pageFrameUrl });
   fakeActs({ act: answer });
   fakeActPort({ ...fakeActPortCalls() });
-  // Main's read of the account's inbox holds the task's one item as waiting, and its task list the task's agents and
-  // the pull request each opened, which the task list's collections hold.
+  // Main's read of the account's inbox holds the task's one item as waiting, and its task list the tasks, the task's
+  // agents, and the pull request each opened, which the task list's collections hold.
   handState(NO_EXPERIMENTS, {
     inbox: {
       ...stateWith({}, {}).inbox,
@@ -270,6 +270,7 @@ async function inbox(
     },
     tasks: {
       ...stateWith({}, {}).tasks,
+      tasks: [TASK, OTHER],
       taskAgents: LISTED_AGENTS,
       agentPullRequests: LISTED_PULL_REQUESTS,
     },
@@ -304,22 +305,22 @@ async function inbox(
     // The window's keymap, which hears a chord as the window's root mounts it.
     useAppKeymap(true);
 
+    const tasks = tasksControl({
+      workspace: ACME,
+      tasks: [TASK, OTHER],
+      liveAgents: LISTED_AGENTS,
+      listedPullRequests: LISTED_PULL_REQUESTS,
+      inboxView: { ...tasksControl().inboxView, pages, onTaskAgents: taskAgents.onRead },
+      sidePanel,
+      onShowTask: (taskId) => left.tasks.push(taskId),
+      onShowPanelTab: (taskId, tab) => left.went.push(`${taskId} ${JSON.stringify(tab)}`),
+      onShowAgent: (taskId, agentId) => left.went.push(`${taskId} agent ${agentId}`),
+    });
+
     return createElement(
       OpenLinkProvider,
       { value: (link: ReadLink) => left.links.push(link) },
-      createElement(DesktopInbox, {
-        tasks: tasksControl({
-          workspace: ACME,
-          tasks: [TASK, OTHER],
-          liveAgents: LISTED_AGENTS,
-          listedPullRequests: LISTED_PULL_REQUESTS,
-          inboxView: { ...tasksControl().inboxView, pages, onTaskAgents: taskAgents.onRead },
-          sidePanel,
-          onShowTask: (taskId) => left.tasks.push(taskId),
-          onShowPanelTab: (taskId, tab) => left.went.push(`${taskId} ${JSON.stringify(tab)}`),
-          onShowAgent: (taskId, agentId) => left.went.push(`${taskId} agent ${agentId}`),
-        }),
-      }),
+      createElement(DesktopInbox, { tasks }),
     );
   }
 

@@ -2,6 +2,7 @@ export {
   AGENT_ENTER,
   AGENT_ENTER_LABEL,
   AGENT_ENTER_LIST,
+  AGENT_ENTER_TOUCH_DETAIL,
   type AgentEnter,
   isAgentEnter,
 } from "./agent-enter.js";

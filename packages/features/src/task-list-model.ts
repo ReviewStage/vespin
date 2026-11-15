@@ -235,7 +235,7 @@ export function createdByOnly(
 }
 
 /** Whether the reader follows a task: one of its followers. */
-export function followedBy(task: TaskSummary, readerId: string | undefined): boolean {
+function followedBy(task: TaskSummary, readerId: string | undefined): boolean {
   return (
     readerId !== undefined &&
     task.followers?.some((follower) => follower.userId === readerId) === true
