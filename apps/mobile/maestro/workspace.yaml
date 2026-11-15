@@ -52,6 +52,14 @@ appId: dev.vespin.ios
     id: "new-workspace-name"
 - waitForAnimationToEnd
 - takeScreenshot: workspace-new
+# The fixture has no service, so Create is refused: the sheet stays with the
+# name and says why under it, rather than closing.
+- inputText: "Launch crew"
+- tapOn: "Create"
+- assertVisible: "Could not.*"
+- assertVisible:
+    id: "new-workspace-name"
+- takeScreenshot: workspace-new-refused
 - tapOn: "Cancel"
 # Back to the account's own workspace, whose threads stand again.
 - tapOn:
