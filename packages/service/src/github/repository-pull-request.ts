@@ -35,6 +35,7 @@ import type { PullRequestActionRequest } from "@repo/features/pull-request-write
 import { Effect, Option } from "effect";
 import {
   actionWrite,
+  countedWrite,
   type OverviewRead,
   viewedAnswerOf,
   viewedRead,
@@ -87,7 +88,7 @@ export interface ReachedPullRequest {
  */
 export const reachedRepository = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
-  query: PullRequestQuery,
+  query: Omit<PullRequestQuery, "number">,
 ) {
   const place = yield* memberPlace(userId, query);
   const app = yield* GitHubApp;
@@ -181,9 +182,12 @@ export const overviewOf = <A, R>(
 export const viewedOf = (userId: string, query: PullRequestQuery) =>
   Effect.map(writtenOn(userId, query, viewedRead), viewedAnswerOf);
 
-/** One change to the pull request, as the member on their own GitHub sign-in, and how GitHub took it. */
+/** One change to the pull request, as the member on their own GitHub sign-in, and how GitHub took it, counted in the query's workspace as a change through an agent is. */
 export const actionOn = (
   userId: string,
   query: PullRequestQuery,
   request: PullRequestActionRequest,
-) => Effect.map(writtenOn(userId, query, actionWrite(request)), writeAnswerOf);
+) =>
+  Effect.tap(writtenOn(userId, query, actionWrite(request)), (written) =>
+    countedWrite(userId, query.workspaceId, request, written),
+  ).pipe(Effect.map(writeAnswerOf));

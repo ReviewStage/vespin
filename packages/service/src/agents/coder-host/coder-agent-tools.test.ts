@@ -1703,8 +1703,8 @@ test("start_agent refuses, in words that say why and starting nothing, a picture
     [[theirs], unreached(theirs)],
     [
       [recording],
-      `Not started: attachment ${recording} is a video, and only a picture, a PNG, JPEG, or ` +
-        "WebP, is handed to another agent.",
+      `Not started: attachment ${recording} is a video or a sound clip, and only a picture, a ` +
+        "PNG, JPEG, or WebP, is handed to another agent.",
     ],
     [
       [tooLargeId],

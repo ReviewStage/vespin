@@ -187,6 +187,9 @@ export const GLYPH = {
   HISTORY: lucide(LUCIDE_SYMBOL.ROTATE_CCW_CLOCK),
   UPDATE: lucide(LUCIDE_SYMBOL.CIRCLE_ARROW_UP),
   RUN: lucide(LUCIDE_SYMBOL.PLAY),
+  // A sound clip's play and pause, as the panel's audio player draws them.
+  PLAY: lucide(LUCIDE_SYMBOL.PLAY),
+  PAUSE: lucide(LUCIDE_SYMBOL.PAUSE),
   STOP: lucide(LUCIDE_SYMBOL.CIRCLE_STOP),
   WAIT: lucide(LUCIDE_SYMBOL.HOURGLASS),
   SLEEP: lucide(LUCIDE_SYMBOL.TIMER),

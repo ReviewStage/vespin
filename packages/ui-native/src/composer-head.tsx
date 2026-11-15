@@ -1,4 +1,4 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message, each taken off on a press, and the skills a `/` offers.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures and pasted text files attached to the message, each taken off on a press, and the skills a `/` offers.
 
 import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -165,13 +165,13 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
   );
 }
 
-/** What a press on an attached picture is heard to do, since its × alone says so on screen. */
+/** What a press on an attached file is heard to do, since its × alone says so on screen. */
 const DETACH_HINT = "Removes it from the message";
 
-/** One picture attached to the message, by the name the message carries it under ("Picture 1"). */
+/** One file attached to the message, a picture or a long paste taken as a text file, by the name the message carries it under ("Picture 1", "Pasted text 1.txt"). */
 export type AttachedPicture = { readonly id: string; readonly name: string };
 
-/** The pictures attached to the message as a row of capsules, each taken off the message on a press, scrolling sideways where they outrun the bar. */
+/** The files attached to the message, its pictures and its pasted text files, as a row of capsules by their names, each taken off the message on a press, scrolling sideways where they outrun the bar. */
 export function AttachedPictures({
   pictures,
   onDetach,

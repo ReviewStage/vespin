@@ -171,7 +171,7 @@ component, or add the component or variant there.
   may read that thread and deleted with it, and none of it goes into a trace,
   a counted event, or a fixture. Such a recording may also be added to its
   task's plan, from the file viewer's Add to plan or an agent's `edit_plan`,
-  at most ten to a plan, kept beside the plan as its pictures are
+  kept beside the plan as its pictures are
   (`packages/database/src/models/plan-attachments.ts`), shown to the members
   who can open the task and deleted with the plan; `look_at_picture` refuses
   it (`packages/service/src/tasks/picture-look.ts`), so no model is handed it,

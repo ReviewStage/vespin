@@ -24,7 +24,10 @@ import { machineAsksRead } from "../live/reads/machine-asks.js";
 import { machineCommandsRead } from "../live/reads/machine-commands.js";
 import { machinesRead } from "../live/reads/machines.js";
 import { agentPagesRead, taskPagesRead } from "../live/reads/pages.js";
-import { pullRequestChaptersRead } from "../live/reads/pull-request-chapters.js";
+import {
+  pullRequestChaptersRead,
+  repositoryPullRequestChaptersRead,
+} from "../live/reads/pull-request-chapters.js";
 import { agentInboxRead, taskInboxRead } from "../live/reads/scope-inbox.js";
 import { sidebarRead } from "../live/reads/sidebar.js";
 import { taskCommentsRead } from "../live/reads/task-comments.js";
@@ -82,6 +85,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   automationWorkspaceRunsRead,
   automationRunsRead,
   pullRequestChaptersRead,
+  repositoryPullRequestChaptersRead,
 ];
 
 export const LIVE_QUERIES = liveReadRegistry(BOUND_READS);

@@ -290,21 +290,30 @@ export function isVideoDataUrl(dataUrl: string): boolean {
 }
 
 /**
- * The `blob:` address a video's `data:` URL plays from, made from its bytes
- * here and let go of as what draws it goes, the player or a thumb's still:
- * neither window's policy lets media load from a `data:` address, nor fetch
- * one, where both allow `blob:`. Note that the bytes are copied into an
- * array of their own length one by one, because `Uint8Array.from` over the
- * decoded string first lists every character, tens of megabytes for a
- * recording, which a phone with several on screen runs out of room for.
+ * The bytes a `data:` URL holds. Note that they are copied into an array of
+ * their own length one by one, because `Uint8Array.from` over the decoded
+ * string first lists every character, tens of megabytes for a recording,
+ * which a phone with several on screen runs out of room for.
+ */
+export function dataUrlBytes(dataUrl: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
+  const bytes = new Uint8Array(binary.length);
+
+  for (let at = 0; at < binary.length; at += 1) bytes[at] = binary.charCodeAt(at);
+
+  return bytes;
+}
+
+/**
+ * The `blob:` address a video's or a sound clip's `data:` URL plays from,
+ * made from its bytes here and let go of as what draws it goes, the player
+ * or a thumb's still: neither window's policy lets media load from a
+ * `data:` address, nor fetch one, where both allow `blob:`.
  */
 export function useBlobUrl(dataUrl: string): string | undefined {
   const [url, setUrl] = useState<string>();
   useEffect(() => {
-    const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
-    const bytes = new Uint8Array(binary.length);
-
-    for (let at = 0; at < binary.length; at += 1) bytes[at] = binary.charCodeAt(at);
+    const bytes = dataUrlBytes(dataUrl);
     const made = URL.createObjectURL(new Blob([bytes], { type: dataUrlMediaType(dataUrl) }));
     setUrl(made);
 
