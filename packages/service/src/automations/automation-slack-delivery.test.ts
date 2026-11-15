@@ -253,7 +253,7 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
   );
 
   it.effect(
-    "a run's result DM is kept as its agent's thread, so the turn a reply there starts is answered under it and the next run is sent as a DM of its own",
+    "a run's result DM is kept as its agent's thread, where a turn a reply starts posts none of its words, one that failed says so, and the next run is sent as a DM of its own",
     () =>
       Effect.gen(function* () {
         const slack = recordingSlack();
@@ -270,13 +270,14 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
         // The fake Slack answers the first message posted under this timestamp.
         const digest = "1700000000.000001";
         const kept = yield* slackAgentThreadAt(organizationId, DM_CHANNEL, digest);
-        // The member's reply in the DM's thread starts a turn that is no run's.
+        // The member's replies in the DM's thread start turns that are no run's.
         yield* endedAt(
           agent,
           RUN_STATUS.SUCCEEDED,
           T0 + 60_000,
           "Yes, black cold brew counts.",
         ).pipe(Effect.provide(posting));
+        yield* endedAt(agent, RUN_STATUS.FAILED, T0 + 120_000).pipe(Effect.provide(posting));
         yield* runOn(automation, agent.id, T0 + 86_400_000);
         yield* endedAt(agent, RUN_STATUS.SUCCEEDED, T0 + 86_460_000, "Two threads need you.").pipe(
           Effect.provide(posting),
@@ -286,11 +287,12 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
           Option.map(kept, (thread) => thread.agentId),
           Option.some(agent.id),
         );
-        const [, answer, nextDigest, ...more] = slack.posted;
+        const [, notice, nextDigest, ...more] = slack.posted;
         assert.equal(more.length, 0);
-        assert.equal(answer?.channel, DM_CHANNEL);
-        assert.equal(answer?.thread_ts, digest);
-        assert.match(answer?.text ?? "", /black cold brew/u);
+        assert.deepEqual(
+          [notice?.channel, notice?.thread_ts, notice?.text],
+          [DM_CHANNEL, digest, "The agent failed: model."],
+        );
         assert.equal(nextDigest?.channel, SLACK_USER);
         assert.equal(nextDigest?.thread_ts, undefined);
         assert.match(nextDigest?.text ?? "", /^Email digest: Two threads/u);
