@@ -57,11 +57,6 @@ export const DEFAULT_WORKSPACE_SANDBOX_SIZE: WorkspaceSandboxSize = {
   maxVcpus: SANDBOX_SIZE.VCPUS,
 };
 
-/** Whether a number is one of the sizes a workspace may choose. */
-export function isSandboxVcpus(value: number): value is SandboxVcpus {
-  return SANDBOX_VCPU_SIZES.some((size) => size === value);
-}
-
 /** The vCPUs an agent's sandbox in the workspace opens with: what its workspace chose, held under the most it may have. */
 export function sandboxVcpus(size: WorkspaceSandboxSize): SandboxVcpus {
   return size.vcpus <= size.maxVcpus ? size.vcpus : size.maxVcpus;

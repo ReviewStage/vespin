@@ -11,11 +11,7 @@ CREATE TABLE "workspace_sandbox_size" (
 	CONSTRAINT "workspace_sandbox_size_max_vcpus" CHECK ("max_vcpus" in (2, 4, 8))
 );
 --> statement-breakpoint
-ALTER TABLE "workspace_sandbox_size" ADD CONSTRAINT "workspace_sandbox_size_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
--- Note that every workspace whose agents worked in Vespin's own repository keeps the four vCPUs that repository was given before sizes were the workspace's, because its typecheck is killed out of memory at two.
-INSERT INTO "workspace_sandbox_size" ("organization_id", "vcpus", "max_vcpus")
-SELECT DISTINCT "organization_id", 4, 4 FROM "agent" WHERE lower("repository") = 'reviewstage/vespin'
-ON CONFLICT ("organization_id") DO NOTHING;
+ALTER TABLE "workspace_sandbox_size" ADD CONSTRAINT "workspace_sandbox_size_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "app_sync_workspace_sandbox_size"() RETURNS trigger LANGUAGE plpgsql AS $app_sync$
 DECLARE

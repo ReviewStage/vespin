@@ -25,7 +25,7 @@ export const PROBE_SANDBOX = {
   CHECKOUT: "/workspace/repository",
   /** Long enough for the image, three launches, and a stop and resume between them. */
   TIMEOUT_MS: 60 * 60 * 1_000,
-  /** The size this repository's own coding agents run at: the Stage workspace's sandbox size (`workspace_sandbox_size`). */
+  /** The vCPUs the probe's sandbox runs at. */
   VCPUS: 4,
 } as const;
 
