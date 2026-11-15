@@ -3,6 +3,7 @@ import {
   AGENT_BOUNDS,
   type AgentAttachmentType,
 } from "@repo/features/agent-wire";
+import { AUDIO_TYPE } from "@repo/features/audio-signature";
 import {
   CONVERSATION_MEDIA_TYPE,
   CONVERSATION_PICTURE_BOUNDS,
@@ -40,9 +41,19 @@ import { task } from "./task.js";
 const isWebm = (table: { readonly contentType: AnyPgColumn }) =>
   sql`${table.contentType} = ${literal(CONVERSATION_MEDIA_TYPE.WEBM)}`;
 
-/** Whether a row's bytes are a recording an agent made, a WebM or an H.264 MP4, which an inbox message or a plan holds to a video's bound rather than a picture's. */
+/** The types an agent's recording or sound clip is kept under, which an inbox message or a plan holds to a video's bound rather than a picture's. */
+const PLAYED_TYPES = [
+  CONVERSATION_MEDIA_TYPE.WEBM,
+  CONVERSATION_MEDIA_TYPE.MP4,
+  ...Object.values(AUDIO_TYPE),
+] as const;
+
+/** Whether a row's bytes are a recording an agent made, a WebM or an H.264 MP4, or a sound clip it made, which an inbox message or a plan holds to a video's bound rather than a picture's. */
 const isVideo = (table: { readonly contentType: AnyPgColumn }) =>
-  sql`${table.contentType} in (${literal(CONVERSATION_MEDIA_TYPE.WEBM)}, ${literal(CONVERSATION_MEDIA_TYPE.MP4)})`;
+  sql`${table.contentType} in (${sql.join(
+    PLAYED_TYPES.map((type) => literal(type)),
+    sql`, `,
+  )})`;
 
 /** Whether a row's bytes are a PDF, which a plan holds to a PDF's bound rather than a picture's. */
 const isPdf = (table: { readonly contentType: AnyPgColumn }) =>

@@ -40,7 +40,7 @@ import {
   recordedVideosOf,
   shownPicturesOf,
 } from "@repo/features/agent-pictures-model";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import type { SendingMessage } from "@repo/features/agent-view";
 import {
   type AgentOrigin,
@@ -358,7 +358,7 @@ function standingOf(state: ToolState, refused: boolean): CallStanding {
 /** Whether a call is a set of pictures shown, which draws as its pictures. */
 function showedPictures(part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>): boolean {
   return (
-    part.tool === AGENT_TOOL.SHOW_IMAGE &&
+    isShowMediaTool(part.tool) &&
     part.state === TOOL_STATE.OUTPUT_AVAILABLE &&
     isRecord(part.output) &&
     part.output.status === "accepted"

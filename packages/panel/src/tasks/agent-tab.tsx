@@ -22,7 +22,7 @@ import {
   wholeCallOf,
 } from "@repo/features/agent-parts";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
@@ -1244,7 +1244,7 @@ function ToolPartView({
   }
 
   // A set of pictures the agent showed, or is showing, is drawn as itself; one refused keeps its row, where its error is read.
-  if (part.tool === AGENT_TOOL.SHOW_IMAGE && part.state !== TOOL_STATE.OUTPUT_ERROR) {
+  if (isShowMediaTool(part.tool) && part.state !== TOOL_STATE.OUTPUT_ERROR) {
     return <ShownPictures input={part.input} output={part.output} />;
   }
 
