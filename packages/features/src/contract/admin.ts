@@ -1,5 +1,5 @@
 /**
- * admin.ts -- the admin dashboard's reads and its one star write, as one resource (`admin-wire.ts`).
+ * admin.ts -- the admin dashboard's reads, its star write, and a workspace's sandbox cap, as one resource (`admin-wire.ts`).
  *
  * Every procedure declares the dashboard's own refusals beside those any
  * procedure may answer (`declaredProcedure`), since the gate and each handler
@@ -12,7 +12,10 @@
  *
  * The star is one address under two methods, PUT to set it and DELETE to take
  * it back, each naming the account in its query; the input is read
- * `detailed`, since a PUT's compact input would be its body.
+ * `detailed`, since a PUT's compact input would be its body. A workspace's
+ * sandbox cap is a PUT read the same way, naming the workspace in its query
+ * and the most vCPUs in its body, a size it may not take being an invalid
+ * request.
  *
  * The answers declare no output schema: the dashboard's answers are typed
  * in `admin-answer-wire.ts` as plain shapes, not schemas, and they are
@@ -24,6 +27,7 @@ import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { ADMIN_ERROR, ADMIN_QUERY, ADMIN_ROUTE_PATH, type AdminError } from "../admin-wire.js";
+import { sandboxVcpusSchema } from "../workspace-sandbox-size-wire.js";
 import { declaredProcedure } from "./base.js";
 
 /** Every refusal an admin procedure may answer, the slug its code. */
@@ -84,6 +88,12 @@ const favoriteInputSchema = EffectSchema.Struct({
   query: EffectSchema.Struct({ [ADMIN_QUERY.USER_ID]: parameter }),
 });
 
+/** The sandbox cap's input, read `detailed`: the workspace it names, in its query, and the most vCPUs, in its body. */
+const workspaceSandboxInputSchema = EffectSchema.Struct({
+  query: EffectSchema.Struct({ [ADMIN_QUERY.WORKSPACE_ID]: parameter }),
+  body: EffectSchema.Struct({ maxVcpus: sandboxVcpusSchema }),
+});
+
 const read = (path: (typeof ADMIN_ROUTE_PATH)[keyof typeof ADMIN_ROUTE_PATH]) =>
   adminProcedure.meta(openapi({ method: HTTP_METHOD.GET, path }));
 
@@ -103,5 +113,14 @@ export const adminContract = {
   user: read(ADMIN_ROUTE_PATH.USER).input(userQuerySchema),
   users: read(ADMIN_ROUTE_PATH.USERS).input(usersQuerySchema),
   workspace: read(ADMIN_ROUTE_PATH.WORKSPACE).input(workspaceQuerySchema),
+  workspaceSandbox: adminProcedure
+    .meta(
+      openapi({
+        method: HTTP_METHOD.PUT,
+        path: ADMIN_ROUTE_PATH.WORKSPACE_SANDBOX,
+        inputStructure: "detailed",
+      }),
+    )
+    .input(workspaceSandboxInputSchema),
   workspaces: read(ADMIN_ROUTE_PATH.WORKSPACES).input(workspacesQuerySchema),
 };

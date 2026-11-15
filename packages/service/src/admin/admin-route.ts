@@ -1,6 +1,10 @@
 import { PROVIDER_KEY_ENCRYPTION_ENVIRONMENT } from "@repo/database/models/provider-key-seal";
+import {
+  readWorkspaceSandboxSize,
+  setWorkspaceSandboxMaxVcpus,
+} from "@repo/database/models/workspace-sandbox-size-store";
 import { INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
-import { Effect } from "effect";
+import { DateTime, Effect, Option } from "effect";
 import {
   AUTH_DEPLOYMENT_ENVIRONMENT,
   AUTH_SECRET_ENVIRONMENT,
@@ -17,6 +21,7 @@ import {
   posthogPersonConsoleUrl,
   posthogProjectConsoleUrl,
 } from "../providers/posthog.js";
+import { sizeAnswer } from "../workspace-sandbox-size/workspace-sandbox-size.js";
 import type { AdminViewer } from "./admin-access.js";
 import { readAdminAccountSource } from "./admin-account-queries.js";
 import { buildAdminCatalog } from "./admin-catalog.js";
@@ -187,9 +192,16 @@ export function hostedAdminSeams(api: AdminSessionApi): AdminProcedureSeams {
       ),
     readWorkspace: (id, now) =>
       Effect.map(
-        readAdminWorkspaceSource({ now, id }),
-        (source) => source && buildAdminWorkspaceDetail(source, now),
+        Effect.all([readAdminWorkspaceSource({ now, id }), readWorkspaceSandboxSize(id)], {
+          concurrency: "unbounded",
+        }),
+        ([source, sandbox]) =>
+          source && { ...buildAdminWorkspaceDetail(source, now), sandbox: sizeAnswer(sandbox) },
       ),
     writeFavorite: (adminId, userId, favorite) => writeAdminFavorite({ adminId, userId, favorite }),
+    writeSandboxCap: (workspaceId, maxVcpus) =>
+      Effect.flatMap(DateTime.nowAsDate, (now) =>
+        Effect.map(setWorkspaceSandboxMaxVcpus(workspaceId, maxVcpus, now), Option.getOrUndefined),
+      ),
   };
 }

@@ -43,7 +43,7 @@ import {
   type DeviceLaunchStep,
   type DeviceLaunchUnstarted,
 } from "@repo/features/device-agent-wire";
-import { sandboxVcpus } from "@repo/features/sandbox-size";
+import { SANDBOX_SIZE, type SandboxVcpus } from "@repo/features/sandbox-size";
 import { TURN_FAILURE, TURN_STATUS, type TurnFailure } from "../../core.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { CODER_REFUSAL } from "./bounds.js";
@@ -348,6 +348,8 @@ export interface AgentTurnStanding {
   readonly sandboxOpen?: boolean | undefined;
   /** Where its first launch stands while its boot record does (`agentBootsOf`); none where it has none or the read named none. */
   readonly boot?: BootPhase | undefined;
+  /** The vCPUs its sandbox opens with, its workspace's size (`sandboxVcpus`); none where the read named none, which reads as the default. */
+  readonly sandboxVcpus?: SandboxVcpus | undefined;
 }
 
 /** When the run the status is read from began: the newest turn's start, or its queueing before a runner takes it, and the agent's own before any turn. */
@@ -450,7 +452,7 @@ function summaryFields(
     // Note that only a local agent says where it runs, so a sandboxed agent's summary is as it was.
     ...(agent.machine === AGENT_MACHINE.DEVICE
       ? { machine: agent.machine }
-      : { sandboxVcpus: sandboxVcpus(agent.repository) }),
+      : { sandboxVcpus: standing.sandboxVcpus ?? SANDBOX_SIZE.VCPUS }),
     ...(mac === undefined ? undefined : { mac }),
     createdAt: agent.createdAt.getTime(),
     status: agentStatusOf(standing.turn, {

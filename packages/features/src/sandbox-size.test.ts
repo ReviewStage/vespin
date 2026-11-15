@@ -2,15 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 import { sandboxVcpus } from "./sandbox-size.js";
 
-test("a repository that asks for no size opens its agent's sandbox at two vCPUs", () => {
-  assert.equal(sandboxVcpus("acme/app"), 2);
-});
-
-test("an agent with no repository opens its sandbox at two vCPUs", () => {
-  assert.equal(sandboxVcpus(null), 2);
-});
-
-test("Vespin's own repository asks for four vCPUs, however GitHub's name for it is cased", () => {
-  assert.equal(sandboxVcpus("reviewstage/vespin"), 4);
-  assert.equal(sandboxVcpus("ReviewStage/vespin"), 4);
+test("a workspace's sandbox opens at the size it chose, held under the most it may have", () => {
+  assert.equal(sandboxVcpus({ vcpus: 4, maxVcpus: 8 }), 4);
+  assert.equal(sandboxVcpus({ vcpus: 8, maxVcpus: 4 }), 4);
 });

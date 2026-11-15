@@ -503,6 +503,8 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_SANDBOX_SETUP_RUN_ACTIONS: "/api/workspaces/sandbox-setup/run-actions",
   /** One of a repository's run actions added, changed, moved, or removed, to an owner or admin (PATCH). */
   WORKSPACE_SANDBOX_SETUP_RUN_ACTION: "/api/workspaces/sandbox-setup/run-action",
+  /** A workspace's cloud sandbox size: its vCPUs and the most it may choose, to a member (GET, `WORKSPACE_SANDBOX_SIZE_QUERY`), or its vCPUs chosen by an owner or admin (PUT), answering the size as it then stands (`workspace-sandbox-size-wire.ts`). */
+  WORKSPACE_SANDBOX_SIZE: "/api/workspaces/sandbox-size",
   /** Whether the deployment holds our Slack bot, and the Slack team a workspace's bot is connected to, to a member (GET, `WORKSPACE_SLACK_BOT_QUERY`). */
   WORKSPACE_SLACK_BOT: "/api/workspaces/slack-bot",
   /** A workspace's Slack bot connected by an owner or admin to the team its token answers for (POST), answering the bot as it then stands (`slack-bot-wire.ts`). */

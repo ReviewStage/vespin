@@ -121,6 +121,11 @@ function seams(asked: string[], viewer: AdminViewer | null = ADMIN): AdminProced
       record(`reliability ${scope} ${windowDays}`, RELIABILITY),
     writeFavorite: (adminId, userId, favorite) =>
       record(`favorite ${adminId} ${userId} ${favorite}`, userId !== "gone"),
+    writeSandboxCap: (workspaceId, maxVcpus) =>
+      record(
+        `sandbox cap ${workspaceId} ${maxVcpus}`,
+        workspaceId === "workspace-2" ? { vcpus: 4, maxVcpus } : undefined,
+      ),
   };
 }
 
@@ -160,6 +165,15 @@ const send = (handed: AdminProcedureSeams, request: Request, logged: string[] = 
 
 function request(path: string, method = "GET"): Request {
   return new Request(new URL(path, ORIGIN), { method });
+}
+
+/** A PUT of a workspace's sandbox cap, its body as given. */
+function capRequest(path: string, body: unknown): Request {
+  return new Request(new URL(path, ORIGIN), {
+    method: "PUT",
+    headers: { "content-type": JSON_TYPE },
+    body: JSON.stringify(body),
+  });
 }
 
 /** A refusal's bytes, as the old group answered it. */
@@ -228,6 +242,12 @@ it.effect("nothing behind the gate runs for a caller it refuses, a write include
       assert.equal(answer.status, 403);
     }
 
+    const capped = yield* send(
+      seams(asked, MEMBER),
+      capRequest("/api/admin/workspace/sandbox?id=workspace-2", { maxVcpus: 8 }),
+    );
+
+    assert.equal(capped.status, 403);
     assert.deepEqual(asked, []);
   }),
 );
@@ -409,6 +429,33 @@ it.effect("an account or a workspace no row carries is a 404, after the read", (
     );
     assert.deepEqual(asked, ["user gone 30", "workspace gone"]);
   }),
+);
+
+it.effect(
+  "a workspace's sandbox cap is set by PUT, its choice held under it, and a size it may not take is refused",
+  () =>
+    Effect.gen(function* () {
+      const asked: string[] = [];
+      const handed = seams(asked);
+      const path = "/api/admin/workspace/sandbox";
+      assert.deepEqual(
+        yield* send(handed, capRequest(`${path}?id=workspace-2`, { maxVcpus: 2 })),
+        read({ vcpus: 2, maxVcpus: 2 }),
+      );
+      assert.deepEqual(
+        yield* send(handed, capRequest(`${path}?id=gone`, { maxVcpus: 8 })),
+        refused(404, ADMIN_ERROR.WORKSPACE_NOT_FOUND),
+      );
+      assert.deepEqual(
+        yield* send(handed, capRequest(path, { maxVcpus: 8 })),
+        refused(400, ADMIN_ERROR.MISSING_WORKSPACE_ID),
+      );
+      assert.equal(
+        (yield* send(handed, capRequest(`${path}?id=workspace-2`, { maxVcpus: 3 }))).status,
+        400,
+      );
+      assert.deepEqual(asked, ["sandbox cap workspace-2 2", "sandbox cap gone 8"]);
+    }),
 );
 
 it.effect("the star is set by PUT and taken back by DELETE, for the signed-in admin alone", () =>

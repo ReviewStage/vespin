@@ -300,6 +300,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     user: INTERNAL,
     users: INTERNAL,
     workspace: INTERNAL,
+    workspaceSandbox: INTERNAL,
     workspaces: INTERNAL,
   },
   agentPages: { frame: SCREEN_ONLY },
@@ -447,6 +448,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
   workspaceMergeQueue: { read: NOT_YET_BUILT },
+  // Note that a size is a cost the workspace pays for every agent, so it is chosen in Settings until a member asks an agent to.
+  workspaceSandboxSize: { read: NOT_YET_BUILT, put: NOT_YET_BUILT },
   workspaceSentry: { install: NEEDS_BROWSER },
   // A call's session is the panel's own, which holds the microphone and the WebRTC peer.
   voice: { open: SCREEN_ONLY },
