@@ -37,6 +37,12 @@ import { HERE, placeAddress, ROUTE, THING } from "../places/pressed-address.js";
 import { useInboxDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
+import {
+  NAMED_ORDER,
+  useNamedTask,
+  useNamedTasks,
+  useTaskListCollections,
+} from "../task-list-collections.js";
 import { agentName } from "../tasks/agent-model.js";
 import {
   INBOX_COLUMNS,
@@ -194,7 +200,8 @@ export const DesktopInbox = memo(function DesktopInbox({
   const inbox = useInboxDoor(tasks);
   // A task chosen narrows the Inbox to its own items, which a chip over the list names and clears.
   const narrowedTask = useInboxView(tasks).narrowed;
-  const narrowedTaskRow = tasks.tasks.find((task) => task.id === narrowedTask);
+  const narrowedTaskRow = useNamedTask(narrowedTask, tasks.typedNames);
+  const collections = useTaskListCollections();
   const narrowedTaskName = narrowedTaskRow?.name;
 
   const {
@@ -281,7 +288,12 @@ export const DesktopInbox = memo(function DesktopInbox({
       : (tasks.workspaces.find((each) => each.id === chosenWorkspaceId)?.slug ?? chosenWorkspaceId);
 
   // What the chosen item's box offers an `@`, read under that workspace and repository.
-  const readMentionAgents = useMentionAgentsReader(place?.workspaceId, tasks.tasks, named.models);
+  const readMentionAgents = useMentionAgentsReader(
+    place?.workspaceId,
+    useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED),
+    named.models,
+  );
+
   // An item's box starts a new thread with its agent, which opens in its place.
   const { startInboxThread } = agents;
 
@@ -411,7 +423,7 @@ export const DesktopInbox = memo(function DesktopInbox({
 
         // Note that the Inbox lists the listed workspace's tasks alone, so an item of a task listed
         // elsewhere is the window's, which lists that task's workspace before opening it.
-        if (holder !== taskId && !tasks.tasks.some((each) => each.id === holder)) return false;
+        if (holder !== taskId && !collections.tasks.has(holder)) return false;
 
         const choice: InboxChoice = {
           taskId: holder,
@@ -901,8 +913,7 @@ function InboxSidePanel({
   // through the agents the Inbox read of the item's task, its plan's card naming the task, whose
   // press opens the plan. Note that no press opens one here any more, since an agent opens in its own
   // tab on the task (`inbox-item-links.ts`); it is drawn only for a tab an earlier version kept.
-  const listedTask =
-    taskId === undefined ? undefined : tasks.tasks.find((each) => each.id === taskId);
+  const listedTask = useNamedTask(taskId, tasks.typedNames);
 
   const cards = taskCards({
     agents,

@@ -40,6 +40,7 @@ import { ChangesTabReading } from "./testing/changes-tab.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
 import { drawnSidebar } from "./testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "./testing/document-task.js";
+import { overEveryTask } from "./testing/history-rows.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
 import { agentsControl, tasksControl } from "./testing/tasks-control.js";
 import { windowRouter } from "./testing/window-router.js";
@@ -233,12 +234,8 @@ test("the Inbox's list says its feed could not be read as the sidebar does, and 
     },
   });
 
-  const page = await mount(
-    createElement(DesktopInbox, {
-      tasks: tasksControl({ tasks: [TASK] }),
-    }),
-    INBOX_AT,
-  );
+  const tasks = tasksControl({ tasks: [TASK] });
+  const page = await mount(overEveryTask(tasks, createElement(DesktopInbox, { tasks })), INBOX_AT);
 
   // Note that the failure, and then the feed read again, stand once they reach the feed's query.
   const failure = await vi.waitFor(() => readFailure(page));
