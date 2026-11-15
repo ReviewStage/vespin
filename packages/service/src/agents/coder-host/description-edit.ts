@@ -179,7 +179,6 @@ export const DESCRIPTION_EDIT_REFUSAL = {
   NO_TURN:
     "Not saved: your turn is not recorded yet, so its notes cannot be counted. Try again in a moment.",
   TOO_MANY_PICTURES: `Not saved: the description holds ${DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION} pictures, as many as a description may. Leave the pictures out.`,
-  TOO_MANY_VIDEOS: `Not saved: the description holds ${DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION} videos, as many as a description may. Leave the videos out, or show them with show_image instead.`,
   TASK_GONE:
     "Not saved: this task no longer exists, so no picture can be added to its description.",
 } as const;
@@ -389,12 +388,6 @@ function keptAsNotes(
       if (kept.status === DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY) {
         return yield* new EditRefused({
           refusal: refused(DESCRIPTION_EDIT_REFUSAL.TOO_MANY_PICTURES),
-        });
-      }
-
-      if (kept.status === DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY_VIDEOS) {
-        return yield* new EditRefused({
-          refusal: refused(DESCRIPTION_EDIT_REFUSAL.TOO_MANY_VIDEOS),
         });
       }
 
