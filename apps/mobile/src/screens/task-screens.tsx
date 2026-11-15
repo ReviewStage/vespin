@@ -128,7 +128,14 @@ import {
   useNavigation,
   useRouter,
 } from "expo-router";
-import { type ReactElement, type ReactNode, useCallback, useMemo, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import {
@@ -162,7 +169,12 @@ import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
-import { START_LANDED, useStartLanded } from "../tasks/use-start.js";
+import {
+  keepStartLanded,
+  START_LANDED,
+  takeStartLanded,
+  useStartLanded,
+} from "../tasks/use-start.js";
 import {
   type ReadListing,
   type StatusQuestion,
@@ -203,9 +215,6 @@ const TASK_NOT_FOUND = "Task not found";
 
 /** What a pushed task's screen says while the list that holds it is first read. */
 const READING_TASK = readingWords("the task");
-
-/** How long a started agent that landed before its task's page first stood in front is held for that moment: the page's arrival, no longer. */
-const HELD_AGENT_MS = 3000;
 
 /** What the list's search field says before anything is typed. */
 const SEARCH_TASKS = "Search tasks";
@@ -2037,10 +2046,10 @@ function useSplitStartLanded(selected: string | undefined, focused: boolean): vo
 
   useStartLanded(selected, (landed) => {
     if (landed.kind === START_LANDED.AGENT) {
-      // Note that a page pushed over the task's detail leaves Tasks focused, so the agent waits for the detail itself to stand in front, read as the answer lands.
+      // Note that a page pushed over the task's detail leaves Tasks focused, so the agent waits for the detail itself to stand in front, read as the answer lands, and one landing before it does is kept for that moment.
       if (focused && topPageOf(SIDEBAR_PLACE.TASKS) === undefined) {
         router.push(onTab(iosAgentRoute(landed.agentId)));
-      }
+      } else if (selected !== undefined) keepStartLanded(selected, landed);
 
       return;
     }
@@ -2048,6 +2057,14 @@ function useSplitStartLanded(selected: string | undefined, focused: boolean): vo
     // Note that the Tasks root's own route lets go of the task, whichever tab stands in front.
     navigation.setParams({ selected: undefined });
   });
+
+  // Note that an agent kept while Tasks came in front opens as it does, while nothing covers the task's detail.
+  useEffect(() => {
+    if (!focused || topPageOf(SIDEBAR_PLACE.TASKS) !== undefined) return;
+    const kept = takeStartLanded(selected);
+
+    if (kept?.kind === START_LANDED.AGENT) router.push(onTab(iosAgentRoute(kept.agentId)));
+  }, [focused, selected, router, onTab]);
 }
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the tree
@@ -2172,19 +2189,14 @@ export function TaskScreen() {
   const colors = useColors();
   // Note that a page New task opened before its task was made hears what the start came to: its agent opens while the page still stands in front, and a refused start takes the page back, at once or as soon as it stands in front again.
   const [gone, setGone] = useState(false);
-  // Note that an agent landing while the page still slides in, before it first stands in front, waits for that moment rather than being let go, since a start the service answers at once lands then.
-  const [arriving, setArriving] = useState(true);
 
-  const [waitingAgent, setWaitingAgent] = useState<
-    { readonly agentId: string; readonly at: number } | undefined
-  >(undefined);
-
+  // Note that an agent landing before the page stands in front, as a start the service answers at once does while the page still slides in or hands itself to the split view, is kept for the next page of the task in front.
   useStartLanded(id, (landed) => {
     const shown = navigation.isFocused();
 
     if (landed.kind === START_LANDED.AGENT) {
       if (shown) router.push(onTab(iosAgentRoute(landed.agentId)));
-      else if (arriving) setWaitingAgent({ agentId: landed.agentId, at: Date.now() });
+      else keepStartLanded(id, landed);
 
       return;
     }
@@ -2195,18 +2207,16 @@ export function TaskScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setArriving(false);
+      if (gone) {
+        router.back();
 
-      if (gone) router.back();
-      else if (waitingAgent !== undefined) {
-        setWaitingAgent(undefined);
-
-        // Note that a held agent opens only while the page is still arriving, so a page first reached later, after the person went elsewhere, never jumps to it.
-        if (Date.now() - waitingAgent.at < HELD_AGENT_MS) {
-          router.push(onTab(iosAgentRoute(waitingAgent.agentId)));
-        }
+        return;
       }
-    }, [gone, waitingAgent, router, onTab]),
+
+      const kept = takeStartLanded(id);
+
+      if (kept?.kind === START_LANDED.AGENT) router.push(onTab(iosAgentRoute(kept.agentId)));
+    }, [gone, id, router, onTab]),
   );
   const found = useFoundTask(id, workspace);
   const held = useTaskOverview(found.taskId);
