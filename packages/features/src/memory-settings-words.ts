@@ -35,6 +35,8 @@ export const MEMORY_EDITOR_WORDS = {
   PLACEHOLDER: "A fact your agents should remember",
   SAVE: "Save",
   GONE: "This memory no longer exists.",
+  /** What a refused memory's Try again says once the workspace it was for is no longer the reader's. */
+  WORKSPACE_GONE: "That workspace is gone, or you're no longer a member of it.",
   TOO_LONG: `A memory holds at most ${MEMORY_BOUNDS.MAX_CHARS.toLocaleString("en-US")} characters.`,
 } as const;
 
