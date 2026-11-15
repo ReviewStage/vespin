@@ -17,11 +17,12 @@ import {
 import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { type Ref, useEffect, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { refusedShown } from "../failure-report.js";
 import { type Invitees, useInvitees, useSignedIn } from "../invitees.js";
+import { workspaceInvitationsQuery } from "../live-reads.js";
 import { replayMaskedError } from "../settings/marks.js";
 import { useWorkspacePhotoPick } from "../workspace-photo.js";
 
@@ -35,6 +36,8 @@ import { useWorkspacePhotoPick } from "../workspace-photo.js";
  * rather than going on. Once the workspace stands, the step coming back
  * holds it as it stands: its name and photo may be changed and more people
  * invited, which Save writes, and with nothing changed the press goes on.
+ * Its invitations still pending stand among the chips as sent, read from
+ * the service, so the step coming back after a reload still shows them.
  */
 
 /** What the team's fields draw from, in setup's team step and New workspace's card alike. */
@@ -125,7 +128,10 @@ export function useTeamForm({
   const pressing = busy ? pressed : undefined;
   const refusal = removing.refusal ?? creating.refusal ?? pickRefusal;
   const [setPhoto, setSetPhoto] = useState<string | undefined>(undefined);
-  const invitees = useInvitees(signedIn?.email);
+  // Note that the workspace made already holds its invitations, so the step coming back after a reload shows them as sent.
+  const invitations = useQuery(workspaceInvitationsQuery(made?.id)).data;
+  const invited = invitations?.map((one) => one.email);
+  const invitees = useInvitees(signedIn?.email, invited);
 
   const { photo, reading, picker, clear } = useWorkspacePhotoPick((picked) => {
     setPickRefusal(picked);

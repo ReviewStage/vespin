@@ -73,6 +73,7 @@ export {
 export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
 export {
+  FailureNoticeLayer,
   FailureNoticeProvider,
   type FailureNotices,
   useFailureNotices,
@@ -207,6 +208,8 @@ export {
 export { RemindPickSheet } from "./remind-sheet.js";
 
 export {
+  FOOTER_TONE,
+  type FooterTone,
   LIST_LOOK,
   type ListLook,
   ListSection,

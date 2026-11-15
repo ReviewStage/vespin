@@ -1,5 +1,5 @@
 /**
- * use-attached-pictures.ts -- the pictures a message or a start carries, as an agent's composer and the sheets that start work hold them: picked from the system's photo picker or dropped from Photos or Files, compressed as they are read, named as the panel names them, held to the service's bounds, and taken off on a press.
+ * use-attached-pictures.ts -- the pictures a message or a start carries, as an agent's composer and the sheets that start work hold them: picked from the system's photo picker or dropped from Photos or Files, compressed as they are read, named as the panel names them, held to the service's bounds, and taken off on a press; and words pasted long enough to come as a text file of their own.
  *
  * A picture is drawn with its long edge within 2048 pixels and read as a
  * JPEG at `PICTURE_QUALITY`, lower only where it would not stand within the
@@ -10,6 +10,15 @@
  * and again before it goes, so a refusal is said in the panel's words rather
  * than met on the wire. What the picker or a bound says goes to the
  * holder's `onNote`, which says it over the field.
+ *
+ * A paste long enough to bury the message (`@repo/features/long-paste`) is
+ * held as a text file beside the pictures, "Pasted text 1.txt", numbered
+ * one past the highest the holder has used, as the panel's box takes one;
+ * the field it was pasted into takes it back out of its words. Words past a
+ * text file's bound, or a paste the holder has no room for as a file under
+ * its count and its bytes together, stay words, which the field's own bound
+ * then cuts. Note that iOS draws no file's chip in the words, so the file
+ * stands with the pictures over the field rather than where it was pasted.
  */
 
 import {
@@ -19,6 +28,7 @@ import {
   base64Bytes,
 } from "@repo/features/agent-wire";
 import { pictureName } from "@repo/features/file-marker";
+import { PASTED_TEXT_BYTES, pastedFile } from "@repo/features/long-paste";
 import { encodeWithin, PICTURE_LONG_EDGE } from "@repo/features/picture-fit";
 import type { AttachedPicture } from "@repo/ui-native";
 import { Predicate } from "effect";
@@ -58,15 +68,20 @@ const MESSAGE_PICTURES: PictureBounds = {
   full: PICTURE_REFUSAL.FULL(AGENT_BOUNDS.MAX_ATTACHMENTS),
 };
 
-/** A picture attached: the id it is taken off by, and the attachment it sends. */
+/** A picture or a pasted text file attached: the id it is taken off by, and the attachment it sends. */
 export interface HeldPicture {
   readonly id: string;
   readonly file: AgentAttachment;
 }
 
-/** The next picture's name, numbered past every picture held. */
+/** Whether a file held is a pasted text file rather than a picture. */
+function isText(file: AgentAttachment): boolean {
+  return file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT;
+}
+
+/** The next picture's name, numbered past every picture held, a pasted text file not counted. */
 function nextName(pictures: readonly HeldPicture[], offset: number): string {
-  return pictureName(pictures.length + offset + 1);
+  return pictureName(pictures.filter(({ file }) => !isText(file)).length + offset + 1);
 }
 
 /** Deletes a JPEG the manipulator saved, once its bytes are read; one that stays only costs the cache. */
@@ -125,7 +140,10 @@ function pictureRefusal(
   bounds: PictureBounds,
 ): string | undefined {
   if (pictures.length > bounds.most) return bounds.full;
-  const tooLarge = pictures.find(({ file }) => base64Bytes(file.data) > bounds.pictureBytes);
+
+  const tooLarge = pictures.find(
+    ({ file }) => base64Bytes(file.data) > (isText(file) ? PASTED_TEXT_BYTES : bounds.pictureBytes),
+  );
 
   if (tooLarge !== undefined) return PICTURE_REFUSAL.TOO_LARGE(tooLarge.file.name);
   const total = pictures.reduce((sum, { file }) => sum + base64Bytes(file.data), 0);
@@ -154,6 +172,8 @@ export interface AttachedPictures {
   readonly take: () => readonly HeldPicture[];
   /** Puts pictures a refused send carried back ahead of any attached since. */
   readonly putBack: (pictures: readonly HeldPicture[]) => void;
+  /** Takes pasted words as a text file where they run long and the holder has room for them as one, answering whether it did, so the field takes them out of its words. */
+  readonly pasteText: (words: string) => boolean;
 }
 
 /**
@@ -222,6 +242,26 @@ export function useAttachedPictures(
       .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
   };
 
+  // Every pasted file's name the holder has handed out, so a file taken off or sent frees no number a later paste reuses.
+  const pastedNames = useRef(new Set<string>());
+
+  // Note that the paste is held at once, as `add` holds what it reads, so the field's words and the file change together.
+  const pasteText = (words: string): boolean => {
+    const now = held.current;
+    const file = pastedFile(words, [...now.map((each) => each.file.name), ...pastedNames.current]);
+
+    if (file === undefined) return false;
+    const next = [...now, { id: randomUUID(), file }];
+
+    if (pictureRefusal(next, bounds) !== undefined) return false;
+    pastedNames.current.add(file.name);
+    held.current = next;
+    setPictures(next);
+    onNote(undefined);
+
+    return true;
+  };
+
   // Each dropped JPEG is read, fit within the bound, and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
   const dropped = (uris: readonly string[], unreadable: number) =>
     Promise.all(
@@ -272,11 +312,19 @@ export function useAttachedPictures(
       setPictures(next);
       onNote(undefined);
     },
+    // Note that `take` and `putBack` write the held pictures at once too, so a paste landing before the next render builds on what they left.
     take: () => {
+      const taken = held.current;
+      held.current = [];
       setPictures([]);
 
-      return pictures;
+      return taken;
     },
-    putBack: (carried) => setPictures((held) => [...carried, ...held]),
+    putBack: (carried) => {
+      const next = [...carried, ...held.current];
+      held.current = next;
+      setPictures(next);
+    },
+    pasteText,
   };
 }
