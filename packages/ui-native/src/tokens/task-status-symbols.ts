@@ -3,7 +3,8 @@
 //
 // The names the iOS app's asset catalog holds a task's status and priority
 // marks under, as symbol sets the app's config writes from @repo/brand's
-// templates, and how strongly a priority's unlit bars are drawn.
+// templates, the bars a priority's lit ones stand on, and how strongly those
+// unlit bars are drawn.
 
 export const TASK_STATUS_SYMBOL = {
   BACKLOG: "TaskStatusBacklog",
@@ -20,5 +21,7 @@ export const TASK_PRIORITY_SYMBOL = {
   MEDIUM: "TaskPriorityMedium",
   LOW: "TaskPriorityLow",
 } as const;
+
+export const TASK_PRIORITY_BARS_SYMBOL = "TaskPriorityBars";
 
 export const TASK_PRIORITY_UNLIT_OPACITY = 0.25;

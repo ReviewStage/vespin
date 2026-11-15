@@ -23,8 +23,8 @@ export const TASK_MARK_ELEMENT = { CIRCLE: "circle", PATH: "path", RECT: "rect" 
 /**
  * The layer a priority's bar stands on: lit in the mark's own ink, or unlit,
  * the same ink at `TASK_PRIORITY_UNLIT_OPACITY`, as `@repo/ui`'s
- * `task-marks.css` draws a bar the priority doesn't reach. The iOS symbol
- * draws the unlit layer as its secondary, which the app's palette paints.
+ * `task-marks.css` draws a bar the priority doesn't reach. The iOS app draws
+ * a priority's lit bars as one symbol over every bar it can light, drawn faint.
  */
 export const TASK_MARK_LAYER = { LIT: "lit", UNLIT: "unlit" };
 

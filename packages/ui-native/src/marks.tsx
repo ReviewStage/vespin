@@ -36,6 +36,7 @@ import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { monogramOf } from "./monogram.js";
 import {
+  PRIORITY_MARK_BARRED,
   PRIORITY_MARK_SYMBOL,
   PRIORITY_MARK_TONE,
   STATUS_MARK_SYMBOL,
@@ -43,6 +44,7 @@ import {
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE } from "./tokens/space.js";
+import { TASK_PRIORITY_UNLIT_OPACITY } from "./tokens/task-status-symbols.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { tileHue } from "./workspace-tile-model.js";
 
@@ -129,21 +131,37 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
 
 /**
  * A task's priority as its bars, as the panel marks it: the lit bars in its
- * ink and the rest faint, urgent's square in the attention ink, heard as the
- * priority's name. Note that its ink is drawn into the symbol's own image
- * (`originalColor`), since a foreground style paints both of its layers alike.
+ * ink over every bar it can light, drawn faint, urgent's square in the
+ * attention ink, heard as the priority's name. Note that the faint bars are
+ * a symbol of their own beneath the lit ones, each in one ink, since a
+ * palette of two layers drew the whole mark black on iOS.
  */
 export function TaskPriorityMark({ priority }: { readonly priority: TaskPriority }) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
+  const ink = toneColor(colors, PRIORITY_MARK_TONE[priority]);
 
-  return (
+  const lit = (
     <Image
       {...glyphImage(PRIORITY_MARK_SYMBOL[priority])}
       size={size}
-      originalColor={toneColor(colors, PRIORITY_MARK_TONE[priority])}
+      color={ink}
       modifiers={[accessibilityLabel(TASK_PRIORITY_WORDS[priority])]}
     />
+  );
+
+  if (!PRIORITY_MARK_BARRED.has(priority)) return lit;
+
+  return (
+    <ZStack>
+      <Image
+        {...glyphImage(GLYPH.PRIORITY_BARS)}
+        size={size}
+        color={ink}
+        modifiers={[opacity(TASK_PRIORITY_UNLIT_OPACITY), accessibilityHidden()]}
+      />
+      {lit}
+    </ZStack>
   );
 }
 
