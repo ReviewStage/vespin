@@ -54,6 +54,7 @@ import {
   holdMembers,
 } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
 import { playListMotions } from "../testing/pane-motion.js";
@@ -61,6 +62,7 @@ import {
   agentsControl,
   handInbox,
   listedAgent,
+  type TasksControlOverrides,
   tasksControl,
   waitingOf,
 } from "../testing/tasks-control.js";
@@ -410,7 +412,7 @@ function mount(userId: string, name?: string, memberCount = MEMBERS.length) {
 
 /** Dean's page by default, over the fixture workspace with `overrides`, every door it opens recorded. */
 function mountWith(
-  overrides: Partial<TasksControl>,
+  overrides: TasksControlOverrides,
   userId = DEAN.userId,
   name?: string,
   memberCount = MEMBERS.length,
@@ -430,13 +432,12 @@ function mountWith(
   });
   holdPeople(reads.deliverMembers);
 
-  const control = (more: Partial<TasksControl>) =>
+  const control = (more: TasksControlOverrides) =>
     tasksControl({
       liveAgents: followedOf(more.tasks ?? overrides.tasks ?? TASKS),
       me: DEAN.userId,
       workspace: { ...ACME, memberCount },
       tasks: TASKS,
-      listed: { tasks: TASKS },
       onSelect: (taskId) => opened.tasks.push(taskId),
       onShowAgent: (taskId, agentId) => opened.agents.push([taskId, agentId]),
       ...overrides,
@@ -459,7 +460,7 @@ function mountWith(
               OpenSettingsProvider,
               { value: (link: SettingsLink) => opened.settings.push(link) },
               createElement(HoldsPersonRoute),
-              createElement(PersonPage, { tasks, userId, name, away }),
+              overListedTasks(tasks, createElement(PersonPage, { tasks, userId, name, away })),
             ),
           ),
         ),
@@ -471,7 +472,7 @@ function mountWith(
   root = createRoot(container);
   draw(control({}));
   /** Draws the page again over the workspace with `more` on top of what it was mounted with. */
-  const redraw = (more: Partial<TasksControl>) => draw(control(more));
+  const redraw = (more: TasksControlOverrides) => draw(control(more));
 
   return { page: container, opened, redraw, router };
 }
@@ -809,10 +810,7 @@ test("an agent's row says its failure at its end and hangs the agent's card whil
   const broken = agent(9, "Flaky retry", CHARLES, AGENT_STATUS.FAILED, 5 * MINUTE);
   const failing = task(9, "Retry flake hunt", CHARLES, 5 * MINUTE, [broken]);
 
-  const { page } = mountWith(
-    { tasks: [...TASKS, failing], listed: { tasks: [...TASKS, failing] } },
-    CHARLES.userId,
-  );
+  const { page } = mountWith({ tasks: [...TASKS, failing] }, CHARLES.userId);
 
   await settle();
 
@@ -866,7 +864,7 @@ test("a person's tasks assigned to them stand above those they created, a task b
 
   const own = task(11, "Charles's own retries", CHARLES, 60 * MINUTE, [], CHARLES);
   const listed = [...TASKS, ...handed, own];
-  const { page } = mountWith({ tasks: listed, listed: { tasks: listed } }, CHARLES.userId);
+  const { page } = mountWith({ tasks: listed }, CHARLES.userId);
   await settle();
 
   const drawn = sections(page);
@@ -923,7 +921,7 @@ test("a person's tasks the list does not hold, as finished ones are, are counted
     },
   });
 
-  const { page } = mountWith({ tasks: listed, listed: { tasks: listed } }, CHARLES.userId);
+  const { page } = mountWith({ tasks: listed }, CHARLES.userId);
   await settle();
 
   assert.deepEqual(asked[0], { workspaceId: ACME.id, personId: CHARLES.userId });
@@ -940,7 +938,7 @@ test("a person's tasks the list does not hold, as finished ones are, are counted
 test("a person's task is the Tasks page's row: its status before its name, one from before statuses under Todo, and its card hung beside it while rested on", async () => {
   const started = { ...DASHBOARD, status: TASK_STATUS.IN_PROGRESS };
   const listed = [RETRIES, CACHE, started, SHIM];
-  const { page } = mountWith({ tasks: listed, listed: { tasks: listed } }, CHARLES.userId);
+  const { page } = mountWith({ tasks: listed }, CHARLES.userId);
   await settle();
 
   const row = (name: string) =>
@@ -1335,7 +1333,7 @@ test("a task no longer theirs slides out of its section, drawn on out of reach u
   await settle();
 
   const left = TASKS.filter((each) => each.id !== DASHBOARD.id);
-  redraw({ tasks: left, listed: { tasks: left } });
+  redraw({ tasks: left });
   const leaving = page.querySelector(`[data-motion-key="${DASHBOARD.id}"]`);
   assert.equal(leaving?.hasAttribute("data-leaving"), true, "drawn on while it goes");
   assert.equal(leaving?.hasAttribute("inert"), true, "out of reach");
@@ -1392,7 +1390,6 @@ test("archiving chosen agents where a teammate's still works asks once before an
   const { page } = mountWith(
     {
       tasks,
-      listed: { tasks },
       agents: agentsControl({
         me: DEAN.userId,
         onArchive: (agentId, _, how) => {

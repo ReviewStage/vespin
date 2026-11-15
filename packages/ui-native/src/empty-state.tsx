@@ -1,6 +1,6 @@
 // empty-state.tsx -- what a screen or a column says when it has nothing to show, laid out as the system's own ContentUnavailableView lays it out, or the system's spinner over its words while what it shows is still read.
 
-import { Image, ProgressView, Text, VStack } from "@expo/ui/swift-ui";
+import { Image, ProgressView, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
   font,
@@ -8,9 +8,11 @@ import {
   frame,
   multilineTextAlignment,
   padding,
+  scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { Fragment } from "react";
+import { useAccessibilitySize } from "./accessibility.js";
 import { BUTTON_LOOK, Button, type ButtonLook } from "./button.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
@@ -88,6 +90,7 @@ export function EmptyState({
   loading = false,
 }: EmptyStateProps) {
   const colors = useColors();
+  const large = useAccessibilitySize();
 
   if (loading) return <LoadingState title={title} />;
 
@@ -98,49 +101,54 @@ export function EmptyState({
 
   const centered = multilineTextAlignment("center");
 
-  return (
-    <Fragment key={description ?? ""}>
-      <VStack
-        key={title}
-        spacing={EMPTY_SPACING}
+  const stack = (
+    <VStack
+      key={title}
+      spacing={EMPTY_SPACING}
+      modifiers={[
+        padding({ all: EMPTY_SPACING * 2 }),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+      ]}
+    >
+      <Image
+        {...glyphImage(symbol)}
+        color={colors.TEXT_MUTED}
+        modifiers={[font({ textStyle: "largeTitle", weight: "regular" }), accessibilityHidden()]}
+      />
+      <Text
         modifiers={[
-          padding({ all: EMPTY_SPACING * 2 }),
-          frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+          font({ textStyle: "title2", weight: "bold" }),
+          foregroundStyle(colors.TEXT),
+          centered,
         ]}
       >
-        <Image
-          {...glyphImage(symbol)}
-          color={colors.TEXT_MUTED}
-          modifiers={[font({ textStyle: "largeTitle", weight: "regular" }), accessibilityHidden()]}
-        />
+        {title}
+      </Text>
+      {description === undefined ? null : (
         <Text
-          modifiers={[
-            font({ textStyle: "title2", weight: "bold" }),
-            foregroundStyle(colors.TEXT),
-            centered,
-          ]}
+          modifiers={[font({ textStyle: "callout" }), foregroundStyle(colors.TEXT_MUTED), centered]}
         >
-          {title}
+          {description}
         </Text>
-        {description === undefined ? null : (
-          <Text
-            modifiers={[
-              font({ textStyle: "callout" }),
-              foregroundStyle(colors.TEXT_MUTED),
-              centered,
-            ]}
-          >
-            {description}
-          </Text>
-        )}
-        {action === undefined ? null : (
-          <Button
-            label={action.label}
-            onPress={action.onPress}
-            look={action.look ?? BUTTON_LOOK.PROMINENT}
-          />
-        )}
-      </VStack>
+      )}
+      {action === undefined ? null : (
+        <Button
+          label={action.label}
+          onPress={action.onPress}
+          look={action.look ?? BUTTON_LOOK.PROMINENT}
+        />
+      )}
+    </VStack>
+  );
+
+  // Note that at an accessibility size the words outgrow a short screen, such as Search's over its keyboard, so they scroll there rather than stand cut short with "…".
+  return (
+    <Fragment key={description ?? ""}>
+      {large ? (
+        <ScrollView modifiers={[scrollDismissesKeyboard("immediately")]}>{stack}</ScrollView>
+      ) : (
+        stack
+      )}
     </Fragment>
   );
 }

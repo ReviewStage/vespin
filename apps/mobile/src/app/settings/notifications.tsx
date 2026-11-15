@@ -33,8 +33,8 @@ import {
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
-/** What the row that says how the phone's pushes fare is named, under the page's own title. */
-const NOTIFICATIONS_STATUS = "Status";
+/** What the row that says how the phone's pushes fare is named, so its value reads as the pushes' state rather than a bare "Working". */
+const NOTIFICATIONS_STATUS = "Push notifications";
 
 /** The step toward allowing them, where one is left: the system's prompt, or iOS's Settings after a refusal. */
 const NOTIFICATION_STEP = {
