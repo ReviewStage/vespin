@@ -310,8 +310,8 @@ export function useTasksSelection(
   // The sections as they stand, which New section's answer reads renders after its act.
   const sections = useSectionDialogs(tasks, tasks.shown);
   const standing = useStandingWrites(tasks.typedNamesNow);
-  // The tasks chosen, read by id from the list, so the bar draws again as one of them moves.
-  const rows = useTaskListRows();
+  // The tasks chosen, read by id from the list with the names being typed, so the bar draws again as one of them moves.
+  const rows = useTaskListRows(tasks.typedNames);
   const latest = useRef(sections.sections);
   latest.current = sections.sections;
   const { regionId, selected, setChosen, onClear } = useChosen(drawn, held);
