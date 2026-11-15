@@ -1446,10 +1446,15 @@ export function useTasksTab(input: {
     reportedAgent.current = shownAgent;
     tellShown({ agentId: shownAgent });
   }, [shownAgent, tellShown]);
-  // The agent on screen is kept warm for the next message while the page is visible.
+
+  // The agent on screen, or the one that posted the Inbox item on screen, is kept warm for the next message while the page is visible.
   // Note that it is looked up by its id alone, so a delivery that moves another agent walks no list here.
-  const shownListed = useTaskListRow(listCollections.agents, shownAgent ?? undefined);
-  useWarmAgent(shownListed ?? agents.agents?.find((agent) => agent.id === shownAgent));
+  const warmAgent =
+    shownAgent ??
+    (shownInbox === null || inboxChosen === undefined ? undefined : choiceItemAgentOf(inboxChosen));
+
+  const warmListed = useTaskListRow(listCollections.agents, warmAgent);
+  useWarmAgent(warmListed ?? agents.agents?.find((agent) => agent.id === warmAgent));
 
   // The host answers a press a round trip later, so where the tab is bound
   // is said at once, and a select that did not open the task takes its ask
