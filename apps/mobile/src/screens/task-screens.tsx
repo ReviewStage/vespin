@@ -5,7 +5,12 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
-import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
+import {
+  iosAgentRoute,
+  iosAppRouteOf,
+  iosPullRequestRoute,
+  iosRouteTab,
+} from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
 import {
   LINK_DESTINATION,
@@ -150,7 +155,7 @@ import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useOnOwnTab, useOnTab } from "../tab-route.js";
+import { useOnOwnTab, useOnTab, useOwnTab } from "../tab-route.js";
 import {
   threadComments,
   threadOpen,
@@ -1812,11 +1817,14 @@ function OverviewPage({
   overview,
   onRefresh,
   onArchiveAgent,
+  handsOff = false,
 }: {
   readonly overview: TaskOverview;
   readonly onRefresh: () => Promise<void>;
   /** Asks to archive one of its agents (`useAgentArchiveAsk`), whose question the screen stands beside its `<Screen>`. */
   readonly onArchiveAgent: (agentId: string) => void;
+  /** Whether the page drawing it hands its task to the split view and leaves, so it keeps a started agent for the split view's own overview rather than opening it, since its hand-off would pop the push. */
+  readonly handsOff?: boolean;
 }) {
   const router = useRouter();
   const toDetail = useDetailPush();
@@ -1833,7 +1841,7 @@ function OverviewPage({
     const shown = navigation.isFocused();
 
     if (landed.kind === START_LANDED.AGENT) {
-      if (shown && !covered) router.push(onTab(iosAgentRoute(landed.agentId)));
+      if (shown && !covered && !handsOff) router.push(onTab(iosAgentRoute(landed.agentId)));
       else keepStartLanded(task.id, landed);
     } else if (shown) router.push({ pathname: "/start-agent", params: { task: task.id } });
   });
@@ -1841,11 +1849,11 @@ function OverviewPage({
   // Note that a kept agent opens as the overview stands in front, at its first focus or as the page over a split view's detail leaves.
   useFocusEffect(
     useCallback(() => {
-      if (covered) return;
+      if (covered || handsOff) return;
       const kept = takeStartLanded(task.id);
 
       if (kept?.kind === START_LANDED.AGENT) router.push(onTab(iosAgentRoute(kept.agentId)));
-    }, [covered, task.id, router, onTab]),
+    }, [covered, handsOff, task.id, router, onTab]),
   );
 
   const { data: descriptions = false } = useQuery({
@@ -2192,6 +2200,12 @@ export function TaskScreen() {
   const colors = useColors();
   // Note that a page New task opened before its task was made hears a refused start on its route, which takes the page back, at once or as soon as it stands in front again; its agent opening is the overview's (`OVERVIEW_HEARS`).
   const [gone, setGone] = useState(false);
+  // Note that a page that hands its task to the split view and leaves, as `useHandToSplit` decides, never opens the agent itself: a push its overview made would be popped by its own hand-off, and the agent lost, so the split view's overview opens it.
+  const own = useOwnTab();
+
+  const handsOff =
+    useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR &&
+    (own === undefined || own === iosRouteTab(SPLIT_TAB.TASKS));
 
   useStartLanded(id, ROUTE_HEARS, () => {
     if (navigation.isFocused()) router.back();
@@ -2302,6 +2316,7 @@ export function TaskScreen() {
             overview={overview}
             onRefresh={refreshTasks}
             onArchiveAgent={archiveAsk.archive}
+            handsOff={handsOff}
           />
         ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
