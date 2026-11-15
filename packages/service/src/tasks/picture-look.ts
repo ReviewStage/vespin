@@ -110,7 +110,7 @@ const LOOK_WORDS = {
   on: {
     address: `The picture's address exactly as the description's or the thread's text writes it, inside its ![alt](address): ${LINK_ORIGIN}/<workspace>/task/<task>/files/<picture> in a description, or under /plan/ in place of /task/ for a picture written before the rename; ${THREAD_ADDRESS} in a thread's message.`,
     tool: "See one of the pictures in a description of your workspace, your own task's or another's, or in a message of a thread",
-    pdf: " A PDF in your own task's description, written ![name.pdf](address) at a description picture's address, is not shown: it is written into your machine and the answer is `written` and its path, which you read with your own tools, such as your file reader, or `pdftotext` where installed.",
+    pdf: " A PDF in your own task's description, written ![name.pdf](address) at a description picture's address, is not shown: it is written into your machine and the answer is `written` and its path, which you read with your own tools.",
   },
   off: {
     address: `The picture's address exactly as the thread's text writes it, inside its ![alt](address): ${THREAD_ADDRESS}.`,
@@ -142,7 +142,7 @@ function lookWordsOf(words: { readonly tool: string; readonly pdf: string }): st
     `${words.tool} ${AGENT_TOOL.READ_THREAD} reads, such as a screenshot or a mockup, by the address its text writes it at. ` +
     'Every picture is written as ![alt text](address "caption"), and its alt text and caption ' +
     "already say what it shows: look only when they do not tell you enough for what you are " +
-    `doing. Answers the picture, or \`not-looked\` and why.${words.pdf}`
+    `doing.${words.pdf}`
   );
 }
 

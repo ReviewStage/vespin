@@ -298,6 +298,7 @@ const LUCIDE_SYMBOLS = {
   NETWORK: "network",
   OCTAGON_MINUS: "octagon-minus",
   PANEL_LEFT: "panel-left",
+  PAUSE: "pause",
   PAPERCLIP: "paperclip",
   PENCIL: "pencil",
   PENCIL_LINE: "pencil-line",

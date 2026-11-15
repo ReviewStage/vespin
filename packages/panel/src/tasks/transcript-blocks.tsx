@@ -7,7 +7,7 @@ import {
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
-import type { IntegrationProvider } from "@repo/features/integration-wire";
+import { type IntegrationProvider, integrationConnectionOf } from "@repo/features/integration-wire";
 import { GITHUB_DEFAULT_BRANCH, GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import { machineName } from "@repo/features/machine-name";
 import { encodeMention, MENTION_KIND, mayNameChip } from "@repo/features/mention-link";
@@ -32,6 +32,7 @@ import {
 import {
   agentCallLine,
   CALL_KIND,
+  CALL_MARK,
   CALL_WORDS,
   type CallKind,
   type CallLine,
@@ -45,6 +46,7 @@ import {
   moreFiles,
   sameFieldsBy,
   sameTurnRow,
+  searchToolsLine,
   siteName,
   TURN_ROW,
   type TurnRow,
@@ -67,6 +69,7 @@ import {
   GlyphSlot,
   INLINE_REF_LOOK,
   InlineRef,
+  type InlineRefLook,
   LAYOUT_ELEMENT,
   LineButton,
   LineRow,
@@ -194,6 +197,7 @@ import { useThisMac } from "../machine-name.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
+import type { CallRoute } from "./agent-machines.js";
 import { KeptAppIcon } from "./agent-pictures.js";
 import { useDescriptionPictureDrawer } from "./description-pictures.js";
 import { useInboxPictureDrawer } from "./inbox-pictures.js";
@@ -1420,8 +1424,8 @@ export function useMacOwner(): Actor | undefined {
   return useContext(MacOwnerContext);
 }
 
-/** The machine a terminal command or an action on an app made now would go to, as the agent's standing names it (`workspaceTools.runOnMac.machine`), which a call still unanswered names; none where it names none. */
-const RoutedMachineContext = createContext<Pick<CallMachine, "id" | "name"> | undefined>(undefined);
+/** Where a terminal command or an action on an app made now would go, as the agent's tools name it (`useCallRoute`), which a call still unanswered names; none where the window holds none. */
+const RoutedMachineContext = createContext<CallRoute | undefined>(undefined);
 
 /** Whether a call that ran nothing has a card under its row naming its machine: the refused call's card for one no machine could take, or the note for one that lacked a grant. */
 function notRunNamesMachine(notRun: MachineNotRun | undefined): boolean {
@@ -1442,47 +1446,51 @@ export function OnMachine({ machine }: { machine: Pick<CallMachine, "id" | "name
   return linkChip(link, words, doors);
 }
 
-/** Names whose Mac the transcript under it ran its Mac commands on (`MacOwnerProvider`), and the machine it would send a call to now, which a call still unanswered names. */
+/** Names whose Mac the transcript under it ran its Mac commands on (`MacOwnerProvider`), and where it would send a call now, which a call still unanswered names. */
 export function CallPlaceProvider({
   owner,
-  machine,
+  route,
   children,
 }: {
   owner: Actor | undefined;
-  machine: Pick<CallMachine, "id" | "name"> | undefined;
+  route: CallRoute | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   return (
     <MacOwnerContext.Provider value={owner}>
-      <RoutedMachineContext.Provider value={machine}>{children}</RoutedMachineContext.Provider>
+      <RoutedMachineContext.Provider value={route}>{children}</RoutedMachineContext.Provider>
     </MacOwnerContext.Provider>
   );
 }
 
 /**
- * Where a call of an MCP server's tool ran, as its row ends: the account's
- * chip, its provider's mark and the account's name, where the call keeps
- * one, hanging the account's card; a server of no integration's by its name
- * beside the server's glyph, since no mark of its own says which; and
- * nothing for an integration's lone account, whose mark leads the row
- * already. The chip takes no press of its own, so a press on it opens the
- * row as a press anywhere on the line does.
+ * The server a call ran on or searched, as its chip: an integration's by its
+ * provider's mark and the account's name where the call keeps one, or the
+ * server's name as its card gives it otherwise, hanging the account's card;
+ * a server of no integration's by its name beside the server's glyph, since
+ * no mark of its own says which. An MCP row ends in it only where it says
+ * more than the mark leading the row (`TranscriptTool`), and a search of a
+ * server's tools names the server by it after its verb, as a pill as every
+ * chip after a verb is. The chip takes no press of its own, so a press on it
+ * opens the row as a press anywhere on the line does.
  */
 function CallServerChip({
   provider,
   connection,
   account,
   server,
+  look = INLINE_REF_LOOK.WASH,
 }: {
   provider: IntegrationProvider | undefined;
   connection: string | undefined;
   account: string | undefined;
   server: string | undefined;
+  look?: InlineRefLook;
 }): ReactNode {
   if (provider === undefined) {
     return server === undefined ? null : (
       <InlineRef
-        look={INLINE_REF_LOOK.WASH}
+        look={look}
         glyph={<EntityGlyph kind={ENTITY_KIND.SERVER} />}
         label={server}
         hint={false}
@@ -1490,11 +1498,13 @@ function CallServerChip({
     );
   }
 
-  return account === undefined ? null : (
+  const label = account ?? server;
+
+  return label === undefined ? null : (
     <InlineRef
-      look={INLINE_REF_LOOK.WASH}
+      look={look}
       glyph={<ProviderMark provider={provider} />}
-      label={account}
+      label={label}
       card={<ServerCard provider={provider} connection={connection} account={account} />}
     />
   );
@@ -1515,6 +1525,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     account?: string | undefined;
     /** For a terminal command or an action on an app, the machine its answer says it went to, which the row says it ran on; none where its answer names none or it has not answered. */
     machine?: CallMachine | undefined;
+    /** For a terminal command or an action on an app, the id of the machine its input names, which the row names while it has not answered; none where it names none. */
+    namedMachine?: string | undefined;
     /** For a command, the plain words the model said it is for, which the row says in its verb's place; the closed row previews the command's first line after them, and the body holds it whole. */
     description?: string | undefined;
     /** For a call about one coding agent, the agent, whose chip the row names it by in the place of "the coding agent"; none where the agent is not known. */
@@ -1539,6 +1551,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     answered?: ReactNode;
     /** For a terminal command or an action on an app that ran nothing on its machine, how, which the row says quietly at its line's end and its body in the answer's place; none for the rest. */
     notRun?: MachineNotRun | undefined;
+    /** Whether the service answered the call without doing it (`ToolCallView`'s `refused`), which its line marks as a failure. */
+    refused?: boolean | undefined;
   };
 
 /** A call held for an answer, as its row draws it (`TranscriptTool`'s `held`). */
@@ -1594,6 +1608,7 @@ export function TranscriptTool({
   connection,
   account,
   machine,
+  namedMachine,
   subject,
   description,
   agent,
@@ -1608,13 +1623,32 @@ export function TranscriptTool({
   held,
   answered,
   notRun,
+  refused,
   ...props
 }: TranscriptToolProps): ReactNode {
   const Icon = CALL_ICON[kind];
   const called = calledChip(kind, files, page, useMentionDoors());
 
-  const { line, chip } =
-    made !== undefined
+  const search = kind === CALL_KIND.SEARCH_TOOLS;
+
+  // Note that a search of a server's tools names the server by its chip after the verb, so its row ends in no tag, and its words stand whole as it opens.
+  const { line, chip } = search
+    ? {
+        line: searchToolsLine(subject),
+        chip:
+          server === undefined ? undefined : (
+            <CallServerChip
+              provider={
+                connection === undefined ? undefined : integrationConnectionOf(connection)?.provider
+              }
+              connection={connection}
+              account={account}
+              server={server}
+              look={INLINE_REF_LOOK.PILL}
+            />
+          ),
+      }
+    : made !== undefined
       ? { line: madeCallLine(made.kind), chip: made.chip }
       : called === undefined
         ? chippedLine(kind, subject, description, agent, undefined, agentCard)
@@ -1622,10 +1656,10 @@ export function TranscriptTool({
 
   const command = isCommandKind(kind);
   const macOwner = useContext(MacOwnerContext);
-  // Note that a call names the machine its answer names, and one still unanswered the machine the agent's calls go to now, so a row never names the starter's Mac for a call routed elsewhere.
-  const routed = useContext(RoutedMachineContext);
+  // Note that a call names the machine its answer names, and one still unanswered the machine it names or else the one the agent's calls go to now, so a row never names the default for a call sent elsewhere.
+  const route = useContext(RoutedMachineContext);
   const unanswered = state === TOOL_STATE.INPUT_STREAMING || state === TOOL_STATE.INPUT_AVAILABLE;
-  const onMachine = machine ?? (unanswered ? routed : undefined);
+  const onMachine = machine ?? (unanswered ? route?.(namedMachine) : undefined);
   const machineCall = kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER;
   // Note that a call no machine could take, or that lacked a grant, ends in its status alone, since the card under it names the machine by its chip, so a narrow row keeps its own words.
   const namedBelow = machineCall && machine !== undefined && notRunNamesMachine(notRun);
@@ -1671,7 +1705,9 @@ export function TranscriptTool({
         subject={line.subject}
         chip={chip}
         subjectIsCode={line.code}
-        subjectInBody={(command && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject)}
+        subjectInBody={
+          (command && input.kind === TOOL_BLOCK.COMMAND) || (!search && blockSays(input, subject))
+        }
         placeChip={onMachineChip ?? serverChip}
         place={
           namedBelow ? undefined : machineCall && macOwner !== undefined ? (
@@ -1680,12 +1716,13 @@ export function TranscriptTool({
               <ActorRef actor={macOwner} sentence possessive />
               {" Mac"}
             </ActorLine>
-          ) : mcp ? undefined : (
-            callPlace(kind, server)
+          ) : mcp || search ? undefined : (
+            callPlace({ kind, server }, CALL_MARK.LEADS)
           )
         }
         status={held?.status ?? (notRun === undefined ? undefined : machineNotRunLabel(notRun))}
         paused={held?.waiting}
+        refused={refused}
       />
       <ToolContent bare>
         {held?.about === undefined ? null : (

@@ -7,7 +7,8 @@
  * path (`scripts/vespin.sh`), and updates itself by running that script
  * again. A package manager's install runs it from a `node_modules/vespin`
  * folder, and is that package manager's to update, so `vespin update` only
- * says the command. Anything else, such as a build run from a checkout, is a
+ * says the command. Homebrew's formula installs the npm package too, under its
+ * `Cellar/vespin/` keg, so it is told apart by that folder. Anything else, such as a build run from a checkout, is a
  * source install, updated by building it again.
  */
 
@@ -23,6 +24,7 @@ export const INSTALL_KIND = {
   PNPM: "pnpm",
   YARN: "yarn",
   BUN: "bun",
+  HOMEBREW: "homebrew",
   SOURCE: "source",
 } as const;
 
@@ -39,6 +41,7 @@ const PACKAGE_FOLDER = `${sep}node_modules${sep}vespin${sep}`;
 
 /** A folder each package manager keeps its global or one-off installs under, by the kind it marks, first match wins. */
 const PACKAGE_MANAGER_MARKS = [
+  { mark: `${sep}Cellar${sep}vespin${sep}`, kind: INSTALL_KIND.HOMEBREW },
   { mark: `${sep}_npx${sep}`, kind: INSTALL_KIND.NPX },
   { mark: `${sep}.bun${sep}`, kind: INSTALL_KIND.BUN },
   { mark: `${sep}pnpm${sep}`, kind: INSTALL_KIND.PNPM },
@@ -54,6 +57,7 @@ export const UPDATE_COMMAND: Readonly<
   [INSTALL_KIND.PNPM]: "pnpm add -g vespin@latest",
   [INSTALL_KIND.YARN]: "yarn global add vespin@latest",
   [INSTALL_KIND.BUN]: "bun add -g vespin@latest",
+  [INSTALL_KIND.HOMEBREW]: "brew upgrade vespin",
   [INSTALL_KIND.SOURCE]: "pnpm --filter @repo/vespin-cli build",
 };
 

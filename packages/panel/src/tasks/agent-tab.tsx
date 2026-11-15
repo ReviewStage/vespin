@@ -22,7 +22,7 @@ import {
   wholeCallOf,
 } from "@repo/features/agent-parts";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
@@ -248,7 +248,7 @@ import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { useForwardToast } from "./agent-forward.js";
 import { GoalConditions, GoalDock, GoalNoticeView } from "./agent-goal.js";
-import { useRoutedMachine } from "./agent-machines.js";
+import { useCallRoute } from "./agent-machines.js";
 import {
   agentLines,
   agentName,
@@ -338,6 +338,7 @@ import {
   useMessageReveal,
 } from "./message-links.js";
 import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
+import { OutOfMemoryOffer } from "./out-of-memory-offer.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
 import { REWIND_ACTION, RewindProvider, rewindPoints, useMessageEdit } from "./rewind-action.js";
@@ -730,7 +731,7 @@ function calledAgentActor(
   };
 }
 
-/** One tool call: its row, and its input and answer under it once opened, a stop naming the worker it stopped by its job where `jobs` knows it, and a call about an agent naming it by its chip where `cards` or its answer know it; an answer its page carried cut drawn as `cut` says. */
+/** One tool call: its row, and its input and answer under it once opened, a stop naming the worker it stopped by its job where `jobs` knows it, a call about an agent naming it by its chip where `cards` or its answer know it, and a command killed out of memory offering a larger sandbox (`OutOfMemoryOffer`); an answer its page carried cut drawn as `cut` says. */
 function ToolCallView({
   part,
   jobs,
@@ -777,6 +778,7 @@ function ToolCallView({
         connection={view.connection}
         account={view.account}
         machine={view.machine}
+        namedMachine={view.namedMachine}
         subject={view.subject}
         description={view.description}
         files={view.files}
@@ -790,6 +792,7 @@ function ToolCallView({
         cut={cut}
         held={held}
         notRun={view.notRun}
+        refused={view.refused}
         answered={
           inBody ? (
             <CallPictures
@@ -804,6 +807,7 @@ function ToolCallView({
       {inBody ? null : <CallPictures tool={part.tool} input={part.input} output={part.output} />}
       <ComputerPermissionNote tool={part.tool} output={part.output} />
       <MachineRefusalCard tool={part.tool} output={part.output} />
+      {part.outOfMemory === undefined ? null : <OutOfMemoryOffer outOfMemory={part.outOfMemory} />}
       {limit === undefined ? null : (
         <UsageLimitNotice notice={limit} look={USAGE_LIMIT_NOTICE_LOOK.TITLE} />
       )}
@@ -1241,7 +1245,7 @@ function ToolPartView({
   }
 
   // A set of pictures the agent showed, or is showing, is drawn as itself; one refused keeps its row, where its error is read.
-  if (part.tool === AGENT_TOOL.SHOW_IMAGE && part.state !== TOOL_STATE.OUTPUT_ERROR) {
+  if (isShowMediaTool(part.tool) && part.state !== TOOL_STATE.OUTPUT_ERROR) {
     return <ShownPictures input={part.input} output={part.output} />;
   }
 
@@ -2705,17 +2709,21 @@ function transcriptPlacing(
   replayed: boolean,
   voiceShown: boolean,
   standingCalls: readonly AgentStandingCall[],
+  fromStart: boolean,
 ) {
   // Note that the voice's lines on a call are drawn only where the Voice experiment is on, the caller's standing as any line of theirs where it is off.
   const messages = voiceShown ? held : held.filter((message) => !isVoiceLine(message));
   const todos = todosPlace(messages, working);
 
-  const first = messages.find(
-    (message) =>
-      message.role === MESSAGE_ROLE.USER &&
-      agentMessageOf(message) === undefined &&
-      !undelivered.has(message.id),
-  );
+  // Note that the opening is read only where the transcript's start is held, because a window of its newest messages, or a line still on its way before any page, would take a teammate's line for the brief and name its starter over it.
+  const first = !fromStart
+    ? undefined
+    : messages.find(
+        (message) =>
+          message.role === MESSAGE_ROLE.USER &&
+          agentMessageOf(message) === undefined &&
+          !undelivered.has(message.id),
+      );
 
   // An agent started from another opens on the brief as its source's did, then the replay's card, then the note.
   const opening = !replayed || first === undefined ? undefined : replayOpening(first);
@@ -2754,6 +2762,7 @@ function AgentTranscriptView({
   onRetry,
   onOlder,
   olderFailed = false,
+  fromStart,
   overComposer = false,
   overEnd,
   earlierOmitted = false,
@@ -2822,6 +2831,8 @@ function AgentTranscriptView({
   onOlder?: (() => void) | undefined;
   /** Whether the last read of older messages did not answer, which a line over the log says with Retry. */
   olderFailed?: boolean;
+  /** Whether the messages begin at the transcript's start, a page landed with none older, so its first line is the opening the brief draws. */
+  fromStart: boolean;
   /** Whether the composer stands right under the log, which the log's foot then fades into. */
   overComposer?: boolean;
   /** The room, in pixels, what floats over the log's end takes, as the apps' windows the agent is using do (`ComputerDock`). */
@@ -2903,8 +2914,9 @@ function AgentTranscriptView({
         replayed,
         voiceShown,
         standingCalls,
+        fromStart,
       ),
-    [messages, working, undelivered, unsent, replayed, voiceShown, standingCalls],
+    [messages, working, undelivered, unsent, replayed, voiceShown, standingCalls, fromStart],
   );
 
   // Each line that reached a turn, with who sent it, kept from draw to draw while neither moved.
@@ -3671,7 +3683,7 @@ function AgentTabView({
     !composer.sending;
 
   const macOwner = useKept(macOwnerOf(agent.startedBy, members, readerId, former), sameFields);
-  const routedMachine = useRoutedMachine(agent.id);
+  const callRoute = useCallRoute(agent.id);
   const disabledServers = servers.disabled;
 
   const mentioned = useMemo(
@@ -3718,7 +3730,7 @@ function AgentTabView({
 
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+      <CallPlaceProvider owner={macOwner} route={callRoute}>
         <AgentPicturesProvider value={pictures}>
           <ComputerAppsProvider value={computerApps}>
             <WholePartsProvider value={wholeParts}>
@@ -3803,6 +3815,7 @@ function AgentTabView({
                                 onRetry={transcript.onRetry}
                                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                                 olderFailed={transcript.olderFailed}
+                                fromStart={transcript.pages > 0 && !transcript.hasOlder}
                                 overComposer
                                 overEnd={appsRoom}
                                 bringIn={bringIn}
@@ -3847,7 +3860,7 @@ function AgentTabView({
         />
         <AgentPicturesProvider value={pictures}>
           {/* Note that the dock reads whose Mac the agent uses, as the transcript above it does, to offer Show only on that Mac. */}
-          <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+          <CallPlaceProvider owner={macOwner} route={callRoute}>
             <ComputerDock
               agentId={agent.id}
               messages={dockLines}
@@ -3891,7 +3904,7 @@ function AgentTabView({
               />
             )}
             {/* Note that the box's `@` reads whose Mac the agent uses, to list that Mac's apps or else the ones the reader's machines allow, named and drawn as the agent's calls kept them. */}
-            <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+            <CallPlaceProvider owner={macOwner} route={callRoute}>
               <AgentPicturesProvider value={pictures}>
                 <ComputerAppsProvider value={computerApps}>
                   <AgentComposer
@@ -4437,7 +4450,7 @@ export function AgentSubagentTab({
   const wholeParts = useWholePartDoor(agentId, callId);
   const { members, former } = useMemberDirectory();
   const macOwner = useKept(macOwnerOf(owner?.startedBy, members, control.me, former), sameFields);
-  const routedMachine = useRoutedMachine(agentId);
+  const callRoute = useCallRoute(agentId);
   // The worker's lines, its task first, and what its rows draw from, kept from draw to draw while none of it moved.
   const lines = useMemo(() => workerLines(task, transcript.messages), [task, transcript.messages]);
   const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
@@ -4464,7 +4477,7 @@ export function AgentSubagentTab({
 
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+      <CallPlaceProvider owner={macOwner} route={callRoute}>
         <AgentPicturesProvider value={pictures}>
           <ComputerAppsProvider value={computerApps}>
             <WholePartsProvider value={wholeParts}>
@@ -4486,6 +4499,8 @@ export function AgentSubagentTab({
                 onRetry={transcript.onRetry}
                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                 olderFailed={transcript.olderFailed}
+                // Note that a worker's lines always open on the task it was handed (`workerLines`), so its start is always held.
+                fromStart
               />
             </WholePartsProvider>
           </ComputerAppsProvider>
