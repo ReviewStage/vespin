@@ -2,7 +2,7 @@
  * task-rename.ts -- a task's rename as each surface renaming one holds it, ⌘Z's to take back once the service kept it.
  */
 
-import type { TasksView } from "@repo/features/tasks-view";
+import type { TaskNames } from "@repo/features/tasks-model";
 import { mutationOptions, useQuery } from "@tanstack/react-query";
 import { sendAct } from "../act.js";
 import type { RenameTerms } from "../rename-write.js";
@@ -54,13 +54,13 @@ function taskRenameMutation(
 
 /**
  * A task's rename as a surface holds it (`taskRenameMutation`), its rows
- * read off `drawn`, the tasks the Tasks tab draws as they stand at the call
- * (`TasksControl`'s `drawnTasks`). A fixture's tasks are renamed nowhere, as
- * they are read from nowhere.
+ * read off the task list as it stands at the call, each name drawn as
+ * `typedNames` answers it (`task-row-doors.ts`). A fixture's tasks are
+ * renamed nowhere, as they are read from nowhere.
  */
-export function useTaskRename(drawn: () => TasksView) {
+export function useTaskRename(typedNames: () => TaskNames) {
   const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
-  const doors = useTaskRowDoors(ROW_WRITE.TASK_RENAME.kind, drawn);
+  const doors = useTaskRowDoors(ROW_WRITE.TASK_RENAME.kind, typedNames);
 
   return fixture
     ? taskRenameMutation(() => Promise.resolve(false), undefined)

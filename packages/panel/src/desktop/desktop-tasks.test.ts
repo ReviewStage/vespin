@@ -75,6 +75,7 @@ import {
   withExperiments,
   writeExperiments,
 } from "../testing/app-state.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
@@ -285,23 +286,26 @@ test("a listed task draws its name, its status, and the column's tab from its ro
               Fragment,
               null,
               createElement(RenameOfferProbe),
-              createElement(DesktopTasks, {
-                looks: NO_LOOKS,
-                tasks: tasksControl({
-                  page: TASKS_PAGE.TASK,
-                  tasks: [listed],
-                  activeTaskId: TASK.id,
-                  region: { kind: TASK_REGION.READING },
-                  workspaces: [
-                    {
-                      id: TASK.workspaceId,
-                      name: "Personal",
-                      role: WORKSPACE_ROLE.OWNER,
-                      github: null,
-                    },
-                  ],
+              overEveryTask(
+                { tasks: [listed] },
+                createElement(DesktopTasks, {
+                  looks: NO_LOOKS,
+                  tasks: tasksControl({
+                    page: TASKS_PAGE.TASK,
+                    tasks: [listed],
+                    activeTaskId: TASK.id,
+                    region: { kind: TASK_REGION.READING },
+                    workspaces: [
+                      {
+                        id: TASK.workspaceId,
+                        name: "Personal",
+                        role: WORKSPACE_ROLE.OWNER,
+                        github: null,
+                      },
+                    ],
+                  }),
                 }),
-              }),
+              ),
             ),
           ),
         ),

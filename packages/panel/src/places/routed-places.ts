@@ -637,7 +637,11 @@ export const ROUTED_PLACE = {
           : { kind: LINK_DESTINATION.INBOX, taskId: at.inboxTask };
 
       const inbox = stepLink(inboxPlace, LINK_THING.INBOX, listed);
-      const chosen = listedInboxChoice(views.inbox.chosen, tasks);
+
+      const chosen = listedInboxChoice(views.inbox.chosen, {
+        workspace: tasks.workspace,
+        task: (taskId) => tasks.tasks.find((each) => each.id === taskId),
+      });
 
       if (chosen === undefined) return [inbox];
       const item = inboxItemPlace(chosen);
