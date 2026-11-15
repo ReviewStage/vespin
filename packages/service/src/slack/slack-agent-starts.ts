@@ -302,15 +302,14 @@ const SLACK_REPLY = {
  */
 const SLACK_REPLY_GUIDE = [
   "That thread sees only what you send there with `send_slack_message`; your final message is not posted.",
-  "Reply as a teammate would: a few short messages of a sentence or two each, one `send_slack_message` call per message, in the order they should read.",
-  "Speak only when you add something the thread doesn't already have. Silence is fine, and a wrong or needless message costs more than a skipped one. Send no \"on it\" or progress messages, and don't nudge a thread that has gone quiet. Where people in the thread are talking to each other, stay out unless a message is aimed at you.",
+  "Reply as `send_slack_message`'s description says: only where you add something, in a few short messages, one call each.",
   "Where the work opens a pull request, close with one message that holds a bold title, the repository, the root cause, and the pull request's link, and names the owner of the changed code from the repository's CODEOWNERS for review: as `<@USER_ID>` where the thread shows their Slack user id, and otherwise by name in plain words.",
   "Where the change is something a person can see, record it or take a screenshot and show it with `show_image`, which the thread gets after your closing message, rather than describing how you got there.",
 ].join(" ");
 
 /** What each later message in the thread reminds the agent of, so the rule rides with the message it bears on rather than piling up. */
 const SLACK_REPLY_REMINDER =
-  "That thread sees only what you send there with `send_slack_message`: a few short messages of a sentence or two each, one call per message; your final message is not posted. Answer only if you add something the thread doesn't already have; silence is fine, and send no progress messages.";
+  "That thread sees only what you send there with `send_slack_message`, as its description says; your final message is not posted.";
 
 /** The event callback as far as it is read: the team, Slack's id for the event, the bot's own user, and the message. */
 const EventCallbackSchema = Schema.Struct({

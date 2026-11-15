@@ -92,6 +92,12 @@ export const AGENT_TOOL = {
   SHOW_MEDIA: "show_media",
   // One message a coding agent sends as the Slack bot in the Slack thread it answers in.
   SEND_SLACK_MESSAGE: "send_slack_message",
+  // The Slack channels the bot is in, where a coding agent may post and read as the Slack bot.
+  LIST_SLACK_CHANNELS: "list_slack_channels",
+  // A Slack channel's latest messages or one thread's, which a coding agent reads as the Slack bot.
+  READ_SLACK: "read_slack",
+  // A reaction a coding agent adds to a Slack message, or takes off it, as the Slack bot.
+  REACT_SLACK: "react_slack",
   // A wakeup a coding agent books for later: its turn ends, and the prompt opens its next turn when due.
   SCHEDULE_WAKEUP: "schedule_wakeup",
   // A coding agent's turn ended in a short summary, the reply its developer reads, and the follow-ups it offers them.

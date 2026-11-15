@@ -456,7 +456,10 @@ const AGENT_TOOLS = [
   "search_memory",
   "list_memories",
   "forget_memory",
+  "list_slack_channels",
   "send_slack_message",
+  "read_slack",
+  "react_slack",
   "schedule_wakeup",
   "end_turn",
 ] as const;

@@ -139,7 +139,12 @@ component, or add the component or variant there.
   environment, the model, and the agent's transcript and traces. And a Slack message a member addresses to Vespin's Slack bot (an
   @Vespin mention or a DM), with the earlier messages of the Slack thread it
   stands in, may reach the agent it starts or is sent to: that agent's task,
-  transcript and traces. And an automation webhook secret may be shown once, in the window that
+  transcript and traces. And a Slack message the bot can read, in a channel it
+  is in (a private one only where the member the agent works for is in it
+  too), may reach an agent of the workspace that connected the bot and reads
+  it (`packages/service/src/slack/slack-agent-tools.ts`): that agent's
+  transcript and traces, and never a trace, a counted event, or a fixture
+  beyond that. And an automation webhook secret may be shown once, in the window that
   minted it, at creation or rotation; never anywhere else. And a voice call's audio goes only between the caller's panel and the GPT-Live session the service opens on the caller's own OpenAI key, which never leaves the service, and is never stored. What the caller and the voice said is kept as text in the agent's conversation, one message to each utterance: the caller's words reach the agent as its messages, transcript, and traces, as a typed line does, and the voice's words stand in that transcript but are never handed to the agent's model. Nothing else of a call is kept past its end but its seconds on the member's day: while a call stands, the service keeps one row of who is calling which agent and the state of its session, deleted when the call closes; a counted event carries only its length, and none of it goes into a fixture. And an agent's cloud
   browser, a
   Chromium in that agent's own Vercel Sandbox, shows its pages, their live-view

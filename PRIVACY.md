@@ -144,7 +144,10 @@ and the scopes it was granted; we delete them when the workspace disconnects
 the bot, when the app is uninstalled from that Slack or its token revoked
 there, and with the workspace. The bot also keeps your Slack user id, and
 messages you send the bot, with the earlier messages of that Slack thread, are
-handed to an agent. If you allow an app such as Claude Code or Cursor to connect to our MCP
+handed to an agent. Your workspace's agents can also read, post, and react as the bot in
+the Slack channels it has been added to (a private channel only where the
+member the agent works for is in it too), so messages in those channels may
+reach the agent that reads them, its transcript, and its traces. If you allow an app such as Claude Code or Cursor to connect to our MCP
 server, we store a record of the app, your consent, and hashed tokens.
 
 ### Commands on your Mac

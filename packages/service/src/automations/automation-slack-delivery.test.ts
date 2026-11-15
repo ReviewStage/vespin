@@ -56,6 +56,8 @@ function recordingSlack() {
 
   const api: SlackWebApi = (method, args) => {
     switch (method) {
+      case "auth.test":
+        return Effect.succeed({ ok: true, team_id: "T0001", team: "Team" });
       case "users.lookupByEmail":
         return Effect.succeed({ ok: true, user: { id: SLACK_USER } });
       case "chat.postMessage":
@@ -241,6 +243,7 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
         assert.deepEqual(sent, {
           status: ACTION_RESULT_STATUS.ACCEPTED,
           channelId: DM_CHANNEL,
+          ts: "1700000000.000002",
           threadTs: digest,
         });
         const [, reply, ...more] = slack.posted;

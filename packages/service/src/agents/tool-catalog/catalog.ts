@@ -66,6 +66,14 @@ import { logStoreFailure } from "../../http/store-failure.js";
 import type { IntegrationConnect } from "../../integrations/integration-connect.js";
 import type { PageLinks } from "../../pages/page-links.js";
 import type { ModelCatalog } from "../../providers/model-catalog.js";
+import {
+  LIST_SLACK_CHANNELS_TOOL,
+  REACT_SLACK_TOOL,
+  READ_SLACK_TOOL,
+  runListSlackChannels,
+  runReactSlack,
+  runReadSlack,
+} from "../../slack/slack-agent-tools.js";
 import type { SlackBot } from "../../slack/slack-bot.js";
 import { runSendSlackMessage, SEND_SLACK_MESSAGE_TOOL } from "../../slack/slack-message-tool.js";
 import {
@@ -645,8 +653,11 @@ const CATALOG = [
   // The ports of the agent's sandbox, and the one it shares by link.
   portTool(LIST_PORTS_TOOL, runListPorts),
   portTool(SHARE_PORT_TOOL, runSharePort),
-  // A message in the agent's Slack thread.
+  // Slack as the bot: where the agent may act, a message, a read, and a reaction.
+  agentTool(LIST_SLACK_CHANNELS_TOOL, runListSlackChannels),
   agentTool(SEND_SLACK_MESSAGE_TOOL, runSendSlackMessage),
+  agentTool(READ_SLACK_TOOL, runReadSlack),
+  agentTool(REACT_SLACK_TOOL, runReactSlack),
   // A wakeup booked for later.
   agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup),
   // A turn's end: the summary its developer reads as the reply, and the follow-ups it offers.
