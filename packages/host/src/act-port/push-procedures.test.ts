@@ -1,12 +1,8 @@
 import assert from "node:assert/strict";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import type { TaskListParts } from "@repo/features/tasks-view";
 import { it } from "vitest";
-import type {
-  AppStateDelivery,
-  AppStateSnapshot,
-  TaskListDelivery,
-  TaskListParts,
-} from "../app-state.js";
+import type { AppStateDelivery, AppStateSnapshot, TaskListDelivery } from "../app-state.js";
 import { initialAppState } from "../client/app-state-store.js";
 import { PUSH, type PushEvent } from "../contract/index.js";
 import { runModeFor } from "../run-mode.js";

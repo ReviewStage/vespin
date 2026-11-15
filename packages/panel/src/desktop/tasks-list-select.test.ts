@@ -8,7 +8,7 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, TASKS_READ } from "@repo/features/tasks-view";
 import type { Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { RUN_PROFILE } from "@repo/host/app-state";
@@ -22,7 +22,7 @@ import { SHELL_ROOM } from "../shell-room.js";
 import { useTasksTab } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { followListedTasks, handMembers } from "../testing/app-state.js";
+import { followListedTasks, handMembers, type WrittenTasksView } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { standingTaskList } from "../testing/history-rows.js";
@@ -107,7 +107,7 @@ function sectionsHolding(taskIds: readonly string[]): TaskSections {
 function viewOf(
   tasks: readonly TaskSummary[],
   taskSections: TaskSections = sectionsHolding([]),
-): TasksView {
+): WrittenTasksView {
   return {
     ...IDLE_TASKS_VIEW,
     listStatus: TASKS_READ.READY,
@@ -183,7 +183,7 @@ async function mountPage(held?: TasksPageHeld): Promise<{
   page: HTMLElement;
   hold: (tasks: readonly TaskSummary[], taskSections?: TaskSections) => void;
 }> {
-  let restand: ((view: TasksView) => void) | undefined;
+  let restand: ((view: WrittenTasksView) => void) | undefined;
 
   /** A status the service keeps, written down. */
   const keepStanding = <Payload>(payload: Payload) => {
