@@ -189,7 +189,7 @@ test("a new list of tasks draws no part opening links again, and a link opened a
   assert.deepEqual(links.map(matched), [
     {
       declared: LINK_ROUTED_PLACE.CHANGES,
-      place: { kind: LINK_DESTINATION.CHANGES, planId: TASK, agentId: AGENT },
+      place: { kind: LINK_DESTINATION.CHANGES, taskId: TASK, agentId: AGENT },
     },
   ]);
 });
@@ -215,13 +215,13 @@ test.each([
     "an agent's link under its task",
     ON_TASK,
     LINK_ROUTED_PLACE.AGENT,
-    { kind: LINK_DESTINATION.AGENT, planId: TASK, agentId: AGENT },
+    { kind: LINK_DESTINATION.AGENT, taskId: TASK, agentId: AGENT },
   ],
   [
     "an agent's link under /plan/",
     ON_PLAN,
     LINK_ROUTED_PLACE.AGENT,
-    { kind: LINK_DESTINATION.AGENT, planId: TASK, agentId: AGENT },
+    { kind: LINK_DESTINATION.AGENT, taskId: TASK, agentId: AGENT },
   ],
   [
     "a message's link",
@@ -233,7 +233,7 @@ test.each([
     "a message's link under /plan/",
     `${ON_PLAN}/message/msg-7`,
     LINK_ROUTED_PLACE.MESSAGE,
-    { kind: LINK_DESTINATION.MESSAGE, planId: TASK, agentId: AGENT, messageId: "msg-7" },
+    { kind: LINK_DESTINATION.MESSAGE, taskId: TASK, agentId: AGENT, messageId: "msg-7" },
   ],
   [
     "a worker's link",
@@ -245,7 +245,7 @@ test.each([
     "a worker's link under its task",
     `${ON_TASK}/worker/toolu_1`,
     LINK_ROUTED_PLACE.WORKER,
-    { kind: LINK_DESTINATION.WORKER, planId: TASK, agentId: AGENT, callId: "toolu_1" },
+    { kind: LINK_DESTINATION.WORKER, taskId: TASK, agentId: AGENT, callId: "toolu_1" },
   ],
   [
     "a Changes link",
@@ -257,7 +257,7 @@ test.each([
     "a Changes link under /plan/",
     `${ON_PLAN}/changes`,
     LINK_ROUTED_PLACE.CHANGES,
-    { kind: LINK_DESTINATION.CHANGES, planId: TASK, agentId: AGENT },
+    { kind: LINK_DESTINATION.CHANGES, taskId: TASK, agentId: AGENT },
   ],
   [
     "a review thread's link",
@@ -276,7 +276,7 @@ test.each([
     LINK_ROUTED_PLACE.PULL_REQUEST_THREAD,
     {
       kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
-      planId: TASK,
+      taskId: TASK,
       agentId: AGENT,
       threadId: "PRRT_1",
       view: "conversation",
@@ -286,7 +286,7 @@ test.each([
     "a worker of our own under /plan/, read as its task",
     `${LINK_ORIGIN}/acme/plan/${TASK}/worker/toolu_1`,
     LINK_ROUTED_PLACE.TASK,
-    { kind: LINK_DESTINATION.TASK, planId: TASK },
+    { kind: LINK_DESTINATION.TASK, taskId: TASK },
   ],
   [
     "a channel's link, read as the Inbox",
@@ -368,7 +368,7 @@ test("a link naming a listed task by its number is asked of the place it is pres
   });
   act(() => open?.(`https://vespin.dev/acme/task/42/page/${page}`));
 
-  assert.deepEqual(asked, [{ kind: LINK_DESTINATION.PAGE, planId: TASK, pageId: page }]);
+  assert.deepEqual(asked, [{ kind: LINK_DESTINATION.PAGE, taskId: TASK, pageId: page }]);
 });
 
 const OTHER = "5b7d9f1a-3c5e-4a7b-9d1f-2b4c6d8e0f1a";
@@ -491,7 +491,7 @@ test("a task's page: a related task's pull request, as its row presses it, the w
 
   assert.deepEqual(
     { places, opened },
-    { places: [{ kind: LINK_DESTINATION.CHANGES, planId: TASK, agentId: AGENT }], opened: [] },
+    { places: [{ kind: LINK_DESTINATION.CHANGES, taskId: TASK, agentId: AGENT }], opened: [] },
   );
 });
 
@@ -506,13 +506,13 @@ test.each<[string, string, boolean, Route]>([
     "the window: a plan an older link names, to the plan",
     `luke://plan/${TASK}`,
     true,
-    go({ workspace: "", place: { kind: LINK_DESTINATION.TASK, planId: TASK } }),
+    go({ workspace: "", place: { kind: LINK_DESTINATION.TASK, taskId: TASK } }),
   ],
   [
     "the window: a pull request a listed task's agent opened, however spelled, to its Pull request tab on the task",
     `${URL}#issuecomment-1`,
     true,
-    go({ workspace: "", place: { kind: LINK_DESTINATION.CHANGES, planId: TASK, agentId: AGENT } }),
+    go({ workspace: "", place: { kind: LINK_DESTINATION.CHANGES, taskId: TASK, agentId: AGENT } }),
   ],
   [
     "the window: a pull request nothing listed names, to the browser",

@@ -21,6 +21,7 @@ import type { AgentApprovalAnswerView } from "@repo/features/agent-view";
 import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { allowedCommandWords } from "@repo/features/allowed-command-model";
 import { providerOf } from "@repo/features/model-label";
+import { drawnCall } from "@repo/features/native-tool-calls";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -128,7 +129,7 @@ export type PermissionModeWriter = (
 ) => Promise<AgentActAnswer>;
 
 /** An answer to an ask as the view hears it: the host's answer, or one that never arrived. */
-export type ApprovalActAnswer = AgentApprovalAnswerView | Unreached<"unanswered">;
+type ApprovalActAnswer = AgentApprovalAnswerView | Unreached<"unanswered">;
 
 /** How an answer is sent: the agent, the ask, and the answer. */
 export type ApprovalAnswerWriter = (
@@ -154,7 +155,7 @@ export const MODE_GROUP = PERMISSION_MODE_WORDS.GROUP;
 export const MODE_QUESTION = PERMISSION_MODE_WORDS.QUESTION;
 
 /** When a change reaches the agent, said under the menu and on the change's toast. */
-export const MODE_APPLIES = PERMISSION_MODE_WORDS.APPLIES;
+const MODE_APPLIES = PERMISSION_MODE_WORDS.APPLIES;
 
 /** Why a change of mode did not take, said under the composer's bar. */
 const MODE_CHANGE_FAILED = PERMISSION_MODE_WORDS.CHANGE_FAILED;
@@ -507,7 +508,7 @@ function DenyNoteBox({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): Reac
 }
 
 /** A held call as its row draws it: where it stands in words, who asks and why, and the presses while it waits. */
-export function heldCallOf(ask: ApprovalView): HeldCall {
+function heldCallOf(ask: ApprovalView): HeldCall {
   return {
     status: ask.settled ?? HELD_WORDS.WAITING,
     waiting: ask.settled === undefined,
@@ -588,16 +589,22 @@ export function looseApprovals(
   );
 }
 
-/** The call an ask no drawn row holds stands for, as its row is drawn from it: the tool, its input, under way while the ask waits. */
+/** The call an ask no drawn row holds stands for, as its row is drawn from it: the tool, its input, under way while the ask waits. Note that the harness's own tool is read as the call of its kind (`drawnCall`), as a stored part is, so a held `Bash` reads as a command rather than as a tool by that name. */
 export function heldCallPart(
   approval: AgentPendingApproval,
 ): Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }> {
+  const { tool, input } = drawnCall({
+    tool: approval.toolName,
+    input: approval.input,
+    output: undefined,
+  });
+
   return {
     kind: AGENT_PART.TOOL,
-    tool: approval.toolName,
+    tool,
     callId: approval.toolUseId,
     state: TOOL_STATE.INPUT_AVAILABLE,
-    input: approval.input,
+    input,
     output: undefined,
     errorText: undefined,
   };

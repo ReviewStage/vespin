@@ -13,8 +13,7 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
-import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
@@ -39,22 +38,24 @@ import {
 } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
+  followListedTasks,
   handHostReads,
   handMembers,
   readExperiments,
   writeExperiments,
 } from "../testing/app-state.js";
 import { startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { peopleRead, withPeopleRead } from "../testing/people-read.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { openTaskMenu } from "../testing/task-menu.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { listedTasksOf, tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
 import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { forgetUndo, UNDO_RAN, undoLast } from "../undo-stack.js";
 import { DesktopTasks } from "./desktop-tasks.js";
-import { SidebarTask, taskOf } from "./task-actions.js";
+import { SidebarTask } from "./task-actions.js";
 import { taskCardOf } from "./task-card.js";
 
 // Note that the description, its comments, and its history stand only while the account has Descriptions on.
@@ -138,10 +139,10 @@ function openTab(
   const open = onRepository(TASK);
 
   const tasks: TasksControl = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     tasks: [onRepository(TASK), onRepository(OTHER)],
     activeTaskId: TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: { ...TASK, ...open } },
+    region: { kind: TASK_REGION.READY, task: { ...TASK, ...open } },
     onChangeRepository: (taskId) => asked.changed.push(taskId),
     sidePanel: { ...tasksControl().sidePanel, open: true, tab: SIDE_PANEL_TAB.DESCRIPTION },
   });
@@ -186,7 +187,7 @@ function mountDescriptionTab(tasks: TasksControl): HTMLElement {
     tasks,
   });
 
-  return mount(withQueryClient(page));
+  return mount(withQueryClient(overEveryTask(tasks, page)));
 }
 
 function sidebarTask(
@@ -209,17 +210,20 @@ function sidebarTask(
   );
 }
 
+/** The row drawn, its task read from collections standing on `tasks`'s list, or, given `followed`, from the window's own, which the test's follow writes. */
 function mountSidebarTask(
   tasks: TasksControl,
   task: TaskSummary,
   asked: Asked,
   current = false,
+  followed = false,
 ): HTMLButtonElement {
-  const container = mount(withQueryClient(sidebarTask(tasks, task, asked, current)));
-  const row = container.querySelector("ul > li > button");
-  assert.ok(row instanceof HTMLButtonElement);
+  const row = sidebarTask(tasks, task, asked, current);
+  const container = mount(withQueryClient(followed ? row : overEveryTask(tasks, row)));
+  const press = container.querySelector("ul > li > button");
+  assert.ok(press instanceof HTMLButtonElement);
 
-  return row;
+  return press;
 }
 
 function openMenu(more: HTMLButtonElement): void {
@@ -345,7 +349,7 @@ test("a question asked of one task does not outlive it: the delete the Plan tab'
   draw({
     ...tasks,
     activeTaskId: OTHER.id,
-    region: { kind: DOCUMENT_REGION.READY, task: other },
+    region: { kind: TASK_REGION.READY, task: other },
   });
   assert.equal(asking(), false, "the question went with the task it was asked of");
 });
@@ -392,7 +396,7 @@ test("⌘K's Change repository shows Overview where an agent's tab hides the des
   assert.ok(menu(), "the ask opens the repository's menu under the plan's path");
 
   // The head drawn afresh, as another tab and back would, opens nothing for the ask already answered.
-  draw({ ...asked(true), region: { kind: DOCUMENT_REGION.READING } });
+  draw({ ...asked(true), region: { kind: TASK_REGION.READING } });
   draw(asked(true));
   assert.equal(menu(), null, "no second opening");
 });
@@ -414,11 +418,11 @@ test("the plan's name reaches the recording only as masked text, never in an att
 /** The open task's tab, `SHARED_PLAN` open as `me` reads it and `OTHER` beside it in the list, its column on no tab and its panel shut. */
 function sharedTab(me: string): TasksControl {
   return tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     me,
     tasks: [SHARED_TASK, OTHER],
     activeTaskId: SHARED_TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: SHARED_TASK },
+    region: { kind: TASK_REGION.READY, task: SHARED_TASK },
   });
 }
 
@@ -949,6 +953,8 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
     },
   });
   const tasks = tasksControl({ tasks: [resting] });
+  // Note that a settle reads its task off main's document, as the window's surfaces read it (`task-row-doors.ts`).
+  followListedTasks({ tasks: [resting] });
 
   const asked: Asked = {
     opened: [],
@@ -961,6 +967,7 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
     container.querySelector('button[aria-label="Mark done"]');
 
   const row = mount(withQueryClient(sidebarTask(tasks, resting, asked)));
+  await act(async () => undefined);
   const check = doneButton(row);
   assert.ok(check instanceof HTMLButtonElement, "the row offers Mark done as its button");
   act(() => check.click());
@@ -1118,10 +1125,10 @@ test("a sidebar row's Change repository searches the workspace's repositories be
 test("the open task's topbar and its sidebar row offer the one menu, Status, Priority, Assignee, Version history, and Change repository among it, Choose a repository on a task with none, the topbar's printing the chords that act on the open task; another task's row prints only U, S, and P, which act on the focused row", () => {
   const { tasks, asked } = openTab({ [TASK.id]: "acme/app", [OTHER.id]: "acme/app" });
 
-  const standing: TasksControl = {
+  const standing = tasksControl({
     ...tasks,
-    tasks: tasks.tasks.map((each) => ({ ...each, ...STANDING })),
-  };
+    tasks: listedTasksOf(tasks).map((each) => ({ ...each, ...STANDING })),
+  });
 
   openTaskMenu(mountDescriptionTab(standing));
   assert.deepEqual(itemChords(), [
@@ -1139,7 +1146,12 @@ test("the open task's topbar and its sidebar row offer the one menu, Status, Pri
 
   unmountAll();
   rightClick(
-    mountSidebarTask(standing, standing.tasks[0] ?? assert.fail("no first task"), asked, true),
+    mountSidebarTask(
+      standing,
+      listedTasksOf(standing)[0] ?? assert.fail("no first task"),
+      asked,
+      true,
+    ),
     40,
     60,
   );
@@ -1154,7 +1166,7 @@ test("the open task's topbar and its sidebar row offer the one menu, Status, Pri
 
   unmountAll();
   rightClick(
-    mountSidebarTask(standing, standing.tasks[1] ?? assert.fail("no second task"), asked),
+    mountSidebarTask(standing, listedTasksOf(standing)[1] ?? assert.fail("no second task"), asked),
     40,
     60,
   );
@@ -1187,27 +1199,6 @@ test("while Descriptions is off the Plan tab's ⋯ offers no Copy description or
   );
   assert.equal(appCommandOffered(APP_COMMAND.COPY_CONTENT), false);
   assert.equal(appCommandOffered(APP_COMMAND.VERSION_HISTORY), false);
-});
-
-test("a task is found in the list the control hands down now, a renamed one by its new name and an added one at once, else in the open document", () => {
-  const listed = { ...OTHER, name: "Before" };
-  const first = tasksControl({ tasks: [listed] });
-  assert.equal(taskOf(first, OTHER.id)?.name, "Before");
-  assert.equal(taskOf(first, TASK.id), undefined, "a task neither holds is none");
-
-  const added: TaskSummary = {
-    ...OTHER,
-    id: "5d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
-    name: "Added",
-  };
-
-  const next = tasksControl({ tasks: [{ ...listed, name: "After" }, added] });
-  assert.equal(taskOf(next, OTHER.id)?.name, "After", "the newer list's task, not the older's");
-  assert.equal(taskOf(next, added.id)?.name, "Added");
-  assert.equal(taskOf(first, OTHER.id)?.name, "Before", "the older list still answers as it stood");
-
-  const opened = tasksControl({ region: { kind: DOCUMENT_REGION.READY, task: TASK } });
-  assert.equal(taskOf(opened, TASK.id)?.id, TASK.id, "the open document's task");
 });
 
 /** The open menu's name and its items' words, or nothing where none stands. */
@@ -1292,24 +1283,21 @@ test("a sidebar task whose rename was refused reopens its field holding the name
 test("⌘Z takes back a sidebar task's rename the service kept, sending its name before", async () => {
   forgetUndo();
   const { tasks, asked } = openTab();
-  // Note that main draws the name the service kept, which ⌘Z reads before it sends the old one back.
-  let drawnName = OTHER.name;
+  // Note that main draws the name the service kept, which ⌘Z reads off the window's list before it sends the old one back.
+  const deliver = followListedTasks({ tasks: [OTHER] });
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_RENAME]: ({ taskId, name }) => {
       asked.renamed.push([taskId, name]);
-      drawnName = name;
+      deliver({ tasks: [{ ...OTHER, name }] });
 
       return Promise.resolve(true);
     },
   });
 
-  const drawn: TasksControl = {
-    ...tasks,
-    drawnTasks: () => ({ ...IDLE_TASKS_VIEW, tasks: [{ ...OTHER, name: drawnName }] }),
-  };
-
-  rightClick(mountSidebarTask(drawn, OTHER, asked), 40, 60);
+  const row = mountSidebarTask(tasks, OTHER, asked, false, true);
+  await act(async () => undefined);
+  rightClick(row, 40, 60);
   choose("Rename");
   const field = document.querySelector<HTMLInputElement>('input[aria-label="Task name"]');
   assert.ok(field, "the row's name is its field");

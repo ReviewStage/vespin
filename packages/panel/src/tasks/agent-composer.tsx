@@ -492,8 +492,9 @@ export function AgentComposer({
   const statuses = useIntegrationStatuses();
 
   const box = useMessageBox({
-    draft: composer.draft,
-    setDraft: composer.setDraft,
+    draft: composer.held.text,
+    // Note that the box's words are moved on from what its draft holds as the change lands, never from a render's copy, since one keystroke may hand back several words.
+    setDraft: (text) => composer.updateHeld((now) => ({ ...now, text })),
     // Note that a closed box asks for nothing, since it takes nothing.
     placeholder: closed
       ? ""
@@ -501,7 +502,11 @@ export function AgentComposer({
     label: wording?.label ?? "Message to the agent",
     maxLength,
     held,
-    holder: { attachments: composer.attachments, update: composer.setAttachments },
+    holder: {
+      attachments: composer.held.attachments,
+      update: (next) =>
+        composer.updateHeld((now) => ({ ...now, attachments: next(now.attachments) })),
+    },
     pastesTextAsFile: true,
     self: agentId,
     skills,
@@ -546,7 +551,7 @@ export function AgentComposer({
     answer === undefined
       ? !sendsEmpty &&
         !editingQueued &&
-        !hasWordsOrFiles(composer.draft.trim(), composer.attachments)
+        !hasWordsOrFiles(composer.held.text.trim(), composer.held.attachments)
       : !answer.sendable;
 
   const showsStop = empty && stoppable && !composer.sending && !editingQueued;
@@ -697,7 +702,7 @@ export function AgentComposer({
     switch (name) {
       case SLASH_COMMAND.COMPACT:
       case SLASH_COMMAND.GOAL: {
-        const words = leadingCommand(composer.draft)?.words ?? "";
+        const words = leadingCommand(composer.held.text)?.words ?? "";
 
         if (chosen) editor.current?.replace(`/${name} ${words}`);
 
@@ -737,7 +742,7 @@ export function AgentComposer({
    */
   const typedCommand = (): SlashCommand | undefined => {
     if (editingQueued) return undefined;
-    const typed = leadingCommand(composer.draft);
+    const typed = leadingCommand(composer.held.text);
 
     if (typed === undefined || !isSlashCommand(typed.name)) return undefined;
 

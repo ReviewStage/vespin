@@ -12,6 +12,7 @@
  * the whole quit, and there is no other order to run it in.
  */
 
+import type { ListedAgent } from "@repo/features/agent-wire";
 import {
   type GatewayHost,
   type GatewayShutdownOptions,
@@ -20,10 +21,11 @@ import {
   type NodeRegistry,
   shutdownGatewayEffect,
 } from "@repo/gateway";
-import { Context, Data, Deferred, Effect, Layer, Ref, type Scope } from "effect";
+import { Context, Data, Deferred, Effect, Layer, Ref, type Scope, type Stream } from "effect";
 import type { Composer } from "../composer.js";
 import type { HostActTable } from "../host-acts.js";
 import type { HostConcern } from "../host-concerns.js";
+import type { TaskListMoved } from "../task-list-moved.js";
 import { layersInOrder } from "./composer.js";
 
 /** The drain's steps did not run to their end; what they could not settle is what the next launch marks interrupted. */
@@ -106,6 +108,10 @@ export interface HostAssembly {
    */
   readonly armed: Effect.Effect<void, never, Scope.Scope>;
   readonly drain: HostDrain;
+  /** The account's task list as each drawing of it moves its tasks and agents, followed while the caller's scope stands, the list as last drawn told whole first: what a client's notices read the tasks and agents from (`client/client-notices.ts`). */
+  readonly taskListMoves: Effect.Effect<Stream.Stream<TaskListMoved>, never, Scope.Scope>;
+  /** Every agent on a task as the account's task list last drew it, the archived among them; none before it first drew: what the desktop counts the agents at work by. */
+  readonly agentsListed: () => readonly ListedAgent[] | undefined;
 }
 
 export class HostAssemblyTag extends Context.Service<HostAssemblyTag, HostAssembly>()(

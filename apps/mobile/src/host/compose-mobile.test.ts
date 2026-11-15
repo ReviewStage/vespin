@@ -4,13 +4,15 @@ import { AUTH_SESSION_END } from "@repo/credentials";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { ACT_KIND } from "@repo/host/acts";
 import { RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
-import { selectExperiment, selectInboxGroupsIn } from "@repo/host/app-state-reads";
+import { inboxGroupsIn, selectExperiment, selectInboxHoldings } from "@repo/host/app-state-reads";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { EXPERIMENT, THEME } from "@repo/settings";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
+import { QueryClient } from "@tanstack/react-query";
 import { Context, Effect, Layer } from "effect";
 import { expect, vi } from "vitest";
+import { followAppStateInto } from "./app-state-query.js";
 import { composeMobile, type DeviceSeams, MobileHostTag } from "./compose-mobile.js";
 import { STUB_ACCOUNT, stubAuthFetch, stubAuthSession } from "./stub-auth-server.js";
 
@@ -73,6 +75,23 @@ const standingHost = (
     return Context.get(built, MobileHostTag);
   });
 
+/** Every holder of Inbox items in the host's document, grouped over the task list as a screen's collections follow it, once its first read is written. */
+const inboxGroupsOver = (bridge: Parameters<typeof followAppStateInto>[0]) =>
+  Effect.gen(function* () {
+    const following = yield* Effect.acquireRelease(
+      Effect.sync(() => followAppStateInto(bridge, new QueryClient())),
+      (followed) => Effect.sync(() => followed.stop()),
+    );
+
+    yield* Effect.promise(() => following.written);
+    const state = following.held();
+    expect(state).toBeDefined();
+
+    return state === undefined
+      ? []
+      : inboxGroupsIn(selectInboxHoldings(state), following.taskList.tasks.toArray, undefined);
+  });
+
 /** A folder of this test's own for the host's files, gone with the scope. */
 const ownFolder = Effect.provide(temporaryDirectoryScoped("mobile-host-"), NodeFileSystem.layer);
 
@@ -88,13 +107,28 @@ it.effect(
 
         expect(state.account.status).toBe(ACCOUNT_STATUS.SIGNED_IN);
 
-        const titles = selectInboxGroupsIn(undefined)(state).flatMap(({ items }) =>
+        const titles = (yield* inboxGroupsOver(bridge)).flatMap(({ items }) =>
           items.map(({ title }) => title),
         );
 
         expect(titles).toContain(STAGED_THREAD);
         // Note that a `/` in any of the app's composers offers skills only while the account has Skills on (`use-skill-offer.ts`).
         expect(selectExperiment(EXPERIMENT.SKILLS)(state)).toBe(true);
+      }),
+    ),
+);
+
+it.effect(
+  "a fixture run on the large Inbox lists as many threads as a busy real account, so a timing run measures that size",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const root = yield* ownFolder;
+        const { bridge } = yield* standingHost(root, RUN_PROFILE.INBOX_LARGE);
+
+        const threads = (yield* inboxGroupsOver(bridge)).flatMap(({ items }) => items);
+
+        expect(threads.length).toBeGreaterThan(600);
       }),
     ),
 );

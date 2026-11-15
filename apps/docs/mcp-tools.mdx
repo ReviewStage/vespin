@@ -1,0 +1,947 @@
+---
+title: "MCP tools"
+description: "Every tool Vespin MCP offers, with its inputs"
+---
+
+Vespin MCP offers these tools to any agent you connect. Each acts as you, with your permissions, so it allows and refuses exactly what the app does. To connect an agent, see [MCP](/vespin-mcp).
+
+Each tool answers JSON text. A refusal comes back marked as an error, with `status: "rejected"` and why. Where you belong to several workspaces, a tool that takes `workspace` needs its slug, from `list_workspaces`.
+
+## Workspaces and members
+
+### list_workspaces
+
+Your workspaces: each one's id, slug, name, and your role. Call it first.
+
+No inputs.
+
+### create_workspace
+
+Creates a workspace you own.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `name` | string, required | The new workspace's name, at most 64 characters, its ends trimmed. (1–64 characters) |
+
+### list_workspace_members
+
+The workspace's members, owners first, with each one's role, and former members.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+
+### rename_workspace
+
+Renames the workspace. Owners and admins only; your first workspace keeps its name.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to rename, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `name` | string, required | The new name, at most 64 characters. (1–64 characters) |
+
+### set_workspace_slug
+
+Changes the workspace's slug. Old links keep working. Owners only.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace whose slug to change, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `slug` | string, required | The new slug: lowercase letters and digits, with single hyphens between them. (1–48 characters) |
+
+### set_workspace_photo
+
+Sets or removes the workspace's photo. Owners and admins only.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace whose photo to set, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `photo` | string or null, required | The photo as a base64 `data:` URL of a PNG, JPEG, or WebP image (image/png, image/jpeg, image/webp), at most 100000 bytes decoded, such as a 256-pixel square; null removes it, and the member's own first workspace then shows their sign-in picture. |
+
+### invite_to_workspace
+
+Invites an email address. The invitation expires after 48 hours. Only the owner can invite an admin.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to invite them to, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `email` | string, required | The address to invite, whose account alone may accept. (up to 254 characters) |
+| `role` | `admin` \| `member`, required | The role it offers: member, or admin, which only the owner may offer. |
+
+### list_workspace_invitations
+
+Pending invitations, with their accept links. Owners and admins only.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace whose invitations to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+
+### cancel_workspace_invitation
+
+Cancels a pending invitation. Owners and admins only.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace the invitation is to, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `invitationId` | string, required | The invitation's id, as list_workspace_invitations answered it. |
+
+### change_workspace_member_role
+
+Makes a member an admin or a member. Owners only.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace the member is in, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `userId` | string, required | The member's account id, as list_workspace_members answered it. |
+| `role` | `admin` \| `member`, required | The role they take: admin, who manages the workspace's members and settings beside the owner, or member. |
+
+### remove_workspace_member
+
+Removes a member. An owner removes admins and members; an admin removes members.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to remove them from, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `userId` | string, required | The member's account id, as list_workspace_members answered it. |
+
+## Tasks
+
+### list_tasks
+
+The workspace's tasks, newest first, 50 a page, and your sidebar sections.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `nameContains` | string | Only the tasks whose name holds these words, whatever their case; leave it out for all. (1–200 characters) |
+| `status` | `backlog` \| `todo` \| `in-progress` \| `done` \| `canceled` | Only the tasks that stand here; leave it out for all. |
+| `assignee` | string or null | Only the tasks assigned to this member, by their mention link, or null for the tasks no one is assigned to; leave it out for all. |
+| `offset` | integer | How many of the matching tasks to pass over, newest first: the nextOffset an earlier list answered, to read the next page; leave it out for the first. (at least 0) |
+
+### read_task
+
+One task: its key, status, priority, repository, assignee, blockers, and brief.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `taskId` | string, required | The task to read, by the id list_tasks answered. (1–36 characters) |
+
+### find_task
+
+Finds a task by its number or key, such as ACME-42, and reads it.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `task` | string, required | The task's number in the workspace, such as 42, or its key, such as ACME-42; the key's prefix is not checked, since it follows the workspace's name. (1–64 characters) |
+
+### create_task
+
+Creates a task you own, with no agent on it.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `name` | string, required | The task's name, as the developer would name it in the sidebar. (1–200 characters) |
+| `repository` | string or null | The GitHub repository its agents work in, as owner/name, which the workspace's GitHub installation must reach; null or left out for none, or the parent's where you give a parent. |
+| `brief` | string | The developer's own words about the task, which Vespin is handed when they open a call on it; their words where they gave them, left out otherwise. (up to 16000 characters) |
+| `status` | `backlog` \| `todo` \| `in-progress` \| `done` \| `canceled` | Where the task stands: backlog for work filed for later; todo where left out. |
+| `priority` | `none` \| `urgent` \| `high` \| `medium` \| `low` | How much the task matters; none for a task no one has weighed yet. |
+| `assignee` | string or null | The member the task is assigned to, who is on it now, by their mention link as list_tasks or another read names them, `[@Name](https://vespin.dev/&lt;workspace&gt;/person/&lt;id&gt;)`, or its address alone; a member of the task's workspace. null for no one. |
+| `parentTaskId` | string | The task to make it a child of, by the id list_tasks answered: a task of your workspace, whose repository it works in. Left out, it stands at the top. (1–36 characters) |
+| `subTaskIds` | array of string | Its sub-tasks (the tasks it is the parent of), by the id list_tasks answered, each a task of your workspace with no parent yet, working in one repository with it, which it takes, so leave repository out. Left out, it has none. (up to 50 items) |
+| `blockedBy` | array of string | Its blocked-by (the tasks it waits on), by the id list_tasks answered, each a task of your workspace, such as a sibling whose work comes first. Left out, it waits on none. (up to 50 items) |
+| `blocks` | array of string | Its blocks (the tasks that wait on it), by the id list_tasks answered, each a task of your workspace. Left out, none waits on it. (up to 50 items) |
+
+### update_task
+
+Changes a task's name, repository, status, priority, assignee, pin, section, parent, or blocks. Marking it done withdraws its open asks.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `taskId` | string, required | The task's id, as list_tasks or list_agents answered it. (1–36 characters) |
+| `name` | string | Its new name, as the sidebar shows it. (1–200 characters) |
+| `repository` | string or null | The GitHub repository its agents work in, as owner/name, which the workspace's GitHub installation must reach; null for none. |
+| `pinned` | boolean | true to pin it in the member's sidebar, false to unpin it; their pin alone, no other member's. |
+| `status` | `backlog` \| `todo` \| `in-progress` \| `done` \| `canceled` | Where the task now stands. |
+| `priority` | `none` \| `urgent` \| `high` \| `medium` \| `low` | How much the task matters; none for a task no one has weighed yet. |
+| `assignee` | string or null | The member the task is assigned to, who is on it now, by their mention link as list_tasks or another read names them, `[@Name](https://vespin.dev/&lt;workspace&gt;/person/&lt;id&gt;)`, or its address alone; a member of the task's workspace. null for no one. |
+| `sectionId` | string or null | The sidebar section the member keeps it in, by the id list_tasks or create_section answered; it leaves the section it stood in and lands at the top of this one. null takes it out of its section, back under Tasks. |
+| `parentTaskId` | string or null | The task to make it a child of, by the id list_tasks answered: a task of your workspace working in the same repository, and neither this task nor one of its sub-tasks; where its agents run stays its own. null takes it out from under its parent, to stand at the top. |
+| `blockedBy` | object | Its blocked-by (the tasks it waits on), changed: tasks to add and tasks to take away, each a task of your workspace. |
+| `blocks` | object | Its blocks (the tasks that wait on it), changed: tasks to add and tasks to take away, each a task of your workspace. |
+
+### change_task_relation
+
+Turns one relation between two tasks into another kind, in one step.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `taskId` | string, required | The task whose relation to move, by the id list_tasks answered. (1–36 characters) |
+| `otherTaskId` | string, required | The other task of the relation, in the same workspace, by the id list_tasks answered. (1–36 characters) |
+| `from` | `blocked-by` \| `blocks` \| `sub-task` \| `parent`, required | How the other task stands to the task now: blocked-by (the other blocks it), blocks (it blocks the other), sub-task (the other is its child), or parent (the other is its parent). |
+| `to` | `blocked-by` \| `blocks` \| `sub-task` \| `parent`, required | How the other task stands to the task once moved, in the same words as from, and another kind than from. |
+
+### delete_task
+
+Deletes a task for good, after stopping its agents.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `taskId` | string, required | The task to delete, by the id list_tasks answered. (1–36 characters) |
+
+### create_section
+
+Adds a section to your sidebar.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `title` | string, required | The section's title, as the sidebar shows it, at most 60 characters. (1–60 characters) |
+| `emoji` | string | One emoji the section wears beside its title; leave it out for none. (up to 32 characters) |
+
+### delete_section
+
+Deletes a sidebar section. Its tasks go back under Tasks.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `sectionId` | string, required | The section's id, as list_tasks or create_section answered it. (1–36 characters) |
+
+### read_page
+
+Reads a page an agent showed on a task: its title, version, and HTML.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `pageId` | string, required | The page's id, as a mention of it or a link to it names. (1–36 characters) |
+| `version` | integer | The version to read, by its number; leave it out for the newest. (at least 1) |
+
+### read_task_file
+
+Reads a file of the task's repository on GitHub, up to 500 lines at a time. Never reads the agent's sandbox.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `taskId` | string, required | The task whose repository to read, by the id list_tasks answered. (1–36 characters) |
+| `path` | string, required | The file's path from the repository's root, such as src/index.ts. (1–1024 characters) |
+| `firstLine` | integer | The first line to read, from 1; 1 where left out. (at least 1) |
+| `commit` | string | The commit to read the file at, by its full SHA, such as the head a pull request stands on; the default branch's head where left out. (40–40 characters) |
+
+### list_task_folder
+
+Lists a folder of the task's repository on GitHub.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `taskId` | string, required | The task whose repository to read, by the id list_tasks answered. (1–36 characters) |
+| `path` | string | The folder's path from the repository's root, such as src; the root where left out. (up to 1024 characters) |
+| `recursive` | boolean | true to list everything under the folder, each entry by its path from the folder; false or left out for the folder's own entries. |
+
+## Agents
+
+### list_agents
+
+Agents, newest first, 50 a page, with each one's status, model, branch, and task.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `taskId` | string | Only the agents on this task, by the id a listed agent's task answered; leave it out for the whole workspace. (1–36 characters) |
+| `words` | string | Only the agents whose title or task's name holds each of these words, whatever their case, to search the workspace by; leave it out for every agent. (1–200 characters) |
+| `offset` | integer | How many of the matching agents to pass over: the nextOffset an earlier list answered, to read the next page; leave it out for the first. (at least 0) |
+
+### read_agent
+
+One agent: its branch, its pull request, and a page of its transcript. The agent isn't told.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `from` | `end` \| `start` | Where to read its transcript from where neither before nor after is given: end, the default, for its newest page, or start for its first, from the message it was started with. |
+| `before` | object | The older place a page answered, to read the page of entries before it. |
+| `after` | object | The newer place a page answered, to read the page of entries after it. |
+| `entries` | integer | At most how many entries of its transcript the page holds, such as 1 for what it last said or did; as many as fit in 16000 characters when left out. |
+
+### read_agent_transcript
+
+An agent's whole transcript, a page at a time, one worker's transcript, or one call in full.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `worker` | string | One of the agent's workers, by the callId of the call that started it, as an entry of the agent's page names it, to read that worker's transcript instead; leave it out for the agent's own. (1–128 characters) |
+| `call` | object | One call of the transcript to read whole, its input and its output, instead of a page; leave it out to read a page. |
+| `from` | `end` \| `start` | Where to read its transcript from where neither before nor after is given: end, the default, for its newest page, or start for its first, from the message it was started with. |
+| `before` | object | The older place a page answered, to read the page of entries before it. |
+| `after` | object | The newer place a page answered, to read the page of entries after it. |
+| `entries` | integer | At most how many entries of its transcript the page holds, such as 1 for what it last said or did; as many as fit in 16000 characters when left out. |
+
+### read_agent_changes
+
+The agent's pull request: its state, checks, reviewers, and changed files, or one file's patch.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `path` | string | One file the pull request changes, by its path from the repository's root as files names it, to read its patch as well; leave it out to list the files alone. (1–4096 characters) |
+
+### start_agent
+
+Starts an agent on a task, on a new task, or from another agent. Answers once its session opens, which can take a minute or two. The agent doesn't report back to the caller.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | Where you name no taskId and no from, the workspace of the task made for the agent, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `taskId` | string | The task to start the agent on, by the id list_tasks answered; leave it out to start it on a new task made for it. (1–36 characters) |
+| `repository` | string or null | Where you name no taskId and no from, the GitHub repository of the task made for the agent, as owner/name, which the workspace's GitHub installation must reach; null or left out for none. A task's agent works in the task's own. |
+| `prompt` | string | What the agent should do, typed to it as its first message: everything it needs to start on its work, or the developer's words where they named the job. Every start takes one but a start from another agent, which takes none. (1–64000 characters) |
+| `note` | string | Everything else the agent should hear as it starts (what to start with, what to watch out for, what to leave alone), handed to it after the prompt in the same first message; leave it out where there is nothing beyond the prompt. (1–64000 characters) |
+| `title` | string | The agent's title from the start, how the developer sees it named, such as the pull request it will open; leave it out to have it named from what it is told. (1–80 characters) |
+| `branch` | string | The branch of the task's repository to clone the agent's checkout at and cut its own branch from, such as the head branch of a pull request it builds on; it must already be on GitHub. Leave it out for the repository's default branch. (1–255 characters) |
+| `model` | string | The model to run on, by its catalog id (such as anthropic/claude-opus-5.5); leave it out with the effort for the member's default. (1–200 characters) |
+| `effort` | string | The reasoning effort, as the model lists it (such as high); given with the model or not at all. (1–200 characters) |
+| `runsOn` | object | Where the agent runs: &#123;"machine":"vercel"&#125; for the cloud, or &#123;"machine":"device","device":"&lt;name&gt;"&#125; for one of the member's own devices (a Mac or a host) by its name, in any case, or &#123;"machine":"device","deviceId":"&lt;id&gt;"&#125; by its id, which must be registered and online; a name that matches none of the member's devices, or more than one, is refused with their devices listed by name, id, and whether each is online. With from, another place than that agent's moves it there. Leave it out for where the agent it starts from runs, with from; else where the member's newest agent on the task runs; else where the member last chose to run one; else the cloud. |
+| `from` | object | Another agent of your workspace to take over from, on its own task: the new agent is handed its brief and its transcript (with Vespin's summary of the steps that do not fit) and a copy of its work, runs on its model unless you name one, and hears the note after them; it takes no prompt and no branch. Without messageId it continues the agent, which is stopped; with one it forks the agent at that message, which goes on. |
+
+### message_agent
+
+Sends an agent a message as you, or queues it behind the agent's turn.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `text` | string, required | What to tell the agent, as the member's own words: it reads them as a message the member typed in its composer. (1–16000 characters) |
+| `queue` | boolean | true to queue it behind the agent's turn, as the composer's ⌘↩ would, rather than steer it into the turn under way: it waits unsent, and goes as the member's next message once the turn and every message queued before it are over, at once where the agent stands idle. Any member who may message the agent queues to it. |
+
+### change_agent_queue
+
+Resumes, holds, edits, deletes, reorders, or steers the messages queued for an agent.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `change` | object, required | The change: resume the paused queue; hold a message or let it go; edit its words; delete it; reorder the queue; or steer a message into the turn under way now, with new words or as it stands. |
+
+### stop_agent
+
+Stops the agent's turn. Its work so far stands.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+
+### update_agent
+
+Changes an agent's title, model, effort, context window, pin, or MCP servers, or archives it.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `title` | string | The agent's title as its tab shows it; empty clears it, so the tab shows the model's name. (up to 80 characters) |
+| `model` | string | The model it runs on from its next step, by its catalog id as list_models answers it; given with the effort or not at all. (1–200 characters) |
+| `effort` | string | The reasoning effort, as the model lists it; given with the model or not at all. (1–200 characters) |
+| `contextWindow` | `standard` \| `long` | The context window it runs on, standard or long; only with a model, and the model's whole window where left out. |
+| `pinned` | boolean | Whether the member keeps it pinned in their sidebar, the pin theirs alone. |
+| `disabledServers` | array of string | The MCP servers switched off for the agent, by connection name, the whole list, which replaces the one standing; empty switches every server back on. Its next turn reads it. (up to 32 items) |
+| `archived` | boolean | true to archive it, as the member's Archive agent would: it leaves the sidebar, its task's tabs, and every list but the archived ones, takes no message, and is not woken, its transcript, branch, and pull request kept; a turn still running is stopped first. false to bring an archived one back. |
+| `reason` | string | Why it is archived, in a short sentence its archived banner shows beside the member's name, such as its pull request having merged; only with archived true. (1–500 characters) |
+
+### rewind_agent
+
+Takes an agent back to the moment before one of its lines. Its checkout stays as it is.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `lineId` | string, required | The line to take the agent back to the moment before, by the lineId read_agent names on a line sent to the agent. (1–128 characters) |
+
+### delete_agent
+
+Deletes an agent for good. Its branch and pull request stay on GitHub.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+
+### wake_agent
+
+Resumes a cloud agent's sandbox.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+
+### list_agent_ports
+
+The ports listening in a cloud agent's sandbox, and the one shared.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+
+### share_agent_port
+
+Shares one port of a cloud agent's sandbox by link, or stops sharing.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `port` | integer or null, required | The port to share, one a server listens on as list_agent_ports lists them; null to stop sharing. |
+
+### list_agent_browser_tabs
+
+The tabs in a cloud agent's browser, with who drives each.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+
+### open_agent_browser_tab
+
+Opens an address in the agent's browser and takes the tab over for you.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `address` | string, required | The http or https address to open the tab at. |
+
+### take_over_agent_browser_tab
+
+Takes a tab over, so the agent waits until you hand it back or 60 seconds pass.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `tabId` | string, required | The tab's id, as list_agent_browser_tabs answered it. (1–36 characters) |
+
+### hand_back_agent_browser_tab
+
+Hands a tab back to the agent.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `tabId` | string, required | The tab's id, as list_agent_browser_tabs answered it. (1–36 characters) |
+
+### run_action
+
+Runs one of the repository's run actions in a cloud agent's sandbox.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `actionId` | string, required | The run action, by its id among the agent's repository's actions as read_sandbox_setup answered them. (1–36 characters) |
+
+### stop_run_action
+
+Stops a run action.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `actionId` | string, required | The run action, by its id among the agent's repository's actions as read_sandbox_setup answered them. (1–36 characters) |
+
+### list_models
+
+The models you're offered, with their efforts, and your default.
+
+No inputs.
+
+### update_preferences
+
+Sets the model, effort, and context window your agents start on.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `model` | string, required | The default model, by its catalog id as list_models answers it. (1–200 characters) |
+| `effort` | string, required | The default reasoning effort, as the model lists it. (1–200 characters) |
+| `contextWindow` | `standard` \| `long` | The default context window, standard or long; leave it out for the model's standard one. |
+
+## Inbox
+
+### read_inbox
+
+Your threads: asks waiting on you first, then other open threads, then the latest 20 settled.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+
+### answer_ask
+
+Answers an open ask as you: a choice, a to-do's done or not done, a form, or words.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `threadId` | string, required | The thread's id, as read_inbox answered it. (1–36 characters) |
+| `askId` | string, required | The id of the message whose ask you answer: the thread's askId, as read_inbox answered it. (1–36 characters) |
+| `reply` | `chose` \| `answered` \| `submitted` \| `done` \| `not-done`, required | How the member answers: chose, with choices, for a decide; answered, with their words in note, where no option of a decide fits or an answer asks no fields; submitted, with values, for an answer's fields; and done or not-done for a do. |
+| `choices` | array of string | The labels of the options the member picks, for chose: one, or several where the ask lets several be picked. (up to 6 items) |
+| `values` | array of object | The fields the member fills, for submitted: each by its field's label, with words, a number, one of a select's options, or true or false, as its type asks; every required field filled. (up to 50 items) |
+| `steps` | array of integer | The steps of a do the member did, by their places from 0: every one for done. (up to 50 items) |
+| `note` | string | The member's words with the answer, in Markdown: the answer itself for answered, and otherwise anything they add. (up to 8000 characters) |
+
+### acknowledge_thread
+
+Acknowledges a notice, as Got it does.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `threadId` | string, required | The thread's id, as read_inbox answered it. (1–36 characters) |
+| `revision` | integer, required | The thread's revision, as read_inbox answered it. (at least 0) |
+
+### reply_to_thread
+
+Writes on a thread without answering its ask.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `threadId` | string, required | The thread's id, as read_inbox answered it. (1–36 characters) |
+| `text` | string, required | The member's message, in Markdown, short and complete. (1–8000 characters) |
+
+### close_thread
+
+Closes a thread without answering it.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `threadId` | string, required | The thread's id, as read_inbox answered it. (1–36 characters) |
+| `revision` | integer, required | The thread's revision, as read_inbox answered it. (at least 0) |
+
+### mark_thread_read
+
+Marks a thread read or unread, for you only.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `threadId` | string, required | The thread's id, as read_inbox answered it. (1–36 characters) |
+| `read` | boolean, required | true to mark it read, as opening it does; false to mark it unread, which holds until the member reads it again. |
+
+### mark_inbox_read
+
+Marks every thread read.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+
+### remind_thread
+
+Hides a thread until a time, or ends its reminder.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `threadId` | string, required | The thread's id, as read_inbox answered it. (1–36 characters) |
+| `at` | string or null, required | When the thread comes back, as a time with its offset, such as 2026-10-20T09:00-07:00, in the member's own zone where you know it; null to end a reminder set before. |
+
+### start_thread
+
+Starts a new thread with an agent.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `title` | string | The thread's subject; leave it out to have it titled from the message. (1–160 characters) |
+| `text` | string, required | The member's message, in Markdown, short and complete. (1–8000 characters) |
+
+## Pull requests
+
+### read_pull_request
+
+Reads one part of a pull request: its overview, checks, conversation, or changes.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `agentId` | string | A coding agent whose pull request it is, by its id as list_agents answered it; leave it out to name a repository's pull request instead. (1–36 characters) |
+| `repository` | string | The pull request's repository, as owner/name, one the workspace's GitHub installation reaches, with number; leave it out with agentId. (up to 140 characters) |
+| `number` | integer | The pull request's number: with repository, the one meant; with agentId, another pull request of the agent's repository, left out for the agent's own. (at least 1) |
+| `part` | `overview` \| `checks` \| `conversation` \| `changes` | What to read: overview (the default), checks, conversation, or changes. |
+| `path` | string | With changes, one file by its path as files names it, to read its patch as well. (1–4096 characters) |
+| `offset` | integer | With conversation or changes, the nextOffset an earlier read answered, to read the next page; leave it out for the first. (at least 0) |
+
+### agent_pull_request_action
+
+Makes one change on GitHub as you: merge, auto-merge, review, comment, label, and the rest.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
+| `number` | integer | Another pull request of the agent's repository, by its number, such as one stacked on its own; leave it out for the agent's own pull request. (at least 1) |
+| `change` | object, required | The change, named by its action, with the fields that action takes. |
+
+### mark_pull_request_files_viewed
+
+Marks files viewed or not viewed.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `agentId` | string | A coding agent whose pull request it is, by its id as list_agents answered it; leave it out to name a repository's pull request instead. (1–36 characters) |
+| `repository` | string | The pull request's repository, as owner/name, one the workspace's GitHub installation reaches, with number; leave it out with agentId. (up to 140 characters) |
+| `number` | integer | The pull request's number: with repository, the one meant; with agentId, another pull request of the agent's repository, left out for the agent's own. (at least 1) |
+| `paths` | array of string, required | The files, by their paths as read_pull_request's changes name them. (up to 50 items) |
+| `viewed` | boolean, required | true to mark them viewed, false to unmark them. |
+
+### read_pull_request_chapters
+
+Reads a pull request's chapters.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string | An agent whose pull request to read, by its id as list_agents answered it; leave it out to name a repository's pull request instead. (1–36 characters) |
+| `repository` | string | The repository whose pull request to read, as owner/name, with number; leave it out with agentId. (up to 140 characters) |
+| `number` | integer | The pull request's number: with repository, the one to read; with agentId, another pull request of the agent's repository, left out for the agent's own. (at least 1) |
+| `workspace` | string | With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+
+### generate_pull_request_chapters
+
+Generates chapters on your own Anthropic or OpenAI key, which you pay for.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `agentId` | string | An agent whose pull request to read, by its id as list_agents answered it; leave it out to name a repository's pull request instead. (1–36 characters) |
+| `repository` | string | The repository whose pull request to read, as owner/name, with number; leave it out with agentId. (up to 140 characters) |
+| `number` | integer | The pull request's number: with repository, the one to read; with agentId, another pull request of the agent's repository, left out for the agent's own. (at least 1) |
+| `workspace` | string | With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+
+## Comments on pages
+
+### read_comments
+
+The comment threads on one of a task's pages.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `taskId` | string, required | The task whose pages' comments to act on, by the id list_tasks answered. (1–36 characters) |
+| `page` | string, required | One of the task's pages, by the id a mention of it or a link to it names, whose threads to read. (1–36 characters) |
+| `status` | `open` \| `resolved` | Which threads to read: open, the default, or resolved. |
+
+### reply_to_comment
+
+Replies in a thread. Every agent in it is sent the reply.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `taskId` | string, required | The task whose pages' comments to act on, by the id list_tasks answered. (1–36 characters) |
+| `thread` | string, required | The thread's id, as read_comments lists it. (1–36 characters) |
+| `words` | string, required | The comment, in plain words, as the member's own: every member of the workspace reads it under the member's name. (up to 8000 characters) |
+
+### update_comment
+
+Resolves or reopens a thread.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `taskId` | string, required | The task whose pages' comments to act on, by the id list_tasks answered. (1–36 characters) |
+| `thread` | string, required | The thread's id, as read_comments lists it. (1–36 characters) |
+| `resolved` | boolean, required | true to resolve the thread once what it asked is settled; false to reopen a resolved one where it is unsettled again. |
+
+## Repositories and GitHub
+
+### list_repositories
+
+The repositories the workspace reaches through the GitHub App or members' tokens.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+
+### set_token_repository
+
+Adds or removes a repository on your own GitHub token.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `repository` | string, required | The repository, by its full name (owner/name), as list_repositories lists it. (up to 140 characters) |
+| `added` | boolean, required | true to add the repository on the member's own GitHub token, false to remove it. |
+
+### read_repository_file
+
+Reads a file of a repository on GitHub.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `repository` | string, required | The repository, by its full name (owner/name), as list_repositories lists it. (up to 140 characters) |
+| `path` | string, required | The file's path from the repository's root, such as src/index.ts. (1–1024 characters) |
+| `firstLine` | integer | The first line to read, from 1; 1 where left out. (at least 1) |
+| `commit` | string | The commit to read the file at, by its full SHA; the default branch's head where left out. (40–40 characters) |
+
+### list_repository_folder
+
+Lists a folder of a repository on GitHub.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `repository` | string, required | The repository, by its full name (owner/name), as list_repositories lists it. (up to 140 characters) |
+| `path` | string | The folder's path from the repository's root, such as src; the root where left out. (up to 1024 characters) |
+| `recursive` | boolean | true to list everything under the folder, each entry by its path from the folder; false or left out for the folder's own entries. |
+
+### read_github_issue
+
+Reads an issue or pull request's title, state, and author.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `repository` | string, required | The repository, by its full name (owner/name), as list_repositories lists it. (up to 140 characters) |
+| `number` | integer, required | The issue's or pull request's number in the repository. (at least 1) |
+
+### read_github_connection
+
+Whether your GitHub is connected, and as whom.
+
+No inputs.
+
+### list_repository_pins
+
+The repositories you pinned.
+
+No inputs.
+
+### pin_repository
+
+Pins or unpins a repository.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `repository` | string, required | The repository, as owner/name. (up to 140 characters) |
+| `pinned` | boolean, required | true to pin it, false to unpin it. |
+
+## Cloud environment
+
+### read_sandbox_setup
+
+The workspace's install script, each repository's setup script, and its run actions.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace whose setup it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+
+### edit_sandbox_setup
+
+Replaces the install script or a repository's setup script. Owners and admins only.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace whose setup it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `repository` | string | The repository whose setup script to save, as owner/name; leave it out to save the workspace's install script. (up to 140 characters) |
+| `script` | string, required | The whole script, which replaces the one that stood; an empty one removes it. (up to 65536 characters) |
+
+### edit_run_action
+
+Adds, changes, or removes a repository's run action. Owners and admins only.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace whose setup it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `repository` | string, required | The repository whose run actions to edit, as owner/name, under any casing of its name. (up to 140 characters) |
+| `actionId` | string | The action to change or remove, by the id read_sandbox_setup answered; leave it out to add one, which then needs a label and a command. (1–36 characters) |
+| `remove` | boolean | true to remove the action actionId names; nothing else given is then read. |
+| `label` | string | What the Run menu and the action's Terminal tab call it. (1–40 characters) |
+| `command` | string | The bash it runs from the repository's checkout, with the workspace's environment variables, such as pnpm dev. (up to 4096 characters) |
+| `icon` | object or null | The icon it wears in the Run menu, one emoji or one Lucide icon by its kebab-case name in a color or none, such as rocket; null for the menu's own. |
+| `isDefault` | boolean | true to make it the repository's default, which the Run button runs, so no other action is; false to make it no longer the default. |
+| `position` | integer | Its place in the list after the edit, from 0, a place past the end being the last; an added action goes last and a changed one stays where it stood where left out. (0–19) |
+
+### list_environment_variables
+
+The workspace's environment variables, by name. Never their values.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace whose environment variables to act on, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+
+### set_environment_variable
+
+Sets an environment variable. Owners and admins only. The value is never shown again.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace whose environment variables to act on, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `name` | string, required | The variable's name: a letter or underscore, then letters, digits, and underscores, such as DATABASE_URL. (up to 256 characters) |
+| `value` | string, required | The value, as the agents' environment will hold it, at most 32768 characters. (up to 32768 characters) |
+
+### delete_environment_variable
+
+Deletes an environment variable. Owners and admins only.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace whose environment variables to act on, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `name` | string, required | The variable's name: a letter or underscore, then letters, digits, and underscores, such as DATABASE_URL. (up to 256 characters) |
+
+## Automations
+
+### list_automations
+
+The workspace's automations, or one in full with its runs.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `automationId` | string | One automation to read whole, its prompt in full and its newest runs, by the id this tool answered; leave it out to list them all. (1–36 characters) |
+
+### create_automation
+
+Creates an automation on a schedule, a GitHub event, or a Sentry event. Webhook triggers are made in the app.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `name` | string, required | (1–80 characters) |
+| `prompt` | string, required | Each run's first message; make it stand alone, since no one watches a run. (1–12000 characters) |
+| `trigger` | object, required | cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub senders default to people (for pull-request-merged, whose pull request it is), moments (pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) to false; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is "Send a notification via Vespin"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page. |
+| `repositories` | array of string | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. Create defaults to none. (up to 10 items) |
+| `model` | string | Catalog id from list_models, given with effort; neither for the creator's default. (1–200 characters) |
+| `effort` | string | (1–200 characters) |
+| `disabledServers` | array of string | The member's connections each run's agent is not handed, by what they connect, such as neon, sentry, or notion-2 for a second Notion account; the whole list. (up to 32 items) |
+| `agentId` | string or null | Hand every run to this agent, by its list_agents id, so runs share its conversation; null for a new agent each run, the default. |
+| `guards` | object | maxConcurrentRuns 1 to 5, default 1; dailyRunCap 1 to 50, default 10; subjectCooldownHours, per Sentry issue, 1 to 168, default 24. |
+| `scope` | `personal` \| `workspace` | personal, the default, is its creator's; workspace is every member's. |
+| `archiveSuccessful` | boolean | Archive each run's agent once it succeeds and leaves no thread open. |
+| `slackDelivery` | boolean | Send each run's result to the member on Slack from Vespin's bot, so the run's agent needs no Slack of its own; the workspace must have the bot connected. |
+
+### update_automation
+
+Changes an automation. A new trigger replaces the old one whole.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `automationId` | string, required | The automation's id, as list_automations or create_automation answered it. (1–36 characters) |
+| `enabled` | boolean | false pauses it, true resumes it; missed firings are not run late. |
+| `name` | string | (1–80 characters) |
+| `prompt` | string | Each run's first message; make it stand alone, since no one watches a run. (1–12000 characters) |
+| `trigger` | object | cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub senders default to people (for pull-request-merged, whose pull request it is), moments (pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) to false; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is "Send a notification via Vespin"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page. |
+| `repositories` | array of string | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. Create defaults to none. (up to 10 items) |
+| `model` | string | Catalog id from list_models, given with effort; neither for the creator's default. (1–200 characters) |
+| `effort` | string | (1–200 characters) |
+| `disabledServers` | array of string | The member's connections each run's agent is not handed, by what they connect, such as neon, sentry, or notion-2 for a second Notion account; the whole list. (up to 32 items) |
+| `agentId` | string or null | Hand every run to this agent, by its list_agents id, so runs share its conversation; null for a new agent each run, the default. |
+| `guards` | object | maxConcurrentRuns 1 to 5, default 1; dailyRunCap 1 to 50, default 10; subjectCooldownHours, per Sentry issue, 1 to 168, default 24. |
+| `scope` | `personal` \| `workspace` | personal, the default, is its creator's; workspace is every member's. |
+| `archiveSuccessful` | boolean | Archive each run's agent once it succeeds and leaves no thread open. |
+| `slackDelivery` | boolean | Send each run's result to the member on Slack from Vespin's bot, so the run's agent needs no Slack of its own; the workspace must have the bot connected. |
+
+### run_automation
+
+Runs an automation now.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `automationId` | string, required | The automation's id, as list_automations or create_automation answered it. (1–36 characters) |
+
+### delete_automation
+
+Deletes an automation.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `automationId` | string, required | The automation's id, as list_automations or create_automation answered it. (1–36 characters) |
+
+## Integrations, Slack, and Sentry
+
+### list_integrations
+
+Your integrations. Never their tokens.
+
+No inputs.
+
+### connect_integration
+
+Answers a link that connects an integration, for you to open in your browser.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `provider` | `executor` \| `github` \| `gmail` \| `google-calendar` \| `google-drive` \| `granola` \| `linear` \| `mercury` \| `neon` \| `notion` \| `posthog` \| `resend` \| `sentry` \| `slack` \| `stripe` \| `supabase` \| `vercel` \| `ycombinator`, required | The provider to sign in to. |
+| `connection` | string | An account the member holds, by the connection name list_integrations answered, to sign it in again; leave it out for the provider's first account. |
+| `add` | boolean | true to sign in another account at the provider, where it takes more than one. |
+
+### list_integration_tools
+
+The tools one of your integrations gives agents.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `connection` | string, required | The account, by the connection name list_integrations answered, such as notion, or notion-2 for a second Notion account. |
+
+### rename_integration
+
+Renames one of your integrations.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `connection` | string, required | The account, by the connection name list_integrations answered, such as notion, or notion-2 for a second Notion account. |
+| `label` | string, required | What the member calls the account, such as the workspace it is at the provider. (1–64 characters) |
+
+### disconnect_integration
+
+Disconnects an integration.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `connection` | string, required | The account, by the connection name list_integrations answered, such as notion, or notion-2 for a second Notion account. |
+
+### read_slack_bot
+
+The workspace's Slack bot: its default repository, channels, and your notifications.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace whose Slack bot it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+
+### update_slack_bot
+
+Changes your Slack notifications, or the bot's repository and channels (owners and admins).
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace whose Slack bot it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `notifications` | boolean | Whether the bot writes the member, in Slack, the threads that wait on them; the member's own switch, which holds in every workspace. |
+| `defaultRepository` | string or null | The repository an agent started from Slack works in where its message names none, as owner/name, one the workspace's GitHub reaches; null clears it. |
+| `channel` | object | One channel of the team to change. |
+
+### disconnect_slack_bot
+
+Disconnects the Slack bot. Owners and admins only.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace whose Slack bot it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+
+### list_sentry_installations
+
+The workspace's Sentry installations.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+
+### disconnect_sentry
+
+Disconnects a Sentry installation. Owners and admins only.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `installationId` | string, required | The installation, by the id list_sentry_installations answered. (1–64 characters) |
+
+## MCP clients
+
+### list_mcp_clients
+
+The apps connected to your account through Vespin MCP, and the server's address.
+
+No inputs.
+
+### revoke_mcp_client
+
+Disconnects an app. Its access ends within 15 minutes.
+
+| Input | Type | Description |
+| --- | --- | --- |
+| `clientId` | string, required | The client, by the id list_mcp_clients answered. (1–2048 characters) |

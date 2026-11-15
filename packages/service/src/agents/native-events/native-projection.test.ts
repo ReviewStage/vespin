@@ -7,6 +7,7 @@ import {
   NATIVE_WRITE,
   projectMoments,
   turnProgressed,
+  withCallAccounts,
 } from "./native-projection.js";
 import { toolAnswerSettlement } from "./runner-moments.js";
 
@@ -49,6 +50,55 @@ test("an unknown tool's call settled with a new input, as Codex settles one, kee
     [
       [RUN_EVENT.TOOL_CALL_STARTED, "unknown_tool", { name: "edit_plan", input: {} }],
       [RUN_EVENT.TOOL_CALL_SETTLED, "unknown_tool", undefined],
+    ],
+  );
+});
+
+test("a call of an integration's tool names the account it ran on, even in the event that opens its turn or as it starts and settles in one event; a call on an account no name stands for is left as it was", () => {
+  const accounts = { "linear-2": "Acme" };
+
+  const envelope = (callId: string, connection: string | undefined) => ({
+    remoteTool: "save_issue",
+    parentCallId: callId,
+    input: {},
+    ...(connection === undefined ? undefined : { connection }),
+  });
+
+  const stamped = withCallAccounts(
+    heldProjection(null),
+    [
+      {
+        kind: NATIVE_MOMENT.TOOL_STARTED,
+        callId: "call_acme",
+        name: "linear_remote",
+        input: envelope("call_acme", "linear-2"),
+      },
+      {
+        kind: NATIVE_MOMENT.TOOL_SETTLED,
+        callId: "call_acme",
+        settlement: toolAnswerSettlement({ workspaceTool: false, text: "ok", output: "ok" }, false),
+        input: envelope("call_acme", "linear-2"),
+      },
+      {
+        kind: NATIVE_MOMENT.TOOL_STARTED,
+        callId: "call_notion",
+        name: "notion_remote",
+        input: envelope("call_notion", undefined),
+      },
+    ],
+    accounts,
+  );
+
+  assert.deepEqual(
+    stamped.map((moment) =>
+      moment.kind === NATIVE_MOMENT.TOOL_STARTED || moment.kind === NATIVE_MOMENT.TOOL_SETTLED
+        ? moment.input
+        : undefined,
+    ),
+    [
+      { ...envelope("call_acme", "linear-2"), account: "Acme" },
+      { ...envelope("call_acme", "linear-2"), account: "Acme" },
+      envelope("call_notion", undefined),
     ],
   );
 });
