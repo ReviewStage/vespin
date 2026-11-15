@@ -8,6 +8,7 @@ import type { TaskFileRequest } from "@repo/features/task-wire";
 import type { TasksFileAnswer } from "@repo/features/tasks-view";
 import {
   type AppStateDelivery,
+  type AppStateRead,
   TASK_LIST_PARTS,
   type TaskListDelivery,
   taskListPartsOf,
@@ -56,6 +57,11 @@ function taskListOf(delivery: AppStateDelivery): TaskListDelivery | undefined {
   return moved === undefined || moved.length === 0 ? undefined : { version, moved };
 }
 
+/** `read` with the task list's lists beside it, as the host answers a whole read, where a fake answered it without them. */
+function withListsBeside(read: AppStateRead): AppStateRead {
+  return read.taskList === undefined ? { ...read, taskList: taskListPartsOf(read.tasks) } : read;
+}
+
 /**
  * The document's whole read and deliveries with the task list's lists and
  * rows beside them, where a fake hands a document or a delivery it built by
@@ -70,12 +76,7 @@ function withTaskLists(calls: Partial<AppBridge>): Partial<AppBridge> {
     ...(requestAppState === undefined
       ? undefined
       : {
-          requestAppState: () =>
-            requestAppState().then((read) =>
-              read.taskList === undefined
-                ? { ...read, taskList: taskListPartsOf(read.tasks) }
-                : read,
-            ),
+          requestAppState: () => requestAppState().then(withListsBeside),
         }),
     ...(onAppState === undefined
       ? undefined

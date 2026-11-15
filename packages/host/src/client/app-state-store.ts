@@ -158,6 +158,7 @@ export class AppStateStore {
 
   #apply(patch: AppStatePatch, taskList: TaskListParts | undefined): void {
     const previous = this.snapshot();
+
     const listed =
       taskList === undefined || sameLists(this.#taskList, taskList) ? this.#taskList : taskList;
 

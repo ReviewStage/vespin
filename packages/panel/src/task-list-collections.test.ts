@@ -99,6 +99,7 @@ function deliveryBetween(sent: AppStateSnapshot, next: AppStateSnapshot): AppSta
     taskListPartsOf(next.tasks),
     next.version,
   );
+
   const delivery = appStateDelivery(sent, next, rows);
 
   if (delivery === undefined) throw new Error("The two documents do not differ.");

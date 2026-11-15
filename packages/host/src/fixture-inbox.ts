@@ -1678,10 +1678,12 @@ function stagedDocuments(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_
   const staged = STAGED_DOCUMENTS.get(held);
 
   if (staged !== undefined) return staged;
+
   const laid = {
     ...held,
     [TASK.INVITES]: { rows: { task: invitesDocument(ownInvites(INVITES_TASK)) } },
   };
+
   STAGED_DOCUMENTS.set(held, laid);
   STAGED_DOCUMENTS.set(laid, laid);
 
