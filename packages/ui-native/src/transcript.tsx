@@ -1,7 +1,5 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
-import type { AgentStatus } from "@repo/features/agent-wire";
-import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -9,8 +7,10 @@ import { SymbolView } from "expo-symbols";
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   type AccessibilityActionEvent,
+  AccessibilityInfo,
   ActivityIndicator,
   FlatList,
+  type HostInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   ScrollView,
@@ -21,14 +21,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   useAccessibilitySize,
-  useAnnounced,
   useReduceMotion,
   useReduceTransparency,
   useScaledSize,
 } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
-import { useDockRoom } from "./glass-bar.js";
+import { DOCK_FOLLOWS_KEYBOARD, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
@@ -62,7 +61,7 @@ const ANCHOR_REACH = 48;
 
 /**
  * The room the system's tab bar floats over at the screen's foot, past the
- * safe area, which the newest row and Jump to latest stand clear of. Note
+ * safe area, which the newest row stands clear of. Note
  * that the list keeps it at its own end, because a scroll to the end reaches
  * the end of the rows alone and not the room the system keeps for the bar.
  */
@@ -157,16 +156,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.EDGE - 4,
     paddingVertical: SPACE.ROW,
   },
-  head: {
-    paddingHorizontal: SPACE.EDGE,
-    paddingTop: SPACE.TIGHT,
-    paddingBottom: SPACE.EDGE,
-    gap: 6,
-  },
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
-  headModel: { flexDirection: "row", alignItems: "center", gap: 3 },
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
-  jump: { position: "absolute", alignSelf: "center" },
+  jump: { position: "absolute" },
   jumpFace: {
     width: JUMP_SIZE,
     height: JUMP_SIZE,
@@ -274,12 +266,22 @@ function CallRow({
   item,
   held,
   onToggle,
+  placeCall,
 }: {
   readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.CALL }>;
   /** The answer the agent holds the call for, where it does. */
   readonly held: HeldCall | undefined;
   readonly onToggle: (item: TranscriptItem) => void;
+  readonly placeCall: ((callId: string, row: HostInstance | null) => void) | undefined;
 }) {
+  const { callId } = item;
+
+  // Note that the row hands the transcript its press, so a reader sent to this call lands on it once the list has scrolled it into view.
+  const press = useCallback(
+    (row: HostInstance | null) => placeCall?.(callId, row),
+    [callId, placeCall],
+  );
+
   const colors = useColors();
   const large = useAccessibilitySize();
   // Note that at an accessibility size the line's words wrap rather than cut to a word or two.
@@ -291,6 +293,7 @@ function CallRow({
   return (
     <View style={[styles.row, inset(item.depth)]}>
       <Press
+        ref={press}
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
@@ -447,6 +450,8 @@ function OriginFrom({
 /** A webhook call's body under the prompt it rode in with, folded under its own line, as the caller sent it. */
 function OriginBody({ body }: { readonly body: string }) {
   const colors = useColors();
+  const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const column = useScaledSize(MARK_SIZE.GLYPH);
   const [open, setOpen] = useState(false);
 
   return (
@@ -460,10 +465,10 @@ function OriginBody({ body }: { readonly body: string }) {
         style={styles.callLine}
       >
         <SymbolView
-          name={open ? "chevron.down" : "chevron.right"}
-          size={MARK_SIZE.GLYPH - 3}
+          name={glyphSymbol(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
+          size={chevron}
           tintColor={colors.TEXT_MUTED}
-          style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
+          style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
         <Text style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
@@ -484,6 +489,8 @@ function FoldRow({
   readonly onToggle: (item: TranscriptItem) => void;
 }) {
   const colors = useColors();
+  const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const column = useScaledSize(MARK_SIZE.GLYPH);
   const large = useAccessibilitySize();
 
   const heard = [
@@ -505,9 +512,9 @@ function FoldRow({
       >
         <SymbolView
           name={glyphSymbol(item.open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
-          size={MARK_SIZE.GLYPH - 3}
+          size={chevron}
           tintColor={colors.TEXT_MUTED}
-          style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
+          style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
         <Text
@@ -549,6 +556,8 @@ interface RowDrawing {
   readonly suggestion?:
     | ((link: ReplyButtonLink, words: string) => SuggestionLook | undefined)
     | undefined;
+  /** Hands the transcript a call's row as it stands and as it goes, so a reader sent to the call lands on it. */
+  readonly placeCall?: ((callId: string, row: HostInstance | null) => void) | undefined;
 }
 
 /** A pull request an agent opened, as the transcript lists it. */
@@ -564,6 +573,8 @@ function TranscriptRow({
 }) {
   const colors = useColors();
   const large = useAccessibilitySize();
+  const pageMark = useScaledSize(MARK_SIZE.WRITER);
+  const pageChevron = useScaledSize(MARK_SIZE.GLYPH - 3);
 
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID:
@@ -573,7 +584,10 @@ function TranscriptRow({
             <OriginFrom parts={item.from} onOpenLink={drawing.onOpenLink} />
           )}
           {item.sender === undefined ? null : (
-            <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}>
+            <Text
+              accessibilityRole="header"
+              style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}
+            >
               {item.sender}
             </Text>
           )}
@@ -639,7 +653,12 @@ function TranscriptRow({
       );
     case TRANSCRIPT_ITEM.CALL:
       return (
-        <CallRow item={item} held={drawing.heldCall?.(item.callId)} onToggle={drawing.onToggle} />
+        <CallRow
+          item={item}
+          held={drawing.heldCall?.(item.callId)}
+          onToggle={drawing.onToggle}
+          placeCall={drawing.placeCall}
+        />
       );
     case TRANSCRIPT_ITEM.FOLD:
       return <FoldRow item={item} onToggle={drawing.onToggle} />;
@@ -681,7 +700,7 @@ function TranscriptRow({
           >
             <SymbolView
               name={glyphSymbol(GLYPH.PAGE)}
-              size={MARK_SIZE.WRITER}
+              size={pageMark}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
@@ -698,7 +717,7 @@ function TranscriptRow({
             </View>
             <SymbolView
               name={glyphSymbol(GLYPH.FOLDED)}
-              size={MARK_SIZE.GLYPH - 3}
+              size={pageChevron}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
@@ -736,91 +755,23 @@ function TranscriptRow({
   }
 }
 
-type AgentHeadProps = {
-  /** The model the agent runs on, as the panel's chip names it. */
-  readonly model: string | undefined;
-  readonly status: AgentStatus | undefined;
-  /** Opens the picker that changes the model, as a press on the panel's chip does; none where the reader may not change it. */
-  readonly onModel?: (() => void) | undefined;
-};
-
-/** What a press on the head's model says it does, to VoiceOver. */
-const CHANGE_MODEL = "Change model";
-
 /**
- * The line over the transcript, the agent's title standing in the system's
- * bar over it: where the agent stands and the model it runs on, as the
- * panel's tab and its model chip say them; nothing before either is known.
- * Where the model may be changed, its name is a press with a chevron after
- * it, as the panel's chip draws one, opening the picker.
- */
-export function AgentHead({ model, status, onModel }: AgentHeadProps) {
-  const colors = useColors();
-  const state = status === undefined ? undefined : agentGlyphState(status);
-  const words = status === undefined ? undefined : agentStateWords(status);
-  const pressed = onModel !== undefined && model !== undefined && model !== "";
-
-  const said = [words, pressed ? undefined : model]
-    .filter((each) => each !== undefined && each !== "")
-    .join(" · ");
-
-  // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Finished or Failed, since the reader may stand anywhere in the transcript.
-  useAnnounced(words);
-
-  if (said === "" && !pressed) return null;
-  const ink = { fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED };
-
-  return (
-    <View style={[styles.head, styles.headLine]}>
-      {state === GLYPH_STATE.WORKING ? (
-        <ActivityIndicator size="small" color={colors.WORKING} accessibilityElementsHidden />
-      ) : state === GLYPH_STATE.FAILED ? (
-        <SymbolView
-          name={glyphSymbol(GLYPH.FAILED)}
-          size={MARK_SIZE.GLYPH}
-          tintColor={colors.DANGER}
-          accessibilityElementsHidden
-        />
-      ) : null}
-      {said === "" ? null : (
-        <Text style={ink}>{pressed && words !== undefined ? `${said} ·` : said}</Text>
-      )}
-      {pressed ? (
-        <Press
-          onPress={onModel}
-          accessibilityRole="button"
-          accessibilityLabel={`${CHANGE_MODEL}, ${model}`}
-          hitSlop={LINE_REACH}
-          testID="agent-model"
-          style={styles.headModel}
-        >
-          <Text style={ink}>{model}</Text>
-          <SymbolView
-            name={glyphSymbol(GLYPH.UNFOLDED)}
-            size={MARK_SIZE.GLYPH - 4}
-            weight="semibold"
-            tintColor={colors.TEXT_MUTED}
-            accessibilityElementsHidden
-          />
-        </Press>
-      ) : null}
-    </View>
-  );
-}
-
-/**
- * The control that brings the newest row into view, as Messages and the
- * chat apps draw it: a round button of Liquid Glass holding a down arrow,
- * centered over the list's foot, standing only once the reader has scrolled
- * back. Note that where Liquid Glass is unavailable, before iOS 26, or the
+ * The control that brings the newest row into view: a round button of
+ * Liquid Glass holding a down arrow, standing only once the reader has
+ * scrolled back, over the list's foot at the end of the rows' words, as the
+ * panel's way back stands in its log's corner, so it covers at most a
+ * line's end rather than the middle of the words. Note that where Liquid Glass is unavailable, before iOS 26, or the
  * reader turned on Reduce Transparency, it is drawn solid on the surface's
  * ground inside the quiet ink rather than a hand-drawn copy of glass.
  */
 function JumpToLatest({
   bottom,
+  end,
   onPress,
 }: {
   readonly bottom: number;
+  /** How far in from the list's trailing edge it stands: where the rows' words end. */
+  readonly end: number;
   readonly onPress: () => void;
 }) {
   const colors = useColors();
@@ -842,7 +793,7 @@ function JumpToLatest({
       accessibilityRole="button"
       accessibilityLabel={JUMP_TO_LATEST}
       hitSlop={SPACE.TIGHT}
-      style={[styles.jump, { bottom }]}
+      style={[styles.jump, { bottom, right: end }]}
     >
       {solid ? (
         <View
@@ -928,6 +879,9 @@ type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
 /** A call's row the transcript is asked to bring into view, the ask told apart by its serial. */
 export type TranscriptReveal = { readonly callId: string; readonly serial: number };
 
+/** How long a revealed row's scroll takes to settle at most, in milliseconds, after which its row takes VoiceOver's focus where the scroll's own end did not send it: the system's scroll animation, with room. */
+const REVEAL_SETTLE_MS = 600;
+
 /** Where a revealed row stands in the screen, from its top: a little above the middle, clear of the composer docked over the foot. */
 const REVEAL_POSITION = 0.35;
 
@@ -958,9 +912,48 @@ export function AgentTranscript({
   // The list's own width, so a wide window's rows stand centered within the reading width rather than across it.
   const [width, setWidth] = useState(0);
   const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
-  const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
-  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
-  const foot = bottom + TAB_BAR_ROOM + useDockRoom();
+  // The calls' rows as they stand, and the call a reader was sent to whose row has not yet taken VoiceOver's focus.
+  const calls = useRef(new Map<string, HostInstance>());
+  const sentTo = useRef<string | undefined>(undefined);
+  // Whether the scroll that brings the call sent to into view has settled, so its row, mounted after, takes the focus as it stands.
+  const settled = useRef(false);
+
+  // Note that the focus waits for the scroll that brings the call into view to settle, since a focus sent as it starts lands on a row still off screen, and a row the list had not yet drawn as it settled takes it once it stands (`placeCall`).
+  const focusSentTo = useCallback(() => {
+    settled.current = true;
+    const callId = sentTo.current;
+    const row = callId === undefined ? undefined : calls.current.get(callId);
+
+    if (row === undefined) return;
+    sentTo.current = undefined;
+    settled.current = false;
+    AccessibilityInfo.sendAccessibilityEvent(row, "focus");
+  }, []);
+
+  const placeCall = useCallback(
+    (callId: string, row: HostInstance | null) => {
+      if (row === null) {
+        calls.current.delete(callId);
+
+        return;
+      }
+
+      calls.current.set(callId, row);
+
+      // Note that the row takes the focus a frame later, once it is laid out, where the scroll settled before it was drawn.
+      if (settled.current && sentTo.current === callId) requestAnimationFrame(focusSentTo);
+    },
+    [focusSentTo],
+  );
+
+  const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now(), placeCall };
+  const keyboard = useDockKeyboard();
+  const dock = useDockRoom();
+  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript. While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the tab bar and the bar stands right on it.
+  // Note that a keyboard standing only partway over that room, as one an interactive drag is pulling down, takes only the part it covers, since the bar stands clear of the safe area until the keyboard rises past it.
+  const foot = Math.max(0, bottom + TAB_BAR_ROOM - keyboard) + dock;
+  // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area, rather than over the tab bar's room, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`).
+  const jumpFoot = Math.max(bottom, keyboard) + dock + SPACE.ROW;
 
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
@@ -1003,8 +996,15 @@ export function AgentTranscript({
 
     if (index < 0) return;
     anchored.current = false;
+    sentTo.current = reveal.callId;
+    settled.current = false;
     list.current?.scrollToIndex({ index, viewPosition: REVEAL_POSITION, animated: !reduceMotion });
-  }, [reveal, reduceMotion]);
+
+    // Note that a scroll that moves the list ends in its momentum's end, which sends the focus, while one that has nowhere to go, the row already in view, ends at once, so the focus is also sent once the scroll would have settled.
+    const settling = setTimeout(focusSentTo, reduceMotion ? 0 : REVEAL_SETTLE_MS);
+
+    return () => clearTimeout(settling);
+  }, [reveal, reduceMotion, focusSentTo]);
 
   // Note that a row not yet measured cannot be scrolled to by its index, so the list goes to where the rows' average height puts it, then to the row once it is drawn.
   const onScrollToIndexFailed = useCallback(
@@ -1013,16 +1013,23 @@ export function AgentTranscript({
         offset: info.averageItemLength * info.index,
         animated: false,
       });
-      requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
         list.current?.scrollToIndex({
           index: info.index,
           viewPosition: REVEAL_POSITION,
           animated: false,
-        }),
-      );
+        });
+        requestAnimationFrame(focusSentTo);
+      });
     },
-    [],
+    [focusSentTo],
   );
+
+  // Note that the keyboard rising under a reader at the newest row brings the row up with it, as Messages' does, rather than leaving it behind the keyboard; the list's inset has already grown for it, so its end is the row clear of the bar.
+  useEffect(() => {
+    if (keyboard > 0 && anchored.current)
+      list.current?.getScrollResponder()?.scrollToEnd({ animated: !reduceMotion });
+  }, [keyboard, reduceMotion]);
 
   // Note that a row landing, or a fold opened, at the newest row keeps it in view, while one landing as the reader reads back leaves their place.
   const onContentSizeChange = useCallback(() => {
@@ -1064,14 +1071,19 @@ export function AgentTranscript({
         contentInsetAdjustmentBehavior="automatic"
         // Note that rows laid before the oldest, as an older page lands, leave the row the reader reads where it stood.
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-        // Note that a drag down into the keyboard lowers it, as Messages' transcript does, since the composer docked over the list holds no key that does.
-        keyboardDismissMode="interactive"
+        // Note that the list stands its end clear of the keyboard with the system's own inset, moved on the keyboard's own curve, so the newest rows never sit behind it.
+        automaticallyAdjustKeyboardInsets
+        // Note that a drag lowers the keyboard, since the composer docked over the list holds no key that does: under the finger, as Messages' does, where the dock follows the keyboard frame by frame, and at once where it follows only the keyboard's announced moves, since its composer would stand still through the drag, then jump.
+        keyboardDismissMode={DOCK_FOLLOWS_KEYBOARD ? "interactive" : "on-drag"}
         onContentSizeChange={onContentSizeChange}
         onScrollToIndexFailed={onScrollToIndexFailed}
         onScroll={onScroll}
         onScrollBeginDrag={onScrollBegin}
         onScrollEndDrag={onScrollSettled}
-        onMomentumScrollEnd={onScrollSettled}
+        onMomentumScrollEnd={(event) => {
+          onScrollSettled(event);
+          focusSentTo();
+        }}
         scrollEventThrottle={64}
         initialNumToRender={16}
         windowSize={9}
@@ -1079,7 +1091,8 @@ export function AgentTranscript({
       />
       {away ? (
         <JumpToLatest
-          bottom={foot}
+          bottom={jumpFoot}
+          end={right + sides + SPACE.EDGE}
           onPress={() => {
             anchored.current = true;
             // Note that the jump scrolls at once where the reader asked for less motion.

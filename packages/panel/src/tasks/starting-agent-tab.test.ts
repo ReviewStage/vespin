@@ -58,7 +58,7 @@ async function agentTabWords(
 
   const agent: AgentSummary = {
     id: "agent-booting",
-    planId: "task-booting",
+    taskId: "task-booting",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Fix the tile",

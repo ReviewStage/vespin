@@ -38,14 +38,22 @@ import {
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { searchTokens } from "@repo/features/search-tokens";
 import { Predicate } from "effect";
-import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
+import {
+  createContext,
+  type ReactElement,
+  type ReactNode,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 import { useReduceMotion, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
-import { RowOpenContext, RowSelectedContext } from "./row-open.js";
+import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -103,6 +111,15 @@ type RowListProps = {
   readonly onRefresh?: (() => Promise<void>) | undefined;
   /** Its Select mode, while it stands in one; none for a list a tap opens rows in. */
   readonly choosing?: RowChoosing | undefined;
+  /** What a search typed, whose words each row's title sets in bold; none for a list no search found. */
+  readonly searched?: string | undefined;
+  /**
+   * Starts its Select mode with the rows the system ticked, where it has one:
+   * iPadOS lets a list whose selection is a set tick several rows with no
+   * edit mode of ours, by a two-finger drag, a pointer's ⌘ or Shift click,
+   * or the keyboard. None for a list with no Select mode.
+   */
+  readonly onChooseStart?: ((ids: readonly string[]) => void) | undefined;
   readonly children: ReactNode;
 };
 
@@ -133,8 +150,18 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
  * row, a tap ticks it rather than opening it, two fingers dragged down tick
  * a run, and the rows' swipes step aside, as the system's do.
  */
-export function RowList({ look, selected, onSelect, onRefresh, choosing, children }: RowListProps) {
+export function RowList({
+  look,
+  selected,
+  onSelect,
+  onRefresh,
+  choosing,
+  searched,
+  onChooseStart,
+  children,
+}: RowListProps) {
   const colors = useColors();
+  const searchedWords = useMemo(() => searchTokens(searched ?? ""), [searched]);
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.SIDEBAR ? 0 : Math.max(0, (width - READING_WIDTH) / 2);
 
@@ -147,6 +174,15 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
       onSelectionChange={(selection) => {
         if (choosing !== undefined) {
           choosing.onChoose(selection.filter(Predicate.isString));
+
+          return;
+        }
+
+        const ids = selection.filter(Predicate.isString);
+
+        // Note that several rows ticked at once by the system start Select mode with them, as Mail's do, rather than read as a tap on the first, which drew them in the system's own ink and fill and then cleared them as the single selection was laid back.
+        if (ids.length > 1 && onChooseStart !== undefined) {
+          onChooseStart(ids);
 
           return;
         }
@@ -173,7 +209,7 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
       <ListLookContext value={look}>
         <RowOpenContext value={onSelect}>
           <RowSelectedContext value={choosing === undefined ? selected : undefined}>
-            {children}
+            <RowSearchedContext value={searchedWords}>{children}</RowSearchedContext>
           </RowSelectedContext>
         </RowOpenContext>
       </ListLookContext>

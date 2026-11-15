@@ -221,6 +221,28 @@ const LeavesContext = createContext<Leaves | undefined>(undefined);
 /** The exits under way, by the element leaving, stopped where its entry is listed again. */
 const exits = new WeakMap<Element, Animation>();
 
+/**
+ * What a leaving element wears as `data-leaving`: marked as it begins to
+ * leave, then laid over its place as its exit plays, or gone at once
+ * (list-motion.css). Note that the place is the motion's own properties,
+ * never the element's `position`, `top` or `display`, because a row a run
+ * places itself (`VirtualRows`) wears those inline as its owner wrote them,
+ * which nothing writes again while unchanged, so the row stands again in
+ * its own place once the mark is taken off.
+ */
+const LEAVING = {
+  MARKED: "",
+  PLACED: "placed",
+  GONE: "gone",
+} as const;
+
+/** The motion's own properties a leaving element is laid over its place by (list-motion.css). */
+const LEAVING_PLACE = {
+  TOP: "--ui-leaving-top",
+  LEFT: "--ui-leaving-left",
+  WIDTH: "--ui-leaving-width",
+} as const;
+
 /** The commit each root is being played in, by the root, until the last motion over it has heard it. */
 const batches = new WeakMap<Element, Batch>();
 
@@ -519,10 +541,7 @@ function standAgain(element: HTMLElement): void {
   exits.get(element)?.cancel();
   exits.delete(element);
 
-  for (const property of ["position", "top", "left", "width", "margin", "display"]) {
-    element.style.removeProperty(property);
-  }
-
+  for (const property of Object.values(LEAVING_PLACE)) element.style.removeProperty(property);
   element.removeAttribute("inert");
   element.removeAttribute("data-leaving");
 }
@@ -593,7 +612,7 @@ function playExits(
 
   for (const { element, onLeft } of leaving) {
     if (before.places.get(element)?.seen === true) continue;
-    element.style.display = "none";
+    element.setAttribute("data-leaving", LEAVING.GONE);
     onLeft();
   }
 
@@ -612,11 +631,10 @@ function playExits(
 
   for (const { each, top, left, width, opacity } of placed) {
     const { element, onLeft } = each;
-    element.style.position = "absolute";
-    element.style.top = `${top}px`;
-    element.style.left = `${left}px`;
-    element.style.width = `${width}px`;
-    element.style.margin = "0";
+    element.style.setProperty(LEAVING_PLACE.TOP, `${top}px`);
+    element.style.setProperty(LEAVING_PLACE.LEFT, `${left}px`);
+    element.style.setProperty(LEAVING_PLACE.WIDTH, `${width}px`);
+    element.setAttribute("data-leaving", LEAVING.PLACED);
 
     const out = element.animate(
       [
@@ -939,10 +957,10 @@ class ListMotionPlayer extends Component<
       }
 
       element.toggleAttribute("inert", true);
-      element.setAttribute("data-leaving", "");
+      element.setAttribute("data-leaving", LEAVING.MARKED);
 
       if ((keyedNow.get(key) ?? []).some((other) => other !== element)) {
-        element.style.display = "none";
+        element.setAttribute("data-leaving", LEAVING.GONE);
         onLeft();
         continue;
       }
