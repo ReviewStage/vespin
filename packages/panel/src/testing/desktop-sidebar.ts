@@ -17,6 +17,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery } from "../use-app-state.js";
 import { testQueryClientNow } from "./copy-feedback.js";
 import { standingTaskList } from "./history-rows.js";
+import { listedTasksOf } from "./tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "./window-router.js";
 
 /**
@@ -96,7 +97,7 @@ function StandingListed({
   tasks: TasksControl;
   children: ReactNode;
 }): ReactElement {
-  const listed = tasks.listed.tasks;
+  const listed = listedTasksOf(tasks);
   const [taskList] = useState(() => standingTaskList(withHeldPullRequests(listed)));
 
   useLayoutEffect(() => taskList.stand(withHeldPullRequests(listed)), [taskList, listed]);

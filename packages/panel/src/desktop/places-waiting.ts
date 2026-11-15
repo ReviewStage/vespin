@@ -2,7 +2,7 @@ import type { TaskSummary } from "@repo/features/task-wire";
 import type { AppInboxTask, AppInboxTaskHolding, AppInboxWaitingItem } from "@repo/host/app-state";
 import { useMinute } from "@repo/ui";
 import { useMemo } from "react";
-import { useListedTasks } from "../task-list-collections.js";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { useInboxTaskHoldings, useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
@@ -96,7 +96,7 @@ export function useTasksWaiting(tasks: TasksControl): ReadonlyMap<string, number
 export function useInboxWaiting(tasks: TasksControl): number {
   const now = useMinute();
   const waiting = useInboxWaitingTasks();
-  const listed = useListedTasks(tasks.workspace?.id, tasks.typedNames);
+  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
 
   return tasks.signedIn ? waitingThreads(listed, waiting, now).length : 0;
 }

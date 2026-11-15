@@ -102,7 +102,11 @@ import {
   useShortcutTargetOn,
 } from "../shortcut-target.js";
 import { useSteadyDoors } from "../steady-door.js";
-import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import {
+  type TaskListRows,
+  useTaskListCollections,
+  useTaskListRow,
+} from "../task-list-collections.js";
 import { lastEditOf } from "../tasks/description-body.js";
 import { EditedBy, type EditPlace, useEditReader } from "../tasks/edit-ref.js";
 import { useTaskSendFailed } from "../tasks/failed-lines.js";
@@ -216,31 +220,6 @@ import { useRefusalHeard } from "./use-refusal-heard.js";
  */
 
 /**
- * Each task list's tasks by id, built once for each list the control hands
- * down and let go with it, so every row of a redraw finds its task at once
- * rather than walking the whole list, which made a redraw of the sidebar
- * grow with the square of its rows. Note that a list is never changed in
- * place, since a change hands down a new one, so an index never goes stale.
- */
-const tasksById = new WeakMap<readonly TaskSummary[], ReadonlyMap<string, TaskSummary>>();
-
-/** `list`'s task of `taskId`, from its index, built the first time the list is asked. */
-function listedTask(list: readonly TaskSummary[], taskId: string): TaskSummary | undefined {
-  let index = tasksById.get(list);
-
-  if (index === undefined) {
-    const built = new Map<string, TaskSummary>();
-
-    // Note that the first of an id wins, as a walk of the list finds it.
-    for (const task of list) if (!built.has(task.id)) built.set(task.id, task);
-    index = built;
-    tasksById.set(list, index);
-  }
-
-  return index.get(taskId);
-}
-
-/**
  * What a task's row and its menu read of the tab (`TasksControl`), wherever
  * the row stands: the values that move seldom, and the tab's doors. Note
  * that the tab's tasks, which a delivery moves for any one of them, are read
@@ -320,18 +299,13 @@ function openedAs(opened: OpenedTask | undefined, taskId: string): OpenedTask | 
   return opened?.task.id === taskId ? opened : undefined;
 }
 
-/** A task as the list or the open document holds it; nothing for a task neither holds. */
-function rowTaskOf(
-  list: readonly TaskSummary[],
-  opened: OpenedTask | undefined,
+/** A task as the list (`rows`) or the open document holds it; nothing for a task neither holds. */
+export function taskOf(
+  tasks: Pick<TasksControl, "region" | "agents">,
+  rows: Pick<TaskListRows, "task">,
   taskId: string,
 ): TaskSummary | undefined {
-  return listedTask(list, taskId) ?? openedAs(opened, taskId)?.task;
-}
-
-/** A task as the list or the open document holds it; nothing for a task neither holds. */
-export function taskOf(tasks: TasksControl, taskId: string): TaskSummary | undefined {
-  return rowTaskOf(tasks.tasks, openedTaskOf(tasks), taskId);
+  return rows.task(taskId) ?? openedAs(openedTaskOf(tasks), taskId)?.task;
 }
 
 /** One way a task can be moved in the sidebar or settled, as a sidebar row's buttons offer it: the list's command and what it does to this task. */

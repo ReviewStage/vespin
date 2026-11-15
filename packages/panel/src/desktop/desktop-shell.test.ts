@@ -53,7 +53,12 @@ import { DOCUMENT_NAME, DOCUMENT_TASK } from "../testing/document-task.js";
 import { restOn } from "../testing/hint-rest.js";
 import { pressInPhoneHead, readPhoneHead } from "../testing/phone-head.js";
 import { agentAt, personAt, SHELL_AT, shellRouterEachTest } from "../testing/shell-router.js";
-import { handInbox, newTaskControl, tasksControl } from "../testing/tasks-control.js";
+import {
+  handInbox,
+  newTaskControl,
+  type TasksControlOverrides,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { holdingInboxChoice, leavingBy } from "../testing/window-router.js";
 import { DesktopShell } from "./desktop-shell.js";
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
@@ -173,7 +178,7 @@ function shellProps(
 }
 
 /** The tasks' state a shell under test is handed, and the routed place it stands at where that is the router's alone, the Board or a person's page. */
-interface ShellOverrides extends Partial<TasksControl> {
+interface ShellOverrides extends TasksControlOverrides {
   readonly at?: string;
   /** Where the Inbox item its address names stands, as the door that chose it held it. */
   readonly held?: InboxChoice;
@@ -1031,7 +1036,7 @@ test("on a phone the bar's Inbox wears the count of what needs the reader, named
   });
 
   const page = await mountNarrow(
-    { at: SHELL_AT.BOARD, listed: { tasks: [DOCUMENT_TASK] } },
+    { at: SHELL_AT.BOARD, tasks: [DOCUMENT_TASK] },
     { overlay: SIDEBAR_OVERLAY.OPEN },
   );
 

@@ -130,7 +130,7 @@ import { useBoardDoor } from "../places/routed-doors.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { useListedTasks } from "../task-list-collections.js";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
 import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
@@ -981,7 +981,7 @@ export function TasksList({
   // Note that a finger's rows draw no ⋯, as a phone's mail list draws none, so their names keep the room: a long press opens a row's menu.
   const more = !useCoarsePointer();
   const [listElement, setListElement] = useState<HTMLDivElement | null>(null);
-  const listed = useListedTasks(tasks.workspace?.id, tasks.typedNames);
+  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
   const subTaskCounts = useMemo(() => childTaskCounts(listed), [listed]);
 
   // The columns its display chose, and the sub-tasks' count beside them where any task has sub-tasks, folded for its own width (`fitted-columns.ts`).

@@ -233,6 +233,9 @@ export const tasksViewSchema = EffectSchema.Struct({
 
 export type TasksView = typeof tasksViewSchema.Type;
 
+/** What a tasks view holds but the list itself, which a window reads from its task list's collections rather than the document. */
+export type TaskListStanding = Omit<TasksView, "tasks">;
+
 /** The view before anything is asked: no tasks read, none active. */
 export const IDLE_TASKS_VIEW: TasksView = {
   tasks: [],
