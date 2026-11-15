@@ -157,6 +157,7 @@ const LISTED_STATE: AppStateSnapshot = {
   tasks: {
     ...STATE.tasks,
     listStatus: TASKS_READ.READY,
+    listed: true,
     tasks: [
       {
         ...BILLING,

@@ -14,6 +14,7 @@ import {
 } from "@repo/gateway";
 import { isWireString } from "@repo/wire";
 import { Data, Effect, type Scope } from "effect";
+import { taskListPartsOf } from "../app-state.js";
 import { createHostOperator, type HostOperator } from "../host-operator.js";
 import {
   HOST_NATIVE_NODE_ID,
@@ -51,10 +52,10 @@ export const wireGateway = /* @__PURE__ */ Effect.fn("client/wireGateway")(funct
   });
 
   // What the host tells its clients of the panel's tasks, written to the
-  // document every window is told from. The subscription is the scope's, so
-  // the close that ends the wiring ends it.
+  // document every window is told from, its lists held beside it. The
+  // subscription is the scope's, so the close that ends the wiring ends it.
   const stopTasks = host.onTasksChanged((tasks) => {
-    state.update({ tasks: tasks });
+    state.update({ tasks: tasks }, taskListPartsOf(tasks));
   });
 
   yield* Effect.addFinalizer(() => Effect.sync(stopTasks));

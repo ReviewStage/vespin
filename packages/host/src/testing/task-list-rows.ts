@@ -4,7 +4,7 @@
 
 import { AGENT_BRIEF } from "@repo/features/agent-wire";
 import { TASK_PRIORITY, TASK_STATUS } from "@repo/features/task-wire";
-import type { AgentRow, PlanRow } from "../task-list-collections.js";
+import type { AgentRow, PlanRow } from "../task-list-rows.js";
 
 /** One plan as the plans statement delivers its row, unpinned, unassigned, and still to do. */
 export function planListRow(id: string, name: string): PlanRow {

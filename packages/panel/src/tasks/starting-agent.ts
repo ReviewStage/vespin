@@ -1,10 +1,7 @@
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import type { ACTOR_KIND, Actor } from "@repo/ui/actor-model";
-import { useQuery } from "@tanstack/react-query";
-import { useCallback } from "react";
-import { appStateQuery } from "../use-app-state.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { agentActor, agentName } from "./agent-model.js";
 import { useOpenPlace } from "./use-open-link.js";
 
@@ -26,11 +23,6 @@ export interface StartingAgent {
   readonly onOpen: (() => void) | undefined;
 }
 
-/** The agent the task list carries by its id, with the task it works on; none where the list carries no such agent. */
-function listedAgent(state: AppStateSnapshot, agentId: string) {
-  return state.tasks?.taskAgents?.find((agent) => agent.id === agentId);
-}
-
 /** The agent `agentId` names, as the task list carries it; none for no id, and for one the list does not carry. */
 export function useStartingAgent(
   agentId: string | undefined,
@@ -38,12 +30,7 @@ export function useStartingAgent(
 ): StartingAgent | undefined {
   const openPlace = useOpenPlace();
 
-  const select = useCallback(
-    (state: AppStateSnapshot) => (agentId === undefined ? undefined : listedAgent(state, agentId)),
-    [agentId],
-  );
-
-  const agent = useQuery({ ...appStateQuery, select }).data;
+  const agent = useTaskListRow(useTaskListCollections().agents, agentId);
 
   if (agent === undefined) return undefined;
 
