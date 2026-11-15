@@ -72,6 +72,57 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.36.0 — 2026-11-15
+
+### Improvements
+
+- A local agent can run commands on any of your machines, its default one, one
+  it names, a teammate's, or your other Macs, and its chip opens the same Where
+  this agent works popover as a cloud agent's
+  ([#9096](https://github.com/ReviewStage/vespin/pull/9096))
+- A change to a workspace variable reaches a running agent on its next message,
+  and every Terminal tab's shell starts with the workspace's variables
+  ([#9304](https://github.com/ReviewStage/vespin/pull/9304))
+- When a machine refuses a call, the agent is told what to do next and carries
+  on rather than stopping to ask
+  ([#9191](https://github.com/ReviewStage/vespin/pull/9191))
+- A failed call's row marks it right after its verb, and a call the service
+  answered without doing it, such as a pull request it refused, reads as failed
+  rather than done ([#9289](https://github.com/ReviewStage/vespin/pull/9289))
+- A refused call's card, the missing-permission note, the GitHub sign-in card,
+  and the Starting on line name a machine by its chip, which opens its card
+  ([#9305](https://github.com/ReviewStage/vespin/pull/9305))
+- An MCP call's row ends in its account's chip where you have several accounts
+  on its provider, and no longer repeats the server's name on every call
+  ([#9301](https://github.com/ReviewStage/vespin/pull/9301))
+- Punctuation typed right after a chip takes the space the chip laid, as iOS
+  does after a suggestion
+  ([#9484](https://github.com/ReviewStage/vespin/pull/9484))
+- Resting the pointer on a finished turn's files count says it opens the turn's
+  changes ([#9276](https://github.com/ReviewStage/vespin/pull/9276))
+- A text file of up to 3 MB can go with a message, and the agent reads past its
+  first lines with its own tools
+  ([#9486](https://github.com/ReviewStage/vespin/pull/9486))
+- Vespin spends far less of your Mac's CPU and memory saving its local store
+  ([#9493](https://github.com/ReviewStage/vespin/pull/9493))
+
+### Fixes
+
+- Fixed a teammate's message to an agent showing under the name of whoever
+  started the agent in a long transcript
+  ([#9496](https://github.com/ReviewStage/vespin/pull/9496))
+- Fixed setup's team step forgetting the invitations it had sent after a reload
+  ([#9501](https://github.com/ReviewStage/vespin/pull/9501))
+- Fixed archiving an agent or marking a task done speaking of running agents in
+  the plural when only one was running
+  ([#9410](https://github.com/ReviewStage/vespin/pull/9410))
+
+### Misc
+
+- Updated the Claude Agent SDK to 0.3.325 and Codex to 0.169.0
+  ([#9473](https://github.com/ReviewStage/vespin/pull/9473),
+  [#9474](https://github.com/ReviewStage/vespin/pull/9474))
+
 ## 0.35.0 — 2026-11-14
 
 ### Following
