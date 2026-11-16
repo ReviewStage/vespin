@@ -127,7 +127,7 @@ export const CODER_SHOW_PAGE_TOOL = {
     "and charts that scroll inside their own box, and tap targets big enough for a finger. It runs sealed off: it cannot " +
     "fetch, post, open links or windows, store anything, or load images from the web, so put its " +
     "data in the page. Never put a secret in a page. Show the page or pictures of it with " +
-    `\`${AGENT_TOOL.SHOW_IMAGE}\`, never both. Call it again with the \`page\` it answered to ` +
+    `\`${AGENT_TOOL.SHOW_MEDIA}\`, never both. Call it again with the \`page\` it answered to ` +
     "replace that page with a new version rather than making another.",
   inputSchema: CODER_SHOW_PAGE_INPUT,
 } as const;
