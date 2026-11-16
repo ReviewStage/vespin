@@ -165,6 +165,7 @@ import { useSteadyDoors } from "../steady-door.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useSurfaceOpen } from "../use-surface-open.js";
 import type { VersionHistoryRoute } from "../version-history-route.js";
+import type { HistoryRows } from "./history-rows.js";
 import type { BackStep, StepsBehind } from "./narrow-backs.js";
 import type { PlaceLeave } from "./place-leave.js";
 import { type PlaceParams, placeParamsOf } from "./place-params.js";
@@ -922,10 +923,12 @@ export function useWindowHistory(input: {
   inbox: Pick<InboxRoute, "open" | "chosen" | "choiceOf" | "onOpen">;
   /** The room the panel's stage gives, narrow where it shows one pane at a time. */
   room: ShellRoom;
+  /** The task list's rows, by id, which the steps are named and reached by (`useHistoryRows`). */
+  rows: HistoryRows;
   tasks: Pick<
     TasksControl,
     | "boundFor"
-    | "tasks"
+    | "typedNames"
     | "listFailed"
     | "taskView"
     | "onLeaveTask"
@@ -938,12 +941,11 @@ export function useWindowHistory(input: {
     | "mainTabs"
     | "activeTaskId"
     | "agents"
-    | "liveAgents"
     | "pages"
     | "workspaces"
   >;
 }): WindowHistory & TaskVisits & HistoryBehind & RecentSteps {
-  const { tasks } = input;
+  const { tasks, rows } = input;
   // The routed place standing over the task's own place, none on the task's own place itself, which the window stands as the task bound for.
   const routed = input.routed?.place === ROUTED_PLACE.TASK ? undefined : input.routed;
   const narrow = input.room === SHELL_ROOM.NARROW;
@@ -972,6 +974,7 @@ export function useWindowHistory(input: {
   const { reachable, historyTaskOf } = useStepReach({
     access,
     tasks,
+    rows,
     columnSeen: columnKnown && !inboxOpen && !historyOpen,
     automations,
   });
@@ -1002,7 +1005,7 @@ export function useWindowHistory(input: {
     if (linkedStands) return linked.address;
 
     if (input.link !== undefined) return addressOf(input.link);
-    const task = tasks.tasks.find((each) => each.id === boundFor);
+    const task = boundFor === undefined ? undefined : rows.task(boundFor);
 
     const home =
       task === undefined
@@ -1012,10 +1015,10 @@ export function useWindowHistory(input: {
     const workspace = home?.slug ?? home?.id ?? task?.workspaceId;
 
     if (boundFor === undefined || workspace === undefined) return undefined;
-    const planId = task === undefined ? boundFor : taskLinkStep(task);
+    const taskId = task === undefined ? boundFor : taskLinkStep(task);
 
-    return addressOf({ workspace, place: { kind: LINK_DESTINATION.TASK, planId } });
-  }, [linkedStands, linked, input.link, tasks.tasks, tasks.workspace, tasks.workspaces, boundFor]);
+    return addressOf({ workspace, place: { kind: LINK_DESTINATION.TASK, taskId } });
+  }, [linkedStands, linked, input.link, rows, tasks.workspace, tasks.workspaces, boundFor]);
 
   // Note that a link's address stands only until its task opens with its own link drawn, or another task is bound for.
   const linkedDone = linked !== undefined && !linkedStands;
@@ -1175,6 +1178,7 @@ export function useWindowHistory(input: {
   const named = useStepNames({
     access,
     tasks,
+    rows,
     inbox,
     historyTaskOf,
     personStanding: routed?.place === ROUTED_PLACE.PERSON,
@@ -1275,7 +1279,7 @@ export function useWindowHistory(input: {
       const panelLink =
         narrow && side?.link !== undefined ? withTaskId(side.link, at.task) : undefined;
 
-      const place = panelLink ?? { kind: LINK_DESTINATION.TASK, planId: at.task };
+      const place = panelLink ?? { kind: LINK_DESTINATION.TASK, taskId: at.task };
       const address = addressOf({ workspace: at.workspace, place });
 
       const wrote = visit(

@@ -461,9 +461,14 @@ async function fakeCoderSessions(
   const github = githubReaching([installation], undefined, undefined, async (request) => {
     const { pathname } = new URL(request.url);
     // The repository holds the branches given, each at a commit; any other is GitHub's not found.
-    const ref = pathname.slice(`/repos/${RELAY_FULL_NAME}/git/ref/heads/`.length);
+    // Note that the ref is one path segment, its slashes encoded, as Octokit sends it.
+    const ref = decodeURIComponent(pathname.slice(`/repos/${RELAY_FULL_NAME}/git/ref/`.length));
+    const branch = ref.slice("heads/".length);
 
-    if (pathname.startsWith(`/repos/${RELAY_FULL_NAME}/git/ref/heads/`) && branches.includes(ref)) {
+    if (
+      pathname.startsWith(`/repos/${RELAY_FULL_NAME}/git/ref/heads%2F`) &&
+      branches.includes(branch)
+    ) {
       return Response.json({ object: { type: "commit", sha: BRANCH_COMMIT } });
     }
 
@@ -1503,7 +1508,7 @@ function pngOf(size: number, mark: number): Uint8Array {
   return bytes;
 }
 
-/** A picture kept beside the agent's conversation, as `show_image` keeps one, a PNG unless another type is given; answers its attachment id. */
+/** A picture kept beside the agent's conversation, as `show_media` keeps one, a PNG unless another type is given; answers its attachment id. */
 async function keptPicture(
   agent: ConversationTarget,
   bytes: Uint8Array,
@@ -1692,14 +1697,14 @@ test("start_agent refuses, in words that say why and starting nothing, a picture
 
   const unreached = (id: string) =>
     `Not started: attachment ${id} is no picture you can hand on. Name a picture of your own ` +
-    "conversation, such as one show_image kept.";
+    "conversation, such as one show_media kept.";
 
   for (const [images, reason] of [
     [[theirs], unreached(theirs)],
     [
       [recording],
-      `Not started: attachment ${recording} is a video, and only a picture, a PNG, JPEG, or ` +
-        "WebP, is handed to another agent.",
+      `Not started: attachment ${recording} is a video or a sound clip, and only a picture, a ` +
+        "PNG, JPEG, or WebP, is handed to another agent.",
     ],
     [
       [tooLargeId],

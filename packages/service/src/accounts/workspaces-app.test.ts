@@ -746,7 +746,7 @@ it.effect(
           return yield* app.userToken(ada);
         }).pipe(Effect.provide(github.layer));
 
-        assert.equal(Redacted.value(kept), GITHUB_FIXTURE_AUTHORIZED_TOKEN);
+        assert.equal(Redacted.value(kept.token), GITHUB_FIXTURE_AUTHORIZED_TOKEN);
         assert.equal(github.sent.filter((sent) => sent.method === "DELETE").length, 2);
       }).pipe(Effect.provide(database));
     }),
@@ -1465,7 +1465,7 @@ it.effect(
             organizationId: acme,
             name: "Relay retries",
             number: 1,
-            document: "",
+            description: "",
           }),
         );
         yield* leaving(plugin, grace, acme);

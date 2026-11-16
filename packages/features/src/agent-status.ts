@@ -19,13 +19,15 @@ import { AGENT_STATUS, type AgentStatus, type AgentTurn, turnStatusOfWord } from
  * turn lands: an agent with no turn row reads as starting for
  * `STARTING_GRACE_MILLIS` past its Start and as failed after, as one that
  * never started, and an agent started blank, with no first turn on its way,
- * as completed. That is why the rule takes the instant it reads at, and a
- * reader following the rows live reads the status again at
- * `statusClockEdge`, the instant the clock alone moves it. An agent whose
- * first launch boots its machine before its first turn (`agent-boot.ts`)
- * reads from its boot record instead: starting for as long as it boots,
- * however long that takes, since the boot's own deadline is what fails
- * a boot that never comes up, and failed once it did.
+ * as completed. That is the one fact of the status the clock alone moves:
+ * the rule reads it as whether the grace has ended (`agentStatusOf`), which
+ * a reader at an instant answers from its clock (`agentStatusAt`), and a
+ * reader following the rows live holds as data it writes at the grace's end
+ * (`startingGraceEnd`), so the status stays a function of what it holds.
+ * An agent whose first launch boots its machine before its first turn
+ * (`agent-boot.ts`) reads from its boot record instead: starting for as
+ * long as it boots, however long that takes, since the boot's own deadline
+ * is what fails a boot that never comes up, and failed once it did.
  */
 
 /**
@@ -53,14 +55,18 @@ export interface StatusTurn {
   readonly cancelRequested: boolean;
 }
 
-/** When the agent was started and the instant it is read at, in epoch milliseconds, and whether it was started blank. */
-export interface StatusStanding {
+/** When the agent was started, in epoch milliseconds, and whether it was started blank. */
+export interface StatusStart {
   readonly createdAt: number;
-  readonly now: number;
   /** Whether the agent was started blank, handed neither the description nor a prompt, so no first turn is on its way; unsaid reads as not. */
   readonly blank?: boolean | undefined;
   /** Where the agent's first launch stands, while its boot record does; unsaid reads as none. */
   readonly boot?: BootPhase | null | undefined;
+}
+
+/** The agent's start and the instant it is read at, in epoch milliseconds. */
+export interface StatusStanding extends StatusStart {
+  readonly now: number;
 }
 
 /**
@@ -76,26 +82,49 @@ export function turnStoppable(turn: StatusTurn | undefined): boolean {
 /**
  * Where an agent stands, from its newest turn: as that turn's status word
  * reads, canceled where it still runs with a Stop asked of it; with no turn,
- * completed where it was started blank, starting inside the grace, and failed
- * past it.
+ * completed where it was started blank, starting until its starting grace
+ * ends, and failed once `graceEnded` says it has. Note that it reads no
+ * clock, so a live query can read it from rows alone.
  */
+export function agentStatusOf(
+  newest: StatusTurn | undefined,
+  start: StatusStart,
+  graceEnded: boolean,
+): AgentStatus {
+  if (newest === undefined && bootHolds(start.boot)) {
+    return start.boot === BOOT_PHASE.FAILED ? AGENT_STATUS.FAILED : AGENT_STATUS.STARTING;
+  }
+
+  if (newest === undefined && start.blank === true) return AGENT_STATUS.COMPLETED;
+
+  if (newest === undefined) return graceEnded ? AGENT_STATUS.FAILED : AGENT_STATUS.STARTING;
+
+  return turnAgentStatus(newest);
+}
+
+/**
+ * The first instant the agent's starting grace has ended, in epoch
+ * milliseconds, `STARTING_GRACE_MILLIS` past its Start: from then it reads
+ * as failed rather than starting. None where the grace moves nothing: a turn
+ * stands, the agent was started blank, or its boot record speaks instead.
+ */
+export function startingGraceEnd(
+  newest: StatusTurn | undefined,
+  start: StatusStart,
+): number | undefined {
+  if (newest !== undefined || start.blank === true || bootHolds(start.boot)) return undefined;
+
+  return start.createdAt + STARTING_GRACE_MILLIS + 1;
+}
+
+/** Where an agent stands at `standing.now` (`agentStatusOf`), its starting grace read off that instant. */
 export function agentStatusAt(
   newest: StatusTurn | undefined,
   standing: StatusStanding,
 ): AgentStatus {
-  if (newest === undefined && bootHolds(standing.boot)) {
-    return standing.boot === BOOT_PHASE.FAILED ? AGENT_STATUS.FAILED : AGENT_STATUS.STARTING;
-  }
+  const end = startingGraceEnd(newest, standing);
 
-  if (newest === undefined && standing.blank === true) return AGENT_STATUS.COMPLETED;
-
-  if (newest === undefined) {
-    return standing.now - standing.createdAt <= STARTING_GRACE_MILLIS
-      ? AGENT_STATUS.STARTING
-      : AGENT_STATUS.FAILED;
-  }
-
-  return turnAgentStatus(newest);
+  return agentStatusOf(newest, standing, end !== undefined && standing.now >= end);
 }
 
 /** Where an agent stands by its newest turn alone: as the turn's status word reads, canceled where it still runs with a Stop asked of it. */
@@ -106,19 +135,18 @@ export function turnAgentStatus(turn: StatusTurn): AgentStatus {
 }
 
 /**
- * The next instant past which the clock alone moves the agent's status, in
- * epoch milliseconds: with no turn yet, the starting grace running out, from
- * starting to failed. None where only a row changing can move it: a turn
- * stands, the agent was started blank, or the grace is already past.
+ * The next instant past `standing.now` the clock alone moves the agent's
+ * status, in epoch milliseconds: its starting grace ending
+ * (`startingGraceEnd`), from starting to failed. None where only a row
+ * changing can move it, the grace already past among them.
  */
 export function statusClockEdge(
   newest: StatusTurn | undefined,
   standing: StatusStanding,
 ): number | undefined {
-  if (newest !== undefined || standing.blank === true || bootHolds(standing.boot)) return undefined;
-  const edge = standing.createdAt + STARTING_GRACE_MILLIS;
+  const end = startingGraceEnd(newest, standing);
 
-  return standing.now <= edge ? edge + 1 : undefined;
+  return end !== undefined && standing.now < end ? end : undefined;
 }
 
 /** The turn statuses a turn has not ended in: queued for a runner, or running. */

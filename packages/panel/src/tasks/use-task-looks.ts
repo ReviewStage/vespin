@@ -6,12 +6,12 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateSnapshot } from "@repo/host/app-state";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { eq, useLiveQuery } from "@tanstack/react-db";
+import { useMutation } from "@tanstack/react-query";
 import { createStore, useSelector } from "@tanstack/react-store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { actMutation, pressMutation } from "../act-mutations.js";
-import { appStateQuery, memoizedSelect } from "../use-app-state.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 
 /**
  * use-task-looks.ts -- what changed since the developer last looked at a task: the open description's sections, and the sidebar's unread tasks.
@@ -70,16 +70,6 @@ export const NO_LOOKS: TaskLooks = { changed: NOTHING_CHANGED, dismiss: () => un
 
 /** The task the developer is looking at now: open, so every save that lands on it is seen. */
 const watchedStore = createStore<string | undefined>(undefined);
-
-/** No marks by hand, before the first document arrives. */
-const NONE_MARKED: ReadonlySet<string> = new Set();
-
-/** The ids of the tasks the reader marked unread by hand, as the list carries them, made once per move of the list for every reader. */
-const selectMarkedUnreadIds = memoizedSelect(
-  (state) => [state.tasks.tasks],
-  (tasks): ReadonlySet<string> =>
-    new Set(tasks.filter((row) => row.markedUnread === true).map((row) => row.id)),
-);
 
 /** The save that last changed each of the description's sections, each by its heading. */
 function sectionSavesOf(task: Task): readonly DescriptionSectionEdit[] {
@@ -287,7 +277,14 @@ export function useReadMark(): ReadMarks["mark"] {
 
 /** The marks by hand, which every menu offering Mark as unread or Mark as read writes through. */
 export function useReadMarks(): ReadMarks {
-  const marked = useQuery({ ...appStateQuery, select: selectMarkedUnreadIds }).data ?? NONE_MARKED;
+  const { tasks } = useTaskListCollections();
+
+  // Note that the query holds only the tasks marked unread, so a delivery moving any other tells it nothing.
+  const { data: markedRows } = useLiveQuery((q) =>
+    q.from({ task: tasks }).where(({ task }) => eq(task.markedUnread, true)),
+  );
+
+  const marked = useMemo(() => new Set(markedRows.map((task) => task.id)), [markedRows]);
   const watched = useSelector(watchedStore);
   const mark = useReadMark();
 
@@ -296,10 +293,5 @@ export function useReadMarks(): ReadMarks {
 
 /** Whether the developer marked a plan unread by hand, as its row reads it, so the row draws again only as its own mark moves, never another's. */
 export function useMarkedUnread(taskId: string): boolean {
-  const select = useCallback(
-    (state: AppStateSnapshot) => selectMarkedUnreadIds(state).has(taskId),
-    [taskId],
-  );
-
-  return useQuery({ ...appStateQuery, select }).data === true;
+  return useTaskListRow(useTaskListCollections().tasks, taskId)?.markedUnread === true;
 }

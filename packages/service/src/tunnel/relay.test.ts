@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { TUNNEL_CLOSE, TUNNEL_KIND } from "@repo/features/sandbox-tunnel-wire";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/terminal-wire";
-import { type Cause, Duration, Effect, Fiber, Option, Queue, Redacted, Stream } from "effect";
-import { TestClock } from "effect/testing";
+import { type Cause, Effect, Fiber, Option, Queue, Redacted, Stream } from "effect";
 import type { RelayFrame, RelaySocket } from "../terminal/relay.js";
 import { relayTunnel, type TunnelDependencies } from "./relay.js";
 
@@ -11,8 +10,7 @@ import { relayTunnel, type TunnelDependencies } from "./relay.js";
  * One tunnel as the relay pipes it, over sockets and a sandbox that answer
  * from a script, on the test clock: a stopped sandbox is never woken, for
  * any kind, and the tunnel closes as not running; a running one starts the port bridge,
- * and once it is ready frames cross both ways, until five minutes without a
- * byte close the tunnel as idle.
+ * and once it is ready frames cross both ways until the desktop leaves.
  */
 
 const ASK = {
@@ -42,7 +40,13 @@ const scriptedSocket = Effect.gen(function* () {
       ),
   };
 
-  return { socket, push: (frame: RelayFrame) => Queue.offer(inbound, frame), sent, closed };
+  return {
+    socket,
+    push: (frame: RelayFrame) => Queue.offer(inbound, frame),
+    leave: Queue.end(inbound),
+    sent,
+    closed,
+  };
 });
 
 type Scripted = Effect.Success<typeof scriptedSocket>;
@@ -91,41 +95,32 @@ it.effect.each([
     }),
 );
 
-it.effect(
-  "frames cross once the bridge is ready, until five minutes without a byte close it as idle",
-  () =>
-    Effect.gen(function* () {
-      const device = yield* scriptedSocket;
-      const pty = yield* scriptedSocket;
-      const deps = world(pty);
+it.effect("frames cross once the bridge is ready, until the desktop leaves", () =>
+  Effect.gen(function* () {
+    const device = yield* scriptedSocket;
+    const pty = yield* scriptedSocket;
+    const deps = world(pty);
 
-      const relay = yield* Effect.forkChild(Effect.scoped(relayTunnel(device.socket, ASK, deps)));
-      yield* settle;
-      // Sent before the bridge is ready, so it waits rather than reaching a PTY that would echo it.
-      yield* device.push({ text: OPEN });
-      yield* settle;
-      const [first] = pty.sent;
-      assert.ok(first !== undefined && "text" in first);
-      const startFrame = JSON.parse(first.text);
-      assert.equal(startFrame.args.at(-1), "5173");
-      assert.deepEqual(lines(pty.sent), []);
+    const relay = yield* Effect.forkChild(Effect.scoped(relayTunnel(device.socket, ASK, deps)));
+    yield* settle;
+    // Sent before the bridge is ready, so it waits rather than reaching a PTY that would echo it.
+    yield* device.push({ text: OPEN });
+    yield* settle;
+    const [first] = pty.sent;
+    assert.ok(first !== undefined && "text" in first);
+    const startFrame = JSON.parse(first.text);
+    assert.equal(startFrame.args.at(-1), "5173");
+    assert.deepEqual(lines(pty.sent), []);
 
-      yield* pty.push(ready);
-      yield* pty.push({ bytes: encode(`${DATA}\r\n`) });
-      yield* settle;
-      assert.deepEqual(lines(pty.sent), [`${OPEN}\n`]);
-      assert.deepEqual(device.sent, [{ text: DATA }]);
+    yield* pty.push(ready);
+    yield* pty.push({ bytes: encode(`${DATA}\r\n`) });
+    yield* settle;
+    assert.deepEqual(lines(pty.sent), [`${OPEN}\n`]);
+    assert.deepEqual(device.sent, [{ text: DATA }]);
 
-      // Traffic three minutes on moves the idle bound on.
-      yield* TestClock.adjust(Duration.minutes(3));
-      yield* device.push({ text: DATA });
-      yield* settle;
-      yield* TestClock.adjust(Duration.minutes(4));
-      assert.deepEqual(device.closed, []);
+    yield* device.leave;
+    yield* Fiber.join(relay);
 
-      yield* TestClock.adjust(Duration.minutes(2));
-      yield* Fiber.join(relay);
-
-      assert.deepEqual(device.closed, [TUNNEL_CLOSE.IDLE]);
-    }),
+    assert.deepEqual(device.closed, []);
+  }),
 );

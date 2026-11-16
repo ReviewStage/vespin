@@ -29,7 +29,10 @@ import { RowHint, RowHintOptions, Tooltip } from "./hint.js";
  * waiting hint off nor takes a standing one down.
  * Words cut short inside a control hanging a card raise its card, not their
  * pill, while a button inside it raises its own, and the pointer moving on
- * from that button to the words raises the card.
+ * from that button to the words raises the card. A hint standing over a
+ * control drawn anew as another element, as a picture's chip becomes a
+ * button once its bytes are here, goes with it rather than hanging from the
+ * window's corner.
  *
  * A reader hears a hint without the pointer or the keyboard: from its first
  * render, a control is described by its hint's words, beside a description
@@ -541,6 +544,23 @@ test("a key, a scroll, or the window losing the keyboard while the pointer rests
   }
 });
 
+test("a box scrolling beside a control, as a log beside its rail, leaves its hint waiting and standing; one scrolling around it takes it down", () => {
+  waiting();
+  const press = drawRows(["Alpha"]);
+  const beside = document.body.appendChild(document.createElement("div"));
+  const scroll = (box: Element) => act(() => box.dispatchEvent(new Event("scroll")));
+  move(undefined, press("Alpha"));
+  pass(MOTION_DELAY_MS.HINT / 2);
+  scroll(beside);
+  pass(MOTION_DELAY_MS.HINT);
+  assert.deepEqual(cards(), ["Alpha's card"], "the wait runs out through a scroll beside it");
+  scroll(beside);
+  assert.deepEqual(cards(), ["Alpha's card"], "the card stands through a scroll beside it");
+  scroll(document.body);
+  pass(2 * MOTION_DELAY_MS.HINT);
+  assert.deepEqual(cards(), [], "a scroll around the control takes the card down");
+});
+
 test("a modifier held alone, as a screenshot's chord begins, neither calls a waiting card off nor takes a standing one down; the key it begins does", () => {
   waiting();
   const press = drawRows(["Alpha"]);
@@ -792,4 +812,29 @@ test("a button inside a control hanging a card raises its own pill, and the word
 
   assert.equal(cardStands(), true, "the card stands over the words");
   assert.equal(card()?.textContent, "Opened by Sam");
+});
+
+/** A picture's chip as a message box draws it: words hinting their name while its bytes are read, then a button hanging its card once they are here. */
+function Chip({ here }: { here: boolean }): React.JSX.Element {
+  return createElement(Tooltip, {
+    label: "Picture 3",
+    card: here ? createElement("p", null, "Picture 3 at a preview's size") : undefined,
+    children: here
+      ? createElement(
+          "button",
+          { type: "button", "data-chip": "", "aria-describedby": undefined },
+          "Picture 3",
+        )
+      : createElement("span", { "data-chip": "", "aria-describedby": undefined }, "Picture 3"),
+  });
+}
+
+test("a hint standing over a control drawn anew as another element goes with it rather than hanging from the window's corner", () => {
+  const page = mount(createElement(Chip, { here: false }));
+  restOn(page.querySelector("[data-chip]") ?? assert.fail("the chip"));
+  assert.equal(document.querySelector("[role='tooltip']")?.textContent, "Picture 3");
+
+  act(() => roots.at(-1)?.render(createElement(Chip, { here: true })));
+
+  assert.equal(document.querySelector("[role='tooltip']"), null);
 });

@@ -71,7 +71,7 @@ export function pageFrameUrl(page: FramedPage): string {
  * own and every load asks for a fresh one.
  */
 export function hostedPageFramePath(page: FramedPage): string {
-  return `/api/plans/${page.taskId}/pages/${page.pageId}/versions/${page.version}/frame`;
+  return `/api/tasks/${page.taskId}/pages/${page.pageId}/versions/${page.version}/frame`;
 }
 
 /** The version a frame's address spells, read only as `pageFrameUrl` spells it, so `02` or `2e0` names nothing. */

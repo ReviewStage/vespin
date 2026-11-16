@@ -46,6 +46,7 @@ const KEPT_KIND = {
   PAGE_VERSION: "page-version",
   FILE_AT_COMMIT: "file-at-commit",
   GITHUB_IMAGE: "github-image",
+  REPOSITORY_GITHUB_IMAGE: "repository-github-image",
 } as const;
 
 /** A picture a tool answered an agent, or one of its workers where `callId` names the delegation call that started it; a picture is named by a hash of its bytes. */
@@ -67,7 +68,7 @@ export class InboxAttachmentKey extends Data.TaggedClass(KEPT_KIND.INBOX_ATTACHM
 
 /** A picture of a description, or a file one of its comments carries: each upload is given an id of its own. */
 export class DescriptionPictureKey extends Data.TaggedClass(KEPT_KIND.DESCRIPTION_PICTURE)<{
-  readonly planId: string;
+  readonly taskId: string;
   readonly attachmentId: string;
 }> {}
 
@@ -101,13 +102,21 @@ export class GitHubImageKey extends Data.TaggedClass(KEPT_KIND.GITHUB_IMAGE)<{
   readonly src: string;
 }> {}
 
+/** An image of a pull request named by its repository and number, by the workspace that reaches the repository, the repository, and the address GitHub's rendering spelled, where it names an upload or a file at a commit; it names no agent or task, so it goes only by age, at a sign-out, or under another account. */
+export class RepositoryGitHubImageKey extends Data.TaggedClass(KEPT_KIND.REPOSITORY_GITHUB_IMAGE)<{
+  readonly workspaceId: string;
+  readonly repository: string;
+  readonly src: string;
+}> {}
+
 export type KeptKey =
   | AgentPictureKey
   | InboxAttachmentKey
   | DescriptionPictureKey
   | PageVersionKey
   | FileAtCommitKey
-  | GitHubImageKey;
+  | GitHubImageKey
+  | RepositoryGitHubImageKey;
 
 /** An answer that carries content: never why there is none. */
 type Carrying<Answer> = Exclude<
@@ -123,6 +132,7 @@ interface KeptAnswers {
   readonly [KEPT_KIND.PAGE_VERSION]: Carrying<TasksPageAnswer>;
   readonly [KEPT_KIND.FILE_AT_COMMIT]: Carrying<TasksFileAnswer>;
   readonly [KEPT_KIND.GITHUB_IMAGE]: Carrying<AgentGitHubImageView>;
+  readonly [KEPT_KIND.REPOSITORY_GITHUB_IMAGE]: Carrying<AgentGitHubImageView>;
 }
 
 /** What is kept under a key of one kind. */
@@ -182,7 +192,7 @@ export function keptOfAgent(agentId: string): (key: KeptKey) => boolean {
 export function keptOfTask(taskId: string): (key: KeptKey) => boolean {
   return (key) =>
     Match.value(key).pipe(
-      Match.tag(KEPT_KIND.DESCRIPTION_PICTURE, (kept) => kept.planId === taskId),
+      Match.tag(KEPT_KIND.DESCRIPTION_PICTURE, (kept) => kept.taskId === taskId),
       Match.tag(
         KEPT_KIND.PAGE_VERSION,
         (kept) => kept.ownerKind === PAGE_OWNER.TASK && kept.ownerId === taskId,

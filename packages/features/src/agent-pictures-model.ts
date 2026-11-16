@@ -16,7 +16,7 @@ import {
 } from "./conversation-picture-wire.js";
 
 /**
- * agent-pictures-model.ts -- the pictures an agent's transcript names, read from its stored calls: the set a `show_image` call showed, the pictures an integration's call answered, and the screenshots a `browser` call took, each by the id the service kept it under.
+ * agent-pictures-model.ts -- the pictures an agent's transcript names, read from its stored calls: the set a `show_media` call showed, the pictures an integration's call answered, and the screenshots a `browser` call took, each by the id the service kept it under.
  *
  * The service keeps a picture beside the transcript and writes its id in the
  * stored output in the bytes' place (`coder-host/show-image.ts`,
@@ -57,7 +57,7 @@ function fileName(path: string): string {
 }
 
 /**
- * A `show_image` call's input as a list of pictures: one given bare, a path
+ * A `show_media` call's input as a list of pictures: one given bare, a path
  * with no list around it, is read as a list of that one, as the service
  * shows it and the transcript draws it. Note that this is read here rather
  * than in the schema, because the schema is what the model is shown and a
@@ -69,7 +69,7 @@ export function asPictureList(input: UnparsedWireValue): UnparsedWireValue {
     : input;
 }
 
-/** The pictures a `show_image` call showed, in order: each as the call asked for it, and as it was kept where the call answered. */
+/** The pictures a `show_media` call showed, in order: each as the call asked for it, and as it was kept where the call answered. */
 export function shownPicturesOf(
   input: UnparsedWireValue,
   output: UnparsedWireValue,

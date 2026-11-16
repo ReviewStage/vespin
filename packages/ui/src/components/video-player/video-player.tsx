@@ -1,5 +1,6 @@
 import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { playheadText } from "@repo/features/time-format";
+import { recordingHasSound } from "@repo/features/video-signature";
 import {
   IN_CONTEXT_KEY,
   IN_CONTEXT_SHORTCUTS,
@@ -18,11 +19,16 @@ import {
   PlayIcon,
   PreviousFrameIcon,
   RewindIcon,
+  SpeakerIcon,
+  SpeakerOffIcon,
 } from "../../icons/lucide-glyphs.js";
+import { useMediaPlace } from "../../media-place.js";
 import { motionHeld } from "../../motion-timing.js";
 import { notePictureOrigin } from "../../picture-expand.js";
+import { usePlayingFrames } from "../../playing-frames.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, Card } from "../card/card.js";
+import { EDGE_CLIP_ELEMENT, EDGE_CLIP_LAYOUT, EdgeClip } from "../edge-clip/edge-clip.js";
 import { SLIDER_LENGTH, Slider } from "../slider/slider.js";
 import { SPINNER_INK, SPINNER_SIZE, Spinner } from "../spinner/spinner.js";
 import { Tooltip } from "../tooltip/hint.js";
@@ -59,8 +65,16 @@ import { Tooltip } from "../tooltip/hint.js";
  * pointer or the keyboard is in it; on a touch screen it always stands. Full
  * screen fills the screen with the frame, the bar with it, and Escape or its
  * button brings it back; where the browser fills it with nothing but a
- * video, as Safari on an iPhone, it opens the video in the browser's player. There is no volume, since an agent's recording of
- * its screen has no sound, and no Download, which the viewer's header has.
+ * video, as Safari on an iPhone, it opens the video in the browser's player. There is no Download, which the viewer's header has.
+ *
+ * An agent's recording of its screen has no sound, so a video plays muted
+ * and its bar offers no sound control, unless its header names a sound
+ * track (`recordingHasSound`), as a clip an agent made to be heard and drew
+ * as a waveform does: then it plays with its sound, and a Mute button after
+ * Play takes it away and gives it back. The choice holds for every player
+ * drawn after it, as the video sites keep it, so a clip muted inline stays
+ * muted in the viewer. There is no volume slider: the system's volume is the
+ * one a reader already reaches for.
  *
  * Where a picture would be drawn, the video plays in place (`INLINE`), in a
  * frame that hugs it at its own shape up to its column's width. A place that
@@ -72,12 +86,11 @@ import { Tooltip } from "../tooltip/hint.js";
  * its size is read it says it as `--ui-video-natural-width` and
  * `--ui-video-natural-height`, plain numbers the place may fit it by.
  *
- * A recording keeps its place wherever it is drawn: each player notes where
- * it stands as it plays (`places`, by the video's bytes), so the same
- * recording drawn again, in the viewer an Expand opens or in a player drawn
- * anew, starts where it was left, and a player played again after another
- * moved the same recording, as the inline one after the viewer closes, goes
- * on from there.
+ * A recording keeps its place wherever it is drawn (`useMediaPlace`, as a
+ * sound clip's does), so the same recording drawn again, in the viewer an
+ * Expand opens or in a player drawn anew, starts where it was left, and a
+ * player played again after another moved the same recording, as the
+ * inline one after the viewer closes, goes on from there.
  *
  * Until its first frame's size is read, the frame holds the shape it will
  * take, its known size or a screenshot's (`LOADING_SIZE`), on the veil, the
@@ -103,6 +116,8 @@ const VIDEO_LABEL = {
   LOADING: "Loading the video",
   PLAY: "Play",
   PAUSE: "Pause",
+  MUTE: "Mute",
+  UNMUTE: "Unmute",
   PREVIOUS_FRAME: "Previous frame",
   NEXT_FRAME: "Next frame",
   SEEK: "Seek",
@@ -144,6 +159,13 @@ const WEBM_ID = {
 
 /** How much of a `data:` URL's base64 holds a WebM's header, read for its frame length: twelve kilobytes, a whole number of base64's four-character groups. */
 const HEADER_BASE64_CHARS = 16_384;
+
+/**
+ * How much of a `data:` URL's base64 is read for a sound track: 192
+ * kilobytes, a whole number of base64's four-character groups, which holds a
+ * WebM's tracks and a long MP4's index, each standing before its media.
+ */
+const SOUND_HEAD_BASE64_CHARS = 262_144;
 
 /** How far an arrow key seeks, in seconds. */
 const ARROW_SEEK_S = 5;
@@ -193,12 +215,6 @@ const FRAME_CHORD = {
   NEXT: IN_CONTEXT_SHORTCUTS[IN_CONTEXT_KEY.VIDEO_FRAME_AHEAD].chord,
 } as const satisfies Record<string, ShortcutChord>;
 
-/**
- * How many recordings' places are kept, the latest played; past it the
- * oldest is let go, since each is keyed by its whole `data:` URL.
- */
-const PLACES_KEPT = 16;
-
 /** Where a video plays: in place of a picture, or in the file viewer. */
 export const VIDEO_PLAYER_PLACE = {
   INLINE: "inline",
@@ -237,23 +253,8 @@ interface Playback {
   readonly speed: number;
 }
 
-/** Where a recording was left: the second it stood at, and the player that stood it there. */
-interface Place {
-  readonly at: number;
-  readonly by: symbol;
-}
-
-/** Where each recording was last left, by its `data:` URL, the latest last. */
-const places = new Map<string, Place>();
-
-/** Notes where `dataUrl` was left, letting the oldest place go past `PLACES_KEPT`. */
-function keepPlace(dataUrl: string, place: Place): void {
-  places.delete(dataUrl);
-  places.set(dataUrl, place);
-  const oldest = places.keys().next().value;
-
-  if (places.size > PLACES_KEPT && oldest !== undefined) places.delete(oldest);
-}
+/** Whether the reader took the sound away last, which every player drawn after it starts by. */
+let soundOff = false;
 
 /** The media type a `data:` URL names, as the picture reads spell one. */
 export function dataUrlMediaType(dataUrl: string): string {
@@ -266,21 +267,30 @@ export function isVideoDataUrl(dataUrl: string): boolean {
 }
 
 /**
- * The `blob:` address a video's `data:` URL plays from, made from its bytes
- * here and let go of as what draws it goes, the player or a thumb's still:
- * neither window's policy lets media load from a `data:` address, nor fetch
- * one, where both allow `blob:`. Note that the bytes are copied into an
- * array of their own length one by one, because `Uint8Array.from` over the
- * decoded string first lists every character, tens of megabytes for a
- * recording, which a phone with several on screen runs out of room for.
+ * The bytes a `data:` URL holds. Note that they are copied into an array of
+ * their own length one by one, because `Uint8Array.from` over the decoded
+ * string first lists every character, tens of megabytes for a recording,
+ * which a phone with several on screen runs out of room for.
+ */
+export function dataUrlBytes(dataUrl: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
+  const bytes = new Uint8Array(binary.length);
+
+  for (let at = 0; at < binary.length; at += 1) bytes[at] = binary.charCodeAt(at);
+
+  return bytes;
+}
+
+/**
+ * The `blob:` address a video's or a sound clip's `data:` URL plays from,
+ * made from its bytes here and let go of as what draws it goes, the player
+ * or a thumb's still: neither window's policy lets media load from a
+ * `data:` address, nor fetch one, where both allow `blob:`.
  */
 export function useBlobUrl(dataUrl: string): string | undefined {
   const [url, setUrl] = useState<string>();
   useEffect(() => {
-    const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
-    const bytes = new Uint8Array(binary.length);
-
-    for (let at = 0; at < binary.length; at += 1) bytes[at] = binary.charCodeAt(at);
+    const bytes = dataUrlBytes(dataUrl);
     const made = URL.createObjectURL(new Blob([bytes], { type: dataUrlMediaType(dataUrl) }));
     setUrl(made);
 
@@ -325,6 +335,17 @@ function frameSecondsOf(dataUrl: string): number {
   }
 
   return FALLBACK_FRAME_S;
+}
+
+/** Whether a recording's `data:` URL names a sound track in its header. */
+function soundOf(dataUrl: string): boolean {
+  const start = dataUrl.indexOf(",") + 1;
+  const head = atob(dataUrl.slice(start, start + SOUND_HEAD_BASE64_CHARS));
+  const bytes = new Uint8Array(head.length);
+
+  for (let at = 0; at < head.length; at += 1) bytes[at] = head.charCodeAt(at);
+
+  return recordingHasSound(bytes);
 }
 
 /** A video as Safari draws one, which on a phone fills the screen only in Safari's own player. */
@@ -374,7 +395,7 @@ function useFullScreen(
  * Note that a WebM a recorder wrote as it went states none, which the
  * browser reports as infinite, so it is sought past its end once, which
  * makes the browser read the length, and brought back to where it was left
- * as the length lands (`resume`).
+ * as the length lands (`useMediaPlace`'s `resume`).
  */
 function probeLength(video: HTMLVideoElement): void {
   if (!Number.isFinite(video.duration)) video.currentTime = Number.MAX_SAFE_INTEGER;
@@ -644,12 +665,14 @@ const LOADING =
 /** The player as its place holds it: hugging the video at most its column's width, and in the viewer no taller than the card. */
 const PLAYER = "ui-video-player relative block w-fit max-w-full";
 
-/** The bar along a video's foot: play or pause, a frame back and on, how far of how long, the scrubber, the speed, Expand, and Full screen. */
+/** The bar along a video's foot: play or pause, mute where it has sound, a frame back and on, how far of how long, the scrubber, the speed, Expand, and Full screen. */
 function VideoBar({
   playback,
   frame,
   full,
+  muted,
   onToggle,
+  onMute,
   onStep,
   onSeek,
   onSpeed,
@@ -660,7 +683,10 @@ function VideoBar({
   /** How long a frame stands, in seconds, which the scrubber moves by. */
   frame: number;
   full: boolean;
+  /** Whether its sound is taken away, where it has sound; without any, the bar offers no Mute. */
+  muted: boolean | undefined;
   onToggle: () => void;
+  onMute: () => void;
   onStep: (by: number) => void;
   onSeek: (at: number) => void;
   onSpeed: () => void;
@@ -676,6 +702,13 @@ function VideoBar({
         icon={playback.playing ? <PauseIcon /> : <PlayIcon />}
         onPress={onToggle}
       />
+      {muted === undefined ? null : (
+        <BarButton
+          label={muted ? VIDEO_LABEL.UNMUTE : VIDEO_LABEL.MUTE}
+          icon={muted ? <SpeakerOffIcon /> : <SpeakerIcon />}
+          onPress={onMute}
+        />
+      )}
       <span className={BAR_EXTRA}>
         <BarButton
           label={VIDEO_LABEL.PREVIOUS_FRAME}
@@ -746,6 +779,8 @@ export function VideoPlayer({
   });
 
   const frameSeconds = useMemo(() => frameSecondsOf(dataUrl), [dataUrl]);
+  const sound = useMemo(() => soundOf(dataUrl), [dataUrl]);
+  const [muted, setMuted] = useState(soundOff);
   const [flash, setFlash] = useState<Flash>();
   // The video's own pixels once its size is read, which the viewer fits it by.
   const [natural, setNatural] = useState<VideoSize>();
@@ -763,10 +798,7 @@ export function VideoPlayer({
           aspectRatio: `${String(LOADING_SIZE.width)} / ${String(LOADING_SIZE.height)}`,
         };
 
-  // This player, named in the places it keeps, so it can tell another's from its own.
-  const [self] = useState(() => Symbol(VIDEO_LABEL.PLAYER));
-  // The recording whose place this player keeps, once it has taken up where that one was left.
-  const keeps = useRef<string>(undefined);
+  const kept = useMediaPlace(dataUrl);
   // Note that whether it starts is read once, as it mounts, because a video hears autoplay only then.
   const [starts] = useState(() => viewer && !motionHeld());
 
@@ -781,18 +813,13 @@ export function VideoPlayer({
       speed: shown.playbackRate,
     });
 
-    if (moved && keeps.current !== undefined) {
-      keepPlace(keeps.current, { at: Math.min(shown.currentTime, duration), by: self });
-    }
+    if (moved) kept.keep(shown);
   };
 
-  // Once its length is known, the video goes to where it was left, or its start, which also ends the seek that read the length.
-  const resume = (shown: HTMLVideoElement) => {
-    if (keeps.current !== undefined || !Number.isFinite(shown.duration)) return;
-    keeps.current = dataUrl;
-    const left = places.get(dataUrl)?.at ?? 0;
-    shown.currentTime = left < shown.duration ? left : 0;
-  };
+  // While it plays, its place is read on every frame, so the scrubber and the playhead glide rather than step at each `timeupdate`.
+  usePlayingFrames(playback.playing, () => {
+    if (video.current !== null) read(video.current);
+  });
 
   const expand =
     onExpand === undefined
@@ -829,7 +856,7 @@ export function VideoPlayer({
         playerKey(event, video.current, frameSeconds, (ask) => setFlash((was) => flashOn(was, ask)))
       }
     >
-      {/* Note that the player carries no captions track, because an agent's recording of its screen has no sound. */}
+      {/* Note that the player carries no captions track, because no recorder of an agent's writes one. */}
       {/* Note that the video stands before its address is made, so the frame holds its shape from the first paint. */}
       <video
         ref={video}
@@ -840,7 +867,7 @@ export function VideoPlayer({
         style={waiting}
         aria-label={label === "" ? VIDEO_LABEL.VIDEO : `${VIDEO_LABEL.VIDEO}: ${label}`}
         autoPlay={starts}
-        muted
+        muted={!sound || muted}
         playsInline
         preload={viewer ? "auto" : "metadata"}
         onClick={() => {
@@ -853,34 +880,27 @@ export function VideoPlayer({
           if (viewer) setNatural({ width: shown.videoWidth, height: shown.videoHeight });
           setReadUrl(url);
           // A new address is a new recording, whose place is taken up afresh.
-          keeps.current = undefined;
+          kept.forget();
           probeLength(shown);
-          resume(shown);
+          // Once its length is known, the video goes to where it was left, which also ends the seek that read the length.
+          kept.resume(shown);
           read(shown);
         }}
         onDurationChange={(event) => {
-          resume(event.currentTarget);
+          kept.resume(event.currentTarget);
           read(event.currentTarget);
         }}
         onTimeUpdate={(event) => read(event.currentTarget)}
         onPlay={(event) => {
-          const shown = event.currentTarget;
-          const left = keeps.current === undefined ? undefined : places.get(keeps.current);
-
           // Played again after another player moved the same recording, it goes on from there.
-          if (left !== undefined && left.by !== self) {
-            shown.currentTime = left.at < shown.duration ? left.at : 0;
-          }
-
-          read(shown);
+          kept.rejoin(event.currentTarget);
+          read(event.currentTarget);
         }}
         onPause={(event) => read(event.currentTarget)}
         onEnded={(event) => read(event.currentTarget)}
         onRateChange={(event) => read(event.currentTarget, false)}
         // A new address resets the old one's time before its own loads, which is no place of the old recording's.
-        onEmptied={() => {
-          keeps.current = undefined;
-        }}
+        onEmptied={kept.forget}
       />
       {flash === undefined ? null : <KeyFlash flash={flash} onGone={() => setFlash(undefined)} />}
       {loaded ? (
@@ -888,7 +908,12 @@ export function VideoPlayer({
           playback={playback}
           frame={frameSeconds}
           full={full}
+          muted={sound ? muted : undefined}
           onToggle={() => toggleOf(video.current)}
+          onMute={() => {
+            soundOff = !muted;
+            setMuted(soundOff);
+          }}
           onStep={(by) => {
             if (video.current !== null) stepFrame(video.current, frameSeconds, by);
           }}
@@ -937,7 +962,10 @@ export function VideoPlayer({
       className={PLAYER}
       data-place={place}
     >
-      {player}
+      {/* Note that the video is clipped inside the card's edge, because a playing video and its bar drawn to the card's corners paint over its edge there. */}
+      <EdgeClip as={EDGE_CLIP_ELEMENT.SPAN} layout={EDGE_CLIP_LAYOUT.BLOCK}>
+        {player}
+      </EdgeClip>
     </Card>
   );
 }

@@ -4,6 +4,7 @@ import {
   CHECK_SUMMARY,
 } from "@repo/features/agent-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { type NumberedAddress, pullRequestAddressOf } from "@repo/features/link-grammar";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import {
   CountParts,
@@ -68,10 +69,8 @@ import { useLinkStanding } from "./use-link-standing.js";
 export interface PublishedDoors {
   openGitHub: (url: string) => void;
   copy: (words: string, label: string) => void;
-  /** Opens the agent's pull request in a tab of the side panel's own; none where the view stands in no panel. */
-  openPullRequest?: (() => void) | undefined;
-  /** Opens another pull request the agent opened, by its number, in that same tab; none where the view stands in no panel. */
-  openPullRequestNumber?: ((number: number) => void) | undefined;
+  /** Opens a pull request the agent opened, by its repository and number, in its tab of the side panel's own; none where the view stands in no panel. */
+  openPullRequest?: ((pullRequest: NumberedAddress) => void) | undefined;
 }
 
 /** What the segment of the agent's other pull requests names its menu. */
@@ -140,11 +139,17 @@ type PullRequestPlacesResult = {
  */
 function pullRequestPlaces(
   url: string,
-  inApp: (() => void) | undefined,
   onGitHub: boolean,
   doors: PublishedDoors,
 ): PullRequestPlacesResult {
   const openGitHub = () => doors.openGitHub(url);
+  const { openPullRequest } = doors;
+  const address = pullRequestAddressOf(url);
+
+  const inApp =
+    openPullRequest === undefined || address === undefined
+      ? undefined
+      : () => openPullRequest(address);
 
   if (inApp === undefined) return { press: openGitHub, other: undefined };
 
@@ -158,6 +163,32 @@ function pullRequestPlaces(
           shortcutSubject(SHORTCUT_SUBJECT.GITHUB_PAGE, url),
         ),
       };
+}
+
+/** The card the pointer resting on a pull request's row or segment hangs: the one its chip hangs (`mention-chip.tsx`), which names it whole, the published title where GitHub answered nothing. */
+function usePullRequestCard(pullRequest: Pick<AgentPullRequest, "url" | "title">): ReactNode {
+  const mentionDoors = useMentionDoors();
+
+  const mention = {
+    kind: MENTION_KIND.LINK,
+    provider: INTEGRATION_PROVIDER.GITHUB,
+    url: pullRequest.url,
+  } as const;
+
+  const standing = useLinkStanding(mention, {
+    taskId: mentionDoors.holder?.taskId,
+    workspace: mentionDoors.place.workspace,
+  });
+
+  return (
+    <MentionChipCard
+      mention={mention}
+      target={pullRequest.url}
+      name={pullRequest.title}
+      doors={mentionDoors}
+      standing={standing}
+    />
+  );
 }
 
 /** The lines a change adds and removes, as GitHub counts them: green, then red. */
@@ -189,36 +220,10 @@ export function PublishedRow({
   const state = pullRequestStateWord(pullRequest);
   const coarse = useCoarsePointer();
 
-  const places = pullRequestPlaces(
-    pullRequest.url,
-    doors.openPullRequest,
-    usePullRequestsOnGitHub(),
-    doors,
-  );
+  const places = pullRequestPlaces(pullRequest.url, usePullRequestsOnGitHub(), doors);
 
   const actions = branchActions(branch, doors, pullRequest.url, places.other);
-  const mentionDoors = useMentionDoors();
-
-  const mention = {
-    kind: MENTION_KIND.LINK,
-    provider: INTEGRATION_PROVIDER.GITHUB,
-    url: pullRequest.url,
-  } as const;
-
-  const standing = useLinkStanding(mention, {
-    taskId: mentionDoors.holder?.taskId,
-    workspace: mentionDoors.place.workspace,
-  });
-
-  const card = (
-    <MentionChipCard
-      mention={mention}
-      target={pullRequest.url}
-      name={pullRequest.title}
-      doors={mentionDoors}
-      standing={standing}
-    />
-  );
+  const card = usePullRequestCard(pullRequest);
 
   return (
     <div className="agent-published">
@@ -250,23 +255,12 @@ export function PublishedRow({
   );
 }
 
-/** Where one of the agent's pull requests opens in the app: the one it stands on in its Pull request tab, another by its number in that tab; none where the view stands in no panel. */
-function dockedInApp(docked: DockedPullRequest, doors: PublishedDoors): (() => void) | undefined {
-  const { openPullRequest, openPullRequestNumber } = doors;
-
-  if (docked.current && openPullRequest !== undefined) return openPullRequest;
-
-  return openPullRequestNumber === undefined
-    ? undefined
-    : () => openPullRequestNumber(docked.pullRequest.number);
-}
-
 /** One of the agent's pull requests' press and the menu's other place (`pullRequestPlaces`). */
 function dockedPlaces(docked: DockedPullRequest, doors: PublishedDoors, onGitHub: boolean) {
-  return pullRequestPlaces(docked.pullRequest.url, dockedInApp(docked, doors), onGitHub, doors);
+  return pullRequestPlaces(docked.pullRequest.url, onGitHub, doors);
 }
 
-/** One pull request's segment of the split bar: its mark and number and title, its line counts where the segment has room, a press opening it, and a right-click offering its page and its link. */
+/** One pull request's segment of the split bar: its mark and number and title, its line counts where the segment has room, a press opening it, a right-click offering its page and its link, and the pointer resting on it hanging the pull request's chip's card, as the one row does. */
 function PublishedSegment({
   docked,
   roomy,
@@ -279,21 +273,24 @@ function PublishedSegment({
   const { pullRequest, branch } = docked;
   const places = dockedPlaces(docked, doors, usePullRequestsOnGitHub());
   const actions = branchActions(branch, doors, pullRequest.url, places.other);
+  const card = usePullRequestCard(pullRequest);
 
   return (
-    <ListRow
-      leading={<PullRequestMark pullRequest={pullRequest} />}
-      title={pullRequestLabelOf(pullRequest)}
-      meta={
-        roomy ? (
-          <LinesChanged additions={pullRequest.additions} deletions={pullRequest.deletions} />
-        ) : undefined
-      }
-      hint={{ Hint: RowHint, label: pullRequest.title }}
-      onPress={places.press}
-      menu={rowMenu(PUBLISHED_THING, actions, undefined, true)}
-      more={false}
-    />
+    <RowHintOptions card={card}>
+      <ListRow
+        leading={<PullRequestMark pullRequest={pullRequest} />}
+        title={pullRequestLabelOf(pullRequest)}
+        meta={
+          roomy ? (
+            <LinesChanged additions={pullRequest.additions} deletions={pullRequest.deletions} />
+          ) : undefined
+        }
+        hint={{ Hint: RowHint, label: pullRequest.title }}
+        onPress={places.press}
+        menu={rowMenu(PUBLISHED_THING, actions, undefined, true)}
+        more={false}
+      />
+    </RowHintOptions>
   );
 }
 
@@ -303,7 +300,7 @@ function PublishedSegment({
  * (`PublishedRow`), and where it opened more, one
  * bar split into an equal segment for each (`SplitBar`), those that do not
  * fit its width folded into a last segment whose press lists them; nothing
- * before it opened one.
+ * before it opened one. Each segment hangs the card the one row hangs.
  */
 export function PublishedBar({
   published,
