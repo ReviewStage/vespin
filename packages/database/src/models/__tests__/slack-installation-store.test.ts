@@ -133,7 +133,15 @@ it.layer(getTestDB())("the Slack installation store", (it) => {
         });
       }
 
-      const bot = { teamId: "T0001", botUserId: "U0BOT", scopes: ["chat:write", "users:read"] };
+      const bot = {
+        teamId: "T0001",
+        botUserId: "U0BOT",
+        botId: "B0BOT",
+        appId: "A0APP",
+        scopes: ["chat:write", "users:read"],
+        enterpriseId: null,
+        isEnterpriseInstall: false,
+      };
 
       const wrongTeam = yield* saveSlackBotToken(ring, {
         ...bot,
@@ -165,6 +173,8 @@ it.layer(getTestDB())("the Slack installation store", (it) => {
           botSealedToken: row?.botSealedToken,
           botUserId: row?.botUserId,
           botScopes: row?.botScopes,
+          botId: row?.botId,
+          appId: row?.appId,
         })
         .where(eq(slackInstallation.organizationId, theirs));
 
@@ -194,7 +204,11 @@ it.layer(getTestDB())("the Slack installation store", (it) => {
         teamId: "T0001",
         token: Redacted.make("xoxb-token"),
         botUserId: "U0BOT",
+        botId: "B0BOT",
+        appId: "A0APP",
         scopes: ["chat:write"],
+        enterpriseId: null,
+        isEnterpriseInstall: false,
       });
 
       const deleted = yield* deleteSlackBotToken(workspace);

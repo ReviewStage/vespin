@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { SLACK_THREAD_ORIGIN, type SlackThreadOrigin } from "../storage-vocabulary.js";
 import { timestamptz } from "./_helpers.js";
 import { agentTable } from "./agent.js";
@@ -37,9 +46,11 @@ import { organization, user } from "./auth.js";
  * also holds the bot token Slack granted that workspace, sealed by
  * `models/provider-key-seal.ts` under the provider keys' ring with purposes
  * of its own and the workspace and team bound beside them, with the bot's
- * own Slack user id and the scopes it was granted. All five are set together
- * or none is: none on a row linked through the Vercel connector, and none
- * once Slack revoked the token. The token leaves with the row.
+ * own Slack user id and id, the scopes it was granted, and the app that
+ * granted it. Those seven are set together or none is: none on a row linked
+ * through the Vercel connector, and none once Slack revoked the token. The
+ * Enterprise Grid org an install was made in, and whether it was made across
+ * the org, are kept beside them as Bolt's installation keeps them. The token leaves with the row.
  */
 export const slackInstallation = pgTable(
   "slack_installation",
@@ -66,14 +77,22 @@ export const slackInstallation = pgTable(
     botUserId: text("bot_user_id"),
     /** The scopes Slack granted the bot token, as its install answered them. */
     botScopes: text("bot_scopes").array(),
+    /** Slack's id for the bot itself (`B…`), as its install answered it. */
+    botId: text("bot_id"),
+    /** Slack's id for the app the bot token was granted by (`A…`). */
+    appId: text("app_id"),
+    /** Slack's id for the Enterprise Grid org the install was made in (`E…`); null for a single-workspace install, the only kind our app allows. */
+    enterpriseId: text("enterprise_id"),
+    /** Whether the app was installed across an Enterprise Grid org rather than one workspace. */
+    isEnterpriseInstall: boolean("is_enterprise_install").notNull().default(false),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },
   (t) => [
-    // The token, its seal, the bot's id, and its scopes stand together or not at all.
+    // The token, its seal, the bot's ids, its scopes, and its app stand together or not at all.
     check(
       "slack_installation_bot_token_whole",
-      sql`num_nonnulls(${t.botKeyVersion}, ${t.botSealedDataKey}, ${t.botSealedToken}, ${t.botUserId}, ${t.botScopes}) in (0, 5)`,
+      sql`num_nonnulls(${t.botKeyVersion}, ${t.botSealedDataKey}, ${t.botSealedToken}, ${t.botUserId}, ${t.botScopes}, ${t.botId}, ${t.appId}) in (0, 7)`,
     ),
   ],
 );

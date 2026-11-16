@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "5eea4e2e-13a8-4065-85c8-4c4435febbbd",
+  "id": "dd321e6f-a660-49d9-9201-ddb9df945603",
   "prevIds": ["57663338-a710-46bf-8580-5cabcd7ca7ff"],
   "ddl": [
     {
@@ -11680,6 +11680,58 @@
       "table": "slack_installation"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bot_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "app_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "enterprise_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "is_enterprise_install",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -22611,7 +22663,7 @@
       "table": "machine_command"
     },
     {
-      "value": "num_nonnulls(\"bot_key_version\", \"bot_sealed_data_key\", \"bot_sealed_token\", \"bot_user_id\", \"bot_scopes\") in (0, 5)",
+      "value": "num_nonnulls(\"bot_key_version\", \"bot_sealed_data_key\", \"bot_sealed_token\", \"bot_user_id\", \"bot_scopes\", \"bot_id\", \"app_id\") in (0, 7)",
       "name": "slack_installation_bot_token_whole",
       "entityType": "checks",
       "schema": "public",

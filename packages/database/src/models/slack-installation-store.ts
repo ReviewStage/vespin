@@ -57,8 +57,9 @@ import type { TaskStoreEffect } from "./task-store.js";
  * forgotten when the bot leaves it.
  *
  * Once the bot runs on our own Slack app, each workspace's install grants
- * its own bot token, which the installation keeps sealed beside the bot's
- * Slack user id and its scopes (`saveSlackBotToken`), opened for one call at
+ * its own bot token, which the installation keeps sealed beside what Bolt's
+ * installation keeps of the bot: its user id and id, the app, its scopes,
+ * and the Enterprise Grid org (`saveSlackBotToken`), opened for one call at
  * a time (`openSlackBot`) and forgotten when Slack revokes it
  * (`deleteSlackBotToken`) or the installation is deleted. A token is only
  * ever handed out `Redacted`, and nothing here logs it or its seal.
@@ -90,20 +91,32 @@ const SlackInstallationRowSchema = Schema.Struct({
 /** The Slack team a workspace's bot is connected to. */
 export type SlackInstallation = typeof SlackInstallationRowSchema.Type;
 
-/** What saving a bot token names: the workspace and the team its install granted it in, the token, the bot's Slack user id, and the scopes Slack granted. */
-export interface SlackBotToSave {
+/** What an install of our Slack app answered of its bot, as Bolt's installation keeps it, the team and the token aside. */
+const SlackBotFieldsSchema = Schema.Struct({
+  /** Slack's id for the bot's own user in the team (`U…`). */
+  botUserId: Schema.String,
+  /** Slack's id for the bot itself (`B…`). */
+  botId: Schema.String,
+  /** Slack's id for the app that granted the token (`A…`). */
+  appId: Schema.String,
+  /** The scopes Slack granted the bot token. */
+  scopes: Schema.Array(Schema.String),
+  /** The Enterprise Grid org the install was made in; null for a single-workspace install. */
+  enterpriseId: Schema.NullOr(Schema.String),
+  /** Whether the app was installed across an Enterprise Grid org. */
+  isEnterpriseInstall: Schema.Boolean,
+});
+
+/** What saving a bot token names: the workspace and the team its install granted it in, the token, and what the install answered of its bot. */
+export interface SlackBotToSave extends Schema.Schema.Type<typeof SlackBotFieldsSchema> {
   readonly organizationId: string;
   readonly teamId: string;
   readonly token: Redacted.Redacted<string>;
-  readonly botUserId: string;
-  readonly scopes: readonly string[];
 }
 
 /** A workspace's bot as its installation holds it, its token opened for one call. */
-export interface SlackBot {
+export interface SlackBot extends Schema.Schema.Type<typeof SlackBotFieldsSchema> {
   readonly teamId: string;
-  readonly botUserId: string;
-  readonly scopes: readonly string[];
   readonly token: Redacted.Redacted<string>;
 }
 
@@ -112,8 +125,7 @@ const SlackBotRowSchema = Schema.Struct({
   keyVersion: Schema.Int,
   sealedDataKey: Schema.String,
   sealedToken: Schema.String,
-  botUserId: Schema.String,
-  scopes: Schema.Array(Schema.String),
+  ...SlackBotFieldsSchema.fields,
 });
 
 const SlackMemberRowSchema = Schema.Struct({
@@ -232,8 +244,7 @@ const writeBotToken = SqlSchema.findAll({
     keyVersion: Schema.Int,
     sealedDataKey: Schema.String,
     sealedToken: Schema.String,
-    botUserId: Schema.String,
-    scopes: Schema.Array(Schema.String),
+    ...SlackBotFieldsSchema.fields,
     now: Schema.Date,
   }),
   Result: Schema.Struct({ organizationId: Schema.String }),
@@ -247,6 +258,10 @@ const writeBotToken = SqlSchema.findAll({
           botSealedToken: row.sealedToken,
           botUserId: row.botUserId,
           botScopes: [...row.scopes],
+          botId: row.botId,
+          appId: row.appId,
+          enterpriseId: row.enterpriseId,
+          isEnterpriseInstall: row.isEnterpriseInstall,
           updatedAt: row.now,
         })
         .where(
@@ -273,6 +288,10 @@ const findBot = SqlSchema.findOneOption({
           sealedToken: sql<string>`${slackInstallation.botSealedToken}`,
           botUserId: sql<string>`${slackInstallation.botUserId}`,
           scopes: sql<string[]>`${slackInstallation.botScopes}`,
+          botId: sql<string>`${slackInstallation.botId}`,
+          appId: sql<string>`${slackInstallation.appId}`,
+          enterpriseId: slackInstallation.enterpriseId,
+          isEnterpriseInstall: slackInstallation.isEnterpriseInstall,
         })
         .from(slackInstallation)
         .where(
@@ -298,6 +317,10 @@ const clearBotToken = SqlSchema.findAll({
           botSealedToken: null,
           botUserId: null,
           botScopes: null,
+          botId: null,
+          appId: null,
+          enterpriseId: null,
+          isEnterpriseInstall: false,
           updatedAt: now,
         })
         .where(
@@ -775,7 +798,7 @@ export function deleteSlackInstallation(
 
 /**
  * Keeps the bot token the workspace's install of our Slack app granted,
- * sealed with the ring, beside the bot's Slack user id and its scopes,
+ * sealed with the ring, beside what the install answered of its bot,
  * replacing any it held; answers whether the workspace's installation is
  * of that team, and writes nothing where it is not.
  */
@@ -789,7 +812,11 @@ export function saveSlackBotToken(ring: KeyRing, bot: SlackBotToSave): TaskStore
       ...owner,
       ...sealed,
       botUserId: bot.botUserId,
+      botId: bot.botId,
+      appId: bot.appId,
       scopes: bot.scopes,
+      enterpriseId: bot.enterpriseId,
+      isEnterpriseInstall: bot.isEnterpriseInstall,
       now,
     });
 
@@ -824,13 +851,17 @@ export function openSlackBot(
     return Option.some({
       teamId: row.teamId,
       botUserId: row.botUserId,
+      botId: row.botId,
+      appId: row.appId,
       scopes: row.scopes,
+      enterpriseId: row.enterpriseId,
+      isEnterpriseInstall: row.isEnterpriseInstall,
       token: token.success,
     });
   });
 }
 
-/** Forgets the workspace's bot token, its bot user id, and its scopes, the installation left standing; answers whether one was held. */
+/** Forgets the workspace's bot token and what its install answered of the bot, the installation left standing; answers whether one was held. */
 export function deleteSlackBotToken(organizationId: string): TaskStoreEffect<boolean> {
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
