@@ -19,7 +19,12 @@ import {
   taskSearchSubject,
 } from "@repo/features/search-found-model";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { useMemo } from "react";
+import { TASKS_READ } from "@repo/features/tasks-view";
+import type { AppStateSnapshot } from "@repo/host/app-state";
+import { INBOX_FEED } from "@repo/host/app-state-reads";
+import { useQuery } from "@tanstack/react-query";
+import { useDeferredValue, useMemo } from "react";
+import { appStateQuery } from "../host/app-state-query.js";
 import {
   useListedAgents,
   useListedTasks,
@@ -35,6 +40,17 @@ import {
   useWaiting,
 } from "../tasks/use-tasks.js";
 
+/** Where a read of the task list stands. */
+type TasksRead = (typeof TASKS_READ)[keyof typeof TASKS_READ];
+
+/** Where the task list stands while its rows may still be coming: not yet asked, or asked and not yet answered. */
+const TASKS_STILL_READING: ReadonlySet<TasksRead> = new Set([TASKS_READ.IDLE, TASKS_READ.READING]);
+
+/** Where the task list's read stands, which says whether a task or an agent the query would find may not be held yet. */
+function selectListStatus(state: AppStateSnapshot): TasksRead {
+  return state.tasks.listStatus;
+}
+
 /** What a query finds: each kind's rows best first, the Tasks listing their rows are drawn and acted on through, and the reader the Inbox's rows are read for. */
 export interface SearchFound {
   readonly tasks: readonly TaskSummary[];
@@ -42,20 +58,33 @@ export interface SearchFound {
   readonly agents: readonly TaskAgentLine[];
   readonly listing: ReadListing;
   readonly readerId: string | undefined;
+  /** Whether the rows were found for what is typed now, the deferred finding caught up. */
+  readonly current: boolean;
+  /** Whether the Inbox's first read is still out, so an Inbox item it would find may not be held yet. */
+  readonly inboxReading: boolean;
+  /** Whether the task list, which holds the tasks and the agents on them, is not yet read, or the service is still searched for the tasks past it, so a task or an agent it would find may not be held yet. */
+  readonly tasksReading: boolean;
 }
 
-/** The tasks, Inbox items, and agents of the chosen workspace that `query` finds; none of any while nothing is typed. */
-export function useSearchFound(query: string): SearchFound {
+/**
+ * The tasks, Inbox items, and agents of the chosen workspace that `typed`
+ * finds; none of any while nothing is typed. Note that they are found for a
+ * deferred copy of what is typed, as ⌘K ranks its rows, so a key typed
+ * draws at once and the finding that follows gives way to the next key.
+ */
+export function useSearchFound(typed: string): SearchFound {
+  const query = useDeferredValue(typed);
   const listing = useTasksListing(query);
   const inbox = useInboxListing({ show: INBOX_SHOW.ALL, search: query });
   const collections = useTaskListCollections();
   const listedTasks = useListedTasks();
   const listedAgents = useListedAgents();
   const pullRequests = useTaskListRows(collections.agentPullRequests);
+  const { data: listStatus } = useQuery({ ...appStateQuery, select: selectListStatus });
   const workspace = listing.workspace;
   const waiting = useWaiting(workspace?.id);
 
-  return useMemo(() => {
+  const ranked = useMemo(() => {
     const names = new Map(listedTasks.map((task) => [task.id, task.name]));
 
     // Note that an archived agent is left out, as a task's page leaves it out of its Agents.
@@ -74,8 +103,34 @@ export function useSearchFound(query: string): SearchFound {
       agents: rankedBySearch(agents, query, (agent) =>
         agentSearchSubject(agent, names.get(agent.taskId)),
       ).map((agent) => agentLine(agent, waiting.byAgent, pullRequests)),
+    };
+  }, [
+    listing.found,
+    inbox.listed,
+    listedTasks,
+    listedAgents,
+    pullRequests,
+    workspace,
+    waiting,
+    query,
+  ]);
+
+  const inboxReading = inbox.feed === INBOX_FEED.READING;
+
+  // Note that a task or agent found past the list held comes only with the service's search, and one on a list not yet read with its first read.
+  const tasksReading =
+    listStatus === undefined || TASKS_STILL_READING.has(listStatus) || listing.searching;
+
+  // Note that what the rows are read through and whether the finding has caught up are joined after the ranking, so neither a key typed nor a search answered ranks again.
+  return useMemo(
+    () => ({
+      ...ranked,
       listing,
       readerId: inbox.readerId,
-    };
-  }, [listing, inbox, listedTasks, listedAgents, pullRequests, workspace, waiting, query]);
+      inboxReading,
+      tasksReading,
+      current: query === typed,
+    }),
+    [ranked, listing, inbox.readerId, inboxReading, tasksReading, query, typed],
+  );
 }
