@@ -456,6 +456,17 @@ type SectionAdd = {
   readonly acts: readonly SectionAct[];
 };
 
+/**
+ * One number for a section's done and total figures, which changes when
+ * either does, so `2/5` rolls on to `2/6` as a sub-task is added and not
+ * only to `3/5` as one is finished: Cantor's pairing, unique to each pair of
+ * whole numbers. Note that the figures stand in one `Text`, heard as one,
+ * so one animation keys on both.
+ */
+function progressKey({ done, total }: SectionProgress): number {
+  return ((done + total) * (done + total + 1)) / 2 + total;
+}
+
 /** A section's header: its fold chevron where it folds, its title in 13 pt medium, and its count, all muted. */
 function GroupHeader({
   title,
@@ -477,7 +488,7 @@ function GroupHeader({
   const colors = useColors();
   const chevron = useScaledSize(CHEVRON_SIZE);
   const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
-  const rolling = useRollingCount(progress?.done ?? count ?? 0);
+  const rolling = useRollingCount(progress === undefined ? (count ?? 0) : progressKey(progress));
 
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
