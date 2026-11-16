@@ -11,7 +11,7 @@ appId: dev.vespin.ios
 - assertVisible: "Recorded the invite flow"
 - tapOn:
     id: "workspace-switcher"
-- tapOn: ".*, Settings"
+- tapOn: "Settings, .*"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "MCP"

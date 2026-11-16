@@ -98,9 +98,10 @@ export type ThreadMedia =
   | {
       readonly kind: typeof THREAD_MEDIA.AUDIO;
       readonly key: string;
-      /** The clip's file under the app's caches, named by its type's extension; none while its bytes are on their way. */
-      readonly source: string | undefined;
+      /** The clip's file under the app's caches, named by its type's extension; none while its bytes are on their way, and `null` where they could not be read. */
+      readonly source: string | null | undefined;
       readonly label: string;
+      readonly onRetry: () => void;
     }
   | {
       readonly kind: typeof THREAD_MEDIA.FILE;
@@ -144,6 +145,8 @@ type ThreadPageProps = {
   readonly pathActions?: BarMenu["actions"] | undefined;
   /** The thread's title, which heads the page. */
   readonly title: string;
+  /** Whether the title is the words the thread stands on, such as a description's comment, quoted as the panel's thread quotes them: muted, regular, and cut to two lines, rather than a heading of its own. */
+  readonly quoted?: boolean | undefined;
   readonly messages: readonly ThreadMessage[];
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
@@ -171,9 +174,21 @@ type ThreadPageProps = {
   readonly foot?: ReactNode | undefined;
 };
 
-/** A thread's heading under its bar: its title in 20 pt semibold, and how it ended under it, 13 pt muted, once it is settled. */
-function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standing">) {
+/** A thread's heading under its bar: its title in 20 pt semibold, or the words it stands on quoted in the body's muted size and cut to two lines, and how it ended under it, 13 pt muted, once it is settled. */
+function ThreadHead({
+  title,
+  quoted = false,
+  standing,
+}: Pick<ThreadPageProps, "title" | "quoted" | "standing">) {
   const colors = useColors();
+
+  // Note that a quoted block reads as what the thread is on, as the panel's quote line does, so a whole paragraph never stands as the page's bold title.
+  const look = quoted
+    ? [font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT_MUTED), lineLimit(2)]
+    : [
+        font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
+        foregroundStyle(colors.TEXT),
+      ];
 
   return (
     <VStack
@@ -181,15 +196,7 @@ function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standi
       spacing={SPACE.TIGHT}
       modifiers={[padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT })]}
     >
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
-          foregroundStyle(colors.TEXT),
-          accessibilityAddTraits(["isHeader"]),
-        ]}
-      >
-        {title}
-      </Text>
+      <Text modifiers={[...look, accessibilityAddTraits(["isHeader"])]}>{title}</Text>
       {standing === undefined ? null : (
         <Text
           modifiers={[
@@ -276,7 +283,7 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
         />
       );
     case THREAD_MEDIA.AUDIO:
-      return <AudioClip source={media.source} label={media.label} />;
+      return <AudioClip source={media.source} label={media.label} onRetry={media.onRetry} />;
     case THREAD_MEDIA.FILE:
       return (
         <FileChip
@@ -479,6 +486,7 @@ export function ThreadPage(props: ThreadPageProps) {
     status,
     pathActions,
     title,
+    quoted,
     messages,
     ask,
     acts = [],
@@ -513,7 +521,7 @@ export function ThreadPage(props: ThreadPageProps) {
               padding({ bottom: SPACE.PAGE + footRoom }),
             ]}
           >
-            <ThreadHead title={title} standing={standing} />
+            <ThreadHead title={title} quoted={quoted} standing={standing} />
             {messages.map((message) => (
               <MessageView key={message.id} message={message} {...drawing} />
             ))}

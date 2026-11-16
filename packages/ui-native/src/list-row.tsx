@@ -86,6 +86,12 @@ function useRowLines(): (typeof ROW_LINES)[keyof typeof ROW_LINES] {
   return useAccessibilitySize() ? ROW_LINES.ACCESSIBILITY : ROW_LINES.STANDARD;
 }
 
+/** How a row's title is drawn: plain, or as Markdown with a search's words in bold, each by a native text of its own. */
+const TITLE_LOOK = {
+  PLAIN: "plain",
+  MARKED: "marked",
+} as const;
+
 /** What parts the pieces of what a row is heard as, as VoiceOver pauses between a label's phrases. */
 const HEARD_PART = ", ";
 
@@ -228,13 +234,14 @@ type TaskRowProps = RowActs & {
   readonly depth?: number | undefined;
 };
 
-/** A row's act as a button of its long press menu or its swipe: red where it takes something away, and otherwise in `ink`, the muted ink a menu's glyph takes unless a swipe asks for its fill. */
+/** A row's act as a button of its long press menu or its swipe: red where it takes something away, through the system's destructive role where `roled`, and otherwise in `ink`, the muted ink a menu's glyph takes unless a swipe asks for its fill. */
 export function actionButton(
   action: RowAction,
   colors: BrandColors,
   ink: string = colors.TEXT_MUTED,
+  roled = true,
 ) {
-  const destructive = action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
+  const destructive = roled && action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
 
   return (
     <Button
@@ -340,7 +347,11 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
  * draws a row's background across the whole column, and on iPadOS 26 a
  * split view's list column runs on under the floating sidebar, so the gray
  * stood under the sidebar's glass to the window's edge. A row's own view
- * stays inside the column's safe area, as Mail's rows do. Note that a row
+ * stays inside the column's safe area, as Mail's rows do. The gray is
+ * rounded and set in from the column's edges by `ROW_INSET.FILL`, as Mail's
+ * selected message stands, the padding inside it giving back that inset so
+ * the row's words and marks stand where an unselected row's do, and its
+ * hairlines step aside while it is selected, as Mail's do. Note that a row
  * draws no hairline over itself, only the one under it, because a list
  * column's first row drew one under its search field, where Mail draws none.
  */
@@ -353,9 +364,22 @@ export function rowPlacement(
   return [
     listRowBackground("clear"),
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
-    padding({ leading: ROW_INSET.LEADING, trailing: SPACE.EDGE, top: vertical, bottom: vertical }),
-    ...(selected ? [background(colors.SELECTED)] : []),
-    listRowSeparator("hidden", "top"),
+    padding({
+      leading: ROW_INSET.LEADING - ROW_INSET.FILL,
+      trailing: SPACE.EDGE - ROW_INSET.FILL,
+      top: vertical,
+      bottom: vertical,
+    }),
+    ...(selected
+      ? [
+          background(
+            colors.SELECTED,
+            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
+          ),
+          listRowSeparator("hidden"),
+        ]
+      : []),
+    padding({ horizontal: ROW_INSET.FILL }),
     listRowSeparatorTint(colors.CHIP_EDGE),
     alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT + indent),
   ];
@@ -404,13 +428,31 @@ function fullSwipes(swipes: readonly RowSwipe[]): boolean {
 }
 
 /**
- * A swipe's piece: an act's button, or a menu's, in `ink`. Behind the row
- * it fills with the action gray, which holds 4.5:1 under the swipe's white
- * words in both themes where the muted ink, light in dark, did not; in the
- * long press menu it stands in the muted ink a menu's glyph takes.
+ * A swipe's piece behind the row: an act's button, or a menu's, filled with
+ * the action gray, which holds 4.5:1 under the swipe's white words in both
+ * themes where the muted ink, light in dark, did not. Note that an act that
+ * takes something away fills with the danger fill, which holds the same
+ * under white, without the destructive role, because SwiftUI takes a row
+ * out of its list the moment a destructive swipe is pressed, before an act
+ * that asks first, such as Archive, hears its answer, so a Cancel left the
+ * row gone under its section's count.
  */
-function swipeButton(swipe: RowSwipe, colors: BrandColors, ink: string) {
-  return isSubmenu(swipe) ? rowSubmenu(swipe, colors, ink) : actionButton(swipe, colors, ink);
+function swipeButton(swipe: RowSwipe, colors: BrandColors) {
+  if (isSubmenu(swipe)) return rowSubmenu(swipe, colors, colors.ACTION_FILL);
+
+  return actionButton(
+    swipe,
+    colors,
+    swipe.tone === ROW_ACTION_TONE.DESTRUCTIVE ? colors.DANGER_FILL : colors.ACTION_FILL,
+    false,
+  );
+}
+
+/** A swiped act as it stands again in the long press menu: in the muted ink a menu's glyph takes, and red through the system's destructive role, since a menu takes no row away. */
+function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
+  return isSubmenu(swipe)
+    ? rowSubmenu(swipe, colors, colors.TEXT_MUTED)
+    : actionButton(swipe, colors);
 }
 
 /**
@@ -495,7 +537,7 @@ export function RowFrame({
     <ContextMenu>
       <ContextMenu.Items>
         {opening.map((action) => actionButton(action, colors))}
-        {swiped.map((swipe) => swipeButton(swipe, colors, colors.TEXT_MUTED))}
+        {swiped.map((swipe) => swipeMenuButton(swipe, colors))}
         {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
         {menuActions.map((action) => actionButton(action, colors))}
       </ContextMenu.Items>
@@ -512,12 +554,12 @@ export function RowFrame({
       {menu}
       {trailingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="trailing" allowsFullSwipe={fullSwipes(trailingActions)}>
-          {trailingActions.map((swipe) => swipeButton(swipe, colors, colors.ACTION_FILL))}
+          {trailingActions.map((swipe) => swipeButton(swipe, colors))}
         </SwipeActions.Actions>
       )}
       {leadingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="leading" allowsFullSwipe={fullSwipes(leadingActions)}>
-          {leadingActions.map((swipe) => swipeButton(swipe, colors, colors.ACTION_FILL))}
+          {leadingActions.map((swipe) => swipeButton(swipe, colors))}
         </SwipeActions.Actions>
       )}
     </SwipeActions>
@@ -529,7 +571,10 @@ export function RowFrame({
  * it, as Mail's search results set them, and plain outside a search. Note
  * that a marked title is one Markdown string in one native text, never texts
  * nested in it, so a key typed redraws the words in place rather than
- * building the row's text anew.
+ * building the row's text anew. A title turning from marked to plain, or
+ * back, is drawn by a native text of its own (`TITLE_LOOK`), because the one
+ * native text, handed its plain words with no Markdown, kept drawing the bold
+ * of the last search it marked.
  */
 function TitleWords({
   title,
@@ -541,9 +586,11 @@ function TitleWords({
   const marked = searchedTitleMarkdown(title, useContext(RowSearchedContext));
 
   return marked === undefined ? (
-    <Text modifiers={[...modifiers]}>{title}</Text>
+    <Text key={TITLE_LOOK.PLAIN} modifiers={[...modifiers]}>
+      {title}
+    </Text>
   ) : (
-    <Text markdownEnabled modifiers={[...modifiers]}>
+    <Text key={TITLE_LOOK.MARKED} markdownEnabled modifiers={[...modifiers]}>
       {marked}
     </Text>
   );
@@ -554,20 +601,26 @@ function TitleWords({
  * column, the title, and what ends the line. The line centers its pieces,
  * so the mark stands on the title at any Dynamic Type size, and at an
  * accessibility size stacks its end under the title, the mark's column
- * growing with the words.
+ * growing with the words. What trails the line, such as the arrow of a row
+ * that opens GitHub, keeps the trailing edge at every size, as iOS keeps a
+ * row's chevron there.
  */
 export function RowHead({
   unread,
   faded,
+  fold,
   mark,
   lead,
   beside,
   title,
   ink,
   end,
+  trail,
 }: {
   readonly unread: boolean;
   readonly faded: boolean;
+  /** A parent's fold chevron, standing before its lead mark; none for a row that folds nothing. */
+  readonly fold?: ReactNode;
   /** A mark before the lead, in a column of the lead's width, as a task row's priority stands before its status. */
   readonly mark?: ReactNode;
   readonly lead: ReactNode;
@@ -576,6 +629,7 @@ export function RowHead({
   readonly title: string;
   readonly ink: string;
   readonly end: ReactNode;
+  readonly trail?: ReactNode;
 }) {
   const lines = useRowLines();
   const stacked = useAccessibilitySize();
@@ -597,10 +651,14 @@ export function RowHead({
     <HStack spacing={SPACE.TIGHT} alignment={stacked ? "firstTextBaseline" : "center"}>
       <UnreadDot unread={unread} faded={faded} />
       <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
-        {mark === undefined ? null : (
-          <HStack modifiers={[frame({ width: leadWidth })]}>{mark}</HStack>
-        )}
-        <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        {/* Note that the fold and the marks stand centered on each other, so the chevron, laid out at no height, sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
+        <HStack spacing={SPACE.ROW} alignment="center">
+          {fold}
+          {mark === undefined ? null : (
+            <HStack modifiers={[frame({ width: leadWidth })]}>{mark}</HStack>
+          )}
+          <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        </HStack>
         {beside}
         {stacked ? (
           <VStack alignment="leading" spacing={2}>
@@ -612,6 +670,7 @@ export function RowHead({
         )}
         <Spacer />
         {stacked ? null : end}
+        {trail}
       </HStack>
     </HStack>
   );
@@ -849,16 +908,27 @@ function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou"
   }
 }
 
-/** How far each level of sub-tasks stands in, in points: past a parent's mark, so a sub-task's mark stands under its parent's name. */
+/** How far each level of sub-tasks stands in, in points: past a parent's fold, so a sub-task's mark stands under its parent's. */
 const SUB_TASK_INDENT = MARK_SIZE.LEAD + SPACE.ROW;
 
 /** What a parent's chevron is heard as, folded and open. */
 const SHOW_SUB_TASKS = "Show sub-tasks";
 const HIDE_SUB_TASKS = "Hide sub-tasks";
 
-/** A parent's fold in its ring's place: a chevron that opens its sub-tasks under it, so a press on the row itself still opens the task. */
+/** The least a fold chevron answers a press across, in points, as the system asks of every target. */
+const FOLD_TARGET = 44;
+
+/**
+ * A parent's fold before its status ring, as the panel's chevron stands
+ * before a task's name: it opens the sub-tasks under the row, while a press
+ * on the row itself still opens the task. Note that the chevron lays out a
+ * lead mark's width, so a sub-task's ring stands under its parent's, but
+ * answers a press across a 44 pt square, its overhang laid out at no size
+ * so the row stands no taller than its siblings.
+ */
 function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPress: () => void }) {
   const colors = useColors();
+  const overhang = { across: (FOLD_TARGET - MARK_SIZE.LEAD) / 2, down: FOLD_TARGET / 2 };
 
   return (
     <Button
@@ -872,7 +942,16 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
         {...glyphImage(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
         size={MARK_SIZE.GLYPH - 4}
         color={colors.TEXT_MUTED}
-        modifiers={[frame({ width: MARK_SIZE.LEAD, height: MARK_SIZE.LEAD })]}
+        modifiers={[
+          frame({ width: FOLD_TARGET, height: FOLD_TARGET }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          padding({
+            leading: -overhang.across,
+            trailing: -overhang.across,
+            top: -overhang.down,
+            bottom: -overhang.down,
+          }),
+        ]}
       />
     </Button>
   );
@@ -880,9 +959,10 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
 
 /**
  * One task on a single line, as Linear's rows stand: the dot while it has
- * news, its priority's mark where its list draws one, its status ring, its name in 15 pt, and at the line's end what its
- * agents say and its key. A task with sub-tasks leads with the panel's fold
- * in its ring's place, whose press opens them; its caller draws them as rows
+ * news, its priority's mark where its list draws one, its status ring, its
+ * name in 15 pt, and at the line's end what its agents say and its key. A
+ * task with sub-tasks leads with the panel's fold before its marks, whose
+ * press opens them; its caller draws them as rows
  * of their own under it, a level deeper. Note that SwiftUI's disclosure is
  * not used, because a press on its row folds it rather than picking the row.
  */
@@ -908,14 +988,11 @@ export function TaskRow(props: TaskRowProps) {
       <RowHead
         unread={unread}
         faded={finished}
-        mark={priority === undefined ? undefined : <TaskPriorityMark priority={priority} />}
-        lead={
-          fold === undefined ? (
-            <TaskStatusMark status={status} />
-          ) : (
-            <SubTaskFold open={fold.open} onPress={fold.onToggle} />
-          )
+        fold={
+          fold === undefined ? undefined : <SubTaskFold open={fold.open} onPress={fold.onToggle} />
         }
+        mark={priority === undefined ? undefined : <TaskPriorityMark priority={priority} />}
+        lead={<TaskStatusMark status={status} />}
         title={name}
         ink={titleInk(colors, unread, finished)}
         end={

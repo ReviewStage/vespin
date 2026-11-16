@@ -137,6 +137,68 @@ describe("transcriptItems", () => {
     ]);
   });
 
+  it("stands one sender's lines sent close together in a run, and the day and time only over talk that picks up again, never joining the reader to an app", () => {
+    const minute = 60 * 1000;
+    const ada = { name: "Ada", userId: "u1" };
+    const grace = { name: "Grace", userId: "u2" };
+
+    const line = (
+      id: string,
+      minutes: number,
+      sentBy: { readonly name: string; readonly userId?: string } = ada,
+    ) => ({
+      id,
+      role: MESSAGE_ROLE.USER,
+      parts: [{ type: "text" as const, text: id }],
+      sentAt: minutes * minute,
+      sentBy,
+    });
+
+    const items = transcriptItems(
+      [
+        line("a", 0),
+        line("b", 1),
+        line("c", 2, grace),
+        line("d", 3, grace),
+        line("e", 40),
+        line("f", 41, { name: "Morning triage" }),
+      ],
+      { writing: false, readerId: "u1", toggles: NO_TOGGLES, now: 41 * minute, pullRequests: [] },
+    );
+
+    expect(
+      items.map((item) =>
+        item.kind === TRANSCRIPT_ITEM.SAID
+          ? [item.words, item.joinsAbove, item.joinsBelow, item.sender, item.stamp !== undefined]
+          : item.kind,
+      ),
+    ).toEqual([
+      ["a", false, true, undefined, true],
+      ["b", true, false, undefined, false],
+      ["c", false, true, "Grace", false],
+      ["d", true, false, "Grace", false],
+      ["e", false, false, undefined, true],
+      ["f", false, false, "Morning triage", false],
+    ]);
+  });
+
+  it("names an app's line while the reader is not yet known", () => {
+    const items = transcriptItems(
+      [
+        {
+          id: "fired",
+          role: MESSAGE_ROLE.USER,
+          parts: [{ type: "text", text: "Triage the new issues." }],
+          sentAt: 0,
+          sentBy: { name: "Morning triage" },
+        },
+      ],
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 1, pullRequests: [] },
+    );
+
+    expect(items).toMatchObject([{ kind: TRANSCRIPT_ITEM.SAID, sender: "Morning triage" }]);
+  });
+
   it("heads a line sent from a suggestion by the agent that suggested it", () => {
     const suggestedBy = { agent_id: "a1", name: "Triage", button_id: "b1" };
     const lead = "Suggested by [@Triage](https://vespin.dev/acme/agent/a1):\n\n";
@@ -253,7 +315,7 @@ describe("transcriptItems", () => {
       },
     },
   ])(
-    "draws a pull request a call opened as its card alone, as the task list holds it, or as it was opened where the list holds none ($card.state)",
+    "draws a pull request a call opened as the task list holds it, or as it was opened where the list holds none, in the call's place ($card.state)",
     ({ held, card }) => {
       const items = transcriptItems([OPENED], {
         writing: false,
