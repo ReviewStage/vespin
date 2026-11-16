@@ -45,7 +45,17 @@ import { PROVIDER_KEY_UNREADABLE } from "@repo/database/models/provider-key-seal
 import { modelIdAtSpeed } from "@repo/features/model-effort";
 import { type MacOffer, MODEL_PROVIDER, MODEL_SPEED, NO_EFFORT } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
-import { Clock, Context, Duration, Effect, Layer, Option, type Redacted, Schema } from "effect";
+import {
+  Clock,
+  Context,
+  Duration,
+  Effect,
+  Layer,
+  Option,
+  Predicate,
+  type Redacted,
+  Schema,
+} from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
@@ -157,10 +167,10 @@ const PINNED_CURSOR_MODELS: readonly CursorModel[] = [
 
 const ParameterValueSchema = Schema.Struct({ id: Schema.String, value: Schema.String });
 
-/** One model of Cursor's list, the fields this module reads alone, so a field Cursor adds changes nothing here. */
+/** One model of Cursor's list, the fields this module reads alone, so a field Cursor adds changes nothing here; its name is its id where Cursor gives none, as `@cursor/sdk` reads it. */
 const CursorListItemSchema = Schema.Struct({
   id: Schema.String,
-  displayName: Schema.String,
+  displayName: Schema.optionalKey(Schema.String),
   parameters: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({
@@ -184,8 +194,14 @@ type CursorListItem = typeof CursorListItemSchema.Type;
 
 type CursorVariant = NonNullable<CursorListItem["variants"]>[number];
 
-/** Cursor's answer to a read of its list. */
-const CursorListSchema = Schema.Struct({ items: Schema.Array(CursorListItemSchema) });
+/**
+ * Cursor's answer to a read of its list, each model read on its own, so one
+ * this module cannot read is left out rather than costing the account the
+ * whole list.
+ */
+const CursorListSchema = Schema.Struct({ items: Schema.Array(Schema.Unknown) });
+
+const readListItem = Schema.decodeUnknownOption(CursorListItemSchema);
 
 // ------------------------------------------------------------- the rule
 
@@ -263,7 +279,7 @@ function offeredOf(item: CursorListItem): readonly CursorModel[] {
           {
             catalogId: `${MODEL_PROVIDER.CURSOR}/${slug}`,
             cursorId: item.id,
-            name: item.displayName,
+            name: item.displayName ?? item.id,
             effort,
             fast: variants.length === 0 ? listsFast : runsFast(standard),
             pinned: [
@@ -284,7 +300,7 @@ function offeredOf(item: CursorListItem): readonly CursorModel[] {
           {
             catalogId: `${MODEL_PROVIDER.CURSOR}/${slug}${MAX_MODE.ID_SUFFIX}`,
             cursorId: item.id,
-            name: `${item.displayName}${MAX_MODE.NAME_SUFFIX}`,
+            name: `${item.displayName ?? item.id}${MAX_MODE.NAME_SUFFIX}`,
             effort,
             fast: runsFast(maxOnly),
             pinned: [...otherParams(maxBase), ...pinnedSpeed(maxBase, runsFast(maxOnly))],
@@ -295,16 +311,19 @@ function offeredOf(item: CursorListItem): readonly CursorModel[] {
   return [...own, ...max];
 }
 
-/** Cursor's list as the models we offer, in Cursor's order, the first of any two that would take one id kept. */
-export function cursorModelsOf(items: readonly CursorListItem[]): readonly CursorModel[] {
+/** Cursor's list as the models we offer, in Cursor's order, each model read on its own and one it cannot read left out, the first of any two that would take one id kept. */
+export function cursorModelsOf(items: readonly unknown[]): readonly CursorModel[] {
   const taken = new Set<string>();
 
-  return items.flatMap(offeredOf).filter((model) => {
-    if (taken.has(model.catalogId)) return false;
-    taken.add(model.catalogId);
+  return items
+    .flatMap((item) => Option.toArray(readListItem(item)))
+    .flatMap(offeredOf)
+    .filter((model) => {
+      if (taken.has(model.catalogId)) return false;
+      taken.add(model.catalogId);
 
-    return true;
-  });
+      return true;
+    });
 }
 
 // ------------------------------------------------------------- the read
@@ -325,6 +344,14 @@ export const CursorModelCatalog = Context.Reference<CursorModelReader>("CursorMo
   defaultValue: () => ({ forAccount: () => Effect.succeed(PINNED_CURSOR_MODELS) }),
 });
 
+/** What a failed read of Cursor's list is, by its kind and, where Cursor answered, its status; never its words or its request. */
+function failureKind(failure: { readonly _tag: string }): string {
+  const response = Predicate.hasProperty(failure, "response") ? failure.response : undefined;
+  const status = Predicate.hasProperty(response, "status") ? ` ${String(response.status)}` : "";
+
+  return `${failure._tag}${status}`;
+}
+
 /** One read of Cursor's list on the key given, answered as the models we offer; none where Cursor did not answer it so. */
 const readCursorList = Effect.fnUntraced(function* (
   client: HttpClient.HttpClient,
@@ -335,16 +362,24 @@ const readCursorList = Effect.fnUntraced(function* (
     HttpClientRequest.bearerToken(key),
   );
 
-  return yield* client.execute(request).pipe(
+  const models = yield* client.execute(request).pipe(
     Effect.flatMap(HttpClientResponse.filterStatusOk),
     Effect.flatMap(HttpClientResponse.schemaBodyJson(CursorListSchema)),
     Effect.scoped,
     Effect.timeout(CURSOR_MODELS_TIMEOUT),
     Effect.map((answer) => cursorModelsOf(answer.items)),
-    Effect.map((models) => (models.length === 0 ? Option.none() : Option.some(models))),
-    // Note that the failure is not kept, because the request it describes carries the key.
-    Effect.catch(() => Effect.succeed(Option.none())),
+    // Note that only the failure's kind and status are logged, because the request it describes carries the key.
+    Effect.catch((failure) =>
+      Effect.as(
+        Effect.logWarning(`Cursor's model list could not be read: ${failureKind(failure)}`),
+        [],
+      ),
+    ),
   );
+
+  if (models.length === 0) return Option.none();
+
+  return Option.some(models);
 });
 
 /**
