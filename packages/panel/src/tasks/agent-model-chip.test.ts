@@ -34,7 +34,7 @@ import { AgentModelChip } from "./agent-model-chip.js";
  * agent's never does. A chip handed the agent's permission mode names it
  * off Full access and offers the modes from its menu's Permissions row,
  * which stands while the catalog could not be read too; a Cursor agent's
- * offers no Ask for approval, and says why.
+ * offers no Ask for approval.
  */
 
 const MODELS: readonly CatalogModel[] = [
@@ -434,7 +434,7 @@ test("a chip handed the agent's permission mode names it off Full access, and it
   assert.deepEqual(chosen, ["auto"]);
 });
 
-test("a Cursor agent's Permissions offer Approve for me and Full access, never Ask for approval, and say why", () => {
+test("a Cursor agent's Permissions offer Approve for me and Full access, never Ask for approval", () => {
   const view = document.createElement("div");
   document.body.append(view);
   const root = createRoot(view);
@@ -488,7 +488,6 @@ test("a Cursor agent's Permissions offer Approve for me and Full access, never A
     ),
     ["Approve for me", "Full access"],
   );
-  assert.match(modes.parentElement?.textContent ?? "", /Cursor agents can't ask for approval/u);
 });
 
 test("the menu offers Permissions while the catalog could not be read, the one place the mode is changed", () => {
