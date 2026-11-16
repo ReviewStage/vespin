@@ -123,8 +123,8 @@ builds a control of its own.
 - **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
   panel's three lines (the task's status ring and name, then the thread's
   title and time, then the glyph and words of what it asks; an agent's own
-  thread, with no task, in two), `TaskRow` a task on one line (its status
-  ring, its name, and at its end a thread that needs you, a failed agent,
+  thread, with no task, in two), `TaskRow` a task on one line (its priority's
+  mark and status ring, as the panel's List row leads, its name, and at its end a thread that needs you, a failed agent,
   one at work, or its pull request, then its key), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
 - **Every glyph is the panel's own Lucide glyph for the same place** (the
@@ -238,11 +238,14 @@ navigation, tab bar, swipes, menus, sheets and glass.
   row that acts, such as New agent. `Screen` tints in `TEXT`, so a piece
   asks for copper by name. Status tones stand on the status marks alone: a
   task's ring, and a pull request's state.
-- **Scopes and capsules.** A list's scopes are `ScopePicker`, the system's
-  segmented control under its title, as Mail and the App Store switch a
-  list's views; in a split view's 320 pt list column, which cuts the
-  segments' words short, the system's menu picker naming the scope chosen
-  (`SCOPE_LOOK.MENU`). `Chip` is a capsule an act or a choice stands in, such as a
+- **Scopes and capsules.** A list's scopes are the system's segmented
+  control under its title, as Mail and the App Store switch a list's views;
+  in a split view's 320 pt list column, which cuts the segments' words
+  short, the system's menu picker naming the scope chosen
+  (`SCOPE_LOOK.MENU`). A list with rows stands them as its first row
+  (`RowList`'s `scopes`), so they scroll away with the rows as Mail's
+  categories do; one listing nothing stands them over its empty state
+  (`ScopePicker`), so another scope is one tap away. `Chip` is a capsule an act or a choice stands in, such as a
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
   status, priority and assignee, and where handed a `FieldMenu`, open the
   system's pull-down menu of the field's values, as Reminders' fields do. Each stands
