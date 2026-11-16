@@ -1820,7 +1820,7 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
 /** The threads a fixture run started on the invites task's description, by id, so a reply or a resolve on one finds it as it does a staged thread. */
 const STARTED_THREADS = new Map<string, DescriptionCommentThread>();
 
-/** The number the next reply the run keeps is given its id by, past every id the fixture stages, so each kept reply is keyed apart. */
+/** The number the next entry the run writes is given its id by, a kept reply or a resolve's or reopen's line, past every id the fixture stages, so each is keyed apart. */
 let nextReplyId = 1000;
 
 /** Keeps a started thread as it now stands, moved on a revision, and answers it. */
@@ -2789,13 +2789,28 @@ const ANSWERS: StagedAnswers = {
 
     const started = STARTED_THREADS.has(thread.id);
 
-    // Note that a thread the run started keeps what was done to it, its replies and whether it stands resolved, so a later answer carries them; a staged thread answers as it stands.
-    if (started && action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE) {
-      return { thread: keepStarted({ ...thread, status: DESCRIPTION_COMMENT_STATUS.RESOLVED }) };
-    }
+    // Note that a resolve or a reopen answers the thread at the status asked, with its line by Ada at the end, as the service answers one, so the host never draws it back as it stood; a thread the run started keeps it, with its replies, so a later answer carries them.
+    if (
+      action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE ||
+      action.action === DESCRIPTION_COMMENT_ACTION.REOPEN
+    ) {
+      const resolving = action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE;
 
-    if (started && action.action === DESCRIPTION_COMMENT_ACTION.REOPEN) {
-      return { thread: keepStarted({ ...thread, status: DESCRIPTION_COMMENT_STATUS.OPEN }) };
+      // Note that the line takes a fresh id from the run's count, as a kept reply does, so a thread settled twice never holds two rows of one key.
+      const line = {
+        id: fixtureId(nextReplyId++),
+        kind: resolving ? DESCRIPTION_COMMENT_ENTRY.RESOLVED : DESCRIPTION_COMMENT_ENTRY.REOPENED,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+        at: Date.now(),
+      };
+
+      const settled = {
+        ...thread,
+        status: resolving ? DESCRIPTION_COMMENT_STATUS.RESOLVED : DESCRIPTION_COMMENT_STATUS.OPEN,
+        entries: [...thread.entries, line],
+      };
+
+      return { thread: started ? keepStarted(settled) : settled };
     }
 
     if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };

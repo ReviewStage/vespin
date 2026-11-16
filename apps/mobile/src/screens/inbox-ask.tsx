@@ -189,8 +189,10 @@ function controlsStand(item: InboxItem): boolean {
  * to tick, with Mark done and Couldn't do it, each sending at once with the
  * note typed; an answer's fields to fill. A notice asking nothing offers Got
  * it while the box is empty, as the panel's Send reads then, which settles it
- * without messaging its agent. What the last send said where it did not go
- * stands under it. None where nothing is asked and nothing was said.
+ * without messaging its agent, and steps aside once pressed. What the last
+ * send said where it did not go stands in the box's head
+ * (`ThreadComposer`), beside the words it put back. None where nothing is
+ * asked.
  */
 export function OpenAskCard({
   item,
@@ -201,49 +203,42 @@ export function OpenAskCard({
   readonly answer: ThreadAnswer;
   readonly doors: OptionMediaDoors;
 }): ReactNode {
-  const { draft, onDraft, note, send, nods, acknowledge, asNew } = answer;
+  const { draft, onDraft, send, nods, acknowledge, asNew } = answer;
   // Note that the ask's controls step aside while the box starts a new thread, since nothing picked there goes with it, and come back as they were.
   const ask = asNew ? undefined : openAsk(item);
-  const said = note === undefined ? null : <AskNote words={note} />;
 
   if (ask === undefined && nods) {
     return (
-      <>
-        <AskActs
-          acts={[{ label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK, onPress: acknowledge }]}
-        />
-        {said}
-      </>
+      <AskActs
+        acts={[{ label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK, onPress: acknowledge }]}
+      />
     );
   }
 
-  if (ask === undefined) return said;
+  if (ask === undefined) return null;
 
   if (ask.type === INBOX_ASK.DECIDE) {
     const cards = optionsCarryMedia(ask);
 
     return (
-      <>
-        <ChoiceList
-          choices={ask.options.map((option) => cardChoice(option, doors))}
-          recommended={recommendedLabels(ask)}
-          picked={draft.choices}
-          multiple={ask.multiple === true}
-          // Note that a pick of several says so over its card, in the panel's words, since its round marks read as a pick of one until something is picked.
-          title={ask.multiple === true ? askHeadWords(ask, undefined) : undefined}
-          onChange={(choices) => onDraft(withPicks(draft, choices))}
-          none={
-            cards
-              ? {
-                  label: NONE_OF_THESE,
-                  picked: picksNone(draft),
-                  onPress: () => onDraft(withNoneOfThese(draft)),
-                }
-              : undefined
-          }
-        />
-        {said}
-      </>
+      <ChoiceList
+        choices={ask.options.map((option) => cardChoice(option, doors))}
+        recommended={recommendedLabels(ask)}
+        picked={draft.choices}
+        multiple={ask.multiple === true}
+        // Note that a pick of several says so over its card, in the panel's words, since its round marks read as a pick of one until something is picked.
+        title={ask.multiple === true ? askHeadWords(ask, undefined) : undefined}
+        onChange={(choices) => onDraft(withPicks(draft, choices))}
+        none={
+          cards
+            ? {
+                label: NONE_OF_THESE,
+                picked: picksNone(draft),
+                onPress: () => onDraft(withNoneOfThese(draft)),
+              }
+            : undefined
+        }
+      />
     );
   }
 
@@ -255,27 +250,24 @@ export function OpenAskCard({
     const ticked = shownTicks(ask, draft);
 
     return (
-      <>
-        <StepList
-          steps={ask.steps.length === 0 ? [item.title] : ask.steps}
-          ticked={ticked}
-          onToggle={(at) => onDraft(withStep(ask, draft, at))}
-          acts={[
-            { label: ASK_PRESS.DONE, symbol: GLYPH.CHECK, onPress: () => press(INBOX_REPLY.DONE) },
-            {
-              label: ASK_PRESS.NOT_DONE,
-              symbol: GLYPH.UNDO,
-              quiet: true,
-              onPress: () => press(INBOX_REPLY.NOT_DONE),
-            },
-          ]}
-        />
-        {said}
-      </>
+      <StepList
+        steps={ask.steps.length === 0 ? [item.title] : ask.steps}
+        ticked={ticked}
+        onToggle={(at) => onDraft(withStep(ask, draft, at))}
+        acts={[
+          { label: ASK_PRESS.DONE, symbol: GLYPH.CHECK, onPress: () => press(INBOX_REPLY.DONE) },
+          {
+            label: ASK_PRESS.NOT_DONE,
+            symbol: GLYPH.UNDO,
+            quiet: true,
+            onPress: () => press(INBOX_REPLY.NOT_DONE),
+          },
+        ]}
+      />
     );
   }
 
-  if (ask.fields === undefined) return said;
+  if (ask.fields === undefined) return null;
 
   const fields: readonly AnswerField[] = ask.fields.map((field) => {
     const kind = FIELD_KIND[field.type];
@@ -292,17 +284,14 @@ export function OpenAskCard({
   });
 
   return (
-    <>
-      <AnswerFields
-        fields={fields}
-        recommendedWord={RECOMMENDED.toLowerCase()}
-        onChange={(label, typed) => {
-          const kind = fields.find((field) => field.label === label)?.kind ?? ANSWER_FIELD.TEXT;
-          onDraft(withValue(draft, label, typedValue(kind, typed)));
-        }}
-      />
-      {said}
-    </>
+    <AnswerFields
+      fields={fields}
+      recommendedWord={RECOMMENDED.toLowerCase()}
+      onChange={(label, typed) => {
+        const kind = fields.find((field) => field.label === label)?.kind ?? ANSWER_FIELD.TEXT;
+        onDraft(withValue(draft, label, typedValue(kind, typed)));
+      }}
+    />
   );
 }
 
@@ -332,7 +321,7 @@ export function ThreadComposer({
 }) {
   // Note that the thread's screen hears its focus here rather than reading it whole, so a change of focus draws only the composer again (`useFocusShown`).
   const focused = useFocusShown();
-  const { draft, onDraft, answerReady, send, asNew, setAsNew, start } = answer;
+  const { draft, onDraft, note: sendNote, answerReady, send, asNew, setAsNew, start } = answer;
   const [pictureNote, setPictureNote] = useState<string | undefined>(undefined);
 
   // Note that the pictures picked are named and bounded against the draft as it stands when the picker answers, since a refused send may have put words and pictures back while it stood open.
@@ -362,11 +351,13 @@ export function ThreadComposer({
 
   const pictures = draft.attachments.map((file) => ({ id: file.name, name: file.name }));
 
+  // Note that the box's head holds the pictures attached, then what the picker refused, then why the last send didn't go.
   const head =
-    pictures.length === 0 && pictureNote === undefined ? undefined : (
+    pictures.length === 0 && pictureNote === undefined && sendNote === undefined ? undefined : (
       <>
         <AttachedPictures pictures={pictures} onDetach={detach} />
         {pictureNote === undefined ? null : <AskNote words={pictureNote} />}
+        {sendNote === undefined ? null : <AskNote words={sendNote} />}
       </>
     );
 
@@ -383,6 +374,7 @@ export function ThreadComposer({
     // Note that a new thread starts from words alone, so no picked answer lights Send for one.
     sendable: !asNew && answerReady,
     onSend: () => (asNew ? start() : send()),
+    // Note that what a send that did not go said stands in the box's head with the pictures, beside the words it put back, as a comment's reply says it.
     head,
     addMenu: {
       actions: [{ ...ATTACH_PHOTOS, onPress: attach }],

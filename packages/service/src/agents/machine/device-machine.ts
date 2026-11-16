@@ -346,6 +346,7 @@ function deviceMachineOver(
         sharedFiles: folders.sharedFiles,
         claudeExecutable: device.value.claudeExecutable,
         codexExecutable: device.value.codexExecutable ?? undefined,
+        cursorSdk: undefined,
         // Note that a Mac's Codex keeps its threads and its login at its own default under the machine's
         // home, which its runner finds by itself, so nothing names `CODEX_HOME` for it.
         codexHome: undefined,

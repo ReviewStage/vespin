@@ -9,8 +9,8 @@ import type { CompactedNotice, GoalNotice } from "@repo/wire/ui-messages";
  * native-moments.ts -- what a native harness's run amounts to for the transcript, said once for every harness.
  *
  * A runner posts its harness's own messages: Claude Code's SDK messages
- * (`claude-code-moments.ts`) or Codex's app-server notifications
- * (`codex-moments.ts`). Each
+ * (`claude-code-moments.ts`), Codex's app-server notifications
+ * (`codex-moments.ts`), or Cursor's SDK messages (`cursor-moments.ts`). Each
  * harness's reader turns its messages into these moments, and the one
  * projection (`native-projection.ts`) folds the moments into the store
  * writer's events, so a second harness adds a reader and nothing else.
@@ -40,10 +40,23 @@ export const NATIVE_MOMENT = {
   TEXT: "text",
   /** One reasoning summary of the step. */
   REASONING: "reasoning",
+  /**
+   * A piece of the step's reasoning, still forming, for a harness that
+   * streams its reasoning a token at a time and never whole (Cursor): the
+   * pieces are told as one summary once the step's words or a call follow,
+   * or the step closes.
+   */
+  REASONING_DELTA: "reasoning_delta",
   /** The model asked for a tool, under the name the transcript stores. */
   TOOL_STARTED: "tool_started",
   /** A tool answered. */
   TOOL_SETTLED: "tool_settled",
+  /**
+   * Every call the turn still holds unanswered settled as given, for a
+   * harness that can leave a call it gave up on with no answer (Cursor,
+   * whose call a review refused may never complete): said as its turn ends.
+   */
+  OPEN_CALLS_SETTLED: "open_calls_settled",
   /** A command the kernel killed for want of memory, said ahead of its answer: its call settles marked with the sandbox's memory. */
   OUT_OF_MEMORY: "out_of_memory",
   /**
@@ -139,6 +152,11 @@ export type NativeMoment =
   | { readonly kind: typeof NATIVE_MOMENT.TEXT_DELTA; readonly text: string }
   | { readonly kind: typeof NATIVE_MOMENT.TEXT; readonly text: string }
   | { readonly kind: typeof NATIVE_MOMENT.REASONING; readonly text: string }
+  | { readonly kind: typeof NATIVE_MOMENT.REASONING_DELTA; readonly text: string }
+  | {
+      readonly kind: typeof NATIVE_MOMENT.OPEN_CALLS_SETTLED;
+      readonly settlement: ToolCallSettlement;
+    }
   | {
       readonly kind: typeof NATIVE_MOMENT.TOOL_STARTED;
       readonly callId: string;
