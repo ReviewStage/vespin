@@ -4,6 +4,7 @@ import { act, createElement, type ReactNode, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { leavingPlace } from "../../testing/leaving-place.js";
+import { GroupHeader } from "../group-header/group-header.js";
 import { ListMotion } from "../list-motion/list-motion.js";
 import { SettingsSection } from "../settings-section/settings-section.js";
 import { Reveal, RevealArea, RevealChoice, revealArea } from "./reveal.js";
@@ -14,7 +15,8 @@ import { Reveal, RevealArea, RevealChoice, revealArea } from "./reveal.js";
  * held drawn and roll up as the rows under them close over them, and are let
  * go once that has played; two reveals turned on in one change move the
  * rows under them once, as far as both moved them; a choice's rows roll up
- * as the next value's unroll; and outside a reveal area they come and go at
+ * as the next value's unroll; a fold pressed open in an area glides the row
+ * under it as a reveal does; and outside a reveal area they come and go at
  * once. jsdom lays nothing out and plays nothing, so each row's place is
  * given and each motion recorded.
  */
@@ -264,6 +266,25 @@ test("a choice picked again rolls up the rows of the value left as the rows of t
   const glide = played.find((each) => each.element === rowOf("Under"));
   expect(glide?.keyframes[0]).toEqual({ transform: `translate(0px, ${-ROW}px)` });
   expect([unroll?.timing.duration, glide?.timing.duration]).toEqual([460, 460]);
+});
+
+test("a fold pressed open in an area glides the row under it down from where it stood", () => {
+  const card = () =>
+    createElement(
+      SettingsSection,
+      null,
+      createElement(GroupHeader, { label: "Group", fold: { defaultOpen: false } }, row("Inside")),
+      row("Under"),
+    );
+
+  draw(card, {});
+
+  act(() => document.querySelector<HTMLElement>("[aria-expanded]")?.click());
+
+  expect(rowOf("Inside")).toBeDefined();
+  expect(motionsOf(rowOf("Under"))).toEqual([
+    [{ transform: `translate(0px, ${-ROW}px)` }, { transform: "none" }],
+  ]);
 });
 
 test("outside a reveal area a setting's rows come and go at once", async () => {
