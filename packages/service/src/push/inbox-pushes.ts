@@ -82,7 +82,7 @@ import {
   openAskOf,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
-import { mentionLinksIn } from "@repo/features/mention-link";
+import { markdownPlainText } from "@repo/features/markdown-plain-text";
 import { agentName } from "@repo/features/model-label";
 import { PRESENCE } from "@repo/features/presence-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
@@ -143,23 +143,28 @@ function clipped(words: string, bound: number): string {
   return words.length <= bound ? words : `${words.slice(0, bound - 1).trimEnd()}…`;
 }
 
-/** The first line of the words that says anything, trimmed, each mention said by its label. */
-function firstLine(text: string): string {
-  let plain = text;
+/**
+ * The words as an alert's body says them: the Markdown said as plain text,
+ * each mention by its label, a line to each line it draws, clipped to the
+ * body's bound. Note that Apple draws no formatting in a banner or on the
+ * Lock Screen, so marks left in would stand as stray characters, and that the
+ * lines past the first fill a banner's four lines and the expanded alert.
+ */
+function bodyWords(text: string): string {
+  return clipped(markdownPlainText(text), ALERT_BOUND.BODY_CHARS);
+}
 
-  for (const link of [...mentionLinksIn(text)].reverse()) {
-    plain = `${plain.slice(0, link.start)}${link.label}${plain.slice(link.end)}`;
-  }
+/** A title as an alert says it: its Markdown said as plain text on one line, or its words as written where that says nothing. */
+function titleWords(title: string): string {
+  const plain = markdownPlainText(title).replaceAll("\n", " ");
 
-  const line = plain.split("\n").find((each) => each.trim() !== "") ?? "";
-
-  return clipped(line.trim(), ALERT_BOUND.BODY_CHARS);
+  return plain === "" ? title.trim() : plain;
 }
 
 /** The alert's title and body; a body that would say nothing is left out. */
 function alertOf(title: string, body: string) {
   return {
-    title: clipped(title.trim(), ALERT_BOUND.TITLE_CHARS),
+    title: clipped(titleWords(title), ALERT_BOUND.TITLE_CHARS),
     ...(body === "" ? undefined : { body }),
   };
 }
@@ -297,7 +302,7 @@ function threadPostNotification(
     collapseId: item.id,
     payload: {
       aps: {
-        alert: alertOf(item.title, firstLine(message.text)),
+        alert: alertOf(item.title, bodyWords(message.text)),
         "thread-id": taskId,
         category,
         "mutable-content": 1,
