@@ -63,7 +63,7 @@ describe("transcriptItems", () => {
     });
   });
 
-  it("draws the pictures a line carried over its words, leaving a file that is no picture to the panel", () => {
+  it("draws the pictures a line carried over its words, one kept apart read by its id, leaving a file that is no picture to the panel", () => {
     const shot = "data:image/png;base64,iVBORw0KGgo=";
 
     const items = transcriptItems(
@@ -75,6 +75,13 @@ describe("transcriptItems", () => {
             { type: "text", text: "The button is cut off." },
             { type: "file", mediaType: "image/png", filename: "bug.png", url: shot },
             { type: "file", mediaType: "application/pdf", filename: "plan.pdf", url: "" },
+            {
+              type: "file",
+              mediaType: "image/png",
+              filename: "kept.png",
+              url: "data:image/png;base64,",
+              providerMetadata: { app: { attachmentId: "picture-9" } },
+            },
           ],
         },
       ],
@@ -84,7 +91,10 @@ describe("transcriptItems", () => {
     expect(items[0]).toMatchObject({
       kind: TRANSCRIPT_ITEM.SAID,
       words: "The button is cut off.",
-      pictures: [{ name: "bug.png", url: shot, pictureId: undefined }],
+      pictures: [
+        { name: "bug.png", url: shot, pictureId: undefined },
+        { name: "kept.png", url: undefined, pictureId: "picture-9" },
+      ],
     });
   });
 

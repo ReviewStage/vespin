@@ -454,7 +454,8 @@ function saidPictures(line: AgentTranscriptMessage): readonly SaidPicture[] {
           {
             key: String(index),
             name: file.name,
-            url: file.url === "" ? undefined : file.url,
+            // Note that a picture kept apart is read by its id, so the empty `data:` address its line keeps in the bytes' place never stands in for it.
+            url: file.pictureId === undefined && file.url !== "" ? file.url : undefined,
             pictureId: file.pictureId,
           },
         ]
