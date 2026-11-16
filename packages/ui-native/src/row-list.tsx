@@ -34,6 +34,7 @@ import {
   listStyle,
   monospacedDigit,
   onGeometryChange,
+  padding,
   refreshable,
   scrollContentBackground,
   scrollContentMargins,
@@ -585,7 +586,8 @@ export function ListSection({
       dropped
     ) : (
       <Overlay alignment="trailing">
-        {dropped}
+        {/* Note that the header keeps the +'s width clear at its end, so a long title or count at a large text size wraps before it rather than running under it; padding across alone leaves the header its title's height. */}
+        <HStack modifiers={[padding({ trailing: ADD_TARGET.WIDTH })]}>{dropped}</HStack>
         <Overlay.Content>
           <SectionAddButton add={add} />
         </Overlay.Content>
