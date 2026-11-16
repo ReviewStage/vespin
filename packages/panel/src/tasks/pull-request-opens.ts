@@ -1,5 +1,5 @@
 /**
- * pull-request-opens.ts -- whether a press on a pull request opens its page on GitHub rather than its agent's Pull request tab, as the account chose.
+ * pull-request-opens.ts -- whether a press on a pull request opens its page on GitHub rather than its Pull request tab, as the account chose.
  *
  * The account's choice (`@repo/settings`'s `PULL_REQUEST_OPEN`, Settings ›
  * Account › Links) is read here for every press on a pull request: its row

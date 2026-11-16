@@ -12,22 +12,24 @@ import {
 } from "@repo/features/pull-request-write-wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { pullRequestPartRetryMutation, pullRequestViewedQuery } from "../live-reads.js";
+import {
+  repositoryPullRequestPartRetryMutation,
+  repositoryPullRequestViewedQuery,
+} from "../live-reads.js";
 import type { ViewedMarks } from "./changes-list.js";
-import { pullRequestAsked } from "./pull-request-number.js";
 import type { PullRequestSource } from "./pull-request-source.js";
 import { noteOf, type WriteNote } from "./pull-request-writes.js";
 
 /**
- * viewed-files.ts -- which of an agent's pull request's files the member marked viewed, as GitHub keeps the mark for them alone, read and set from Files changed.
+ * viewed-files.ts -- which of a pull request's files the member marked viewed, as GitHub keeps the mark for them alone, read and set from Files changed.
  *
  * The marks are GitHub's own, the ones its Viewed box sets, so they are read
  * and written by the service on the member's own GitHub sign-in and never on
  * our GitHub App (`pull-request-write-wire.ts`): the read, held by the host
- * while Files changed reads a pull request (`pullRequestViewedQuery`)
+ * while Files changed reads a pull request (`repositoryPullRequestViewedQuery`)
  * and asked again each time the changes are read anew, so the two describe
  * the same push, and as its head moves, and a mark or an unmark as one of the
- * pull request's changes (`AGENTS_PULL_REQUEST_ACTION`). A file marked
+ * pull request's changes (`PULL_REQUESTS_ACTION`). A file marked
  * viewed and changed since (GitHub's dismissed) reads as not viewed, as
  * GitHub unticks it.
  *
@@ -76,24 +78,23 @@ interface Pressing {
 }
 
 /**
- * The member's marks on the agent's pull request's files, held by the host
+ * The member's marks on the pull request's files, held by the host
  * while `reading` names a pull request and asked again each time it counts
  * another answer of the changes read, and marked or unmarked a file at a
  * time, several files at once.
  */
 export function useViewedFiles(
-  agentId: string,
-  source: Pick<PullRequestSource, "number" | "write">,
+  source: Pick<PullRequestSource, "pullRequest" | "write">,
   /** How many answers the changes read has landed with, a pull request named in the latest; none while none is. */
   reading: number | undefined,
 ): ViewedFiles {
-  const { number, write } = source;
+  const { pullRequest, write } = source;
 
   const held = useQuery(
-    pullRequestViewedQuery(reading === undefined ? undefined : pullRequestAsked(agentId, number)),
+    repositoryPullRequestViewedQuery(reading === undefined ? undefined : pullRequest),
   );
 
-  const { mutate: retryViewed } = useMutation(pullRequestPartRetryMutation());
+  const { mutate: retryViewed } = useMutation(repositoryPullRequestPartRetryMutation());
   const [states, setStates] = useState<ReadonlyMap<string, FileViewedState> | undefined>();
   const [pressed, setPressed] = useState<ReadonlyMap<string, boolean>>(new Map());
   const [note, setNote] = useState<WriteNote | undefined>(undefined);
@@ -112,9 +113,9 @@ export function useViewedFiles(
     readFor.current = reading;
 
     if (was !== undefined && reading !== undefined && was !== reading) {
-      retryViewed({ part: PULL_REQUEST_PART.VIEWED, ...pullRequestAsked(agentId, number) });
+      retryViewed({ part: PULL_REQUEST_PART.VIEWED, ...pullRequest });
     }
-  }, [reading, retryViewed, agentId, number]);
+  }, [reading, retryViewed, pullRequest]);
 
   const answer: AgentPullRequestViewedAnswerView | undefined =
     held.data ?? (held.isError ? UNANSWERED : undefined);

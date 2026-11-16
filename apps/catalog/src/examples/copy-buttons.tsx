@@ -9,6 +9,8 @@ import {
   GAP,
   Inline,
   Stack,
+  TEXT_TONE,
+  Text,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import type { Example } from "../example";
@@ -93,6 +95,25 @@ function CopyButtons(): React.JSX.Element {
             copy={copyToClipboard}
           />
         </Inline>
+      </CatalogSection>
+      <CatalogSection
+        id="copy-button-chip-flush"
+        title="A flush toolbar chip: its glyph on the edge of the words under it"
+      >
+        <Stack gap={GAP.TIGHT}>
+          <CopyButton
+            look={COPY_LOOK.CHIP}
+            face={COPY_CHIP_LOOK.TOOLBAR}
+            flush
+            lead={GLYPH.VARIABLE}
+            text="DATABASE_URL"
+            what="name DATABASE_URL"
+            copy={copyToClipboard}
+          />
+          <Text as="span" tone={TEXT_TONE.MUTED}>
+            Updated 3d ago
+          </Text>
+        </Stack>
       </CatalogSection>
       <CatalogSection id="copy-field" title="A block that shows what it copies">
         <Stack gap={GAP.CONTROL}>

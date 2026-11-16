@@ -33,6 +33,8 @@ import { samePrefix } from "@repo/features/allowed-command-model";
 import { HOSTS_READ } from "@repo/features/host-live";
 import type { DevicePresenceAnswer } from "@repo/features/host-wire";
 import type { LIVE_READ } from "@repo/features/live-wire";
+import { MACHINE_ASKS_READ } from "@repo/features/machine-ask-live";
+import { MACHINES_READ } from "@repo/features/machine-live";
 import { WORKSPACE_MEMORIES_READ } from "@repo/features/memory-live";
 import { CHATGPT_DEVICE_LOGIN, type ProviderKeysAnswer } from "@repo/features/provider-key-wire";
 import { declaredWrite, type EntityPool } from "@repo/sync";
@@ -58,6 +60,8 @@ import { type HostActTable, liveTold } from "./host-acts.js";
 import type { HostKernel } from "./host-kernel.js";
 import { heldHosts, hostRemove } from "./hosts-follow.js";
 import type { HeldSlice } from "./live-collection.js";
+import { heldMachineAsks } from "./machine-asks-follow.js";
+import { heldMachines, machineChange, machineRemove } from "./machines-follow.js";
 import { heldMemories, memoryForget, memorySave } from "./memory-follow.js";
 import type { WindowFocus } from "./window-focus.js";
 
@@ -68,6 +72,9 @@ export type AccountAsksClient = Pick<
   | "devicePresence"
   | "machineAllowedApps"
   | "removeHost"
+  | "changeMachine"
+  | "removeMachine"
+  | "answerMachineAsk"
   | "readHostPairing"
   | "approveHostPairing"
   | "denyHostPairing"
@@ -96,6 +103,7 @@ export type AccountAsksClient = Pick<
   | "removeSound"
   | "chooseSound"
   | "transcribeDictation"
+  | "openVoiceSession"
   | "markActive"
   | "registerPushDevice"
   | "unregisterPushDevice"
@@ -124,13 +132,20 @@ export interface AccountAsksDependencies extends AccountGateDependencies {
 /** The agents' acts this composer answers: a host removed, a host's pairing read, approved, or denied, and the apps the account's machines always allow read. */
 export type AccountAsksAgentAct =
   | "HOSTS_REMOVE"
+  | "MACHINES_CHANGE"
+  | "MACHINES_REMOVE"
+  | "MACHINE_ASK_ANSWER"
   | "HOSTS_ALLOWED_APPS"
   | "HOSTS_PAIRING_READ"
   | "HOSTS_PAIRING_APPROVE"
   | "HOSTS_PAIRING_DENY";
 
 /** The agents' live follows this composer answers: the account's hosts, and their devices' beats. */
-export type AccountAsksAgentFollow = "HOSTS_FOLLOW" | "HOSTS_PRESENCE_FOLLOW";
+export type AccountAsksAgentFollow =
+  | "HOSTS_FOLLOW"
+  | "HOSTS_PRESENCE_FOLLOW"
+  | "MACHINES_FOLLOW"
+  | "MACHINE_ASKS_FOLLOW";
 
 /** The acts this composer answers: the account's own asks, the hosts' and their pairing's, and the live follows of a workspace's memories, the account's hosts, and their devices' beats. */
 type AccountAsksActs = HostActTable<typeof ACCOUNT_ASK_ACTS> &
@@ -155,6 +170,14 @@ interface LiveFollows {
   readonly hosts: HeldSlice<string>;
   /** The windows' one hold on the hosts, under the account signed in. */
   readonly hostsHold: AccountHeld;
+  /** The account's machines Settings › Machines holds, by the account. */
+  readonly machines: HeldSlice<string>;
+  /** The windows' one hold on the machines, under the account signed in. */
+  readonly machinesHold: AccountHeld;
+  /** The asks the account's machines hold for its answer, by the account. */
+  readonly machineAsks: HeldSlice<string>;
+  /** The windows' one hold on the asks, under the account signed in. */
+  readonly machineAsksHold: AccountHeld;
 }
 
 /** The reads the host fetches for the windows that hold them, and the windows' holds on them. */
@@ -230,7 +253,33 @@ function liveFollows(
       tell: liveTold(kernel.emit, AGENT_FOLLOWS.HOSTS_FOLLOW),
     });
 
-    return { memories, hosts, hostsHold: yield* accountHeld(hosts, accountId) };
+    const machines = yield* heldMachines({
+      seal: (userId, poll, after) =>
+        asked(client.liveRead(MACHINES_READ, { userId }, poll ? { after } : undefined)),
+      accountId,
+      gate,
+      pool,
+      tell: liveTold(kernel.emit, AGENT_FOLLOWS.MACHINES_FOLLOW),
+    });
+
+    const machineAsks = yield* heldMachineAsks({
+      seal: (userId, poll, after) =>
+        asked(client.liveRead(MACHINE_ASKS_READ, { userId }, poll ? { after } : undefined)),
+      accountId,
+      gate,
+      pool,
+      tell: liveTold(kernel.emit, AGENT_FOLLOWS.MACHINE_ASKS_FOLLOW),
+    });
+
+    return {
+      memories,
+      hosts,
+      hostsHold: yield* accountHeld(hosts, accountId),
+      machines,
+      machinesHold: yield* accountHeld(machines, accountId),
+      machineAsks,
+      machineAsksHold: yield* accountHeld(machineAsks, accountId),
+    };
   });
 }
 
@@ -479,7 +528,7 @@ function retriedFor(
 function actsOf(
   dependencies: AccountAsksDependencies,
   asked: Asked,
-  { memories, hosts, hostsHold }: LiveFollows,
+  { memories, hosts, hostsHold, machines, machinesHold, machineAsks, machineAsksHold }: LiveFollows,
   fetched: FetchedReads,
   commandsInTurn: <A>(write: Effect.Effect<A>) => Effect.Effect<A>,
 ): AccountAsksActs {
@@ -545,6 +594,8 @@ function actsOf(
     SOUND_CHOOSE: (choice) => asked(client.chooseSound(choice)),
     // Note that the clip passes through once and is noted nowhere, because its words are the developer's voice.
     DICTATION_TRANSCRIBE: (clip) => asked(client.transcribeDictation(clip)),
+    // Note that the offer and the answer pass through once and are noted nowhere, as the call's audio never touches the host.
+    VOICE_OPEN: (offer) => asked(client.openVoiceSession(offer)),
     // Note that the beat carries nothing and its answer is read by no one, so a signed-out window's is dropped at the gate.
     ACCOUNT_ACTIVE: () => Effect.asVoid(asked(client.markActive())),
     // Note that a phone's token passes through once and is noted nowhere, as the service keeps it alone.
@@ -561,6 +612,28 @@ function actsOf(
       hostRemove((id) => asked(client.removeHost(id))),
       { read: ({ id }) => Effect.succeed(id) },
     ),
+    // A change is drawn over its machine, and a removal draws it gone, over the held machines the moment it is asked.
+    MACHINES_CHANGE: declaredWrite(
+      pool,
+      machineChange((change) => asked(client.changeMachine(change))),
+    ),
+    MACHINES_REMOVE: declaredWrite(
+      pool,
+      machineRemove((id) => asked(client.removeMachine(id))),
+      { read: ({ id }) => Effect.succeed(id) },
+    ),
+    // Note that an ask's answer is the service's to settle, first answer standing, and the held asks show it as the read carries it.
+    MACHINE_ASK_ANSWER: (answer) => asked(client.answerMachineAsk(answer)),
+    // The asks are held for the windows while one could draw them, under the account signed in.
+    MACHINE_ASKS_FOLLOW: {
+      hold: () => machineAsksHold.hold,
+      retry: () => retriedFor(dependencies.accountId, machineAsks),
+    },
+    // The machines are held for the windows while Settings › Machines draws them, under the account signed in.
+    MACHINES_FOLLOW: {
+      hold: () => machinesHold.hold,
+      retry: () => retriedFor(dependencies.accountId, machines),
+    },
     // Note that the apps are asked afresh each time a window lists them, and kept nowhere here.
     HOSTS_ALLOWED_APPS: () => asked(client.machineAllowedApps()),
     HOSTS_PAIRING_READ: ({ code }) => asked(client.readHostPairing(code)),
@@ -606,7 +679,9 @@ export function composeAccountAsks(
     const asked = askedOf(dependencies, yield* HttpClient.HttpClient);
     const follows = yield* liveFollows(dependencies, asked);
     const fetched = yield* fetchedReads(dependencies, asked);
-    const { memories, hosts, hostsHold } = follows;
+
+    const { memories, hosts, hostsHold, machines, machinesHold, machineAsks, machineAsksHold } =
+      follows;
 
     const { presence, presenceHold, keys, keysHold, token, tokenHold, commands, commandsHold } =
       fetched;
@@ -621,11 +696,13 @@ export function composeAccountAsks(
         (yield* Semaphore.make(1)).withPermits(1),
       ),
       lifetime: Effect.void,
-      // Note that the beats, the hosts, the keys, and the token are held anew under whoever signed in, in place of the hold before, rather than followed again under the account they were held for.
+      // Note that the beats, the hosts, the machines, the keys, and the token are held anew under whoever signed in, in place of the hold before, rather than followed again under the account they were held for.
       open: Effect.gen(function* () {
         yield* memories.open;
         yield* presenceHold.open;
         yield* hostsHold.open;
+        yield* machinesHold.open;
+        yield* machineAsksHold.open;
         yield* keysHold.open;
         yield* tokenHold.open;
         yield* commandsHold.open;
@@ -634,6 +711,8 @@ export function composeAccountAsks(
       reset: Effect.gen(function* () {
         yield* memories.end;
         yield* hosts.end;
+        yield* machines.end;
+        yield* machineAsks.end;
         yield* presence.end;
         yield* keys.end;
         yield* token.end;

@@ -1,11 +1,11 @@
 import type { AgentPullRequestAnswerView } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentPullRequestAnswer } from "@repo/features/agent-wire";
+import { type NumberedAddress, pullRequestAddressOf } from "@repo/features/link-grammar";
 import type { ListedPullRequest } from "@repo/features/task-wire";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { pullRequestPublishedQuery } from "../live-reads.js";
-import { appStateQuery } from "../use-app-state.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 
 /**
  * use-agent-pull-request.ts -- what one agent published, as its tab draws it: the pull request the task list carries for it, and its branch as the host holds it while the tab shows.
@@ -91,16 +91,30 @@ export function useListedPullRequests(
  * The pull request one agent opened, as the service last synced it onto the
  * agent's row and the task list carries it, a hover card's whole source of
  * it, so hanging one asks the service nothing; none where it opened none,
- * and before the list first answers live. The document keeps a row's
- * identity while it does not move, so its reader is drawn again only as it
- * does.
+ * and before the list first answers live. It is read by the agent's id from
+ * the task list's collections, so its reader is drawn again only as that
+ * row moves.
  */
 export function useListedPullRequest(agentId: string): AgentPullRequest | undefined {
-  const select = useCallback(
-    (state: AppStateSnapshot) =>
-      state.tasks.agentPullRequests?.find((each) => each.agentId === agentId)?.pullRequest,
-    [agentId],
-  );
+  return useTaskListRow(useTaskListCollections().agentPullRequests, agentId)?.pullRequest;
+}
 
-  return useQuery({ ...appStateQuery, select }).data;
+/**
+ * The pull request an agent's line in the task list names, by its
+ * repository and number, read as it is asked: what a link an earlier
+ * version wrote under the agent opens, its Changes or one of its review
+ * threads, since a Pull request tab names its pull request alone; none
+ * where the list names none for the agent.
+ */
+export function useAgentPullRequestAddress(): (agentId: string) => NumberedAddress | undefined {
+  const { agentPullRequests } = useTaskListCollections();
+
+  return useCallback(
+    (agentId: string) => {
+      const url = agentPullRequests.get(agentId)?.pullRequest.url;
+
+      return url === undefined ? undefined : pullRequestAddressOf(url);
+    },
+    [agentPullRequests],
+  );
 }

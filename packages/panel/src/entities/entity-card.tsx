@@ -20,6 +20,7 @@ import {
 } from "../tasks/chip-cards.js";
 import { FileCard } from "../tasks/file-ref.js";
 import { InboxItemChipCard } from "../tasks/inbox-item-chip.js";
+import { MacAppMentionCard } from "../tasks/mac-app-card.js";
 import {
   AgentPullRequestChipCard,
   MentionedAgentCard,
@@ -27,6 +28,7 @@ import {
 } from "../tasks/mentioned-agent-card.js";
 import { ServerCard } from "../tasks/server-card.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
+import { MachineChipCard } from "../tasks/workspace-machines.js";
 
 /**
  * entity-card.tsx -- the card a chip hangs for each kind of entity it names, one entry per kind (`@repo/features/entity-kind`).
@@ -123,7 +125,7 @@ const ENTITY_CARD: EntityCards = {
     />
   ),
   [ENTITY_KIND.VERSION]: (version, at) => (
-    <VersionChipCard taskId={version.planId} revision={version.revision} fallback={at.own} />
+    <VersionChipCard taskId={version.taskId} revision={version.revision} fallback={at.own} />
   ),
   [ENTITY_KIND.COMMENT]: OWN_CARD,
   // Note that an older link's page an agent showed on itself names no task to read it through, so it hangs the card of a page not read.
@@ -146,7 +148,7 @@ const ENTITY_CARD: EntityCards = {
   [ENTITY_KIND.CHANGES]: (changes, at) => (
     <AgentPullRequestChipCard
       agentId={changes.agentId}
-      taskId={changes.planId}
+      taskId={changes.taskId}
       reading={reading(at)}
       fallback={at.own}
     />
@@ -190,8 +192,20 @@ const ENTITY_CARD: EntityCards = {
   [ENTITY_KIND.REPOSITORY]: OWN_CARD,
   [ENTITY_KIND.WORKSPACE]: OWN_CARD,
   [ENTITY_KIND.DATE]: OWN_CARD,
-  [ENTITY_KIND.MAC_APP]: OWN_CARD,
+  // An app hangs the card every chip naming one hangs: the machine it is on, and whether that machine always allows it.
+  [ENTITY_KIND.MAC_APP]: (macApp, at) => (
+    <MacAppMentionCard
+      app={macApp.app}
+      machineId={macApp.machine}
+      name={at.name}
+      wordsWorkspaceId={at.wordsWorkspaceId}
+    />
+  ),
   [ENTITY_KIND.COMPUTER]: OWN_CARD,
+  // A machine hangs whose it is and what it is, as the workspace its link names reads it.
+  [ENTITY_KIND.MACHINE]: (machine, at) => (
+    <MachineChipCard machineId={machine.machineId} workspace={at.workspace} name={at.name} />
+  ),
 };
 
 /** An entity's card drawn through its kind's own entry. */

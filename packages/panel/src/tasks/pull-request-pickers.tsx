@@ -5,6 +5,7 @@ import type {
   PullRequestLabel,
   PullRequestReviewTeam,
 } from "@repo/features/agent-wire";
+import type { RepositoryPullRequestParams } from "@repo/features/pull-request-view";
 import {
   PULL_REQUEST_ACTION,
   type PullRequestAction,
@@ -38,9 +39,13 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { ACTOR_SIZE, ActorMark, actorCard } from "../actor-ref.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import { type ActionSearch, ActionSearchMenu } from "../desktop/action-search-menu.js";
-import { pullRequestPartRetryMutation, reviewOptionsQuery } from "../live-reads.js";
+import {
+  repositoryPullRequestPartRetryMutation,
+  repositoryReviewOptionsQuery,
+} from "../live-reads.js";
 import { usePendingNow } from "../pending-clock.js";
 import { useNamer } from "./pull-request-people.js";
+import { writeScopeOf } from "./pull-request-source.js";
 import type { PullRequestWrites } from "./pull-request-writes.js";
 
 /**
@@ -119,20 +124,22 @@ export interface ReviewOptions {
 }
 
 /**
- * The agent's repository's labels, assignable users, and teams, held by the
- * host from the moment a picker first asks (`reviewOptionsQuery`), so a
+ * The pull request's repository's labels, assignable users, and teams, held by the
+ * host from the moment a picker first asks (`repositoryReviewOptionsQuery`), so a
  * tab drawn again offers them at once, asked again as a window comes forward
  * and on Retry after a failure.
  */
-export function useReviewOptions(agentId: string): ReviewOptions {
+export function useReviewOptions(pullRequest: RepositoryPullRequestParams): ReviewOptions {
+  // Note that what was asked is held by the pull request's scope, so a tab shown on another pull request asks afresh.
+  const scope = writeScopeOf(pullRequest);
   const [asked, setAsked] = useState<string | undefined>(undefined);
   const [retrying, setRetrying] = useState(false);
-  const held = useQuery(reviewOptionsQuery(asked === agentId ? { agentId } : undefined));
-  const { mutateAsync: retry } = useMutation(pullRequestPartRetryMutation());
+  const held = useQuery(repositoryReviewOptionsQuery(asked === scope ? pullRequest : undefined));
+  const { mutateAsync: retry } = useMutation(repositoryPullRequestPartRetryMutation());
   const answer = held.data;
 
   const read: OptionsRead =
-    asked !== agentId
+    asked !== scope
       ? { kind: OPTIONS.UNASKED }
       : retrying || (answer === undefined && held.isPending)
         ? { kind: OPTIONS.READING }
@@ -141,14 +148,14 @@ export function useReviewOptions(agentId: string): ReviewOptions {
           : { kind: OPTIONS.LANDED, value: answer };
 
   const ask = useCallback(() => {
-    if (asked !== agentId) return setAsked(agentId);
+    if (asked !== scope) return setAsked(scope);
 
     if (read.kind !== OPTIONS.FAILED) return;
     setRetrying(true);
-    void retry({ part: PULL_REQUEST_PART.REVIEW_OPTIONS, agentId })
+    void retry({ part: PULL_REQUEST_PART.REVIEW_OPTIONS, ...pullRequest })
       .catch(() => undefined)
       .finally(() => setRetrying(false));
-  }, [agentId, asked, read.kind, retry]);
+  }, [scope, pullRequest, asked, read.kind, retry]);
 
   return { read, ask };
 }

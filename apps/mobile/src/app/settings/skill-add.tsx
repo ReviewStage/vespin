@@ -26,7 +26,6 @@ import {
   textFill,
 } from "@repo/features/skill-install-model";
 import { failureLine, SKILLS_LINE } from "@repo/features/skills-settings-words";
-import { VERB } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
@@ -35,17 +34,20 @@ import {
   BUZZ,
   ConfirmAsk,
   ListSection,
+  SCREEN_GROUND,
   ScopePicker,
   Screen,
   SettingsForm,
   ToggleRow,
+  TRY_AGAIN_WORDS,
   useColors,
   WordsField,
 } from "@repo/ui-native";
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
+import { useCloseSheet } from "../../close-sheet.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { DISCARD_WORDS, useKeptWords } from "../../use-kept-words.js";
@@ -111,7 +113,7 @@ export default function SkillAddScreen() {
  */
 function AddSkill({ workspace }: { readonly workspace: Workspace }) {
   const colors = useColors();
-  const router = useRouter();
+  const close = useCloseSheet();
   const acts = useHostActs();
   const write = useWrite();
   const [text, setText] = useState("");
@@ -209,14 +211,21 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
       went: BUZZ.SUCCESS,
     }).then((went) => {
       out.current = false;
-      setInstalling(false);
 
       // Note that words changed while the install was out keep the page, as Send feedback keeps its own, so nothing typed meanwhile goes unasked.
       const edited = JSON.stringify(shownRequest.current) !== JSON.stringify(request);
 
-      if (!went || !standing.current || edited) return;
+      // Note that a page that leaves, or was left, stays held, as Add memory's does, because a paste field enabled again takes back the focus it held, and a List torn down around a field taking focus aborts the app.
+      if (!standing.current) return;
+
+      if (!went || edited) {
+        setInstalling(false);
+
+        return;
+      }
+
       kept.release();
-      router.back();
+      close();
     });
   };
 
@@ -292,7 +301,7 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
           verbatim
         />
         {failed !== undefined && previewRetries(failed) ? (
-          <ActionRow label={VERB.RETRY} onPress={() => void previewed.refetch()} />
+          <ActionRow label={TRY_AGAIN_WORDS} onPress={() => void previewed.refetch()} />
         ) : null}
       </ListSection>
       {line === undefined ? textFields : null}
@@ -354,7 +363,7 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
         }}
         onDismiss={kept.stay}
       />
-      <Screen>{body}</Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>{body}</Screen>
     </>
   );
 }

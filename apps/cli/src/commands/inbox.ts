@@ -3,7 +3,7 @@
  *
  * `list` reads the account's open threads (`inbox.account`) and keeps those
  * of the workspace the command acts in, placing a task's thread by its
- * task (`plans.list`). `view` finds the thread's agent (`inbox.home`) and
+ * task (`tasks.list`). `view` finds the thread's agent (`inbox.home`) and
  * reads its threads (`inbox.agent`) for the one asked. The writes go
  * through the procedures the app's inbox sends them by: an answer is a
  * message carrying the answer to the open ask (`inbox.message`, its
@@ -21,7 +21,7 @@ import type { AccountInboxAnswer } from "@repo/features/account-inbox-wire";
 import { CLI_EXIT } from "@repo/features/cli-exit";
 import { CLI_DO_ANSWER, cliInboxAnswer } from "@repo/features/cli-inbox-answer";
 import { cliRemindAt } from "@repo/features/cli-remind";
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { readerZone } from "@repo/features/date-mention";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import {
@@ -71,7 +71,7 @@ function threadsOf(
 ): readonly ListedThread[] {
   return read.items
     .flatMap((entry) => {
-      const task = tasks.get(entry.planId);
+      const task = tasks.get(entry.taskId);
 
       if (task === undefined) return [];
 
@@ -83,7 +83,7 @@ function threadsOf(
           asking: entry.asking !== false,
           agentId: entry.agentId,
           agent: entry.agentTitle ?? entry.agentModel,
-          taskId: entry.planId,
+          taskId: entry.taskId,
           task,
           updatedAt: entry.updatedAt,
         },
@@ -117,6 +117,7 @@ function authorOf(message: InboxMessage): string {
 const MEDIA_WORD = {
   PICTURE: "Picture",
   RECORDING: "Recording",
+  SOUND_CLIP: "Sound clip",
   PAGE: "Page",
   LINK: "Link",
 } as const;
@@ -125,7 +126,11 @@ const MEDIA_WORD = {
 function mediaLine(piece: InboxOptionMedia, at: number): string {
   switch (piece.type) {
     case INBOX_OPTION_MEDIA.FILE: {
-      const word = isVideoType(piece.mediaType) ? MEDIA_WORD.RECORDING : MEDIA_WORD.PICTURE;
+      const word = isVideoType(piece.mediaType)
+        ? MEDIA_WORD.RECORDING
+        : isAudioType(piece.mediaType)
+          ? MEDIA_WORD.SOUND_CLIP
+          : MEDIA_WORD.PICTURE;
 
       return `      ${word}: ${piece.caption ?? `${at + 1}`}`;
     }
@@ -244,12 +249,12 @@ const listCommand = Command.make(
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
       const read = yield* askService(hosted.inbox.account, {});
-      const { plans } = yield* askService(hosted.plans.list, {});
+      const { tasks: plans } = yield* askService(hosted.tasks.list, {});
 
       const tasks = new Map(
         plans
-          .filter((plan) => plan.workspaceId === workspace.id)
-          .map((plan) => [plan.id, plan.name]),
+          .filter((task) => task.workspaceId === workspace.id)
+          .map((task) => [task.id, task.name]),
       );
 
       const threads = threadsOf(read, tasks).filter((thread) => !unread || thread.unread);

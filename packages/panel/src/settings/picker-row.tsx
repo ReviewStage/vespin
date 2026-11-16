@@ -76,6 +76,8 @@ interface PickerProps {
   /** The id a pressed search result lands on: marked on the chip, which takes the keyboard. */
   anchor?: string | undefined;
   disabled?: boolean | undefined;
+  /** Why the reader may not change the value, where they may not: the chip then opens no menu, reads as disabled, and hangs these words as its hover, as a locked switch does. */
+  locked?: string | undefined;
   /** What the chip's hover says beyond its value, such as when a change takes; none where its name says enough. */
   hint?: string | undefined;
   /** The card the chip's hover hangs in its pill's place while the menu is shut, `hint` its one-line summary, as an agent's place chip hangs where it runs. */
@@ -121,6 +123,7 @@ export function Picker({
   note,
   anchor,
   disabled,
+  locked,
   hint,
   card,
   align = POPOVER_ALIGN.END,
@@ -159,7 +162,7 @@ export function Picker({
       ref={row}
     >
       <Tooltip
-        label={open ? undefined : (hint ?? (iconOnly ? valueLabel : undefined))}
+        label={open ? undefined : (locked ?? hint ?? (iconOnly ? valueLabel : undefined))}
         card={open ? undefined : card}
       >
         <Chip
@@ -176,7 +179,11 @@ export function Picker({
           aria-expanded={open}
           aria-controls={open ? menuId : undefined}
           disabled={disabled}
+          // Note that a locked chip stays focusable and takes the pointer, so its why can hang from it, where a disabled one takes neither.
+          aria-disabled={locked === undefined ? undefined : true}
           onClick={() => {
+            if (locked !== undefined) return;
+
             if (!open) onOpen?.();
             setOpen(!open);
           }}
@@ -255,6 +262,7 @@ export function PickerRow({
   error,
   density,
   indent,
+  leading,
   labelReplayUnmasked = false,
   action,
   ...picker
@@ -271,6 +279,8 @@ export function PickerRow({
   density?: SettingsRowDensity | undefined;
   /** Whether the row stands inset under the row above, one of its things. */
   indent?: SettingsRowIndent | undefined;
+  /** The glyph the row leads with, where what it sets has one. */
+  leading?: React.ReactNode;
   /** A control of the row's own beside the picker, as a Play beside a sound; none where the picker stands alone. */
   action?: React.ReactNode;
 }): React.JSX.Element {
@@ -278,6 +288,7 @@ export function PickerRow({
     <SettingsRow
       density={density}
       indent={indent}
+      leading={leading}
       label={<ReplayWords unmasked={labelReplayUnmasked}>{picker.label}</ReplayWords>}
       adornment={<SavedTick saves={saves} />}
       description={detail}

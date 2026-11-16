@@ -74,12 +74,16 @@ import type { DictationControl } from "./use-dictation.js";
  * how narrow the card stands. `MessageBox` draws the card: the shared
  * composer card (`../ai-elements/prompt-input.tsx`), a form whose Send and
  * Enter both submit it, each file it takes written into its words as its
- * chip where the caret stood (`file-chips.tsx`), and the files its words
+ * chip where the caret stood (`file-chips.tsx`), a paste long enough to
+ * bury the message among them as a text file (`use-attached-files.ts`'s
+ * `pasteText`), and the files its words
  * do not name in a row over its field (`@repo/ui`'s `ComposerBody`), and
  * its foot (`ComposerFoot`): the + at the left, which
  * opens the file picker or, where the owner hands rows (`plus`), a menu of
  * Attachment and those rows; the owner's `tools` after it; at the right the
- * owner's `actions`, the microphone, the ⋯, and the owner's `beforeSend`;
+ * owner's `actions`, the microphone, the owner's `call` (an agent's Talk,
+ * or on a call its controls, in the microphone's place while the call holds
+ * it), the ⋯, and the owner's `beforeSend`;
  * then Send, or the owner's Stop in its place, and one note under the bar.
  * `MessageField` draws the field alone in a frame sized as a text field, for
  * a box that sends with its page.
@@ -93,7 +97,7 @@ import type { DictationControl } from "./use-dictation.js";
  * container, tasks.css). As the card narrows, the owner's tools draw their
  * marks alone (`folds(FOLD_WIDTH.TOOLS)`); then the ⋯ takes in, in this
  * order, the owner's presses it offers in their stead (an agent's context
- * ring and permission mode chip) and the microphone, where the ring stands, since a ⋯ holding the
+ * ring and permission mode chip) and the microphone and Talk, where the ring stands, since a ⋯ holding the
  * microphone alone would be one press behind two; then the owner's
  * chip draws its mark alone (`FOLD_WIDTH.MODEL`); and last the + goes into
  * the ⋯ too, which offers the + menu's rows in its place. The field and
@@ -142,7 +146,7 @@ export const FOLD_WIDTH = {
   MODEL: 300,
 } as const;
 
-export type FoldWidth = (typeof FOLD_WIDTH)[keyof typeof FOLD_WIDTH];
+type FoldWidth = (typeof FOLD_WIDTH)[keyof typeof FOLD_WIDTH];
 
 /** The fold widths, narrowest first. */
 const FOLD_LINES = Object.values(FOLD_WIDTH).toSorted((a, b) => a - b);
@@ -152,6 +156,7 @@ export const OVERFLOW_PRESS = {
   ATTACH: "message-box-attach",
   CONTEXT: "agent-context-button",
   DICTATE: "dictate-button",
+  TALK: "talk-button",
 } as const;
 
 type OverflowPress = (typeof OVERFLOW_PRESS)[keyof typeof OVERFLOW_PRESS];
@@ -183,8 +188,6 @@ interface MessageBoxOptions extends PickerOptions {
   readonly holder?: AttachedFilesOptions["holder"];
   /** Whether the box takes files at all, each written into its words as its chip; a field-only box sends words alone. */
   readonly takesFiles?: boolean | undefined;
-  /** Whether words pasted long enough to bury the message come as a text file, as an agent's box takes them. */
-  readonly pastesTextAsFile?: boolean | undefined;
   /** The words a dictation is likely to say (`dictation-keywords.ts`); none for a comment. */
   readonly keywords?: readonly string[] | undefined;
   /** A key the field's lists and dictation left, answering whether the owner took it. */
@@ -495,7 +498,7 @@ function BoxField({
       onKey={(event) => pickers.field.onKey(event) || options.onKey?.(event) === true}
       onEnter={onEnter}
       onPasteFiles={takesFiles ? files.paste : () => false}
-      onPasteText={options.pastesTextAsFile === true ? files.pasteText : undefined}
+      onPasteText={files.pasteText}
       files={inWords.field}
     />
   );
@@ -600,6 +603,8 @@ export function MessageBox({
   head,
   tools,
   actions,
+  call,
+  dictates = true,
   beforeSend,
   plus = NO_ROWS,
   more = NO_OFFERS,
@@ -618,6 +623,10 @@ export function MessageBox({
   tools?: ReactNode;
   /** What stands first at the foot's right, before the microphone: an agent's model chip and context ring, a comment's Start a review. */
   actions?: ReactNode;
+  /** What stands after the microphone: an agent's Talk, or on a call its controls; none in every other box. */
+  call?: ReactNode;
+  /** Whether the box offers Dictate; not while a call holds the microphone, whose own mute stands in the row. */
+  dictates?: boolean | undefined;
   /** What stands just before Send: an edit's Cancel. */
   beforeSend?: ReactNode;
   /** The rows the + menu offers after Attachment; none opens the file picker from the + itself. */
@@ -657,17 +666,21 @@ export function MessageBox({
         ]
       : []),
     ...more,
-    {
-      press: OVERFLOW_PRESS.DICTATE,
-      entries: [
-        {
-          label: dictation.keyMissing ? OPENAI_KEY_MISSING_NOTE : BOX_WORDS.DICTATE,
-          icon: <MicrophoneIcon />,
-          disabled: held || module === undefined,
-          onSelect: dictation.start,
-        },
-      ],
-    },
+    ...(dictates
+      ? [
+          {
+            press: OVERFLOW_PRESS.DICTATE,
+            entries: [
+              {
+                label: dictation.keyMissing ? OPENAI_KEY_MISSING_NOTE : BOX_WORDS.DICTATE,
+                icon: <MicrophoneIcon />,
+                disabled: held || module === undefined,
+                onSelect: dictation.start,
+              },
+            ],
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -730,7 +743,10 @@ export function MessageBox({
         actions={
           <ComposerActions>
             {actions}
-            <DictateButton dictation={dictation} disabled={held || module === undefined} />
+            {dictates ? (
+              <DictateButton dictation={dictation} disabled={held || module === undefined} />
+            ) : null}
+            {call}
             <BoxMore card={box.frame} offers={offers} />
             {beforeSend}
           </ComposerActions>

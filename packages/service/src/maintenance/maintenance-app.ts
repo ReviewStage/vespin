@@ -1,13 +1,15 @@
 import type { DatabaseServices } from "@repo/database/core/query";
-import { markAwayDevices } from "@repo/database/models/device-store";
+import { markAwayDevices, markCommandsAwayDevices } from "@repo/database/models/device-store";
+import { pruneMachineAsks } from "@repo/database/models/machine-command-ask-store";
 import { pruneSyncLog } from "@repo/database/models/sync-log";
 import { MAC_PRESENCE } from "@repo/features/agent-wire";
 import type { Sandbox } from "@repo/sandbox";
-import { Effect, Layer } from "effect";
+import { Duration, Effect, Layer } from "effect";
 import { HttpClient, HttpRouter } from "effect/http";
 import { keepRunningSandboxesUp, reconcileAgents } from "../agents/coder-host/reconcile.js";
 import { resumeWaitedTurns } from "../agents/coder-host/steer.js";
 import { republishQueuedTurns } from "../agents/coder-host/turn-delivery.js";
+import { MACHINE_LISTENER_FRESH } from "../agents/machine-command.js";
 import { releaseUnusedSandboxes } from "../agents/session-sandboxes.js";
 import { HostedEnvironment } from "../environment.js";
 import type { GitHubApp } from "../github/github-app.js";
@@ -54,6 +56,9 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
     releaseHeldPushes,
     refreshLiveActivities: () => refreshLiveActivities(),
     markAwayHosts: (now) => markAwayDevices(now, MAC_PRESENCE.FRESH_MS),
+    markCommandsAway: (now) =>
+      markCommandsAwayDevices(now, Duration.toMillis(MACHINE_LISTENER_FRESH)),
+    pruneMachineAsks,
     releaseSandboxes: releaseUnusedSandboxes,
   });
 });
