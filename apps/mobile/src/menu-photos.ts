@@ -4,7 +4,7 @@ import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-pictu
 import { MARK_SIZE } from "@repo/ui-native";
 import { File, Paths } from "expo-file-system";
 import { useEffect, useMemo, useState } from "react";
-import { PixelRatio } from "react-native";
+import { AppState, PixelRatio } from "react-native";
 import type { PictureOf } from "./member-pictures.js";
 
 /** What a photo's file is named with, before the picture it holds. */
@@ -22,8 +22,14 @@ const PHOTO_LIFETIME = 24 * 60 * 60 * 1000;
 const FNV_OFFSET = 0x81_1c_9d_c5;
 const FNV_PRIME = 0x01_00_01_93;
 
+/** A photo's file as a hook holds it: where it stands, and since when it counts as fresh. */
+interface HeldPhoto {
+  readonly uri: string;
+  readonly at: number;
+}
+
 /** Each download still under way, by the address of the file it writes, so two menus asking for one photo share its download. */
-const downloading = new Map<string, Promise<string | undefined>>();
+const downloading = new Map<string, Promise<HeldPhoto | undefined>>();
 
 /** A picture's address as a short name: its FNV-1a hash, in hex. */
 function addressName(address: string): string {
@@ -46,31 +52,31 @@ function photoFile(address: string): File {
   return new File(Paths.cache, `${PHOTO_PREFIX}-${addressName(address)}`);
 }
 
-/** Whether a photo's file was written within its lifetime. */
-function fresh(file: File): boolean {
-  const written = file.info().modificationTime;
-
-  return written !== undefined && Date.now() - written < PHOTO_LIFETIME;
+/** Whether a photo counted fresh since `at` is still within its lifetime. */
+function freshSince(at: number | undefined): at is number {
+  return at !== undefined && Date.now() - at < PHOTO_LIFETIME;
 }
 
 /**
  * The picture's file: the one already written while it's fresh, the
  * download under way, or one begun now, which writes over a stale file. A
- * download that fails keeps the stale file where there is one, and answers
- * none where there isn't.
+ * download that fails keeps the stale file where there is one, counted fresh
+ * from now so it's tried again only after another lifetime, and answers none
+ * where there isn't.
  */
-function downloaded(address: string): Promise<string | undefined> {
+function downloaded(address: string): Promise<HeldPhoto | undefined> {
   const file = photoFile(address);
+  const written = file.exists ? file.info().modificationTime : undefined;
 
-  if (file.exists && fresh(file)) return Promise.resolve(file.uri);
+  if (freshSince(written)) return Promise.resolve({ uri: file.uri, at: written });
   const under = downloading.get(file.uri);
 
   if (under !== undefined) return under;
   const kept = file.exists ? file.uri : undefined;
 
   const download = File.downloadFileAsync(address, file, { idempotent: true })
-    .then((written) => written.uri)
-    .catch(() => kept)
+    .then((saved) => ({ uri: saved.uri, at: Date.now() }))
+    .catch(() => (kept === undefined ? undefined : { uri: kept, at: Date.now() }))
     .finally(() => downloading.delete(file.uri));
 
   downloading.set(file.uri, download);
@@ -92,13 +98,24 @@ function menuAddress(picture: string | undefined): string | undefined {
  * draws them; none for a member with no picture, or while theirs is still
  * downloading, whose choice keeps its glyph meanwhile. Note that a system
  * menu reads its images once, as it opens, so a photo still downloading
- * shows the next time the menu opens.
+ * shows the next time the menu opens. A photo held past its lifetime is
+ * read again as the app comes back to the front, since a member's picture
+ * can change under the same address while a screen stays mounted.
  */
 export function useMenuPhotos(
   pictureOf: PictureOf,
   userIds: readonly string[],
 ): (userId: string) => string | undefined {
-  const [files, setFiles] = useState<ReadonlyMap<string, string>>(new Map());
+  const [files, setFiles] = useState<ReadonlyMap<string, HeldPhoto>>(new Map());
+  const [resumes, setResumes] = useState(0);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") setResumes((count) => count + 1);
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   const addresses = useMemo(() => {
     const byUser = new Map<string, string>();
@@ -115,22 +132,25 @@ export function useMenuPhotos(
   useEffect(() => {
     let live = true;
 
-    for (const address of new Set(addresses.values())) {
-      if (files.has(address)) continue;
+    // Note that a resume runs this again, so a photo past its lifetime is read again while the screen stays mounted.
+    void resumes;
 
-      void downloaded(address).then((uri) => {
-        if (live && uri !== undefined) setFiles((held) => new Map(held).set(address, uri));
+    for (const address of new Set(addresses.values())) {
+      if (freshSince(files.get(address)?.at)) continue;
+
+      void downloaded(address).then((photo) => {
+        if (live && photo !== undefined) setFiles((held) => new Map(held).set(address, photo));
       });
     }
 
     return () => {
       live = false;
     };
-  }, [addresses, files]);
+  }, [addresses, files, resumes]);
 
   return (userId) => {
     const address = addresses.get(userId);
 
-    return address === undefined ? undefined : files.get(address);
+    return address === undefined ? undefined : files.get(address)?.uri;
   };
 }
