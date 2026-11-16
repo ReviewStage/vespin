@@ -19,7 +19,8 @@ import {
   type ReviewThread,
 } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL, chaptersModelOn } from "@repo/features/chapters-model-choice";
-import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import type { ModelApiProvider } from "@repo/features/provider-key-wire";
 import {
   CHAPTER_KIND,
   CHAPTER_RISK,
@@ -363,11 +364,11 @@ interface Answers {
   /** Whether the files' read names no head, as where the service could not read the pull request's commits. */
   readonly filesHeadless?: boolean;
   /** The provider the member last picked chapters to run on, as their preferences row holds it; the row unread where none is named. */
-  readonly picked?: ModelProvider;
+  readonly picked?: ModelApiProvider;
 }
 
 /** The providers each pick of a model for chapters asked the host to keep, in order. */
-let picks: ModelProvider[] = [];
+let picks: ModelApiProvider[] = [];
 
 /** Answers the pick still out, which the host holds until the service keeps it. */
 let landPick: () => void = () => undefined;
@@ -402,7 +403,7 @@ function chaptersHeld(answer: PullRequestChaptersAnswerView): AppRepositoryChapt
 /** The agent's control, its overview, files, and Generate answering as given, and its chapters laid on the window's document as the host holds them. */
 function controlAnswering(answers: Answers): AgentsControl {
   /** The member's preferences row as the host holds it, with chapters on the provider named. */
-  const preferencesOn = (provider: ModelProvider) => ({
+  const preferencesOn = (provider: ModelApiProvider) => ({
     rows: {
       agent: undefined,
       chaptersModel: chaptersModelOn(provider, CHAPTERS_MODEL.HAIKU),
@@ -464,7 +465,7 @@ function controlAnswering(answers: Answers): AgentsControl {
 
       if (refusePick) return Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED });
       deliverPreferences(preferencesOn(provider));
-      const kept = Promise.withResolvers<{ provider: ModelProvider }>();
+      const kept = Promise.withResolvers<{ provider: ModelApiProvider }>();
       landPick = () => kept.resolve({ provider });
 
       return kept.promise;

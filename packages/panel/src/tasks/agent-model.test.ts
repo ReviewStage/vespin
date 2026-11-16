@@ -504,6 +504,22 @@ test("a fast or Ultrafast version is folded into its base model by its id, read 
     choiceLabel({ model: "anthropic/claude-fable-5", effort: "xhigh" }, models),
     "Fable 5 Extra high",
   );
+
+  // A model with no effort of its own says none.
+  const composer = {
+    id: "cursor/composer-2.5",
+    name: "Composer 2.5",
+    provider: MODEL_PROVIDER.CURSOR,
+    efforts: ["default"],
+  };
+
+  assert.equal(
+    choiceLabel({ model: "cursor/composer-2.5-fast", effort: "default" }, [
+      composer,
+      { ...composer, id: "cursor/composer-2.5-fast" },
+    ]),
+    "Composer 2.5 Fast",
+  );
 });
 
 test("a choice names its window after the effort only where it runs on the standard one and the model offers two, and a change of model keeps the standard window only where the next model offers two too", () => {
