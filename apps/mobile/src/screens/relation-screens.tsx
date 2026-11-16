@@ -26,6 +26,7 @@ import {
   EmptyState,
   GLYPH,
   type Glyph,
+  glyphSymbol,
   LIST_LOOK,
   LinkRow,
   ListSection,
@@ -46,6 +47,7 @@ import { useTaskOverview } from "../tasks/use-tasks.js";
 
 /** The sheet's own words. */
 const WORDS = {
+  BACK: "Back",
   CANCEL: "Cancel",
   TASK_NOT_FOUND: "Task not found",
 } as const;
@@ -169,6 +171,8 @@ export function TaskRelationScreen({
   const [chosen, setChosen] = useState<TaskRelationKind | undefined>(opened);
   const [search, setSearch] = useState("");
   const kind = chosen;
+  // Whether the kind was picked in this sheet rather than handed to it, so a step back to the kinds stands.
+  const stepped = opened === undefined && kind !== undefined;
 
   const bar = (
     <>
@@ -194,9 +198,30 @@ export function TaskRelationScreen({
           />
         )}
       </Stack.Screen>
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
-      </Stack.Toolbar>
+      {stepped ? (
+        <>
+          {/* Note that a kind picked inside the sheet steps back to the kinds, as a pushed page's back chevron does, with Cancel moving to the other end. */}
+          <Stack.Toolbar placement="left">
+            <Stack.Toolbar.Button
+              icon={glyphSymbol(GLYPH.BACK)}
+              accessibilityLabel={WORDS.BACK}
+              onPress={() => {
+                setChosen(undefined);
+                setSearch("");
+              }}
+            />
+          </Stack.Toolbar>
+          <Stack.Toolbar placement="right">
+            <Stack.Toolbar.Button onPress={() => router.back()}>
+              {WORDS.CANCEL}
+            </Stack.Toolbar.Button>
+          </Stack.Toolbar>
+        </>
+      ) : (
+        <Stack.Toolbar placement="left">
+          <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        </Stack.Toolbar>
+      )}
     </>
   );
 

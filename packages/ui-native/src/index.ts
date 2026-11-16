@@ -299,6 +299,7 @@ export {
   AGENT_ROW_STATE,
   AgentRow,
   type AgentRowState,
+  FailedReadRow,
   GroupRow,
   LINK_ROW_TONE,
   LinkRow,
