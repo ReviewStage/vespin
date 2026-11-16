@@ -504,10 +504,10 @@ type RowActsResult = {
  * the swipes' acts with Mark as read or unread, whichever the task is not;
  * then Task relation, which opens the Task relation sheet on a kind, Move to
  * section, and its repository (`placingSubmenus`), with Remove parent where
- * it has one; then Rename, in the system's name alert, its version history
- * and Move to workspace where offered; then Copy link, which raises the
- * share sheet, and Open in browser; and Permanently delete alone, last,
- * which asks first.
+ * it has one; then Rename, in the system's name alert, and Copy link, which
+ * raises the share sheet; then More, holding its version history and Move
+ * to workspace where offered, and Open in browser; and Permanently delete
+ * alone, last, which asks first.
  * Priority and assignee are set from the chips on the task's page
  * (`standingMenus`).
  */
@@ -550,24 +550,31 @@ function rowActs(
             tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: () => askRename(task, listing.rename),
           },
-          ...rowActions(historyActions(task, listing.doors.history)),
-          ...rowActions(moveActions(listing.doors.moveDoor(task))),
-        ],
-      },
-      {
-        actions: [
           {
             label: WORDS.COPY_LINK,
             symbol: GLYPH.LINK,
             tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: () => copyTaskLink(task, listing.workspace),
           },
+        ],
+      },
+      {
+        // Note that the acts a phone reaches for least wait one level down in More, so the menu fits an iPhone's window under the lifted preview and Permanently delete stands in it rather than below its fold.
+        submenus: [
           {
-            label: VERB.OPEN_IN_BROWSER,
-            symbol: GLYPH.OPEN_EXTERNALLY,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () =>
-              openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
+            ...WORDS.MORE,
+            choices: [],
+            actions: [
+              ...rowActions(historyActions(task, listing.doors.history)),
+              ...rowActions(moveActions(listing.doors.moveDoor(task))),
+              {
+                label: VERB.OPEN_IN_BROWSER,
+                symbol: GLYPH.OPEN_EXTERNALLY,
+                tone: ROW_ACTION_TONE.NEUTRAL,
+                onPress: () =>
+                  openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
+              },
+            ],
           },
         ],
       },
