@@ -9,7 +9,11 @@ import { HTTP_METHOD } from "@repo/wire";
 import { jsonResponse, recordedRequest, recordingHttpClient } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { ConfigProvider, Effect, Layer } from "effect";
-import { onboardingEventsFromEnvironment, taskActivityReported } from "./onboarding-events.js";
+import {
+  onboardingEventsFromEnvironment,
+  signUpReported,
+  taskActivityReported,
+} from "./onboarding-events.js";
 import { WELCOME_MAIL_ENVIRONMENT } from "./welcome-mail.js";
 
 /**
@@ -45,7 +49,42 @@ const startTaskAt = (userId: string, at: number) =>
     );
   });
 
+const reporting = (resend: ReturnType<typeof recordingHttpClient>) =>
+  onboardingEventsFromEnvironment.pipe(
+    Layer.provide(
+      Layer.merge(
+        resend.layer,
+        ConfigProvider.layer(
+          ConfigProvider.fromUnknown({
+            [WELCOME_MAIL_ENVIRONMENT.RESEND_API_KEY]: "re_test",
+            [WELCOME_MAIL_ENVIRONMENT.FROM]: "Charles <charles@app.test>",
+          }),
+        ),
+      ),
+    ),
+  );
+
 it.layer(getTestDB())("onboarding task activity", (it) => {
+  it.effect(
+    "a new account's contact joins the product-update list, subscribed, by its first name",
+    () =>
+      Effect.gen(function* () {
+        const ada = yield* openUser(new Date(SIGNED_UP_AT));
+        const resend = recordingHttpClient(() => jsonResponse({ object: "contact" }));
+        yield* signUpReported(ada.userId).pipe(Effect.provide(reporting(resend)));
+
+        const contact = resend.requests.find((request) => request.pathname === "/contacts");
+        assert.ok(contact);
+        assert.equal(contact.method, HTTP_METHOD.POST);
+        assert.deepEqual(JSON.parse(contact.body ?? "{}"), {
+          email: ada.email,
+          first_name: "Test",
+          segments: [{ id: "c290144d-226c-4ad4-ab7b-0cf0cca8cd8d" }],
+          topics: [{ id: "011d1425-2e35-4da4-87f1-f23c4921a019", subscription: "opt_in" }],
+        });
+      }),
+  );
+
   it.effect(
     "an account's task days are counted from its own sign-up, over its own tasks alone",
     () =>
@@ -60,23 +99,7 @@ it.layer(getTestDB())("onboarding task activity", (it) => {
         yield* startTaskAt(grace.userId, SIGNED_UP_AT + 5 * DAY_MS);
 
         const resend = recordingHttpClient(() => jsonResponse({ object: "contact" }));
-        yield* taskActivityReported(ada.userId).pipe(
-          Effect.provide(
-            onboardingEventsFromEnvironment.pipe(
-              Layer.provide(
-                Layer.merge(
-                  resend.layer,
-                  ConfigProvider.layer(
-                    ConfigProvider.fromUnknown({
-                      [WELCOME_MAIL_ENVIRONMENT.RESEND_API_KEY]: "re_test",
-                      [WELCOME_MAIL_ENVIRONMENT.FROM]: "Charles <charles@app.test>",
-                    }),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
+        yield* taskActivityReported(ada.userId).pipe(Effect.provide(reporting(resend)));
 
         assert.equal(resend.requests.length, 1);
         const request = recordedRequest(resend.requests);
