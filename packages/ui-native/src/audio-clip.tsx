@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import {
   type AccessibilityActionEvent,
   ActivityIndicator,
+  Animated,
+  Easing,
   StyleSheet,
   Text,
   View,
@@ -32,7 +34,7 @@ const AUDIO_CLIP_ID = "audio-clip";
 /** How far, in seconds, VoiceOver's swipe up or down moves a clip, as a podcast app's skip does. */
 const SEEK_STEP_SECONDS = 5;
 
-/** How often, in seconds, the player says where it stands while it plays, often enough that the bar moves smoothly under a short clip. */
+/** How often, in seconds, the player says where it stands while it plays, which the bar's glide is set back on (`useGlide`). */
 const TIME_STEP_SECONDS = 0.25;
 
 /** The playhead's time as `playheadText` takes it. */
@@ -61,7 +63,8 @@ const styles = StyleSheet.create({
   button: { alignItems: "center", justifyContent: "center", borderRadius: 999 },
   barPress: { flex: 1, minWidth: 80, height: BAR_PRESS_HEIGHT, justifyContent: "center" },
   bar: { height: BAR_HEIGHT, borderRadius: BAR_HEIGHT / 2, overflow: "hidden" },
-  fill: { height: "100%" },
+  // Note that the fill is scaled from its left edge rather than sized, because the native driver moves a transform alone.
+  fill: { width: "100%", height: "100%", transformOrigin: "left" },
   unplayable: { justifyContent: "center", minHeight: BUTTON_SIZE + SPACE.TIGHT * 4 },
 });
 
@@ -79,6 +82,37 @@ type AudioClipProps = {
   /** What the clip is, its caption or its file's name, heard in its place. */
   readonly label: string;
 };
+
+/**
+ * The bar's fill, as a share of the clip, gliding between the player's
+ * reports of where it stands, which come a quarter second apart: while the
+ * clip plays, the fill runs on the native driver toward the clip's end at
+ * the clip's own pace, so it moves on every frame the screen draws, and each
+ * report sets it back where the clip stands, so it never drifts from the
+ * player. Paused, ended, or sought, it stands where the clip does.
+ */
+function useGlide(share: number, playing: boolean, secondsLeft: number): Animated.Value {
+  const [glide] = useState(() => new Animated.Value(share));
+
+  useEffect(() => {
+    glide.setValue(share);
+
+    if (!playing || secondsLeft <= 0) return;
+
+    const run = Animated.timing(glide, {
+      toValue: 1,
+      duration: secondsLeft * SECOND_MS,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    });
+
+    run.start();
+
+    return () => run.stop();
+  }, [glide, share, playing, secondsLeft]);
+
+  return glide;
+}
 
 /**
  * A sound clip, played in place by the system's own player (AVPlayer,
@@ -142,6 +176,7 @@ export function AudioClip({ source, label }: AudioClipProps) {
   const ready = source !== undefined && playback.status === "readyToPlay";
   const duration = playback.duration > 0 ? playback.duration : player.duration;
   const share = duration > 0 ? Math.min(1, playback.at / duration) : 0;
+  const glide = useGlide(share, playback.playing, Math.max(0, duration - playback.at));
   const time = `${playheadText(playback.at * SECOND_MS)} / ${playheadText(duration * SECOND_MS)}`;
   const playWord = playback.playing ? PLAYBACK_WORD.PAUSE : PLAYBACK_WORD.PLAY;
 
@@ -240,8 +275,11 @@ export function AudioClip({ source, label }: AudioClipProps) {
           style={[styles.barPress, large ? styles.stackedBar : null]}
         >
           <View style={[styles.bar, { backgroundColor: colors.CHIP_EDGE }]}>
-            <View
-              style={[styles.fill, { width: `${share * 100}%`, backgroundColor: colors.TEXT }]}
+            <Animated.View
+              style={[
+                styles.fill,
+                { backgroundColor: colors.TEXT, transform: [{ scaleX: glide }] },
+              ]}
             />
           </View>
         </Press>
