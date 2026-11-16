@@ -43,6 +43,7 @@ import {
   CLAUDE_CODE_TOOL,
   CONNECTION_TOOL,
   EVE_TOOL,
+  isShowMediaTool,
   RETIRED_TOOL,
 } from "./agent-tools.js";
 import {
@@ -54,6 +55,7 @@ import {
 import type { KeptPicture } from "./conversation-picture-wire.js";
 import { drawnCall } from "./native-tool-calls.js";
 import { formatBytes } from "./number-format.js";
+import { type OutOfMemory, outOfMemoryOf } from "./out-of-memory-wire.js";
 import { TOOL_STATE, type ToolState } from "./tool-call-block.js";
 import {
   type CallMachine,
@@ -146,6 +148,8 @@ export type AgentPart =
       readonly output: WireValue | undefined;
       /** The error's own text, on a call that ended in one. */
       readonly errorText: string | undefined;
+      /** Where the kernel killed the call's command for want of memory, the sandbox's memory as it ran (`out-of-memory-wire.ts`). */
+      readonly outOfMemory?: OutOfMemory;
       readonly cut?: AgentPartCut;
     }
   | { readonly kind: typeof AGENT_PART.STEP_START }
@@ -215,12 +219,15 @@ export function agentPart(part: WireValue): AgentPart {
       output: part.output,
     });
 
+    const outOfMemory = outOfMemoryOf(part.resultProviderMetadata);
+
     return {
       kind: AGENT_PART.TOOL,
       ...call,
       callId: isWireString(part.toolCallId) ? part.toolCallId : "",
       state: toolState(part.state),
       errorText: isWireString(part.errorText) ? part.errorText : undefined,
+      ...(outOfMemory === undefined ? undefined : { outOfMemory }),
     };
   }
 
@@ -626,7 +633,7 @@ export function isTodos(
   );
 }
 
-/** How the fold reads a part: its words, its reasoning as a note, a delegation as a subagent, a to-do list and a set of pictures, a page, or a recording shown each on a row of its own, a start that began a coding agent counted apart, and every other call grouped with the calls beside it. */
+/** How the fold reads a part: its words, its reasoning as a note, a delegation as a subagent, a set of pictures, a page, or a recording shown each on a row of its own, a start that began a coding agent counted apart, and every other call grouped with the calls beside it. */
 const AGENT_READING: RowReading<AgentPart> = {
   key: (part, index) => {
     if (part.kind === AGENT_PART.TOOL) return part.callId;
@@ -655,7 +662,7 @@ const AGENT_READING: RowReading<AgentPart> = {
     if (startedAgentOf(part) !== undefined) return ROW_PART.AGENT;
 
     // Note that what the agent showed is never grouped, because a group folds closed once the agent moves on and would fold the pictures with it.
-    return isTodos(part) || isShownSet(part) || isShownPage(part) || keptRecording(part)
+    return isShownSet(part) || isShownPage(part) || keptRecording(part)
       ? ROW_PART.LONE_CALL
       : ROW_PART.CALL;
   },
@@ -689,11 +696,11 @@ function runConnectionCalls(parts: readonly AgentPart[]): ReadonlySet<string> {
 
 type ToolPart = Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>;
 
-/** Whether a part is a `show_image` call that showed its pictures, which a reader reads as their own and never folds away. */
+/** Whether a part is a `show_media` call, or a `show_image` one, that showed its pictures, which a reader reads as their own and never folds away. */
 function isShownSet(part: AgentPart): part is ToolPart {
   return (
     part.kind === AGENT_PART.TOOL &&
-    part.tool === AGENT_TOOL.SHOW_IMAGE &&
+    isShowMediaTool(part.tool) &&
     part.state === TOOL_STATE.OUTPUT_AVAILABLE &&
     isRecord(part.output) &&
     part.output.status === ACTION_RESULT_STATUS.ACCEPTED
@@ -716,13 +723,13 @@ function keptRecording(part: AgentPart): boolean {
 }
 
 /**
- * A `show_image` call its tool refused, as the call that failed it is: the
+ * A `show_media` or `show_image` call its tool refused, as the call that failed it is: the
  * service answers a refusal as an output carrying why, so the row reads
  * the reason as its error, its line wears the failed mark, and no picture
  * waits for bytes that were never kept; nothing for any other part.
  */
 function refusedSet(part: AgentPart): ToolPart | undefined {
-  if (part.kind !== AGENT_PART.TOOL || part.tool !== AGENT_TOOL.SHOW_IMAGE) return undefined;
+  if (part.kind !== AGENT_PART.TOOL || !isShowMediaTool(part.tool)) return undefined;
 
   if (part.state !== TOOL_STATE.OUTPUT_AVAILABLE || !isRecord(part.output)) return undefined;
   const reason = part.output.reason;
@@ -904,10 +911,9 @@ export function followUpsWords(chosen: readonly string[]): string | undefined {
  * across them. The turn moves while the agent may still write to it, which
  * is its last message; any other has ended. A worker's session folds as
  * its agent's does, since a run of calls reads the same whoever made it.
- * The agent's words, its to-do lists, and every set of pictures, page, and
- * recording it showed stand on rows of their own, never folded. A line that
- * reached the turn while it ran (`arrived`) stands among its parts where it
- * arrived.
+ * The agent's words and every set of pictures, page, and recording it
+ * showed stand on rows of their own, never folded. A line that reached the
+ * turn while it ran (`arrived`) stands among its parts where it arrived.
  */
 export function agentRows(
   message: AgentTranscriptMessage,

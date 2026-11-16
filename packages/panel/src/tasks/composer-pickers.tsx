@@ -143,6 +143,7 @@ export function useComposerPickers({
     room,
     side,
     onChoose: (mention) => editor.current?.chooseMention(mention),
+    onRetype: (words) => editor.current?.retypeMention(words),
   });
 
   const onKey = (event: KeyboardEvent): boolean => {

@@ -1,0 +1,14 @@
+/* audio-player.css -- the keyboard's ring around a sound clip's waveform
+   while the bare slider over it holds the focus. The slider draws no thumb
+   there (`SLIDER_LOOK.BARE`), and its range input is hidden, so the ring the
+   window draws on a focused control would stand on nothing; it stands around
+   the waveform instead, under the same rule as every control's ring: only
+   while the keyboard moved the focus (`@repo/panel`'s base.css). */
+
+@layer components {
+  :root[data-keyboard="true"] .ui-audio-player-scrubber:has(:focus-visible) {
+    border-radius: var(--ui-control-radius);
+    outline: var(--ui-focus-ring-width) solid var(--ui-color-focus-ring);
+    outline-offset: var(--ui-focus-ring-offset);
+  }
+}

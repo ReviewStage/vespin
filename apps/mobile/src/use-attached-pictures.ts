@@ -3,7 +3,9 @@
  *
  * A picture is drawn with its long edge within 2048 pixels and read as a
  * JPEG at `PICTURE_QUALITY`, lower only where it would not stand within the
- * bound for one picture (`@repo/features/picture-fit`), named "Picture 1",
+ * bound for one picture (`@repo/features/picture-fit`); but a PNG picked
+ * within that bound, such as a screenshot, is kept as its own PNG so its
+ * words and lines stay sharp, as the panel sends one. Each is named "Picture 1",
  * "Picture 2", and on past every picture the holder has, and checked against
  * the service's bounds for one message (`AGENT_BOUNDS`), or the holder's
  * own, such as a note's to the people who make the app, as it is attached
@@ -35,7 +37,7 @@ import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
-import { launchImageLibraryAsync } from "expo-image-picker";
+import { type ImagePickerAsset, launchImageLibraryAsync } from "expo-image-picker";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 /** The JPEG quality a message's picture is first read at, once drawn within its long edge, as the panel's feedback form reads a screenshot. */
@@ -68,10 +70,25 @@ const MESSAGE_PICTURES: PictureBounds = {
   full: PICTURE_REFUSAL.FULL(AGENT_BOUNDS.MAX_ATTACHMENTS),
 };
 
-/** A picture or a pasted text file attached: the id it is taken off by, and the attachment it sends. */
+/** A picture or a pasted text file attached: the id it is taken off by, the attachment it sends, and, for a picture, the `data:` address its thumbnail draws from, made once so a redraw hands the thumbnail the same string. */
 export interface HeldPicture {
   readonly id: string;
   readonly file: AgentAttachment;
+  /** None for a pasted text file, which has no thumbnail. */
+  readonly address?: string | undefined;
+}
+
+/** A picture's bytes as read, in base64, and what they are. */
+interface ReadPicture {
+  readonly data: string;
+  readonly mediaType: typeof AGENT_ATTACHMENT_TYPE.JPEG | typeof AGENT_ATTACHMENT_TYPE.PNG;
+}
+
+/** A JPEG read as base64, as `readPicture` answers one; none for one that could not be read. */
+function jpegOf(base64: string | null | undefined): ReadPicture | undefined {
+  return base64 === null || base64 === undefined
+    ? undefined
+    : { data: base64, mediaType: AGENT_ATTACHMENT_TYPE.JPEG };
 }
 
 /** Whether a file held is a pasted text file rather than a picture. */
@@ -134,6 +151,31 @@ async function readPicture(uri: string, bounds: PictureBounds): Promise<string> 
   }
 }
 
+/**
+ * A picture the picker answered, as it goes: a PNG within `bounds`' bytes
+ * for one picture, read from the file the picker wrote, which keeps it a PNG
+ * so a screenshot's words stay sharp; and every other picture, or a PNG
+ * whose file could not be read, drawn within its long edge and read as a
+ * JPEG (`readPicture`).
+ */
+async function pickedPicture(
+  asset: ImagePickerAsset,
+  bounds: PictureBounds,
+): Promise<ReadPicture | undefined> {
+  const keepsPng =
+    asset.mimeType === AGENT_ATTACHMENT_TYPE.PNG &&
+    asset.fileSize !== undefined &&
+    asset.fileSize <= bounds.pictureBytes;
+
+  const png = keepsPng ? await new File(asset.uri).base64().catch(() => undefined) : undefined;
+
+  if (png !== undefined) return { data: png, mediaType: AGENT_ATTACHMENT_TYPE.PNG };
+
+  return readPicture(asset.uri, bounds)
+    .then(jpegOf)
+    .catch(() => undefined);
+}
+
 /** Why the pictures held cannot all go together, in the panel's words; none where they can. */
 function pictureRefusal(
   pictures: readonly HeldPicture[],
@@ -165,7 +207,7 @@ export interface AttachedPictures {
   readonly drop: (uris: readonly string[], unreadable: number) => void;
   /** Whether the pictures the holder opened with are still being read, while nothing it sends would carry them. */
   readonly opening: boolean;
-  /** Whether pictures dropped on the holder are still being read, while a send would go without them. */
+  /** Whether pictures picked or dropped on the holder are still being read, while a send would go without them. */
   readonly reading: boolean;
   readonly detach: (id: string) => void;
   /** Takes every picture off, as a send does, answering what was held so a refusal can put it back. */
@@ -266,21 +308,19 @@ export function useAttachedPictures(
     held.current = pictures;
   }, [pictures]);
 
-  // How many picks and drops are still being read.
-  const [reads, setReads] = useState(0);
-
-  // Pictures read as base64, or none for one that could not be, named past every picture held now and added after them, saying the first that could not be read, or else what a bound refuses. Note that the held pictures are written at once, so a second drop landing before the next render adds after this one rather than over it.
-  const add = (contents: readonly (string | null | undefined)[], unreadable = 0) => {
+  // Pictures as read, or none for one that could not be, named past every picture held now and added after them, saying the first that could not be read, or else what a bound refuses. Note that the held pictures are written at once, so a second drop landing before the next render adds after this one rather than over it.
+  const add = (contents: readonly (ReadPicture | undefined)[], unreadable = 0) => {
     const now = held.current;
 
-    const read = contents.map((base64, index): HeldPicture | string => {
+    const read = contents.map((picture, index): HeldPicture | string => {
       const name = nextName(now, index);
 
-      if (base64 === null || base64 === undefined) return PICTURE_REFUSAL.UNREADABLE(name);
+      if (picture === undefined) return PICTURE_REFUSAL.UNREADABLE(name);
 
       return {
         id: randomUUID(),
-        file: { name, mediaType: AGENT_ATTACHMENT_TYPE.JPEG, data: base64 },
+        file: { name, mediaType: picture.mediaType, data: picture.data },
+        address: `data:${picture.mediaType};base64,${picture.data}`,
       };
     });
 
@@ -294,22 +334,34 @@ export function useAttachedPictures(
     onNote(unread ?? pictureRefusal(next, bounds));
   };
 
-  // Note that the system's photo picker reads only what the member picks, so no permission is asked for first.
+  // How many drops, and picks kept as their own PNG, are still being read.
+  const [reads, setReads] = useState(0);
+
+  // Note that the system's photo picker reads only what the member picks, so no permission is asked for first; and a holder already full says so rather than opening it, since a picture past the bound would only be refused.
   const attach = () => {
+    const room = bounds.most - held.current.length;
+
+    if (room <= 0) {
+      onNote(bounds.full);
+
+      return;
+    }
+
     launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
-      selectionLimit: Math.max(1, bounds.most - pictures.length),
+      selectionLimit: room,
     })
-      .then((picked) => {
+      .then(async (picked) => {
         if (picked.canceled) return;
+        // Note that each picture is read after the picker closes, drawn within its long edge or kept as its PNG, so the holder stands reading until they land, and a send meanwhile waits rather than going without them.
         setReads((count) => count + 1);
 
-        void Promise.all(
-          picked.assets.map((asset) => readPicture(asset.uri, bounds).catch(() => undefined)),
-        )
-          .then((contents) => add(contents))
-          .finally(() => setReads((count) => count - 1));
+        try {
+          add(await Promise.all(picked.assets.map((asset) => pickedPicture(asset, bounds))));
+        } finally {
+          setReads((count) => count - 1);
+        }
       })
       .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
   };
@@ -341,6 +393,7 @@ export function useAttachedPictures(
         const file = new File(uri);
 
         return readPicture(uri, bounds)
+          .then(jpegOf)
           .catch(() => undefined)
           .finally(() => {
             try {
@@ -370,7 +423,7 @@ export function useAttachedPictures(
   useEffect(() => open(), []);
 
   return {
-    attached: pictures.map(({ id, file }) => ({ id, name: file.name })),
+    attached: pictures.map(({ id, file, address }) => ({ id, name: file.name, address })),
     files: pictures.length === 0 ? undefined : pictures.map(({ file }) => file),
     refusal: pictureRefusal(pictures, bounds),
     attach,

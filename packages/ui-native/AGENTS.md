@@ -26,7 +26,14 @@ builds a control of its own.
   a path, a page's main acts as glyphs in the bar's one glass before its ⋯
   (two or three, dimmed rather than gone with nothing picked, the rest left
   in ⋯ by `menuWithout`), a list's scopes as Mail's filter button
-  (`scopeMenu`, beside the app sidebar only), a `BarMenu` such as the ⋯ menu, an
+  (`scopeMenu`, beside the app sidebar only), a line under its title
+  (`titleLine`) such as the narrowing scope's "Filtered by:" line (`scopeSubtitle`), as
+  Mail's, which `Screen`'s `subtitle` sets under a compact screen's stack bar
+  too (`barSubtitle`: SwiftUI's `navigationSubtitle` for a column, the
+  stack's `UINavigationItem.subtitle` for a screen, each standing whether
+  or not it has words, since a modifier coming or going redraws all under
+  it), a
+  `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says, and `SplitOverTabs`, the one split view a window wide enough
   for three columns stands over the hidden tabs, in front of a tab's root and
@@ -87,7 +94,7 @@ builds a control of its own.
   call lines (`@repo/features/agent-parts`, `turn-rows`, `tool-call-model`),
   the agent's thinking left out, and each call leads with the glyph for its
   kind, as the rows' glyphs are chosen (`transcript-look.ts`). A pull
-  request an agent opened stands under its call as `PullRequestCard`, as the
+  request an agent opened stands in its call's place as `PullRequestCard`, as the
   task list holds it now. A page an agent showed is `SealedPage`, the app's
   one web view, handed the page's HTML sealed by `@repo/features/sealed-page`. `Pressable`,
   `TextInput`, and the rest of React Native's controls appear only here. SwiftUI standing inside those views, such as a message's long press
@@ -118,13 +125,15 @@ builds a control of its own.
   themselves (`containerBackground`) and a sheet or popover to its edge
   (`presentationBackground`); a split view's sidebar paints nothing, so it
   stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
-  inset cards; and the tint is the brand's copper, never the system's blue.
+  inset cards (a page of one thing's sections, such as a task's, stands
+  `LIST_LOOK.DETAIL`, the system's grouped list, so its headers scroll away
+  rather than pin under the bar, its rows still clear on the ground); and the tint is the brand's copper, never the system's blue.
   Only a control's states and a label's hierarchy are the system's.
 - **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
   panel's three lines (the task's status ring and name, then the thread's
   title and time, then the glyph and words of what it asks; an agent's own
-  thread, with no task, in two), `TaskRow` a task on one line (its status
-  ring, its name, and at its end a thread that needs you, a failed agent,
+  thread, with no task, in two), `TaskRow` a task on one line (its priority's
+  mark and status ring, as the panel's List row leads, its name, and at its end a thread that needs you, a failed agent,
   one at work, or its pull request, then its key), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
 - **Every glyph is the panel's own Lucide glyph for the same place** (the
@@ -218,7 +227,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
   words. An Inbox thread stands roomier, as Mail's message rows do
   (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
-  its lines), while a task's row keeps the list's tighter inset.
+  its lines), while a task's row keeps the list's tighter inset. A row a
+  split view's list keeps selected stands on a rounded `SELECTED` fill set in
+  from the column's edges (`ROW_INSET.FILL`), its hairlines stepping aside, as
+  Mail's selected message does; its words don't move.
 - **Select mode** (`RowList`'s `choosing`) is SwiftUI's own edit mode, as
   Mail's Select: a round check leads each row, a tap ticks it, two fingers
   dragged down tick a run, and the swipes step aside. Its screen names the
@@ -226,7 +238,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
   foot, a compact window's tab bar stepping aside for it.
 - **Group headers** (`ListSection`) are small and muted with a count, or
   finished of all as `2/5` (`progress`); a `foldable` one folds in place on
-  a press, its chevron on the left; and one given `add` ends in a muted +,
+  a press, its chevron on the left, its rows easing away and back; and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an
   empty section stands as its header alone rather than a list of add rows.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
@@ -248,8 +260,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   (`ScopePicker`), so another scope is one tap away. `Chip` is a capsule an act or a choice stands in, such as a
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
   status, priority and assignee, and where handed a `FieldMenu`, open the
-  system's pull-down menu of the field's values, as Reminders' fields do. Each stands
-  on `SURFACE` inside a hairline.
+  system's pull-down menu of the field's values, as Reminders' fields do.
+  `Chip`, a field's chip that opens a menu, and `FollowingChip` are the
+  system's own small bordered capsule; a field's chip that only says stands
+  on `SURFACE` inside a hairline, since a bordered button reads as pressable.
 - **Grouped forms** (`SettingsForm` and the sheets that start work, pick
   or remind) read as iOS Settings' cards: their rows stand in the panel's
   raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
@@ -262,7 +276,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   provider's own mark, the desktop's vector (`INTEGRATION_MARK_ASSET`), and
   its one act is a small bordered capsule at its end; what went wrong is a
   `ProblemLine`, muted words led by the alert glyph in the attention ink,
-  never red words, wherever a refusal stands under a row or a field; what a section means is said in its
+  never red words, wherever a refusal stands under a row or a field, an
+  ask's `AskNote` for a send that did not go among them; what a section means is said in its
   footer, never in a line under a switch; a row that leaves the app ends in
   the arrow out; and the Account page heads with the
   account's photo, name and address centered on the ground, closing with
@@ -275,8 +290,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
-  card and prompting with its label while empty, a select's menu picker at
-  the end of its label's row, a
+  card and prompting "Required" or "Optional" while empty, a number field's
+  pad standing one Done over it for the card, a select's menu picker
+  under its label, reading "None" until a pick, a
   boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because
   a `Form` scrolls on its own inside the thread's scroll; a card's hairlines
   start where its rows' words do, as iOS insets a list's separator) and the pull request

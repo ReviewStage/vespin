@@ -275,6 +275,10 @@ export const LIVE_READ = {
   GITHUB_TOKEN: "githubToken",
   /** One agent's pull request's newest chapters, by the agent and the pull request's number: the service's `pullRequestChaptersLive` query. */
   PULL_REQUEST_CHAPTERS: "pullRequestChapters",
+  /** One pull request's newest chapters, by the workspace, its repository, and its number: the service's `repositoryPullRequestChapters` query. */
+  REPOSITORY_PULL_REQUEST_CHAPTERS: "repositoryPullRequestChapters",
+  /** When GitHub last said one pull request moved, and its head as GitHub last named it, by the workspace, its repository, and its number: the service's `repositoryPullRequestMoved` query, which the host follows for each pull request a Pull request tab holds by its repository and number, and asks its parts again as it moves. */
+  REPOSITORY_PULL_REQUEST_MOVED: "repositoryPullRequestMoved",
   /** The checks on one agent's pull request's head, keyed and fetched as `PULL_REQUEST`. */
   PULL_REQUEST_CHECKS: "pullRequestChecks",
   /** One agent's pull request's conversation and where its reviewers stand, keyed and fetched as `PULL_REQUEST`. */
@@ -285,6 +289,18 @@ export const LIVE_READ = {
   PULL_REQUEST_VIEWED: "pullRequestViewed",
   /** What the reviewer and label pickers of one agent's Pull request tab offer, its repository's labels, assignable users, and teams, keyed and fetched as `PULL_REQUEST`. */
   REVIEW_OPTIONS: "reviewOptions",
+  /** One pull request as a Pull request tab draws it, by the workspace whose installation reaches its repository, then the repository, then its number, with no agent: fetched by the host while a window holds it. */
+  REPOSITORY_PULL_REQUEST: "repositoryPullRequest",
+  /** The checks on one pull request's head, keyed and fetched as `REPOSITORY_PULL_REQUEST`. */
+  REPOSITORY_PULL_REQUEST_CHECKS: "repositoryPullRequestChecks",
+  /** One pull request's conversation and where its reviewers stand, keyed and fetched as `REPOSITORY_PULL_REQUEST`. */
+  REPOSITORY_PULL_REQUEST_CONVERSATION: "repositoryPullRequestConversation",
+  /** One pull request as GitHub holds it now with its head's checks and the branch it is from, keyed and fetched as `REPOSITORY_PULL_REQUEST`. */
+  REPOSITORY_PULL_REQUEST_PUBLISHED: "repositoryPullRequestPublished",
+  /** Which of one pull request's files the member marked viewed on GitHub, read on their own GitHub sign-in, keyed and fetched as `REPOSITORY_PULL_REQUEST`. */
+  REPOSITORY_PULL_REQUEST_VIEWED: "repositoryPullRequestViewed",
+  /** What the reviewer and label pickers offer of one pull request's repository, keyed and fetched as `REPOSITORY_PULL_REQUEST`. */
+  REPOSITORY_REVIEW_OPTIONS: "repositoryReviewOptions",
   /** One task's comments, its description's own threads or one page's: the service's `taskCommentsLive` query. */
   DESCRIPTION_COMMENTS: "taskComments",
   /** One task's description history, by the task: the service's `taskHistoryLive` query for its newest page, then the older pages its version history read past it, held for the windows that show it and a few they showed lately. */
