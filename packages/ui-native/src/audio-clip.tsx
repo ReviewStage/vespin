@@ -1,4 +1,4 @@
-// audio-clip.tsx -- a sound clip a message carried, played through expo-video's player with no picture, as a strip at its message's width: play and pause, where it stands, and its time.
+// audio-clip.tsx -- a sound clip a message carried, played through expo-video's player with no picture, as a strip at its message's width: play and pause, its time, and where it stands.
 
 import { playheadText } from "@repo/features/time-format";
 import { SymbolView } from "expo-symbols";
@@ -55,8 +55,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.ROW,
     borderRadius: 8,
   },
-  // Note that at an accessibility size the time stands under the bar rather than beside it, so the bar keeps its room and the time is never cut.
+  // Note that at an accessibility size the bar stands on a row of its own under the play button and the time, whatever the strip's width, so the bar keeps its room and the time is never cut.
   stacked: { flexWrap: "wrap" },
+  stackedBar: { flexBasis: "100%" },
   button: { alignItems: "center", justifyContent: "center", borderRadius: 999 },
   barPress: { flex: 1, minWidth: 80, height: BAR_PRESS_HEIGHT, justifyContent: "center" },
   bar: { height: BAR_HEIGHT, borderRadius: BAR_HEIGHT / 2, overflow: "hidden" },
@@ -82,9 +83,9 @@ type AudioClipProps = {
 /**
  * A sound clip, played in place by the system's own player (AVPlayer,
  * through expo-video, with no picture), as Messages plays a voice message: a
- * round play button that turns to pause while it plays, a bar of where it
- * stands that a press moves to, and its time as the panel's player says it
- * ("0:04 / 0:12"). A clip played to its end stands back at its start. Note
+ * round play button that turns to pause while it plays, its time beside it
+ * as the panel's player says it ("0:04 / 0:12"), as a video's bar stands it,
+ * and a bar of where it stands that a press moves to. A clip played to its end stands back at its start. Note
  * that one the player cannot read, such as an Ogg before the service keeps
  * its AAC copy, says so in its place rather than standing as a button that
  * never plays; and one whose bytes are on their way, or that the player
@@ -224,17 +225,6 @@ export function AudioClip({ source, label }: AudioClipProps) {
             <ActivityIndicator color={colors.TEXT_MUTED} />
           )}
         </View>
-        <Press
-          onPress={(event) => seekAt(event.nativeEvent.locationX)}
-          onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
-          style={styles.barPress}
-        >
-          <View style={[styles.bar, { backgroundColor: colors.CHIP_EDGE }]}>
-            <View
-              style={[styles.fill, { width: `${share * 100}%`, backgroundColor: colors.TEXT }]}
-            />
-          </View>
-        </Press>
         <Text
           style={{
             fontSize: TEXT_SIZE.CAPTION,
@@ -244,6 +234,17 @@ export function AudioClip({ source, label }: AudioClipProps) {
         >
           {time}
         </Text>
+        <Press
+          onPress={(event) => seekAt(event.nativeEvent.locationX)}
+          onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
+          style={[styles.barPress, large ? styles.stackedBar : null]}
+        >
+          <View style={[styles.bar, { backgroundColor: colors.CHIP_EDGE }]}>
+            <View
+              style={[styles.fill, { width: `${share * 100}%`, backgroundColor: colors.TEXT }]}
+            />
+          </View>
+        </Press>
       </View>
     </HeldMenu>
   );
