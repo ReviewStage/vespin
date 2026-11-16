@@ -15,6 +15,7 @@ import {
 } from "@repo/ui-native";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
+import { Platform } from "react-native";
 import { useInboxBadge } from "../inbox/use-inbox.js";
 import { useSettingsAccount } from "../settings-button.js";
 import { keepSidebarPlace, keepTasksCollection, useTasksCollection } from "../sidebar-pick.js";
@@ -102,10 +103,22 @@ export function placeRoute(place: SidebarPlace): string {
 }
 
 /**
- * New task as a regular window offers it: the compose button leading the
- * detail's bar beside Expand, as Mail's stands over its message, or in
- * Search's own bar where Search stands alone; ⌘N opens it from the menu bar
- * too. A compact window keeps the tab bar's round + instead.
+ * Whether the tab bar stands its round + for New task: on an iPhone, the
+ * iPhone Duo's either posture included, and never on an iPad, read by the
+ * device's idiom rather than the window. Note that the + is never hidden as
+ * the window crosses between compact and regular, because expo-router keys
+ * the tabs' view on the names of the tabs that stand, so a + coming or going
+ * would mount every tab again and drop its pages and drafts on each fold,
+ * rotation, or resize.
+ */
+export const PLUS_TAB = !(Platform.OS === "ios" && Platform.isPad);
+
+/**
+ * New task where the tab bar has no round + (`PLUS_TAB`): the compose button
+ * leading the detail's bar beside Expand, as Mail's stands over its message,
+ * or in a list's or Search's own bar where no detail stands beside it; ⌘N
+ * opens it from the menu bar too. A window wide enough for three columns
+ * hides the tab bar, so its detail's bar leads with compose on an iPhone too.
  */
 export function useComposeAction(): BarAction {
   const router = useRouter();
@@ -114,14 +127,15 @@ export function useComposeAction(): BarAction {
 }
 
 /**
- * The detail's bar beside a regular window's first column, led by New task's
- * compose as a landscape window's detail bar is and Mail's stands over its
- * message, so New task stands in one place in every regular window.
+ * The detail's bar beside a regular window's first column, led on an iPad by
+ * New task's compose as a landscape window's detail bar is and Mail's stands
+ * over its message. The open Duo keeps the tab rail's round + instead, so no
+ * window offers New task twice.
  */
 export function usePortraitDetailBar(bar: ColumnBar | undefined): ColumnBar {
   const compose = useComposeAction();
 
-  return { ...bar, lead: [compose] };
+  return PLUS_TAB ? { ...bar } : { ...bar, lead: [compose] };
 }
 
 /**
@@ -150,8 +164,8 @@ export function useListColumn(list: ListColumn): FirstColumn {
 
   return {
     sidebar: list.view,
-    // Note that New task leads the detail's bar instead (`usePortraitDetailBar`), as in a landscape window and Mail, so the narrow list's bar keeps only its own acts, such as Select mode's Done.
-    sidebarBar: { ...list.bar, leading },
+    // Note that New task leads the detail's bar instead (`usePortraitDetailBar`), as in a landscape window and Mail, so the narrow list's bar keeps only its own acts, such as Select mode's Done, and acts it leads with, such as Select all, stand in the switcher's place, as on the iPhone, since a second leading item folds into the bar's overflow.
+    sidebarBar: { ...list.bar, leading: (list.bar.lead ?? []).length > 0 ? undefined : leading },
     sidebarShown: shown,
     onSidebarShownChange: setShown,
   };

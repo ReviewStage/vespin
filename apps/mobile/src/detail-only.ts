@@ -1,7 +1,7 @@
 // detail-only.ts -- whether a window wide enough for three columns stands its detail alone, as Mail's expand button stands a message, one answer for the detail bar's button and the menu bar's ⌃⌘F.
 
+import { useThreeColumns } from "@repo/ui-native";
 import { useSyncExternalStore } from "react";
-import { useThreeColumns } from "./use-window-size-class.js";
 
 /** Whether the detail stands alone, for this launch. */
 let held = false;

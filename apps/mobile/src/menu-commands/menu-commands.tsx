@@ -31,7 +31,13 @@ import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
-import { BUZZ, ConfirmAsk } from "@repo/ui-native";
+import {
+  BUZZ,
+  ConfirmAsk,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
+} from "@repo/ui-native";
 import { and, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
@@ -66,9 +72,7 @@ import { placeOfRoute, type SidebarPlace } from "../screens/app-sidebar.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
-import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
 import { type NavigatorState, tabStackBacks, tabsInFront } from "./window-back.js";

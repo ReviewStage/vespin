@@ -9,7 +9,9 @@
  * OpenAI API key pays, which it runs as the base model on its `fast` service
  * tier, and an Ultrafast version only where its OpenAI API key pays, on its
  * `ultrafast` tier, since OpenAI offers Ultrafast on few plans; on a Mac's
- * own sign-in, whatever it is signed in with, it runs neither. A runtime's
+ * own sign-in, whatever it is signed in with, it runs neither. Cursor takes
+ * Cursor's models, a fast version among them where the model has one,
+ * which it runs as the model with Cursor's `fast` parameter on. A runtime's
  * rule is one row of `NATIVE_MODEL_RULE`, Codex's on the plan
  * (`CODEX_FAST`) and on an API key (`CODEX_ON_API_KEY`) its own; no runtime, or
  * one with no row, offers everything (`ANY_MODEL`).
@@ -69,6 +71,13 @@ const NATIVE_MODEL_RULE: Partial<Record<AgentRuntime, RuntimeModelRule>> = {
     fastRefusal: "which runs a fast version on the Codex plan or an OpenAI API key alone",
     ultrafastRefusal: "which runs an Ultrafast version on an OpenAI API key alone",
   },
+  cursor: {
+    provider: MODEL_PROVIDER.CURSOR,
+    fast: true,
+    ultrafast: false,
+    contextWindow: false,
+    name: "Cursor",
+  },
 };
 
 /** Codex where the account's ChatGPT plan pays: a GPT model's fast version runs on its `fast` service tier, and no Ultrafast version. */
@@ -98,7 +107,7 @@ export function harnessNameOf(provider: ModelProvider): string {
     case MODEL_PROVIDER.OPENAI:
       return NATIVE_MODEL_RULE.codex?.name ?? "Codex";
     case MODEL_PROVIDER.CURSOR:
-      return "Cursor";
+      return NATIVE_MODEL_RULE.cursor?.name ?? "Cursor";
   }
 }
 
@@ -244,6 +253,8 @@ function providerName(provider: ModelProvider | undefined): string {
   if (provider === MODEL_PROVIDER.ANTHROPIC) return "Claude";
 
   if (provider === MODEL_PROVIDER.OPENAI) return "GPT";
+
+  if (provider === MODEL_PROVIDER.CURSOR) return "Cursor";
 
   return "its provider's";
 }

@@ -8,6 +8,7 @@ import {
   markdownBlocks,
   markdownGithubPages,
   markdownReplyButtons,
+  markdownShows,
 } from "./markdown-model.js";
 
 const READING = {
@@ -43,6 +44,7 @@ describe("markdownBlocks", () => {
             heard: "pull request #42 Fix the refresh",
             target: { kind: LINK_TARGET.WEB, href: "https://github.com/acme/app/pull/42" },
             github: "https://github.com/acme/app/pull/42",
+            of: { kind: "pull-request", url: "https://github.com/acme/app/pull/42" },
           },
         },
         words(" on "),
@@ -139,6 +141,16 @@ describe("markdownBlocks", () => {
     expect(markdownBlocks(written, { ...READING, typed: true })).toEqual([
       { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("A quote stands apart,\nand wraps.")] },
     ]);
+  });
+
+  it("hides raw HTML where the words are drawn as GitHub's page draws a pull request body", () => {
+    const body =
+      "<!-- What changed and why? -->\n\nAdds a row.\n\n<details><summary>Log</summary></details>";
+
+    expect(markdownBlocks(body, { ...READING, hidesHtml: true })).toEqual([
+      { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("Adds a row.")] },
+    ]);
+    expect(markdownShows("<!-- What changed and why? -->\n", { hidesHtml: true })).toBe(false);
   });
 
   it("draws a table as rows as wide as its header, each column aligned as written", () => {

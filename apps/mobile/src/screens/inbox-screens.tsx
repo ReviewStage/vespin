@@ -20,6 +20,7 @@ import {
   inboxLineKind,
   inboxMemberName,
   inboxPreview,
+  inboxScopeInstead,
   inboxSettledStanding,
   inboxThreadMessages,
   isDone,
@@ -35,8 +36,15 @@ import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link
 import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
-import { CHOOSE_AN_ITEM_WORDS, SELECTION_WORDS, selectedWords } from "@repo/features/words";
+import {
+  CHOOSE_AN_ITEM_WORDS,
+  NO_RESULTS_HINT,
+  noResultsForWords,
+  SELECTION_WORDS,
+  selectedWords,
+} from "@repo/features/words";
 import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
+import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   BAR_TITLE,
   type BarAction,
@@ -45,7 +53,6 @@ import {
   BUTTON_LOOK,
   EmptyState,
   GLYPH,
-  GlassDock,
   glyphSymbol,
   isBarMenu,
   LIST_LOOK,
@@ -77,6 +84,9 @@ import {
   UNDER_SPLIT_SCREEN,
   useColors,
   useMinute,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
@@ -88,6 +98,7 @@ import {
   useStackRoot,
   useStandFocusedDetailFront,
 } from "../detail-stack.js";
+import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
@@ -104,17 +115,21 @@ import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns, useInFront } from "../place-columns.js";
-import { useRefilledSearchField } from "../search-field.js";
+import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
-import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, useListColumn, usePortraitDetailBar } from "./app-sidebar.js";
+import {
+  PLUS_TAB,
+  SIDEBAR_PLACE,
+  useComposeAction,
+  useListColumn,
+  usePortraitDetailBar,
+} from "./app-sidebar.js";
 import { useDetailStackColumn } from "./detail-stack-column.js";
 import {
   NO_THREAD_ACTS,
@@ -162,6 +177,22 @@ const PLAYED_LABEL = {
   [INBOX_MEDIA.AUDIO]: "Sound clip",
 } as const;
 
+/** The panel's pager words, said by VoiceOver for an open thread's arrows. */
+const STEP_WORDS = {
+  PREVIOUS: APP_SHORTCUTS[APP_COMMAND.PREVIOUS_INBOX_ITEM].label,
+  NEXT: APP_SHORTCUTS[APP_COMMAND.NEXT_INBOX_ITEM].label,
+} as const;
+
+/**
+ * The Inbox's rows, by id, in the order the compact list drew them as one
+ * was opened: its scope and its search as they stood, so an open thread's
+ * arrows step through what the reader was looking at, as the panel's K and
+ * J step through the list held on screen. Note that it lives as long as the
+ * app does, and a thread it doesn't hold, such as one a notification opened,
+ * steps through the kept scope's live rows instead.
+ */
+let heldOrder: readonly string[] = [];
+
 /** What an agent is called where the task list does not hold it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
 
@@ -173,11 +204,6 @@ function askFileKind(mediaType: string) {
   if (isVideoType(mediaType)) return INBOX_MEDIA.VIDEO;
 
   return isAudioType(mediaType) ? INBOX_MEDIA.AUDIO : INBOX_MEDIA.PICTURE;
-}
-
-/** What the list's search says where it finds nothing. */
-function noMatchWords(search: string): string {
-  return `No items match “${search}”.`;
 }
 
 type InboxRowsProps = {
@@ -299,6 +325,12 @@ function InboxRowView({
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspaceStep = linkWorkspaceStep(holder.task.workspaceId, workspaces);
+  const keeping = useKeeping();
+
+  const link = linkOf(
+    { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
+    workspaceStep,
+  );
 
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
   const messages = useMemo(
@@ -356,10 +388,16 @@ function InboxRowView({
           onPress: () => onMark(item.id, !unread),
         },
       ]}
-      link={linkOf(
-        { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
-        workspaceStep,
-      )}
+      link={link}
+      // Note that the long press offers Copy link after the swipes' acts, as the panel's row menu and the thread's ⋯ offer it.
+      menuActions={[
+        {
+          label: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
+          symbol: GLYPH.LINK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => keeping.copyWords(link),
+        },
+      ]}
       preview={
         <ThreadPreview
           title={title}
@@ -385,18 +423,24 @@ const InboxRow = memo(InboxRowView);
  * What the list stands where it lists nothing: that the account's feed is
  * still on its first read, or could not be read, with Try again, rather than an
  * empty Inbox over threads not yet read; else nothing its search found, or
- * nothing its scope holds.
+ * nothing its scope holds, with the press to the scope that holds something
+ * (`inboxScopeInstead`), as the panel's empty Inbox offers it, so an empty
+ * scope is never a dead end.
  */
 function InboxEmpty({
   show,
   search,
   feed,
+  counts,
   onRetry,
+  onShow,
 }: {
   readonly show: InboxShow;
   readonly search: string;
   readonly feed: InboxFeed;
+  readonly counts: InboxCounts;
   readonly onRetry: () => void;
+  readonly onShow: (show: InboxShow) => void;
 }) {
   if (feed === INBOX_FEED.READING)
     return <EmptyState title={READING_INBOX} symbol={GLYPH.INBOX} loading />;
@@ -412,10 +456,32 @@ function InboxEmpty({
   }
 
   if (search.trim() !== "") {
-    return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
+    return (
+      <EmptyState
+        title={noResultsForWords(search)}
+        symbol={GLYPH.SEARCH}
+        description={NO_RESULTS_HINT}
+      />
+    );
   }
 
-  return <EmptyState title={INBOX_SHOW_EMPTY[INBOX_WHOSE.MINE][show]} symbol={GLYPH.INBOX} />;
+  const instead = inboxScopeInstead(show, counts);
+
+  return (
+    <EmptyState
+      title={INBOX_SHOW_EMPTY[INBOX_WHOSE.MINE][show]}
+      symbol={GLYPH.INBOX}
+      action={
+        instead === undefined
+          ? undefined
+          : {
+              label: instead.label,
+              onPress: () => onShow(instead.show),
+              look: BUTTON_LOOK.BORDERED,
+            }
+      }
+    />
+  );
 }
 
 /** The Inbox's scopes as its pills, the one shown filled, Questions and Open with their counts. */
@@ -458,12 +524,20 @@ function moreMenu(
   };
 }
 
+/** A menu standing dimmed while `dim` holds, so a bar keeps its place for it and VoiceOver hears it as dimmed, as Mail's edit bar stands Remind me until a message is chosen. */
+function dimmedWhile(dim: boolean, menu: BarMenu): BarMenu {
+  return dim ? { ...menu, disabled: true } : menu;
+}
+
 /**
  * What the Inbox offers for the threads chosen in Select mode, as the panel's
  * selection does (`inbox-selection.tsx`): Mark as read while one is unread,
  * else Mark as unread; Remind me, its time set on every one; and Resolve
  * while one is open, each taking only the threads it would change. Each act
- * lets Select mode go, as Mail's do. None while nothing is chosen.
+ * lets Select mode go, as Mail's do. Note that every act keeps its place,
+ * dimmed while it would change nothing, as Mail's edit bar stands its acts
+ * dimmed until a message is chosen, so the bar never pops in on the first
+ * tick nor shifts as Resolve comes and goes.
  */
 function chosenActs(
   chosen: readonly InboxItem[],
@@ -471,30 +545,18 @@ function chosenActs(
   remind: ReturnType<typeof useRemind>,
   stop: () => void,
 ): readonly BarFootItem[] {
-  if (chosen.length === 0) return [];
+  const none = chosen.length === 0;
   const unread = chosen.filter(isUnread);
   const open = chosen.filter((item) => item.status === INBOX_STATUS.OPEN);
   const marking = unread.length > 0 ? unread : chosen;
 
-  const resolve =
-    open.length === 0
-      ? []
-      : [
-          {
-            label: RESOLVE,
-            symbol: GLYPH.RESOLVED,
-            onPress: () => {
-              acts.resolveMany(open);
-              stop();
-            },
-          },
-        ];
-
   return [
     {
-      label: unread.length > 0 ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-      symbol: unread.length > 0 ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+      label: unread.length > 0 || none ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
+      symbol: unread.length > 0 || none ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+      disabled: none,
       onPress: () => {
+        if (none) return;
         acts.markMany(
           marking.map((item) => item.id),
           unread.length === 0,
@@ -502,8 +564,17 @@ function chosenActs(
         stop();
       },
     },
-    remind.menu(chosen, stop),
-    ...resolve,
+    dimmedWhile(none, remind.menu(chosen, stop)),
+    {
+      label: RESOLVE,
+      symbol: GLYPH.RESOLVED,
+      disabled: open.length === 0,
+      onPress: () => {
+        if (open.length === 0) return;
+        acts.resolveMany(open);
+        stop();
+      },
+    },
   ];
 }
 
@@ -546,8 +617,11 @@ function useAgentLabel(agentId: string): {
  * names the path and which draws its own Remind me sheet, or a split view's
  * detail, which opens the sheet its screen draws outside the split view.
  */
+/** The threads either side of an open one, in the list's order; none at an end. */
+type ThreadSteps = { readonly previous?: string | undefined; readonly next?: string | undefined };
+
 type ThreadPlace =
-  | { readonly inStack: true }
+  | { readonly inStack: true; readonly steps: ThreadSteps }
   | {
       readonly inStack: false;
       /** Remind me's times on a thread, from its screen, which draws the picker sheet outside the split view. */
@@ -641,7 +715,7 @@ function ThreadDetail({
     openInSafari(linkOf(place, workspaceStep));
   };
 
-  const { sources, sizes } = useThreadMedia(item.id, media);
+  const { sources, sizes, retry } = useThreadMedia(item.id, media);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
   const router = useRouter();
@@ -674,6 +748,11 @@ function ThreadDetail({
 
     if (place.inStack) router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
     else place.onOpen(id);
+  };
+
+  // An arrow opens the thread above or below in this one's place, as Mail's message arrows do, so Back still lands on the list.
+  const stepTo = (id: string | undefined) => {
+    if (id !== undefined) router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
   };
 
   const answer = useThreadAnswer(listed, openStarted);
@@ -736,6 +815,7 @@ function ThreadDetail({
     media: message.media.map((each): ThreadMedia => {
       const source = sources.get(each.attachmentId);
       const key = each.attachmentId;
+      const onRetry = () => retry(key);
 
       if (each.kind === INBOX_MEDIA.VIDEO) {
         return {
@@ -744,11 +824,12 @@ function ThreadDetail({
           source,
           label: each.name,
           onOpenElsewhere: openOnWeb,
+          onRetry,
         };
       }
 
       if (each.kind === INBOX_MEDIA.AUDIO) {
-        return { kind: THREAD_MEDIA.AUDIO, key, source, label: each.name };
+        return { kind: THREAD_MEDIA.AUDIO, key, source, label: each.name, onRetry };
       }
 
       if (each.kind === INBOX_MEDIA.FILE) {
@@ -761,20 +842,28 @@ function ThreadDetail({
           name: each.name,
           mediaType: each.mediaType,
           size,
+          onRetry,
         };
       }
 
-      return { kind: THREAD_MEDIA.PICTURE, key, source, alt: each.name };
+      return { kind: THREAD_MEDIA.PICTURE, key, source, alt: each.name, onRetry };
     }),
   }));
 
   // Note that a picture the words name by one of the thread's own files is drawn from its bytes as read, and any other from the address it names.
-  const pictureSource = (written: string): string | undefined => {
+  const pictureSource = (written: string): string | null | undefined => {
     const named = inboxAttachmentOf(inboxPictureDestination(written));
 
     return named === undefined || named.itemId !== item.id
       ? written
       : sources.get(named.attachmentId);
+  };
+
+  // A picture the words name by one of the thread's own files is read again by its file; any other is drawn from its address and never fails a read of ours.
+  const retryPicture = (written: string) => {
+    const named = inboxAttachmentOf(inboxPictureDestination(written));
+
+    if (named !== undefined && named.itemId === item.id) retry(named.attachmentId);
   };
 
   // A video or a sound clip the words name as a picture is played where they name it, from its bytes as read.
@@ -789,6 +878,7 @@ function ThreadDetail({
       label: PLAYED_LABEL[kind],
       audio: kind === INBOX_MEDIA.AUDIO,
       onOpenElsewhere: openOnWeb,
+      onRetry: () => retry(named.attachmentId),
     };
   };
 
@@ -811,6 +901,7 @@ function ThreadDetail({
       repository={holder.task.repository}
       onOpenLink={openLink}
       pictureSource={pictureSource}
+      onRetryPicture={retryPicture}
       videoAt={videoAt}
       linkStanding={linkStanding}
       standing={item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(item)}
@@ -820,6 +911,7 @@ function ThreadDetail({
           answer={answer}
           doors={{
             source: (attachmentId) => sources.get(attachmentId),
+            retry,
             openPage: (page) =>
               openLink(
                 linkOf(
@@ -839,9 +931,17 @@ function ThreadDetail({
       {...(inStack
         ? {}
         : {
+            pathInHead: true,
             acts,
             menu: menuWithout(menu, acts),
-            foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
+            foot: (
+              <ThreadComposer
+                item={item}
+                answer={answer}
+                agentName={agentName}
+                inColumn={{ inFront }}
+              />
+            ),
           })}
     />
   );
@@ -857,6 +957,21 @@ function ThreadDetail({
         }}
       />
       <Stack.Toolbar placement="right">
+        {/* Note that the arrows and ⋯ stand in one bar, since a screen's last `Stack.Toolbar` of a placement replaces the ones before it, and an arrow at the list's end stands dimmed rather than gone, so the other one never moves under the thumb, as Mail's do. */}
+        <Stack.Toolbar.Button
+          accessibilityLabel={STEP_WORDS.PREVIOUS}
+          disabled={place.steps.previous === undefined}
+          onPress={() => stepTo(place.steps.previous)}
+        >
+          <Stack.Toolbar.Icon xcasset={GLYPH.PREVIOUS_ITEM} renderingMode="template" />
+        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          accessibilityLabel={STEP_WORDS.NEXT}
+          disabled={place.steps.next === undefined}
+          onPress={() => stepTo(place.steps.next)}
+        >
+          <Stack.Toolbar.Icon xcasset={GLYPH.NEXT_ITEM} renderingMode="template" />
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
           <Stack.Toolbar.Menu inline>
             {pathActions.map((action) => (
@@ -881,9 +996,9 @@ function ThreadDetail({
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
-      <GlassDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
+      <FocusedDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
         <Screen>{page}</Screen>
-      </GlassDock>
+      </FocusedDock>
       {remind.sheet}
     </>
   );
@@ -978,12 +1093,22 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
         title:
           pickedItems.length === 0 ? SELECTION_WORDS.SELECT : selectedWords(pickedItems.length),
         acts: chosenActs(pickedItems, acts, remind, selecting.stop),
+        // Note that Select all takes every thread listed, and Select none lets them go once all are chosen, as Mail's edit bar leads with them.
+        all: (pickedItems.length === listing.listed.length && pickedItems.length > 0
+          ? { label: SELECTION_WORDS.SELECT_NONE, onPress: () => selecting.choose([]) }
+          : {
+              label: SELECTION_WORDS.SELECT_ALL,
+              // Note that with nothing listed, such as under a search that finds nothing, Select all stands dimmed, so its press never lets go of the threads chosen before.
+              disabled: listing.listed.length === 0,
+              onPress: () => selecting.choose(listing.listed.map(({ item }) => item.id)),
+            }) satisfies BarAction,
         done: { label: SELECT_DONE, onPress: selecting.stop } satisfies BarAction,
       }
     : undefined;
 
   return {
     show,
+    choose,
     search,
     setSearch,
     listing,
@@ -1005,13 +1130,26 @@ function InboxStackList(held: InboxHeld) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
+  const compose = useComposeAction();
 
-  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing, chooseStart } =
-    useInboxScreen(held);
+  const {
+    show,
+    choose,
+    search,
+    setSearch,
+    listing,
+    acts,
+    scopes,
+    menu,
+    remind,
+    choosing,
+    chooseStart,
+  } = useInboxScreen(held);
 
   const field = useRefilledSearchField(search);
+  const placement = useHeldSearchPlacement(search);
 
-  // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
+  // Note that Select mode names how many are chosen in the title's place, stands Select all where the switcher stood and Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
   return (
     <>
       <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }}>
@@ -1019,14 +1157,26 @@ function InboxStackList(held: InboxHeld) {
           <Stack.SearchBar
             ref={field}
             placeholder={SEARCH_INBOX}
-            placement="integratedButton"
+            placement={placement}
             allowToolbarIntegration={false}
             onChangeText={(event) => setSearch(event.nativeEvent.text)}
             onCancelButtonPress={() => setSearch("")}
           />
         )}
       </Stack.Screen>
-      {choosing !== undefined ? null : <SettingsBarButton switcher={switcher} />}
+      {choosing !== undefined ? (
+        <Stack.Toolbar placement="left">
+          <Stack.Toolbar.Button
+            variant="plain"
+            disabled={choosing.all.disabled === true}
+            onPress={choosing.all.onPress}
+          >
+            {choosing.all.label}
+          </Stack.Toolbar.Button>
+        </Stack.Toolbar>
+      ) : (
+        <SettingsBarButton switcher={switcher} />
+      )}
       <Stack.Toolbar placement="right">
         {choosing !== undefined ? (
           <Stack.Toolbar.Button variant="plain" onPress={choosing.done.onPress}>
@@ -1037,6 +1187,14 @@ function InboxStackList(held: InboxHeld) {
             {toolbarMenuActions(menu)}
           </Stack.Toolbar.Menu>
         )}
+        {/* Note that a narrow iPad window's tab bar has no round +, so its list's bar offers New task, as its wider windows' bars do. */}
+        {choosing !== undefined || PLUS_TAB ? null : (
+          <Stack.Toolbar.Button
+            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
+            accessibilityLabel={compose.label}
+            onPress={compose.onPress}
+          />
+        )}
       </Stack.Toolbar>
       {choosing === undefined ? null : (
         <Stack.Toolbar placement="bottom">
@@ -1044,7 +1202,11 @@ function InboxStackList(held: InboxHeld) {
             ...(at === 0 ? [] : [<Stack.Toolbar.Spacer key={at} />]),
             // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass.
             isBarMenu(act) ? (
-              <Stack.Toolbar.Menu key={act.label} accessibilityLabel={act.label}>
+              <Stack.Toolbar.Menu
+                key={act.label}
+                accessibilityLabel={act.label}
+                disabled={act.disabled === true}
+              >
                 <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
                 {toolbarMenuActions(act)}
               </Stack.Toolbar.Menu>
@@ -1052,6 +1214,7 @@ function InboxStackList(held: InboxHeld) {
               <Stack.Toolbar.Button
                 key={act.label}
                 accessibilityLabel={act.label}
+                disabled={act.disabled === true}
                 onPress={act.onPress}
               >
                 {act.symbol === undefined ? null : (
@@ -1069,7 +1232,9 @@ function InboxStackList(held: InboxHeld) {
               show={show}
               search={search}
               feed={listing.feed}
+              counts={listing.counts}
               onRetry={() => void acts.refresh()}
+              onShow={choose}
             />
           </ScopePicker>
         ) : (
@@ -1078,11 +1243,12 @@ function InboxStackList(held: InboxHeld) {
             look={LIST_LOOK.PLAIN}
             listed={listing.listed}
             readerId={listing.readerId}
-            onSelect={(id) =>
+            onSelect={(id) => {
+              heldOrder = listing.listed.map(({ item }) => item.id);
               router.push(
                 onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
-              )
-            }
+              );
+            }}
             onRefresh={acts.refresh}
             onMark={acts.mark}
             remindMenu={remind.itemMenu}
@@ -1114,8 +1280,19 @@ function InboxSplitScreen({
   readonly select: (id: string) => void;
   readonly held: InboxHeld;
 }) {
-  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing, chooseStart } =
-    useInboxScreen(held, selected);
+  const {
+    show,
+    choose,
+    search,
+    setSearch,
+    listing,
+    acts,
+    scopes,
+    menu,
+    remind,
+    choosing,
+    chooseStart,
+  } = useInboxScreen(held, selected);
 
   const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
@@ -1126,7 +1303,9 @@ function InboxSplitScreen({
         show={show}
         search={search}
         feed={listing.feed}
+        counts={listing.counts}
         onRetry={() => void acts.refresh()}
+        onShow={choose}
       />
     ) : (
       <InboxRows
@@ -1156,7 +1335,7 @@ function InboxSplitScreen({
           {rows}
         </ScopePicker>
       ),
-    // Note that Select mode names how many are chosen in the column's title, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
+    // Note that Select mode names how many are chosen in the column's title, leads its bar with Select all, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
     bar:
       choosing === undefined
         ? {
@@ -1169,7 +1348,12 @@ function InboxSplitScreen({
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
           }
-        : { title: choosing.title, action: choosing.done, foot: choosing.acts },
+        : {
+            title: choosing.title,
+            lead: [choosing.all],
+            action: choosing.done,
+            foot: choosing.acts,
+          },
   };
 
   const detail =
@@ -1214,6 +1398,27 @@ function InboxSplitScreen({
 }
 
 /**
+ * The threads either side of an open one: in the order the list held as it
+ * was opened, or, for a thread that order doesn't hold, in the kept scope's
+ * live rows, the open thread kept among them, as the panel's list keeps the
+ * item its pane shows, which are then held for the arrows' next steps.
+ */
+function useThreadSteps(id: string): ThreadSteps {
+  const { show } = useInboxScope();
+  const listing = useInboxListing({ show, search: "", chosen: id });
+  const held = heldOrder.includes(id);
+  const order = held ? heldOrder : listing.listed.map(({ item }) => item.id);
+  const at = order.indexOf(id);
+
+  // Note that a thread the held order doesn't hold starts a run of its own on the live rows, held from then on, so a step to a thread an older order also holds keeps to this run's order rather than jumping to that one's.
+  useEffect(() => {
+    if (!held) heldOrder = order;
+  }, [held, order]);
+
+  return at < 0 ? {} : { previous: order[at - 1], next: order[at + 1] };
+}
+
+/**
  * The Inbox tab's root screen: its list, laid out by the window's size
  * class. Note that a rotation or a fold swaps one layout for the other,
  * redrawing all under it, so what must outlive the swap is held here: the
@@ -1245,6 +1450,7 @@ export function InboxListScreen() {
 export function InboxThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { listed, readerId, feed, retry } = useInboxThread(id);
+  const steps = useThreadSteps(id);
   const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
 
@@ -1254,7 +1460,7 @@ export function InboxThreadScreen() {
         options={{ headerBackTitle: INBOX_TITLE, ...(listed === undefined && { title: "" }) }}
       />
       {listed !== undefined ? (
-        <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: true }} />
+        <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: true, steps }} />
       ) : (
         <Screen>
           <ThreadNotDrawn feed={feed} onRetry={retry} />

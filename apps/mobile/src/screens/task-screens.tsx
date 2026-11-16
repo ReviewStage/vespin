@@ -11,6 +11,7 @@ import {
   LINK_DESTINATION,
   type LinkDestination,
   linkOf,
+  linkWorkspaceStep,
   readLink,
   taskLinkStep,
   taskNumberOf,
@@ -59,10 +60,13 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { provenanceText } from "@repo/features/time-format";
 import {
   CHOOSE_AN_ITEM_WORDS,
   countWords,
+  NO_RESULTS_HINT,
+  noResultsForWords,
   readFailedWords,
   readingWords,
   TERM,
@@ -81,12 +85,14 @@ import {
   BAR_TITLE,
   type BarAction,
   type BarMenu,
+  BUTTON_LOOK,
   BUZZ,
   buzz,
   type ColumnBar,
   ConfirmAsk,
   DetailPage,
   EmptyState,
+  FailedReadRow,
   GLYPH,
   type Glyph,
   GroupRow,
@@ -120,6 +126,9 @@ import {
   TaskRow,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
   WordsRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -137,14 +146,16 @@ import {
 } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
+import { useKeeping } from "../keeping.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
-import { useRefilledSearchField } from "../search-field.js";
+import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
+import { stackMenuItems } from "../stack-bar-menu.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
@@ -166,6 +177,7 @@ import {
   type TaskAgentLine,
   type TaskOverview,
   type TaskPlacing,
+  type TaskRowDoors,
   type TasksListing,
   useDeleteAsk,
   useListingAsks,
@@ -174,15 +186,16 @@ import {
   useTaskReadOnOpen,
   useTasksListing,
   useTasksRead,
+  useTasksReadStatus,
   useTaskWrites,
 } from "../tasks/use-tasks.js";
-import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
+  PLUS_TAB,
   SIDEBAR_PLACE,
   type SidebarPlace,
   type SidebarTasks,
+  useComposeAction,
   useListColumn,
   usePortraitDetailBar,
 } from "./app-sidebar.js";
@@ -201,6 +214,15 @@ const TASK_NOT_FOUND = "Task not found";
 /** What a pushed task's screen says while the list that holds it is first read. */
 const READING_TASK = readingWords("the task");
 
+/** What the Tasks list says while the list is first read, as the panel's Tasks page does. */
+const READING_TASKS = readingWords(TERM.TASK.many);
+
+/** What the Tasks list says where the list could not be read, beside Try again, as the panel's Tasks page does. */
+const TASKS_UNREAD = readFailedWords(`your ${TERM.TASK.many}`);
+
+/** What a failed read offers. */
+const TRY_AGAIN = "Try again";
+
 /** What the list's search field says before anything is typed. */
 const SEARCH_TASKS = "Search tasks";
 
@@ -211,8 +233,11 @@ const WORDS = {
   UNPIN: "Unpin",
   AGENTS: "Agents",
   NEW_AGENT: "New agent",
+  TRY_AGAIN: "Try again",
   PAGES: "Pages",
   DESCRIPTION: "Description",
+  /** What a task's page says under Description where the task has none, rather than leaving the page blank under its headers. */
+  NO_DESCRIPTION: "No description yet",
   CREATED_BY: "Created by",
   SUB_TASKS: "Sub-tasks",
   TASK_RELATIONS: "Task relations",
@@ -248,11 +273,6 @@ const LINE_PART = " · ";
 
 /** No parent's sub-tasks stand open, as a section opens. */
 const NONE_OPEN: ReadonlySet<string> = new Set();
-
-/** What the list's search says where it finds nothing. */
-function noMatchWords(search: string): string {
-  return `No tasks match “${search}”.`;
-}
 
 /** A destination on vespin.dev in the workspace, opened in Safari, since the app draws no page for it yet. */
 function openOnWeb(destination: LinkDestination, workspace: Workspace | undefined): void {
@@ -302,6 +322,30 @@ function statusSubmenu(
       onPress: () => setStatus(task.id, status),
     })),
   };
+}
+
+/**
+ * A task row's trailing swipe, as the panel's row offers it: Mark done while
+ * it isn't, which a full swipe runs, then Status. Note that `setStatus` is
+ * the one that asks before Done stops a working agent.
+ */
+function settleSwipes(
+  task: TaskSummary,
+  setStatus: (taskId: string, status: TaskStatus) => void,
+): readonly RowSwipe[] {
+  const markDone: readonly RowSwipe[] =
+    task.status === TASK_STATUS.DONE
+      ? []
+      : [
+          {
+            label: WORDS.MARK_DONE,
+            symbol: GLYPH.CHECK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => setStatus(task.id, TASK_STATUS.DONE),
+          },
+        ];
+
+  return [...markDone, statusSubmenu(task, setStatus)];
 }
 
 /**
@@ -417,6 +461,16 @@ function relationSubmenu(task: TaskSummary, openRelation: OpenRelation): RowSubm
   };
 }
 
+/** A bar's ⋯ acts as a row's long press offers them, in the ink. */
+function rowActions(actions: BarMenu["actions"]): readonly RowAction[] {
+  return actions.map((action) => ({
+    label: action.label,
+    symbol: action.symbol,
+    tone: ROW_ACTION_TONE.NEUTRAL,
+    onPress: action.onPress,
+  }));
+}
+
 /** A task's Remove parent, which takes it out from under its parent, as the panel's does; none for a task at the top level. */
 function removeParentActs(task: TaskSummary, relations: TaskRelationWrites): readonly RowAction[] {
   if (task.parentTaskId === undefined) return [];
@@ -459,20 +513,8 @@ function rowActs(
 ): RowActsResult {
   const pinned = task.pinnedAt !== undefined;
 
-  const markDone: readonly RowSwipe[] =
-    task.status === TASK_STATUS.DONE
-      ? []
-      : [
-          {
-            label: WORDS.MARK_DONE,
-            symbol: GLYPH.CHECK,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => listing.setStatus(task.id, TASK_STATUS.DONE),
-          },
-        ];
-
   return {
-    trailingActions: [...markDone, statusSubmenu(task, listing.setStatus)],
+    trailingActions: settleSwipes(task, listing.setStatus),
     leadingActions: [
       {
         label: pinned ? WORDS.UNPIN : WORDS.PIN,
@@ -496,12 +538,14 @@ function rowActs(
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => askRename(task, listing.rename),
       },
+      ...rowActions(historyActions(task, listing.doors.history)),
       {
         label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
         symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => listing.markRead(task.id, !unread),
       },
+      ...rowActions(moveActions(listing.doors.moveDoor(task))),
       {
         label: VERB.OPEN_IN_BROWSER,
         symbol: GLYPH.OPEN_EXTERNALLY,
@@ -732,25 +776,56 @@ type OpenedParents = {
   readonly toggle: (taskId: string) => void;
 };
 
-/**
- * Which parents of a group stand open. Note that the group's owner holds it,
- * rather than each row, since a recycled row draws another task once
- * scrolled past, and rather than the rows, since a folded section drops its
- * rows and a parent opened before the fold must stand open after it.
- */
-function useOpenedParents(): OpenedParents {
-  const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
+/** What the tree holds of its own reading: each group's opened parents, and the groups folded shut, by the group's key. */
+type TreeHold = {
+  readonly opened: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly toggleParent: (group: string, taskId: string) => void;
+  readonly folded: ReadonlySet<string>;
+  readonly setFolded: (group: string, folded: boolean) => void;
+};
 
-  const toggle = (taskId: string) =>
+/**
+ * The tree's hold: which parents stand open and which groups stand folded.
+ * Note that it is held above the rows, since a recycled row draws another
+ * task once scrolled past and a folded section drops its rows, and above the
+ * Tasks tab's two layouts, since a fold or an unfold of the iPhone Duo, or a
+ * rotation across the split's cutoff, swaps one layout for the other and
+ * would lose what the reader opened. It is handed to the tree as a prop,
+ * never a context, because a three-column window draws the tree in the
+ * tabs' one split view, above this root screen.
+ */
+function useTreeHoldState(): TreeHold {
+  const [opened, setOpened] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
+  const [folded, setFoldedSet] = useState<ReadonlySet<string>>(NONE_OPEN);
+
+  const toggleParent = (group: string, taskId: string) =>
     setOpened((was) => {
+      const parents = new Set(was.get(group) ?? NONE_OPEN);
+
+      if (!parents.delete(taskId)) parents.add(taskId);
+
+      return new Map(was).set(group, parents);
+    });
+
+  const setFolded = (group: string, shut: boolean) =>
+    setFoldedSet((was) => {
       const next = new Set(was);
 
-      if (!next.delete(taskId)) next.add(taskId);
+      if (shut) next.add(group);
+      else next.delete(group);
 
       return next;
     });
 
-  return { opened, toggle };
+  return { opened, toggleParent, folded, setFolded };
+}
+
+/** One group's opened parents out of the tree's hold. */
+function groupParents(hold: TreeHold, group: string): OpenedParents {
+  return {
+    opened: hold.opened.get(group) ?? NONE_OPEN,
+    toggle: (taskId) => hold.toggleParent(group, taskId),
+  };
 }
 
 /** A group's rows, a task's sub-tasks folded under it, each parent opened and shut by its chevron. */
@@ -794,15 +869,19 @@ function FoldedRows({
 function CollectionRows({
   collection,
   listing,
+  hold,
 }: {
   readonly collection: TaskTreeGroup;
   readonly listing: TasksListing;
+  readonly hold: TreeHold;
 }) {
-  const parents = useOpenedParents();
-
   return (
     <ListSection>
-      <FoldedRows rows={collection.rows} listing={listing} parents={parents} />
+      <FoldedRows
+        rows={collection.rows}
+        listing={listing}
+        parents={groupParents(hold, collection.key)}
+      />
     </ListSection>
   );
 }
@@ -816,22 +895,57 @@ function CollectionRows({
 function GroupSection({
   group,
   listing,
+  hold,
 }: {
   readonly group: TaskTreeGroup;
   readonly listing: TasksListing;
+  readonly hold: TreeHold;
 }) {
-  const parents = useOpenedParents();
-
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
       count={group.rows.length}
       foldable
+      folded={hold.folded.has(group.key)}
+      onFold={(shut) => hold.setFolded(group.key, shut)}
       onDropLink={dropOnto(group, listing)}
     >
-      <FoldedRows rows={group.rows} listing={listing} parents={parents} />
+      <FoldedRows rows={group.rows} listing={listing} parents={groupParents(hold, group.key)} />
     </ListSection>
   );
+}
+
+/**
+ * What an empty list says in place of "No tasks" while the list has not
+ * been read: reading, or that the read failed with Try again, as the
+ * panel's Tasks page says; none once it is read, so an empty list is one
+ * that holds nothing. Note that it is asked only while the whole list holds
+ * nothing, so a list holding rows draws them whatever its read, and a
+ * refresh that fails leaves what was read standing.
+ */
+function notRead(
+  read: TasksView["listStatus"],
+  onRefresh: () => Promise<void>,
+): ReactElement | undefined {
+  if (read === TASKS_READ.READY) return undefined;
+
+  if (read === TASKS_READ.FAILED) {
+    return (
+      <EmptyState
+        title={TASKS_UNREAD}
+        symbol={GLYPH.TASK}
+        action={{
+          label: TRY_AGAIN,
+          onPress: () => {
+            void onRefresh();
+          },
+          look: BUTTON_LOOK.BORDERED,
+        }}
+      />
+    );
+  }
+
+  return <EmptyState title={READING_TASKS} symbol={GLYPH.TASK} loading />;
 }
 
 /** Whether a task stands among a collection's rows, a sub-task under one of them included. */
@@ -853,6 +967,8 @@ function treeEmpty(tree: TaskTree): boolean {
 
 type TasksTreeProps = {
   readonly listing: TasksListing;
+  /** The parents opened and groups folded, held by the Tasks tab's root screen. */
+  readonly hold: TreeHold;
   readonly look: ListLook;
   readonly search: string;
   /** The collection the app sidebar picked, Pinned, Following, or a section, whose rows alone the list draws; every group where none is. */
@@ -873,6 +989,7 @@ type TasksTreeProps = {
  */
 function TasksTree({
   listing,
+  hold,
   look,
   search,
   collection,
@@ -881,6 +998,7 @@ function TasksTree({
   onRefresh,
 }: TasksTreeProps) {
   const { tree } = listing;
+  const read = useTasksReadStatus();
 
   // Note that a search under a picked collection finds only that collection's tasks, as its title says.
   const found =
@@ -888,7 +1006,15 @@ function TasksTree({
 
   if (search.trim() !== "") {
     if (found.length === 0) {
-      return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
+      return (
+        (treeEmpty(tree) ? notRead(read, onRefresh) : undefined) ?? (
+          <EmptyState
+            title={noResultsForWords(search)}
+            symbol={GLYPH.SEARCH}
+            description={NO_RESULTS_HINT}
+          />
+        )
+      );
     }
 
     return (
@@ -902,30 +1028,41 @@ function TasksTree({
 
   if (collection !== undefined) {
     if (collection.rows.length === 0) {
-      return <EmptyState title={WORDS.NO_TASKS} symbol={collectionGlyph(collection)} />;
+      return (
+        (treeEmpty(tree) ? notRead(read, onRefresh) : undefined) ?? (
+          <EmptyState title={WORDS.NO_TASKS} symbol={collectionGlyph(collection)} />
+        )
+      );
     }
 
     return (
       <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
-        <CollectionRows collection={collection} listing={listing} />
+        <CollectionRows collection={collection} listing={listing} hold={hold} />
       </RowList>
     );
   }
 
   // Note that an empty workspace draws the system's empty view, as the Inbox's does, rather than a bare list.
-  if (treeEmpty(tree)) return <EmptyState title={WORDS.NO_TASKS} symbol={GLYPH.TASK} />;
+  if (treeEmpty(tree)) {
+    return notRead(read, onRefresh) ?? <EmptyState title={WORDS.NO_TASKS} symbol={GLYPH.TASK} />;
+  }
 
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
-      {tree.pinned === undefined ? null : <GroupSection group={tree.pinned} listing={listing} />}
-      {tree.following === undefined ? null : (
-        <GroupSection group={tree.following} listing={listing} />
+      {tree.pinned === undefined ? null : (
+        <GroupSection group={tree.pinned} listing={listing} hold={hold} />
       )}
-      {tree.sections.map((group) => (
-        <GroupSection key={group.key} group={group} listing={listing} />
-      ))}
+      {tree.following === undefined ? null : (
+        <GroupSection group={tree.following} listing={listing} hold={hold} />
+      )}
+      {/* Note that a section holding no task stands only in the app sidebar, where a task is dropped onto it, as Reminders keeps an empty list off a grouped view. */}
+      {tree.sections
+        .filter((group) => group.rows.length > 0)
+        .map((group) => (
+          <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
+        ))}
       {tree.tasks.map((group) => (
-        <GroupSection key={group.key} group={group} listing={listing} />
+        <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
       ))}
     </RowList>
   );
@@ -964,14 +1101,10 @@ export function useSidebarTasks(): SidebarTasks {
 }
 
 /** What a task's ⋯ asks first, what opens New task for a sub-task of it, and what opens its Task relation sheet. */
-interface TaskMenuDoors {
+interface TaskMenuDoors extends TaskRowDoors {
   readonly askDelete: (task: TaskSummary) => void;
   readonly newSubTask: (task: TaskSummary) => void;
-  /** Opens the description's version history; none where the workspace's descriptions stand off, as the panel's ⋯ offers it only where they stand on. */
-  readonly history: ((task: TaskSummary) => void) | undefined;
   readonly openRelation: OpenRelation;
-  /** Move to workspace's door for a task, none where the reader may not move it (`useMoveTaskDoor`). */
-  readonly moveDoor: (task: TaskSummary) => (() => void) | undefined;
 }
 
 /** Version history as a task's ⋯ offers it, none where the workspace's descriptions stand off. */
@@ -998,11 +1131,13 @@ function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
 }
 
 /**
- * What a task's ⋯ holds, in the panel's order: Copy link, Rename, Version
- * history where the workspace's descriptions stand on, New sub-task, Move
- * to workspace where the reader may move it, Remove parent where it has
- * one, Open in browser, and Permanently delete, red, which asks first; then
- * Task relation, Move to section, and its repository. Its status is the
+ * What a task's ⋯ holds, the panel's acts in four groups set apart by the
+ * system's rule, as Reminders and Mail group a list's ⋯: where the task is
+ * (Copy link, Open in browser); the task itself (Rename, Version history
+ * where the workspace's descriptions stand on, Move to workspace where the
+ * reader may move it); where it stands among tasks (New sub-task, Remove
+ * parent where it has one, Task relation, its section and its repository);
+ * and Permanently delete, red, alone, which asks first. Its status is the
  * page's status chip's menu (`standingMenus`), so ⋯ holds no Status.
  */
 function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
@@ -1018,39 +1153,53 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         onPress: () => copyTaskLink(task, overview.workspace),
       },
       {
-        label: WORDS.RENAME,
-        symbol: GLYPH.RENAME,
-        onPress: () => askRename(task, overview.rename),
-      },
-      ...historyActions(task, doors.history),
-      {
-        label: WORDS.NEW_SUB_TASK,
-        symbol: GLYPH.ADD,
-        onPress: () => doors.newSubTask(task),
-      },
-      ...moveActions(doors.moveDoor(task)),
-      ...removeParentActs(task, overview.relations).map((action) => ({
-        label: action.label,
-        symbol: action.symbol,
-        onPress: action.onPress,
-      })),
-      {
         label: VERB.OPEN_IN_BROWSER,
         symbol: GLYPH.OPEN_EXTERNALLY,
         onPress: () =>
           openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, overview.workspace),
       },
+    ],
+    groups: [
       {
-        label: WORDS.DELETE,
-        symbol: GLYPH.DELETE,
-        destructive: true,
-        onPress: () => doors.askDelete(task),
+        actions: [
+          {
+            label: WORDS.RENAME,
+            symbol: GLYPH.RENAME,
+            onPress: () => askRename(task, overview.rename),
+          },
+          ...historyActions(task, doors.history),
+          ...moveActions(doors.moveDoor(task)),
+        ],
+      },
+      {
+        actions: [
+          {
+            label: WORDS.NEW_SUB_TASK,
+            symbol: GLYPH.ADD,
+            onPress: () => doors.newSubTask(task),
+          },
+          ...removeParentActs(task, overview.relations).map((action) => ({
+            label: action.label,
+            symbol: action.symbol,
+            onPress: action.onPress,
+          })),
+        ],
+        submenus: [
+          relationSubmenu(task, doors.openRelation),
+          ...placingSubmenus(task, overview.placing),
+        ].map(barSubmenu),
+      },
+      {
+        actions: [
+          {
+            label: WORDS.DELETE,
+            symbol: GLYPH.DELETE,
+            destructive: true,
+            onPress: () => doors.askDelete(task),
+          },
+        ],
       },
     ],
-    submenus: [
-      relationSubmenu(task, doors.openRelation),
-      ...placingSubmenus(task, overview.placing),
-    ].map(barSubmenu),
   };
 }
 
@@ -1111,6 +1260,14 @@ function useHistoryDoor(
     if (toDetail({ kind: PUSHED_PAGE.HISTORY, taskId: task.id })) return;
     router.push({ pathname: onOwnTab(HISTORY_ROUTE), params: { id: task.id } });
   };
+}
+
+/** The doors a list's task rows open past it, opened once for the whole list rather than on each recycled row. */
+export function useTaskRowDoors(workspaceId: string | undefined): TaskRowDoors {
+  const history = useHistoryDoor(workspaceId);
+  const moveDoor = useMoveTaskDoor();
+
+  return { history, moveDoor };
 }
 
 /** Opens New task as a sub-task of the task, as the panel's New sub-task opens its card. */
@@ -1319,12 +1476,12 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
             id={sub.id}
             name={sub.name}
             status={sub.status}
-            trailingActions={relationSwipes(
-              task.id,
-              sub.id,
-              TASK_RELATION_KIND.SUB_TASK,
-              relations,
-            )}
+            faded={taskFinished(sub)}
+            // Note that a sub-task is settled in place, as Reminders' subtasks are and the panel's related rows' Status is, before its relation is changed.
+            trailingActions={[
+              ...settleSwipes(sub, overview.setStatus),
+              ...relationSwipes(task.id, sub.id, TASK_RELATION_KIND.SUB_TASK, relations),
+            ]}
           />
         ))}
       </ListSection>
@@ -1354,6 +1511,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
                   id={id}
                   name={other?.name ?? WORDS.UNLISTED_TASK}
                   status={other?.status}
+                  faded={other !== undefined && taskFinished(other)}
                   relation={TASK_RELATION_WORDS[kind]}
                   trailingActions={relationSwipes(task.id, id, kind, relations)}
                 />
@@ -1398,6 +1556,35 @@ function agentSwipes(
       onPress: () => onArchive(agent.id),
     },
   ];
+}
+
+/**
+ * What an agent row's long press holds past its swipes, which `RowFrame`
+ * stands in the menu already (Stop, or Archive asked first): the panel's
+ * Copy link and Open in browser (`agentMenuGroups`), once its workspace is
+ * known. Rename, Copy transcript and Permanently delete stay on the agent's
+ * page, which holds the questions and the transcript they need.
+ */
+function agentMenuActs(
+  link: string | undefined,
+  onCopyLink: (link: string) => void,
+): readonly RowAction[] {
+  return link === undefined
+    ? []
+    : [
+        {
+          label: WORDS.COPY_LINK,
+          symbol: GLYPH.LINK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => onCopyLink(link),
+        },
+        {
+          label: VERB.OPEN_IN_BROWSER,
+          symbol: GLYPH.OPEN_EXTERNALLY,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => openInSafari(link),
+        },
+      ];
 }
 
 type UseAgentArchiveAskResult = {
@@ -1461,11 +1648,14 @@ export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
 export function TaskAgentRow({
   line,
   task,
+  named = false,
   onArchive,
 }: {
   readonly line: TaskAgentLine;
   /** The task it works on, which its preview names over it; none where the list does not hold it. */
   readonly task?: TaskSummary | undefined;
+  /** Whether its row names the task in its line, as a list of many tasks' agents does, such as Search's; its preview names it either way. */
+  readonly named?: boolean | undefined;
   /** Asks to archive the agent, once it rests (`useAgentArchiveAsk`); its row offers no Archive where none is given. */
   readonly onArchive?: ((agentId: string) => void) | undefined;
 }) {
@@ -1478,6 +1668,15 @@ export function TaskAgentRow({
   const name = agentName(agent);
   const harness = providerOf(agent.model);
   const runsOn = agentRunsOnWords(agent);
+  const keeping = useKeeping();
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const linkStep = linkWorkspaceStep(agent.workspaceId, workspaces);
+
+  const link =
+    linkStep === undefined
+      ? undefined
+      : linkOf({ kind: LINK_DESTINATION.AGENT, taskId: agent.taskId, agentId: agent.id }, linkStep);
+
   // Note that a device's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac.
   const platform = useDevicePlatform(agent.mac?.deviceId);
 
@@ -1490,6 +1689,7 @@ export function TaskAgentRow({
       runsOn={runsOn}
       runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform })}
       waiting={waiting}
+      task={named ? task?.name : undefined}
       pullRequest={
         pullRequest === undefined
           ? undefined
@@ -1510,6 +1710,7 @@ export function TaskAgentRow({
             }
       }
       trailingActions={agentSwipes(agent, acts, onArchive)}
+      menuActions={agentMenuActs(link, keeping.copyWords)}
       preview={
         <AgentPreview
           name={name}
@@ -1642,7 +1843,7 @@ function OverviewDescription({
   const threads = useTaskComments(task.id);
   const blocks = useMemo(() => descriptionBlocks(body), [body]);
   const onBlocks = threadsOnBlocks(threads, blocks);
-  const { pictureSource, videoAt } = useDescriptionPictures(body);
+  const { pictureSource, videoAt, fileAt } = useDescriptionPictures(body);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
 
   // Note that a chip's pull request is read through the task's own workspace, as the panel's is, whichever one the phone works in.
@@ -1669,6 +1870,7 @@ function OverviewDescription({
           onOpenLink={openLink}
           pictureSource={pictureSource}
           videoAt={videoAt}
+          fileAt={fileAt}
           linkStanding={linkStanding}
         />
       </ListSection>
@@ -1689,6 +1891,7 @@ function OverviewDescription({
             onOpenLink={openLink}
             pictureSource={pictureSource}
             videoAt={videoAt}
+            fileAt={fileAt}
             linkStanding={linkStanding}
             last={index === blocks.length - 1}
             menuActions={
@@ -1745,15 +1948,7 @@ function ReadFailedRow({
   readonly words: string;
   readonly onRetry: () => void;
 }) {
-  return (
-    <LinkRow
-      symbol={GLYPH.FAILED}
-      label={words}
-      detail={VERB.RETRY}
-      tone={LINK_ROW_TONE.ATTENTION}
-      onPress={onRetry}
-    />
-  );
+  return <FailedReadRow label={words} act={WORDS.TRY_AGAIN} onPress={onRetry} />;
 }
 
 /**
@@ -1844,7 +2039,7 @@ function OverviewPage({
   };
 
   return (
-    <RowList look={LIST_LOOK.PLAIN} onSelect={open} onRefresh={onRefresh}>
+    <RowList look={LIST_LOOK.DETAIL} onSelect={open} onRefresh={onRefresh}>
       <ListSection>
         <OverviewHead overview={overview} />
       </ListSection>
@@ -1855,7 +2050,11 @@ function OverviewPage({
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
-      ) : document === undefined || document.description.body.trim() === "" ? null : (
+      ) : document === undefined ? null : document.description.body.trim() === "" ? (
+        <ListSection title={WORDS.DESCRIPTION} footer={WORDS.NO_DESCRIPTION}>
+          {null}
+        </ListSection>
+      ) : (
         <OverviewDescription overview={overview} body={document.description.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
@@ -1873,21 +2072,33 @@ type TasksSearch = { readonly search: string; readonly setSearch: (search: strin
  */
 function useTasksScreen({ search, setSearch }: TasksSearch) {
   const read = useTasksListing(search);
-  const { listing, status, deletion } = useListingAsks(read);
+  const doors = useTaskRowDoors(read.workspace?.id);
+  const { listing, status, deletion } = useListingAsks(read, doors);
   const { refreshTasks } = useInboxActs();
 
   return { search, setSearch, listing, status, deletion, refreshTasks };
 }
 
+/** The list screens' state, held by the tab's root screen above its two layouts. */
+type TasksScreenState = ReturnType<typeof useTasksScreen>;
+
 // A compact window: the tree, the account's photo opening Settings and the
 // workspace switcher beside it at the bar's leading edge and its search a round glass button at its trailing one, each
 // row pushing its task as the Stack's next screen.
-function TasksStackList(words: TasksSearch) {
+function TasksStackList({
+  screen,
+  hold,
+}: {
+  readonly screen: TasksScreenState;
+  readonly hold: TreeHold;
+}) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
-  const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
+  const compose = useComposeAction();
+  const { search, setSearch, listing, refreshTasks } = screen;
   const field = useRefilledSearchField(search);
+  const placement = useHeldSearchPlacement(search);
 
   return (
     <>
@@ -1895,16 +2106,27 @@ function TasksStackList(words: TasksSearch) {
         <Stack.SearchBar
           ref={field}
           placeholder={SEARCH_TASKS}
-          placement="integratedButton"
+          placement={placement}
           allowToolbarIntegration={false}
           onChangeText={(event) => setSearch(event.nativeEvent.text)}
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
+      {/* Note that a narrow iPad window's tab bar has no round +, so its list's bar offers New task, as its wider windows' bars do. */}
+      {PLUS_TAB ? null : (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
+            accessibilityLabel={compose.label}
+            onPress={compose.onPress}
+          />
+        </Stack.Toolbar>
+      )}
       <Screen>
         <TasksTree
           listing={listing}
+          hold={hold}
           look={LIST_LOOK.PLAIN}
           search={search}
           onSelect={(id) =>
@@ -1913,8 +2135,6 @@ function TasksStackList(words: TasksSearch) {
           onRefresh={refreshTasks}
         />
       </Screen>
-      <StatusQuestionAsk question={status} />
-      <StatusQuestionAsk question={deletion} />
     </>
   );
 }
@@ -2039,13 +2259,15 @@ export function TaskColumnPage({ taskId }: { readonly taskId: string }) {
 function TasksSplitScreen({
   selected,
   select,
-  words,
+  screen,
+  hold,
 }: {
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
-  readonly words: TasksSearch;
+  readonly screen: TasksScreenState;
+  readonly hold: TreeHold;
 }) {
-  const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
+  const { search, setSearch, listing, refreshTasks } = screen;
   const threeColumns = useThreeColumns();
   const picked = useTasksCollection();
 
@@ -2064,6 +2286,7 @@ function TasksSplitScreen({
     view: (
       <TasksTree
         listing={listing}
+        hold={hold}
         look={LIST_LOOK.PLAIN}
         search={search}
         collection={collection}
@@ -2105,23 +2328,35 @@ function TasksSplitScreen({
           />
         </Screen>
       )}
-      <StatusQuestionAsk question={status} />
-      <StatusQuestionAsk question={deletion} />
       {asks}
     </>
   );
 }
 
-/** The Tasks tab's root screen: its tree, laid out by the window's size class, its search held here so a rotation or a fold keeps it. */
+/**
+ * The Tasks tab's root screen: its tree, laid out by the window's size
+ * class. Note that what the reader set is held here, above the two layouts,
+ * so a rotation or a fold of the iPhone Duo, which swaps one layout for the
+ * other, keeps it: the search, the parents opened and the groups folded
+ * (`TreeHold`), and a status or a delete question standing open.
+ */
 export function TasksListScreen() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
   const [search, setSearch] = useState("");
+  const screen = useTasksScreen({ search, setSearch });
+  const hold = useTreeHoldState();
 
-  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-    <TasksSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
-  ) : (
-    <TasksStackList search={search} setSearch={setSearch} />
+  return (
+    <>
+      {sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
+        <TasksSplitScreen selected={selected} select={select} screen={screen} hold={hold} />
+      ) : (
+        <TasksStackList screen={screen} hold={hold} />
+      )}
+      <StatusQuestionAsk question={screen.status} />
+      <StatusQuestionAsk question={screen.deletion} />
+    </>
   );
 }
 
@@ -2155,6 +2390,7 @@ export function TaskScreen() {
   // Note that a task deleted from its own page gives way to the list it stood in, rather than saying it is not found.
   const deletion = useDeleteAsk(remove, () => router.back());
   const newSubTask = useNewSubTask();
+  const newAgent = useNewAgent();
   const openRelation = useOpenRelation();
   const moveDoor = useMoveTaskDoor();
   const { refreshTasks } = useInboxActs();
@@ -2192,48 +2428,17 @@ export function TaskScreen() {
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      {menu === undefined ? null : (
+      {menu === undefined || overview === undefined ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-            {(menu.submenus ?? []).map((submenu) => (
-              <Stack.Toolbar.Menu
-                key={submenu.label}
-                title={submenu.label}
-                icon={glyphSymbol(submenu.symbol)}
-              >
-                {submenu.choices.map((choice) => (
-                  <Stack.Toolbar.MenuAction
-                    key={choice.label}
-                    {...(choice.symbol === undefined ? {} : { icon: glyphSymbol(choice.symbol) })}
-                    isOn={choice.on}
-                    onPress={choice.onPress}
-                  >
-                    {choice.label}
-                  </Stack.Toolbar.MenuAction>
-                ))}
-                {submenu.actions.map((action) => (
-                  <Stack.Toolbar.MenuAction
-                    key={action.label}
-                    {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
-                    destructive={action.destructive === true}
-                    onPress={action.onPress}
-                  >
-                    {action.label}
-                  </Stack.Toolbar.MenuAction>
-                ))}
-              </Stack.Toolbar.Menu>
-            ))}
-            {menu.actions.map((action) => (
-              <Stack.Toolbar.MenuAction
-                key={action.label}
-                {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
-                destructive={action.destructive === true}
-                onPress={action.onPress}
-              >
-                {action.label}
-              </Stack.Toolbar.MenuAction>
-            ))}
+            {stackMenuItems(menu)}
           </Stack.Toolbar.Menu>
+          {/* Note that New agent stands as a glyph before ⋯, as a split view's detail bar stands a page's main act; it is written after ⋯ because a right bar's first item stands at its edge. */}
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.AGENT)}
+            accessibilityLabel={WORDS.NEW_AGENT}
+            onPress={() => newAgent(overview.task)}
+          />
         </Stack.Toolbar>
       )}
       <Screen>

@@ -122,8 +122,9 @@ const MOTION_PANE = "cubic-bezier(0.2, 0, 0, 1)";
 // and a sidebar stand on, the raised fill a grouped form's rows stand in
 // (OVERLAY) and the light ground under them (CHIP_HOVER), the strong fill the
 // member's own message sits on (FILL_STRONG), the gray a neutral swipe
-// action fills with under white words (ACTION_FILL), the inks, and the status
-// inks.
+// action fills with under white words (ACTION_FILL) and the red a swipe that
+// takes something away fills with under them (DANGER_FILL), the inks, and the
+// status inks.
 // The rest (a focus ring, a chip's selection) are the desktop's and the
 // site's, which SwiftUI's own control states stand in for on iOS.
 const NATIVE_ROLES = [
@@ -140,6 +141,7 @@ const NATIVE_ROLES = [
   "CHIP_EDGE",
   "FILL_STRONG",
   "ACTION_FILL",
+  "DANGER_FILL",
   "TEXT",
   "TEXT_BODY",
   "TEXT_MUTED",
@@ -237,6 +239,7 @@ const LUCIDE_SYMBOLS = {
   CHECK_CHECK: "check-check",
   CHEVRON_DOWN: "chevron-down",
   CHEVRON_RIGHT: "chevron-right",
+  CHEVRON_UP: "chevron-up",
   CIRCLE: "circle",
   CIRCLE_ALERT: "circle-alert",
   CIRCLE_ARROW_UP: "circle-arrow-up",

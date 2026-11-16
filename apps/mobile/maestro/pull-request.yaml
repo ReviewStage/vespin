@@ -1,4 +1,4 @@
-# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, then merged from the press under its heading; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed; and one in the merge queue, taken out of it after the question, and opened on GitHub.
+# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed; and one in the merge queue, taken out of it after the question, and opened on GitHub.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -15,11 +15,18 @@ appId: dev.vespin.ios
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
 - assertVisible: "Add a way to resend an invite that expired."
-# The card offers Merge beside Review, which asks first.
-- scrollUntilVisible:
-    element: "Merge"
-    direction: UP
-    centerElement: true
+# The card offers Merge beside Review, which asks first. Note that the
+# transcript is dragged at three quarters across the screen rather than at
+# its center, which on a landscape iPad is the list column beside it.
+- repeat:
+    while:
+      notVisible: "Merge"
+    times: 10
+    commands:
+      - swipe:
+          start: "75%, 35%"
+          end: "75%, 75%"
+          duration: 400
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-card
 - tapOn: "Merge"
@@ -33,12 +40,45 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Ready to merge"
     timeout: 30000
-- assertVisible: "grace"
+# Its description, as its agent wrote it, under the heading.
+- assertVisible: "Adds Invite by email.*"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-ready
-# Merging acts on the press under the heading, in every window, as the
-# panel's merge control does.
+# Note that the description stands above the checks, so the reviewer's row,
+# the page's last, may stand below the fold on a phone and is scrolled to,
+# dragged at three quarters across as the card is, so a landscape iPad's
+# drag lands on the page rather than the list column beside it.
+- repeat:
+    while:
+      notVisible: "grace"
+    times: 10
+    commands:
+      - swipe:
+          start: "75%, 75%"
+          end: "75%, 35%"
+          duration: 400
+- assertVisible: "grace"
+# Merging is the press under the heading, in every window, and it asks
+# first, as the card's Merge does, scrolled back up to after the reviewer.
+# Note that the list is let settle first, since a tap on a list still
+# gliding only stops it and presses nothing.
+- repeat:
+    while:
+      notVisible: "Squash and merge"
+    times: 10
+    commands:
+      - swipe:
+          start: "75%, 35%"
+          end: "75%, 75%"
+          duration: 400
+- waitForAnimationToEnd
 - tapOn: "Squash and merge"
+- assertVisible: "Merge this pull request?"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-merge-ask
+- tapOn:
+    text: "Squash and merge"
+    below: "Merge this pull request?"
 - extendedWaitUntil:
     visible: "Merged"
     timeout: 30000
@@ -70,10 +110,18 @@ appId: dev.vespin.ios
 # Note that iOS never hears a chip as an element of its own, since it stands
 # in its line as a view, so the line is found by what it is heard as
 # (`heardLine`), "Pull request: pull request #128 …", and pressed at its
-# middle, where the chip stands.
-- scrollUntilVisible:
-    element: ".*#128 Invite a teammate by email"
-    direction: DOWN
+# middle, where the chip stands. Note that the page is swiped at its right
+# side rather than scrolled from the screen's center, since a landscape iPad's
+# center falls in the list column beside the task, which never holds the chip.
+- repeat:
+    while:
+      notVisible: ".*#128 Invite a teammate by email"
+    times: 8
+    commands:
+      - swipe:
+          start: 85%, 70%
+          end: 85%, 35%
+      - waitForAnimationToEnd
 - tapOn: ".*#128 Invite a teammate by email"
 - extendedWaitUntil:
     visible: "Ready to merge"
