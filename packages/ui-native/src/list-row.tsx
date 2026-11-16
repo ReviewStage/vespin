@@ -86,6 +86,12 @@ function useRowLines(): (typeof ROW_LINES)[keyof typeof ROW_LINES] {
   return useAccessibilitySize() ? ROW_LINES.ACCESSIBILITY : ROW_LINES.STANDARD;
 }
 
+/** How a row's title is drawn: plain, or as Markdown with a search's words in bold, each by a native text of its own. */
+const TITLE_LOOK = {
+  PLAIN: "plain",
+  MARKED: "marked",
+} as const;
+
 /** What parts the pieces of what a row is heard as, as VoiceOver pauses between a label's phrases. */
 const HEARD_PART = ", ";
 
@@ -228,13 +234,14 @@ type TaskRowProps = RowActs & {
   readonly depth?: number | undefined;
 };
 
-/** A row's act as a button of its long press menu or its swipe: red where it takes something away, and otherwise in `ink`, the muted ink a menu's glyph takes unless a swipe asks for its fill. */
+/** A row's act as a button of its long press menu or its swipe: red where it takes something away, through the system's destructive role where `roled`, and otherwise in `ink`, the muted ink a menu's glyph takes unless a swipe asks for its fill. */
 export function actionButton(
   action: RowAction,
   colors: BrandColors,
   ink: string = colors.TEXT_MUTED,
+  roled = true,
 ) {
-  const destructive = action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
+  const destructive = roled && action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
 
   return (
     <Button
@@ -340,7 +347,11 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
  * draws a row's background across the whole column, and on iPadOS 26 a
  * split view's list column runs on under the floating sidebar, so the gray
  * stood under the sidebar's glass to the window's edge. A row's own view
- * stays inside the column's safe area, as Mail's rows do. Note that a row
+ * stays inside the column's safe area, as Mail's rows do. The gray is
+ * rounded and set in from the column's edges by `ROW_INSET.FILL`, as Mail's
+ * selected message stands, the padding inside it giving back that inset so
+ * the row's words and marks stand where an unselected row's do, and its
+ * hairlines step aside while it is selected, as Mail's do. Note that a row
  * draws no hairline over itself, only the one under it, because a list
  * column's first row drew one under its search field, where Mail draws none.
  */
@@ -353,9 +364,22 @@ export function rowPlacement(
   return [
     listRowBackground("clear"),
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
-    padding({ leading: ROW_INSET.LEADING, trailing: SPACE.EDGE, top: vertical, bottom: vertical }),
-    ...(selected ? [background(colors.SELECTED)] : []),
-    listRowSeparator("hidden", "top"),
+    padding({
+      leading: ROW_INSET.LEADING - ROW_INSET.FILL,
+      trailing: SPACE.EDGE - ROW_INSET.FILL,
+      top: vertical,
+      bottom: vertical,
+    }),
+    ...(selected
+      ? [
+          background(
+            colors.SELECTED,
+            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
+          ),
+          listRowSeparator("hidden"),
+        ]
+      : []),
+    padding({ horizontal: ROW_INSET.FILL }),
     listRowSeparatorTint(colors.CHIP_EDGE),
     alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT + indent),
   ];
@@ -404,13 +428,31 @@ function fullSwipes(swipes: readonly RowSwipe[]): boolean {
 }
 
 /**
- * A swipe's piece: an act's button, or a menu's, in `ink`. Behind the row
- * it fills with the action gray, which holds 4.5:1 under the swipe's white
- * words in both themes where the muted ink, light in dark, did not; in the
- * long press menu it stands in the muted ink a menu's glyph takes.
+ * A swipe's piece behind the row: an act's button, or a menu's, filled with
+ * the action gray, which holds 4.5:1 under the swipe's white words in both
+ * themes where the muted ink, light in dark, did not. Note that an act that
+ * takes something away fills with the danger fill, which holds the same
+ * under white, without the destructive role, because SwiftUI takes a row
+ * out of its list the moment a destructive swipe is pressed, before an act
+ * that asks first, such as Archive, hears its answer, so a Cancel left the
+ * row gone under its section's count.
  */
-function swipeButton(swipe: RowSwipe, colors: BrandColors, ink: string) {
-  return isSubmenu(swipe) ? rowSubmenu(swipe, colors, ink) : actionButton(swipe, colors, ink);
+function swipeButton(swipe: RowSwipe, colors: BrandColors) {
+  if (isSubmenu(swipe)) return rowSubmenu(swipe, colors, colors.ACTION_FILL);
+
+  return actionButton(
+    swipe,
+    colors,
+    swipe.tone === ROW_ACTION_TONE.DESTRUCTIVE ? colors.DANGER_FILL : colors.ACTION_FILL,
+    false,
+  );
+}
+
+/** A swiped act as it stands again in the long press menu: in the muted ink a menu's glyph takes, and red through the system's destructive role, since a menu takes no row away. */
+function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
+  return isSubmenu(swipe)
+    ? rowSubmenu(swipe, colors, colors.TEXT_MUTED)
+    : actionButton(swipe, colors);
 }
 
 /**
@@ -495,7 +537,7 @@ export function RowFrame({
     <ContextMenu>
       <ContextMenu.Items>
         {opening.map((action) => actionButton(action, colors))}
-        {swiped.map((swipe) => swipeButton(swipe, colors, colors.TEXT_MUTED))}
+        {swiped.map((swipe) => swipeMenuButton(swipe, colors))}
         {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
         {menuActions.map((action) => actionButton(action, colors))}
       </ContextMenu.Items>
@@ -512,12 +554,12 @@ export function RowFrame({
       {menu}
       {trailingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="trailing" allowsFullSwipe={fullSwipes(trailingActions)}>
-          {trailingActions.map((swipe) => swipeButton(swipe, colors, colors.ACTION_FILL))}
+          {trailingActions.map((swipe) => swipeButton(swipe, colors))}
         </SwipeActions.Actions>
       )}
       {leadingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="leading" allowsFullSwipe={fullSwipes(leadingActions)}>
-          {leadingActions.map((swipe) => swipeButton(swipe, colors, colors.ACTION_FILL))}
+          {leadingActions.map((swipe) => swipeButton(swipe, colors))}
         </SwipeActions.Actions>
       )}
     </SwipeActions>
@@ -529,7 +571,10 @@ export function RowFrame({
  * it, as Mail's search results set them, and plain outside a search. Note
  * that a marked title is one Markdown string in one native text, never texts
  * nested in it, so a key typed redraws the words in place rather than
- * building the row's text anew.
+ * building the row's text anew. A title turning from marked to plain, or
+ * back, is drawn by a native text of its own (`TITLE_LOOK`), because the one
+ * native text, handed its plain words with no Markdown, kept drawing the bold
+ * of the last search it marked.
  */
 function TitleWords({
   title,
@@ -541,9 +586,11 @@ function TitleWords({
   const marked = searchedTitleMarkdown(title, useContext(RowSearchedContext));
 
   return marked === undefined ? (
-    <Text modifiers={[...modifiers]}>{title}</Text>
+    <Text key={TITLE_LOOK.PLAIN} modifiers={[...modifiers]}>
+      {title}
+    </Text>
   ) : (
-    <Text markdownEnabled modifiers={[...modifiers]}>
+    <Text key={TITLE_LOOK.MARKED} markdownEnabled modifiers={[...modifiers]}>
       {marked}
     </Text>
   );
@@ -554,7 +601,9 @@ function TitleWords({
  * column, the title, and what ends the line. The line centers its pieces,
  * so the mark stands on the title at any Dynamic Type size, and at an
  * accessibility size stacks its end under the title, the mark's column
- * growing with the words.
+ * growing with the words. What trails the line, such as the arrow of a row
+ * that opens GitHub, keeps the trailing edge at every size, as iOS keeps a
+ * row's chevron there.
  */
 export function RowHead({
   unread,
@@ -566,6 +615,7 @@ export function RowHead({
   title,
   ink,
   end,
+  trail,
 }: {
   readonly unread: boolean;
   readonly faded: boolean;
@@ -579,6 +629,7 @@ export function RowHead({
   readonly title: string;
   readonly ink: string;
   readonly end: ReactNode;
+  readonly trail?: ReactNode;
 }) {
   const lines = useRowLines();
   const stacked = useAccessibilitySize();
@@ -619,6 +670,7 @@ export function RowHead({
         )}
         <Spacer />
         {stacked ? null : end}
+        {trail}
       </HStack>
     </HStack>
   );

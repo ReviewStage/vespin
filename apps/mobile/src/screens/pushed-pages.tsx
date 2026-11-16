@@ -55,6 +55,7 @@ export function PushedPageView({ page }: { readonly page: PushedPage }) {
           from={page.from}
           to={page.to}
           quote={page.quote}
+          again={page.again}
           inColumn
         />
       );

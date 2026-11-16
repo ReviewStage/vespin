@@ -3,6 +3,7 @@
 import { dateChipText } from "@repo/features/date-mention";
 import { type Draft, draftKindOf, readDraft } from "@repo/features/draft-text";
 import {
+  type Entity,
   type EntityKind,
   entityOfDestination,
   entityOfMention,
@@ -118,6 +119,8 @@ export interface MarkdownChip {
   readonly target: LinkTarget;
   /** The GitHub pull request's or issue's page it names, by which its standing is read; none for any other chip. */
   readonly github?: string | undefined;
+  /** The entity it names, by its ids, by which the app finds its mark (`ChipMarkOf`); none for a date. */
+  readonly of?: Entity | undefined;
 }
 
 /**
@@ -252,10 +255,17 @@ function linkTarget(href: string): LinkTarget {
     : { kind: LINK_TARGET.WEB, href };
 }
 
-function chipOf(entity: EntityKind, name: string, target: LinkTarget): MarkdownChip {
+function chipOf(
+  entity: EntityKind,
+  name: string,
+  target: LinkTarget,
+  of?: Entity | undefined,
+): MarkdownChip {
   const word = entityWordHeard(entity, name);
 
-  return { entity, name, heard: word === undefined ? name : `${word} ${name}`, target };
+  const chip = { entity, name, heard: word === undefined ? name : `${word} ${name}`, target };
+
+  return of === undefined ? chip : { ...chip, of };
 }
 
 /** No names held: the app reads none for a chip yet, so a place is called by its label, or by its kind where it has none. */
@@ -278,8 +288,9 @@ function linkChip(href: string, label: string, reading: MarkdownReading): Markdo
 
   if (chip.kind === LINK_CHIP.PLACE) {
     const look = placeChipLook(chip.link.place, chip.name, NO_NAMES);
+    const entity = entityOfDestination(chip.link.place);
 
-    return chipOf(entityOfDestination(chip.link.place).kind, look.name, linkTarget(href));
+    return chipOf(entity.kind, look.name, linkTarget(href), entity);
   }
 
   if (chip.mention.kind === MENTION_KIND.DATE) {
@@ -288,7 +299,8 @@ function linkChip(href: string, label: string, reading: MarkdownReading): Markdo
     return chipOf(MENTION_KIND.DATE, name, { kind: LINK_TARGET.NONE });
   }
 
-  const drawn = chipOf(entityOfMention(chip.mention).kind, chip.name, linkTarget(href));
+  const entity = entityOfMention(chip.mention);
+  const drawn = chipOf(entity.kind, chip.name, linkTarget(href), entity);
   const github = githubAddressOf(chip.mention);
 
   return github === undefined ? drawn : { ...drawn, github };
