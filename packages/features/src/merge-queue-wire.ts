@@ -19,7 +19,7 @@ import { workspaceIdSchema } from "./task-wire.js";
  * refused as an upstream error, never answered as no queue.
  */
 
-export const MERGE_QUEUE_QUERY = { WORKSPACE_ID: "workspaceId" } as const;
+const MERGE_QUEUE_QUERY = { WORKSPACE_ID: "workspaceId" } as const;
 
 export const MERGE_QUEUE_BOUNDS = {
   /** The most repositories one read asks GitHub about: those the workspace's tasks changed most recently. */
@@ -54,8 +54,6 @@ export const mergeQueueRequestSchema = EffectSchema.Struct({
   [MERGE_QUEUE_QUERY.WORKSPACE_ID]: workspaceIdSchema,
 });
 
-export type MergeQueueRequest = typeof mergeQueueRequestSchema.Type;
-
 /** The task an entry's pull request belongs to: the task of an agent that opened it. */
 const mergeQueueTaskSchema = EffectSchema.Struct({
   id: wireUuidSchema,
@@ -65,13 +63,23 @@ const mergeQueueTaskSchema = EffectSchema.Struct({
 });
 
 /** Who opened the pull request, as GitHub names them; none for a deleted account. */
+/** How the queue's checks stand on the commit it builds for an entry: how many it reports, how many passed, how many failed, and the names of those failed among the first the service reads, in GitHub's order. */
+const mergeQueueChecksSchema = EffectSchema.Struct({
+  total: countedNumber,
+  passed: countedNumber,
+  failedCount: countedNumber,
+  failed: EffectSchema.Array(EffectSchema.String),
+});
+
+export type MergeQueueChecks = typeof mergeQueueChecksSchema.Type;
+
 const mergeQueueAuthorSchema = EffectSchema.Struct({
   login: EffectSchema.String,
   avatarUrl: EffectSchema.String,
 });
 
 /** One pull request in a queue. */
-export const mergeQueueEntrySchema = EffectSchema.Struct({
+const mergeQueueEntrySchema = EffectSchema.Struct({
   /** Where it stands, counted from one at the front. */
   position: countedNumber,
   /** A state a later GitHub adds reads as queued. */
@@ -81,6 +89,10 @@ export const mergeQueueEntrySchema = EffectSchema.Struct({
   ),
   /** When it joined the queue, in milliseconds since the epoch. */
   enqueuedAt: countedNumber,
+  /** When GitHub estimates it merges, in milliseconds since the epoch; none where GitHub gives no estimate, and left out by a service from before it was read. */
+  estimatedMergeAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
+  /** How the queue's checks stand on the commit it builds for it; none before it builds one, and left out by a service from before it was read. */
+  checks: EffectSchema.optionalKey(EffectSchema.NullOr(mergeQueueChecksSchema)),
   pullRequest: EffectSchema.Struct({
     number: countedNumber,
     title: EffectSchema.String,
@@ -93,7 +105,7 @@ export const mergeQueueEntrySchema = EffectSchema.Struct({
 export type MergeQueueEntry = typeof mergeQueueEntrySchema.Type;
 
 /** One repository's queue: the repository as GitHub spells it, GitHub's own page of the queue, and its entries, front first. */
-export const mergeQueueRepositorySchema = EffectSchema.Struct({
+const mergeQueueRepositorySchema = EffectSchema.Struct({
   repository: githubRepositoryFullNameSchema,
   url: EffectSchema.String,
   entries: EffectSchema.Array(mergeQueueEntrySchema),

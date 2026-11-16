@@ -1,5 +1,6 @@
 import { LEGACY_APP_WORD, type WireBoundaryInput } from "@repo/wire";
 import { Schema as EffectSchema, Option } from "effect";
+import { AUDIO_TYPE, type AudioType } from "./audio-signature.js";
 import { INBOX_IMAGE_TYPE } from "./inbox-wire.js";
 import { MP4_TYPE, WEBM_TYPE } from "./video-signature.js";
 
@@ -35,7 +36,7 @@ export const CONVERSATION_PICTURE_BOUNDS = {
   MAX_BYTES: 4_000_000,
   /** The most bytes of pictures one conversation keeps; a picture past them is named, not kept. */
   MAX_BYTES_PER_CONVERSATION: 200_000_000,
-  /** The most pictures one `show_image` call shows, as one set. */
+  /** The most pictures one `show_media` call shows, as one set. */
   MAX_PER_CALL: 20,
 } as const;
 
@@ -52,15 +53,20 @@ export const PICTURE_OMISSION = {
 export type PictureOmission = (typeof PICTURE_OMISSION)[keyof typeof PICTURE_OMISSION];
 
 /**
- * What a transcript's picture may be: one of the three pictures, or a
+ * What a transcript's picture may be: one of the three pictures, a
  * recording an agent made of what it did, a WebM of its browser or an H.264
- * MP4 of an app on the developer's Mac, shown as a picture is and kept under
- * the same bounds, which the transcript plays where it would draw a picture.
+ * MP4 of an app on the developer's Mac, or a sound clip it made, one of the
+ * audio types Chromium decodes (`audio-signature.ts`), each shown as a
+ * picture is and kept under the same bounds, which the transcript plays
+ * where it would draw a picture. Note that a sound clip is named here before
+ * the service keeps one, because a client released before it could read
+ * one would draw it as a picture that never loads.
  */
 export const CONVERSATION_MEDIA_TYPE = {
   ...INBOX_IMAGE_TYPE,
   WEBM: WEBM_TYPE,
   MP4: MP4_TYPE,
+  ...AUDIO_TYPE,
 } as const;
 
 /** The recordings a transcript plays, by the media type each is kept under. */
@@ -68,6 +74,9 @@ const VIDEO_TYPES: ReadonlySet<string> = new Set([
   CONVERSATION_MEDIA_TYPE.WEBM,
   CONVERSATION_MEDIA_TYPE.MP4,
 ]);
+
+/** The sound clips a transcript plays, by the media type each is kept under. */
+const AUDIO_TYPES: ReadonlySet<string> = new Set(Object.values(AUDIO_TYPE));
 
 export type ConversationMediaType =
   (typeof CONVERSATION_MEDIA_TYPE)[keyof typeof CONVERSATION_MEDIA_TYPE];
@@ -84,7 +93,25 @@ export function isVideoType(
   return VIDEO_TYPES.has(mediaType);
 }
 
-/** A kept picture as a stored output names it: the row, the type its bytes were sniffed to be, its size in pixels, and its size in bytes. */
+/**
+ * Whether a transcript's or a thread's media is played rather than drawn, a
+ * recording or a sound clip, which is never handed to a model as an image.
+ */
+export function isPlayedType(
+  mediaType: string,
+): mediaType is
+  | typeof CONVERSATION_MEDIA_TYPE.WEBM
+  | typeof CONVERSATION_MEDIA_TYPE.MP4
+  | AudioType {
+  return isVideoType(mediaType) || isAudioType(mediaType);
+}
+
+/** Whether a transcript's or a thread's media is a sound clip, played rather than drawn, and never handed to a model. */
+export function isAudioType(mediaType: string): mediaType is AudioType {
+  return AUDIO_TYPES.has(mediaType);
+}
+
+/** A kept picture as a stored output names it: the row, the type its bytes were sniffed to be, its size in pixels (zero by zero for a sound clip, which has none), and its size in bytes. */
 export const keptPictureSchema = EffectSchema.Struct({
   id: EffectSchema.String,
   mediaType: conversationMediaTypeSchema,

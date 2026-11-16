@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { VOICE_SPEAKER, type VoiceSpeaker } from "@repo/features/agent-wire";
 import { type AutomationFiring, FIRING_HANDS_OUTSIDE_WORDS } from "@repo/features/automation-wire";
+import type { CheckoutRestoreSnapshot } from "@repo/features/checkout-restore";
 import {
   RUN_EVENT,
   RUN_STATUS,
@@ -121,7 +122,6 @@ import {
   requeueUntaken,
   startTurn,
   stopTurn,
-  type TurnCheckoutSnapshot,
 } from "./turn-state.js";
 
 /**
@@ -460,7 +460,7 @@ interface AwaitingLineWrite {
  * session's event whose words it took last, which the call's next holder
  * resumes after.
  */
-export interface VoiceLineWrite {
+interface VoiceLineWrite {
   readonly key: string;
   readonly callId: string;
   readonly speaker: VoiceSpeaker;
@@ -539,13 +539,13 @@ type LostLinesResent = Result.Result<
  * client id of the row it was written under, which the runner was handed
  * with the line.
  */
-/** The line a turn took, by its words or its client id, with the checkout as the runner recorded it before the turn where the line opened one (`turn-state.ts`'s `TurnCheckoutSnapshot`). */
+/** The line a turn took, by its words or its client id, with the checkout as the runner recorded it before the turn where the line opened one (`@repo/features/checkout-restore`'s `CheckoutRestoreSnapshot`). */
 type AwaitingLineTake =
   | { readonly text: string; readonly turnId: string }
   | {
       readonly clientId: string;
       readonly turnId: string;
-      readonly snapshot?: TurnCheckoutSnapshot | undefined;
+      readonly snapshot?: CheckoutRestoreSnapshot | undefined;
     };
 
 /**
@@ -1585,6 +1585,15 @@ const turnStarted = /* @__PURE__ */ Effect.fnUntraced(function* (
   return Result.succeed(started ? STORE_WRITE_EFFECT.WRITTEN : STORE_WRITE_EFFECT.REPEATED);
 });
 
+/**
+ * A journal still open as its turn ends belongs to a turn that answered
+ * nothing. A brain's keeps what it did, and the words its steps formed leave
+ * it, because a new session's seed reads them as said and the voice could
+ * speak them. A coding agent's keeps its words as well, because they are the
+ * partial work its tab shows and a Continue or a Fork replays. One the
+ * answer already closed is revised in place, because a reader may have taken
+ * it before the row settled, and what the row now says of it travels with it.
+ */
 const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
   context: WriterContext,
   event: Extract<RunEvent, { kind: typeof RUN_EVENT.TURN_ENDED }>,
@@ -1654,14 +1663,7 @@ const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
     });
   }
 
-  // A journal still open here belongs to a turn that answered nothing. A
-  // brain's keeps what it did and the words its steps formed leave it,
-  // because a new session's seed reads them as said and the voice could
-  // speak them. A coding agent's keeps its words as well, because they are
-  // the partial work its tab shows and a Continue or a Fork replays. One
-  // the answer already closed is revised in place, because a reader may
-  // have taken it before the row settled, and what the row now says of it
-  // travels with it.
+  // The turn's journal is closed as unanswered, or revised where the answer already closed it.
   const open = yield* journalRow(context, event.turnId);
 
   if (Option.isSome(open) && open.value.finishedAt !== null) {

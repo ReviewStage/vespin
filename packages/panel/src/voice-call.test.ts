@@ -32,6 +32,7 @@ class FakeChannel {
   readyState: RTCDataChannelState = "connecting";
   readonly sent: string[] = [];
   onmessage: ((message: { data: string }) => void) | null = null;
+  onopen: (() => void) | null = null;
   onclose: (() => void) | null = null;
   send(data: string) {
     this.sent.push(data);
@@ -43,6 +44,7 @@ class FakeChannel {
   /** The channel opening and the session saying it started, as GPT-Live does once the peer connects. */
   started() {
     this.readyState = "open";
+    this.onopen?.();
     this.onmessage?.({ data: JSON.stringify({ type: "session.started" }) });
   }
   /** What the call told the session, each event as it was sent. */
@@ -85,8 +87,8 @@ class FakePeer {
   }
 }
 
-/** The microphone's one track, whose light a stop puts out. */
-const microphone = { stopped: false };
+/** The microphone's one track, whose light a stop puts out, and whether it sounds. */
+const microphone = { stopped: false, enabled: true };
 
 /** What the call asked the service to open. */
 let opened: unknown[];
@@ -136,10 +138,14 @@ beforeEach(() => {
   FakePeer.made = [];
   opened = [];
   microphone.stopped = false;
+  microphone.enabled = true;
 
   const track = {
     stop: () => {
       microphone.stopped = true;
+    },
+    set enabled(on: boolean) {
+      microphone.enabled = on;
     },
   };
 
@@ -208,6 +214,25 @@ test("muting the microphone tells the session, and muting the speaker tells it n
   assert.equal(call.call?.speakerMuted, true);
 });
 
+test("a mute pressed while the call connects is told to the session once it starts", async () => {
+  await mounted();
+  const peer = await called();
+
+  act(() => call.setMicrophoneMuted(true));
+  assert.equal(call.call?.microphoneMuted, true);
+  assert.deepEqual(peer.channel.told(), []);
+  assert.equal(
+    microphone.enabled,
+    false,
+    "the track sends nothing before the session hears the mute",
+  );
+
+  act(() => peer.channel.started());
+
+  assert.deepEqual(peer.channel.told(), [said("session.input_audio.mute")]);
+  assert.equal(call.call?.microphoneMuted, true);
+});
+
 test("a call refused for want of an OpenAI key says to add one and lets the microphone go", async () => {
   fakeActPort({
     [ACT_KIND.VOICE_OPEN]: () =>
@@ -220,6 +245,28 @@ test("a call refused for want of an OpenAI key says to add one and lets the micr
   assert.ok(peer.closed, "the peer is dropped");
   assert.ok(microphone.stopped, "the microphone is let go");
   assert.ok(document.body.textContent?.includes(OPENAI_KEY_MISSING_NOTE));
+});
+
+test("a call ended while the service answers closes the session it answers with, once its channel opens", async () => {
+  let answer: (sdp: { callId: string; sdp: string }) => void = () => undefined;
+  fakeActPort({
+    [ACT_KIND.VOICE_OPEN]: () =>
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+  });
+  await mounted();
+  const peer = await called();
+
+  act(() => call.end());
+  assert.equal(call.call, undefined);
+  answer({ callId: CALL_ID, sdp: "v=0 answer" });
+  await settleQueries();
+  act(() => peer.channel.started());
+
+  assert.deepEqual(peer.channel.told(), [said("session.close")]);
+  assert.ok(peer.closed, "the peer is dropped once its channel closes");
+  assert.ok(microphone.stopped, "the microphone is let go");
 });
 
 test("the session closing from its side ends the call", async () => {

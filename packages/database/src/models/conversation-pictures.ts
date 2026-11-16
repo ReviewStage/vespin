@@ -23,7 +23,7 @@ import type { ConversationTarget } from "./writer.js";
  * conversation-pictures.ts -- the pictures a conversation's tools answered, kept once each beside the transcript that names them.
  *
  * A tool hands each picture in as it settles the call that answered it
- * (`show-image.ts`, `browser-tool.ts`), already sniffed and measured, and
+ * (`show-media.ts`, `browser-tool.ts`), already sniffed and measured, and
  * writes the id this answers into the stored output in the bytes' place.
  * A picture is keyed by the hash of its bytes within its conversation, so
  * handing the same one in again answers the row already kept, and a call

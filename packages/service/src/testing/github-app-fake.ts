@@ -32,6 +32,7 @@ import {
   GitHubApp,
   type GitHubAppSettings,
   GitHubAppThrottle,
+  type GitHubBearer,
 } from "../github/github-app.js";
 import { linkInstallation } from "../github/github-installations.js";
 
@@ -57,6 +58,9 @@ export const GITHUB_APP_SETTINGS: GitHubAppSettings = {
   privateKey: Redacted.make(privateKey.export({ type: "pkcs1", format: "pem" }).toString()),
   sessionSecret: Redacted.make(GITHUB_FIXTURE.SESSION_SECRET),
 };
+
+/** The schemes GitHub takes a token under, in any case (https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api). */
+const TOKEN_SCHEME = /^(?:token|bearer) /iu;
 
 /** One request as GitHub saw it. */
 export interface SentToGitHub {
@@ -126,6 +130,12 @@ export function fixtureGitHubApp(
 ): Layer.Layer<GitHubApp, never, HttpClient.HttpClient> {
   return GitHubApp.layer(...app).pipe(Layer.provide(Layer.merge(FIXTURE_HOLDS, FIXTURE_THROTTLE)));
 }
+
+/** A token as a test reads on it: the App's `@repo/github` client for it, over the fake GitHub the test stands. */
+export const fixtureBearer = (
+  token: Redacted.Redacted,
+): Effect.Effect<GitHubBearer, never, GitHubApp> =>
+  Effect.flatMap(GitHubApp, (app) => Effect.orDie(app.memberBearer(token)));
 
 /** The App over the fixture settings, which is what every fake stands unless a test hands another. */
 const GITHUB_APP_LAYER = fixtureGitHubApp(GITHUB_APP_SETTINGS);
@@ -209,10 +219,20 @@ export function fakeGitHub(
   let clock: Clock.Clock | undefined;
 
   const respond = async (url: string, init: RequestInit) => {
+    const headers = new Headers(init.headers);
+    const authorization = headers.get("authorization");
+
+    // Note that GitHub takes a token under `token` and `Bearer` alike, in any case, and Octokit sends `token`, or `bearer` for the App's JWT, so the fake records it under the one scheme its scripts read.
+    const scheme = authorization === null ? null : TOKEN_SCHEME.exec(authorization);
+
+    if (authorization !== null && scheme !== null) {
+      headers.set("authorization", `Bearer ${authorization.slice(scheme[0].length)}`);
+    }
+
     const request: SentToGitHub = {
       url,
       method: init.method ?? "GET",
-      headers: new Headers(init.headers),
+      headers,
       body: init.body === undefined ? "" : await new Response(init.body).text(),
       ...(init.signal && { signal: init.signal }),
       at: clock?.currentTimeMillisUnsafe() ?? Date.now(),
@@ -320,6 +340,32 @@ function sliceOf<A>(items: readonly A[], url: string): readonly A[] {
   return items.slice((page - 1) * perPage, page * perPage);
 }
 
+/** The answer's init for a page of a listing that has a next one, as GitHub links it from the page asked at `url`. */
+export function nextPageOf(url: string): ResponseInit {
+  const next = new URL(url);
+  next.searchParams.set("page", String(pageOf(url).page + 1));
+
+  return { headers: { link: `<${next.toString()}>; rel="next"` } };
+}
+
+/** A page of a listing that wraps its items, as far as how many the listing holds. */
+interface ListingPage {
+  readonly total_count: number;
+}
+
+/**
+ * A page of a listing as GitHub answers it: the body, with a `link` header
+ * naming the next page where one follows
+ * (https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api).
+ */
+function pagedJson<Page extends ListingPage>(body: Page, url: string): Response {
+  const { page, perPage } = pageOf(url);
+
+  return page * perPage >= body.total_count
+    ? Response.json(body)
+    : Response.json(body, nextPageOf(url));
+}
+
 const INSTALLATION = /^\/app\/installations\/(\d+)$/u;
 const INSTALLATION_ACCESS_TOKENS = /^\/app\/installations\/(\d+)\/access_tokens$/u;
 const APP_TOKEN = /^\/applications\/[^/]+\/token$/u;
@@ -381,12 +427,12 @@ export function githubReaching(
 
   return fakeGitHub(async (sent) => {
     if (sent.url === TOKEN_ENDPOINT) {
-      const asked = new URLSearchParams(sent.body);
+      const asked: { readonly code?: string } = JSON.parse(sent.body);
 
       // Note that only the web flow's exchange is answered: a refresh finds GitHub unavailable.
-      if (!asked.has("code")) return new Response(null, { status: 503 });
+      if (asked.code === undefined) return new Response(null, { status: 503 });
 
-      return asked.get("code") === GITHUB_FIXTURE_REFUSED_CODE
+      return asked.code === GITHUB_FIXTURE_REFUSED_CODE
         ? Response.json({ error: "bad_verification_code" })
         : Response.json({
             access_token: GITHUB_FIXTURE_AUTHORIZED_TOKEN,
@@ -474,10 +520,13 @@ export function githubReaching(
     }
 
     if (pathname === "/user/installations") {
-      return Response.json({
-        total_count: installations.length,
-        installations: sliceOf(installations, sent.url).map(installationJson),
-      });
+      return pagedJson(
+        {
+          total_count: installations.length,
+          installations: sliceOf(installations, sent.url).map(installationJson),
+        },
+        sent.url,
+      );
     }
 
     if (pathname === "/installation/repositories") {
@@ -491,11 +540,14 @@ export function githubReaching(
         return Response.json({ message: "Bad credentials" }, { status: 401 });
       }
 
-      return Response.json({
-        total_count: installation.repositories.length,
-        repository_selection: GITHUB_REPOSITORY_SELECTION.SELECTED,
-        repositories: sliceOf(installation.repositories, sent.url).map(repositoryJson),
-      });
+      return pagedJson(
+        {
+          total_count: installation.repositories.length,
+          repository_selection: GITHUB_REPOSITORY_SELECTION.SELECTED,
+          repositories: sliceOf(installation.repositories, sent.url).map(repositoryJson),
+        },
+        sent.url,
+      );
     }
 
     return notFound();

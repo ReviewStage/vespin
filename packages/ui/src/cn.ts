@@ -295,7 +295,6 @@ const CHIPS_MEDIA = {
     "attachment-chip-remove",
     "attachment-chip-remove-out",
     "attachment-chip-thumb",
-    "call-row",
     "icon-12",
     "icon-16",
     "page-thumb-row",

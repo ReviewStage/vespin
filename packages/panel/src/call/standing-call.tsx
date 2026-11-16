@@ -7,14 +7,16 @@
  * call's agent, in the window's bottom-left corner while the sidebar is
  * folded, and alone in the floating window while no window of the app has
  * the keyboard. The window's root reads the call once (`StandingCallProvider`):
- * its task's name, its agent's line from the agent's live transcript, and
- * its mutes, which every dock below draws, and which the shell tells the
+ * its agent's name and harness, its task's name, its agent's line from the
+ * agent's live transcript, and its mutes, which every dock below draws, and which the shell tells the
  * Mac (`AppPlatform.voiceCall`). A press on the floating card comes back as
  * a push and is answered here as a press on the window's own card.
  */
 
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
+import { callAgentLine } from "@repo/features/call-agent-line";
+import { agentName, providerOf } from "@repo/features/model-label";
 import { type StandingCall, VOICE_BOUNDS, VOICE_CALL_PRESS } from "@repo/features/voice-wire";
 import { CallCard, type CallCardSurface } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
@@ -31,13 +33,12 @@ import {
 import { appBridge } from "../app-bridge.js";
 import { appPlatform } from "../app-platform.js";
 import { transcriptQuery } from "../live-reads.js";
-import { appStateQuery, selectListedTasks } from "../use-app-state.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { useVoiceCall } from "../voice-call.js";
-import { callAgentLine } from "./call-agent-line.js";
 import { type CallCardOf, type CallCardPresses, callCardOf } from "./call-card-of.js";
 
-/** The card's name while neither the call's task nor its agent is listed. */
-const UNNAMED_CALL = "Call";
+/** The agent's name while it is not listed. */
+const UNNAMED_AGENT = "Agent";
 
 const NO_MESSAGES: readonly AgentTranscriptMessage[] = [];
 
@@ -60,18 +61,21 @@ function bounded(words: string): string {
   return words.slice(0, VOICE_BOUNDS.MAX_CARD_CHARS);
 }
 
-/** The call's name and its agent's status, as the task list holds them. */
+/** The call's agent by name and harness, its status, and its task's name, as the task list holds them, read by id from its collections so only those two rows draw the card again. */
 function useListedFacts(taskId: string | undefined, agentId: string | undefined) {
-  return useQuery({
-    ...appStateQuery,
-    select: (state) => {
-      const tasks = selectListedTasks(state);
-      const task = tasks.tasks.find((each) => each.id === taskId);
-      const agent = tasks.taskAgents?.find((each) => each.id === agentId);
+  const collections = useTaskListCollections();
+  const task = useTaskListRow(collections.tasks, taskId);
+  const agent = useTaskListRow(collections.agents, agentId);
 
-      return { name: task?.name ?? agent?.title ?? UNNAMED_CALL, status: agent?.status };
-    },
-  }).data;
+  return useMemo(
+    () => ({
+      agentName: agent === undefined ? UNNAMED_AGENT : agentName(agent),
+      provider: agent === undefined ? undefined : providerOf(agent.model),
+      taskName: task?.name,
+      status: agent?.status,
+    }),
+    [task, agent],
+  );
 }
 
 /**
@@ -105,17 +109,21 @@ export function StandingCallProvider({
   const standing = useMemo<StandingCall | null>(() => {
     if (call === undefined) return null;
     const agent = working ? { agent: action === undefined ? {} : { action: bounded(action) } } : {};
+    const provider = facts?.provider === undefined ? {} : { provider: facts.provider };
+    const taskName = facts?.taskName === undefined ? {} : { taskName: bounded(facts.taskName) };
 
     return {
       agentId: call.agentId,
       taskId: call.taskId,
-      name: bounded(facts?.name ?? UNNAMED_CALL),
+      agentName: bounded(facts?.agentName ?? UNNAMED_AGENT),
+      ...provider,
+      ...taskName,
       stage: call.stage,
       microphoneMuted: call.microphoneMuted,
       speakerMuted: call.speakerMuted,
       ...agent,
     };
-  }, [call, facts?.name, working, action]);
+  }, [call, facts?.agentName, facts?.provider, facts?.taskName, working, action]);
 
   useEffect(() => appPlatform().voiceCall?.(standing), [standing]);
 
@@ -148,8 +156,12 @@ export function StandingCallProvider({
     () =>
       standing === null
         ? undefined
-        : { agentId: standing.agentId, card: callCardOf(standing, presses) },
-    [standing, presses],
+        : {
+            agentId: standing.agentId,
+            // Note that the window's own card rings its mutes, while the floating window's, which holds no audio, stands still.
+            card: { ...callCardOf(standing, presses), levels: voice.levels },
+          },
+    [standing, presses, voice.levels],
   );
 
   return <StandingCardContext.Provider value={value}>{children}</StandingCardContext.Provider>;
@@ -158,8 +170,9 @@ export function StandingCallProvider({
 /**
  * The window's card, docked here while `docked` and the window is not on
  * the call's agent, and kept through its slide out once it is not, from the
- * last card it drew, until that slide has ended. Its name is the task's, a
- * person's words, so it is masked in a recording whatever stands around it.
+ * last card it drew, until that slide has ended. Its names are the agent's
+ * and the task's, a person's words, so it is masked in a recording whatever
+ * stands around it.
  */
 export function CallCardDock({
   docked,

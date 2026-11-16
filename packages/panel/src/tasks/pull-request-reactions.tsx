@@ -356,7 +356,7 @@ export function Reactions({
   const writing = useThreadWriting();
   // Note that the row draws what GitHub answered itself (`settled`), so a press lets go as GitHub answers rather than waiting on the conversation's read.
   const readAgain = writing?.onWritten ?? noop;
-  const writes = usePullRequestWrites(writing?.agentId ?? "", () => void readAgain());
+  const writes = usePullRequestWrites(() => void readAgain());
   // Note that the row's change is its own, so which reaction it is on is held here beside it.
   const [pressed, setPressed] = useState<Reaction | undefined>(undefined);
   const [settled, setSettled] = useState<Settled | undefined>(undefined);

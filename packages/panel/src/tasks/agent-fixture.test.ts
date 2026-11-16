@@ -11,6 +11,7 @@ import {
   type PortActPayload,
   type PortActResult,
 } from "@repo/host/contract";
+import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { Effect, Result, Schema } from "effect";
 import { onTestFinished } from "vitest";
 import { askAct } from "../act.js";
@@ -45,17 +46,20 @@ function read<Kind extends PortActKind>(kind: Kind, payload: PortActPayload<Kind
 
 const AGENT = { agentId: FIXTURE_AGENT_ID };
 
+/** The agent's pull request, as its tab names it, read through the fixture task's workspace. */
+const PULL_REQUEST = { workspaceId: FIXTURE_IDS.WORKSPACE, repository: "ada/relay", number: 214 };
+
 /** The reads the agent's column and its side panel's tabs ask that answer once, each a value the contract encodes. */
 const READS: readonly Read[] = [
   read(ACT_KIND.AGENTS_LIST, { taskId: FIXTURE_TASK_ID, includeArchived: true }),
-  read(ACT_KIND.AGENTS_CHANGES, AGENT),
+  read(ACT_KIND.PULL_REQUESTS_CHANGES, PULL_REQUEST),
   read(ACT_KIND.TASKS_FILE, {
     taskId: FIXTURE_TASK_ID,
     path: "src/members/invite.ts",
     firstLine: 1,
     lastLine: 200,
   }),
-  read(ACT_KIND.TASKS_TREE, { planId: FIXTURE_TASK_ID, path: "src/members" }),
+  read(ACT_KIND.TASKS_TREE, { taskId: FIXTURE_TASK_ID, path: "src/members" }),
   read(ACT_KIND.TERMINAL_CREATE, AGENT),
 ];
 
@@ -122,7 +126,7 @@ function hunkCounts(patch: string): readonly { readonly said: string; readonly h
 }
 
 it("every changed file's patch counts the lines its hunks hold, as the diff view reads it", () => {
-  const changes = answered(RUN_PROFILE.AGENT_FILES, ACT_KIND.AGENTS_CHANGES, AGENT);
+  const changes = answered(RUN_PROFILE.AGENT_FILES, ACT_KIND.PULL_REQUESTS_CHANGES, PULL_REQUEST);
   assert.ok("pullRequest" in changes && changes.pullRequest !== null);
 
   const miscounted = changes.pullRequest.files.flatMap((file) =>
@@ -137,7 +141,7 @@ it("every changed file's patch counts the lines its hunks hold, as the diff view
 /** Every file path the File tab's tree lists under `path`, walking its folders. */
 function listedFiles(path: string): readonly string[] {
   const listed = answered(RUN_PROFILE.AGENT_FILE, ACT_KIND.TASKS_TREE, {
-    planId: FIXTURE_TASK_ID,
+    taskId: FIXTURE_TASK_ID,
     path,
   });
 
@@ -151,7 +155,7 @@ function listedFiles(path: string): readonly string[] {
 }
 
 it("every file the File tab's tree lists, and every file the pull request changed, reads whole on the agent's branch", () => {
-  const changes = answered(RUN_PROFILE.AGENT_FILES, ACT_KIND.AGENTS_CHANGES, AGENT);
+  const changes = answered(RUN_PROFILE.AGENT_FILES, ACT_KIND.PULL_REQUESTS_CHANGES, PULL_REQUEST);
   assert.ok("pullRequest" in changes && changes.pullRequest !== null);
   const listed = listedFiles("");
 

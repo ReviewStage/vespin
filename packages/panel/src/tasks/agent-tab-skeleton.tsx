@@ -1,5 +1,7 @@
+import { BOOT_WORDS } from "@repo/features/agent-boot-words";
 import { readingWords } from "@repo/features/words";
 import { ComposerFoot, Skeleton, SkeletonRegion } from "@repo/ui";
+import { ConversationLead } from "../ai-elements/conversation.js";
 import { Message, MessageContent } from "../ai-elements/message.js";
 import { PromptInputCard } from "../ai-elements/prompt-input.js";
 import { BUTTON, ComposerCard, PLACEHOLDER } from "./agent-composer.js";
@@ -7,6 +9,7 @@ import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { ATTACH_FILES, AttachFilesButton } from "./attach-files-button.js";
 import { ComposerFieldRoom, ComposerPlaceholder, UnloadedComposerField } from "./composer-field.js";
 import { ComposerActions, ComposerAttach } from "./message-box.js";
+import { WorkingLine } from "./working-time.js";
 
 /**
  * agent-tab-skeleton.tsx -- an agent's tab in the shape it lands in, while what it draws is on its way.
@@ -25,7 +28,10 @@ import { ComposerActions, ComposerAttach } from "./message-box.js";
  * platform alike. The task's page stands its column as this too while the
  * task itself is read (`desktop-tasks.tsx`), so a task opened on an agent
  * shows one placeholder from the open to the transcript, never a chain of
- * them.
+ * them. A Start still under way has no transcript to stand in for, so its
+ * log says only that the agent is starting, at its top where the agent's
+ * tab goes on saying how its machine boots (`AgentBootLine`), rather than
+ * an exchange that never took place.
  */
 
 /** What the log's placeholder says to a reader. */
@@ -113,11 +119,34 @@ function ComposerSkeleton(): React.JSX.Element {
   );
 }
 
-/** A whole agent's tab before it can be drawn: the log's last exchange over the composer, which `label` names to a reader. */
-export function AgentTabSkeleton({ label }: { label?: string | undefined }): React.JSX.Element {
+/**
+ * The log of an agent whose Start is still under way: no transcript, only
+ * the working line at its top, uncounted, in the words the agent's tab says
+ * while it cannot yet name where the machine boots.
+ */
+function StartingLog(): React.JSX.Element {
+  return (
+    <ConversationLead>
+      <WorkingLine startedAt={undefined} words={BOOT_WORDS.STARTING} />
+    </ConversationLead>
+  );
+}
+
+/**
+ * A whole agent's tab before it can be drawn: the log's last exchange over
+ * the composer, which `label` names to a reader, or, while the agent's
+ * Start is still under way (`starting`), the log saying it starts.
+ */
+export function AgentTabSkeleton({
+  label,
+  starting = false,
+}: {
+  label?: string | undefined;
+  starting?: boolean;
+}): React.JSX.Element {
   return (
     <AgentTabFrame>
-      <TranscriptSkeleton label={label} />
+      {starting ? <StartingLog /> : <TranscriptSkeleton label={label} />}
       <AgentTabFoot>
         <ComposerSkeleton />
       </AgentTabFoot>

@@ -200,8 +200,8 @@ const RUNS: ReadonlyMap<string, readonly AutomationRunSummary[]> = new Map([
 /** The three automations of a workspace, newest first, as its list reads them. */
 function automations(workspaceId: string): readonly AutomationSummary[] {
   const common = {
-    planId: null,
-    planName: null,
+    taskId: null,
+    taskName: null,
     workspaceId,
     enabled: true,
     pausedReason: null,

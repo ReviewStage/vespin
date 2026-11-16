@@ -1358,7 +1358,7 @@ The agent is offered Vespin's own tools on Vespin's MCP server
 runner's bearer, minted at each launch and kept on the agent's row only as
 its hash (`workspace-mcp/bearer.ts`), and runs each call as the agent's starter
 through the shared doors (`src/agents/coder-host/agent-doors.ts`): Claude
-Code sees them as `mcp__workspace__<tool>`, Codex as the `workspace` server. Its shell,
+Code sees them as `mcp__team__<tool>`, Codex as the `team` server. Its shell,
 files, search, and page reads are the harness's own. Among Vespin's tools,
 `edit_description` (`src/agents/coder-host/description-edit.ts`) takes notes
 (`@repo/features/description-notes`'s `descriptionNotesSchema`)
@@ -2001,7 +2001,7 @@ its conversation stays its starter's, the row's `userId`, under which its
 turns and lines are read and written, and its Start's retry key stays the
 starter's own; `packages/features/src/agent-wire.ts`
 declares every request and answer, and `service-paths.ts` the addresses.
-`POST /api/plans/{id}/agents` takes `{ idempotencyKey, model?, effort?, task? }`:
+`POST /api/tasks/{id}/agents` takes `{ idempotencyKey, model?, effort?, task? }`:
 both of the choice or neither, the account's default (`/api/account/preferences`)
 where neither, checked against the catalog with `acceptedModelChoice`, which
 also refuses a stored default that has since left the catalog. On a task
@@ -2053,7 +2053,7 @@ agent, any member's, absent for the cloud or a task with none. The task's own
 `machine` and `device_id` columns are no longer read or written, and a later
 migration drops them.
 
-`GET /api/plans/{id}/agents` answers each agent's id, model, effort, start
+`GET /api/tasks/{id}/agents` answers each agent's id, model, effort, start
 instant, status, `brief` (`plan` or `task`, what it was handed first, so its
 tab draws a description as the description's card and a prompt as the developer's message),
 and `turnId`, the newest turn the status is read from
@@ -2283,14 +2283,14 @@ account's personal automation, or one in a workspace the account left, is
 
 - `GET /api/automations` answers the automations the account may read
   newest first, or one workspace's under `?workspaceId=`, each with its
-  newest run, and `[]` under `?planId=`, kept for the released desktops
+  newest run, and `[]` under `?taskId=`, kept for the released desktops
   that still send it;
   `POST /api/automations` makes one (`201`) in the workspace its
   `workspaceId` names, on its `repositories`, each reached through the
   workspace's installation (`standingOf`). A schedule that does not
   read (five-field cron, a known zone, no more often than every fifteen
   minutes), a model the catalog does not offer the account, a key the
-  frame does not name, a `planId`, no workspace or no repositories, or the
+  frame does not name, a `taskId`, no workspace or no repositories, or the
   `workspace` scope in the account's personal workspace is
   `invalid-request`, a workspace the account is not in is `not-found`, and
   a GitHub trigger with no repository is `no-repository`
@@ -2383,21 +2383,21 @@ fire.
 ## The tasks group
 
 `src/tasks/tasks-procedures.ts`, on the hosted oRPC router, is the Mac's Tasks tab's
-route group over the account's named tasks (`docs/TASKS.md`): `GET /api/plans` lists them, newest
+route group over the account's named tasks (`docs/TASKS.md`): `GET /api/tasks` lists them, newest
 started first and the archived ones left out unless `?archived=include` asks
-for them, so a build from before archiving never draws one, `POST /api/plans`
+for them, so a build from before archiving never draws one, `POST /api/tasks`
 starts one with its name, the untouched
 template as its document, and the repository it is about where one is
 chosen, in the workspace its `workspaceId` names, which the account must be
 a member of (`isWorkspaceMember`; one it is not in answers `not-found`), or
 in the account's first workspace, ensured first, where it names none,
-`GET /api/plans/{id}` opens one with its saved document,
+`GET /api/tasks/{id}` opens one with its saved document,
 `GET /api/workspaces/{workspace}/tasks/{number}` answers the id of the one a
 link names by its number in its workspace, by slug or id, the number it
 held before a move still finding it (`task_number_forward`), and
 `not-found` for a workspace the account is no member of, a number naming no
 task, or a task it does not reach,
-`PATCH /api/plans/{id}` changes its name, its repository, whether it is
+`PATCH /api/tasks/{id}` changes its name, its repository, whether it is
 pinned, whether it is archived, the workspace it belongs to, or several at
 once, an archive a stamp on the row (`archived_at`) and a pin the
 account's own row of `plan_pin`, so one member's pin of a shared task is
@@ -2408,7 +2408,7 @@ teammate), into a workspace they are a member of (`not-found` otherwise)
 whose installation reaches the task's repository, refused as a repository
 change would be otherwise, and its agents go with it, its number in the
 workspace it left kept for the links written with it, and
-`DELETE /api/plans/{id}` stops each of its agents for good, then deletes
+`DELETE /api/tasks/{id}` stops each of its agents for good, then deletes
 it, its agents' rows going with it and their conversations deleted with them
 (`deleteTask`), or answers `agent-not-ready` where an agent started
 meanwhile,
@@ -2438,7 +2438,7 @@ unpins one and answers them all as they then stand. A pin is a row of
 (`packages/database/src/models/repository-pin-store.ts`), stamped the first time it is made,
 deleted when it is undone, bounded at fifty an account, and gone with the
 account. It names the repository and nothing of it, so it asks GitHub
-nothing. It is a path of its own rather than one under `/api/plans/`, where the
+nothing. It is a path of its own rather than one under `/api/tasks/`, where the
 next segment is a task's id.
 
 `src/accounts/workspaces-procedures.ts`, on the hosted oRPC router, answers
@@ -2490,7 +2490,7 @@ installation, its status, and an account standing for another workspace is
 refused and stays there. `src/accounts/workspaces-app.test.ts` holds
 all of it over the plugin on PGlite and a scripted GitHub.
 
-`GET /api/plans/{id}/file?path=&first=&last=` reads a window of one file of
+`GET /api/tasks/{id}/file?path=&first=&last=` reads a window of one file of
 the task's repository for the Mac's File tab (`src/tasks/task-file.ts`),
 at most 500 lines a window. It reads GitHub's contents API at the head of
 the default branch, not an agent's checkout, or with `ref=` at that commit, a whole 40-character
@@ -2511,16 +2511,16 @@ reaches the route because the grouped function's dispatcher reads its own
 path override from `route-path` (`apps/web/server/function-dispatch.ts`): it once
 read `path`, and every File tab read was answered 404.
 
-`GET /api/plans/{id}/revisions` reads the description's history for the Mac's
+`GET /api/tasks/{id}/description/revisions` reads the description's history for the Mac's
 version history (`packages/database/src/models/description-revisions.ts`): fifty revisions a page,
 newest first, each its writer as the "Edited by" line names it, when it
 began and last moved, how many changes it made, and for a restore the
 revision it brought back; `?before=<seq>` reads the page before that
 revision, and the answer names the revision the next older page is read
-before while one stands. `GET /api/plans/{id}/revisions/{seq}` reads one
+before while one stands. `GET /api/tasks/{id}/description/revisions/{seq}` reads one
 revision's content and the content before it, null for the first, each
 formatted under the task's name as it stands now, so a rename since is no
-difference between them. `POST /api/plans/{id}/revisions/{seq}/restore`
+difference between them. `POST /api/tasks/{id}/description/revisions/{seq}/restore`
 puts that revision's text back through the description's one
 locked save (`src/tasks/description-notes.ts`'s `restoreRevision`), kept as a
 revision of the developer's naming the one restored, and answers the description.
@@ -2563,7 +2563,7 @@ for one workspace alone and moving the task there is what reaches the repository
 a task a personal workspace held before #2524 is left that way.
 
 A description's text has one write, `src/tasks/description-notes.ts`, and three
-writers. `POST /api/plans/{id}/edit` takes the developer's edit of the
+writers. `POST /api/tasks/{id}/description` takes the developer's edit of the
 whole text against the base it was made on (`saveDeveloperEdit`), saved
 where the text still holds that base, laid over what others wrote meanwhile
 where it can be, and answered as a conflict with the text as it stands and

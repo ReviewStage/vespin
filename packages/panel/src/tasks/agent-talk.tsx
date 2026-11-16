@@ -19,12 +19,12 @@
  */
 
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { TALK_LABEL } from "@repo/features/voice-call-words";
 import { EXPERIMENT } from "@repo/settings";
 import {
   CallComposerControls,
   CONFIRM_LOSS,
   ConfirmDialog,
-  TALK_LABEL,
   TalkButton,
   useConfirmDialog,
   WaveformIcon,
@@ -109,6 +109,7 @@ export function useAgentTalk(
             muted: call.speakerMuted,
             onPress: () => voice.setSpeakerMuted(!call.speakerMuted),
           }}
+          levels={voice.levels}
           onEnd={voice.end}
         />
       ),

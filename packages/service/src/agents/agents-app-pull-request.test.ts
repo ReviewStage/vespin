@@ -416,8 +416,8 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             return mutation === undefined ? [] : [[mutation, call.variables]];
           }),
           [
-            ["mergePullRequest", { id, method: "SQUASH", head: PUBLISHED.headSha }],
-            ["enablePullRequestAutoMerge", { id, head: PUBLISHED.headSha, method: "REBASE" }],
+            ["mergePullRequest", { id, mergeMethod: "SQUASH", head: PUBLISHED.headSha }],
+            ["enablePullRequestAutoMerge", { id, head: PUBLISHED.headSha, mergeMethod: "REBASE" }],
             ["enablePullRequestAutoMerge", { id, head: PUBLISHED.headSha }],
             ["disablePullRequestAutoMerge", { id }],
             ["dequeuePullRequest", { id }],

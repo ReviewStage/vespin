@@ -1,17 +1,31 @@
 // host-provider.tsx -- the host started as the app mounts, its document followed into the Query client every screen reads.
 
+import type { ListedAgent } from "@repo/features/agent-wire";
+import type { TaskSummary } from "@repo/features/task-wire";
 import type { AppBridge } from "@repo/host/bridge";
 import type { ActPortClient } from "@repo/host/contract";
+import type { TaskListCollections } from "@repo/host/task-list-following";
+import { type Collection, useLiveQuery } from "@tanstack/react-db";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Effect } from "effect";
 import Constants from "expo-constants";
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.js";
 import { HostFailedScreen } from "../screens/host-failed.js";
+import { releaseSplashAfterFrame } from "../splash.js";
 import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
 import {
   launchFixtureProfile,
+  launchMachineAsk,
   launchRefusesWrites,
   launchStubsAuthServer,
   launchUpdateNeeded,
@@ -33,10 +47,11 @@ export const APP_VERSION = Constants.expoConfig?.version ?? UNVERSIONED;
 /** How a screen counts a moment of the panel's surface vocabulary, such as a surface opened, through the host's bridge. */
 export type HostCount = AppBridge["recordSurfaceEvent"];
 
-/** Where the host's start stands: not yet answered, standing with its document in a client, its act port, and its counts, or failed. */
+/** Where the host's start stands: not yet answered, standing with its document in a client and its task list in collections, its act port, and its counts, or failed. */
 type Standing =
   | {
       readonly client: QueryClient;
+      readonly taskList: TaskListCollections;
       readonly acts: ActPortClient;
       readonly follow: HostFollow;
       readonly count: HostCount;
@@ -51,6 +66,9 @@ const HostFollows = createContext<HostFollow | undefined>(undefined);
 
 /** The counts a screen sends through the host, once it stands. */
 const HostCounts = createContext<HostCount | undefined>(undefined);
+
+/** The task list's collections, fed from the document the client holds, once the host stands. */
+const TaskListCollectionsContext = createContext<TaskListCollections | undefined>(undefined);
 
 /** The host's act port, for a screen drawn under `HostProvider`. */
 export function useHostActs(): ActPortClient {
@@ -79,6 +97,78 @@ export function useHostCount(): HostCount {
   return count;
 }
 
+/** The task list's collections, for a live query over its tasks or agents, for a screen drawn under `HostProvider`. */
+export function useTaskListCollections(): TaskListCollections {
+  const collections = useContext(TaskListCollectionsContext);
+
+  if (collections === undefined) {
+    throw new Error("A screen read the task list outside the host's provider.");
+  }
+
+  return collections;
+}
+
+/** Nothing to listen for: what a read with no key subscribes with. */
+const LISTEN_TO_NOTHING = (): (() => void) => () => {};
+
+/**
+ * The row `key` names in one of the task list's collections (`.get(key)`),
+ * drawn again only when that row moves, and the same object until it does;
+ * none where the collection holds no such row, or no key is given.
+ */
+export function useTaskListRow<Row extends object>(
+  collection: Collection<Row, string>,
+  key: string | undefined,
+): Row | undefined {
+  const subscribe = useCallback(
+    (heard: () => void) => {
+      if (key === undefined) return LISTEN_TO_NOTHING();
+
+      const subscription = collection.subscribeChanges((changes) => {
+        if (changes.some((change) => change.key === key)) heard();
+      });
+
+      return () => subscription.unsubscribe();
+    },
+    [collection, key],
+  );
+
+  return useSyncExternalStore(subscribe, () =>
+    key === undefined ? undefined : collection.get(key),
+  );
+}
+
+/** Every row of one of the task list's pull-request collections, in no order, as one live query, drawn again only when one of them moves. */
+export function useTaskListRows<Row extends object>(
+  collection: Collection<Row, string>,
+): readonly Row[] {
+  return useLiveQuery((q) => q.from({ row: collection })).data;
+}
+
+/** The task list's tasks newest started first, as the document lists them, as one live query, drawn again only when one of them moves. */
+export function useListedTasks(): readonly TaskSummary[] {
+  const { tasks } = useTaskListCollections();
+
+  return useLiveQuery((q) =>
+    q
+      .from({ task: tasks })
+      .orderBy(({ task }) => task.createdAt, "desc")
+      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" }),
+  ).data;
+}
+
+/** The task list's agents, the archived among them, first started first, as the document lists them, as one live query, drawn again only when one of them moves. */
+export function useListedAgents(): readonly ListedAgent[] {
+  const { agents } = useTaskListCollections();
+
+  return useLiveQuery((q) =>
+    q
+      .from({ agent: agents })
+      .orderBy(({ agent }) => agent.createdAt)
+      .orderBy(({ agent }) => agent.id, { stringSort: "lexical" }),
+  ).data;
+}
+
 /**
  * What this launch starts the host on: the device, or, where a flow names
  * the stubbed account service, the device with its sign-in sheet and every
@@ -92,6 +182,7 @@ function launchOptions(): MobileHostStartOptions {
     errorReporting: crashReportsErrorReporting,
     fixture: launchFixtureProfile(),
     fixtureUpdateNeeded: launchUpdateNeeded(),
+    fixtureMachineAsk: launchMachineAsk(),
     fixtureRefusesWrites: launchRefusesWrites(),
     appVersion: APP_VERSION,
     stateRoot: hostStateRoot(),
@@ -113,7 +204,8 @@ function launchOptions(): MobileHostStartOptions {
 /**
  * Starts the host once, follows its document into a Query client of the
  * app's own, and draws the screens once the first reading is in it, so no
- * screen draws an empty document first. A host that cannot stand is said on
+ * screen draws an empty document first; the launch splash stands until then
+ * (`splash.ts`). A host that cannot stand is said on
  * the console, reported to Sentry, and shown in the screens' place with Retry, which starts it
  * again, rather than drawing an empty Inbox over nothing; a host that stands
  * but refuses its first read is said on the console too, and the screens
@@ -148,6 +240,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
         if (live) {
           setStanding({
             client,
+            taskList: following.taskList,
             acts: host.acts,
             follow: host.follow,
             count: host.bridge.recordSurfaceEvent,
@@ -168,6 +261,8 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
       void started?.close();
     };
   }, [attempt]);
+  // Note that the splash stands over the launch until the screens, or the failure in their place, first draw, so no blank screen shows while the host starts.
+  useEffect(() => (standing === undefined ? undefined : releaseSplashAfterFrame()), [standing]);
 
   if (standing === undefined) return null;
 
@@ -179,7 +274,11 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
     <QueryClientProvider client={standing.client}>
       <HostActs.Provider value={standing.acts}>
         <HostFollows.Provider value={standing.follow}>
-          <HostCounts.Provider value={standing.count}>{children}</HostCounts.Provider>
+          <HostCounts.Provider value={standing.count}>
+            <TaskListCollectionsContext.Provider value={standing.taskList}>
+              {children}
+            </TaskListCollectionsContext.Provider>
+          </HostCounts.Provider>
         </HostFollows.Provider>
       </HostActs.Provider>
     </QueryClientProvider>

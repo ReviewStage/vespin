@@ -144,6 +144,14 @@ const REFUSAL_ROWS: Readonly<Record<keyof typeof WORKSPACE_ACTS, RefusalRow>> = 
     refusal: "Could not save that variable on this system.",
     payload: { ...WORKSPACE, name: "API_TOKEN", value: "fixture-value" },
   },
+  WORKSPACE_ENVIRONMENT_SAVE: {
+    refusal: "Could not save those variables on this system.",
+    payload: {
+      ...WORKSPACE,
+      secret: true,
+      variables: [{ name: "API_TOKEN", value: "fixture-value" }],
+    },
+  },
   WORKSPACE_ENVIRONMENT_DELETE: {
     refusal: "Could not delete that variable on this system.",
     payload: { ...WORKSPACE, name: "API_TOKEN" },
@@ -152,8 +160,20 @@ const REFUSAL_ROWS: Readonly<Record<keyof typeof WORKSPACE_ACTS, RefusalRow>> = 
     refusal: "Could not read that workspace's cloud setup on this system.",
     payload: WORKSPACE,
   },
+  WORKSPACE_SANDBOX_SIZE_READ: {
+    refusal: "Could not read that workspace's sandbox size on this system.",
+    payload: WORKSPACE,
+  },
+  WORKSPACE_SANDBOX_SIZE_PUT: {
+    refusal: "Could not save that sandbox size on this system.",
+    payload: { ...WORKSPACE, vcpus: 4 },
+  },
   WORKSPACE_MERGE_QUEUE_READ: {
     refusal: "Could not read that workspace's merge queues on this system.",
+    payload: WORKSPACE,
+  },
+  WORKSPACE_MACHINES_READ: {
+    refusal: "Could not read that workspace's machines on this system.",
     payload: WORKSPACE,
   },
   WORKSPACE_INSTALL_SCRIPT_PUT: {

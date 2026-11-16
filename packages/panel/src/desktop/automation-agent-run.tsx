@@ -126,10 +126,10 @@ export function openRunAgent(
   tasks: Pick<TasksControl, "liveAgents" | "onShowAgent" | "agentView">,
   agentId: string,
 ): void {
-  const planId = tasks.liveAgents?.find((each) => each.id === agentId)?.planId;
+  const taskId = tasks.liveAgents?.find((each) => each.id === agentId)?.taskId;
 
-  if (planId === undefined) tasks.agentView.onOpen(agentId);
-  else tasks.onShowAgent(planId, agentId);
+  if (taskId === undefined) tasks.agentView.onOpen(agentId);
+  else tasks.onShowAgent(taskId, agentId);
 }
 
 /** The agent an automation's run started on its task: the first started of the task's agents a run names, archived ones among them; none on a task no run made. */

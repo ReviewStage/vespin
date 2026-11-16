@@ -1,7 +1,7 @@
 /**
  * sandbox-door.ts -- the door to a native agent's sandbox a tool of our MCP server reads a file through.
  *
- * `post_thread`, `edit_description`, `show_image`, and `show_page` read a
+ * `post_thread`, `edit_description`, `show_media`, and `show_page` read a
  * file the agent names by its path through a door made here, and
  * `look_at_picture` writes a description's PDF in through it, over the
  * agent's machine (`../machine/agent-machine.ts`, the one its row names, a
@@ -79,6 +79,8 @@ export function agentSandboxDoors<R>(
           },
           phoneVideo: async ({ path }: { readonly path: string }) =>
             (await ask((each) => each.phoneVideo(sessionId, path))) ?? null,
+          phoneAudio: async ({ path }: { readonly path: string }) =>
+            (await ask((each) => each.phoneAudio(sessionId, path))) ?? null,
           writeFile: (file: { readonly name: string; readonly contents: Uint8Array }) =>
             ask((each) => each.writeFile(sessionId, file)),
         }),

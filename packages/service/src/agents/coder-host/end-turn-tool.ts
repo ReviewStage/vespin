@@ -17,7 +17,7 @@ import { ACTION_RESULT_STATUS, isRecord, type UnparsedWireValue } from "../../co
 import { type AgentCall, agentToolRejected, callerAgent } from "../agent-tools.js";
 
 /** The bounds a turn's end is held to: the summary's characters, how many follow-ups, and each one's characters. */
-export const END_TURN_BOUNDS = {
+const END_TURN_BOUNDS = {
   SUMMARY_CHARS: 2_000,
   FOLLOW_UPS: 3,
   FOLLOW_UP_CHARS: 120,
@@ -62,7 +62,7 @@ export const END_TURN_TOOL = {
     "so put in it what your last message would have said, briefly. Your follow-ups stand under it as " +
     "a list they tick and send to you with their own words. Ask what you need of them with your " +
     "threads as before; a turn that waits on an answer offers no follow-ups. Calling it again in the " +
-    "same turn replaces the last call. Answers `accepted`, or `rejected` and why.",
+    "same turn replaces the last call.",
   inputSchema: END_TURN_INPUT,
 } as const;
 

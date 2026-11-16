@@ -1,13 +1,13 @@
 /**
- * agent-warm.ts -- which agents a client keeps warm while one stands on screen, and how often it says so, the panel's and the iPhone's alike.
+ * agent-warm.ts -- which agents a client keeps warm while one's chat is shown, and how often it says so, the panel's and the iPhone's alike.
  *
- * The service keeps a cloud agent's sandbox and runner warm for five minutes
- * past its last warm call (`AGENTS_WARM`), so a client calls at once and
- * then every `AGENT_WARM_EVERY_MS` while the agent stands on screen in a
- * window in front: the panel's `use-warm-agent.ts` in a focused window, and
- * the iPhone's agent page in focus while the app is in the foreground.
- * Leaving it stops the calls and sends nothing; the service's window runs
- * out on its own. Nothing here draws or calls.
+ * A shown chat holds a cloud agent's sandbox up as one beat of its window or
+ * device (`AGENTS_WARM`, `@repo/features/agent-wire`'s `AGENT_CHAT`), which
+ * lapses a couple of minutes past its last call, so a client calls at once
+ * and then every `AGENT_WARM_EVERY_MS` while the chat is shown: the panel's
+ * `use-warm-agent.ts` in a visible page, and the iPhone's agent page in
+ * focus while the app is in the foreground. Leaving it says the chat is
+ * hidden at once, which lets go of that hold. Nothing here draws or calls.
  */
 
 import { AGENT_STATUS, type AgentSummary } from "./agent-wire.js";

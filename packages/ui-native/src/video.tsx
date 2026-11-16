@@ -1,7 +1,7 @@
 // video.tsx -- a video a message carried, played in iOS's own player through expo-video, at its message's width.
 
 import { useVideoPlayer, type VideoPlayerStatus, type VideoTrack, VideoView } from "expo-video";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
@@ -35,6 +35,9 @@ function trackAspect(track: VideoTrack | null): number | undefined {
 
   return Math.max(TALLEST_ASPECT, track.size.width / track.size.height);
 }
+
+/** What a playable video is heard to do, as a video in Messages opens: the system's player full screen, whose controls VoiceOver reads there. */
+const OPENS_FULL_SCREEN = "Opens the video full screen";
 
 const styles = StyleSheet.create({
   frame: {
@@ -73,12 +76,15 @@ type VideoProps = {
  * plays, rather than standing as a player that never starts; and one whose
  * bytes are on their way, or that the player still reads, stands the
  * system's spinner in its well, as Photos does, so it never reads as an
- * empty box.
+ * empty box. To VoiceOver, a player that can play is one element, the
+ * video's name, which opens the system's player full screen, where its
+ * controls are read, as a video in Messages is.
  */
 export function Video({ source, label, onOpenElsewhere, tileAspect }: VideoProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
   const player = useVideoPlayer(source ?? null);
+  const view = useRef<VideoView>(null);
   const [status, setStatus] = useState<VideoPlayerStatus>(player.status);
   const [ownAspect, setOwnAspect] = useState(() => trackAspect(player.videoTrack));
   useEffect(() => {
@@ -149,17 +155,24 @@ export function Video({ source, label, onOpenElsewhere, tileAspect }: VideoProps
     );
   }
 
+  // Note that the player stands as one element, its name, which opens it full screen, as a video in Messages does, because the system's inline player nests a dozen views under it, and a thread's video in an iPad's split view stood past the depth XCTest can serialize (Foundation's "Too many nested arrays or dictionaries"), so no flow could read that screen.
   return (
     <HeldMenu acts={acts}>
-      <View style={[styles.frame, tiled]}>
+      <View
+        style={[styles.frame, tiled]}
+        accessible
+        accessibilityLabel={label}
+        accessibilityHint={OPENS_FULL_SCREEN}
+        onAccessibilityTap={() => void view.current?.enterFullscreen()}
+        testID={status === "readyToPlay" ? VIDEO_PLAYER_ID : undefined}
+      >
         <VideoView
+          ref={view}
           player={player}
           nativeControls
           contentFit="contain"
           fullscreenOptions={{ enable: true }}
           allowsPictureInPicture
-          accessibilityLabel={label}
-          testID={status === "readyToPlay" ? VIDEO_PLAYER_ID : undefined}
           style={[StyleSheet.absoluteFill, { backgroundColor: colors.WELL }]}
         />
         {status === "readyToPlay" ? null : (

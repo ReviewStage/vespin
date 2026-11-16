@@ -1,7 +1,12 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { FEEDBACK_KIND, type FeedbackKind } from "@repo/features/feedback";
-import { type AccountLink, LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
+import {
+  type AccountLink,
+  LINK_DESTINATION,
+  type NumberedAddress,
+  type ReadLink,
+} from "@repo/features/link-grammar";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -19,6 +24,8 @@ import { playCompletionSound } from "@repo/ui/completion-sound";
 import { isComposingKey } from "@repo/ui/composing-key";
 import { useLinkOpener } from "@repo/ui/held-link";
 import { LINK_ROUTE, linkRoute } from "@repo/ui/link-route";
+import { changesTab } from "@repo/ui/tab-strip-model";
+import { eq, useLiveQuery } from "@tanstack/react-db";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -55,6 +62,7 @@ import { useKeyboardModality } from "./keyboard-modality.js";
 import { useLastSignIn } from "./last-sign-in.js";
 import { LinkMenu } from "./link-menu.js";
 import { useCopyLink } from "./links-at-hand.js";
+import { MachineAskCard } from "./machine-ask-card.js";
 import { MachineCommandAskDialog } from "./machine-command-ask.js";
 import { useOfflineRefusedToast } from "./offline-refused-toast.js";
 import { OpenFeedbackProvider } from "./open-feedback.js";
@@ -63,6 +71,7 @@ import { OpenAiKeyProvider } from "./openai-key.js";
 import { PANEL_TAB, type PanelTab } from "./panel-tabs.js";
 import { OpenPersonProvider, PreloadPersonProvider } from "./person-door.js";
 import { forgetPictures } from "./picture-query.js";
+import { useHistoryRows } from "./places/history-rows.js";
 import { useLinkDestinationLandings } from "./places/link-landings.js";
 import { useLinkReads } from "./places/link-reads.js";
 import { useNarrowBacks } from "./places/narrow-backs.js";
@@ -86,6 +95,7 @@ import { SHELL_ROOM } from "./shell-room.js";
 import { useSoundClipLoaded } from "./sound-clip.js";
 import { ShellRoomContext, useStageRoom } from "./stage-room.js";
 import { useSteadyDoor } from "./steady-door.js";
+import { useTaskListCollections } from "./task-list-collections.js";
 import { useTaskRoute } from "./task-route.js";
 import { MessageRevealProvider } from "./tasks/message-links.js";
 import { type RepositoryRemedyDoors, RepositoryRemedyProvider } from "./tasks/repository-remedy.js";
@@ -275,6 +285,7 @@ function AppWindow(): React.JSX.Element {
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const run = useQuery({ ...appStateQuery, select: selectRun }).data;
   const planning = useQuery({ ...appStateQuery, select: selectTasks }).data;
+  const taskListCollections = useTaskListCollections();
 
   const unseenAgents =
     useQuery({ ...appStateQuery, select: selectUnseenAgents }).data ?? NO_UNSEEN_AGENTS;
@@ -573,8 +584,9 @@ function AppWindow(): React.JSX.Element {
   );
 
   // What the window shows is handed off to the member's iPhone, as the phone's own screen for it would be (`handoff.ts`).
+  // Note that the task list is read as it stands at the draw, as the links at hand are.
   useHandoff(() => (accountGated ? [] : copyLink.linksAt(false).map(({ link }) => link)), {
-    tasks: tasks.tasks,
+    tasks: taskListCollections.tasks.toArray,
     workspaces: tasks.workspaces,
   });
 
@@ -595,12 +607,23 @@ function AppWindow(): React.JSX.Element {
   }, [launched, goSettings, adminView, listedForLaunch, openAutomations]);
 
   // An app link, handed by the system or pressed in the window, opens where its place stands (`@repo/ui/link-route`).
-  // A pull request a listed task's agent opened opens in that agent's Pull request tab wherever it is pressed (`use-open-link.ts`).
-  const listedTasks = useMemo(() => {
-    const ids = new Set(tasks.tasks.map((task) => task.id));
+  // A pull request a listed task's lines name opens in its Pull request tab on that task wherever it is pressed (`use-open-link.ts`).
+  // Note that only the pull requests of a task the list holds are, joined on the task's id.
+  const { data: listedTasks } = useLiveQuery((q) =>
+    q
+      .from({ listed: taskListCollections.taskPullRequests })
+      .join(
+        { task: taskListCollections.tasks },
+        ({ listed, task }) => eq(listed.taskId, task.id),
+        "inner",
+      )
+      .select(({ listed }) => ({ taskId: listed.taskId, pullRequests: listed.pullRequests })),
+  );
 
-    return (planning?.taskPullRequests ?? []).filter((each) => ids.has(each.taskId));
-  }, [tasks.tasks, planning?.taskPullRequests]);
+  // A pull request a listed task's lines name opens in its Pull request tab on that task, on its conversation.
+  const openListedPullRequest = useSteadyDoor((taskId: string, pullRequest: NumberedAddress) =>
+    tasks.onShowPanelTab(taskId, changesTab(pullRequest)),
+  );
 
   // An Admin link opens while the account's access is still being read, the
   // place waiting on it, and never for an account that is no admin
@@ -666,16 +689,19 @@ function AppWindow(): React.JSX.Element {
   const known = run !== undefined && !accountGated && !workspacesUnread;
   const routedViews = useRoutedViews();
   const backs = useNarrowBacks(room === SHELL_ROOM.NARROW);
+  // The task list's rows the history names and reaches, read by id, so a delivery moving any other task draws none of it again.
+  const historyRows = useHistoryRows();
 
   const history = useWindowHistory({
     known,
     link: copyLink.placed,
-    title: stepTitle(routedHere?.place, tasks, routedViews),
+    title: stepTitle(routedHere?.place, tasks, historyRows, routedViews),
     routed: routedHere,
     automations: automationsView,
     versionHistory: versionHistoryView,
     inbox: inboxView,
     room,
+    rows: historyRows,
     tasks,
   });
 
@@ -919,7 +945,7 @@ function AppWindow(): React.JSX.Element {
       {/* The window's one voice call, which outlives switching tabs and tasks. */}
       <VoiceCallProvider>
         <OpenLinkProvider value={openAppLink}>
-          <ListedPullRequests tasks={listedTasks}>
+          <ListedPullRequests tasks={listedTasks} onOpen={openListedPullRequest}>
             <OpenPersonProvider value={openPerson}>
               <PreloadPersonProvider value={preloadPerson}>
                 <OpenFeedbackProvider value={openFeedbackAbout}>
@@ -979,6 +1005,8 @@ function AppWindow(): React.JSX.Element {
                             <Announcer />
                             {/* A command an agent asks to run on this Mac, while main holds it for an answer. */}
                             <MachineCommandAskDialog />
+                            {/* An ask another of the developer's machines holds for an agent, over the window whatever it shows. */}
+                            <MachineAskCard />
                             {/* The menu a right-click on any link in the window hangs. */}
                             <LinkMenu />
                             <UpdatedToast />

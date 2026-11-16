@@ -5,9 +5,8 @@ import type * as HttpClient from "effect/http/HttpClient";
 import {
   type AccountCallEffects,
   accountCall,
-  type CallAnswer,
-  type CallCredential,
   callAnswered,
+  type HostedServiceOptions,
   jsonOf,
 } from "./account-call.js";
 import type { AccountPreferencesAnswerWire } from "./account-wire.js";
@@ -31,6 +30,7 @@ import {
   type AgentCallFailure,
   type AgentChangesAnswerView,
   type AgentDefaultAnswer,
+  type AgentDefaultMachineAnswerView,
   type AgentDeleteAnswerView,
   type AgentGitHubImageView,
   type AgentInboxAnsweredView,
@@ -72,7 +72,6 @@ import {
   type DictationTranscribeParams,
   type GitHubTokenAnswerView,
   type GitHubTokenSaveParams,
-  githubImageTypeSchema,
   type HostDoneAnswerView,
   type HostsAnswerView,
   type LiveActivityEndedAnswerView,
@@ -80,6 +79,8 @@ import {
   type LiveActivityTokenAnswerView,
   type LiveActivityTokenParams,
   type MachineAllowedAppsAnswerView,
+  type MachineAskAnsweredView,
+  type MachineChangeParams,
   type MemoriesAnswerView,
   type MemoryForgetParams,
   type MemorySaveAnswerView,
@@ -117,6 +118,7 @@ import {
   AGENT_LIST_QUERY,
   AGENT_WORKSPACE_QUERY,
   type AgentArchiveRequest,
+  type AgentChatHold,
   type AgentMessageRequest,
   type AgentNewestAnswer,
   type AgentOlderAnswer,
@@ -162,16 +164,9 @@ import {
   HOSTED_DEADLINE,
   type HostedClient,
   type HostedDeadline,
-  HostedUnanswered,
   hostedClient,
-  hostedFailureFacts,
 } from "./hosted-link.js";
-import {
-  type ImageBody,
-  type ImageBodyUnread,
-  imageBodyOf,
-  imageBodyUnread,
-} from "./image-body.js";
+import { imageBodyOf } from "./image-body.js";
 import {
   INBOX_FILE_TYPE,
   type InboxAcknowledgeRequest,
@@ -193,6 +188,7 @@ import {
 } from "./live-activity-wire.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { TRANSCRIPT_NOW_QUERY, type TranscriptNowAnswer } from "./live-wire.js";
+import type { MachineAskAnswerRequest } from "./machine-ask-wire.js";
 import { MEMORY_QUERY } from "./memory-wire.js";
 import {
   agentDefaultWriteSchema,
@@ -202,6 +198,7 @@ import {
 } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
+  type ModelApiProvider,
   PROVIDER_KEY_QUERY,
   providerKeyForAgentsRequestSchema,
   providerKeyResetCreditRequestSchema,
@@ -224,6 +221,7 @@ import {
   pushDeviceUnregisterRequestSchema,
 } from "./push-device-wire.js";
 import type { RepositoryUnreached } from "./repository-reach-wire.js";
+import { imageAnswerOf, servedGitHubImage, servedRefusal, unansweredCall } from "./served-bytes.js";
 import { agentGitHubImagePath, agentPicturePath, inboxAttachmentPath } from "./service-paths.js";
 import {
   HOSTED_API_ERROR,
@@ -256,14 +254,6 @@ import { voiceSessionRequestSchema } from "./voice-wire.js";
  * call keeps the account call's usual one.
  */
 
-export interface HostedAgentClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-  requestTimeoutMs?: number;
-}
-
 const UNANSWERED = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 
 type Failed = {
@@ -275,15 +265,6 @@ type Failed = {
   readonly localAgentRefusal?: LocalAgentRefusal;
   readonly refusedDevice?: RefusedDevice;
 };
-
-/** A served file's refusal: not found where the service said so; unanswered for anything else. */
-function servedRefusal(payload: UnparsedWireValue): Failed {
-  const refusal = Result.getOrUndefined(readServiceAnswer(hostedErrorSchema)(payload));
-
-  return refusal === HOSTED_API_ERROR.NOT_FOUND
-    ? { failure: AGENT_CALL_FAILURE.NOT_FOUND }
-    : UNANSWERED;
-}
 
 /** The refusals a Start's contract declares, which are the ones a refusal beside a task it made may be read as. */
 const START_DECLARED: ReadonlySet<string> = new Set(
@@ -334,31 +315,6 @@ function unansweredBare<Answer extends object>(answer: Answer): Answer {
 
   // SAFETY: a bare unanswered failure is a member of every answer a call here reads its refusals into.
   return bare as Answer;
-}
-
-/**
- * A call that never reached the service, unanswered with where it ended,
- * the network or its deadline among them, which the window reports and
- * never draws, so a read the network failed is not reported as the app's.
- */
-function unansweredCall(answer: Exclude<CallAnswer, { readonly response: Response }>): Failed {
-  const { fault, errorName } = answer;
-
-  const unanswered = new HostedUnanswered({
-    fault,
-    ...(errorName === undefined ? undefined : { errorName }),
-  });
-
-  return { ...UNANSWERED, cause: hostedFailureFacts(unanswered) };
-}
-
-/** An image's read as the window hears it: its bytes, a body the network cut as a call that never reached the service, or else unanswered. */
-function imageAnswerOf<Type extends string>(
-  read: ImageBody<Type> | ImageBodyUnread | undefined,
-): ImageBody<Type> | Failed {
-  if (read === undefined) return UNANSWERED;
-
-  return imageBodyUnread(read) ? unansweredCall(read) : read;
 }
 
 /** The idempotency key a write taken once under it is asked under, where one is given. */
@@ -504,7 +460,7 @@ export class HostedAgentClient {
 
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedAgentClientOptions) {
+  constructor(options: HostedServiceOptions) {
     const { credential } = options;
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
@@ -550,6 +506,25 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.hosts.remove, { id });
   }
 
+  /** One of the account's machines changed from this device: each setting named, or an app taken back from those it always allows, answering the transaction it was written in. */
+  changeMachine(
+    change: MachineChangeParams,
+  ): Effect.Effect<HostDoneAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.hosts.changeMachine, change);
+  }
+
+  /** One of the account's machines removed, as a host where it runs agents, answering the transaction it was removed in. */
+  /** An ask one of the account's machines holds, answered from this device: the answer that stands, this one where it was the first. */
+  answerMachineAsk(
+    answer: MachineAskAnswerRequest,
+  ): Effect.Effect<MachineAskAnsweredView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.hosts.answerMachineAsk, answer);
+  }
+
+  removeMachine(id: string): Effect.Effect<HostDoneAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.hosts.removeMachine, { id });
+  }
+
   /** A box's pending pairing by the code its link named, as the approve screen shows it: the box and the address its start came from. */
   readHostPairing(code: string): Effect.Effect<HostPairingView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.hosts.readPairing, { code }, { as: HOST_PAIRING_RENAMES });
@@ -583,7 +558,7 @@ export class HostedAgentClient {
 
   /** Whose API key the account's chapters run on where it saved both, written on its own as the account's chapters model, its provider's model of Haiku's tier, answering it as kept with the transaction it committed in. */
   writeChaptersProvider(
-    provider: ModelProvider,
+    provider: ModelApiProvider,
   ): Effect.Effect<ChaptersProviderAnswer, never, HttpClient.HttpClient> {
     return Effect.map(
       hostedCall(
@@ -1348,9 +1323,12 @@ export class HostedAgentClient {
     );
   }
 
-  /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */
-  warm(agentId: string): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
-    return hostedCall(this.#hosted.agents.warm, { id: agentId });
+  /** Keeps one agent warm for the next message, its chat's hold beaten while it is shown and let go as it is hidden (`agentWarmAnswerSchema`). */
+  warm(
+    agentId: string,
+    hold?: AgentChatHold,
+  ): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.warm, { id: agentId, ...hold });
   }
 
   /** One button in an agent's reply as the window draws it, or why it is not drawn. */
@@ -1460,6 +1438,17 @@ export class HostedAgentClient {
     agentId: string,
   ): Effect.Effect<AgentWorkspaceToolsAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.agents.workspaceTools, { id: agentId });
+  }
+
+  /** One agent's default machine set, where its terminal commands and computer use go when a call names none; answers its tools as they then stand. */
+  setDefaultMachine(
+    agentId: string,
+    machineId: string,
+  ): Effect.Effect<AgentDefaultMachineAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.setDefaultMachine, {
+      params: { id: agentId },
+      body: { machineId },
+    });
   }
 
   /** What the reviewer and label pickers of one agent's Pull request tab offer: its repository's labels, assignable users, and teams as GitHub holds them now. */
@@ -1606,18 +1595,7 @@ export class HostedAgentClient {
     agentId: string,
     src: string,
   ): Effect.Effect<AgentGitHubImageView, never, HttpClient.HttpClient> {
-    return Effect.flatMap(
-      this.#call.send({ method: HTTP_METHOD.GET, path: agentGitHubImagePath(agentId, src) }),
-      (answer): Effect.Effect<AgentGitHubImageView> => {
-        if (!callAnswered(answer)) return Effect.succeed(unansweredCall(answer));
-
-        if (!answer.response.ok) {
-          return Effect.map(jsonOf(answer.response), (body) => servedRefusal(unparsedWire(body)));
-        }
-
-        return Effect.map(imageBodyOf(answer.response, githubImageTypeSchema), imageAnswerOf);
-      },
-    );
+    return servedGitHubImage(this.#call, agentGitHubImagePath(agentId, src));
   }
 
   /**

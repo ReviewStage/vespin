@@ -38,6 +38,12 @@ export class GitHubNotFound extends Schema.TaggedError<GitHubNotFound>()("GitHub
 /** GitHub answered 403 for anything but a rate limit: a permission the identity lacks. */
 export class GitHubForbidden extends Schema.TaggedError<GitHubForbidden>()("GitHubForbidden", {
   message: Schema.String,
+  /**
+   * GitHub's `x-github-sso` header, where it answered one: a token not yet
+   * authorized for an organization's SAML SSO, and where to authorize it
+   * (https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api#saml-sso).
+   */
+  sso: Schema.optional(Schema.String),
 }) {}
 
 /** GitHub answered 401: the token or JWT is not accepted. */

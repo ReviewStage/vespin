@@ -1,12 +1,18 @@
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentSummary } from "@repo/features/agent-wire";
-import { descriptionSections } from "@repo/features/description-document";
 import { revisionSummary, VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
+import { descriptionSections } from "@repo/features/description-sections";
+import {
+  type ChangedSection,
+  changedSections,
+  VERSION_CHANGE,
+  versionDiff,
+} from "@repo/features/description-version-diff";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { sectionAnchors } from "@repo/features/mention-link";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DescriptionRevisionLine } from "@repo/features/task-wire";
-import { DOCUMENT_REGION } from "@repo/features/tasks-model";
+import { TASK_REGION } from "@repo/features/tasks-model";
 import { readFailedWords, readingWords } from "@repo/features/words";
 import type { FormerMember, Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -72,8 +78,6 @@ import { centerWithin } from "../scroll-within.js";
 import { hiddenColumns, SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useShortcutTargetsOf } from "../shortcut-target.js";
 import {
-  type ChangedSection,
-  changedSections,
   type HistoryReader,
   opensSections,
   type RevisionSource,
@@ -81,8 +85,6 @@ import {
   revisionSource,
   sectionName,
   sourceLabel,
-  VERSION_CHANGE,
-  versionDiff,
 } from "../tasks/description-history-model.js";
 import type { MentionedTask } from "../tasks/task-mentions.js";
 import {
@@ -646,7 +648,7 @@ function openedSections(
 
   if (read.kind !== HISTORY_READ.READY) return undefined;
 
-  return changedSections(versionDiff(read.previous, read.document), read.previous === null);
+  return changedSections(versionDiff(read.previous, read.description), read.previous === null);
 }
 
 /** Whether the open revision's version failed to read, so its sections will not stand until it is read again. */
@@ -735,7 +737,7 @@ const VERSION_LIST_PLACE = "versions";
 /** The open plan's history as the view's subject: its name, its agents, and the places in the window its revisions were written. */
 export function taskVersionSubject(tasks: TasksControl): VersionSubject {
   const { region, boundFor } = tasks;
-  const task = region.kind === DOCUMENT_REGION.READY ? region.task : undefined;
+  const task = region.kind === TASK_REGION.READY ? region.task : undefined;
   const workspace = tasks.workspaces.find((each) => each.id === task?.workspaceId);
 
   return {
@@ -749,7 +751,7 @@ export function taskVersionSubject(tasks: TasksControl): VersionSubject {
             place: { workspace: workspace?.slug ?? task.workspaceId, repository: task.repository },
             anchors: new Set(
               sectionAnchors(
-                descriptionSections(task.document.body).map((section) => section.heading),
+                descriptionSections(task.description.body).map((section) => section.heading),
               ),
             ),
           },
@@ -849,7 +851,7 @@ export function DesktopVersionHistory({
       ? undefined
       : linkOf(
           numbered(
-            { kind: LINK_DESTINATION.VERSION, planId: linked.taskId, revision },
+            { kind: LINK_DESTINATION.VERSION, taskId: linked.taskId, revision },
             linked.place.workspace,
           ),
           linked.place.workspace,
