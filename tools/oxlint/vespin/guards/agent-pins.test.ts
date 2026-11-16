@@ -24,6 +24,13 @@ const AGREEING: AgentPins = {
       archive: "https://registry.npmjs.org/codex-0.163.0-linux-x64.tgz",
     },
   ],
+  hostCursorPins: [
+    {
+      name: "CURSOR_SDK_MAC_PIN",
+      version: "1.4.0",
+      archive: "https://registry.npmjs.org/@cursor/sdk/-/sdk-1.4.0.tgz",
+    },
+  ],
   runnerCursorSdkDependency: "1.4.0",
   pinnedCursorSdk: "1.4.0",
   pinnedPlaywright: "1.64.1",

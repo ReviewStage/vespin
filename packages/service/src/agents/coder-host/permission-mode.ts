@@ -6,8 +6,8 @@
  * it launched with, and a warm runner idle on another mode is launched
  * again as the next message reaches it (`runner-sessions.ts`'s
  * `launchFingerprint`). Claude Code and Codex each ask in their own terms
- * (`@repo/agent-runner`'s `PERMISSION_MODE`); an agent on neither has no
- * runner to ask, so a mode that asks is refused for it. A new agent starts
+ * (`@repo/agent-runner`'s `PERMISSION_MODE`), and Cursor takes Auto alone of
+ * the two; a mode a harness does not take is refused for it. A new agent starts
  * on the mode its Start names, as a new-agent menu picked it, else on its
  * starter's Default permissions, where its harness takes that mode
  * (`startingPermissionMode`).
@@ -21,11 +21,12 @@ import { PERMISSION_MODE, type PermissionMode } from "@repo/agent-runner/protoco
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { listAllowedCommands } from "@repo/database/models/account-allowed-commands";
 import type { Agent } from "@repo/database/models/agent-store";
-import { CONVERSATION_RUNTIME, type ConversationRuntime } from "@repo/database/storage-vocabulary";
+import type { ConversationRuntime } from "@repo/database/storage-vocabulary";
 import {
   AGENT_PERMISSION_MODE,
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
+import { modeTakenOn, runtimeTakesMode } from "@repo/features/agent-runtime-modes";
 import { Effect } from "effect";
 
 /** The agent's modes as a runner's config names them, one for one. */
@@ -86,24 +87,18 @@ export function startingPermissionMode(
 ): AgentPermissionMode {
   const mode = automated ? undefined : chosen;
 
-  return mode !== undefined && harnessTakesMode(runtime, mode)
-    ? mode
-    : AGENT_PERMISSION_MODE.FULL_ACCESS;
+  return mode === undefined ? AGENT_PERMISSION_MODE.FULL_ACCESS : modeTakenOn(runtime, mode);
 }
 
 /**
- * Whether the agent's harness takes the mode: full access on any; Ask and
- * Auto on Claude Code and Codex; and Auto on Cursor, as its own Auto-review,
- * whose SDK asks nobody, so Ask has no one to ask there.
+ * Whether the agent's harness takes the mode, by the one table every client
+ * offers modes from (`@repo/features`'s `modesOf`): full access on any; Ask
+ * and Auto on Claude Code and Codex; and Auto on Cursor, as its own
+ * Auto-review, whose SDK asks nobody, so Ask has no one to ask there.
  */
 export function harnessTakesMode(
   runtime: ConversationRuntime | undefined,
   mode: AgentPermissionMode,
 ): boolean {
-  return (
-    mode === AGENT_PERMISSION_MODE.FULL_ACCESS ||
-    runtime === CONVERSATION_RUNTIME.CLAUDE_CODE ||
-    runtime === CONVERSATION_RUNTIME.CODEX ||
-    (runtime === CONVERSATION_RUNTIME.CURSOR && mode === AGENT_PERMISSION_MODE.AUTO)
-  );
+  return runtimeTakesMode(runtime, mode);
 }

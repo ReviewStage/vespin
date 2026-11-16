@@ -1,4 +1,4 @@
-import { CONNECTION_LOST_DETAIL } from "@repo/agent-runner/protocol";
+import { CONNECTION_LOST_DETAIL, CURSOR_SIGNED_OUT_DETAIL } from "@repo/agent-runner/protocol";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -208,7 +208,7 @@ export const FAILURE_WORDS: readonly (readonly [AgentFailure, readonly string[]]
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,
     ],
   ],
-  [AGENT_FAILURE.MACHINE_SIGN_IN, [CODER_REFUSAL.MACHINE_SIGNED_OUT]],
+  [AGENT_FAILURE.MACHINE_SIGN_IN, [CODER_REFUSAL.MACHINE_SIGNED_OUT, CURSOR_SIGNED_OUT_DETAIL]],
   [AGENT_FAILURE.OTHER, [HOST_AWAY_DETAIL, LAUNCH_STOPPED_DETAIL]],
   [AGENT_FAILURE.CONNECTION_LOST, Object.values(CONNECTION_LOST_DETAIL)],
 ];
