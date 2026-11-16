@@ -601,6 +601,9 @@ const INVITES_ITEMS: readonly InboxItem[] = [
             `![The invite page](${RECORDED_PICTURE_ADDRESS})`,
             "",
             "The recording is under this. The expired page is still the placeholder.",
+            "",
+            // Note that this links a settled thread, outside the Open list, so a flow can push it over this one and come back to step on from here.
+            "It goes out with the digest, on the day [@Which day the digest goes out](https://vespin.dev/personal/inbox/81e2a425-6d9f-4ab7-92df-00000000000d) settled.",
           ].join("\n"),
         ),
         files: [
