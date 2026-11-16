@@ -59,7 +59,7 @@ const CUT_MARK = "… (cut to fit; read_agent reads the rest)";
 const NO_WORDS = "(it said nothing)";
 
 /** The summary of the turn's last `end_turn`, where its answer took it; none where it ended no turn that way, or that call was refused or never answered. */
-function endTurnSummary(journal: StoredUIMessage): string | undefined {
+export function endTurnSummary(journal: StoredUIMessage): string | undefined {
   // Note that the last call stands for the turn, so a later refused one hides an earlier one taken.
   const part = journal.parts.findLast(
     (each) => isToolUIPart(each) && getToolName(each) === AGENT_TOOL.END_TURN,
