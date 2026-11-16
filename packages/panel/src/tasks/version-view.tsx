@@ -76,9 +76,6 @@ import { useOpenLink } from "./use-open-link.js";
 /** A line over a version: what it is compared with, or why it is not drawn, in the body's muted type a group's gap over the version. */
 const VERSION_NOTE = "version-note mt-0 mb-section-gap text-body text-muted-foreground";
 
-/** What the view says over a version that changed nothing from the one before it. */
-const NO_CHANGE_LINE = "This version changed nothing from the one before it.";
-
 /**
  * The placeholder page's shape while a version is read: a section's heading
  * over its lines, twice, each as wide as its share of the column.
@@ -256,7 +253,7 @@ function VersionContent({
 
   return (
     <>
-      {unchanged ? <p className={VERSION_NOTE}>{NO_CHANGE_LINE}</p> : null}
+      {unchanged ? <p className={VERSION_NOTE}>{VERSION_HISTORY_WORDS.NO_CHANGE}</p> : null}
       {task === undefined ? (
         <VersionBody diff={diff} title={title} section={section} task={task} />
       ) : (
