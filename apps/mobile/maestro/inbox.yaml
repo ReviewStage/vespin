@@ -28,14 +28,15 @@ env:
 - takeScreenshot: inbox-more
 - runFlow:
     file: subflows/dismiss.yaml
-# The scopes' segmented control over the list, Open chosen: All lists the settled threads
-# too. A regular window's list column holds them as a menu picker instead,
-# its Filter button, so the flow opens it first there. Note that it is found
-# by "Filter", which it is named on iOS 26.5, where it is a glyph alone, and
-# begins its name with on iOS 27, where the scope chosen follows.
+# The scopes' segmented control over the list, Open chosen: All lists the
+# settled threads too. An iPad's list column holds them as a menu picker
+# instead, its Filter button, so the flow opens it first there, whether or
+# not a thread stands beside it. Note that it is found by "Filter", its whole
+# name on iOS 26.5, where it is a glyph alone, and the start of it on iOS 27,
+# where the scope chosen follows.
 - runFlow:
     when:
-      visible: "Choose an item"
+      true: ${FLOATING_TABS == 'true'}
     commands:
       - tapOn: "Filter.*"
 - tapOn: "All"
@@ -49,7 +50,7 @@ env:
 # above it, out of sight.
 - runFlow:
     when:
-      notVisible: "Choose an item"
+      true: ${FLOATING_TABS != 'true'}
     commands:
       - scrollUntilVisible:
           element: "Open.*"
@@ -57,7 +58,7 @@ env:
 - waitForAnimationToEnd
 - runFlow:
     when:
-      visible: "Choose an item"
+      true: ${FLOATING_TABS == 'true'}
     commands:
       - tapOn: "Filter.*"
 - tapOn: "Open.*"
@@ -243,7 +244,7 @@ env:
       - assertVisible: "Reminder .*"
 - runFlow:
     when:
-      visible: "Choose an item"
+      true: ${FLOATING_TABS == 'true'}
     commands:
       - tapOn: "Filter.*"
 - tapOn: "Reminders"
@@ -253,7 +254,7 @@ env:
 - takeScreenshot: inbox-reminders
 - runFlow:
     when:
-      visible: "Choose an item"
+      true: ${FLOATING_TABS == 'true'}
     commands:
       - tapOn: "Filter.*"
 - tapOn: "Open.*"
