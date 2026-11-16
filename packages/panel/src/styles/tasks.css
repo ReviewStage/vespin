@@ -1644,7 +1644,7 @@ summary button[data-tool-agent-ref]:focus-visible {
   border-radius: var(--ui-radius-6);
   background: var(--ui-prose-tint, var(--ui-color-fill-hover));
   font-family: var(--ui-font-mono);
-  font-size: 0.9em;
+  font-size: 1em;
   line-height: 1;
 }
 

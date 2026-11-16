@@ -30,8 +30,10 @@
     border-radius: 0.4em;
     background: var(--ui-prose-tint, var(--ui-color-fill-hover));
     font-family: var(--ui-font-mono);
-    /* Mono runs wider than the words around it at equal size. */
-    font-size: 0.9em;
+    /* At the words' own size, as the system's mono face is drawn to stand
+       beside its sans: its capitals as tall as theirs, so code reads as the
+       same size as the line it sits in. */
+    font-size: 1em;
   }
 
   /* A span's line box stands inside its line's. Note that a span inherits
