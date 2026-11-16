@@ -83,6 +83,22 @@ export function mp4Bytes(width: number, height: number, mediaFirst = false): Uin
   ]);
 }
 
+/**
+ * An M4A as ffmpeg writes one without `+faststart`: its media before its
+ * index, whose one track's handler (`hdlr`: version and flags, four zero
+ * bytes, then the type) is sound; no samples, since every reader of one
+ * reads no further than the index.
+ */
+export function m4aBytes(): Uint8Array {
+  const handler = mp4Box("hdlr", [0, 0, 0, 0, 0, 0, 0, 0, ...ascii("soun"), 0, 0, 0]);
+
+  return new Uint8Array([
+    ...mp4Box("ftyp", ascii("M4A ")),
+    ...mp4Box("mdat", [0, 0, 0, 0]),
+    ...mp4Box("moov", mp4Box("trak", mp4Box("mdia", handler))),
+  ]);
+}
+
 /** The bytes given, padded with zeros to the length given, so a test reaches a bound with a file a reader still sniffs. */
 export function paddedTo(bytes: Uint8Array, length: number): Uint8Array {
   const padded = new Uint8Array(length);

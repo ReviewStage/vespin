@@ -40,7 +40,7 @@ import {
   recordedVideosOf,
   shownPicturesOf,
 } from "@repo/features/agent-pictures-model";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import type { SendingMessage } from "@repo/features/agent-view";
 import {
   type AgentOrigin,
@@ -49,8 +49,8 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { fileName } from "@repo/features/code-ref-words";
-import { isVideoType } from "@repo/features/conversation-picture-wire";
-import { INTEGRATION_NAME } from "@repo/features/integration-wire";
+import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
+import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import { messageFileChips } from "@repo/features/message-files";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
@@ -71,6 +71,7 @@ import { shownPageVersion, type ToolCallView, toolCallView } from "@repo/feature
 import { suggestedByOf, suggestionStartOf } from "@repo/features/transcript-lines";
 import {
   CALL_KIND,
+  CALL_MARK,
   type CallKind,
   type CallLine,
   calledFile,
@@ -142,14 +143,30 @@ export interface CallBodyBlock {
   readonly text: string;
 }
 
-/** One picture or recording a call showed, by the id the service kept it under. */
+/** How a call's shown media is drawn: a picture, a recording in the system's player, or a sound clip in its strip. */
+export const SHOWN_MEDIA = {
+  PICTURE: "picture",
+  VIDEO: "video",
+  AUDIO: "audio",
+} as const;
+
+type ShownMediaKind = (typeof SHOWN_MEDIA)[keyof typeof SHOWN_MEDIA];
+
+/** How media kept under `mediaType` is drawn. */
+function shownKindOf(mediaType: string): ShownMediaKind {
+  if (isVideoType(mediaType)) return SHOWN_MEDIA.VIDEO;
+
+  return isAudioType(mediaType) ? SHOWN_MEDIA.AUDIO : SHOWN_MEDIA.PICTURE;
+}
+
+/** One picture, recording, or sound clip a call showed, by the id the service kept it under. */
 export interface ShownMedia {
   readonly id: string;
   /** The words drawn under it; empty for none. */
   readonly caption: string;
   /** What it is heard as: its caption, or where it has none its name among the call's (`screenshot-1`), as the panel's viewer names it. */
   readonly label: string;
-  readonly video: boolean;
+  readonly kind: ShownMediaKind;
 }
 
 /** One part of the line naming who sent a line: words before it and after it in the muted ink, such as "Suggested by" and who started an agent, where it has any; its words; and the address a press opens, where it has one. */
@@ -195,6 +212,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       /** The call's id, which opens and closes it. */
       readonly callId: string;
       readonly callKind: CallKind;
+      /** For a call of an integration's tool, the integration, whose mark leads its row in its kind's glyph's place. */
+      readonly provider: IntegrationProvider | undefined;
       readonly line: CallLine;
       /** What the call made or is about, named after the line's verb as the panel's chip names it. */
       readonly chip: string | undefined;
@@ -349,9 +368,9 @@ function callBody(
   ];
 }
 
-/** Where a call stands by its state. */
-function standingOf(state: ToolState): CallStanding {
-  if (state === TOOL_STATE.OUTPUT_ERROR) return CALL_STANDING.FAILED;
+/** Where a call stands by its state, a call the service answered without doing it (`refused`) standing as failed. */
+function standingOf(state: ToolState, refused: boolean): CallStanding {
+  if (state === TOOL_STATE.OUTPUT_ERROR || refused) return CALL_STANDING.FAILED;
 
   return state === TOOL_STATE.OUTPUT_AVAILABLE ? CALL_STANDING.DONE : CALL_STANDING.RUNNING;
 }
@@ -359,7 +378,7 @@ function standingOf(state: ToolState): CallStanding {
 /** Whether a call is a set of pictures shown, which draws as its pictures. */
 function showedPictures(part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>): boolean {
   return (
-    part.tool === AGENT_TOOL.SHOW_IMAGE &&
+    isShowMediaTool(part.tool) &&
     part.state === TOOL_STATE.OUTPUT_AVAILABLE &&
     isRecord(part.output) &&
     part.output.status === "accepted"
@@ -656,7 +675,7 @@ function callItems(
               id: picture.id,
               caption,
               label: caption === "" ? name : caption,
-              video: isVideoType(picture.mediaType),
+              kind: shownKindOf(picture.mediaType),
             },
           ],
     ),
@@ -664,7 +683,7 @@ function callItems(
       id: picture.id,
       caption,
       label: caption === "" ? name : caption,
-      video: true,
+      kind: SHOWN_MEDIA.VIDEO,
     })),
     // Note that a picture a call answered that was not kept has no bytes to draw, so it is left out.
     ...calledPicturesOf(part.tool, part.input, part.output).flatMap((called) =>
@@ -674,7 +693,7 @@ function callItems(
               id: called.picture.id,
               caption: "",
               label: called.name,
-              video: isVideoType(called.picture.mediaType),
+              kind: shownKindOf(called.picture.mediaType),
             },
           ]
         : [],
@@ -712,9 +731,11 @@ function callItems(
     kind: TRANSCRIPT_ITEM.CALL,
     callId: part.callId,
     callKind: view.kind,
+    provider: view.provider,
     ...callNaming(view),
-    runOn: callPlace(view.kind, view.server),
-    standing: standingOf(part.state),
+    // Note that the row leads with the integration's mark, so it names only what the mark does not: the account among several, or a server of no integration's.
+    runOn: callPlace(view, CALL_MARK.LEADS),
+    standing: standingOf(part.state, view.refused === true),
     open,
     body: open
       ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)

@@ -94,6 +94,8 @@ export {
 
 export { HostedMcpClientsClient } from "./mcp-clients-client.js";
 
+export { HostedPullRequestClient } from "./pull-request-client.js";
+
 export {
   automationPath,
   automationWebhookPath,

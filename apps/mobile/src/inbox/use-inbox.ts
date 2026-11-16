@@ -58,7 +58,7 @@ import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
-import { cachedFile, cachedVideo } from "../cached-media.js";
+import { cachedFile, cachedPlayed } from "../cached-media.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
@@ -680,14 +680,15 @@ export interface ThreadFiles extends ThreadMediaRead {
   readonly retry: (attachmentId: string) => void;
 }
 
-/** What a file of the thread is read into, by its kind: a picture's `data:` address, or a video's or another file's address under the app's caches. */
+/** What a file of the thread is read into, by its kind: a picture's `data:` address, or a video's, a sound clip's, or another file's address under the app's caches. */
 function sourceOf(
   each: InboxMessageMedia,
   read: { readonly contentType: string; readonly base64: string },
 ): Promise<string> {
   switch (each.kind) {
     case INBOX_MEDIA.VIDEO:
-      return cachedVideo(INBOX_MEDIA_PREFIX, each.attachmentId, read.contentType, read.base64);
+    case INBOX_MEDIA.AUDIO:
+      return cachedPlayed(INBOX_MEDIA_PREFIX, each.attachmentId, read.contentType, read.base64);
     case INBOX_MEDIA.FILE:
       return cachedFile(
         INBOX_MEDIA_PREFIX,
@@ -704,9 +705,11 @@ function sourceOf(
 /**
  * What each of a thread's files is drawn from, by its attachment, read once
  * through the host as the panel reads one (`AGENTS_INBOX_ATTACHMENT`): a
- * picture as a `data:` address, a video, asked for as its MP4 copy, as a
- * file of the app's caches, since the system's player reads a file, which an
- * older recording with no copy answers as a WebM the player cannot play, and
+ * picture as a `data:` address, a video or a sound clip, asked for as its
+ * MP4 copy, as a file of the app's caches, since the system's player reads a
+ * file, which an older recording with no copy answers as a WebM the player
+ * cannot play, and an Ogg clip before the service keeps its copy as the Ogg,
+ * and
  * any other file, such as a PDF, as a file of the app's caches under its own
  * name, which its viewer and the share sheet read; with each one's size in
  * words, which a file's chip says. One still on its way is absent, and one
@@ -757,8 +760,9 @@ export function useThreadMedia(
         }));
       };
 
-      // A video is asked for as the MP4 copy iOS's player plays, which an older recording kept without one answers as its WebM.
-      const playable = each.kind === INBOX_MEDIA.VIDEO ? ({ playable: MP4_TYPE } as const) : {};
+      // A video or a sound clip is asked for as the MP4 copy iOS's player plays, which only a recording or an Ogg clip is kept with: one kept without it, an older recording's WebM or any other clip, is answered as it is.
+      const played = each.kind === INBOX_MEDIA.VIDEO || each.kind === INBOX_MEDIA.AUDIO;
+      const playable = played ? ({ playable: MP4_TYPE } as const) : {};
       acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({
         itemId,
         attachmentId: each.attachmentId,
