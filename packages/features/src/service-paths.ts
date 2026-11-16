@@ -515,6 +515,15 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_SLACK_BOT: "/api/workspaces/slack-bot",
   /** A workspace's Slack bot connected by an owner or admin to the team its token answers for (POST), answering the bot as it then stands (`slack-bot-wire.ts`). */
   WORKSPACE_SLACK_BOT_CONNECT: "/api/workspaces/slack-bot/connect",
+  /** Where an owner or admin goes to Add to Slack (POST): Slack's authorize address for our Slack app, carrying a single-use intent's state that `SLACK_OAUTH_CALLBACK` spends (`slack-bot-wire.ts`). */
+  WORKSPACE_SLACK_BOT_INSTALL: "/api/workspaces/slack-bot/install",
+  /**
+   * Our Slack app's Redirect URL (GET): Slack returns the browser here from
+   * an Add to Slack with a code and the intent's state, or an error; the
+   * route exchanges the code for the workspace's bot token, links the team,
+   * and lands on the integrations landing page.
+   */
+  SLACK_OAUTH_CALLBACK: "/api/slack/oauth/callback",
   /** A workspace's Slack bot disconnected by an owner or admin (POST), answering the bot as it then stands. */
   WORKSPACE_SLACK_BOT_DISCONNECT: "/api/workspaces/slack-bot/disconnect",
   /** The reader's own Slack notifications turned on or off by any member (POST), answering the bot as it then stands. */
