@@ -112,6 +112,7 @@ import {
   type RowAction,
   RowForEach,
   RowList,
+  type RowMenuGroup,
   type RowSubmenu,
   type RowSwipe,
   runsOnGlyph,
@@ -488,20 +489,23 @@ function removeParentActs(task: TaskSummary, relations: TaskRelationWrites): rea
 type RowActsResult = {
   readonly trailingActions: readonly RowSwipe[];
   readonly leadingActions: readonly RowSwipe[];
-  readonly menuSubmenus: readonly RowSubmenu[];
   readonly menuActions: readonly RowAction[];
+  readonly menuGroups: readonly RowMenuGroup[];
 };
 
 /**
  * A row's acts, as the panel's row menu offers them on a phone: behind its
  * trailing swipe Mark done, offered on a task not yet done, which a full
  * swipe runs, and Status; behind its leading swipe Pin or Unpin, whichever
- * the task is not, which a full swipe runs; and in its long press menu,
- * after those, Task relation, which opens the Task relation sheet on a kind,
- * Move to section, and its repository (`placingSubmenus`), then Remove
- * parent, where it has one, and the panel's order: Copy link, which raises the share sheet, Rename, in
- * the system's name alert, Mark as read or unread, whichever the task is
- * not, Open in browser, and Permanently delete last, which asks first.
+ * the task is not, which a full swipe runs. Its long press menu groups them
+ * as the task page's ⋯ does (`taskMenu`), each group set apart by a divider:
+ * the swipes' acts with Mark as read or unread, whichever the task is not;
+ * then Task relation, which opens the Task relation sheet on a kind, Move to
+ * section, and its repository (`placingSubmenus`), with Remove parent where
+ * it has one; then Rename, in the system's name alert, its version history
+ * and Move to workspace where offered; then Copy link, which raises the
+ * share sheet, and Open in browser; and Permanently delete alone, last,
+ * which asks first.
  * Priority and assignee are set from the chips on the task's page
  * (`standingMenus`).
  */
@@ -523,41 +527,57 @@ function rowActs(
         onPress: () => listing.pin(task.id, !pinned),
       },
     ],
-    menuSubmenus: [relationSubmenu(task, openRelation), ...placingSubmenus(task, listing.placing)],
     menuActions: [
-      ...removeParentActs(task, listing.relations),
-      {
-        label: WORDS.COPY_LINK,
-        symbol: GLYPH.LINK,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => copyTaskLink(task, listing.workspace),
-      },
-      {
-        label: WORDS.RENAME,
-        symbol: GLYPH.RENAME,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => askRename(task, listing.rename),
-      },
-      ...rowActions(historyActions(task, listing.doors.history)),
       {
         label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
         symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => listing.markRead(task.id, !unread),
       },
-      ...rowActions(moveActions(listing.doors.moveDoor(task))),
+    ],
+    menuGroups: [
       {
-        label: VERB.OPEN_IN_BROWSER,
-        symbol: GLYPH.OPEN_EXTERNALLY,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () =>
-          openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
+        submenus: [relationSubmenu(task, openRelation), ...placingSubmenus(task, listing.placing)],
+        actions: removeParentActs(task, listing.relations),
       },
       {
-        label: WORDS.DELETE,
-        symbol: GLYPH.DELETE,
-        tone: ROW_ACTION_TONE.DESTRUCTIVE,
-        onPress: () => listing.askDelete(task),
+        actions: [
+          {
+            label: WORDS.RENAME,
+            symbol: GLYPH.RENAME,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => askRename(task, listing.rename),
+          },
+          ...rowActions(historyActions(task, listing.doors.history)),
+          ...rowActions(moveActions(listing.doors.moveDoor(task))),
+        ],
+      },
+      {
+        actions: [
+          {
+            label: WORDS.COPY_LINK,
+            symbol: GLYPH.LINK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => copyTaskLink(task, listing.workspace),
+          },
+          {
+            label: VERB.OPEN_IN_BROWSER,
+            symbol: GLYPH.OPEN_EXTERNALLY,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () =>
+              openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
+          },
+        ],
+      },
+      {
+        actions: [
+          {
+            label: WORDS.DELETE,
+            symbol: GLYPH.DELETE,
+            tone: ROW_ACTION_TONE.DESTRUCTIVE,
+            onPress: () => listing.askDelete(task),
+          },
+        ],
       },
     ],
   };
