@@ -586,13 +586,17 @@ function columnBarOf(doors: AgentBarDoors): ColumnBar {
         ...optionActs,
       ],
       submenus: [copy, ...run],
-      last: listed
+      groups: listed
         ? [
             {
-              label: MENU_WORDS.DELETE,
-              symbol: GLYPH.DELETE,
-              destructive: true,
-              onPress: doors.onDelete,
+              actions: [
+                {
+                  label: MENU_WORDS.DELETE,
+                  symbol: GLYPH.DELETE,
+                  destructive: true,
+                  onPress: doors.onDelete,
+                },
+              ],
             },
           ]
         : [],
