@@ -3,9 +3,11 @@
  *
  * Each alert names its category (`PUSH_CATEGORY`, `@repo/features/inbox-push-wire`):
  * any post offers a reply typed in place, registered here once a launch; a
- * decide's buttons are set for each push by the app's Notification Service
- * Extension (`notification-service/`), since a category's actions are fixed
- * otherwise; a failed run offers none. A tap opens the thread, or a failed
+ * decide's buttons are set on each notification by the app's Notification
+ * Content Extension (`notification-content/`), which draws both kinds of post
+ * when a long press opens one, since a category's actions are fixed
+ * otherwise, and the decide's category is registered here with none of its
+ * own; a failed run offers none. A tap opens the thread, or a failed
  * run's agent, in whatever state the app stood, a cold launch included, since
  * iOS keeps the response that launched the app (`useLastNotificationResponse`).
  *
@@ -64,7 +66,7 @@ setNotificationHandler({
 
 /**
  * The app's side of its notifications, mounted once over the screens: the
- * reply's category registered, and each tap or action, the one that
+ * post categories registered, and each tap or action, the one that
  * launched the app among them, opening its route once an account is signed
  * in, with what an action sends held for the thread's box.
  */
@@ -75,6 +77,9 @@ export function useInboxNotifications(signedIn: boolean): void {
   useEffect(() => {
     setNotificationCategoryAsync(PUSH_CATEGORY.REPLY, REPLY_ACTIONS).catch((cause: unknown) =>
       console.error("The reply's notification category was not registered.", cause),
+    );
+    setNotificationCategoryAsync(PUSH_CATEGORY.DECIDE, []).catch((cause: unknown) =>
+      console.error("The decide's notification category was not registered.", cause),
     );
   }, []);
   useEffect(() => {

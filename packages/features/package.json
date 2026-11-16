@@ -101,6 +101,7 @@
     "./unreached": "./src/unreached.js",
     "./video-signature": "./src/video-signature.js",
     "./voice-delegation": "./src/voice-delegation.js",
+    "./markdown-leads": "./src/markdown-leads.js",
     "./markdown-nesting": "./src/markdown-nesting.js",
     "./markdown-plain-text": "./src/markdown-plain-text.js",
     "./markdown-tree": "./src/markdown-tree.js",

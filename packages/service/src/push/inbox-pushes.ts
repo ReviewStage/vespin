@@ -13,13 +13,16 @@
  * notification permission and iOS's settings: no switch of ours is read,
  * the desktop's `turnNotifications` among them (`@repo/host/agent-notices`).
  *
- * An alert says the thread's or the agent's title over the message's first
- * line, its Markdown chips said by their labels, and carries, beside Apple's
- * `aps`, the ids the app opens the thread and answers it by (`InboxPushIds`).
+ * An alert says the thread's or the agent's title over the message's
+ * Markdown said as plain words, its chips by their labels, since a banner and
+ * the Lock Screen draw no formatting. Beside Apple's `aps` it carries the ids
+ * the app opens the thread and answers it by (`InboxPushIds`), and a post's
+ * Markdown itself (`markdown`), as much as Apple's 4 KB bound leaves room
+ * for, which the app's expanded notification draws formatted.
  * Its `thread-id` groups the phone's notifications by task; its `category` is the actions the app offers on it
  * (`PUSH_CATEGORY`): a decide that takes one option offers each as a button,
- * whose labels the payload's `options` carries for the app's service
- * extension to set, since a category's actions are otherwise fixed; any other
+ * whose labels the payload's `options` carries for the app to set on that
+ * notification alone, since a category's actions are otherwise fixed; any other
  * post offers a reply typed in place; a failed run, none. Its collapse id is
  * the thread's, so a later post on a thread replaces the one before it on the
  * lock screen, and the app removes it by that id, which iOS names the
@@ -82,6 +85,7 @@ import {
   openAskOf,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
+import { markdownLeads } from "@repo/features/markdown-leads";
 import { clippedWords, markdownPlainText } from "@repo/features/markdown-plain-text";
 import { agentName } from "@repo/features/model-label";
 import { PRESENCE } from "@repo/features/presence-wire";
@@ -100,6 +104,12 @@ import { LIVE_ACTIVITY_CAUSE, refreshLiveActivity } from "./live-activities.js";
 
 /** The most characters of a title and a body an alert says; Apple caps a payload at 4 KB. */
 const ALERT_BOUND = { TITLE_CHARS: 120, BODY_CHARS: 240 } as const;
+
+/**
+ * Apple's bound on an alert push's payload, in bytes of its JSON, and the
+ * room kept under it for what Apple's own encoding may add.
+ */
+const PAYLOAD_BOUND = { BYTES: 4096, SPARE: 64 } as const;
 
 /** What a failed run's alert says under the agent's name, as the desktop's notification says it. */
 const RUN_FAILED_BODY = "Your agent failed.";
@@ -272,7 +282,29 @@ function pushToMember(
   });
 }
 
-/** The alert about a post on a thread: its title over the post's first line, with the ask's actions where it asked; none where the post wrote no message of the agent's. */
+/** A payload's size as Apple counts it: the bytes of its JSON. */
+function payloadBytes(payload: ApnsPayload): number {
+  return new TextEncoder().encode(JSON.stringify(payload)).length;
+}
+
+/**
+ * The payload with the post's Markdown beside the alert, as the app's
+ * expanded notification draws it (`notification-content/`): as many of its
+ * blocks, from the first, as keep the payload within Apple's bound, so a cut
+ * never leaves a mark open. Note that it is left out where it would say just
+ * what the body says, or where not even its first block fits, and the
+ * expanded notification then draws the body.
+ */
+function withMarkdown(payload: ApnsPayload, text: string, body: string | undefined): ApnsPayload {
+  const leads = markdownLeads(text);
+  const room = PAYLOAD_BOUND.BYTES - PAYLOAD_BOUND.SPARE;
+
+  const markdown = leads.findLast((lead) => payloadBytes({ ...payload, markdown: lead }) <= room);
+
+  return markdown === undefined || markdown === body ? payload : { ...payload, markdown };
+}
+
+/** The alert about a post on a thread: its title over the post's plain words, with the post's Markdown beside them and the ask's actions where it asked; none where the post wrote no message of the agent's. */
 function threadPostNotification(
   post: ThreadPushPost,
 ): ((badge: number) => MemberNotification) | undefined {
@@ -292,22 +324,28 @@ function threadPostNotification(
   const { category, ...actions } = actionsOf(message);
   const kind = message.ask?.status === INBOX_ASK_STATUS.OPEN ? PUSH_KIND.ASK : PUSH_KIND.POST;
 
+  const alert = alertOf(item.title, bodyWords(message.text));
+
   return (badge) => ({
     pushType: APNS_PUSH_TYPE.ALERT,
     collapseId: item.id,
-    payload: {
-      aps: {
-        alert: alertOf(item.title, bodyWords(message.text)),
-        "thread-id": taskId,
-        category,
-        "mutable-content": 1,
-        sound: "default",
-        badge,
+    payload: withMarkdown(
+      {
+        aps: {
+          alert,
+          "thread-id": taskId,
+          category,
+          "mutable-content": 1,
+          sound: "default",
+          badge,
+        },
+        kind,
+        ...ids,
+        ...actions,
       },
-      kind,
-      ...ids,
-      ...actions,
-    },
+      message.text,
+      alert.body,
+    ),
   });
 }
 
