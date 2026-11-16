@@ -45,7 +45,11 @@ env:
 
 # Opened as a reader opens it, from the agent's row on its task's page, so
 # the time from the tap to the page's first frame can be read from the run's
-# recording: the first frame drawn must be the newest row, as above.
+# recording: the first frame drawn must be the newest row, as above. Note
+# that the task is done, so it stands in the Tasks list's search rather than
+# its rows, which leave a settled task out; the search is reached as
+# `tasks.yaml` reaches it: a compact window's round button above the tab bar,
+# and the field itself in a split view's sidebar.
 - launchApp:
     clearState: true
     arguments:
@@ -55,9 +59,16 @@ env:
     env:
       TAB: Tasks
 - runFlow:
-    file: subflows/open-row.yaml
-    env:
-      ROW: "Ledger rounding"
+    when:
+      notVisible: "Search tasks"
+    commands:
+      - tapOn:
+          text: "Search"
+          above: "Tab Bar"
+- tapOn: "Search tasks"
+- inputText: "rounding"
+- assertVisible: "Ledger rounding"
+- tapOn: "Ledger rounding"
 - extendedWaitUntil:
     visible: "Created by .*"
     timeout: 20000
