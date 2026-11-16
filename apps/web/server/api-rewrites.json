@@ -175,6 +175,10 @@
     "dest": "/api/default.js?route=previews/sign-in"
   },
   {
+    "src": "/api/pull-requests/github-image",
+    "dest": "/api/default.js?route=pull-requests/github-image"
+  },
+  {
     "src": "/api/slack/events",
     "dest": "/api/default.js?route=slack/events"
   },

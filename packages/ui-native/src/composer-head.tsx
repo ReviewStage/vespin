@@ -1,4 +1,4 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message, each taken off on a press, and the skills a `/` offers.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures and pasted text files attached to the message, each taken off on a press, and the skills a `/` offers.
 
 import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -11,6 +11,7 @@ import {
   frame,
   lineLimit,
 } from "@expo/ui/swift-ui/modifiers";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { Chip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
@@ -50,6 +51,7 @@ function LineAct({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+  const glyph = useScaledSize(MARK_SIZE.GLYPH);
 
   return (
     <Button
@@ -71,9 +73,32 @@ function LineAct({
           {label}
         </Text>
       ) : (
-        <Image {...glyphImage(symbol)} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
+        <Image {...glyphImage(symbol)} size={glyph} color={colors.TEXT_MUTED} />
       )}
     </Button>
+  );
+}
+
+/** How many lines a queued message keeps at an accessibility size before it is cut. */
+const QUEUED_LINES_LARGE = 3;
+
+/** A queued message's Steer and Delete, where each is offered. */
+function QueuedActs({
+  id,
+  onSteer,
+  onDelete,
+}: {
+  readonly id: string;
+  readonly onSteer: QueuedLinesProps["onSteer"];
+  readonly onDelete: QueuedLinesProps["onDelete"];
+}) {
+  return (
+    <>
+      {onSteer === undefined ? null : <LineAct label={WORDS.STEER} onPress={() => onSteer(id)} />}
+      {onDelete === undefined ? null : (
+        <LineAct label={WORDS.DELETE} symbol={GLYPH.DELETE} onPress={() => onDelete(id)} />
+      )}
+    </>
   );
 }
 
@@ -85,6 +110,8 @@ function LineAct({
  */
 export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesProps) {
   const colors = useColors();
+  const large = useAccessibilitySize();
+  const glyph = useScaledSize(MARK_SIZE.GLYPH);
 
   if (lines.length === 0 && paused === undefined) return null;
 
@@ -97,43 +124,54 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
           {paused}
         </Text>
       )}
-      {lines.map((line) => (
-        <HStack key={line.id} spacing={SPACE.ROW} modifiers={[frame({ minHeight: PRESS_SIZE })]}>
-          <Image
-            {...glyphImage(GLYPH.QUEUED)}
-            size={MARK_SIZE.GLYPH}
-            color={colors.TEXT_MUTED}
-            modifiers={[accessibilityHidden()]}
-          />
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-              foregroundStyle(colors.TEXT_BODY),
-              lineLimit(1),
-              frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-            ]}
-          >
-            {line.words}
-          </Text>
-          {onSteer === undefined ? null : (
-            <LineAct label={WORDS.STEER} onPress={() => onSteer(line.id)} />
-          )}
-          {onDelete === undefined ? null : (
-            <LineAct label={WORDS.DELETE} symbol={GLYPH.DELETE} onPress={() => onDelete(line.id)} />
-          )}
-        </HStack>
-      ))}
+      {lines.map((line) => {
+        const words = (
+          <HStack spacing={SPACE.ROW} modifiers={[frame({ minHeight: PRESS_SIZE })]}>
+            <Image
+              {...glyphImage(GLYPH.QUEUED)}
+              size={glyph}
+              color={colors.TEXT_MUTED}
+              modifiers={[accessibilityHidden()]}
+            />
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_TITLE }),
+                foregroundStyle(colors.TEXT_BODY),
+                lineLimit(large ? QUEUED_LINES_LARGE : 1),
+                frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+              ]}
+            >
+              {line.words}
+            </Text>
+            {large ? null : <QueuedActs id={line.id} onSteer={onSteer} onDelete={onDelete} />}
+          </HStack>
+        );
+
+        // Note that at an accessibility size a queued message keeps a few lines and its acts stand under it, since on one line beside Steer and Delete it read as a few letters on the folded Duo's 466 pt.
+        return large ? (
+          <VStack key={line.id} alignment="trailing" spacing={0}>
+            {words}
+            <HStack spacing={SPACE.ROW}>
+              <QueuedActs id={line.id} onSteer={onSteer} onDelete={onDelete} />
+            </HStack>
+          </VStack>
+        ) : (
+          <VStack key={line.id} spacing={0}>
+            {words}
+          </VStack>
+        );
+      })}
     </VStack>
   );
 }
 
-/** What a press on an attached picture is heard to do, since its × alone says so on screen. */
+/** What a press on an attached file is heard to do, since its × alone says so on screen. */
 const DETACH_HINT = "Removes it from the message";
 
-/** One picture attached to the message, by the name the message carries it under ("Picture 1"). */
+/** One file attached to the message, a picture or a long paste taken as a text file, by the name the message carries it under ("Picture 1", "Pasted text 1.txt"). */
 export type AttachedPicture = { readonly id: string; readonly name: string };
 
-/** The pictures attached to the message as a row of capsules, each taken off the message on a press, scrolling sideways where they outrun the bar. */
+/** The files attached to the message, its pictures and its pasted text files, as a row of capsules by their names, each taken off the message on a press, scrolling sideways where they outrun the bar. */
 export function AttachedPictures({
   pictures,
   onDetach,
@@ -192,6 +230,10 @@ export function SkillSuggestions({
   readonly onPick: (name: string) => void;
 }) {
   const colors = useColors();
+  const large = useAccessibilitySize();
+  const glyph = useScaledSize(MARK_SIZE.GLYPH);
+  // Note that at an accessibility size a skill's name and what it is for wrap rather than cut, and the list stands whole, since four rows of a fixed height showed about two.
+  const lines = large ? undefined : 1;
 
   if (skills.length === 0) {
     if (empty === undefined) return null;
@@ -227,13 +269,13 @@ export function SkillSuggestions({
               }),
             ]}
           >
-            <Image {...glyphImage(GLYPH.SKILL)} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
+            <Image {...glyphImage(GLYPH.SKILL)} size={glyph} color={colors.TEXT_MUTED} />
             <VStack alignment="leading" spacing={1}>
               <Text
                 modifiers={[
                   font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "medium" }),
                   foregroundStyle(colors.TEXT),
-                  lineLimit(1),
+                  ...(lines === undefined ? [] : [lineLimit(lines)]),
                 ]}
               >
                 {skill.word}
@@ -243,7 +285,7 @@ export function SkillSuggestions({
                   modifiers={[
                     font({ textStyle: TYPE_ROLE.ROW_LINE }),
                     foregroundStyle(colors.TEXT_MUTED),
-                    lineLimit(1),
+                    ...(lines === undefined ? [] : [lineLimit(lines)]),
                   ]}
                 >
                   {skill.detail}
@@ -256,7 +298,7 @@ export function SkillSuggestions({
     </VStack>
   );
 
-  if (skills.length <= SUGGESTIONS_SHOWN) return rows;
+  if (large || skills.length <= SUGGESTIONS_SHOWN) return rows;
 
   return (
     <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>
