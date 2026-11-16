@@ -2293,11 +2293,15 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.equal(ended, RUNNER_ENDED.LEFT);
         assert.equal(api.sandboxes[0]?.status, "running");
-        // The launch recorded the workspace the sandbox is billed to.
+        // The launch recorded the workspace the sandbox is billed to, and the agent's member.
         const owned = yield* sandboxOwner(api.sandboxes[0]?.name ?? "");
         assert.deepEqual(
-          Option.map(owned, ({ organizationId, agentId }) => ({ organizationId, agentId })),
-          Option.some({ organizationId: agent.organizationId, agentId: agent.id }),
+          Option.map(owned, ({ organizationId, agentId, userId }) => ({
+            organizationId,
+            agentId,
+            userId,
+          })),
+          Option.some({ organizationId: agent.organizationId, agentId: agent.id, userId }),
         );
         api.idleStop();
         assert.equal(
