@@ -209,10 +209,17 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
   }
 
   function publishAppState(): void {
-    for (const sender of panels.senders()) windowPushes.pushState(sender, appStateFor(sender));
+    const taskList = state.taskList();
+
+    for (const sender of panels.senders()) {
+      windowPushes.pushState(sender, appStateFor(sender), taskList);
+    }
+
     const call = callWindow.current();
 
-    if (call !== undefined) windowPushes.pushState(call.webContents, appStateFor(call.webContents));
+    if (call !== undefined) {
+      windowPushes.pushState(call.webContents, appStateFor(call.webContents), taskList);
+    }
   }
 
   /**

@@ -19,6 +19,7 @@ import { SETTINGS_PAGE_TITLE, SETTINGS_VIEW } from "@repo/settings/settings-view
 import {
   AccountRow,
   GLYPH,
+  glyphSymbol,
   ListSection,
   PUSH_ROW_GOES,
   PushRow,
@@ -100,7 +101,11 @@ export default function SettingsScreen() {
   return (
     <>
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button onPress={() => router.back()}>Done</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={"Done"}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Screen ground={SCREEN_GROUND.GROUPED}>
         <SettingsForm>

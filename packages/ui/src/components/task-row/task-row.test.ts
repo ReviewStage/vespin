@@ -10,7 +10,8 @@ import { RELATED_TASK_CELLS, TASK_ROW_CELL, TaskRow, TaskRows } from "./task-row
  * nested rows by a chevron that is a control of its own beside the row's
  * press, and by → and ← on the press, and chooses its rows as a Mac's list
  * does, a ⌘-click choosing a row rather than opening it while a plain press
- * still opens it. Synthetic tasks.
+ * still opens it; the row its page stands open on is said current. Synthetic
+ * tasks.
  */
 
 declare global {
@@ -167,4 +168,41 @@ test("a row's flag stands in a list that draws no cell after the name, and its �
   );
   expect(container.querySelector("[data-flag]")?.textContent).toBe("Blocked");
   expect(container.querySelector("[data-flag]")?.closest("[data-under-more]")).toBeNull();
+});
+
+test("the row its page stands open on is said current to a reader, and the rows beside it are not", () => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  const cells = [TASK_ROW_CELL.STATUS];
+
+  const row = (taskId: string, name: string, current: boolean) =>
+    createElement(TaskRow, {
+      key: taskId,
+      taskId,
+      name,
+      cells,
+      content: {},
+      current,
+      onOpen: () => undefined,
+    });
+
+  act(() =>
+    root.render(
+      createElement(TaskRows, {
+        label: "Queue",
+        cells,
+        children: [
+          row("front", "Expire invitations", false),
+          row("marked", "Rename the job", true),
+        ],
+      }),
+    ),
+  );
+  expect(
+    [...container.querySelectorAll("li[aria-current='true']")].map((each) =>
+      each.getAttribute("data-task-id"),
+    ),
+  ).toEqual(["marked"]);
 });

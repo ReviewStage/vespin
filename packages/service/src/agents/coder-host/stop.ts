@@ -15,6 +15,7 @@ import { cancelAgentWakeup } from "@repo/database/models/agent-wakeups";
 import { devicesNamed } from "@repo/database/models/device-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import type { TaskStandingAgent } from "@repo/database/models/task-store";
+import { workspaceSandboxVcpusOf } from "@repo/database/models/workspace-sandbox-size-store";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import type { StoreWriter } from "@repo/database/models/writer";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
@@ -66,10 +67,20 @@ import {
  * conversation, whichever of them started it.
  */
 
-/** Where each of the agents' conversations named stands now, read by id since the agents passed the task's gate: its newest turn, and whether its sandbox stands open. */
+/**
+ * Where each of the agents' conversations named stands now, read by id since
+ * the agents passed the task's gate: its newest turn, and whether its sandbox
+ * stands open; and of the agents `booting` names, where its first launch
+ * stands and, for one that names its workspace, the vCPUs its sandbox opens
+ * with.
+ */
 export const standingsOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   conversationIds: readonly string[],
-  booting: readonly { readonly id: string; readonly conversationId: string }[] = [],
+  booting: readonly {
+    readonly id: string;
+    readonly conversationId: string;
+    readonly organizationId?: string;
+  }[] = [],
 ): Effect.fn.Return<
   (conversationId: string) => AgentTurnStanding,
   HostedRefusal,
@@ -79,6 +90,18 @@ export const standingsOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const runtimes = yield* hostedStoreOrUnavailable(nativeRuntimesOfReached(conversationIds));
   const sandboxes = yield* hostedStoreOrUnavailable(openSandboxesOfReached(conversationIds));
   const boots = yield* hostedStoreOrUnavailable(agentBootsOf(booting.map((agent) => agent.id)));
+
+  const vcpusOfWorkspace = yield* hostedStoreOrUnavailable(
+    workspaceSandboxVcpusOf(booting.flatMap((agent) => agent.organizationId ?? [])),
+  );
+
+  const vcpusOf = new Map(
+    booting.flatMap((agent) =>
+      agent.organizationId === undefined
+        ? []
+        : [[agent.conversationId, vcpusOfWorkspace(agent.organizationId)] as const],
+    ),
+  );
 
   const bootOf = new Map(
     booting.flatMap((agent) => {
@@ -93,6 +116,7 @@ export const standingsOf = /* @__PURE__ */ Effect.fnUntraced(function* (
     runtime: runtimes.get(conversationId),
     sandboxOpen: sandboxes.has(conversationId),
     boot: bootOf.get(conversationId),
+    sandboxVcpus: vcpusOf.get(conversationId),
   });
 });
 

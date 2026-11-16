@@ -9,6 +9,12 @@ import {
 import { INBOX_STATUS, INBOX_WIRE_VERSION, type InboxItem } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
+import type { RepositoryPullRequestViewedAnswerView } from "@repo/features/pull-request-view";
+import {
+  FILE_VIEWED_STATE,
+  type FileViewedState,
+  PULL_REQUEST_WRITE_OUTCOME,
+} from "@repo/features/pull-request-write-wire";
 import type { Task, TaskSummary } from "@repo/features/task-wire";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { appSettingsWire, settingsView } from "@repo/settings/testing";
@@ -19,6 +25,7 @@ import {
   type AppHolderInboxes,
   type AppInboxItems,
   type AppPages,
+  type AppRepositoryPullRequestHeld,
   type AppStateDelivery,
   type AppStateSnapshot,
   type AppTranscript,
@@ -180,23 +187,15 @@ describe("a delivery that crosses the wire", () => {
     repository: null,
   });
 
-  const [invites, billing] = [
-    {
-      ...summary("invites", "Teammate invitations"),
-      agents: { total: 0, working: 0, pullRequestTotal: 0 },
-    },
-    summary("billing", "Billing usage alerts"),
-  ];
+  const invites = {
+    ...summary("invites", "Teammate invitations"),
+    agents: { total: 0, working: 0, pullRequestTotal: 0 },
+  };
 
   const openDescription: Task = {
     ...invites,
     description: { body: "# Billing alerts fire at ninety percent", assumptions: [] },
   };
-
-  const taskList = (tasks: readonly TaskSummary[]): AppStateSnapshot => ({
-    ...document,
-    tasks: { ...document.tasks, tasks, activeTaskId: openDescription.id },
-  });
 
   const descriptions = (held: AppHeldTasks): AppStateSnapshot => ({
     ...document,
@@ -229,6 +228,16 @@ describe("a delivery that crosses the wire", () => {
     [LIVE_READ.TRANSCRIPT]: { "agent-1": { [OWN_TRANSCRIPT]: { rows: own } } },
   });
 
+  /** A pull request's files marked as GitHub holds them, the one file at `path` standing at `state`. */
+  const marks = (path: string, state: FileViewedState) => ({
+    rows: { outcome: PULL_REQUEST_WRITE_OUTCOME.DONE, files: [{ path, state }] },
+  });
+
+  const viewed = (
+    held: AppRepositoryPullRequestHeld<RepositoryPullRequestViewedAnswerView>,
+  ): AppStateSnapshot => ({ ...document, [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: held });
+
+  const quietMarks = marks("src/quiet-marks.ts", FILE_VIEWED_STATE.VIEWED);
   const quietLine = line("m-1", "Read the invites.");
   /** A task's description holding `body` alone. */
   const draft = (body: string): Task["description"] => ({ body, assumptions: [] });
@@ -283,20 +292,6 @@ describe("a delivery that crosses the wire", () => {
       quiet: [alpha.title],
     },
     {
-      name: "the task list, one task renamed and one come at the head, and the rest kept",
-      sent: taskList([invites, billing]),
-      next: taskList([
-        summary("delta", "Quarterly review"),
-        { ...invites, name: "Invites now" },
-        billing,
-      ]),
-      kept: (state: AppStateSnapshot) => [
-        state.tasks.tasks.find((row) => row.id === billing.id),
-        state.tasks.tasks.find((row) => row.id === invites.id)?.agents,
-      ],
-      quiet: [billing.name],
-    },
-    {
       name: "the held descriptions, a task's saved, one let go, and one kept",
       sent: descriptions({
         quiet: quietDescription,
@@ -328,6 +323,28 @@ describe("a delivery that crosses the wire", () => {
         state[LIVE_READ.TRANSCRIPT]["agent-1"]?.[OWN_TRANSCRIPT]?.rows?.messages[0],
       ],
       quiet: ["Read the invites."],
+    },
+    {
+      name: "the pull requests held by repository, one's marks moved, one let go, and another repository's kept",
+      sent: viewed({
+        "workspace-personal": {
+          "acme/quiet": { "7": quietMarks },
+          "acme/relay": {
+            "41": marks("src/expiry.ts", FILE_VIEWED_STATE.VIEWED),
+            "42": { failed: true },
+          },
+        },
+      }),
+      next: viewed({
+        "workspace-personal": {
+          "acme/quiet": { "7": quietMarks },
+          "acme/relay": { "41": marks("src/expiry.ts", FILE_VIEWED_STATE.UNVIEWED) },
+        },
+      }),
+      kept: (state: AppStateSnapshot) => [
+        state[LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]["workspace-personal"]?.["acme/quiet"],
+      ],
+      quiet: ["src/quiet-marks.ts"],
     },
   ])(
     "crosses a change to $name as what moved alone, what it kept the very one the window held",
