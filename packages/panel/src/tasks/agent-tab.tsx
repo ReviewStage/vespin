@@ -56,6 +56,7 @@ import {
 } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
+import type { NumberedAddress } from "@repo/features/link-grammar";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle, plainWords } from "@repo/features/plain-words";
@@ -3966,8 +3967,8 @@ interface AgentTabDoors {
   onOpenTarget?: DelegationDoors["onOpenTarget"];
   /** The cards its rows that open a tab hang, as those tabs hang them. */
   cards?: TranscriptCards | undefined;
-  /** Opens the agent's pull request, its checks, description, and conversation, in a tab of the side panel's own. */
-  onOpenPullRequest?: ((number?: number) => void) | undefined;
+  /** Opens a pull request the agent opened, by its repository and number, its checks, description, and conversation, in a tab of the side panel's own. */
+  onOpenPullRequest?: ((pullRequest: NumberedAddress) => void) | undefined;
   /** Hears the transcript the tab holds each time it moves, which the tab's hover card previews once the tab is not shown. */
   onHeld: (agentId: string, held: HeldTranscript) => void;
 }
@@ -4308,8 +4309,7 @@ function AgentTabBody({
         doors={{
           openGitHub,
           copy: copyWithToast,
-          openPullRequest: onOpenPullRequest === undefined ? undefined : () => onOpenPullRequest(),
-          openPullRequestNumber: onOpenPullRequest,
+          openPullRequest: onOpenPullRequest,
         }}
         startedAt={agent.runStartedAt}
         counts={shown}

@@ -188,7 +188,9 @@ patchedDependencies:
 # `scrollContentMargins`, SwiftUI's `contentMargins(_:_:for: .scrollContent)`,
 # which stands a plain list's rows in the reading column across a wide window
 # while the list keeps the whole width, so a drag beside the column scrolls it
-# as Mail's does; `listSectionMargins` moved no plain list's rows. Delete it
+# as Mail's does; `listSectionMargins` moved no plain list's rows. And it hands
+# a `List` its edit mode as a binding (`editing`, `onEditingChange`), so a
+# two-finger drag down a list can switch Select mode on. Delete it
 # when an `@expo/ui` release offers a tinted image and a photo a menu keeps,
 # and scroll content margins.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch

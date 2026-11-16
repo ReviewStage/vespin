@@ -63,6 +63,7 @@ import {
   PULL_REQUEST_CHAPTERS_READ,
   REPOSITORY_PULL_REQUEST_CHAPTERS_READ,
 } from "@repo/features/pull-request-chapters-live";
+import { REPOSITORY_PULL_REQUEST_MOVED_READ } from "@repo/features/pull-request-moved-live";
 import type { RepositoryPullRequestPartParams } from "@repo/features/pull-request-view";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
@@ -668,7 +669,7 @@ export function composeAgents(
 
     const { pullRequests } = dependencies;
 
-    // Note that a pull request named by its repository has no agent, so nothing here asks for an agent's own.
+    // Note that a pull request named by its repository has no agent, so it is followed by what GitHub says of it alone.
     const repositoryParts = yield* repositoryPullRequestParts({
       gate,
       focus: dependencies.focus,
@@ -680,7 +681,22 @@ export function composeAgents(
         reviewOptions: (key) => asked(pullRequests.reviewOptions(key)),
         viewed: (key) => asked(pullRequests.viewed(key)),
       },
-      listings: dependencies.pullRequestListings ?? Effect.succeed(Stream.empty),
+      moved: {
+        seal: (key, poll, userId, after) =>
+          asked(
+            client.liveRead(
+              REPOSITORY_PULL_REQUEST_MOVED_READ,
+              {
+                workspaceId: key.workspaceId,
+                repository: key.repository,
+                number: String(key.number),
+                userId,
+              },
+              poll ? { after } : undefined,
+            ),
+          ),
+        accountId: dependencies.accountId,
+      },
       tell: repositoryPartsTold(dependencies.kernel.emit),
     });
 
