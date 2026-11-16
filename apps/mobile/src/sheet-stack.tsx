@@ -43,7 +43,9 @@ export function SheetStack() {
  * Transparency iOS draws the glass as its own opaque gray, so the screen
  * keeps the brand's ground there too. A change of size class sets the sheet's
  * detents anew, which tells no event, so it is taken as opening again, at
- * half height.
+ * half height. Note that only a screen whose route opens with
+ * `SHORT_SHEET_DETENTS` may read it, since a whole sheet, such as Options,
+ * never stands at half height yet starts here as if it did.
  */
 export function useSheetAtHalf(): boolean {
   const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;

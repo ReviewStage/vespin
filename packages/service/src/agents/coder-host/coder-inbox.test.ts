@@ -34,7 +34,7 @@ import {
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
-import { paddedTo, webmBytes } from "@repo/wire/testing";
+import { m4aBytes, paddedTo, webmBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { Duration, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
@@ -723,6 +723,42 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
+    "a sound clip a body draws is kept as the clip it is, an MP4 of sound alone as an M4A",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* openAgent;
+
+        // A RIFF WAVE header's opening bytes, `RIFF`, a length, and `WAVE`, which is all a clip's read sniffs.
+        const clip = Uint8Array.from([
+          0x52, 0x49, 0x46, 0x46, 0x24, 0, 0, 0, 0x57, 0x41, 0x56, 0x45,
+        ]);
+
+        const sandbox = sandboxWith({ "/tmp/voice.m4a": m4aBytes(), "/tmp/chime.wav": clip });
+
+        const posted = yield* post(
+          agent,
+          {
+            ...QUEUE,
+            body: '![The greeting](/tmp/voice.m4a "Spoken")\n\n![The chime](/tmp/chime.wav)',
+          },
+          sandbox,
+        );
+
+        assert.equal(posted.status, ACTION_RESULT_STATUS.ACCEPTED);
+        const item = yield* onlyItem(agent);
+        const [message] = item.thread ?? [];
+
+        assert.deepEqual(
+          message?.files?.map((file) => [file.name, file.mediaType]),
+          [
+            ["voice.m4a", INBOX_FILE_TYPE.M4A],
+            ["chime.wav", INBOX_FILE_TYPE.WAV],
+          ],
+        );
+      }),
+  );
+
+  it.effect(
     "a recording a body draws is kept as a WebM past a picture's and a file's bound and read back as one, and a desktop before version 5 is shown no image block for it",
     () =>
       Effect.gen(function* () {
@@ -772,7 +808,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         });
 
         const tooLarge =
-          "Not posted: a picture names a file larger than 1.5 MB, a video larger than 4.0 MB, or a PDF larger than 3.0 MB; render it smaller, or record a shorter flow:";
+          "Not posted: a picture names a file larger than 1.5 MB, a video or a sound clip larger than 4.0 MB, or a PDF larger than 3.0 MB; render it smaller, or record a shorter flow or clip:";
 
         const refusals = [
           ["shots/huge.png", `${tooLarge} shots/huge.png`],
@@ -780,7 +816,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           ["/tmp/report.pdf", `${tooLarge} /tmp/report.pdf`],
           [
             "/tmp/video/flow.mkv",
-            "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM or H.264 MP4 video that states its size, or a PDF: /tmp/video/flow.mkv",
+            "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM or H.264 MP4 video that states its size, a WAV, MP3, M4A, AAC, or Ogg sound clip, or a PDF: /tmp/video/flow.mkv",
           ],
         ] as const;
 
@@ -816,7 +852,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           ],
           [
             drawing("notes.txt"),
-            "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM or H.264 MP4 video that states its size, or a PDF: notes.txt",
+            "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM or H.264 MP4 video that states its size, a WAV, MP3, M4A, AAC, or Ogg sound clip, or a PDF: notes.txt",
           ],
           [
             drawing(...Array.from({ length: 9 }, (_none, at) => `shots/${at}.png`)),

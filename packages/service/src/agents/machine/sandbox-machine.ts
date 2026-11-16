@@ -219,7 +219,7 @@ import {
   type RunnerRecord,
   type SandboxSetup,
 } from "./agent-machine.js";
-import { phoneVideoAsk, phoneVideoOf } from "./phone-video.js";
+import { phoneAudioAsk, phoneAudioOf, phoneVideoAsk, phoneVideoOf } from "./phone-video.js";
 
 /** Our state folder on the agent's own drive, beside the checkout, which a sandbox made again mounts as it stood. */
 const DRIVE_STATE_FOLDER = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/${SANDBOX_STATE_FOLDER}`;
@@ -911,6 +911,11 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
     phoneVideo: (session, path) =>
       Effect.flatMap(runningSession(session), (running) =>
         Effect.map(api.run(running, phoneVideoAsk(path)), phoneVideoOf),
+      ),
+
+    phoneAudio: (session, path) =>
+      Effect.flatMap(runningSession(session), (running) =>
+        Effect.map(api.run(running, phoneAudioAsk(path)), phoneAudioOf),
       ),
   };
 }

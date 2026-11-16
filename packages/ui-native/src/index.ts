@@ -32,6 +32,7 @@ export {
   FollowingChip,
   LabelChip,
   type ListScopes,
+  PriorityChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -93,6 +94,7 @@ export {
   glyphSymbol,
   type LucideSymbol,
   type MarkLook,
+  runsOnGlyph,
   sectionGlyph,
 } from "./glyph.js";
 
@@ -145,7 +147,7 @@ export {
 
 export { MachineAskSheet } from "./machine-ask-sheet.js";
 
-export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
+export { Markdown, type MarkdownFile, type MarkdownVideo, Picture } from "./markdown.js";
 
 export { markdownGithubPages, markdownReplyButtons } from "./markdown-model.js";
 
@@ -167,7 +169,7 @@ export {
 
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
 
-export { monogramOf } from "./monogram.js";
+export { useMinute } from "./minute.js";
 
 export { SwitchRow } from "./option-rows.js";
 
@@ -210,6 +212,7 @@ export { RemindPickSheet } from "./remind-sheet.js";
 export {
   FOOTER_TONE,
   type FooterTone,
+  footerToneOf,
   LIST_LOOK,
   type ListLook,
   ListSection,
@@ -235,7 +238,9 @@ export {
   CodeRow,
   type ConnectionLine,
   ConnectionRow,
+  FORM_SPACING,
   FollowerRow,
+  type FormSpacing,
   LoadingRow,
   MemberRow,
   type MemberRowAct,
@@ -261,12 +266,15 @@ export {
   type BarAction,
   type BarFootItem,
   type BarMenu,
+  type BarMenuAction,
+  type BarMenuGroup,
   type BarPath,
   type BarSearch,
   type ColumnBar,
   DetailPage,
   type DetailStack,
   type DetailStackPage,
+  groupKey,
   HostedFill,
   isBarMenu,
   KeptColumns,
@@ -275,10 +283,15 @@ export {
   SplitOverTabs,
   SplitView,
   scopeMenu,
+  scopeSubtitle,
   UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 
-export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
+export {
+  PRIORITY_MARK_SYMBOL,
+  PRIORITY_MARK_TONE,
+  STATUS_MARK_SYMBOL,
+} from "./status-mark-model.js";
 
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
@@ -288,6 +301,7 @@ export {
   AGENT_ROW_STATE,
   AgentRow,
   type AgentRowState,
+  FailedReadRow,
   GroupRow,
   LINK_ROW_TONE,
   LinkRow,

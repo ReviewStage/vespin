@@ -17,7 +17,7 @@ import { type ReactNode, useRef } from "react";
 import { useMachineAsks } from "../machine-asks.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
 import type { AgentSubject } from "../tasks/agent-ref.js";
-import { useChangesPeople } from "../tasks/changes-people.js";
+import { changesAddressOf, useChangesPeople } from "../tasks/changes-people.js";
 import { PullRequestCard, peopleOf } from "../tasks/pull-request-card.js";
 import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { RunsOnPlace } from "../tasks/runs-on.js";
@@ -121,7 +121,7 @@ export function AgentListRow({
   onOpenPullRequest: () => void;
 }): React.JSX.Element {
   const { models, macs } = agents;
-  const changesPeople = useChangesPeople(pullRequest === undefined ? undefined : agent.id);
+  const changesPeople = useChangesPeople(changesAddressOf(pullRequest?.url));
   const people = pullRequest === undefined ? undefined : peopleOf(changesPeople, pullRequest);
   const { name } = subject;
 

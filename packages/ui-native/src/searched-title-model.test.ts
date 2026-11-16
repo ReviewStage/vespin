@@ -16,6 +16,11 @@ describe("a searched title", () => {
     expect(searchedTitleMarkdown("ΟΔΟΣ map", searchTokens("οδος"))).toBe("**ΟΔΟΣ** map");
   });
 
+  it("keeps a letter outside the Basic Multilingual Plane whole at either edge of a bold", () => {
+    expect(searchedTitleMarkdown("𠮷野家 menu", ["𠮷野家"])).toBe("**𠮷野家** menu");
+    expect(searchedTitleMarkdown("menu 野家𠮷", ["野家𠮷"])).toBe("menu **野家𠮷**");
+  });
+
   it("is none where no word typed stands in the title, or only punctuation matched", () => {
     expect(searchedTitleMarkdown("Invite flow", ["ledger"])).toBeUndefined();
     expect(searchedTitleMarkdown("Invite (flow)", ["("])).toBeUndefined();
