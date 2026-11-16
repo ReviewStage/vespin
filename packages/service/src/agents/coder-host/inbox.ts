@@ -127,7 +127,9 @@ const MAX_VIDEO_MB = (INBOX_BOUNDS.MAX_VIDEO_BYTES / 1_000_000).toFixed(1);
 const MAX_PDF_MB = (AGENT_BOUNDS.MAX_PDF_BYTES / 1_000_000).toFixed(1);
 
 const POST_THREAD_WORDS =
-  "Post a message on a thread in the inbox, apart from your transcript. " +
+  "Post a message on a thread in the inbox, apart from your transcript: the inbox is where the developer looks for what needs them, so your reply alone never reaches them there. " +
+  "Post a question, a decision you should not make alone, or a to-do only they can do; and, the moment it is ready, what they should look at, such as a pull request, a page, or a screenshot. " +
+  `Keep one thread per thing and post on it again rather than open another; never post progress. Where a message names a thread someone wrote on, answer there with its key, and once its request is done, say there in a line what you did. Where another agent started you, post your own threads and send it each one's mention with ${AGENT_TOOL.MESSAGE_AGENT}. ` +
   "key is your own short lowercase slug, such as branch-protection: the first post under a key opens its thread and must name its title, " +
   "and a later one adds a message to that thread, a title it names renaming it. " +
   "to is the member the ask waits on, by their [@Name](link) mention; without it, the task's assignee, or the developer who started you. " +
