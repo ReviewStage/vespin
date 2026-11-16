@@ -51,6 +51,7 @@ import { ACTION_RESULT_STATUS, EXCESS_KEYS, type UnparsedWireValue } from "../..
 import { afterResponse } from "../../http/after-response.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import {
+  agentInboxItemOfKey,
   agentInboxItems,
   agentReachedInboxItems,
   closeInboxItem,
@@ -306,6 +307,8 @@ export type InboxWriteResult =
       readonly status: typeof ACTION_RESULT_STATUS.ACCEPTED;
       readonly thread: AgentInboxLine;
       readonly open: readonly AgentThreadRow[];
+      /** Why a withdrawal changed nothing: how the thread's ask was settled before it. */
+      readonly note?: string;
     }
   | InboxRefused;
 
@@ -356,7 +359,9 @@ export const INBOX_REFUSAL = {
     "Not read: name the thread by threadId as list_threads answered it, and before only as a page's older answered it.",
   NO_THREAD:
     "Not read: no thread of your workspace that the developer may see has that id; list_threads lists them.",
-  NO_OPEN_ASK: "Not withdrawn: you have no thread under that key with an open ask.",
+  NO_OPEN_ASK:
+    "Not withdrawn: your thread under that key is a notice, which asks nothing; a member settles it.",
+  NO_KEYED_THREAD: "Not withdrawn: you have no thread under that key; list_threads lists them.",
   NO_MEMBER:
     "Not posted: to names no member; write a member of your workspace by their mention link, [@Name](link), as a person's chip is written.",
   NO_ADDRESSEE: "Not posted: the member you addressed is not in your workspace.",
@@ -364,6 +369,15 @@ export const INBOX_REFUSAL = {
     "Not posted: the member you addressed cannot see your task, so they would never see the thread; address someone who can, or leave to out.",
   NO_AGENT: "Not done: this conversation is no agent's.",
   UNAVAILABLE: "Not done: the service could not reach its store.",
+} as const;
+
+/** Why a withdrawal changed nothing on a thread whose ask was settled before it, in the words the model reads. */
+const ALREADY_SETTLED = {
+  ANSWERED: (by: string) =>
+    `Nothing withdrawn: ${by} already answered the ask; their answer is on the thread.`,
+  CLOSED: (by: string) =>
+    `Nothing withdrawn: ${by} already closed the thread without answering it.`,
+  WITHDRAWN: (reason: string) => `Nothing withdrawn: the ask was already withdrawn: ${reason}`,
 } as const;
 
 /** How many of a settled thread's latest messages its read carries: enough to see what came of it. */
@@ -588,8 +602,12 @@ function rowsOf(items: readonly InboxItem[], readerId: string): readonly AgentTh
   );
 }
 
-/** What a post or a withdrawal answers once it is taken: the thread it changed, and one line for each other thread of the agent's still open. */
-function written(agent: InboxAgent, item: InboxItem): InboxStoreEffect<InboxWriteResult> {
+/** What a post or a withdrawal answers once it is taken: the thread it changed, one line for each other thread of the agent's still open, and why it changed nothing, where it did not. */
+function written(
+  agent: InboxAgent,
+  item: InboxItem,
+  note?: string,
+): InboxStoreEffect<InboxWriteResult> {
   return Effect.map(agentInboxItems(agent), (items) => ({
     status: ACTION_RESULT_STATUS.ACCEPTED,
     thread: lineOf(item, agent.agentId),
@@ -597,6 +615,7 @@ function written(agent: InboxAgent, item: InboxItem): InboxStoreEffect<InboxWrit
       items.filter((each) => each.status === INBOX_STATUS.OPEN && each.id !== item.id),
       agent.agentId,
     ),
+    ...(note === undefined ? undefined : { note }),
   }));
 }
 
@@ -995,6 +1014,39 @@ export function postToInbox(
   );
 }
 
+/** How a settled thread's ask was settled, in the words the model reads: answered, or closed by a member, or withdrawn with why. */
+function settledNote(item: InboxItem): string {
+  if (item.status === INBOX_STATUS.ANSWERED) {
+    return ALREADY_SETTLED.ANSWERED(item.answeredBy?.name ?? "a former member");
+  }
+
+  const { closedBy } = closerOf(item);
+
+  if (closedBy !== undefined) return ALREADY_SETTLED.CLOSED(closedBy);
+
+  return ALREADY_SETTLED.WITHDRAWN(item.closedReason ?? "");
+}
+
+/**
+ * A withdrawal that closed nothing, answered by what stands under the key.
+ * Note that a thread whose ask was settled first, answered or closed or
+ * withdrawn before, is answered as taken with how, because the agent's
+ * intent already holds and a refusal would only cost it a step; only a key
+ * with no thread, or a notice, which asks nothing, is refused.
+ */
+function notWithdrawn(agent: InboxAgent, key: string): InboxStoreEffect<InboxWriteResult> {
+  return Effect.gen(function* () {
+    const standing = yield* agentInboxItemOfKey(agent, key);
+
+    if (Option.isNone(standing)) return inboxRejected(INBOX_REFUSAL.NO_KEYED_THREAD);
+    const item = standing.value;
+
+    if (item.status === INBOX_STATUS.OPEN) return inboxRejected(INBOX_REFUSAL.NO_OPEN_ASK);
+
+    return yield* written(agent, item, settledNote(item));
+  });
+}
+
 /** Runs one withdrawal: the open ask of the thread under the key withdrawn with why, and the agent's inbox answered, or why not. */
 export function withdrawAsk(
   agent: InboxAgent,
@@ -1011,7 +1063,7 @@ export function withdrawAsk(
   return Effect.gen(function* () {
     const withdrawn = yield* closeInboxItem(agent, key, reason);
 
-    if (Option.isNone(withdrawn)) return inboxRejected(INBOX_REFUSAL.NO_OPEN_ASK);
+    if (Option.isNone(withdrawn)) return yield* notWithdrawn(agent, key);
     yield* afterResponse("a withdrawn thread's Slack DM", settleThreadDms(withdrawn.value.id));
     yield* afterResponse("a withdrawn thread's push", pushThreadSettled(withdrawn.value.id));
 
