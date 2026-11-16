@@ -9,6 +9,8 @@ import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import {
   APP_SETTING_SCHEMA,
   describedSettings,
+  EXPERIMENT,
+  experimentOn,
   HOST_CAPABILITY,
   LISTED_EXPERIMENTS,
   type SettingsRowsInput,
@@ -346,6 +348,15 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
             "Codex",
             "openai api key byok own key gpt chatgpt plan subscription billing provider credential dictation dictate",
           ],
+        }
+      : undefined,
+    // Cursor's row, its API keys alone, only for an account trying Cursor, as its card stands only there.
+    input.accountDrawn && experimentOn(input.settings.experiments, EXPERIMENT.CURSOR)
+      ? {
+          id: SETTINGS_SEARCH_ROW.API_KEY_CURSOR,
+          label: "Cursor",
+          page: SETTINGS_VIEW.AGENTS,
+          haystack: ["Cursor", "cursor api key byok own key billing provider credential"],
         }
       : undefined,
     // The Workspace page's rows beside its sections, as it draws them for the
