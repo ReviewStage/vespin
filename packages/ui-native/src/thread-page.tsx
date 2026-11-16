@@ -228,8 +228,11 @@ export function PathTitle({
   path,
   status,
   actions = [],
+  wrap = false,
 }: Pick<ThreadPageProps, "path" | "status"> & {
   readonly actions?: BarMenu["actions"] | undefined;
+  /** Whether the words wrap rather than cut to one line, as where the path heads the page rather than standing in a bar. */
+  readonly wrap?: boolean | undefined;
 }) {
   const colors = useColors();
   const words = path.join(PATH_PART);
@@ -241,7 +244,7 @@ export function PathTitle({
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
           foregroundStyle(colors.TEXT_MUTED),
-          lineLimit(1),
+          ...(wrap ? [] : [lineLimit(1)]),
         ]}
       >
         {words}
@@ -506,7 +509,11 @@ export function ThreadPage(props: ThreadPageProps) {
 
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
-  const pathTitle = <PathTitle path={path} status={status} actions={pathActions} />;
+
+  // Note that the path heading the page wraps, so its words stand uncut, while the bar's keeps to one line.
+  const pathTitle = (
+    <PathTitle path={path} status={status} actions={pathActions} wrap={pathInHead} />
+  );
 
   // Note that a thread opens at its newest message and keeps to its foot as it grows or the keyboard rises, as Messages does and the panel's board does, while one too short to scroll stands under its heading.
   return (
