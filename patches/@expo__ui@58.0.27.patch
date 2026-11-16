@@ -413,10 +413,10 @@ index 07a856574df36a69b802bd483caf4e33ae05a976..96144798f4a0de5176074149fd73e378
        return try ListSectionMargins(from: params, appContext: appContext)
      }
 diff --git a/ios/ToolbarView.swift b/ios/ToolbarView.swift
-index 7d5046d74247691b139f0ef570d3aa2ba409f8a8..773073b88843f93ea666855201532702c1897a52 100644
+index 7d5046d74247691b139f0ef570d3aa2ba409f8a8..b23862621aa9f846d84d13144cc4e5f6bc86129b 100644
 --- a/ios/ToolbarView.swift
 +++ b/ios/ToolbarView.swift
-@@ -38,10 +38,50 @@ private struct ToolbarItemLayer: View {
+@@ -38,8 +38,67 @@ private struct ToolbarItemLayer: View {
    let content: AnyView
  
    var body: some View {
@@ -429,9 +429,9 @@ index 7d5046d74247691b139f0ef570d3aa2ba409f8a8..773073b88843f93ea666855201532702
 +    } else {
 +      placed(content, on: base, placement: placement, visibilityPriority: visibilityPriority)
 +    }
-   }
- }
- 
++  }
++}
++
 +/**
 + How much room a spacer placed before an item takes, matching SwiftUI's `SpacerSizing`.
 + */
@@ -451,24 +451,41 @@ index 7d5046d74247691b139f0ef570d3aa2ba409f8a8..773073b88843f93ea666855201532702
 +) -> some View {
 +#if os(iOS) && compiler(>=6.2) // Xcode 26
 +  if #available(iOS 26.0, *) {
++#if compiler(>=6.4) // Xcode 27
++    if #available(iOS 27.0, *), let visibilityPriority {
++      base.toolbar {
++        ToolbarSpacer(spacerBefore == .fixed ? .fixed : .flexible, placement: placement)
++        ToolbarItem(placement: placement) {
++          content
++        }
++        .visibilityPriority(visibilityPriority.toPriority())
++      }
++    } else {
++      base.toolbar {
++        ToolbarSpacer(spacerBefore == .fixed ? .fixed : .flexible, placement: placement)
++        ToolbarItem(placement: placement) {
++          content
++        }
++      }
++    }
++#else
 +    base.toolbar {
 +      ToolbarSpacer(spacerBefore == .fixed ? .fixed : .flexible, placement: placement)
 +      ToolbarItem(placement: placement) {
 +        content
 +      }
 +    }
++#endif
 +  } else {
 +    placed(content, on: base, placement: placement, visibilityPriority: visibilityPriority)
-+  }
+   }
 +#else
 +  placed(content, on: base, placement: placement, visibilityPriority: visibilityPriority)
 +#endif
-+}
-+
- internal struct ToolbarView: ExpoSwiftUI.View {
-   @ObservedObject var props: ToolbarViewProps
+ }
  
-@@ -110,6 +150,13 @@ private func placement(from props: SlotViewProps) -> ToolbarItemPlacement {
+ internal struct ToolbarView: ExpoSwiftUI.View {
+@@ -110,6 +169,13 @@ private func placement(from props: SlotViewProps) -> ToolbarItemPlacement {
    return placement.toPlacement()
  }
  
