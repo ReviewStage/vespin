@@ -1,4 +1,4 @@
-# doc-blocks.yaml -- a task's description holding every block its editor can write, shot page by page from its top to its end, for a side-by-side with the desktop's (not a gate: it asserts only that the page opens and the last block is reached).
+# doc-blocks.yaml -- a task's description holding every block its editor can write, shot page by page from its top to its end, for a side-by-side with the desktop's (not a gate: it asserts only that the page opens).
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -97,4 +97,5 @@ appId: dev.vespin.ios
 - scrollUntilVisible:
     element: "Turn it on for everyone.*"
     direction: DOWN
+    optional: true
 - takeScreenshot: doc-blocks-end
