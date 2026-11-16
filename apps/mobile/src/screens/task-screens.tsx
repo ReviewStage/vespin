@@ -128,6 +128,7 @@ import {
   TaskRow,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useMinute,
   useThreeColumns,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -1403,6 +1404,7 @@ function standingMenus(
 
 /** The task's head: its name, its chips, each opening its menu, who follows it, and who created it and when. */
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
+  const now = useMinute();
   const { task } = overview;
   const pictureOf = useMemberPictures();
   const following = useFollowingChip(task.id);
@@ -1433,7 +1435,7 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
       createdBy={
         task.createdBy === undefined
           ? undefined
-          : `${WORDS.CREATED_BY} ${task.createdBy.name}${LINE_PART}${provenanceText(task.createdAt, Date.now())}`
+          : `${WORDS.CREATED_BY} ${task.createdBy.name}${LINE_PART}${provenanceText(task.createdAt, now)}`
       }
     />
   );
@@ -1847,6 +1849,7 @@ function OverviewAgents({
 
 /** The pages the task's agents showed, each opened whole on the app's own page screen, at the version the list holds. */
 function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
+  const now = useMinute();
   const router = useRouter();
   const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
@@ -1861,7 +1864,7 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
           key={page.id}
           symbol={GLYPH.PAGE}
           label={page.title}
-          detail={provenanceText(page.at, Date.now())}
+          detail={provenanceText(page.at, now)}
           onPress={() => {
             const opened = {
               kind: PUSHED_PAGE.TASK_PAGE,
@@ -2042,6 +2045,7 @@ const COMMENTS_SHOWN = {
  * back. None where no thread stands, open or resolved.
  */
 function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
+  const now = useMinute();
   const router = useRouter();
   const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
@@ -2073,7 +2077,7 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
           key={thread.id}
           symbol={showingResolved ? GLYPH.RESOLVED : GLYPH.COMMENT}
           label={threadComments(thread)[0]?.words ?? thread.quote}
-          detail={provenanceText(thread.updatedAt, Date.now())}
+          detail={provenanceText(thread.updatedAt, now)}
           onPress={() => {
             if (toDetail({ kind: PUSHED_PAGE.COMMENTS, threadId: thread.id, taskId: task.id })) {
               return;
