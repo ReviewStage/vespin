@@ -24,6 +24,7 @@ import {
   foregroundStyle,
   frame,
   lineLimit,
+  onGeometryChange,
   opacity,
   padding,
   tint,
@@ -36,6 +37,7 @@ import { BAR_EDGE, BAR_ROW_SPACING, BarHead, GlassBar, useBarGlass } from "./gla
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
+import { useNoticeLift } from "./notice-lift.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -43,6 +45,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The send button's round, in points. */
 const SEND_SIZE = 32;
+
+/** How tall a column's composer stands at its foot with its gap before it is measured, a bare field's, which the app's notice stands over, in points. */
+const COMPOSER_FOOT_UNMEASURED = SEND_SIZE + 2 * (SPACE.ROW + 2) + SPACE.ROW;
 
 /**
  * A press's frame in the composer's row: Apple's least target, its mark
@@ -435,15 +440,20 @@ export function Composer(props: ComposerProps) {
  * detail, where no React Native bar can stand: its pieces in a row of the
  * system's own glass, rounded as the bar is, or solid where the reader
  * reduces transparency, as the bar stands (`useBarGlass`), taking pictures
- * dropped on it as the bar does.
+ * dropped on it as the bar does. While its column is the one in front
+ * (`shown`), the app's notice stands over it, as tall as it stands, its head
+ * of queued messages or a held call included.
  */
-export function ComposerFoot(props: ComposerProps) {
+export function ComposerFoot(props: ComposerProps & { readonly shown: boolean }) {
   const { onDropPictures } = props;
+  const [room, setRoom] = useState(COMPOSER_FOOT_UNMEASURED);
+  useNoticeLift({ room }, props.shown);
 
   const glass = [
     padding({ all: BAR_EDGE }),
     ...useBarGlass(),
     padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
+    onGeometryChange(({ height }) => setRoom(height + SPACE.ROW)),
     ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
   ];
 

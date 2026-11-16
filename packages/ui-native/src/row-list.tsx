@@ -42,7 +42,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useAnnounced, useReduceMotion } from "./accessibility.js";
+import { useAnnounced, useReduceMotion, useScaledSize } from "./accessibility.js";
 import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
@@ -56,6 +56,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** Whether a foldable section stands open, in VoiceOver's own words for a disclosure. */
 const FOLD_HEARD = { OPEN: "Expanded", SHUT: "Collapsed" } as const;
+
+/** FNV-1a's 32-bit offset and prime, and the character `orderOf` puts between two ids so `ab`,`c` and `a`,`bc` differ. */
+const FNV = { OFFSET: 0x811c9dc5, PRIME: 0x01000193, SEPARATOR: 0x1f } as const;
 
 /** What a press on a foldable section's header is heard to do. */
 const FOLD_HINT = "Shows or hides the rows it holds";
@@ -121,6 +124,27 @@ type RowListProps = {
   readonly onChooseStart?: ((ids: readonly string[]) => void) | undefined;
   readonly children: ReactNode;
 };
+
+/**
+ * A number standing for the rows' ids in their order, FNV-1a over each id's
+ * characters with a separator between ids, so it changes when a row comes,
+ * goes, or moves, and holds while the same rows only redraw.
+ */
+function orderOf<Item>(data: readonly Item[], keyOf: (item: Item) => string): number {
+  let hash: number = FNV.OFFSET;
+
+  for (const item of data) {
+    const key = keyOf(item);
+
+    for (let index = 0; index < key.length; index++) {
+      hash = Math.imul(hash ^ key.charCodeAt(index), FNV.PRIME);
+    }
+
+    hash = Math.imul(hash ^ FNV.SEPARATOR, FNV.PRIME);
+  }
+
+  return hash;
+}
 
 /**
  * The rows a two-finger drag chose: the selection the system reports, but
@@ -310,8 +334,15 @@ type RowForEachProps<Item> = {
  * row drawn here holds no state of its own; its caller holds it by id.
  */
 export function RowForEach<Item>({ data, keyOf, children }: RowForEachProps<Item>) {
+  const reduceMotion = useReduceMotion();
+
+  // Note that a row that comes, goes, or moves slides the rows around it into place, as Mail's list does when a message is archived, rather than the list redrawing in its new order at once; with Reduce Motion on the rows stand in their new places at once, as the system's own lists do.
   return (
-    <List.ForEach data={data} keyExtractor={keyOf}>
+    <List.ForEach
+      data={data}
+      keyExtractor={keyOf}
+      modifiers={reduceMotion ? [] : [animation(Animation.default, orderOf(data, keyOf))]}
+    >
       {({ item }) => children(item)}
     </List.ForEach>
   );
@@ -326,6 +357,10 @@ type ListSectionProps = {
   readonly mark?: MarkLook | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
   readonly foldable?: boolean | undefined;
+  /** Whether a foldable section stands folded, where its screen holds that across a change of layout; it holds its own where none is given. */
+  readonly folded?: boolean | undefined;
+  /** Called with whether a press folded the section, where its screen holds `folded`. */
+  readonly onFold?: ((folded: boolean) => void) | undefined;
   /** A line under the section, in the system's footnote. */
   readonly footer?: string | undefined;
   /** What the footer says: a note on the section, in the footnote's own ink, or why a send did not go, as every refusal reads (`ProblemLine`) and told to VoiceOver at once. */
@@ -376,6 +411,7 @@ function GroupHeader({
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
+  const chevron = useScaledSize(CHEVRON_SIZE);
 
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
@@ -391,9 +427,9 @@ function GroupHeader({
       {folded === undefined ? null : (
         <Image
           {...glyphImage(folded ? GLYPH.FOLDED : GLYPH.UNFOLDED)}
-          size={CHEVRON_SIZE}
+          size={chevron}
           color={colors.TEXT_MUTED}
-          modifiers={[frame({ width: CHEVRON_SIZE + 2 })]}
+          modifiers={[frame({ width: chevron + 2 })]}
         />
       )}
       <Text
@@ -443,6 +479,7 @@ function GroupHeader({
  */
 function SectionAddButton({ add }: { readonly add: SectionAdd }) {
   const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
   const [only, ...rest] = add.acts;
 
   if (only === undefined) return null;
@@ -451,7 +488,7 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
   const glyph = (
     <Image
       {...glyphImage(GLYPH.ADD)}
-      size={MARK_SIZE.GLYPH}
+      size={size}
       color={colors.TEXT_MUTED}
       modifiers={[
         frame({ minWidth: ADD_TARGET.WIDTH, minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),
@@ -519,15 +556,24 @@ export function ListSection({
   progress,
   mark,
   foldable = false,
+  folded: held,
+  onFold,
   footer,
   footerTone = FOOTER_TONE.NOTE,
   onDropLink,
   add,
   children,
 }: ListSectionProps) {
-  const [folded, setFolded] = useState(false);
+  const [own, setOwn] = useState(false);
+  const folded = held ?? own;
   const look = useContext(ListLookContext);
   const reduceMotion = useReduceMotion();
+
+  const setFolded = (next: boolean) => {
+    setOwn(next);
+    onFold?.(next);
+  };
+
   // Note that a header holding none shows no count, as Mail's groups stand, rather than a 0 beside its title.
   const shown = count === 0 ? undefined : count;
 
@@ -547,7 +593,7 @@ export function ListSection({
       label
     ) : (
       <Button
-        onPress={() => setFolded((was) => !was)}
+        onPress={() => setFolded(!folded)}
         modifiers={[
           buttonStyle("plain"),
           accessibilityAddTraits(["isHeader"]),

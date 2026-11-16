@@ -1,5 +1,6 @@
 // audio-clip.tsx -- a sound clip a message carried, played through expo-video's player with no picture, as a strip at its message's width: play and pause, its time, and where it stands.
 
+import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { playheadText } from "@repo/features/time-format";
 import { SymbolView } from "expo-symbols";
 import { useVideoPlayer, type VideoPlayerStatus } from "expo-video";
@@ -17,6 +18,7 @@ import { useAccessibilitySize, useReduceMotion, useScaledSize } from "./accessib
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
+import { MediaFailed } from "./media-failed.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -85,10 +87,12 @@ interface Playback {
 }
 
 type AudioClipProps = {
-  /** The file the clip plays from, written under the app's caches by its type's extension; none while its bytes are on their way. */
-  readonly source: string | undefined;
+  /** The file the clip plays from, written under the app's caches by its type's extension; none while its bytes are on their way, and `null` where they could not be read. */
+  readonly source: string | null | undefined;
   /** What the clip is, its caption or its file's name, heard in its place. */
   readonly label: string;
+  /** Reads a clip whose bytes could not be read again; none offers nothing. */
+  readonly onRetry?: (() => void) | undefined;
 };
 
 /**
@@ -136,13 +140,14 @@ function useGlide(at: number, duration: number, playing: boolean): Animated.Valu
  * that one the player cannot read, such as an Ogg before the service keeps
  * its AAC copy, says so in its place rather than standing as a button that
  * never plays; and one whose bytes are on their way, or that the player
- * still reads, stands the system's spinner where its button will be. To
+ * still reads, stands the system's spinner where its button will be; one
+whose bytes could not be read says so with Try again, as a picture does. To
  * VoiceOver the strip is one adjustable element, its label, valued by its
  * time: a double tap or the magic tap plays and pauses it, a swipe up or down
  * moves it five seconds on or back, and its actions name Play or Pause. Its
  * long press offers what `keep-model.ts` offers a clip.
  */
-export function AudioClip({ source, label }: AudioClipProps) {
+export function AudioClip({ source, label, onRetry }: AudioClipProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
   const buttonSize = useScaledSize(BUTTON_SIZE);
@@ -182,11 +187,11 @@ export function AudioClip({ source, label }: AudioClipProps) {
   }, [player]);
 
   const acts = useKeptActs(
-    source === undefined ? undefined : { kind: KEPT_KIND.SOUND, source, name: label },
+    source == null ? undefined : { kind: KEPT_KIND.SOUND, source, name: label },
   );
 
   const failed = playback.status === "error";
-  const ready = source !== undefined && playback.status === "readyToPlay";
+  const ready = source != null && playback.status === "readyToPlay";
   const duration = playback.duration > 0 ? playback.duration : player.duration;
   const glide = useGlide(playback.at, duration, playback.playing);
   const time = `${playheadText(playback.at * SECOND_MS)} / ${playheadText(duration * SECOND_MS)}`;
@@ -220,6 +225,18 @@ export function AudioClip({ source, label }: AudioClipProps) {
     else if (actionName === "increment") seekTo(playback.at + SEEK_STEP_SECONDS);
     else if (actionName === "decrement") seekTo(playback.at - SEEK_STEP_SECONDS);
   };
+
+  // Note that a clip whose bytes could not be read says so in the strip's place with Try again, rather than spin as one still on its way.
+  if (source === null) {
+    return (
+      <MediaFailed
+        line={MEDIA_READ_WORDS.AUDIO_FAILED}
+        heard={`${label} ${MEDIA_READ_WORDS.COULD_NOT_READ}`}
+        onRetry={onRetry}
+        style={styles.strip}
+      />
+    );
+  }
 
   if (failed) {
     return (
