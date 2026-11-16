@@ -1,6 +1,6 @@
 // index.ts -- @repo/ui-native: the iOS app's components over @expo/ui's SwiftUI, its Markdown in React Native views, and the brand's tokens they draw with.
 
-export { useAnnounced } from "./accessibility.js";
+export { useAnnounced, useReduceTransparency } from "./accessibility.js";
 
 export { AccountBarItem, AccountButton, type BarAccount } from "./account-button.js";
 
@@ -148,7 +148,7 @@ export {
 
 export { MachineAskSheet } from "./machine-ask-sheet.js";
 
-export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
+export { Markdown, type MarkdownFile, type MarkdownVideo, Picture } from "./markdown.js";
 
 export { markdownGithubPages, markdownReplyButtons } from "./markdown-model.js";
 
@@ -171,8 +171,6 @@ export {
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
 
 export { useMinute } from "./minute.js";
-
-export { monogramOf } from "./monogram.js";
 
 export { SwitchRow } from "./option-rows.js";
 
@@ -215,6 +213,7 @@ export { RemindPickSheet } from "./remind-sheet.js";
 export {
   FOOTER_TONE,
   type FooterTone,
+  footerToneOf,
   LIST_LOOK,
   type ListLook,
   ListSection,
@@ -227,7 +226,7 @@ export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./r
 
 export { latestStep, type PreviewMessage, previewMessages } from "./row-preview-model.js";
 
-export { SCREEN_GROUND, Screen, type ScreenGround, Spacer } from "./screen.js";
+export { NO_GROUND, SCREEN_GROUND, Screen, type ScreenGround, Spacer } from "./screen.js";
 
 export { ScreenFailure } from "./screen-failure.js";
 
@@ -240,7 +239,9 @@ export {
   CodeRow,
   type ConnectionLine,
   ConnectionRow,
+  FORM_SPACING,
   FollowerRow,
+  type FormSpacing,
   LoadingRow,
   MemberRow,
   type MemberRowAct,
@@ -266,12 +267,15 @@ export {
   type BarAction,
   type BarFootItem,
   type BarMenu,
+  type BarMenuAction,
+  type BarMenuGroup,
   type BarPath,
   type BarSearch,
   type ColumnBar,
   DetailPage,
   type DetailStack,
   type DetailStackPage,
+  groupKey,
   HostedFill,
   isBarMenu,
   KeptColumns,
@@ -298,6 +302,7 @@ export {
   AGENT_ROW_STATE,
   AgentRow,
   type AgentRowState,
+  FailedReadRow,
   GroupRow,
   LINK_ROW_TONE,
   LinkRow,
@@ -318,10 +323,12 @@ export {
 export { BRAND_COLOR } from "./tokens/brand-colors.js";
 
 export {
+  type BarScheme,
   type BrandColors,
   STATUS_TONE,
   type StatusTone,
   toneColor,
+  useBarScheme,
   useColors,
 } from "./tokens/colors.js";
 
