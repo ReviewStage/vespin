@@ -445,8 +445,10 @@ export function AgentComposer({
   const connected = useConnected();
   // Note that a Start's box has no runtime yet, so the harness its chosen model runs on stands for it.
   const provider = model === undefined ? undefined : providerOf(model.choice.model);
+
   const runtime =
     model?.runtime ?? (provider === undefined ? undefined : runtimeOfProvider(provider));
+
   // Who pays, as the chip's menu names it, is the context popover's last line too.
   const paying = model === undefined ? payer : paidByOf(payer, usage, model.runtime);
 
