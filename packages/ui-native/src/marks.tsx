@@ -402,6 +402,7 @@ export function AgentTile({
           modifiers={[
             resizable(),
             frame({ width: size * TILE_MARK_SCALE, height: size * TILE_MARK_SCALE }),
+            foregroundStyle(colors.TEXT),
             accessibilityHidden(),
           ]}
         />
@@ -418,10 +419,18 @@ export function HarnessMark({
   readonly provider: ModelProvider;
   readonly size?: number | undefined;
 }) {
+  const colors = useColors();
+
+  // Note that the text's ink reaches Cursor's cube alone, a template; Clawd and Codex's picture keep their own colors.
   return (
     <Image
       assetName={HARNESS_MARK_ASSET[provider]}
-      modifiers={[resizable(), frame({ width: size, height: size }), accessibilityHidden()]}
+      modifiers={[
+        resizable(),
+        frame({ width: size, height: size }),
+        foregroundStyle(colors.TEXT),
+        accessibilityHidden(),
+      ]}
     />
   );
 }
