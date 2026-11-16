@@ -11,7 +11,7 @@ import {
   saveSlackBotToken,
 } from "@repo/database/models/slack-installation-store";
 import { member, organization, user } from "@repo/database/schemas/auth";
-import { getTestDB } from "@repo/database/testing";
+import { getTestDB, openWorkspace } from "@repo/database/testing";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted, Result } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
@@ -24,6 +24,7 @@ import {
   firstIntegrationAccount,
   integrationConnectOf,
 } from "../testing/integration-connect.js";
+import { SlackApp, slackAppService } from "./slack-app.js";
 import {
   SlackBot,
   SlackBotFailure,
@@ -31,6 +32,7 @@ import {
   slackBotFromEnvironment,
   slackBotOver,
 } from "./slack-bot.js";
+import { readSlackBot } from "./slack-bot-operations.js";
 
 /**
  * Our Slack bot writing to a member, over a real store and a fake
@@ -38,7 +40,9 @@ import {
  * know is written nothing unless they connected their own Slack account in
  * the bot's team, and a Slack that refuses answers nothing rather than
  * failing whoever asked. Each workspace's calls are made on the token its
- * own install granted, and one that holds none writes nothing.
+ * own install granted, and one that holds none writes nothing. Settings
+ * offers the bot only where the deployment holds both the key ring that
+ * opens a token and our Slack app whose install grants one.
  *
  * Synthetic accounts, workspaces, and Slack ids throughout.
  */
@@ -224,5 +228,33 @@ it.layer(getTestDB())("the Slack bot", (it) => {
         assert.deepEqual(bearers, ["Bearer xoxb-theirs", "Bearer xoxb-ours"]);
       }).pipe(Effect.provide(bot));
     },
+  );
+
+  it.effect.each([
+    { holds: "the key ring and the Slack app", ring: true, app: true, configured: true },
+    { holds: "the key ring alone", ring: true, app: false, configured: false },
+    { holds: "the Slack app alone", ring: false, app: true, configured: false },
+  ])("is offered in Settings where the deployment holds $holds: $configured", (row) =>
+    Effect.gen(function* () {
+      const owner = yield* openAccount(`${randomUUID()}@app.test`);
+      const workspace = yield* openWorkspace(owner);
+
+      assert.equal((yield* readSlackBot(owner, workspace)).configured, row.configured);
+    }).pipe(
+      Effect.provideService(SlackBot, slackBotOver(row.ring ? fakeSlack : undefined)),
+      Effect.provideService(
+        SlackApp,
+        slackAppService(
+          row.app
+            ? {
+                clientId: "1.2",
+                clientSecret: Redacted.make("client-secret"),
+                signingSecret: Redacted.make("signing-secret"),
+              }
+            : undefined,
+          [],
+        ),
+      ),
+    ),
   );
 });

@@ -78,6 +78,7 @@ import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { readAccountPerson } from "../accounts/account-person.js";
 import { type ConnectorService, IntegrationConnect } from "../integrations/integration-connect.js";
 import { readIntegrationConnections } from "../integrations/integration-store.js";
+import { SlackApp } from "./slack-app.js";
 
 /** How long a member whose email matched no one in the team is written nothing before Slack is asked again. */
 const SLACK_MEMBER_MISS_LIFETIME = Duration.days(1);
@@ -732,6 +733,19 @@ function slackWorkspaceBotOver(
             ),
   };
 }
+
+/**
+ * Whether this deployment holds the bot as Settings offers it: the key ring
+ * a workspace's token is opened with, and our Slack app, whose install
+ * grants that token; one without either connects nothing.
+ */
+export const slackBotConfigured: Effect.Effect<boolean, never, SlackBot | SlackApp> = Effect.gen(
+  function* () {
+    if (!(yield* SlackBot).configured) return false;
+
+    return Result.isSuccess(yield* Effect.result((yield* SlackApp).settings));
+  },
+);
 
 /** The bot over one Web API every workspace's calls are made on, and the file transfer beside it, or over none, where no workspace's token is held. */
 export function slackBotOver(

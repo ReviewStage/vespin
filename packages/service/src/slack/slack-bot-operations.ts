@@ -66,7 +66,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../http/http-effect.js";
 import { SlackApp } from "./slack-app.js";
-import { SlackBot, type SlackWorkspaceBot } from "./slack-bot.js";
+import { SlackBot, type SlackWorkspaceBot, slackBotConfigured } from "./slack-bot.js";
 import { slackAuthorizeUrl, slackInstallCallback } from "./slack-install-app.js";
 
 /** One channel changed: the bot put in it or taken out of it, and its default repository named or cleared, either or both. */
@@ -76,7 +76,12 @@ export type SlackChannelChange = Omit<
 >;
 
 /** What a write that names a repository reaches: the store, the bot, and GitHub through the App. */
-type SlackBotWriteServices = DatabaseServices | SlackBot | GitHubApp | HttpClient.HttpClient;
+type SlackBotWriteServices =
+  | DatabaseServices
+  | SlackBot
+  | SlackApp
+  | GitHubApp
+  | HttpClient.HttpClient;
 
 /** The team's channels as Settings lists them, each with its default repository; none where Slack could not be read. */
 const listedChannels = Effect.fn("web/slackBotChannels")(function* (
@@ -103,8 +108,9 @@ const listedChannels = Effect.fn("web/slackBotChannels")(function* (
 const workspaceSlackBot = Effect.fn("web/workspaceSlackBot")(function* (
   workspace: Workspace,
   userId: string,
-): Effect.fn.Return<WorkspaceSlackBot, HostedRefusal, DatabaseServices | SlackBot> {
-  const { configured, forWorkspace } = yield* SlackBot;
+): Effect.fn.Return<WorkspaceSlackBot, HostedRefusal, DatabaseServices | SlackBot | SlackApp> {
+  const { forWorkspace } = yield* SlackBot;
+  const configured = yield* slackBotConfigured;
   const installation = yield* hostedStoreOrUnavailable(workspaceSlackInstallation(workspace.id));
 
   if (Option.isNone(installation)) return { configured };
