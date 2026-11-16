@@ -29,12 +29,7 @@ import {
 } from "@repo/features/agent-approval-wire";
 import {
   AGENT_CALL_FAILURE,
-  type AgentOverviewChecksAnswerView,
-  type AgentOverviewConversationAnswerView,
-  type AgentOverviewPullRequestAnswerView,
   type AgentPullRequestAnswerView,
-  type AgentPullRequestViewedAnswerView,
-  type AgentReviewOptionsAnswerView,
   type AgentTurnChangesAnswerView,
 } from "@repo/features/agent-view";
 import {
@@ -62,7 +57,18 @@ import {
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { CHAPTER_KIND, CHAPTER_RISK, LINE_REF_SIDE } from "@repo/features/pull-request-chapters";
-import { PULL_REQUEST_CHAPTERS_STATE } from "@repo/features/pull-request-chapters-wire";
+import {
+  PULL_REQUEST_CHAPTERS_STATE,
+  type PullRequestChaptersAnswer,
+} from "@repo/features/pull-request-chapters-wire";
+import type {
+  RepositoryOverviewChecksAnswerView,
+  RepositoryOverviewConversationAnswerView,
+  RepositoryOverviewPullRequestAnswerView,
+  RepositoryPullRequestAnswerView,
+  RepositoryPullRequestViewedAnswerView,
+  RepositoryReviewOptionsAnswerView,
+} from "@repo/features/pull-request-view";
 import {
   FILE_VIEWED_STATE,
   MERGE_METHOD,
@@ -92,9 +98,9 @@ import {
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/terminal-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
-  type AppChapters,
   type AppPages,
   type AppPullRequestPart,
+  type AppRepositoryPullRequestHeld,
   type AppStateSnapshot,
   type AppTranscript,
   type AppTranscripts,
@@ -110,6 +116,7 @@ import { agentTab, changesTab, fileTab, pageTab, terminalTab } from "@repo/ui/ta
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { longRunHold, longRunPicture, longRunTranscript } from "./agent-long-run-fixture.js";
 import { voiceLiveHold, voiceLiveTranscript, voiceTranscript } from "./agent-voice-fixture.js";
+import { NO_PULL_REQUESTS_KEPT, withPullRequest } from "./by-pull-request.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW, type PullRequestView } from "./task-tab-model.js";
 import type { MainTab } from "./use-main-tabs.js";
 import type { SidePanelState, StagedSidePanel } from "./use-side-panel.js";
@@ -1294,7 +1301,7 @@ const ANSWERS: StagedAnswers = {
 
     return sent;
   },
-  [ACT_KIND.AGENTS_CHANGES]: () => CHANGES,
+  [ACT_KIND.PULL_REQUESTS_CHANGES]: () => CHANGES,
   [ACT_KIND.AGENTS_TURN_CHANGES]: ({ messageId }) =>
     TURN_CHANGES.get(messageId) ?? { files: INVITE_CHANGES, truncated: false },
   [ACT_KIND.AGENTS_PORTS]: () => ({ running: true, ports: [3000, 5173] }),
@@ -1515,47 +1522,129 @@ function stagedRunOnMac(held: AppWorkspaceTools): AppWorkspaceTools {
   return laid;
 }
 
-/** Main's held chapters with the agent's pull request's holding its chapters, one object for each of main's. */
-const STAGED_CHAPTERS = new WeakMap<AppChapters, AppChapters>();
+/** The Inbox profile's pull request, the reference journey's agent's, which a link beside its items opens: its number and title. */
+const INBOX_PULL_REQUEST = { number: 128, title: "Invite a teammate by email" } as const;
 
-/** Lays `rows` as one part of the agent's own pull request over main's held part, one object for each of main's. */
-function stagedPart<Part>(
-  rows: Part,
-): (held: AppPullRequestPart<Part>) => AppPullRequestPart<Part> {
-  const staged = new WeakMap<AppPullRequestPart<Part>, AppPullRequestPart<Part>>();
+/** Lays `rows` as one read of the agent's pull request, by its repository and number, over main's held read, one object for each of main's and workspace. */
+function stagedPart<Read>(
+  rows: Read,
+  number: number = PULL_REQUEST.number,
+): (
+  held: AppRepositoryPullRequestHeld<Read>,
+  workspaceId: string,
+) => AppRepositoryPullRequestHeld<Read> {
+  const staged = new WeakMap<
+    AppRepositoryPullRequestHeld<Read>,
+    Map<string, AppRepositoryPullRequestHeld<Read>>
+  >();
 
-  return (held) => {
-    let laid = staged.get(held);
+  return (held, workspaceId) => {
+    const ofHeld = staged.get(held) ?? new Map<string, AppRepositoryPullRequestHeld<Read>>();
+    staged.set(held, ofHeld);
+    let laid = ofHeld.get(workspaceId);
 
     if (laid === undefined) {
+      const repository = REPOSITORY;
+      const ofWorkspace = held[workspaceId];
+
       laid = {
         ...held,
-        [FIXTURE_AGENT_ID]: { ...held[FIXTURE_AGENT_ID], [OWN_PULL_REQUEST]: { rows } },
+        [workspaceId]: {
+          ...ofWorkspace,
+          [repository]: { ...ofWorkspace?.[repository], [String(number)]: { rows } },
+        },
       };
-      staged.set(held, laid);
+      ofHeld.set(workspaceId, laid);
     }
 
     return laid;
   };
 }
 
-/** The parts of the agent's own pull request its tabs hold, as the host would lay each. */
+/** Main's held branch reads with the agent's own laid over them, which its tab's pull request card reads (`use-agent-pull-request.ts`), one object for each of main's. */
+const STAGED_PUBLISHED = new WeakMap<
+  AppPullRequestPart<AgentPullRequestAnswerView>,
+  AppPullRequestPart<AgentPullRequestAnswerView>
+>();
+
+/** What the agent published, its branch and pull request, as its tab's read of it holds it. */
+function stagedPublished(
+  held: AppPullRequestPart<AgentPullRequestAnswerView>,
+): AppPullRequestPart<AgentPullRequestAnswerView> {
+  let laid = STAGED_PUBLISHED.get(held);
+
+  if (laid === undefined) {
+    laid = {
+      ...held,
+      [FIXTURE_AGENT_ID]: { ...held[FIXTURE_AGENT_ID], [OWN_PULL_REQUEST]: { rows: PUBLISHED } },
+    };
+    STAGED_PUBLISHED.set(held, laid);
+  }
+
+  return laid;
+}
+
+/** The reads of the agent's pull request its tab holds, as the host would lay each. */
 const STAGED_PARTS = {
-  [LIVE_READ.PULL_REQUEST]: stagedPart<AgentOverviewPullRequestAnswerView>(OVERVIEW_PULL_REQUEST),
-  [LIVE_READ.PULL_REQUEST_CHECKS]: stagedPart<AgentOverviewChecksAnswerView>(OVERVIEW_CHECKS),
-  [LIVE_READ.PULL_REQUEST_CONVERSATION]:
-    stagedPart<AgentOverviewConversationAnswerView>(OVERVIEW_CONVERSATION),
-  [LIVE_READ.PULL_REQUEST_PUBLISHED]: stagedPart<AgentPullRequestAnswerView>(PUBLISHED),
-  [LIVE_READ.REVIEW_OPTIONS]: stagedPart<AgentReviewOptionsAnswerView>({
+  [LIVE_READ.REPOSITORY_PULL_REQUEST]:
+    stagedPart<RepositoryOverviewPullRequestAnswerView>(OVERVIEW_PULL_REQUEST),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]:
+    stagedPart<RepositoryOverviewChecksAnswerView>(OVERVIEW_CHECKS),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]:
+    stagedPart<RepositoryOverviewConversationAnswerView>(OVERVIEW_CONVERSATION),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]:
+    stagedPart<RepositoryPullRequestAnswerView>(PUBLISHED),
+  [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: stagedPart<RepositoryReviewOptionsAnswerView>({
     labels: OVERVIEW_PULL_REQUEST.pullRequest.labels,
     users: [ADA, GRACE],
     teams: [],
   }),
-  [LIVE_READ.PULL_REQUEST_VIEWED]: stagedPart<AgentPullRequestViewedAnswerView>({
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: stagedPart<RepositoryPullRequestViewedAnswerView>({
     outcome: PULL_REQUEST_WRITE_OUTCOME.DONE,
     files: [{ path: "src/db/schema/memberships.ts", state: FILE_VIEWED_STATE.VIEWED }],
   }),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: stagedPart<PullRequestChaptersAnswer>(CHAPTERS),
 };
+
+/** The overview's parts of the Inbox profile's pull request, as the agent's own read them, under its own number and title. */
+const INBOX_PARTS = {
+  [LIVE_READ.REPOSITORY_PULL_REQUEST]: stagedPart<RepositoryOverviewPullRequestAnswerView>(
+    {
+      pullRequest: {
+        ...OVERVIEW_PULL_REQUEST.pullRequest,
+        ...INBOX_PULL_REQUEST,
+        url: `https://github.com/${REPOSITORY}/pull/${INBOX_PULL_REQUEST.number}`,
+      },
+    },
+    INBOX_PULL_REQUEST.number,
+  ),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: stagedPart<RepositoryOverviewChecksAnswerView>(
+    OVERVIEW_CHECKS,
+    INBOX_PULL_REQUEST.number,
+  ),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]:
+    stagedPart<RepositoryOverviewConversationAnswerView>(
+      OVERVIEW_CONVERSATION,
+      INBOX_PULL_REQUEST.number,
+    ),
+};
+
+/** Main's document as the Inbox profile draws it: the reference journey's pull request held as its Pull request tab beside an item reads it. */
+function inboxAppState(state: AppStateSnapshot, workspaceId: string): AppStateSnapshot {
+  return {
+    ...state,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST]: INBOX_PARTS[LIVE_READ.REPOSITORY_PULL_REQUEST](
+      state[LIVE_READ.REPOSITORY_PULL_REQUEST],
+      workspaceId,
+    ),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: INBOX_PARTS[
+      LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS
+    ](state[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS], workspaceId),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: INBOX_PARTS[
+      LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION
+    ](state[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION], workspaceId),
+  };
+}
 
 /** Main's settings with the Voice experiment on, one object for each of main's. */
 const VOICE_SETTINGS = new WeakMap<
@@ -1589,11 +1678,18 @@ function voiceSettings(
  * and the agent's transcript as its tab's read of it holds it
  * (`LIVE_READ.TRANSCRIPT`), the long run's at the step it reached, and
  * where its `run_on_mac` stands as its Runs on card reads it
- * (`LIVE_READ.WORKSPACE_TOOLS`).
+ * (`LIVE_READ.WORKSPACE_TOOLS`); and under the Inbox profile, the
+ * reference journey's pull request as its tab beside an item reads it.
  * The same document, the very object, under any other profile.
  */
-export function agentAppState(state: AppStateSnapshot, taskId: string): AppStateSnapshot {
+export function agentAppState(
+  state: AppStateSnapshot,
+  taskId: string,
+  workspaceId: string,
+): AppStateSnapshot {
   const stage = AGENT_STAGES.get(state.run.profile);
+
+  if (state.run.profile === RUN_PROFILE.INBOX) return inboxAppState(state, workspaceId);
 
   if (stage === undefined) return state;
   const held = state[LIVE_READ.PAGES];
@@ -1608,48 +1704,44 @@ export function agentAppState(state: AppStateSnapshot, taskId: string): AppState
     STAGED_PAGES.set(held, staged);
   }
 
-  const heldChapters = state[LIVE_READ.PULL_REQUEST_CHAPTERS];
-  let chapters = STAGED_CHAPTERS.get(heldChapters);
-
-  if (chapters === undefined) {
-    chapters = {
-      ...heldChapters,
-      [FIXTURE_AGENT_ID]: { [String(PULL_REQUEST.number)]: { rows: CHAPTERS } },
-    };
-    STAGED_CHAPTERS.set(heldChapters, chapters);
-  }
-
   return {
     ...state,
     ...(voiceStage(stage) === undefined || state.settings === undefined
       ? undefined
       : { settings: voiceSettings(state.settings) }),
     [LIVE_READ.PAGES]: staged,
-    [LIVE_READ.PULL_REQUEST_CHAPTERS]: chapters,
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT], stagedTranscript(stage)),
     [LIVE_READ.WORKSPACE_TOOLS]: stagedRunOnMac(state[LIVE_READ.WORKSPACE_TOOLS]),
-    [LIVE_READ.PULL_REQUEST]: STAGED_PARTS[LIVE_READ.PULL_REQUEST](state[LIVE_READ.PULL_REQUEST]),
-    [LIVE_READ.PULL_REQUEST_CHECKS]: STAGED_PARTS[LIVE_READ.PULL_REQUEST_CHECKS](
-      state[LIVE_READ.PULL_REQUEST_CHECKS],
+    [LIVE_READ.PULL_REQUEST_PUBLISHED]: stagedPublished(state[LIVE_READ.PULL_REQUEST_PUBLISHED]),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST]: STAGED_PARTS[LIVE_READ.REPOSITORY_PULL_REQUEST](
+      state[LIVE_READ.REPOSITORY_PULL_REQUEST],
+      workspaceId,
     ),
-    [LIVE_READ.PULL_REQUEST_CONVERSATION]: STAGED_PARTS[LIVE_READ.PULL_REQUEST_CONVERSATION](
-      state[LIVE_READ.PULL_REQUEST_CONVERSATION],
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: STAGED_PARTS[
+      LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS
+    ](state[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS], workspaceId),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: STAGED_PARTS[
+      LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION
+    ](state[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION], workspaceId),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: STAGED_PARTS[
+      LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED
+    ](state[LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED], workspaceId),
+    [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: STAGED_PARTS[LIVE_READ.REPOSITORY_REVIEW_OPTIONS](
+      state[LIVE_READ.REPOSITORY_REVIEW_OPTIONS],
+      workspaceId,
     ),
-    [LIVE_READ.PULL_REQUEST_PUBLISHED]: STAGED_PARTS[LIVE_READ.PULL_REQUEST_PUBLISHED](
-      state[LIVE_READ.PULL_REQUEST_PUBLISHED],
-    ),
-    [LIVE_READ.REVIEW_OPTIONS]: STAGED_PARTS[LIVE_READ.REVIEW_OPTIONS](
-      state[LIVE_READ.REVIEW_OPTIONS],
-    ),
-    [LIVE_READ.PULL_REQUEST_VIEWED]: STAGED_PARTS[LIVE_READ.PULL_REQUEST_VIEWED](
-      state[LIVE_READ.PULL_REQUEST_VIEWED],
-    ),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: STAGED_PARTS[
+      LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED
+    ](state[LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED], workspaceId),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: STAGED_PARTS[
+      LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS
+    ](state[LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS], workspaceId),
   };
 }
 
 /**
  * The side panel an agent profile opens with, from the panel the tasks
- * profiles open: the agent's Pull request tab on the profile's view, the
+ * profiles open: the agent's pull request's tab on the profile's view, the
  * file's tab, the page's, or the agent's Terminal, or shut beside the description;
  * none under any other profile.
  */
@@ -1666,13 +1758,14 @@ export function agentSidePanel(
   if (voiceStage(stage) !== undefined) return { ...panel, open: false, tab: undefined };
 
   if ("view" in stage) {
-    const pullRequest = changesTab(FIXTURE_AGENT_ID);
+    const address = { repository: REPOSITORY, number: PULL_REQUEST.number };
+    const pullRequest = changesTab(address);
 
     return {
       ...panel,
       tasks: { [taskId]: { opened: [], closed: [], changes: [pullRequest] } },
       tab: pullRequest,
-      pullRequestViews: new Map([[FIXTURE_AGENT_ID, new Map([[undefined, stage.view]])]]),
+      pullRequestViews: withPullRequest(NO_PULL_REQUESTS_KEPT, address, stage.view),
     };
   }
 

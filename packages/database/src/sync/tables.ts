@@ -41,6 +41,7 @@ import { device } from "../schemas/device.js";
 import { deviceAgentLine, deviceAgentRequest } from "../schemas/device-agent.js";
 import { githubInstallation } from "../schemas/github-installation.js";
 import { githubPersonalToken } from "../schemas/github-personal-token.js";
+import { githubPullRequestMove } from "../schemas/github-pull-request-move.js";
 import { githubRepositoryRead } from "../schemas/github-repository-read.js";
 import { hostPairing } from "../schemas/host-pairing.js";
 import { inboxItem } from "../schemas/inbox.js";
@@ -734,6 +735,16 @@ export const pullRequestChaptersSync = defineSyncTable(pullRequestChapters, {
 });
 
 /**
+ * When GitHub last said a pull request moved, on its repository's topic by
+ * GitHub's id, which only the open Pull request tabs following that
+ * repository's pull requests are woken on. No column is ignored: a delivery
+ * moves `moved_at` on every write, which is what a tab follows.
+ */
+export const githubPullRequestMoveSync = defineSyncTable(githubPullRequestMove, {
+  topics: [{ kind: TOPIC.GITHUB_REPOSITORY, column: githubPullRequestMove.repositoryId }],
+});
+
+/**
  * A workspace's memory, on its workspace's memory topic, which only the open
  * memory reads of the workspace are woken on: the workspace's own topic
  * would wake every member's task list on each agent's `save_memory`. No
@@ -950,6 +961,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   taskPageVersionSync,
   agentBrowserTabSync,
   pullRequestChaptersSync,
+  githubPullRequestMoveSync,
   memorySync,
   memoryRecallSync,
   installedSkillSync,

@@ -130,13 +130,11 @@ interface PullRequestAsked {
 export const OPEN_PULL_REQUEST_TOOL = {
   name: AGENT_TOOL.OPEN_PULL_REQUEST,
   description:
-    "Open the pull request for a branch you pushed. head is the branch's name, title its title, body its description in " +
-    "Markdown, draft whether it opens as a draft, and base the branch it merges into: the repository's default branch " +
-    "where left out, or another branch on GitHub, such as the parent's branch for a stacked pull request. Use this rather than " +
-    `\`gh pr create\`: the service opens it as the developer who started you where you write as them, and as ${PRODUCT_NAME}'s GitHub ` +
-    "App otherwise, and adds nothing to the description. Where GitHub refuses the developer's " +
-    "own access, it is opened as the App instead and the answer says so; tell the developer, who can sign in with GitHub " +
-    "again. The call answers with the pull request's address and number, or GitHub's reason it opened none.",
+    "Open the pull request for a branch you pushed: head is the branch, body its description in Markdown, and base the branch it " +
+    "merges into, the default branch where left out, or another on GitHub, such as the parent's branch for a stacked pull request. " +
+    `Use this rather than \`gh pr create\`: it opens as the developer who started you where you write as them, and as ${PRODUCT_NAME}'s GitHub ` +
+    "App otherwise, and adds nothing to the description. Where GitHub refuses the developer's own access, it opens as the App " +
+    "and the answer says so; tell the developer, who can sign in with GitHub again.",
   inputSchema: openPullRequestInputSchema,
 } as const;
 

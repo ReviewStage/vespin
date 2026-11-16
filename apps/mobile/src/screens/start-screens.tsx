@@ -33,7 +33,6 @@ import {
   buzz,
   Chip,
   type ChipMenuGroup,
-  ComposeSheet,
   ConfirmAsk,
   FieldChip,
   GLYPH,
@@ -41,16 +40,18 @@ import {
   glyphSymbol,
   MenuChip,
   type PickOption,
+  runsOnGlyph,
   STATUS_MARK_SYMBOL,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useIsFocused, useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { useCloseSheet } from "../close-sheet.js";
+import { FocusedComposeSheet } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useListedTasks } from "../host/host-provider.js";
 import { useOnTab } from "../tab-route.js";
@@ -259,10 +260,30 @@ function RunsOnChip({
   if (pick.devices.length === 0) return null;
   const options = runsOnOptions(pick.devices);
 
+  // Note that each place leads with the panel's runs-on mark: the cloud's, or its device's by its platform.
+  const glyphOf = (place: string) =>
+    runsOnGlyph({
+      cloud: place === CLOUD,
+      platform: pick.devices.find((device) => device.deviceId === place)?.platform,
+    });
+
   return (
     <MenuChip
       label={labelOf(options, runsOn) ?? WORDS.RUNS_ON}
-      menu={{ groups: [{ title: WORDS.RUNS_ON, choices: choicesOf(options, runsOn, onRunsOn) }] }}
+      symbol={glyphOf(runsOn)}
+      menu={{
+        groups: [
+          {
+            title: WORDS.RUNS_ON,
+            choices: options.map((option) => ({
+              label: option.label,
+              symbol: glyphOf(option.id),
+              on: option.id === runsOn,
+              onPress: () => onRunsOn(option.id),
+            })),
+          },
+        ],
+      }}
     />
   );
 }
@@ -429,8 +450,6 @@ export function NewAgentScreen({
   readonly taskId: string;
   readonly opened?: OpenedSuggestion | undefined;
 }) {
-  // Whether the sheet is the screen in front, which its bar of capsules tells the app's notice.
-  const focused = useIsFocused();
   const action = opened?.view.action;
   const brief = action?.kind === REPLY_BUTTON_ACTION.START ? action.prompt : "";
   const [prompt, setPrompt] = useState(brief);
@@ -487,8 +506,7 @@ export function NewAgentScreen({
         onStart={start}
         kept={kept}
       />
-      <ComposeSheet
-        shown={focused}
+      <FocusedComposeSheet
         title={
           opened === undefined
             ? undefined
@@ -701,8 +719,6 @@ export function NewTaskScreen({
   readonly parent?: string | undefined;
   readonly draft?: NewTaskDraft | undefined;
 }) {
-  // Whether the sheet is the screen in front, which its bar of capsules tells the app's notice.
-  const focused = useIsFocused();
   const [prompt, setPrompt] = useState(draft?.prompt ?? "");
   const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
@@ -778,8 +794,7 @@ export function NewTaskScreen({
         file={{ ready: filed !== undefined && placed && !starting, onFile: file }}
         kept={kept}
       />
-      <ComposeSheet
-        shown={focused}
+      <FocusedComposeSheet
         head={<RelationChip pick={relation} />}
         words={{
           placeholder: WORDS.TASK_PLACEHOLDER,

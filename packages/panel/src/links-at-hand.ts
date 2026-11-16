@@ -74,7 +74,6 @@ export const LINK_THING = {
   PAGE: "page",
   AGENT: "agent",
   WORKER: "worker",
-  CHANGES: "pull request",
   INBOX: "Inbox",
   INBOX_ITEM: "Inbox item",
   AUTOMATIONS: "Automations",
@@ -130,11 +129,11 @@ export function slugOf(workspaces: readonly Workspace[], workspaceId: string | u
  * The place a tab of the side panel shows, on the task that holds the
  * panel; none for a tab whose thing has no link of its own:
  * a file's, the Inbox, the comments, a terminal, the plan's of old,
- * whose task is the column's Overview and linked as the task, a pull request
- * the agent did not open, and a worker of the app's own, which is drawn
- * nowhere a link opens. Note that a Changes or a
- * worker's tab is the agent's, so it is linked by the agent alone, on a
- * task's panel as on the agent's page.
+ * whose task is the column's Overview and linked as the task, a pull
+ * request's, whose page on GitHub names it, and a worker of the app's own,
+ * which is drawn nowhere a link opens. Note that a worker's tab is the
+ * agent's, so it is linked by the agent alone, on a task's panel as on the
+ * agent's page.
  */
 export function panelTabPlace(
   holder: PagePlace,
@@ -148,8 +147,6 @@ function panelThing(place: LinkDestination): LinkThing | undefined {
   switch (place.kind) {
     case LINK_DESTINATION.PAGE:
       return LINK_THING.PAGE;
-    case LINK_DESTINATION.CHANGES:
-      return LINK_THING.CHANGES;
     case LINK_DESTINATION.WORKER:
       return LINK_THING.WORKER;
     default:
