@@ -204,7 +204,7 @@ export function coderInstructions(
           `Record a decision you made, or a question left open with the assumption you go on, in the task's description with \`${EDIT_DESCRIPTION_TOOL.name}\`${read}.`,
         ]
       : []),
-    `Save screenshots under \`${machine.sharedFiles}/\` and show them with \`${AGENT_TOOL.SHOW_IMAGE}\`.`,
+    `Save screenshots under \`${machine.sharedFiles}/\` and show them with \`${AGENT_TOOL.SHOW_MEDIA}\`.`,
     ...namingLines(repository, ownTask, workspace),
   ];
 
