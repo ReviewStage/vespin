@@ -154,6 +154,7 @@ export function CommentThread({
   const page = (foot?: ReactNode) =>
     thread === undefined ? undefined : (
       <ThreadPage
+        quoted
         path={path}
         status={task?.status}
         title={quoteOf(thread.quote, thread.anchor !== undefined)}
@@ -299,6 +300,7 @@ export function NewComment({
   const page = (foot?: ReactNode) =>
     block === undefined ? undefined : (
       <ThreadPage
+        quoted
         path={path}
         status={overview?.task.status}
         title={quoteOf(block.quote ?? "", true)}
