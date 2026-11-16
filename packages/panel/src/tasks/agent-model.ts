@@ -72,6 +72,7 @@ import {
   type ModelProvider,
   type ModelSpeed,
   modelSpeedOf,
+  NO_EFFORT,
   standardModelIdOf,
 } from "@repo/features/models-wire";
 import { formatCompact, formatUsd } from "@repo/features/number-format";
@@ -1251,7 +1252,7 @@ const PROVIDER_ORDER: readonly string[] = Object.values(MODEL_PROVIDER);
 
 /**
  * The model families the menus lead with, in the order they list them,
- * Anthropic's and then OpenAI's: the newest of each is listed before
+ * Anthropic's, then OpenAI's, then Cursor's: the newest of each is listed before
  * anything is searched, and every other version only once something is. A
  * new version needs nothing here; a new family is one word.
  */
@@ -1264,6 +1265,9 @@ const LEAD_FAMILIES: readonly string[] = [
   "sol",
   "luna",
   "terra",
+  "composer",
+  "auto",
+  "grok",
 ];
 
 /**
@@ -1449,7 +1453,8 @@ export function choiceModelId(offered: OfferedModel, speed: ModelSpeed): string 
  * says nothing.
  */
 function choiceDetail(effort: string, speed: ModelSpeed, standardTokens?: number): string {
-  const words = [effortLabel(effort)];
+  // A model with no effort of its own says none, so Composer 2.5 never reads "Default".
+  const words = effort === NO_EFFORT ? [] : [effortLabel(effort)];
 
   if (speed !== MODEL_SPEED.STANDARD) words.push(SPEED_WORD[speed]);
 

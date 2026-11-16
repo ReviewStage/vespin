@@ -6,6 +6,7 @@ import {
   BAR_TITLE,
   EmptyState,
   GLYPH,
+  glyphSymbol,
   ListSection,
   PersonPickRows,
   Screen,
@@ -77,7 +78,11 @@ export function AddFollowerScreen({ taskId }: { readonly taskId: string }) {
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={WORDS.CANCEL}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
     </>
   );

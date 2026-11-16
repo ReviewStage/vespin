@@ -1,4 +1,4 @@
-// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, one act or a menu, the field, and a send or mic button on the right, in a React Native bar or a SwiftUI column's foot.
+// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, one act or a menu, the field, and Send or Stop on the right, in a React Native bar or a SwiftUI column's foot.
 
 import {
   Button,
@@ -8,6 +8,7 @@ import {
   Menu,
   ProgressView,
   TextField,
+  type TextFieldSelection,
   Toggle,
   useNativeState,
   VStack,
@@ -30,7 +31,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { longPasteIn } from "@repo/features/long-paste";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import { BAR_EDGE, BAR_ROW_SPACING, BarHead, GlassBar, useBarGlass } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -50,9 +51,12 @@ const COMPOSER_FOOT_UNMEASURED = SEND_SIZE + 2 * (SPACE.ROW + 2) + SPACE.ROW;
 
 /**
  * A press's frame in the composer's row: Apple's least target, its mark
- * centered in it, the whole frame taking the press. The bar's edge is thin
- * (`BAR_EDGE`) by as much as the frame stands past its mark, so the bar
- * draws as it did with its marks alone.
+ * centered in it. The bar's edge is thin (`BAR_EDGE`) by as much as the frame
+ * stands past its mark, so the bar draws as it did with its marks alone.
+ * Note that a plain mark's button wears it on its label, never on the button,
+ * so the whole frame takes the press: a borderless button or a menu answers
+ * only where its label is hit. The round button wears it on itself, for its
+ * place in the row alone, since its press is its circle's, as the system's is.
  */
 const PRESS_FRAME = [
   frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
@@ -108,11 +112,11 @@ const FIELD_LEADING = SPACE.ROW + 4 - BAR_EDGE;
 /** How far the field's words stand from Send's frame, which stands its round in by less than the row's spacing did. */
 const FIELD_TRAILING = SPACE.TIGHT;
 
-/** The most lines the field grows to before it scrolls its words. */
-const FIELD_LINES = 6;
+/** The most lines the field grows to before it scrolls its words; fewer at an accessibility size, where six of its lines with the keyboard up left the transcript over it no room. */
+const FIELD_LINES = { REGULAR: 6, LARGE: 3 } as const;
 
 /** What the + is named by, whether it opens one act or a menu. */
-const ADD_LABEL = "Add";
+export const ADD_LABEL = "Add";
 
 /**
  * What the + offers where it opens a menu rather than one act, in the
@@ -145,8 +149,6 @@ type ComposerProps = {
   readonly onAdd?: (() => void) | undefined;
   /** What the + opens as a menu in place of `onAdd`'s one act, such as an agent's Photos, Permissions, and Fast. */
   readonly addMenu?: ComposerMenu | undefined;
-  /** Starts dictation, drawn as a mic in Send's place while the field is empty. */
-  readonly onDictate?: (() => void) | undefined;
   /** What the composer offers of a voice call into its agent: Talk before Send while the field is empty, or the call's presses there while the call stands; none where it calls no one. */
   readonly call?: ComposerCall | undefined;
   /** Stops the turn under way, drawn as Stop in Send's place while the field is empty, as the panel's box offers it while its agent works. */
@@ -167,18 +169,16 @@ type ComposerProps = {
  * The round button at the field's end, the system's own prominent circle as
  * Messages draws Send: Send in the ink once there is something to send and
  * the system's dimmed circle until then, or, while nothing is typed, Stop
- * while a turn runs, the system's spinner once it is pressed, else the mic.
+ * while a turn runs, and the system's spinner once it is pressed.
  */
 function SendButton({
   empty,
   onSend,
-  onDictate,
   onStop,
   stopping,
 }: {
   readonly empty: boolean;
   readonly onSend: (() => void) | undefined;
-  readonly onDictate: (() => void) | undefined;
   readonly onStop: (() => void) | undefined;
   readonly stopping: boolean;
 }) {
@@ -187,7 +187,6 @@ function SendButton({
   const round = useScaledSize(SEND_SIZE);
   const stopSize = useScaledSize(MARK_SIZE.GLYPH - 2);
   const sendSize = useScaledSize(MARK_SIZE.GLYPH);
-  const dictateSize = useScaledSize(MARK_SIZE.LEAD + 2);
 
   if (empty && onStop !== undefined && stopping) {
     return (
@@ -210,17 +209,6 @@ function SendButton({
     );
   }
 
-  if (empty && onDictate !== undefined) {
-    return (
-      <Button
-        onPress={onDictate}
-        modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel("Dictate")]}
-      >
-        <Image {...glyphImage(GLYPH.DICTATE)} size={dictateSize} color={colors.TEXT_MUTED} />
-      </Button>
-    );
-  }
-
   const sendable = !empty && onSend !== undefined;
 
   return (
@@ -237,18 +225,13 @@ function SendButton({
   );
 }
 
-/** The + as a menu, as SwiftUI draws one from a press: its acts, a rule, then its choices within and its switches. */
-function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testId: string }) {
-  const colors = useColors();
-  const addSize = useScaledSize(MARK_SIZE.LEAD + 2);
+/** What the + menu holds, wherever its button stands: its acts, a rule, then its choices within and its switches. */
+export function AddMenuItems({ menu }: { readonly menu: ComposerMenu }) {
   const submenus = menu.submenus ?? [];
   const switches = menu.switches ?? [];
 
   return (
-    <Menu
-      label={<Image {...glyphImage(GLYPH.ADD)} size={addSize} color={colors.TEXT_MUTED} />}
-      modifiers={[...PRESS_FRAME, accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
-    >
+    <>
       {menu.actions.map((action) => (
         <Button
           key={action.label}
@@ -270,6 +253,28 @@ function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testI
           onIsOnChange={() => each.onPress()}
         />
       ))}
+    </>
+  );
+}
+
+/** The + as a menu, as SwiftUI draws one from a press. */
+function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testId: string }) {
+  const colors = useColors();
+  const addSize = useScaledSize(MARK_SIZE.LEAD + 2);
+
+  return (
+    <Menu
+      label={
+        <Image
+          {...glyphImage(GLYPH.ADD)}
+          size={addSize}
+          color={colors.TEXT_MUTED}
+          modifiers={PRESS_FRAME}
+        />
+      }
+      modifiers={[accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
+    >
+      <AddMenuItems menu={menu} />
     </Menu>
   );
 }
@@ -304,17 +309,21 @@ export function AddPress({
       onPress={onAdd}
       modifiers={[
         buttonStyle("borderless"),
-        ...PRESS_FRAME,
         accessibilityLabel(ADD_LABEL),
         accessibilityIdentifier(testId),
       ]}
     >
-      <Image {...glyphImage(GLYPH.ADD)} size={addSize} color={colors.TEXT_MUTED} />
+      <Image
+        {...glyphImage(GLYPH.ADD)}
+        size={addSize}
+        color={colors.TEXT_MUTED}
+        modifiers={PRESS_FRAME}
+      />
     </Button>
   );
 }
 
-/** The composer's pieces in a row's order: the +, the field, and Send or the mic, which a bar of glass holds. */
+/** The composer's pieces in a row's order: the +, the field, and Send or Stop, which a bar of glass holds. */
 function ComposerPieces(props: ComposerProps) {
   const {
     placeholder,
@@ -324,7 +333,6 @@ function ComposerPieces(props: ComposerProps) {
     onSend,
     onAdd,
     addMenu,
-    onDictate,
     call,
     onStop,
     stopping = false,
@@ -332,6 +340,9 @@ function ComposerPieces(props: ComposerProps) {
   } = props;
 
   const text = useNativeState(held ?? "");
+  // Note that a field opening on words handed back, as a refused send's, stands its caret after them, as Messages keeps a draft's, rather than at their start.
+  const [opened] = useState(() => (held ?? "").length);
+  const caret = useNativeState<TextFieldSelection>({ start: opened, end: opened });
   const [typed, setTyped] = useState(held ?? "");
   const words = held ?? typed;
   // Note that the field is handed the holder's words only where they moved apart from what was typed, as a send empties them or a refusal hands them back.
@@ -355,6 +366,7 @@ function ComposerPieces(props: ComposerProps) {
   };
 
   const empty = words.trim() === "" && !sendable;
+  const lines = useAccessibilitySize() ? FIELD_LINES.LARGE : FIELD_LINES.REGULAR;
 
   const send =
     onSend === undefined
@@ -376,10 +388,11 @@ function ComposerPieces(props: ComposerProps) {
         placeholder={placeholder}
         axis="vertical"
         autoFocus={props.autoFocus === true}
+        {...(opened > 0 && { selection: caret })}
         onTextChange={type}
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-          lineLimit(FIELD_LINES),
+          lineLimit(lines),
           padding({
             vertical: FIELD_INSET,
             trailing: FIELD_TRAILING,
@@ -393,13 +406,7 @@ function ComposerPieces(props: ComposerProps) {
       {call === undefined || (call.kind === COMPOSER_CALL.TALK && !empty) ? null : (
         <ComposerCallPresses call={call} />
       )}
-      <SendButton
-        empty={empty}
-        onSend={send}
-        onDictate={onDictate}
-        onStop={onStop}
-        stopping={stopping}
-      />
+      <SendButton empty={empty} onSend={send} onStop={onStop} stopping={stopping} />
     </>
   );
 }
@@ -407,8 +414,8 @@ function ComposerPieces(props: ComposerProps) {
 /**
  * A composer in the system's Liquid Glass at the screen's foot, above the tab
  * bar: the + for what a message carries, the field, which grows with its
- * words, and Send filled with the ink, or the mic while the field is empty
- * where dictation is offered. Where its holder keeps the words, the field
+ * words, and Send filled with the ink, or Stop while the field is empty and
+ * a turn runs. Where its holder keeps the words, the field
  * follows them, so words a refused send hands back stand in it again; else
  * it empties on Send. Pictures dropped on it, on an iPad, go to its
  * holder's `onDropPictures`. It stands in a React Native bar (`GlassBar`),

@@ -1,6 +1,6 @@
 // tab-stack.tsx -- a tab's native stack: inline titles in the ink and round glass back buttons, its items in the brand's copper, its bar clear over the brand's ground.
 
-import { BAR_TITLE, useColors } from "@repo/ui-native";
+import { BAR_TITLE, useBarScheme, useColors } from "@repo/ui-native";
 import { Stack } from "expo-router";
 
 /**
@@ -15,10 +15,12 @@ import { Stack } from "expo-router";
  */
 export function TabStack() {
   const colors = useColors();
+  const scheme = useBarScheme();
 
   return (
     <Stack
       screenOptions={{
+        headerUserInterfaceStyle: scheme,
         headerTintColor: colors.TEXT,
         headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         headerBackButtonDisplayMode: "minimal",
