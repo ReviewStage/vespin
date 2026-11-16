@@ -35,7 +35,7 @@ import {
   type IntegrationStatus,
 } from "@repo/features/integration-wire";
 import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
-import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, TASKS_READ } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { type AppWorkspaceIntegrations, NO_KEYS_HELD } from "@repo/host/app-state";
@@ -62,6 +62,7 @@ import {
   holdAutomations,
   holdIntegrations,
   stateWith,
+  type WrittenTasksView,
 } from "./app-state.js";
 import { composerEditor, editorBundleLanded, installEditorLayout } from "./composer.js";
 import { settleQueries, withQueryClient } from "./copy-feedback.js";
@@ -79,8 +80,8 @@ export const WORKSPACE: Workspace = {
 export function automation(n: number, patch: Partial<AutomationSummary> = {}): AutomationSummary {
   return {
     id: `3f0e6f5c-7d1a-4f6e-9a55-${String(n).padStart(12, "0")}`,
-    planId: null,
-    planName: null,
+    taskId: null,
+    taskName: null,
     workspaceId: WORKSPACE.id,
     name: `Automation ${n}`,
     enabled: true,
@@ -140,7 +141,7 @@ const DIGEST_TASK = "2b4d6f8a-0c1e-4a3b-9d5f-7a9c1e3b5d7f";
 /** One agent of the workspace's on the repository, which a same-agent automation's runs may go to. */
 export const CI_DIGEST = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: DIGEST_TASK,
+  taskId: DIGEST_TASK,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "CI digest",
@@ -154,12 +155,12 @@ const LEDGER_TASK = "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32";
 
 /** An agent on a task in the workspace, working in the automations' repository, as the task list carries it. */
 export function onLedger(agent: AgentSummary): ListedAgent {
-  return { ...agent, planId: LEDGER_TASK, workspaceId: WORKSPACE.id, repository: "acme/ledger" };
+  return { ...agent, taskId: LEDGER_TASK, workspaceId: WORKSPACE.id, repository: "acme/ledger" };
 }
 
 /** The task list as the host lays it: failed before it carried any agent where the test says so, else carrying the test's agents. */
-export function tasksView(): TasksView {
-  const read: TasksView = world.remembering
+export function tasksView(): WrittenTasksView {
+  const read: WrittenTasksView = world.remembering
     ? {
         ...IDLE_TASKS_VIEW,
         workspaces: [
@@ -173,11 +174,12 @@ export function tasksView(): TasksView {
       }
     : IDLE_TASKS_VIEW;
 
-  const listed: TasksView = world.agentListRefused
+  const listed: WrittenTasksView = world.agentListRefused
     ? { ...read, listStatus: TASKS_READ.FAILED }
     : {
         ...read,
         listStatus: TASKS_READ.READY,
+        listed: true,
         taskAgents: world.workspaceAgents,
       };
 
@@ -312,7 +314,7 @@ class AutomationsWorld {
   /** How many times the task list, and the workspaces with it, were asked to be read again. */
   tasksRefreshes = 0;
   /** Lays the task list on the window again, as the host does once it reads it. */
-  deliverTasks: (next: TasksView) => void = () => undefined;
+  deliverTasks: (next: WrittenTasksView) => void = () => undefined;
   /** Lays the models on the window again, as the host does once it asks them again. */
   deliverModels: HostReadsHanded["deliverModels"] = () => undefined;
   /** Whether a search among the workspace's agents answers that it could not be made. */

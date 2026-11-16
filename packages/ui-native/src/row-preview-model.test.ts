@@ -1,3 +1,4 @@
+import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { ANSWER_TONE } from "@repo/features/inbox-list-model";
 import { CALL_KIND } from "@repo/features/turn-rows";
 import { describe, expect, it } from "vitest";
@@ -52,6 +53,7 @@ describe("latestStep", () => {
         kind: TRANSCRIPT_ITEM.CALL,
         callId: "call",
         callKind: CALL_KIND.READ_FILE,
+        provider: undefined,
         line: { verb: "Read", subject: "list-row.tsx", code: true },
         chip: undefined,
         runOn: undefined,
@@ -66,11 +68,52 @@ describe("latestStep", () => {
         kind: TRANSCRIPT_ITEM.SAID,
         words: "Hurry up",
         sender: undefined,
-        sent: undefined,
+        by: undefined,
+        at: undefined,
+        stamp: undefined,
+        joinsAbove: false,
+        joinsBelow: false,
       },
       { place: PLACE, depth: 0, kind: TRANSCRIPT_ITEM.WORKING, words: "Working" },
     ];
 
     expect(latestStep(items)).toBe("Read list-row.tsx");
+  });
+
+  const WORDS_FIRST: TranscriptItem = {
+    place: PLACE,
+    depth: 0,
+    kind: TRANSCRIPT_ITEM.WORDS,
+    words: "Writing it up.",
+  };
+
+  it.each<{ readonly card: TranscriptItem; readonly step: string }>([
+    {
+      card: {
+        place: PLACE,
+        depth: 0,
+        kind: TRANSCRIPT_ITEM.PAGE,
+        title: "Invite plan",
+        page: "p1",
+        version: 1,
+      },
+      step: "Showed Invite plan",
+    },
+    {
+      card: {
+        place: PLACE,
+        depth: 0,
+        kind: TRANSCRIPT_ITEM.PULL_REQUEST,
+        number: 12,
+        title: "Resend expired invites",
+        url: "https://github.com/acme/relay/pull/12",
+        state: PULL_REQUEST_STATE.OPEN,
+        additions: undefined,
+        deletions: undefined,
+      },
+      step: "Opened Resend expired invites",
+    },
+  ])("says a call that stands as its card alone as its row would ($step)", ({ card, step }) => {
+    expect(latestStep([WORDS_FIRST, card])).toBe(step);
   });
 });

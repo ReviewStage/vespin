@@ -11,7 +11,9 @@ import {
   EmptyState,
   FollowerRow,
   GLYPH,
+  glyphSymbol,
   ListSection,
+  NO_GROUND,
   type PageFollowing,
   Screen,
   SettingsForm,
@@ -19,6 +21,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { Stack, useRouter } from "expo-router";
+import { useSheetAtHalf } from "../sheet-stack.js";
 import { type FollowerFace, type TaskFollowing, useTaskFollowing } from "../tasks/use-following.js";
 import { useAddFollowerDoor } from "./follower-screens.js";
 
@@ -47,8 +50,8 @@ export function useOpenFollowing(): (taskId: string) => void {
 /**
  * The task page's Following chip: the followers' faces, four then a count of
  * the rest, and Following where the reader follows or Follow where they
- * don't, opening the Following sheet; none while the task's workspace has
- * Following off.
+ * don't, opening the Following sheet; none where the task carries no
+ * followers.
  */
 export function useFollowingChip(taskId: string): PageFollowing | undefined {
   const following = useTaskFollowing(taskId);
@@ -59,7 +62,9 @@ export function useFollowingChip(taskId: string): PageFollowing | undefined {
 
   return {
     label: following.chipWords,
-    faces: followers.slice(0, FOLLOWING_FACES).map(({ name, picture }) => ({ name, picture })),
+    faces: followers
+      .slice(0, FOLLOWING_FACES)
+      .map(({ userId, name, picture }) => ({ id: userId, name, picture })),
     more: Math.max(0, followers.length - FOLLOWING_FACES),
     hint: SHEET_WORDS.OPENS,
     heard: followers.map((face) => (face.you ? FOLLOWING_WORDS.YOU : face.name)).join(", "),
@@ -118,6 +123,7 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
   const router = useRouter();
   const following = useTaskFollowing(taskId);
   const addFollower = useAddFollowerDoor();
+  const half = useSheetAtHalf();
 
   const bar = (
     <>
@@ -128,13 +134,15 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
+          contentStyle: { backgroundColor: half ? NO_GROUND : colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
-          {SHEET_WORDS.DONE}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={SHEET_WORDS.DONE}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
     </>
   );
@@ -143,7 +151,7 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
     return (
       <>
         {bar}
-        <Screen>
+        <Screen clear={half}>
           <EmptyState title={SHEET_WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         </Screen>
       </>
@@ -153,14 +161,15 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
   return (
     <>
       {bar}
-      <Screen>
-        <SettingsForm>
+      <Screen clear={half}>
+        <SettingsForm clear={half}>
           {following.followers.length === 0 ? null : (
             <ListSection>
               {following.followers.map((face) => (
                 <FollowerRow
                   key={face.userId}
                   name={face.you ? FOLLOWING_WORDS.YOU : face.name}
+                  id={face.userId}
                   picture={face.picture}
                   role={face.assignee ? FOLLOWING_WORDS.ASSIGNEE : undefined}
                   machines={face.machines}

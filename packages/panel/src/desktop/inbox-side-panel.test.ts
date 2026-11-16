@@ -99,7 +99,7 @@ const OTHER: TaskSummary = { ...TASK, id: OTHER_TASK, name: "Invitation funnel s
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Batch the invitations",
@@ -236,6 +236,16 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
 }
 
 /** The window's Inbox on the plan's item, its side panel the window's own hook held by the chosen item's plan, and every place it was asked to leave for. */
+/** The task's agents as the task list carries them. */
+const LISTED_AGENTS = [ARCHIVED, AGENT].map((agent) => listedAgent(agent));
+
+/** Both agents' rows keep the pull request they opened, which the list carries beside them. */
+const LISTED_PULL_REQUESTS = [ARCHIVED, AGENT].map((agent) => ({
+  agentId: agent.id,
+  taskId: TASK.id,
+  pullRequest: BATCHED,
+}));
+
 async function inbox(
   { pages }: { pages: readonly PageLine[] | undefined } = {
     pages: [FUNNEL],
@@ -250,17 +260,41 @@ async function inbox(
   fakeAppPlatform({ ...QUIET_PANEL, pageFrameUrl });
   fakeActs({ act: answer });
   fakeActPort({ ...fakeActPortCalls() });
-  // Main's read of the account's inbox holds the task's one item as waiting.
+  // Main's read of the account's inbox holds the task's one item as waiting, and its task list the tasks, the task's
+  // agents, and the pull request each opened, which the task list's collections hold.
   handState(NO_EXPERIMENTS, {
     inbox: {
       ...stateWith({}, {}).inbox,
       waiting: [{ taskId: TASK.id, items: [waitingOf(ITEM)] }],
       tasks: [{ taskId: TASK.id, items: 1, updatedAt: 2_000 }],
     },
+    tasks: {
+      ...stateWith({}, {}).tasks,
+      tasks: [TASK, OTHER],
+      taskAgents: LISTED_AGENTS,
+      agentPullRequests: LISTED_PULL_REQUESTS,
+      taskPullRequests: [
+        {
+          taskId: TASK.id,
+          pullRequests: [
+            {
+              number: BATCHED.number,
+              title: BATCHED.title,
+              state: BATCHED.state,
+              checks: BATCHED.checks,
+              additions: BATCHED.additions,
+              deletions: BATCHED.deletions,
+              url: BATCHED.url,
+              agentId: AGENT.id,
+            },
+          ],
+        },
+      ],
+    },
   });
   // The account's feed holds the task's one item, which the Inbox draws from.
   handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [ITEM] } },
+    rows: { [INBOX_SCOPE_KIND.TASK]: { [TASK.id]: [ITEM] } },
   });
   // The host lays the agent's transcript, which names a page of its task, once its tab holds it.
   pushedTranscripts(() => [TRANSCRIPT]);
@@ -288,27 +322,22 @@ async function inbox(
     // The window's keymap, which hears a chord as the window's root mounts it.
     useAppKeymap(true);
 
+    const tasks = tasksControl({
+      workspace: ACME,
+      tasks: [TASK, OTHER],
+      liveAgents: LISTED_AGENTS,
+      listedPullRequests: LISTED_PULL_REQUESTS,
+      inboxView: { ...tasksControl().inboxView, pages, onTaskAgents: taskAgents.onRead },
+      sidePanel,
+      onShowTask: (taskId) => left.tasks.push(taskId),
+      onShowPanelTab: (taskId, tab) => left.went.push(`${taskId} ${JSON.stringify(tab)}`),
+      onShowAgent: (taskId, agentId) => left.went.push(`${taskId} agent ${agentId}`),
+    });
+
     return createElement(
       OpenLinkProvider,
       { value: (link: ReadLink) => left.links.push(link) },
-      createElement(DesktopInbox, {
-        tasks: tasksControl({
-          workspace: ACME,
-          tasks: [TASK, OTHER],
-          liveAgents: [ARCHIVED, AGENT].map((agent) => listedAgent(agent)),
-          // Both agents' rows keep the pull request they opened, which the list carries beside them.
-          listedPullRequests: [ARCHIVED, AGENT].map((agent) => ({
-            agentId: agent.id,
-            taskId: TASK.id,
-            pullRequest: BATCHED,
-          })),
-          inboxView: { ...tasksControl().inboxView, pages, onTaskAgents: taskAgents.onRead },
-          sidePanel,
-          onShowTask: (taskId) => left.tasks.push(taskId),
-          onShowPanelTab: (taskId, tab) => left.went.push(`${taskId} ${JSON.stringify(tab)}`),
-          onShowAgent: (taskId, agentId) => left.went.push(`${taskId} agent ${agentId}`),
-        }),
-      }),
+      createElement(DesktopInbox, { tasks }),
     );
   }
 
@@ -415,10 +444,10 @@ test("a page the item names before its plan's pages are read is still the panel'
   assert.equal(left.links.length, 0, "the page is still the panel's to open");
 });
 
-test("an archived agent's Pull request tab stands beside the Inbox as any other, and closing the last tab drawn shuts the panel, as on a task's page", async () => {
+test("a pull request's tab stands beside the Inbox as on the task's page, and closing the last tab drawn shuts the panel, as on a task's page", async () => {
   const { container, panel } = await inbox();
-  // The archived agent's tab, as one opened on the task's page before the agent was archived, which still draws its pull request.
-  act(() => panel().onChoose(changesTab(ARCHIVED.id)));
+  // The pull request's tab, as one opened on the task's page.
+  act(() => panel().onChoose(changesTab({ repository: "acme/relay", number: 42 })));
   await settle();
   await pressChip(container, "relay#42");
   assert.equal(panelTabs(container)?.[0], "▸ #42 Send invitations in batches");

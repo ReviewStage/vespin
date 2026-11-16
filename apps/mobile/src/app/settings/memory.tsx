@@ -12,7 +12,6 @@ import {
 import type { MemorySummary } from "@repo/features/memory-wire";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { agoText } from "@repo/features/time-format";
-import { VERB } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaceMemories, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -23,6 +22,7 @@ import {
   glyphSymbol,
   ListSection,
   NoteRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   useColors,
@@ -112,10 +112,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
         <EmptyState
           title={MEMORY_PAGE_WORDS.FAILED}
           symbol={GLYPH.FAILED}
-          action={{
-            label: VERB.RETRY,
-            onPress: () => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost),
-          }}
+          retry={() => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost)}
         />
       ) : (
         <EmptyState title={MEMORY_PAGE_WORDS.READING} symbol={MEMORY_SYMBOL} loading />
@@ -126,11 +123,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
       <EmptyState title={MEMORY_PAGE_WORDS.NO_MATCH} symbol={GLYPH.SEARCH} />
     ) : (
       <SettingsForm>
-        <ListSection
-          title={MEMORY_PAGE_WORDS.TITLE}
-          count={listed.length}
-          footer={MEMORY_RECALLS_WORDS}
-        >
+        <ListSection footer={MEMORY_RECALLS_WORDS}>
           {listed.map((memory) => (
             <NoteRow
               key={memory.id}
@@ -177,7 +170,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
           onPress={() => router.push(SETTINGS_ROUTE.MEMORY_EDIT)}
         />
       </Stack.Toolbar>
-      <Screen>{body}</Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>{body}</Screen>
       <ConfirmAsk
         title={question.title}
         message={question.body}

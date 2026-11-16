@@ -155,6 +155,14 @@ jobs:
             exit 1
           fi
 
+          # The host the app carries must start: a bundle that cannot load dies at every launch on every Mac.
+          host_version=$("$APP_PATH/Contents/MacOS/vespin-host" version)
+          printf 'bundled vespin-host %s\n' "$host_version"
+          if [[ -z "$host_version" ]]; then
+            echo "error: the bundled vespin-host did not start" >&2
+            exit 1
+          fi
+
       - name: Validate notarized application
         run: |
           assessment=$(spctl --assess --type execute -vv "$APP_PATH" 2>&1)

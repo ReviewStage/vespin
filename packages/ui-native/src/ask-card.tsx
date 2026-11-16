@@ -9,7 +9,10 @@ import {
   Button as SwiftUIButton,
   Text,
   TextField,
+  type TextFieldRef,
   Toggle,
+  Toolbar,
+  ToolbarItem,
   useNativeState,
   VStack,
 } from "@expo/ui/swift-ui";
@@ -32,30 +35,42 @@ import {
   tint,
   toggleStyle,
 } from "@expo/ui/swift-ui/modifiers";
-import { FIELD_WORDS } from "@repo/features/words";
+import { FIELD_WORDS, SELECTION_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
-import { Fragment, type ReactNode } from "react";
-import { useAnnounced } from "./accessibility.js";
-import { Chip } from "./button.js";
+import { Fragment, type ReactNode, useRef } from "react";
+import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
+import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { ProblemLine } from "./problem-line.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How thick the card's edge is drawn: a hairline, as the decide card's is. */
+/** What a flow finds an ask's note by. */
+const ASK_NOTE_ID = "ask-note";
+
 const HAIRLINE = 0.5;
 
 /** A row's inner margins, as a decide option's. */
 const ROW_PADDING = { horizontal: SPACE.EDGE - 2, vertical: SPACE.ROW + 1 } as const;
 
-/** How far a typed field's words stand inside its box, as the composer's field holds its own. */
-const FIELD_PADDING = { horizontal: SPACE.ROW, vertical: SPACE.TIGHT * 2 } as const;
+/** Where a row's words start in the card: past its margin, and past its leading mark where it has one, as a step's round check. */
+export const CARD_WORDS_INSET = {
+  BARE: ROW_PADDING.horizontal,
+  MARKED: ROW_PADDING.horizontal + MARK_SIZE.LEAD + SPACE.ROW,
+} as const;
+
+/** A hairline between a card's rows, starting where the words do, as iOS insets a list's separator past a row's leading mark. */
+export function CardDivider({ inset }: { readonly inset: number }) {
+  return <Divider modifiers={[padding({ leading: inset })]} />;
+}
 
 /** What a ticked step is heard as after its words. */
 const TICKED = "ticked";
 
-/** What a select's picker reads before an option is picked. */
-const CHOOSE = "Choose";
+/** What lowers a number pad, which has no return key of its own. */
+const KEYBOARD_DONE = "Done";
 
 /** The kinds of field an answer ask types its values in. */
 export const ANSWER_FIELD = {
@@ -83,11 +98,19 @@ export type AnswerField = {
 export type AskAct = {
   readonly label: string;
   readonly symbol: Glyph;
+  /** Whether it is the lesser of the card's acts, such as Couldn't do it beside Mark done, which stands quiet, as the panel's does. */
+  readonly quiet?: boolean | undefined;
   readonly onPress: () => void;
 };
 
-/** The bordered card on the surface the rows stand in, a hairline between each. */
-function Card({ children }: { readonly children: readonly ReactNode[] }) {
+/** The bordered card on its own fill (`CARD`), set off from the page's ground, the rows standing in it, a hairline between each from where their words start. */
+function Card({
+  inset,
+  children,
+}: {
+  readonly inset: number;
+  readonly children: readonly ReactNode[];
+}) {
   const colors = useColors();
 
   return (
@@ -97,7 +120,7 @@ function Card({ children }: { readonly children: readonly ReactNode[] }) {
       modifiers={[
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
         background(
-          colors.SURFACE,
+          colors.CARD,
           SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
         ),
         strokeBorder({
@@ -112,7 +135,7 @@ function Card({ children }: { readonly children: readonly ReactNode[] }) {
       {children.map((child, index) => (
         // Note that the rows are keyed by their place, since they never reorder while the card stands.
         <Fragment key={index}>
-          {index === 0 ? null : <Divider />}
+          {index === 0 ? null : <CardDivider inset={inset} />}
           {child}
         </Fragment>
       ))}
@@ -120,33 +143,40 @@ function Card({ children }: { readonly children: readonly ReactNode[] }) {
   );
 }
 
-/** What the box's last send said where it did not go, under the ask: what the answer lacks, or the refusal, in the danger's ink. */
+/** What the box's last send said where it did not go, under the ask: what the answer lacks, or the refusal, as every refusal stands (`ProblemLine`), never red words. */
 export function AskNote({ words }: { readonly words: string }) {
-  const colors = useColors();
   // Note that a note stands because a send did not go, so VoiceOver is told it at once, rather than the reader finding it only by walking the screen.
   useAnnounced(words, true);
 
-  return (
-    <Text
-      modifiers={[
-        font({ textStyle: TYPE_ROLE.ROW_LINE }),
-        foregroundStyle(colors.DANGER_TEXT),
-        accessibilityIdentifier("ask-note"),
-      ]}
-    >
-      {words}
-    </Text>
-  );
+  return <ProblemLine text={words} id={ASK_NOTE_ID} />;
 }
 
-/** The card's acts in a row under it, each a small capsule with its glyph, as the panel's presses under an ask stand. */
+/**
+ * The card's acts in a row under it, at the system's regular size so each
+ * stands a 44 pt target: the main act, such as Mark done, filled in the
+ * accent as a screen's one act is, and a quiet one beside it, such as
+ * Couldn't do it, its words alone in the ink, as the panel's quiet button.
+ */
 export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
-  return (
-    <HStack spacing={SPACE.TIGHT * 2}>
-      {acts.map((act) => (
-        <Chip key={act.label} label={act.label} symbol={act.symbol} onPress={act.onPress} />
-      ))}
-    </HStack>
+  const stacked = useAccessibilitySize();
+
+  const buttons = acts.map((act) => (
+    <Button
+      key={act.label}
+      label={act.label}
+      symbol={act.symbol}
+      look={act.quiet === true ? BUTTON_LOOK.PLAIN : BUTTON_LOOK.PROMINENT}
+      onPress={act.onPress}
+    />
+  ));
+
+  // Note that past the accessibility sizes the acts stand one under the other, as a row's end does, because two regular buttons side by side run past an iPhone's width there.
+  return stacked ? (
+    <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
+      {buttons}
+    </VStack>
+  ) : (
+    <HStack spacing={SPACE.TIGHT * 2}>{buttons}</HStack>
   );
 }
 
@@ -213,7 +243,7 @@ export function StepList({
   return (
     <VStack alignment="leading" spacing={SPACE.ROW}>
       {steps.length === 0 ? null : (
-        <Card>
+        <Card inset={CARD_WORDS_INSET.MARKED}>
           {steps.map((step, index) => (
             <StepRow
               key={step}
@@ -232,12 +262,13 @@ export function StepList({
 /** A field's label, with "Optional" after it in the muted ink where it may be left empty, as the panel's form says it. */
 function FieldWords({
   label,
-  required,
+  optional,
   textStyle,
   ink,
 }: {
   readonly label: string;
-  readonly required: boolean;
+  /** Whether the label says the field is optional after it, where nothing else in the row does. */
+  readonly optional: boolean;
   readonly textStyle: (typeof TYPE_ROLE)[keyof typeof TYPE_ROLE];
   readonly ink: string;
 }) {
@@ -246,61 +277,59 @@ function FieldWords({
   return (
     <Text modifiers={[font({ textStyle, weight: "medium" }), foregroundStyle(ink)]}>
       <Text>{label}</Text>
-      {required ? null : (
+      {optional ? (
         <Text
           modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
         >
           {`  ${FIELD_WORDS.OPTIONAL}`}
         </Text>
-      )}
+      ) : null}
     </Text>
   );
 }
 
 /**
- * A text or number field: its label over the system's field, drawn as a
- * field (a box on the ground inside the card's hairline, as the panel's
- * answer box stands) rather than words with nothing round them, and heard
- * by its label; a number's with the decimal pad.
+ * A text or number field: its label over the system's plain field, as the
+ * panel stands a field's name over it, the field with no box of its own
+ * inside the card's (one layer, as a Form's field stands in its row); a
+ * field prompts "Required" or "Optional" while it is empty, as iOS's account
+ * forms do, so it never reads as a gap nor repeats the label over it, and
+ * its label says nothing more; heard by its label, a number's with the
+ * decimal pad.
  */
 function TypedFieldRow({
   field,
   onChange,
+  onFocused,
 }: {
   readonly field: AnswerField;
   readonly onChange: (value: string) => void;
+  /** Called with the field and whether it now holds the keyboard, so the card's Done lowers the one focused. */
+  readonly onFocused: (field: TextFieldRef | null, focused: boolean) => void;
 }) {
   const colors = useColors();
   const text = useNativeState(Predicate.isString(field.value) ? field.value : "");
+  const fieldRef = useRef<TextFieldRef>(null);
 
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
       <FieldWords
         label={field.label}
-        required={field.required}
+        optional={false}
         textStyle={TYPE_ROLE.ROW_LINE}
         ink={colors.TEXT_MUTED}
       />
       <TextField
+        ref={fieldRef}
         text={text}
+        placeholder={field.required ? FIELD_WORDS.REQUIRED : FIELD_WORDS.OPTIONAL}
         onTextChange={onChange}
+        onFocusChange={(focused) => onFocused(fieldRef.current, focused)}
         modifiers={[
           textFieldStyle("plain"),
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
           foregroundStyle(colors.TEXT),
-          padding(FIELD_PADDING),
           frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-          background(
-            colors.GROUND,
-            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.TAG }),
-          ),
-          strokeBorder({
-            content: colors.CHIP_EDGE,
-            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-            shape: "roundedRectangle",
-            cornerRadius: RADIUS.TAG,
-            style: { lineWidth: HAIRLINE },
-          }),
           accessibilityLabel(field.label),
           accessibilityIdentifier(`answer-field-${field.label}`),
           ...(field.kind === ANSWER_FIELD.NUMBER ? [keyboardType("decimal-pad")] : []),
@@ -310,7 +339,13 @@ function TypedFieldRow({
   );
 }
 
-/** A select: its label over the system's menu picker, which reads "Choose" until an option is picked, the recommended option said as such. */
+/**
+ * A select: its label over the system's menu picker at the leading edge, as
+ * a text field stands under its name in the same card, so a long value such
+ * as "Every member (recommended)" has the row's width rather than squeezing
+ * its label into a column beside it; it reads "None" until an option is
+ * picked, as Settings' pickers do, the recommended option said as such.
+ */
 function SelectRow({
   field,
   recommendedWord,
@@ -326,7 +361,7 @@ function SelectRow({
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
       <FieldWords
         label={field.label}
-        required={field.required}
+        optional={!field.required}
         textStyle={TYPE_ROLE.ROW_LINE}
         ink={colors.TEXT_MUTED}
       />
@@ -336,7 +371,7 @@ function SelectRow({
         onSelectionChange={onChange}
         modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.TEXT)]}
       >
-        <Text modifiers={[tag("")]}>{CHOOSE}</Text>
+        <Text modifiers={[tag("")]}>{SELECTION_WORDS.NONE}</Text>
         {(field.options ?? []).map((option) => (
           <Text key={option} modifiers={[tag(option)]}>
             {option === field.recommended ? `${option} (${recommendedWord})` : option}
@@ -369,7 +404,7 @@ function BooleanRow({
     >
       <FieldWords
         label={field.label}
-        required={field.required}
+        optional={!field.required}
         textStyle={TYPE_ROLE.ROW_TITLE}
         ink={colors.TEXT}
       />
@@ -395,8 +430,16 @@ export function AnswerFields({
   /** Called with a field's label and what it now holds. */
   readonly onChange: (label: string, value: string | boolean) => void;
 }) {
-  return (
-    <Card>
+  const focused = useRef<TextFieldRef | null>(null);
+
+  // Note that a field letting the keyboard go clears the hold only while it is still the one held, since the next field's focus can arrive before the last one's blur.
+  const onFocused = (field: TextFieldRef | null, now: boolean) => {
+    if (now) focused.current = field;
+    else if (focused.current === field) focused.current = null;
+  };
+
+  const card = (
+    <Card inset={CARD_WORDS_INSET.BARE}>
       {fields.map((field) => {
         const change = (value: string | boolean) => onChange(field.label, value);
 
@@ -415,8 +458,27 @@ export function AnswerFields({
           );
         }
 
-        return <TypedFieldRow key={field.label} field={field} onChange={change} />;
+        return (
+          <TypedFieldRow key={field.label} field={field} onChange={change} onFocused={onFocused} />
+        );
       })}
     </Card>
+  );
+
+  // Note that a number pad has no return key, so a card holding a number field stands one Done over the keyboard, as Settings' and Contacts' number pads do, lowering whichever field is focused. It's the card's, mounted once for as long as the card holds a number field, because adding a toolbar item as a field takes focus changed the field's view and let the keyboard go.
+  return fields.some((field) => field.kind === ANSWER_FIELD.NUMBER) ? (
+    <Toolbar>
+      {card}
+      <Toolbar.Content>
+        <ToolbarItem placement="keyboard">
+          <HStack>
+            <Spacer />
+            <SwiftUIButton label={KEYBOARD_DONE} onPress={() => void focused.current?.blur()} />
+          </HStack>
+        </ToolbarItem>
+      </Toolbar.Content>
+    </Toolbar>
+  ) : (
+    card
   );
 }

@@ -1,10 +1,11 @@
 import { Toast as BaseToast, type ToastObject } from "@base-ui/react/toast";
 import { Duration } from "effect";
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { AlertIcon, CircleCheckIcon, InboxIcon } from "../../icons/lucide-glyphs.js";
 import { type MarkProvider, PROVIDER_MARK_SIZE, ProviderMark } from "../../marks/provider-mark.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
+import { CARD_CORNER, CARD_LOOK, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
 import { SpinnerRing } from "../spinner/spinner.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 
@@ -63,12 +64,31 @@ const GLYPH_INK = {
 } as const satisfies Record<ToastTone, string>;
 
 /**
- * The card: its glyph, its words' first line, and its action share a first
+ * The card's own layout, its ground, edge, corner, and shadow a raised
+ * `Card`'s (`ToastFrame`): its glyph, its words' first line, and its action share a first
  * row as tall as a control, each centered on it; its words wrap at the card's
  * own line. One with an action button ends a step closer to it.
  */
 const TOAST_CARD =
-  "ui-toast flex items-start gap-icon-gap rounded-toast border border-border-strong bg-background px-list-inset py-row-inset shadow-toast has-[.ui-button:not(.ui-toast-dismiss_.ui-button)]:pr-toast-gap";
+  "ui-toast flex items-start gap-icon-gap px-list-inset py-row-inset has-[.ui-button:not(.ui-toast-dismiss_.ui-button)]:pr-toast-gap";
+
+/** The toast drawn as a card, as Base UI's root renders it: raised, at a dialog's corner, on a toast's shadow, holding what Base UI hands it. */
+function ToastFrame({
+  children,
+  ...props
+}: HTMLAttributes<HTMLElement> & { ref?: Ref<HTMLElement> | undefined }): React.JSX.Element {
+  return (
+    <Card
+      {...props}
+      look={CARD_LOOK.RAISED}
+      corner={CARD_CORNER.DIALOG}
+      shadow={CARD_SHADOW.TOAST}
+      padding={CARD_PADDING.NONE}
+    >
+      {children}
+    </Card>
+  );
+}
 
 /** The cell its glyph stands in, centered on its first row. */
 const TOAST_GLYPH =
@@ -127,6 +147,7 @@ export function Toast({
     <BaseToast.Root
       toast={toast}
       swipeDirection={SWIPE_AWAY}
+      render={(frame) => <ToastFrame {...frame} />}
       className={TOAST_CARD}
       data-tone={tone}
     >

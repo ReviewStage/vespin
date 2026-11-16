@@ -1,4 +1,4 @@
-import { CONNECTION_LOST_DETAIL } from "@repo/agent-runner/protocol";
+import { CONNECTION_LOST_DETAIL, CURSOR_SIGNED_OUT_DETAIL } from "@repo/agent-runner/protocol";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -43,7 +43,7 @@ import {
   type DeviceLaunchStep,
   type DeviceLaunchUnstarted,
 } from "@repo/features/device-agent-wire";
-import { sandboxVcpus } from "@repo/features/sandbox-size";
+import { SANDBOX_SIZE, type SandboxVcpus } from "@repo/features/sandbox-size";
 import { TURN_FAILURE, TURN_STATUS, type TurnFailure } from "../../core.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { CODER_REFUSAL } from "./bounds.js";
@@ -208,7 +208,7 @@ export const FAILURE_WORDS: readonly (readonly [AgentFailure, readonly string[]]
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,
     ],
   ],
-  [AGENT_FAILURE.MACHINE_SIGN_IN, [CODER_REFUSAL.MACHINE_SIGNED_OUT]],
+  [AGENT_FAILURE.MACHINE_SIGN_IN, [CODER_REFUSAL.MACHINE_SIGNED_OUT, CURSOR_SIGNED_OUT_DETAIL]],
   [AGENT_FAILURE.OTHER, [HOST_AWAY_DETAIL, LAUNCH_STOPPED_DETAIL]],
   [AGENT_FAILURE.CONNECTION_LOST, Object.values(CONNECTION_LOST_DETAIL)],
 ];
@@ -348,6 +348,8 @@ export interface AgentTurnStanding {
   readonly sandboxOpen?: boolean | undefined;
   /** Where its first launch stands while its boot record does (`agentBootsOf`); none where it has none or the read named none. */
   readonly boot?: BootPhase | undefined;
+  /** The vCPUs its sandbox opens with, its workspace's size; none where the read named none, which reads as the default. */
+  readonly sandboxVcpus?: SandboxVcpus | undefined;
 }
 
 /** When the run the status is read from began: the newest turn's start, or its queueing before a runner takes it, and the agent's own before any turn. */
@@ -426,7 +428,7 @@ function summaryFields(
   names: ReadonlyMap<string, string>,
   continuedBy: readonly AgentStartedFromIt[],
   macs: ReadonlyMap<string, Device>,
-): Omit<AgentSummary, "id" | "planId"> {
+): Omit<AgentSummary, "id" | "taskId"> {
   const starter = names.get(agent.userId);
   const mac = macOf(agent, macs);
 
@@ -439,7 +441,7 @@ function summaryFields(
 
   const turn = agentTurnOf(standing.turn);
 
-  const summary: Omit<AgentSummary, "id" | "planId"> = {
+  const summary: Omit<AgentSummary, "id" | "taskId"> = {
     model: agent.model,
     effort: agent.effort,
     ...(agent.contextWindow === CONTEXT_WINDOW.STANDARD
@@ -450,7 +452,7 @@ function summaryFields(
     // Note that only a local agent says where it runs, so a sandboxed agent's summary is as it was.
     ...(agent.machine === AGENT_MACHINE.DEVICE
       ? { machine: agent.machine }
-      : { sandboxVcpus: sandboxVcpus(agent.repository) }),
+      : { sandboxVcpus: standing.sandboxVcpus ?? SANDBOX_SIZE.VCPUS }),
     ...(mac === undefined ? undefined : { mac }),
     createdAt: agent.createdAt.getTime(),
     status: agentStatusOf(standing.turn, {
@@ -516,7 +518,7 @@ export function agentSummary(
 
   return {
     id: line.id,
-    planId: line.taskId,
+    taskId: line.taskId,
     ...summaryFields(line, standing, now, names, continuedBy, macs),
   };
 }
@@ -574,7 +576,7 @@ export function agentPage(
 ): AgentPage {
   return {
     id: agent.id,
-    planId: agent.taskId,
+    taskId: agent.taskId,
     ...summaryFields(agentLineOf(agent), standing, now, names, continuedBy, macs),
     automationId: agent.automationId,
     ...(agent.automationOrigin === null

@@ -11,7 +11,7 @@ import {
 } from "@repo/features/agent-wire";
 import { pageFrameUrl } from "@repo/features/page-frame";
 import type { Task } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import {
@@ -34,9 +34,10 @@ import { NO_LOOKS } from "../tasks/use-task-looks.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
   DESKTOP_CAPABILITIES,
+  followListedTasks,
   handCapabilities,
   handHostReads,
-  holdPullRequestParts,
+  holdRepositoryPullRequestParts,
   withExperiments,
 } from "../testing/app-state.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -69,12 +70,12 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: "acme/web",
-  document: { body: "", assumptions: [] },
+  description: { body: "", assumptions: [] },
 };
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Invite expiry job",
@@ -135,9 +136,9 @@ async function mountEveryTab(
   pullRequests: AgentsControl["pullRequests"] = new Map(),
 ): Promise<HTMLElement> {
   const control = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     activeTaskId: TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: TASK },
+    region: { kind: TASK_REGION.READY, task: TASK },
     mainTabs: {
       ...tasksControl().mainTabs,
       tabs: [MAIN_TAB.OVERVIEW, agentTab(AGENT.id), draftTab("draft-1")],
@@ -149,7 +150,7 @@ async function mountEveryTab(
       open: true,
       subagents: [SUBAGENT],
       files: [{ path: "src/invite.ts", range: undefined, opened: 1, browsedOn: TASK.id }],
-      changes: [changesTab(AGENT.id)],
+      changes: [changesTab(WEB_42)],
       terminals: [CLOUD],
       pages: [pageTab(PAGE_ID)],
       tab: chosen.side,
@@ -171,7 +172,9 @@ async function mountEveryTab(
 
   // The host holds the Pull request tab's parts, answered as a service that did not answer.
   const unanswered = () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED } as const);
-  holdPullRequestParts(handHostReads({}).deliverParts, {
+  // The task list holds the task, whose workspace the Pull request tab reads its pull request through.
+  followListedTasks({ tasks: [TASK] });
+  holdRepositoryPullRequestParts(handHostReads({}).deliverParts, {
     [PULL_REQUEST_PART.PULL_REQUEST]: unanswered,
     [PULL_REQUEST_PART.CHECKS]: unanswered,
     [PULL_REQUEST_PART.CONVERSATION]: unanswered,
@@ -359,6 +362,9 @@ test("a tab with nothing to offer on what it shows still answers a right-click w
 });
 
 /** The agent's pull request, as what it published names it. */
+/** The agent's pull request, by its repository and number, as its tab names it. */
+const WEB_42 = { repository: "acme/web", number: 42 } as const;
+
 const PULL_REQUEST: AgentPullRequest = {
   number: 42,
   title: "Expire invitations",
@@ -370,7 +376,7 @@ const PULL_REQUEST: AgentPullRequest = {
   changedFiles: 6,
 };
 
-test("the Pull request tab's right-click offers Copy link first, then Copy GitHub link, Open on GitHub, and Refresh, which no other tab of the panel offers, and opens the pull request on GitHub", async () => {
+test("the Pull request tab's right-click offers Copy GitHub link, Open on GitHub, and Refresh, which no other tab of the panel offers, and opens the pull request on GitHub", async () => {
   const opened: string[] = [];
   fakeAppPlatform({
     ...QUIET_PANEL,
@@ -382,7 +388,7 @@ test("the Pull request tab's right-click offers Copy link first, then Copy GitHu
   const published = new Map([[AGENT.id, PULL_REQUEST]]);
 
   const container = await mountEveryTab(
-    { main: draftTab("draft-1"), side: changesTab(AGENT.id) },
+    { main: draftTab("draft-1"), side: changesTab(WEB_42) },
     published,
   );
 
@@ -390,7 +396,6 @@ test("the Pull request tab's right-click offers Copy link first, then Copy GitHu
   // Note that the pull request's actions stand once its read reaches its query.
   await vi.waitFor(() =>
     assert.deepEqual(contentOf(rightClickChosen(side)), [
-      "Copy link",
       "Copy GitHub link",
       "Open on GitHub",
       "Refresh",
@@ -431,7 +436,7 @@ function installClipboard(): string[] {
   return copied;
 }
 
-test("each tab whose thing has a link offers Copy link in its right-click and its bar's ⋯, copying the agent's, its worker's, its Changes', or a page's", async () => {
+test("each tab whose thing has a link offers Copy link in its right-click and its bar's ⋯, copying the agent's, its worker's, or a page's", async () => {
   const copied = installClipboard();
   const task = `https://vespin.dev/workspace-personal/task/${TASK.id}`;
   const agent = `https://vespin.dev/workspace-personal/agent/${AGENT.id}`;
@@ -439,7 +444,6 @@ test("each tab whose thing has a link offers Copy link in its right-click and it
   const cases: [{ main: MainTab; side: SidePanelTab }, keyof Bars, string][] = [
     [{ main: agentTab(AGENT.id), side: SIDE_PANEL_TAB.INBOX }, "main", agent],
     [{ main: draftTab("draft-1"), side: SUBAGENT }, "side", `${agent}/worker/call-1`],
-    [{ main: draftTab("draft-1"), side: changesTab(AGENT.id) }, "side", `${agent}/changes`],
     [{ main: draftTab("draft-1"), side: pageTab(PAGE_ID) }, "side", `${task}/page/${PAGE_ID}`],
   ];
 

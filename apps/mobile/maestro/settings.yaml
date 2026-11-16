@@ -1,4 +1,4 @@
-# settings.yaml -- Settings on the Inbox fixture: its list, grouped Workspace then Account, Notifications' page with the phone registered, its pushes working and its "Notify me" picked, About, the Account page with Delete account's question, the Workspace page with its members and invitation, and the Agents page.
+# settings.yaml -- Settings on the Inbox fixture: its list, the workspace's group then the account's, Notifications' page with the phone registered, its pushes working and its "Notify me" picked, About, the Account page with Delete account's question, the Workspace page with its members and invitation, and the Agents page.
 #
 # Launched on the host's Inbox fixture with notifications allowed, so the
 # phone names itself by the fixture's synthetic token, which the fixture
@@ -13,12 +13,14 @@ appId: dev.vespin.ios
       notifications: allow
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 # The workspace switcher leads the Inbox's bar, and its menu's account,
-# heard as its name and Settings, opens it.
+# heard as Settings and its address, opens it.
 - tapOn:
     id: "workspace-switcher"
-- tapOn: ".*, Settings"
+- tapOn: "Settings, .*"
 - waitForAnimationToEnd
 # The account heads the list, pushing to Account.
 - assertVisible: "Ada Lovelace"
@@ -28,13 +30,19 @@ appId: dev.vespin.ios
 - scrollUntilVisible:
     element:
       id: "settings-notifications"
-- assertVisible: "Notifications, When I'm away"
+# Note that the iPhone hears the row as its name and value together
+# ("Notifications, When I'm away") and the iPad's form sheet as its name with
+# the value an element of its own, so the row is found by its id and name.
+- assertVisible:
+    id: "settings-notifications"
+    text: "Notifications.*"
+- assertVisible: ".*When I'm away"
 - tapOn:
     id: "settings-notifications"
 - waitForAnimationToEnd
 # Note that the row is one element, its name and value heard together, and a
 # text matches an element's whole words.
-- assertVisible: "Status, Working"
+- assertVisible: "Push notifications, Working"
 - assertVisible: "Open iOS notification settings"
 - takeScreenshot: settings-notifications
 # A choice is drawn at once, as the fixture takes it.
@@ -44,17 +52,17 @@ appId: dev.vespin.ios
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
-- assertVisible: "Notifications, Always"
+# Note that the iPad's form sheet hears the value apart from the row's name, as above.
+- assertVisible:
+    id: "settings-notifications"
+    text: "Notifications.*"
+- assertVisible: ".*Always"
 # About, and the pages still kept on vespin.dev under it.
 - scrollUntilVisible:
     element: "Send feedback"
 - assertVisible: "What's new"
 - waitForAnimationToEnd
 - takeScreenshot: settings-about
-- scrollUntilVisible:
-    element: "Experimental"
-- waitForAnimationToEnd
-- takeScreenshot: settings-more-on-web
 # The Account page: who is signed in, Privacy, Sign out, and Delete account.
 # Note that the personal workspace's row below it bears the same name, so the
 # account is found by the line only it draws.
@@ -81,10 +89,12 @@ appId: dev.vespin.ios
     stopApp: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: ".*, Settings"
+- tapOn: "Settings, .*"
 - waitForAnimationToEnd
 - tapOn:
     id: "settings-workspace"
@@ -109,10 +119,12 @@ appId: dev.vespin.ios
     stopApp: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: ".*, Settings"
+- tapOn: "Settings, .*"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Agents"

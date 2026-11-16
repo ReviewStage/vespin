@@ -48,8 +48,8 @@ const NOW = new Date("2026-01-14T12:00:00Z");
 
 const SAVED: AutomationSummary = {
   id: "3f0e6f5c-7d1a-4f6e-9a55-1b2c3d4e5f60",
-  planId: null,
-  planName: null,
+  taskId: null,
+  taskName: null,
   workspaceId: "workspace-acme",
   name: "Nightly flaky-test sweep",
   enabled: true,
@@ -266,7 +266,7 @@ test("a save changes only what moved, the task keeping its model, and a draft th
     ),
     { repositories: ["acme/web"], scope: AUTOMATION_SCOPE.PERSONAL },
   );
-  const onTask = { ...SAVED, planId: "9b1d2c3e-4f5a-4b6c-8d7e-0f1a2b3c4d5e" };
+  const onTask = { ...SAVED, taskId: "9b1d2c3e-4f5a-4b6c-8d7e-0f1a2b3c4d5e" };
   assert.equal(
     changeOf({ ...automationDraft(onTask, DEFAULTS), repository: "acme/web" }, onTask, DEFAULTS),
     undefined,
@@ -622,19 +622,7 @@ test("a Sentry trigger opens and writes back as it was given, and moves only whe
   assert.deepEqual(changeOf(moved, saved, DEFAULTS), { trigger: moved.integrationTrigger });
 });
 
-test("two drafts whose guards differ only in their subject cooldown are not the same", () => {
-  const draft = automationDraft(
-    { ...SAVED, guards: { ...AUTOMATION_DEFAULT_GUARDS, subjectCooldownHours: 24 } },
-    DEFAULTS,
-  );
-
-  const longer = { ...draft, guards: { ...AUTOMATION_DEFAULT_GUARDS, subjectCooldownHours: 48 } };
-
-  assert.ok(sameDraft(draft, draft));
-  assert.ok(!sameDraft(draft, longer));
-});
-
-/** A saved automation fired by Sentry alerts from two projects, waiting six hours before the same issue runs again. */
+/** A saved automation fired by Sentry alerts from two projects. */
 const ALERTED: AutomationSummary = {
   ...SAVED,
   trigger: {
@@ -643,13 +631,11 @@ const ALERTED: AutomationSummary = {
     event: SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED,
     filters: { project: ["web", "api"], level: [SENTRY_LEVEL.ERROR] },
   },
-  guards: { ...AUTOMATION_DEFAULT_GUARDS, subjectCooldownHours: 6 },
 };
 
-test("a Sentry trigger opens as saved, its filters in any order no change, and saves only the trigger or the cooldown that moved", () => {
+test("a Sentry trigger opens as saved, its filters in any order no change, and saves only the trigger that moved", () => {
   const opened = automationDraft(ALERTED, DEFAULTS);
 
-  assert.equal(opened.subjectCooldownHours, 6);
   assert.deepEqual(changeOf(opened, ALERTED, DEFAULTS), undefined);
   const reordered = withIntegrationFilters(opened, { project: ["api", "web"] });
   assert.ok(sameDraft(reordered, opened));
@@ -659,10 +645,6 @@ test("a Sentry trigger opens as saved, its filters in any order no change, and s
   assert.deepEqual(changeOf(issues, ALERTED, DEFAULTS), {
     trigger: { ...ALERTED.trigger, event: SENTRY_TRIGGER_EVENT.ISSUE_CREATED },
   });
-  assert.deepEqual(changeOf({ ...opened, subjectCooldownHours: 48 }, ALERTED, DEFAULTS), {
-    guards: { ...AUTOMATION_DEFAULT_GUARDS, subjectCooldownHours: 48 },
-  });
-  assert.ok(!sameDraft({ ...opened, subjectCooldownHours: 48 }, opened));
 });
 
 test("a filter emptied is dropped from the trigger, and a trigger with no filter left names none", () => {
@@ -681,7 +663,7 @@ test("a filter emptied is dropped from the trigger, and a trigger with no filter
   assert.deepEqual(filterValuesOf(" web, api,, web ,"), ["web", "api"]);
 });
 
-test("a new Sentry automation is made on its event, filters, and cooldown over the default guards, a day unless another is written", () => {
+test("a new Sentry automation is made on its event and filters", () => {
   const fresh = automationDraft(undefined, DEFAULTS);
 
   const sentry = withIntegrationFilters(
@@ -702,37 +684,16 @@ test("a new Sentry automation is made on its event, filters, and cooldown over t
     event: SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED,
     filters: { environment: ["production"] },
   });
-  assert.deepEqual(made.guards, { ...AUTOMATION_DEFAULT_GUARDS, subjectCooldownHours: 24 });
-  assert.equal(
-    createRequestOf({ ...sentry, triggerKind: AUTOMATION_TRIGGER.WEBHOOK }, "w").guards,
-    undefined,
-  );
 });
 
-test("a Sentry trigger stops a save where its cooldown is no whole number of hours up to a week, or a filter holds too much", () => {
+test("a Sentry trigger stops a save where a filter holds too much", () => {
   const opened = automationDraft(ALERTED, DEFAULTS);
 
   assert.deepEqual(draftProblems(opened, false, NOW), {});
-
-  for (const subjectCooldownHours of [undefined, 0, 169, 1.5]) {
-    assert.ok(
-      draftProblems({ ...opened, subjectCooldownHours }, false, NOW)[DRAFT_FIELD.COOLDOWN],
-      String(subjectCooldownHours),
-    );
-  }
 
   const crowded = withIntegrationFilters(opened, {
     project: Array.from({ length: 11 }, (_, n) => `project-${n}`),
   });
 
   assert.ok(draftProblems(crowded, false, NOW)[DRAFT_FIELD.FILTERS]);
-  // A cooldown left behind by another trigger kind stops nothing.
-  assert.deepEqual(
-    draftProblems(
-      { ...opened, triggerKind: AUTOMATION_TRIGGER.WEBHOOK, subjectCooldownHours: undefined },
-      false,
-      NOW,
-    ),
-    {},
-  );
 });

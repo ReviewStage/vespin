@@ -28,7 +28,7 @@ const WORKSPACE_ID = "2a9c4e6f-1b3d-4f5a-8c7e-9d0b1a2c3e4f";
 
 const AGENT = {
   id: AGENT_ID,
-  planId: TASK_ID,
+  taskId: TASK_ID,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: null,
@@ -75,7 +75,7 @@ it.effect("starts an agent with the request as sent", () =>
     const request = { idempotencyKey: "press-1", ...CHOICE };
 
     const api = fakeCloudApi({
-      [`POST /api/plans/${TASK_ID}/agents`]: {
+      [`POST /api/tasks/${TASK_ID}/agents`]: {
         answer: () => ({ agent: AGENT }),
         status: 201,
       },
@@ -92,7 +92,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const refusing = fakeCloudApi({
-        [`POST /api/plans/${TASK_ID}/agents`]: {
+        [`POST /api/tasks/${TASK_ID}/agents`]: {
           answer: () => ({ error: HOSTED_API_ERROR.INVALID_REQUEST }),
           status: HTTP_STATUS.BAD_REQUEST,
         },
@@ -119,7 +119,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const api = fakeCloudApi({
-        [`POST /api/plans/${TASK_ID}/agents`]: { answer: () => ({ agent: AGENT }), status: 201 },
+        [`POST /api/tasks/${TASK_ID}/agents`]: { answer: () => ({ agent: AGENT }), status: 201 },
       });
 
       yield* Effect.provide(
@@ -142,7 +142,7 @@ it.effect(
 
       const refusingWith = (unreached: JsonValue) =>
         fakeCloudApi({
-          [`POST /api/plans/${TASK_ID}/agents`]: {
+          [`POST /api/tasks/${TASK_ID}/agents`]: {
             answer: () => ({ error: HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE, unreached }),
             status: HTTP_STATUS.FORBIDDEN,
           },
@@ -188,7 +188,7 @@ it.effect(
 it.effect("a Start the task's device refused carries why, as the service named it", () =>
   Effect.gen(function* () {
     const refusing = fakeCloudApi({
-      [`POST /api/plans/${TASK_ID}/agents`]: {
+      [`POST /api/tasks/${TASK_ID}/agents`]: {
         answer: () => ({
           error: HOSTED_API_ERROR.LOCAL_AGENT_REFUSED,
           localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
@@ -217,7 +217,7 @@ it.effect(
         Effect.provide(
           client().start(TASK_ID, { idempotencyKey: "press-1" }),
           fakeCloudApi({
-            [`POST /api/plans/${TASK_ID}/agents`]: {
+            [`POST /api/tasks/${TASK_ID}/agents`]: {
               answer: () => body,
               status: HTTP_STATUS.CONFLICT,
             },

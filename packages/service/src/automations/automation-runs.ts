@@ -1,5 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
-import { latestTurnsOfReached, readVisibleAgent } from "@repo/database/models/agent-store";
+import { readVisibleAgent } from "@repo/database/models/agent-store";
 import {
   type Automation,
   type AutomationRun,
@@ -7,24 +7,19 @@ import {
   adoptAutomationAgent,
   attachRunAgent,
   attachRunTask,
-  automationRunsSince,
   claimAutomationRun,
-  claimedRunsStarting,
   creatorStillMember,
   failClaimedRun,
   readAutomationToRun,
   settleAutomationRun,
-  startedRunAgents,
-  subjectRunStartedSince,
   withAutomationLocked,
 } from "@repo/database/models/automation-store";
 import { createTaskOnce, readTask } from "@repo/database/models/task-store";
 import { automationLineMetadata, storeWriter } from "@repo/database/models/writer";
 import type { StoredAutomationOrigin } from "@repo/database/schemas/agent";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { AGENT_BOUNDS, AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
+import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import {
-  AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS,
   AUTOMATION_FIRING,
   AUTOMATION_RUN_REASON,
   AUTOMATION_RUN_STATUS,
@@ -49,12 +44,11 @@ import {
   type TriggerProvider,
 } from "@repo/features/trigger-catalog";
 import { failureKind } from "@repo/runtime/effect";
-import { Clock, Duration, Effect, Option, Result } from "effect";
+import { Effect, Option, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { SqlClient } from "effect/sql";
 import { calledId } from "../agents/called-id.js";
 import { type StartServices, type StartWhere, startAgent } from "../agents/coder-host/start.js";
-import { agentStatusOf } from "../agents/coder-host/status.js";
 import { steerAgent } from "../agents/coder-host/steer.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { fenceable } from "../agents/fenced-text.js";
@@ -65,7 +59,7 @@ import type { HostedRefusal } from "../http/http-effect.js";
 import type { ModelChoiceRefused } from "../providers/model-catalog.js";
 
 /**
- * automation-runs.ts -- one queued automation run acted on: its guards read, its coding agent started as the deployment acting for the owner, and the run settled.
+ * automation-runs.ts -- one queued automation run acted on: its coding agent started as the deployment acting for the owner, and the run settled.
  *
  * A run is a Start with a prompt, on the one path a Start takes
  * (`coder-host/start.ts`), on a task of the run's own: the
@@ -79,19 +73,15 @@ import type { ModelChoiceRefused } from "../providers/model-catalog.js";
  * request or issue starts its agent named by it, and any other run's agent
  * is named by the title model from the automation's prompt.
  *
- * Before the start, the guards: a run whose automation was paused after it
- * was queued is skipped, but for the owner's own "Run now"; and a run past
- * the daily cap (runs started in the last twenty-four hours) or past the
- * concurrency guard (agents its runs started that are still starting or
- * running, read as each agent's tab reads it) is skipped, never queued, as
- * is an integration's run about a subject (one Sentry issue) another run
- * started on within the trigger's cooldown. The
- * guards read what earlier runs settled, and each act reads them under
- * the automation's row lock, so one automation's runs are decided one
- * after another however many deliveries come at once; a noisy
- * trigger costs nothing past
- * its caps. A start refused is a failed run with one fixed word for why,
- * and the next firing tries again.
+ * Before the start, a run whose automation was paused after it was queued
+ * is skipped, but for the owner's own "Run now", as is a GitHub run about a
+ * repository the automation no longer works in. Every other run starts:
+ * nothing caps how many run at once or in a day, and a repeat alert for one
+ * issue is held back by its provider's own rule (Sentry's action interval).
+ * Each act decides under the automation's row lock, so one automation's
+ * runs are decided one after another however many deliveries come at once.
+ * A start refused is a failed run with one fixed word for why, and the next
+ * firing tries again.
  *
  * An automation that hands every run to the same agent sends the run there
  * instead, and where it holds no agent yet, or the one it holds is gone or
@@ -99,16 +89,6 @@ import type { ModelChoiceRefused } from "../providers/model-catalog.js";
  * keeps it for every later run, saying on the run that it replaced the gone
  * one, so an agent let go costs the automation its memory and never its runs.
  */
-
-/** How long a claimed run counts as starting against the concurrency guard; a start runs in seconds. */
-const CLAIM_WINDOW_MS = 10 * 60_000;
-
-const AUTOMATION_RUNS = {
-  /** The window the daily cap counts started runs over. */
-  CAP_WINDOW: Duration.days(1),
-  /** How far back the runs whose agents may still be at work are read: a day and an hour, past the longest an automation's agent works. */
-  AT_WORK_WINDOW_MS: 25 * 60 * 60 * 1000,
-} as const;
 
 /** A run as it is acted on: a webhook's body, or an integration event's summary, beside it where the read that found it carried one. */
 type ActedRun = AutomationRun & { readonly payload?: string | null };
@@ -126,9 +106,6 @@ const INTEGRATION_FENCE = {
 
 /** What a body cut to fit the prompt's bound ends with. */
 const CUT_MARK = "\n… (cut to fit; the full body is the caller's to send again)";
-
-/** The statuses under which an agent counts against the concurrency guard. */
-const WORKING: ReadonlySet<AgentStatus> = new Set([AGENT_STATUS.STARTING, AGENT_STATUS.RUNNING]);
 
 /** The agents' sessions as the deployment reaches them acting for one account, or the refusal where it cannot. */
 export type SessionsForAccount = (
@@ -521,84 +498,6 @@ const steerClaimed = Effect.fnUntraced(function* (
   });
 });
 
-/**
- * How many of the agents the automation's runs started are still at work at
- * `now`, and the agent it hands every run to among them whatever started it,
- * so a run waits on that agent's own work as on its earlier runs'.
- */
-const workingAgents = Effect.fnUntraced(function* (automation: Automation, now: number) {
-  // Note that a run older than `AT_WORK_WINDOW_MS` is not read, so the read stays bounded.
-  const since = new Date(now - AUTOMATION_RUNS.AT_WORK_WINDOW_MS);
-  const started = yield* startedRunAgents(automation.id, since);
-
-  const target =
-    automation.targetKind === AUTOMATION_TARGET.SAME_AGENT && automation.targetAgentId !== null
-      ? yield* readVisibleAgent(automation.userId, automation.targetAgentId)
-      : Option.none();
-
-  const agents = [
-    ...started.filter((agent) =>
-      Option.match(target, {
-        onNone: () => true,
-        onSome: (held) => agent.agentId !== held.id,
-      }),
-    ),
-    ...Option.match(target, {
-      onNone: () => [],
-      onSome: (held) => [
-        { agentId: held.id, conversationId: held.conversationId, createdAt: held.createdAt },
-      ],
-    }),
-  ];
-
-  const conversations = agents.map((agent) => agent.conversationId);
-  const turns = yield* latestTurnsOfReached(conversations);
-
-  return agents.filter((agent) =>
-    WORKING.has(
-      agentStatusOf(turns.get(agent.conversationId), { createdAt: agent.createdAt, now }),
-    ),
-  ).length;
-});
-
-/**
- * Whether an integration's run is about a subject (one Sentry issue) the
- * automation started a run on within its cooldown, so a noisy issue starts
- * one agent a cooldown rather than one an alert.
- */
-const sameSubjectRecently = Effect.fnUntraced(function* (
-  automation: Automation,
-  run: ActedRun,
-  now: number,
-) {
-  if (run.firing.kind !== AUTOMATION_FIRING.INTEGRATION) return false;
-  const hours = automation.guards.subjectCooldownHours ?? AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS;
-  const since = new Date(now - Duration.toMillis(Duration.hours(hours)));
-
-  return yield* subjectRunStartedSince(automation.id, run.firing.subject.id, since);
-});
-
-/** The guard that holds this run back, if one does. */
-const heldBack = Effect.fnUntraced(function* (automation: Automation, now: number) {
-  const recent = yield* automationRunsSince(
-    automation.id,
-    new Date(now - Duration.toMillis(AUTOMATION_RUNS.CAP_WINDOW)),
-  );
-
-  const started = recent.filter((run) => run.status === AUTOMATION_RUN_STATUS.STARTED).length;
-
-  if (started >= automation.guards.dailyRunCap) return AUTOMATION_RUN_REASON.DAILY_CAP;
-  const working = yield* workingAgents(automation, now);
-  // A run claimed and still starting holds a place as an agent at work does.
-  const starting = yield* claimedRunsStarting(automation.id, new Date(now - CLAIM_WINDOW_MS));
-
-  if (working + starting >= automation.guards.maxConcurrentRuns) {
-    return AUTOMATION_RUN_REASON.CONCURRENCY;
-  }
-
-  return undefined;
-});
-
 /** What the locked look at a run came to: held back by a guard, claimed for its start, or settled by another act already. */
 const DECISION = {
   HELD: "held",
@@ -622,19 +521,17 @@ type Decision =
   | { readonly kind: typeof DECISION.TAKEN };
 
 /**
- * The guards read and the run claimed under the automation's row lock, so
- * two acts on its runs, two deliveries or one and a "Run now", never both read
- * room for one more agent: a run held back is settled skipped there, and
- * one let through is claimed, started with no agent yet, which the next
- * act's concurrency counts. Note that the automation is read again under
- * the lock, because a pause, or a change of repositories that drops a GitHub
- * firing's repository, committed while this act waited must hold the run back.
+ * The run checked and claimed under the automation's row lock, so two acts
+ * on one run, two deliveries of it, never both start it: a run held back is
+ * settled skipped there, and one let through is claimed, started with no
+ * agent yet. Note that the automation is read again under the lock, because
+ * a pause, or a change of repositories that drops a GitHub firing's
+ * repository, committed while this act waited must hold the run back.
  */
 const decide = (automationId: string, run: ActedRun) =>
   withAutomationLocked(
     automationId,
     Effect.gen(function* () {
-      const now = yield* Clock.currentTimeMillis;
       const read = yield* readAutomationToRun(automationId);
 
       if (Option.isNone(read)) return { kind: DECISION.TAKEN } satisfies Decision;
@@ -666,9 +563,7 @@ const decide = (automationId: string, run: ActedRun) =>
         ? AUTOMATION_RUN_REASON.PAUSED
         : moved
           ? AUTOMATION_RUN_REASON.REPOSITORY_CHANGED
-          : (yield* sameSubjectRecently(automation, run, now))
-            ? AUTOMATION_RUN_REASON.SAME_SUBJECT
-            : yield* heldBack(automation, now);
+          : undefined;
 
       if (held !== undefined) {
         const settled = yield* settleAutomationRun(run.id, {

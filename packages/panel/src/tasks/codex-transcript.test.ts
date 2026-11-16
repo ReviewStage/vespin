@@ -145,10 +145,87 @@ const CODEX_ITEMS: readonly {
     tool: "mcpToolCall",
     input: { server: "sentry", tool: "search_issues", arguments: { query: "invoice" } },
     output: "3 issues match invoice",
-    line: ["Ran", "search_issues", "Sentry"],
+    line: ["Ran", "search_issues"],
     body: ["Inputinvoice", "3 issues match invoice"],
   },
 ];
+
+/**
+ * A coding agent on Cursor stores its calls under `CURSOR_TOOL`'s names with
+ * Cursor's own args and answers, as `cursor-moments.ts` keeps them, the
+ * shapes the spike recorded of `@cursor/sdk` 1.4.0; it is drawn the same way.
+ */
+const CURSOR_ITEMS: typeof CODEX_ITEMS = [
+  {
+    name: "a command",
+    tool: "cursorShell",
+    input: { command: "git status --short", workingDirectory: CHECKOUT, timeout: 30000 },
+    output: { exitCode: 0, signal: "", stdout: " M README.md\n", stderr: "", executionTime: 68 },
+    line: ["git status --short"],
+    body: ["git status --short", "M README.md"],
+  },
+  {
+    name: "a read",
+    tool: "cursorRead",
+    input: { path: `${CHECKOUT}/README.md` },
+    output: { content: "# scratch\nTODO: nothing\n", totalLines: 3, fileSize: 24 },
+    line: ["Read", `${CHECKOUT}/README.md`],
+    body: ["TODO: nothing"],
+  },
+  {
+    name: "an edit",
+    tool: "cursorEdit",
+    input: { path: `${CHECKOUT}/README.md` },
+    output: {
+      linesAdded: 1,
+      linesRemoved: 1,
+      diffString: `--- a/${CHECKOUT}/README.md\n+++ b/${CHECKOUT}/README.md\n@@ -1,2 +1,2 @@\n # scratch\n-TODO: nothing\n+TODO: spike`,
+    },
+    line: ["Edited", `${CHECKOUT}/README.md`],
+    body: ["-TODO: nothing", "+TODO: spike"],
+  },
+  {
+    name: "a search",
+    tool: "cursorGrep",
+    input: { pattern: "greet", path: CHECKOUT, outputMode: "content" },
+    output: {
+      workspaceResults: {
+        [CHECKOUT]: {
+          type: "content",
+          output: {
+            matches: [{ file: "./greet.ts", lineNumber: 1, line: "export const greet = 1;" }],
+            totalMatches: 1,
+          },
+        },
+      },
+    },
+    line: ["greet"],
+    body: ["./greet.ts:1: export const greet = 1;"],
+  },
+  {
+    name: "a subagent's task",
+    tool: "cursorTask",
+    input: {
+      description: "List folder file count",
+      prompt: "Count the files in the workspace folder.",
+      subagentType: { kind: "explore" },
+      model: "composer-2.5-fast",
+    },
+    output: { isBackground: false, resultSuffix: "12 files." },
+    line: ["List folder file count"],
+    body: ["12 files."],
+  },
+];
+
+for (const item of CURSOR_ITEMS) {
+  test(`Cursor's ${item.name} is drawn on the renderer of Vespin's tool of its kind`, () => {
+    const { line, body } = opened(storedPart(item.tool, item.input, item.output));
+
+    for (const words of item.line) assert.ok(line.includes(words), `${line} says ${words}`);
+
+    for (const words of item.body) assert.ok(body.includes(words), `${body} shows ${words}`);
+  });
+}
 
 for (const item of CODEX_ITEMS) {
   test(`Codex's ${item.name} is drawn on the renderer of Vespin's tool of its kind`, () => {

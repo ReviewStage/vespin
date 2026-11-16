@@ -8,13 +8,13 @@ import type { TaskSummary } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppHostRead, AppLinkStanding, AppStateSnapshot } from "@repo/host/app-state";
+import type { AppHostRead, AppLinkStanding } from "@repo/host/app-state";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test } from "vitest";
 import { type AnyAct, FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
-import { signedInAs } from "../testing/app-state.js";
+import { type ListedAppState, signedInAs } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
@@ -190,7 +190,7 @@ const STANDINGS: Readonly<Record<string, AppHostRead<AppLinkStanding>>> = Object
 ]);
 
 /** Main's document holding the plan in Acme, with what the host holds of each page read through Acme, whether or not it is drawn. */
-function stateWith(workspace: Workspace): AppStateSnapshot {
+function stateWith(workspace: Workspace): ListedAppState {
   const snapshot = signedInAs({ id: "user-sam", email: "sam@example.com", name: "Sam Okafor" });
 
   return {

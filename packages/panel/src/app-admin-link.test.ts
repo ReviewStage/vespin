@@ -213,7 +213,7 @@ test.each([
   [
     "a task's version",
     "/acme/task/7/version/3",
-    { kind: LINK_DESTINATION.VERSION, planId: "7", revision: 3 },
+    { kind: LINK_DESTINATION.VERSION, taskId: "7", revision: 3 },
   ],
 ] as const)(
   "a link to %s already standing leaves it standing, as pressing the place standing always has",
@@ -317,7 +317,7 @@ test("a version history loaded on a task number the service finds nothing for gi
 /** An agent of Acme's task numbered 7, which no list the window holds names, as the service reads its page. */
 const SEVEN_AGENT: AgentPage = {
   id: "agent-of-seven",
-  planId: ACME_SEVEN.id,
+  taskId: ACME_SEVEN.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Retry the relay",
@@ -461,7 +461,7 @@ test("Home standing in a workspace the reader is no longer in stands under the w
 });
 
 test("a Home link to a workspace the reader is not in, pressed on an open task, leaves no row of the sidebar current under the not-found page", async () => {
-  const { document: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+  const { description: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
   first = stateWith(
     {},
     {
@@ -536,7 +536,7 @@ test("a link to a workspace the reader has since left, opened after a not-found 
 });
 
 test("a move from one open task to another keeps the task's page drawn, never its loading frame", async () => {
-  const { document: _document, ...one } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+  const { description: _document, ...one } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
   const other = { ...one, id: "b2000002-0000-4000-8000-0000000000f9", name: "Other", number: 77 };
 
   const openOn = (taskId: string): AppStateSnapshot => ({
@@ -552,7 +552,7 @@ test("a move from one open task to another keeps the task's page drawn, never it
         access: { admin: false, pending: true },
       },
     ),
-    [LIVE_READ.DESCRIPTION_DOCUMENT]: {
+    [LIVE_READ.HELD_TASK]: {
       [one.id]: { rows: { task: { ...DOCUMENT_TASK, workspaceId: ACME.id } } },
       [other.id]: { rows: { task: { ...DOCUMENT_TASK, ...other } } },
     },
@@ -602,7 +602,7 @@ function currentRows(): string[] {
 }
 
 test("a task pressed in the sidebar on Home is its row current while the host opens it, as the address already names it", async () => {
-  const { document: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+  const { description: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
   first = stateWith(
     {},
     {
@@ -633,7 +633,7 @@ test.each([
 ] as const)(
   "a task pressed in the sidebar on %s that the host refuses to open lands back where it was pressed",
   async (_from, at, other) => {
-    const { document: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+    const { description: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
 
     const open = {
       ...listed,

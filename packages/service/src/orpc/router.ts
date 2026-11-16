@@ -139,7 +139,12 @@ import {
   type WorkspaceSandboxSetupProcedureSeams,
   workspaceSandboxSetupProcedures,
 } from "../workspace-sandbox-setup/workspace-sandbox-setup-procedures.js";
+import {
+  type WorkspaceSandboxSizeProcedureSeams,
+  workspaceSandboxSizeProcedures,
+} from "../workspace-sandbox-size/workspace-sandbox-size-procedures.js";
 import { hosted } from "./base.js";
+import type { HostedRouter } from "./handler.js";
 
 /** What the resources ask of the deployment: one line per resource, in alphabetical order. */
 export type HostedRouterSeams = AccountProcedureSeams &
@@ -180,14 +185,15 @@ export type HostedRouterSeams = AccountProcedureSeams &
   TasksProcedureSeams &
   WorkspaceEnvironmentProcedureSeams &
   WorkspaceSandboxSetupProcedureSeams &
+  WorkspaceSandboxSizeProcedureSeams &
   WorkspaceGithubProcedureSeams &
   WorkspaceInvitationsProcedureSeams &
   SentryInstallProcedureSeams &
   SlackBotProcedureSeams &
   WorkspacesProcedureSeams;
 
-/** The hosted router: one line per resource, in alphabetical order. */
-export function hostedRouter(seams: HostedRouterSeams) {
+/** The hosted router: one line per resource, in alphabetical order. Note that it answers as `hostedFetch` takes it, because its inferred type is past the length declarations will hold. */
+export function hostedRouter(seams: HostedRouterSeams): HostedRouter {
   // One cache of the kept published answers for every resource that reads them or lets them go.
   const published = { ...seams, published: instancePublishedCache() };
 
@@ -217,7 +223,7 @@ export function hostedRouter(seams: HostedRouterSeams) {
     messages: messagesProcedures(seams),
     models: modelsProcedures(seams),
     descriptionComments: descriptionCommentsProcedures(seams),
-    plans: tasksProcedures(seams),
+    tasks: tasksProcedures(seams),
     pullRequestChapters: pullRequestChaptersProcedures(published),
     pullRequests: repositoryPullRequestProcedures(seams),
     pushDevices: pushDevicesProcedures(seams),
@@ -229,6 +235,7 @@ export function hostedRouter(seams: HostedRouterSeams) {
     voice: voiceProcedures(seams),
     workspaceEnvironment: workspaceEnvironmentProcedures(seams),
     workspaceSandboxSetup: workspaceSandboxSetupProcedures(seams),
+    workspaceSandboxSize: workspaceSandboxSizeProcedures(seams),
     workspaceGithub: workspaceGithubProcedures(seams),
     workspaceInvitations: workspaceInvitationsProcedures(seams),
     workspaceMergeQueue: mergeQueueProcedures(seams),

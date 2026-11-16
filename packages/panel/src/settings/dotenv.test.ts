@@ -1,0 +1,60 @@
+import assert from "node:assert/strict";
+import { test } from "vitest";
+import { parseDotenv } from "./dotenv.js";
+
+/**
+ * dotenv.test.ts -- a `.env` read as the variables it sets: comments, blank
+ * lines, and lines with no name set nothing, and `export` and one pair of
+ * quotes are taken off.
+ */
+
+test("a .env reads as the pairs it sets, in order", () => {
+  const text = [
+    "# .env.local",
+    "",
+    "REDIS_URL=redis://cache:6379",
+    'LINEAR_API_KEY="lin_api_example"',
+    "export FEATURE_FLAGS = 'new-inbox'",
+    "DATABASE_URL=postgres://localhost/acme?a=b#frag",
+    "=no-name",
+    "just words",
+  ].join("\r\n");
+
+  assert.deepEqual(parseDotenv(text), [
+    { name: "REDIS_URL", value: "redis://cache:6379" },
+    { name: "LINEAR_API_KEY", value: "lin_api_example" },
+    { name: "FEATURE_FLAGS", value: "new-inbox" },
+    { name: "DATABASE_URL", value: "postgres://localhost/acme?a=b#frag" },
+  ]);
+});
+
+test("a quoted value running over several lines is read whole, its line breaks kept", () => {
+  const text = ['PRIVATE_KEY="-----BEGIN KEY-----', "abc", '-----END KEY-----"', "NEXT=1"].join(
+    "\n",
+  );
+
+  assert.deepEqual(parseDotenv(text), [
+    { name: "PRIVATE_KEY", value: "-----BEGIN KEY-----\nabc\n-----END KEY-----" },
+    { name: "NEXT", value: "1" },
+  ]);
+});
+
+test("a quoted value closes at its quote, a comment after it left out", () => {
+  const text = ['TOKEN="one # two" # primary', "NEXT='three'", "EMPTY="].join("\n");
+
+  assert.deepEqual(parseDotenv(text), [
+    { name: "TOKEN", value: "one # two" },
+    { name: "NEXT", value: "three" },
+    { name: "EMPTY", value: "" },
+  ]);
+});
+
+test("an escaped quote inside a quoted value is kept, and the value closes at the quote after it", () => {
+  const text = ['JSON="{\\"on\\":true}"', 'NOTE="say \\"hi\\"', 'twice"', "NEXT=1"].join("\n");
+
+  assert.deepEqual(parseDotenv(text), [
+    { name: "JSON", value: '{\\"on\\":true}' },
+    { name: "NOTE", value: 'say \\"hi\\"\ntwice' },
+    { name: "NEXT", value: "1" },
+  ]);
+});

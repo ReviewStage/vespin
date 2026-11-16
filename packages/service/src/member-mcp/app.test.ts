@@ -791,7 +791,7 @@ it.effect(
 );
 
 it.effect(
-  "a member makes, starts, messages, stops, changes, shares a port of, drives a browser of, plans, comments, remembers, runs, and reads or disconnects the Sentry of nothing in a workspace they are not in",
+  "a member makes, starts, messages, stops, changes, wakes, shares a port of, drives a browser of, plans, comments, remembers, runs, and reads or disconnects the Sentry of nothing in a workspace they are not in",
   () =>
     Effect.gen(function* () {
       const { auth, fetch, services } = yield* standing;
@@ -803,12 +803,6 @@ it.effect(
         // The member's own workspace has its experiments on, so their tools are listed to be refused elsewhere.
         yield* memoryIn(own, member.userId);
         yield* descriptionsIn(own, member.userId, true);
-        yield* setWorkspaceExperiment({
-          organizationId: own,
-          experiment: EXPERIMENT.RUN_ACTIONS,
-          on: true,
-          by: member.userId,
-        });
         const elsewhere = yield* openWorkspace(stranger.userId);
 
         const task = yield* createTask(stranger.userId, {
@@ -933,6 +927,7 @@ it.effect(
           ],
           [MEMBER_MCP_TOOL.STOP_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true }],
+          [MEMBER_MCP_TOOL.WAKE_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.LIST_AGENT_PORTS, { agentId }],
           [MEMBER_MCP_TOOL.SHARE_AGENT_PORT, { agentId, port: 3000 }],
           [MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS, { agentId }],
@@ -1342,7 +1337,7 @@ it.effect(
           ["markPullRequestReadyForReview", { id }, `Bearer ${MEMBER_GITHUB_TOKEN}`],
           [
             "mergePullRequest",
-            { id, method: "SQUASH", head: PUBLISHED.headSha },
+            { id, mergeMethod: "SQUASH", head: PUBLISHED.headSha },
             `Bearer ${MEMBER_GITHUB_TOKEN}`,
           ],
         ],

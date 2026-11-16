@@ -1,5 +1,5 @@
 /**
- * pins.ts -- what a coding agent's sandbox pins of Claude Code and Codex: their versions and where the image puts them, read by the image, the sessions, and the protocol generator alike.
+ * pins.ts -- what a coding agent's sandbox pins of Claude Code, Codex, and Cursor's SDK: their versions and where the image puts them, read by the image, the sessions, and the protocol generator alike.
  *
  * The image (`apps/web/agent-image/Dockerfile`, which
  * `tools/oxlint/vespin/guards/agent-pins.ts` holds to these) installs
@@ -9,7 +9,7 @@
  * app-server protocol types are generated from the same Codex
  * (`scripts/generate-codex-protocol.mjs`). A bump moves them together.
  * What a device fetches or carries of its own, a host's Node, and the
- * Claude Code, Codex, and GitHub CLI every host keeps for its agents to
+ * Claude Code, Codex, and GitHub CLI every host, and the Cursor SDK every Mac, keeps for its agents to
  * run on the box itself, is an `AgentToolPin` checked by size, digest, and
  * signature where it has one before it is kept (`@repo/host`'s
  * `localAgentTool`). Erasable syntax alone, so Node runs the generator over
@@ -105,8 +105,8 @@ export const RUNNER_UNIT = {
  * sandbox's architecture.
  */
 export const CLAUDE_CODE_PIN = {
-  SDK_VERSION: "0.3.322",
-  VERSION: "2.1.322",
+  SDK_VERSION: "0.3.325",
+  VERSION: "2.1.325",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/claude-agent-sdk`,
   /** The binary, under `DIRECTORY`. */
   BINARY: "node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude",
@@ -123,12 +123,30 @@ export const CLAUDE_EXECUTABLE = `${CLAUDE_CODE_PIN.DIRECTORY}/${CLAUDE_CODE_PIN
  * the threads it keeps there outlive a stop.
  */
 export const CODEX_PIN = {
-  VERSION: "0.167.2",
+  VERSION: "0.169.0",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/codex`,
   /** Where the image links the binary as `codex`. */
   LINK: "/usr/local/bin/codex",
   HOME: `/home/${AGENT_USER}/.codex`,
 } as const;
+
+/**
+ * Cursor's TypeScript SDK, pinned exactly, with the platform package npm
+ * installs beside it on the sandbox's Linux x86-64 (`@cursor/sdk-linux-x64`:
+ * its tree-sitter bindings and the `rg` its search tools run), installed as
+ * root under a prefix only root writes. The runner imports the SDK from
+ * here rather than bundling it, so the SDK finds that package beside itself
+ * as it looks for it (`CURSOR_SDK_ENTRY`). It needs Node 22.13 or later.
+ */
+export const CURSOR_SDK_PIN = {
+  VERSION: "1.4.0",
+  DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/cursor-sdk`,
+  /** The SDK's ES module entry, under `DIRECTORY`. */
+  ENTRY: "node_modules/@cursor/sdk/dist/esm/index.js",
+} as const;
+
+/** The SDK's entry's whole path, which the service names in a Cursor launch's config (`sdk`). */
+export const CURSOR_SDK_ENTRY = `${CURSOR_SDK_PIN.DIRECTORY}/${CURSOR_SDK_PIN.ENTRY}`;
 
 /**
  * A binary a local agent's Mac or host fetches once and keeps (`@repo/host`'s
@@ -170,6 +188,29 @@ export interface AgentToolPin {
    * the developer's could have written it since its archive was checked.
    */
   readonly FILES?: Readonly<Record<string, string>>;
+  /**
+   * The files under the kept folder `codesign` checks against `TEAM`, where
+   * the build that runs is not `BINARY` itself; `BINARY` alone where absent.
+   */
+  readonly SIGNED?: readonly string[];
+  /**
+   * Further archives the kept build is made of, each kept whole under a
+   * folder of its own inside it, as npm lays a package's dependencies out
+   * beside it; none for a tool that is one archive.
+   */
+  readonly PARTS?: readonly AgentToolPart[];
+}
+
+/** One more archive of a tool's kept build (`AgentToolPin.PARTS`), checked by its own size and digest before anything of it is kept. */
+export interface AgentToolPart {
+  /** The archive by its https address, a gzipped tar. */
+  readonly ARCHIVE: string;
+  readonly SHA256: string;
+  readonly BYTES: number;
+  /** The archive's folder kept, whole. */
+  readonly ROOT: string;
+  /** Where under the kept build it is kept. */
+  readonly INTO: string;
 }
 
 /**
@@ -229,13 +270,19 @@ export const NODE_MAC_PIN: AgentToolPin = {
 };
 
 /**
- * The Agent SDK release every host's own Claude Code is, and the Codex and
- * GitHub CLI releases beside it, each written out in its pins below rather
- * than read off `CLAUDE_CODE_PIN` and `CODEX_PIN`, so a bump fails the
+ * The Agent SDK release every host's own Claude Code is, and the Codex,
+ * Cursor SDK, and GitHub CLI releases beside it, each written out in its pins
+ * below rather than read off `CLAUDE_CODE_PIN`, `CODEX_PIN`, and
+ * `CURSOR_SDK_PIN`, so a bump fails the
  * repository check (`tools/oxlint/vespin/guards/agent-pins.ts`) until each
  * pin's address, size, and digests are read off the new release too.
  */
-const HOST_CLI_VERSION = { CLAUDE_CODE: "0.3.322", CODEX: "0.167.2", GH: "2.103.3" } as const;
+const HOST_CLI_VERSION = {
+  CLAUDE_CODE: "0.3.325",
+  CODEX: "0.169.0",
+  CURSOR_SDK: "1.4.0",
+  GH: "2.103.3",
+} as const;
 
 /**
  * Claude Code on a Mac host, This Mac's among them: the macOS arm64 build of
@@ -246,13 +293,13 @@ export const CLAUDE_CODE_MAC_PIN: AgentToolPin = {
   NAME: "claude",
   VERSION: HOST_CLI_VERSION.CLAUDE_CODE,
   ARCHIVE: `https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-darwin-arm64/-/claude-agent-sdk-darwin-arm64-${HOST_CLI_VERSION.CLAUDE_CODE}.tgz`,
-  SHA256: "7b0c90817ff94002578389efd5280337cde9ecfc43115fc0f76d64ac4e6db128",
-  BYTES: 147_737_860,
+  SHA256: "4951eee7021a321f7538d626aeb731aaa9c36c1d03092f9fdf4e507bc7da8e3f",
+  BYTES: 157_704_852,
   ROOT: "package",
   MEMBERS: ["claude"],
   BINARY: "claude",
   TEAM: "Q6L2SF6YDW",
-  FILES: { claude: "a9d237949db816a0b7afd88a9a8e1df36b3a597a30f5a41d1c0539eb180a3450" },
+  FILES: { claude: "84590fefe6338be9087f5814b61f9a54c5f21524163a4c127cb5a808e31009f2" },
 };
 
 /**
@@ -265,17 +312,113 @@ export const CODEX_MAC_PIN: AgentToolPin = {
   NAME: "codex",
   VERSION: HOST_CLI_VERSION.CODEX,
   ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-darwin-arm64.tgz`,
-  SHA256: "7dd03256d9c38110e8b5d26bb8f177cc938fa9603ee2f509a2c9fdb877fb363e",
-  BYTES: 148_633_178,
+  SHA256: "d67d443253294438a21fde15753d7c1174e6a32147d842eb84428479d664c93d",
+  BYTES: 153_831_622,
   ROOT: "package/vendor/aarch64-apple-darwin",
   MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
   BINARY: "bin/codex",
   TEAM: "2DC432GLL2",
   FILES: {
-    "bin/codex": "97bc82fd46f117cf10efb95e6ff0c81dc4784f5797bcdc2cb75093ba09e4def0",
-    "bin/codex-code-mode-host": "45acdb759c3ac0a6b30a5107329b364b7ac1579f2cdf270997f03bc8d6365ef6",
-    "codex-path/rg": "0cf872126b9094deda77f5e1710c6514c06dded7ea9abc0765c876d36ba3e9e9",
+    "bin/codex": "739cda86e15d30a6e2b40cf8dcbbfb988aaf48b305b27065573bb8e9fd41d002",
+    "bin/codex-code-mode-host": "10feae2abe764bcf2273e241ace67aecc360eb8c28a82a2988bf1d8498a9bacf",
+    "codex-path/rg": "2caf75aae63d8fd944456686d5241f4864f5e2a930e0a93434e121873f7ff6bf",
   },
+};
+
+/** Where npm keeps a package's archive, by its name and the archive's own file name. */
+const npmArchive = (name: string, file: string): string =>
+  `https://registry.npmjs.org/${name}/-/${file}`;
+
+/**
+ * Cursor's SDK on a Mac host: the sandbox's release (`CURSOR_SDK_PIN.VERSION`),
+ * as npm keeps it, kept as the SDK's own package folder with what npm would
+ * install beside it under its `node_modules`: the macOS arm64 platform
+ * package, signed by Cursor (its `rg`, its sandbox, and its tree-sitter
+ * bindings), and the SDK's dependencies and its `zod` peer at the releases
+ * the sandbox's install resolves. The runner imports the SDK's entry
+ * (`BINARY`) from here, so the SDK finds every one of them beside itself as
+ * it looks for them. The SDK reads the Mac's own Cursor sign-in, which its
+ * `Cursor.auth.login()` keeps at `~/.cursor/sdk/auth.json`.
+ */
+export const CURSOR_SDK_MAC_PIN: AgentToolPin = {
+  NAME: "cursor-sdk",
+  VERSION: HOST_CLI_VERSION.CURSOR_SDK,
+  ARCHIVE: npmArchive("@cursor/sdk", `sdk-${HOST_CLI_VERSION.CURSOR_SDK}.tgz`),
+  SHA256: "a4cb4580916c60b1870fa9879542cc106bd531beb73f409bfdb94295db856425",
+  BYTES: 4_832_140,
+  ROOT: "package",
+  MEMBERS: ["package.json", "dist"],
+  BINARY: "dist/esm/index.js",
+  TEAM: "DCNK4UB866",
+  SIGNED: [
+    "node_modules/@cursor/sdk-darwin-arm64/bin/rg",
+    "node_modules/@cursor/sdk-darwin-arm64/bin/cursorsandbox",
+  ],
+  FILES: {
+    "dist/esm/index.js": "8dbaf5a53f69c08b7845efad9ca1ef9d3c8fcf2e00051578edac3fea776459b4",
+    "node_modules/@cursor/sdk-darwin-arm64/bin/rg":
+      "0e0f0d4dd175deae3ec5b88486a77210bd71d4edb22e917582062ae90dd541ba",
+    "node_modules/@cursor/sdk-darwin-arm64/bin/cursorsandbox":
+      "6070d808e304b9a08d4f271e85bcc009a72fd443d3f9a4cc685cb7ca4a694484",
+    "node_modules/@cursor/sdk-darwin-arm64/vendor/tree-sitter/binding.node":
+      "d8543f4774829b3ee40f6deec01217cb0614dbf278536835bbaf21a83d30d8f8",
+    "node_modules/@cursor/sdk-darwin-arm64/vendor/tree-sitter-bash/binding.node":
+      "6571991eed6ce9ad68bc952a3116010dd9df6287e114a75cb347101b774892fd",
+  },
+  PARTS: [
+    {
+      ARCHIVE: npmArchive(
+        "@cursor/sdk-darwin-arm64",
+        `sdk-darwin-arm64-${HOST_CLI_VERSION.CURSOR_SDK}.tgz`,
+      ),
+      SHA256: "fc9ee1ef51cc056e9b9ca2e125a6d67a9ba06fd03b394076badc283763eb21b5",
+      BYTES: 3_510_646,
+      ROOT: "package",
+      INTO: "node_modules/@cursor/sdk-darwin-arm64",
+    },
+    {
+      ARCHIVE: npmArchive("@bufbuild/protobuf", "protobuf-1.10.0.tgz"),
+      SHA256: "2219bc26e399a6e8ee56a3daf8a3bf47f4e935f425c22b812d991316dd665266",
+      BYTES: 189_348,
+      ROOT: "package",
+      INTO: "node_modules/@bufbuild/protobuf",
+    },
+    {
+      ARCHIVE: npmArchive("@connectrpc/connect", "connect-1.7.0.tgz"),
+      SHA256: "cdcd4386d3f4d750bcfe5b56d1247eb6c2ed0b2ddd3e496517033f925cfe5206",
+      BYTES: 104_162,
+      ROOT: "package",
+      INTO: "node_modules/@connectrpc/connect",
+    },
+    {
+      ARCHIVE: npmArchive("@connectrpc/connect-web", "connect-web-1.7.0.tgz"),
+      SHA256: "8c3fe6386c920e95cec20f483d228c2ba91e084fc99f9002a4445cd9707e700c",
+      BYTES: 8_004,
+      ROOT: "package",
+      INTO: "node_modules/@connectrpc/connect-web",
+    },
+    {
+      ARCHIVE: npmArchive("@statsig/js-client", "js-client-3.31.0.tgz"),
+      SHA256: "21d69db8b144ea65fd283aaac108398046a32885e10b65358e66aac290e42ec7",
+      BYTES: 231_613,
+      ROOT: "package",
+      INTO: "node_modules/@statsig/js-client",
+    },
+    {
+      ARCHIVE: npmArchive("@statsig/client-core", "client-core-3.31.0.tgz"),
+      SHA256: "7b598abbc7b16ab5f519da5b2747fa503e888b83c2d04a4eb2ae3efae7adba76",
+      BYTES: 41_491,
+      ROOT: "package",
+      INTO: "node_modules/@statsig/client-core",
+    },
+    {
+      ARCHIVE: npmArchive("zod", "zod-4.6.7.tgz"),
+      SHA256: "84efd155bed93270286e793fc951be270b536cbd5b0eeb111f0fa3967201d698",
+      BYTES: 1_141_941,
+      ROOT: "package",
+      INTO: "node_modules/zod",
+    },
+  ],
 };
 
 /** GitHub's CLI on a Mac host, as cli/cli's release keeps its macOS arm64 build, a zip, signed by GitHub. */
@@ -298,23 +441,23 @@ export const CLAUDE_CODE_LINUX_PINS: LinuxToolPins = {
     NAME: "claude",
     VERSION: HOST_CLI_VERSION.CLAUDE_CODE,
     ARCHIVE: `https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-x64/-/claude-agent-sdk-linux-x64-${HOST_CLI_VERSION.CLAUDE_CODE}.tgz`,
-    SHA256: "cc294a64eacb94472983ba3912612ceecf97c0bf9372027fc94485c89e4594e2",
-    BYTES: 159_262_449,
+    SHA256: "74dc7ac3255a4638b013b1b3e30bd64f8d26f8df5fcc2aee0bfdebd55fe201c5",
+    BYTES: 169_350_891,
     ROOT: "package",
     MEMBERS: ["claude"],
     BINARY: "claude",
-    FILES: { claude: "bfb3703ad5380242328459bc62ada4bde8ae7ba57c6e1eeadb9c00e08874c478" },
+    FILES: { claude: "0dc4f4a9a165fc60746d7ae8489712e5fc352f1e7ad4eb22e7141bd0812eb0cf" },
   },
   arm64: {
     NAME: "claude",
     VERSION: HOST_CLI_VERSION.CLAUDE_CODE,
     ARCHIVE: `https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-arm64/-/claude-agent-sdk-linux-arm64-${HOST_CLI_VERSION.CLAUDE_CODE}.tgz`,
-    SHA256: "5344081b93b8e03ca2a9af70eedae3319e4752460f00b5868c657c61e1b15385",
-    BYTES: 160_278_104,
+    SHA256: "280aa628eb0b4c82da7c580c429806e3cef099ba44ba3fe54148570a79d1f32e",
+    BYTES: 170_148_890,
     ROOT: "package",
     MEMBERS: ["claude"],
     BINARY: "claude",
-    FILES: { claude: "f220ca50ea4f3222043ff83cc224a1262e0196e9897acc0871efa94235b0c1fd" },
+    FILES: { claude: "7b6e484b1989a5a14a4b354709ccc8672518a3ec5b9ccd7981fc6254327fde67" },
   },
 };
 
@@ -328,32 +471,32 @@ export const CODEX_LINUX_PINS: LinuxToolPins = {
     NAME: "codex",
     VERSION: HOST_CLI_VERSION.CODEX,
     ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-linux-x64.tgz`,
-    SHA256: "637bf17e7a3082b62f8cbd11ed1936601014af4dedac7ce78f8e3614c6e4adf6",
-    BYTES: 173_786_277,
+    SHA256: "89801b4b97faba562eb80fe0a833159ac79399be674022f4b1a0ccab1d153faa",
+    BYTES: 167_001_509,
     ROOT: "package/vendor/x86_64-unknown-linux-musl",
     MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
     BINARY: "bin/codex",
     FILES: {
-      "bin/codex": "a9672d0fa0dd8fcf8cad136fa0d056b914bc046f5ac3d78f4a5cf390655af56b",
+      "bin/codex": "b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b",
       "bin/codex-code-mode-host":
-        "007c62795a7215c27ee85486ecb95e714b33118a2d18c6d7b09b0d9793c72ff4",
+        "e9f2ef68671b2b6ac68902d19e8dafda3f5928e678ecf3f30c74b203a2c403ed",
       "codex-path/rg": "e62198eb19b136b88c330af83647b5a962cb99b6b1f066758568f12de1974849",
-      "codex-resources/bwrap": "7df960565a0dece99240ea4b9d0e011307817f9f3b73176c7b71fda44fe84765",
+      "codex-resources/bwrap": "15fd5f2673d2e1c2f80e34e5108462fd014f5e8bbc7b0731f1ab23d1ff1ac140",
     },
   },
   arm64: {
     NAME: "codex",
     VERSION: HOST_CLI_VERSION.CODEX,
     ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-linux-arm64.tgz`,
-    SHA256: "cf2827197edee6a430485b68979fb2b8f27cf97e30f71a6334fe02b0e6e73e11",
-    BYTES: 165_987_253,
+    SHA256: "c1555c8ad3913e703d736584ff15e98eaeda685bf6eaedc83ae15943badbc1ff",
+    BYTES: 171_743_625,
     ROOT: "package/vendor/aarch64-unknown-linux-musl",
     MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
     BINARY: "bin/codex",
     FILES: {
-      "bin/codex": "b581df3989da98e36fccd7d40cc980727a9ee87bcf0e6ef52ffb2544d6a5302f",
+      "bin/codex": "3bb41c9a80187773e2a59278d4fc355b1a163c31bb5a79581e37d4fe428af047",
       "bin/codex-code-mode-host":
-        "7614c7d46f4f6cdfc09d7c741c8a48f8d23cc37469c738ed01d349dcffd7868e",
+        "66874c7881c4004f1c155584e1325cad17795bdd91b886995ad8a043809c1019",
       "codex-path/rg": "e36d0eb52e70696bdf1781392722e05a21bb91d3b7b762ef5ec20e5df2ec687b",
       "codex-resources/bwrap": "0f543a7356ab343b4827222f910461d4196778f328b28acd6c126ef18e9557ab",
     },

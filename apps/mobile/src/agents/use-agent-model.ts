@@ -19,7 +19,8 @@
 import { chooseFailureNote } from "@repo/features/agent-refusal-words";
 import { runtimeModels } from "@repo/features/agent-runtime-models";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import { effortFor, effortsOf } from "@repo/features/model-effort";
+import { effortFor, effortLabel, effortsOf } from "@repo/features/model-effort";
+import { modelLabel } from "@repo/features/model-label";
 import {
   type CatalogModel,
   MODEL_SPEED,
@@ -64,6 +65,21 @@ function atSpeed(offered: readonly CatalogModel[], model: string, running: strin
   return offered.some(({ id }) => id === version) ? version : model;
 }
 
+/**
+ * The options with the one the agent runs on among them, last where the
+ * list lacks it. Note that a menu picker whose value matches no option draws
+ * it empty, as the agent's model did before the catalog was read, or where
+ * the catalog no longer offers it for the agent's harness.
+ */
+function withRunning(
+  options: readonly PickOption[],
+  running: PickOption | undefined,
+): readonly PickOption[] {
+  if (running === undefined || options.some(({ id }) => id === running.id)) return options;
+
+  return [...options, running];
+}
+
 /** The agent's model and effort, and the picks that change them from its next step. */
 export function useAgentModelPick(agentId: string): AgentModelPick {
   const acts = useHostActs();
@@ -76,8 +92,16 @@ export function useAgentModelPick(agentId: string): AgentModelPick {
   const catalog = read?.models ?? NO_MODELS;
   const runtime = agent?.runtime;
   const offered = useMemo(() => runtimeModels(catalog, runtime), [catalog, runtime]);
-  const models = useMemo(() => modelOptions(offered), [offered]);
   const model = agent === undefined ? undefined : standardModelIdOf(agent.model);
+
+  const models = useMemo(
+    () =>
+      withRunning(
+        modelOptions(offered),
+        model === undefined ? undefined : { id: model, label: modelLabel(model, catalog) },
+      ),
+    [offered, model, catalog],
+  );
 
   const choose = (choice: ModelChoice) => {
     writes.current += 1;
@@ -101,7 +125,12 @@ export function useAgentModelPick(agentId: string): AgentModelPick {
 
   return {
     models,
-    efforts: effortOptions(offered, model),
+    efforts: withRunning(
+      effortOptions(offered, model),
+      agent?.effort === undefined
+        ? undefined
+        : { id: agent.effort, label: effortLabel(agent.effort) },
+    ),
     model,
     effort: agent?.effort,
     note,

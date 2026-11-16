@@ -42,7 +42,8 @@ const AVATAR = { TILE: "#171412", INK: COPPER.DARK.FILL };
 // accent: a burnt orange in the light theme and an orange in the dark. Each
 // role takes the step Geist names for it: background-100 the ground and
 // background-200 the frame and the wells, gray-100 to 300 a control's rest,
-// hover, and press, gray-400 and 500 its edges, gray-900 the secondary
+// hover, and press, gray-400 and 500 its edges (gray-300 a chip's in the
+// dark, as soft as a card's border there), gray-900 the secondary
 // words and gray-1000 the primary. A status ink is its scale's 900, Geist's
 // accessible text step. Attention shares the accent, as copper's did, and so
 // does a start, which copper drew in a yellow Geist has no scale for; work
@@ -80,6 +81,7 @@ const BRAND_PALETTES = {
       TEXT: "#171614",
       TEXT_BODY: "#282624",
       TEXT_MUTED: "#64615f",
+      ACTION_FILL: "#64615f",
       ACCENT: COPPER.LIGHT.FILL,
       ON_ACCENT: "#ffffff",
       ON_ACCENT_MUTED: "#ffffff",
@@ -116,6 +118,7 @@ const BRAND_PALETTES = {
       TEXT: "#f4f1ef",
       TEXT_BODY: "#e0dddb",
       TEXT_MUTED: "#96918d",
+      ACTION_FILL: "#4a4744",
       ACCENT: COPPER.DARK.FILL,
       ON_ACCENT: "#120f0d",
       ON_ACCENT_MUTED: "#120f0d",
@@ -156,6 +159,7 @@ const BRAND_PALETTES = {
       TEXT: GEIST_LIGHT.GRAY[1000],
       TEXT_BODY: GEIST_LIGHT.GRAY[1000],
       TEXT_MUTED: GEIST_LIGHT.GRAY[900],
+      ACTION_FILL: GEIST_LIGHT.GRAY[900],
       ACCENT: GEIST_LIGHT.AMBER[900],
       ON_ACCENT: GEIST_WHITE,
       ON_ACCENT_MUTED: GEIST_WHITE,
@@ -185,13 +189,14 @@ const BRAND_PALETTES = {
       CHIP: GEIST_DARK.GRAY[100],
       CHIP_HOVER: GEIST_DARK.GRAY[200],
       CHIP_SELECTED: GEIST_DARK.GRAY[300],
-      CHIP_EDGE: GEIST_DARK.GRAY[400],
+      CHIP_EDGE: GEIST_DARK.GRAY[300],
       CHIP_EDGE_STRONG: GEIST_DARK.GRAY[500],
       FILL_STRONG: GEIST_DARK.GRAY_ALPHA[200],
       INK: GEIST_WHITE,
       TEXT: GEIST_DARK.GRAY[1000],
       TEXT_BODY: GEIST_DARK.GRAY[1000],
       TEXT_MUTED: GEIST_DARK.GRAY[900],
+      ACTION_FILL: GEIST_DARK.GRAY[500],
       ACCENT: GEIST_DARK.AMBER[900],
       ON_ACCENT: GEIST_LIGHT.GRAY[1000],
       ON_ACCENT_MUTED: GEIST_LIGHT.GRAY[1000],

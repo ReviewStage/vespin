@@ -1,23 +1,16 @@
 // file-chip.tsx -- a file a message carried that is neither a picture nor a video, such as a PDF: its chip after the message's words, naming it and its size, which opens a PDF full screen in a web view and any other file in the system's share sheet, and whose long press offers Share and, for a text file, Copy.
 
+import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Linking,
-  Modal,
-  Pressable,
-  Share,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Linking, Modal, Share, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView, type WebViewNavigation } from "react-native-webview";
 import { useAccessibilitySize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
+import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -68,9 +61,10 @@ const styles = StyleSheet.create({
     gap: SPACE.ROW,
     paddingHorizontal: SPACE.ROW + 2,
     paddingVertical: SPACE.TIGHT * 2,
-    borderRadius: RADIUS.TAG * 2,
+    borderRadius: RADIUS.TILE,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  atEnd: { alignSelf: "flex-end" },
   words: { flexShrink: 1, gap: 1 },
   facts: { flexDirection: "row", flexWrap: "wrap", columnGap: SPACE.ROW - 2 },
   viewer: { flex: 1 },
@@ -180,7 +174,7 @@ function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
             },
           ]}
         >
-          <Pressable
+          <Press
             onPress={onClose}
             accessibilityRole="button"
             testID="file-viewer-done"
@@ -189,7 +183,7 @@ function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
             <Text style={{ fontSize: TEXT_SIZE.BODY, fontWeight: "600", color: colors.TEXT }}>
               {FILE_WORDS.DONE}
             </Text>
-          </Pressable>
+          </Press>
           <Text
             numberOfLines={1}
             ellipsizeMode="middle"
@@ -201,7 +195,7 @@ function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
           >
             {name}
           </Text>
-          <Pressable
+          <Press
             onPress={() => shareFile(source, name)}
             accessibilityRole="button"
             accessibilityLabel={FILE_WORDS.SHARE}
@@ -213,7 +207,7 @@ function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
               size={MARK_SIZE.LEAD + 2}
               tintColor={colors.TEXT}
             />
-          </Pressable>
+          </Press>
         </View>
         {failed ? (
           <View style={styles.cannot}>
@@ -263,11 +257,20 @@ type FileChipProps = {
   readonly name: string;
   /** The file's type, which names its kind and its glyph. */
   readonly mediaType: string;
-  /** The file's address on the device, under the app's caches; none while its bytes are on their way. */
-  readonly source: string | undefined;
+  /** The file's address on the device, under the app's caches; none while its bytes are on their way, and `null` where they could not be read. */
+  readonly source: string | null | undefined;
   /** The file's size in words, such as "48 KB"; none until its bytes are read. */
   readonly size: string | undefined;
+  /** Reads the file again where its bytes could not be read, which a press on its chip then does; none offers nothing. */
+  readonly onRetry?: (() => void) | undefined;
+  /** Whether it stands at its row's end, as a sent line's files do, rather than at its start. */
+  readonly atEnd?: boolean | undefined;
+  /** Whether its bytes are anywhere to open; one a line kept none of is drawn by its name and kind alone and opens nothing, as the panel's chip, whatever its source. */
+  readonly held?: boolean | undefined;
 };
+
+/** What a press on a chip whose file could not be read is heard to do. */
+const READS_AGAIN = "Reads the file again";
 
 /**
  * A file's chip after a message's words, as the panel stands a file's chip:
@@ -279,43 +282,81 @@ type FileChipProps = {
  * system's spinner stands in its glyph's place and a press does nothing. At
  * an accessibility size its name wraps rather than cuts.
  */
-export function FileChip({ name, mediaType, source, size }: FileChipProps) {
+export function FileChip({
+  name,
+  mediaType,
+  source,
+  size,
+  onRetry,
+  atEnd = false,
+  held = true,
+}: FileChipProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
   const [open, setOpen] = useState(false);
   const kind = kindOf(name, mediaType);
-  const heard = [name, kind, size].filter((part) => part !== undefined).join(", ");
+
+  // Note that a file whose bytes could not be read says so under its name in place of its kind, as the panel's chip does, and a press on it reads it again.
+  const unread = held && source === null;
+  const waiting = held && source === undefined;
+  const opened = held ? (source ?? undefined) : undefined;
+  const said = unread ? MEDIA_READ_WORDS.FILE_FAILED : kind;
+
+  const heard = unread
+    ? `${name} ${MEDIA_READ_WORDS.COULD_NOT_READ}`
+    : [name, kind, size].filter((part) => part !== undefined).join(", ");
+
   const fact = { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED };
   const viewed = isPdf(mediaType);
 
   const acts = useKeptActs(
-    source === undefined ? undefined : { kind: KEPT_KIND.FILE, source, name, mediaType },
+    opened === undefined ? undefined : { kind: KEPT_KIND.FILE, source: opened, name, mediaType },
   );
 
   const press = () => {
-    if (source === undefined) return;
+    if (unread) onRetry?.();
+
+    if (opened === undefined) return;
 
     if (viewed) setOpen(true);
-    else shareFile(source, name);
+    else shareFile(opened, name);
   };
 
   return (
     <>
       <HeldMenu acts={acts}>
-        <Pressable
+        <Press
           onPress={press}
-          disabled={source === undefined}
+          disabled={waiting || !held || (unread && onRetry === undefined)}
           accessibilityRole="button"
           accessibilityLabel={heard}
-          accessibilityHint={viewed ? FILE_WORDS.OPENS : FILE_WORDS.SHARES}
-          accessibilityState={{ busy: source === undefined }}
-          style={[styles.chip, { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE }]}
+          accessibilityHint={
+            !held || (unread && onRetry === undefined)
+              ? undefined
+              : unread
+                ? READS_AGAIN
+                : viewed
+                  ? FILE_WORDS.OPENS
+                  : FILE_WORDS.SHARES
+          }
+          accessibilityState={{ busy: waiting }}
+          style={[
+            styles.chip,
+            atEnd ? styles.atEnd : null,
+            { backgroundColor: colors.CARD, borderColor: colors.CHIP_EDGE },
+          ]}
         >
-          {source === undefined ? (
+          {waiting ? (
             <ActivityIndicator color={colors.TEXT_MUTED} style={{ width: MARK_SIZE.LEAD }} />
           ) : (
             <SymbolView
-              name={glyphSymbol(isDocument(mediaType) ? FILE_SYMBOL.DOCUMENT : FILE_SYMBOL.OTHER)}
+              name={glyphSymbol(
+                unread
+                  ? GLYPH.FAILED
+                  : isDocument(mediaType)
+                    ? FILE_SYMBOL.DOCUMENT
+                    : FILE_SYMBOL.OTHER,
+              )}
               size={MARK_SIZE.LEAD}
               tintColor={colors.TEXT_MUTED}
             />
@@ -330,14 +371,14 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
             </Text>
             {/* Note that its kind and its size stand as two muted words apart, never joined by a separator. */}
             <View style={styles.facts}>
-              <Text style={fact}>{kind}</Text>
-              {size === undefined ? null : <Text style={fact}>{size}</Text>}
+              <Text style={fact}>{said}</Text>
+              {size === undefined || unread ? null : <Text style={fact}>{size}</Text>}
             </View>
           </View>
-        </Pressable>
+        </Press>
       </HeldMenu>
-      {source === undefined || !viewed ? null : (
-        <FileViewer source={source} name={name} visible={open} onClose={() => setOpen(false)} />
+      {opened === undefined || !viewed ? null : (
+        <FileViewer source={opened} name={name} visible={open} onClose={() => setOpen(false)} />
       )}
     </>
   );

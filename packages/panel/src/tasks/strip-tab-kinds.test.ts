@@ -12,6 +12,7 @@ import {
   subagentTab,
   terminalTab,
   transcriptTab,
+  turnChangesTab,
 } from "@repo/ui/tab-strip-model";
 import { describe, it } from "vitest";
 import {
@@ -210,15 +211,15 @@ describe("a strip tab's kind answers", () => {
       stays: false,
     },
     {
-      kind: "changes",
-      tab: changesTab(AGENT),
+      kind: "pull request",
+      tab: changesTab({ repository: "acme/relay", number: 7 }),
       title: "#7 Fix refresh",
       untitled: "Pull request",
       look: { kind: "changes", pullRequest: undefined },
       surface: PRODUCT_SURFACE.PULL_REQUEST,
-      of: AGENT,
-      link: { kind: LINK_DESTINATION.CHANGES, agentId: AGENT },
-      drawsAgain: false,
+      of: undefined,
+      link: undefined,
+      drawsAgain: true,
       reopens: true,
       endsSession: false,
       closesIdle: true,
@@ -228,10 +229,10 @@ describe("a strip tab's kind answers", () => {
       stays: false,
     },
     {
-      kind: "changes on another pull request, by its number",
-      tab: changesTab(AGENT, 34),
-      title: "#7 Fix refresh",
-      untitled: "Pull request",
+      kind: "turn changes",
+      tab: turnChangesTab(AGENT, "message-1"),
+      title: "Turn changes",
+      untitled: "Turn changes",
       look: { kind: "changes", pullRequest: undefined },
       surface: PRODUCT_SURFACE.PULL_REQUEST,
       of: undefined,
@@ -240,7 +241,7 @@ describe("a strip tab's kind answers", () => {
       reopens: true,
       endsSession: false,
       closesIdle: true,
-      pin: TAB_PIN.SIDEBAR,
+      pin: TAB_PIN.NONE,
       kept: { column: false, sidePanel: true },
       takesFind: true,
       stays: false,
@@ -289,7 +290,7 @@ describe("a strip tab's kind answers", () => {
       look: { kind: "page", title: "Page" },
       surface: PRODUCT_SURFACE.PAGE,
       of: PAGE,
-      link: { kind: LINK_DESTINATION.PAGE, planId: TASK, pageId: PAGE },
+      link: { kind: LINK_DESTINATION.PAGE, taskId: TASK, pageId: PAGE },
       drawsAgain: false,
       reopens: true,
       endsSession: false,
@@ -326,7 +327,7 @@ describe("a strip tab's kind answers", () => {
       const shown = stripTabSurface(tab, TASK);
       assert.equal(shown.surface, surface);
 
-      // Note that a transcript's and a numbered Changes tab's key is minted on first ask, so no row can name it.
+      // Note that a transcript's, a pull request's, and a turn's Changes tab's key is minted on first ask, so no row can name it.
       if (of !== undefined) assert.equal(shown.of, of);
       assert.deepEqual(stripTabLink(tab, HOLDER), link);
       assert.deepEqual(
@@ -353,7 +354,11 @@ describe("a strip tab's kind answers", () => {
       tab: subagentTab(CALL, { agent: AGENT, task: "Read the logs" }),
       draws: { ...DRAWS_NOTHING, openAgents: [AGENT] },
     },
-    { kind: "changes", tab: changesTab(AGENT), draws: { ...DRAWS_NOTHING, taskAgents: [AGENT] } },
+    {
+      kind: "turn changes",
+      tab: turnChangesTab(AGENT, "message-1"),
+      draws: { ...DRAWS_NOTHING, taskAgents: [AGENT] },
+    },
     { kind: "page", tab: pageTab(PAGE), draws: { ...DRAWS_NOTHING, pages: [PAGE] } },
   ])(
     "$kind: drawn again where the task names it, and before the task is read",
