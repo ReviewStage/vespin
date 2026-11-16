@@ -384,8 +384,11 @@ function AgentComposerBar({
           onDelete={composer.remove}
           onMove={composer.move}
           onResume={composer.resume}
+          onEdit={composer.edit}
+          onCancelEdit={composer.cancelEdit}
         />
       ),
+    saving: composer.saving,
   };
 
   return inColumn ? <ComposerFoot {...props} shown={shown} /> : <Composer {...props} />;

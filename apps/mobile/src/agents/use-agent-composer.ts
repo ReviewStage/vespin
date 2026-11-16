@@ -39,6 +39,12 @@ import {
   type AgentStatus,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
+import {
+  QUEUE_EDIT_SEND,
+  type QueueEditSend,
+  queueEditChange,
+  queueEditLeft,
+} from "@repo/features/queue-edit-model";
 import { type SuggestionSendResult, suggestedWords } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
@@ -49,7 +55,13 @@ import {
   selectInboxReader,
 } from "@repo/host/app-state-reads";
 import { AGENT_ENTER } from "@repo/settings";
-import { type AttachedPicture, BUZZ, buzz, type QueuedLine } from "@repo/ui-native";
+import {
+  type AttachedPicture,
+  BUZZ,
+  buzz,
+  type ComposerSaving,
+  type QueuedLine,
+} from "@repo/ui-native";
 import { sentLineId } from "@repo/wire/host-ids";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
@@ -123,6 +135,12 @@ export interface AgentComposer {
   readonly move: ((from: number, to: number) => void) | undefined;
   /** Lets a paused queue hand its messages on again; none for a reader who did not start the agent. */
   readonly resume: (() => void) | undefined;
+  /** Takes a queued message's words into the field to edit, the field's own kept aside; none for a reader who did not start the agent. */
+  readonly edit: ((id: string) => void) | undefined;
+  /** Gives up the edit of a queued message, this field's or one another window left standing, the field given back what it held. */
+  readonly cancelEdit: ((id: string) => void) | undefined;
+  /** What Send does while the field holds a queued message's words; none while it holds its own. */
+  readonly saving: ComposerSaving | undefined;
   /** What the last send, pick, Stop, or queue change that did not go said. */
   readonly note: string | undefined;
   /** The skills a `/` being typed offers; none while no `/` word ends the words. */
@@ -137,6 +155,13 @@ export interface QueuedDeleteAsk {
   readonly presented: boolean;
   readonly onAct: () => void;
   readonly onDismiss: () => void;
+}
+
+/** The field's own words and pictures kept aside while it holds the words of the queued message `id` names. */
+interface EditStash {
+  readonly id: string;
+  readonly words: string;
+  readonly pictures: readonly HeldPicture[];
 }
 
 /** A message suggestion a box was opened on: its button, by which its words are laid in once, the words, and the send that goes through it in place of a message. */
@@ -198,6 +223,18 @@ export function useAgentComposer(
   const [note, setNote] = useState<string | undefined>(undefined);
   // The queued message whose Delete asks, by its id; none while none asks.
   const [deleting, setDeleting] = useState<string | undefined>(undefined);
+  // The queued message whose words the field holds, and the field's own words and pictures kept aside meanwhile; none while it holds its own.
+  const [editing, setEditing] = useState<EditStash | undefined>(undefined);
+  // The edited message's id as an answer that lands later reads it.
+  const editingNow = useRef<string | undefined>(undefined);
+  // The edit whose Save or Steer is on its way, by its message's id, which the queue may send on before it answers.
+  const [settling, setSettling] = useState<string | undefined>(undefined);
+  // Whether the queue has listed the edited message since its edit opened, which its leaving the queue is read against.
+  const [seenEdited, setSeenEdited] = useState(false);
+
+  useEffect(() => {
+    editingNow.current = editing?.id;
+  }, [editing]);
   const pictures = useAttachedPictures(setNote);
   const [stopping, setStopping] = useState(false);
   const writing = status !== undefined && agentStillWriting(status);
@@ -257,6 +294,8 @@ export function useAgentComposer(
   }, [sending, acts, agentId]);
 
   const send = () => {
+    // Note that a send while the field holds a queued message's words saves them back in its place, as Save does.
+    if (editing !== undefined) return sendEdit(QUEUE_EDIT_SEND.SAVE);
     const text = words.trim();
 
     if (text === "" && pictures.files === undefined) return;
@@ -366,9 +405,11 @@ export function useAgentComposer(
     );
   };
 
-  const change = (next: AgentQueueChange) => {
+  /** One change of the queue, answering whether it went; what one that did not go said stands over the field. */
+  const change = (next: AgentQueueChange): Promise<boolean> => {
     setNote(undefined);
-    write(() => acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change: next }), {
+
+    return write(() => acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change: next }), {
       refused: (answer) =>
         "failure" in answer ? queueRefusalWords(next.change, answer.failure) : undefined,
       unanswered: queueRefusalWords(next.change, AGENT_CALL_FAILURE.UNANSWERED),
@@ -391,7 +432,68 @@ export function useAgentComposer(
 
     if (taken === undefined) return;
     order.splice(to, 0, taken);
-    change({ change: QUEUE_CHANGE.REORDER, order });
+    void change({ change: QUEUE_CHANGE.REORDER, order });
+  };
+
+  // A message that left the queue while its edit stood open, sent or deleted elsewhere, is no longer the field's to edit: the edit closes, its words left in the field.
+  const editedListed = editing !== undefined && held.some((message) => message.id === editing.id);
+
+  useEffect(() => {
+    if (editing === undefined) return setSeenEdited(false);
+
+    if (editedListed) return setSeenEdited(true);
+    const stash = { id: editing.id, text: editing.words, attachments: [] };
+
+    if (queueEditLeft(stash, seenEdited, editedListed, settling)) setEditing(undefined);
+  }, [editing, editedListed, seenEdited, settling]);
+
+  /** The field given back the words and pictures it held before the edit, the edit's own pictures let go. */
+  const giveBack = (stash: EditStash) => {
+    pictures.take();
+    pictures.putBack(stash.pictures);
+    setWords(stash.words);
+    setEditing(undefined);
+  };
+
+  /** The edit given up: the message's mark cleared, and the field given back what it held. */
+  const cancelEditOf = (stash: EditStash) => {
+    void change({ change: QUEUE_CHANGE.HOLD, messageId: stash.id, held: false });
+    giveBack(stash);
+  };
+
+  const edit = (id: string) => {
+    const message = held.find((each) => each.id === id);
+
+    // Note that only a message of words alone is edited here, since an edit's files replace the message's and the field does not read a queued message's pictures back.
+    if (message === undefined || (message.files ?? []).length > 0) return;
+
+    if (editing !== undefined)
+      void change({ change: QUEUE_CHANGE.HOLD, messageId: editing.id, held: false });
+
+    const stash: EditStash =
+      editing === undefined ? { id, words, pictures: pictures.take() } : { ...editing, id };
+
+    setEditing(stash);
+    setWords(message.text);
+    // A message the queue would not mark, already on its way, is no longer the field's to edit.
+    void change({ change: QUEUE_CHANGE.HOLD, messageId: id, held: true }).then((went) => {
+      if (!went && editingNow.current === id) giveBack(stash);
+    });
+  };
+
+  /** The edit saved or steered with the field's words and pictures, closed once the queue took it; given up where the field was emptied. */
+  const sendEdit = (way: QueueEditSend) => {
+    if (editing === undefined) return;
+    const stash = editing;
+    const next = queueEditChange(way, stash.id, { text: words, attachments: pictures.files ?? [] });
+
+    if (next === undefined) return cancelEditOf(stash);
+    setSettling(stash.id);
+    void change(next).then((went) => {
+      setSettling((was) => (was === stash.id ? undefined : was));
+
+      if (went && editingNow.current === stash.id) giveBack(stash);
+    });
   };
 
   const queued: readonly QueuedLine[] = held.map((message) => ({
@@ -400,6 +502,8 @@ export function useAgentComposer(
       message.text === ""
         ? (message.files ?? []).map((file) => file.name).join(", ")
         : message.text,
+    editing: message.id === editing?.id || message.editing === true,
+    editable: (message.files ?? []).length === 0,
   }));
 
   return {
@@ -422,7 +526,7 @@ export function useAgentComposer(
     queued,
     paused: paused === undefined ? undefined : pausedWords(paused),
     steer: controlsQueue
-      ? (messageId) => change({ change: QUEUE_CHANGE.STEER, messageId })
+      ? (messageId) => void change({ change: QUEUE_CHANGE.STEER, messageId })
       : undefined,
     remove: controlsQueue ? setDeleting : undefined,
     removing: {
@@ -433,15 +537,30 @@ export function useAgentComposer(
       onAct: () => {
         setDeleting(undefined);
 
-        if (deleting !== undefined) change({ change: QUEUE_CHANGE.DELETE, messageId: deleting });
+        if (deleting !== undefined)
+          void change({ change: QUEUE_CHANGE.DELETE, messageId: deleting });
       },
       onDismiss: () => setDeleting(undefined),
     },
     move: controlsQueue && held.length > 1 ? move : undefined,
     resume:
       controlsQueue && paused !== undefined
-        ? () => change({ change: QUEUE_CHANGE.RESUME })
+        ? () => void change({ change: QUEUE_CHANGE.RESUME })
         : undefined,
+    edit: controlsQueue ? edit : undefined,
+    cancelEdit: controlsQueue
+      ? (id) => {
+          if (editing?.id === id) return cancelEditOf(editing);
+          void change({ change: QUEUE_CHANGE.HOLD, messageId: id, held: false });
+        }
+      : undefined,
+    saving:
+      editing === undefined
+        ? undefined
+        : {
+            onSave: () => sendEdit(QUEUE_EDIT_SEND.SAVE),
+            onSteer: writing ? () => sendEdit(QUEUE_EDIT_SEND.STEER) : undefined,
+          },
     note,
     skills,
   };
