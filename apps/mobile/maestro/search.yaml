@@ -50,10 +50,16 @@ appId: dev.vespin.ios
 - takeScreenshot: search-results
 # A task found opens on its Overview, in the Tasks tab, as its row there
 # opens it. It comes last, since the Tasks tab then stands over the search.
+# Note that the agent's row names its task too, so the task's own row is found
+# as the one above the agent.
 - scrollUntilVisible:
-    element: "Ledger rounding"
+    element:
+      text: "Ledger rounding"
+      above: "Fix ledger rounding"
     direction: UP
 - waitForAnimationToEnd
-- tapOn: "Ledger rounding"
+- tapOn:
+    text: "Ledger rounding"
+    above: "Fix ledger rounding"
 - assertVisible: "Created by .*"
 - takeScreenshot: search-opened

@@ -180,6 +180,8 @@ export const MERGE_WORDS = {
   ENABLE_AUTO_MERGE: "Enable auto-merge",
   DISABLE_AUTO_MERGE: "Disable auto-merge",
   DEQUEUE: "Remove from queue",
+  /** What a phone's merge asks first, now or once ready, wherever it is pressed: a pull request's card or its page. */
+  MERGE_QUESTION: "Merge this pull request?",
   /** What Remove from queue asks first. */
   DEQUEUE_QUESTION: "Remove from the merge queue?",
   BYPASS: "Bypass rules and merge",

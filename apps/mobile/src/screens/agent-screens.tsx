@@ -66,6 +66,7 @@ import {
   MenuPickRow,
   MenuRow,
   type MenuRowAct,
+  NO_GROUND,
   NO_TOGGLES,
   openCuts,
   PickRows,
@@ -133,6 +134,7 @@ import {
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
+import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
@@ -201,9 +203,8 @@ const MODE_SYMBOL = {
   [AGENT_PERMISSION_MODE.FULL_ACCESS]: GLYPH.FULL_ACCESS,
 } as const satisfies Record<AgentPermissionMode, Glyph>;
 
-/** What a pull request's card offers beside Review where it may merge now, and what that asks first. */
+/** What a pull request's card offers beside Review where it may merge now. */
 const MERGE_WORD = "Merge";
-const MERGE_QUESTION = "Merge this pull request?";
 
 /** The agent's address on vespin.dev, under its workspace and its task, once the agent is read; none before its workspace is known. */
 function useAgentAddress(
@@ -275,7 +276,7 @@ function CardMergeAsk({
 
   return (
     <ConfirmAsk
-      title={MERGE_QUESTION}
+      title={MERGE_WORDS.MERGE_QUESTION}
       message={`#${pullRequest.number} ${pullRequest.title}`}
       act={merge.words}
       presented
@@ -1405,6 +1406,7 @@ const PORTS_WORDS = { DONE: "Done" } as const;
  */
 export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
   const colors = useColors();
+  const half = useSheetAtHalf();
   const router = useRouter();
   const ports = useAgentPorts(agentId);
 
@@ -1434,7 +1436,7 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
+          contentStyle: { backgroundColor: half ? NO_GROUND : colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="right">
@@ -1446,8 +1448,8 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
           onPress={() => router.back()}
         />
       </Stack.Toolbar>
-      <Screen>
-        <SettingsForm spacing={FORM_SPACING.COMPACT}>
+      <Screen clear={half}>
+        <SettingsForm clear={half} spacing={FORM_SPACING.COMPACT}>
           <ListSection
             footer={ports.note ?? (ports.rows.length === 0 ? ports.none : ports.linkNote)}
             footerTone={footerToneOf(ports.note)}
