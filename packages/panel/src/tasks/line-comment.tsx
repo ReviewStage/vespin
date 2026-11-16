@@ -71,7 +71,6 @@ export type PendingReview = { readonly comments: number } | null | undefined;
  * Escape lets it go unless it is on its way.
  */
 export function LineComment({
-  agentId,
   path,
   lines,
   headSha,
@@ -84,7 +83,6 @@ export function LineComment({
   onWritten,
   onRefresh,
 }: {
-  agentId: string;
   path: string;
   lines: CommentLines;
   /** The head the files were read at, which the comment is anchored to; none where it could not be read, which offers nothing but Refresh. */
@@ -102,7 +100,7 @@ export function LineComment({
   /** Reads the changes again. */
   onRefresh: () => void;
 }): React.JSX.Element {
-  const writes = usePullRequestWrites(agentId, onWritten);
+  const writes = usePullRequestWrites(onWritten);
   // Which offer sent the comment out, which alone wears the wait.
   const [sentAs, setSentAs] = useState<ReviewCommentMode | undefined>(undefined);
   const sending = writes.pending !== undefined;

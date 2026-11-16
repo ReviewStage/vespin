@@ -170,11 +170,6 @@ const LIMIT_GROUPS: readonly LimitGroup[] = [
         formatCount(DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION),
         "DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION",
       ),
-      limit(
-        "Recordings in a description",
-        formatCount(DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION),
-        "DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION",
-      ),
     ],
   },
   {

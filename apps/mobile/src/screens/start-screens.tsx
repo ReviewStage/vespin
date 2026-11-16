@@ -6,8 +6,6 @@ import {
   hasWordsOrFiles,
 } from "@repo/features/agent-wire";
 import { attachmentText } from "@repo/features/attachment-model";
-import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
-import { devicePlatformOf } from "@repo/features/device-platform";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
@@ -43,11 +41,12 @@ import {
   MENU_CHIP_LOOK,
   MenuChip,
   type PickOption,
+  runsOnGlyph,
   STATUS_MARK_SYMBOL,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useNavigation, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
@@ -251,15 +250,6 @@ function ModelChip({ pick }: { readonly pick: ModelPick }) {
   );
 }
 
-/** The panel's glyph for where an agent runs, as its Runs on chip leads with it: the cloud's, or a device's by its platform, a server's for Linux and a laptop's otherwise. */
-function placeGlyph(pick: ModelPick, runsOn: string): Glyph {
-  const device = pick.devices.find((each) => each.deviceId === runsOn);
-
-  if (runsOn === CLOUD || device === undefined) return GLYPH.CLOUD;
-
-  return devicePlatformOf(device) === DEVICE_PLATFORM.LINUX ? GLYPH.HOST : GLYPH.MAC;
-}
-
 /** Where the agent runs, Cloud or one of the account's devices, as a capsule; none where the account may run an agent on no device of its own. */
 function RunsOnChip({
   pick,
@@ -273,12 +263,31 @@ function RunsOnChip({
   if (pick.devices.length === 0) return null;
   const options = runsOnOptions(pick.devices);
 
+  // Note that each place leads with the panel's runs-on mark: the cloud's, or its device's by its platform.
+  const glyphOf = (place: string) =>
+    runsOnGlyph({
+      cloud: place === CLOUD,
+      platform: pick.devices.find((device) => device.deviceId === place)?.platform,
+    });
+
   return (
     <MenuChip
       look={MENU_CHIP_LOOK.DOCK}
       label={labelOf(options, runsOn) ?? WORDS.RUNS_ON}
-      symbol={placeGlyph(pick, runsOn)}
-      menu={{ groups: [{ title: WORDS.RUNS_ON, choices: choicesOf(options, runsOn, onRunsOn) }] }}
+      symbol={glyphOf(runsOn)}
+      menu={{
+        groups: [
+          {
+            title: WORDS.RUNS_ON,
+            choices: options.map((option) => ({
+              label: option.label,
+              symbol: glyphOf(option.id),
+              on: option.id === runsOn,
+              onPress: () => onRunsOn(option.id),
+            })),
+          },
+        ],
+      }}
     />
   );
 }
@@ -345,6 +354,67 @@ type UseSheetStartResult = {
 
 type Started = { answer?: StartAnswer };
 
+/** A route in a navigator's state, as React Navigation hands it: its key, its params, and the navigator under it. */
+type RouteNode = {
+  readonly key?: string | undefined;
+  readonly params?: object | undefined;
+  readonly state?: NavigatorState | undefined;
+};
+
+/** A navigator's state, as React Navigation hands it. */
+type NavigatorState = {
+  readonly index?: number | undefined;
+  readonly routes: readonly RouteNode[];
+};
+
+/** Where the reader stands: the focused route by its key, and its params as written, which a split view's pick moves. */
+type Standing = { readonly key: string | undefined; readonly params: string | undefined };
+
+/** The route focused inside `route`, as `getCurrentRoute` descends to it. */
+function focusedIn(route: RouteNode | undefined): RouteNode | undefined {
+  const state = route?.state;
+
+  if (state === undefined) return route;
+
+  return focusedIn(state.routes[state.index ?? state.routes.length - 1]);
+}
+
+/** A navigator, as React Navigation hands it, read only for its state and the navigator over it. */
+type Navigator = {
+  readonly getState: () => NavigatorState;
+  readonly getParent: () => Navigator | undefined;
+};
+
+/**
+ * The navigator a sheet was presented on: the first, from the sheet's own up,
+ * with a route beneath its top. Note that it is found by walking up, because
+ * a sheet may stand in a stack of its own, as New task's layout does.
+ */
+function presentingNavigator(own: Navigator): Navigator {
+  const state = own.getState();
+  const parent = own.getParent();
+
+  return (state.index ?? 0) > 0 || parent === undefined ? own : presentingNavigator(parent);
+}
+
+/** Where the reader stands in a navigator, `back` routes below its top: the focused route there, by key and params. */
+function standingIn(navigator: Navigator, back: number): Standing {
+  const state = navigator.getState();
+  const at = (state.index ?? state.routes.length - 1) - back;
+
+  return standingOf(at < 0 ? undefined : focusedIn(state.routes[at]));
+}
+
+/** Where a route stands, by its key and its params, which React Navigation keeps serializable. */
+function standingOf(route: RouteNode | undefined): Standing {
+  return { key: route?.key, params: JSON.stringify(route?.params) };
+}
+
+/** Whether the reader stands where they stood: the same route, with the same row selected. */
+function sameStanding(was: Standing, now: Standing): boolean {
+  return was.key === now.key && was.params === now.params;
+}
+
 /**
  * Sends a start once, while none is out: on an agent started, the sheet
  * gives way to its page; on a task made with no agent, filed for later or
@@ -405,6 +475,75 @@ function useSheetStart(
   };
 
   return { starting, go };
+}
+
+/**
+ * New task's start, as the panel's New task sends it: the sheet closes the
+ * moment Start is pressed, and the start goes on as a write, opening the
+ * task's page once it lands, where its new agent stands among its agents. A start
+ * refused is said in the failure notice, whose Try again sends the same
+ * start again. Note that this never makes a second task, because the task's
+ * id and its agent's key are minted once per sheet (`useStartTask`,
+ * `useFileTask`), and the service answers a start it already made with the
+ * same task. Pictures the service would refuse still hold the sheet, saying
+ * why under its words.
+ */
+function useClosingStart(
+  kept: KeptWords,
+  setNote: (note: string | undefined) => void,
+): UseSheetStartResult {
+  const router = useRouter();
+  const navigation: Navigator = useNavigation();
+  const onTab = useOnTab();
+  const write = useWrite();
+  // Note that a start goes once, so a second press while the sheet slides away sends nothing.
+  const [sent, setSent] = useState(false);
+
+  const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
+    if (sent) return;
+
+    if (refusal !== undefined) {
+      setNote(refusal);
+      buzz(BUZZ.WARNING);
+
+      return;
+    }
+
+    setSent(true);
+    // Note that where the reader stands is kept as Start is pressed, in the navigator the sheet was presented on: the sheet, and the route it uncovers.
+    const presenting = presentingNavigator(navigation);
+    const sheet = standingIn(presenting, 0);
+    const uncovered = standingIn(presenting, 1);
+    kept.release();
+    router.dismiss();
+    const started: Started = {};
+
+    void write(
+      () =>
+        start().then((answer) => {
+          started.answer = answer;
+
+          return answer;
+        }),
+      {
+        refused: (answer) => ("refused" in answer ? answer.refused : undefined),
+        retry: true,
+        went: BUZZ.SUCCESS,
+      },
+    ).then((went) => {
+      const answer = started.answer;
+
+      if (!went || answer === undefined || "refused" in answer) return;
+      // Note that the task opens only while the reader stands where Start left them, on the same route with the same row selected, so a page they opened or a row they picked meanwhile stands.
+      const now = standingIn(presenting, 0);
+
+      if (!sameStanding(sheet, now) && !sameStanding(uncovered, now)) return;
+      // Note that only the task's page opens, its new agent standing in its Agents section, because a second route pushed over it races the split view's hand-off and leaves the task behind.
+      router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })));
+    });
+  };
+
+  return { starting: sent, go };
 }
 
 /**
@@ -744,7 +883,7 @@ export function NewTaskScreen({
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
   const filed = pictures.opening ? undefined : filedOf(prompt, pictures.files);
   const kept = useKeptWords(drafted);
-  const { starting, go } = useSheetStart(kept, setNote);
+  const { starting, go } = useClosingStart(kept, setNote);
   const place = { repository: repository.picked, relation: relation.relation };
   const tree = inTree(relation.relation) ? relation.task : undefined;
   // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.

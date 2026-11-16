@@ -422,7 +422,6 @@ const deleteEndedWindows = SqlSchema.void({
     ),
 });
 
-/** The effect given, in one transaction. */
 function transacted<A>(work: PairingEffect<A>): PairingEffect<A> {
   return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(work));
 }

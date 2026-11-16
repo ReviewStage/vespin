@@ -499,19 +499,34 @@ export const actionOnAgentPullRequest = /* @__PURE__ */ Effect.fnUntraced(functi
     Effect.ensuring(Effect.flatMap(published, (kept) => forgetPublished(kept, userId, agent.id))),
   );
 
-  // Counted only where GitHub made the change, and under the member: an agent's own pull request work never comes through here.
-  const counted = countedAction(request);
-
-  if (counted !== undefined && written.outcome === PULL_REQUEST_WRITE_OUTCOME.DONE) {
-    yield* recordServerEvent(
-      SERVER_EVENT.PULL_REQUEST_ACTION,
-      { userId, workspaceId: agent.organizationId },
-      { action: counted },
-    );
-  }
+  yield* countedWrite(userId, agent.organizationId, request, written);
 
   return writeAnswerOf(written);
 });
+
+/**
+ * Counts a member's change to a pull request, in the workspace given, as
+ * one of the four counted where GitHub made it, whichever door it came
+ * through: an agent's tab or one by the repository and number. Note that an
+ * agent's own pull request work never comes through here, so every count
+ * is the member's.
+ */
+export const countedWrite = (
+  userId: string,
+  workspaceId: string,
+  request: PullRequestActionRequest,
+  written: { readonly outcome: string },
+) => {
+  const counted = countedAction(request);
+
+  return counted === undefined || written.outcome !== PULL_REQUEST_WRITE_OUTCOME.DONE
+    ? Effect.void
+    : recordServerEvent(
+        SERVER_EVENT.PULL_REQUEST_ACTION,
+        { userId, workspaceId },
+        { action: counted },
+      );
+};
 
 /** Which of the pull request's files the member marked viewed, read as a write is made, on their own token. */
 export const viewedRead = (member: MemberPullRequest) =>
