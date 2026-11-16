@@ -153,7 +153,7 @@ describe("transcriptItems", () => {
     ]);
   });
 
-  it("opens an automation's transcript on its run's prompt, from the automation and its pull request, with the pictures it carried, leaving later lines as sent", () => {
+  it("opens an automation's transcript on its run's prompt, from the automation and its pull request, with the pictures and files it carried, leaving later lines as sent", () => {
     const origin = transcriptOriginOf({
       automationId: undefined,
       automationName: "Morning triage",
@@ -177,6 +177,12 @@ describe("transcriptItems", () => {
           parts: [
             { type: "text", text: "Triage the new issues.\n\nFired by pull request #42." },
             { type: "file", mediaType: "image/png", filename: "crash.png", url: SHOT },
+            {
+              type: "file",
+              mediaType: "text/plain",
+              filename: "crash.log",
+              url: "data:text/plain;base64,YQ==",
+            },
           ],
         },
         { id: "later", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Thanks." }] },
@@ -201,6 +207,7 @@ describe("transcriptItems", () => {
         ],
         body: '{"event":"opened"}',
         pictures: [{ name: "crash.png", url: SHOT, pictureId: undefined }],
+        files: [{ name: "crash.log", base64: "YQ==" }],
       },
       { kind: TRANSCRIPT_ITEM.SAID, words: "Thanks.", sender: undefined },
     ]);
