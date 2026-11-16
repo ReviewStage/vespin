@@ -72,6 +72,7 @@ public final class QuickLookModule: Module {
     Name("QuickLook")
 
     AsyncFunction("preview") { (uri: String, title: String?) -> Bool in
+      NSLog("[probe-ql] preview asked")
       guard let url = URL(string: uri), url.isFileURL else { return false }
       let item = PreviewItem(url: url, title: title)
 
@@ -108,6 +109,17 @@ public final class QuickLookModule: Module {
         return false
       }
 
+      NSLog("[probe-ql] presented over %@", String(describing: type(of: presenter)))
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        let nav = controller.navigationController
+        NSLog(
+          "[probe-ql] after 1.5s: in window %@, nav %@, bar hidden %@, toolbar hidden %@",
+          controller.viewIfLoaded?.window == nil ? "no" : "yes",
+          nav == nil ? "none" : String(describing: type(of: nav!)),
+          nav.map { $0.isNavigationBarHidden ? "yes" : "no" } ?? "n/a",
+          nav.map { $0.isToolbarHidden ? "yes" : "no" } ?? "n/a"
+        )
+      }
       return true
     }.runOnQueue(.main)
   }

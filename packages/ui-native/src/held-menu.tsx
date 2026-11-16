@@ -85,9 +85,21 @@ export function useKeptActs(kept: Kept | undefined): readonly HeldAct[] {
 export function useQuickLook(kept: Kept | undefined): (() => void) | undefined {
   const keeping = useContext(KeepingDoor);
 
-  if (keeping === undefined || kept === undefined) return undefined;
+  if (keeping === undefined || kept === undefined) {
+    console.error(
+      "[probe-ql] no press: keeping",
+      keeping === undefined ? "missing" : "present",
+      "kept",
+      kept === undefined ? "missing" : "present",
+    );
 
-  return () => keeping.open(kept);
+    return undefined;
+  }
+
+  return () => {
+    console.error("[probe-ql] press reached open");
+    keeping.open(kept);
+  };
 }
 
 /** A message's Copy, which copies its words as they were written, Markdown and all, as the panel's does; none for a message of no words. */

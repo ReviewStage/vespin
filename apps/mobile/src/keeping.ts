@@ -180,6 +180,7 @@ function previewFile(kept: Kept): Promise<string> {
  */
 async function opened(kept: Kept): Promise<void> {
   const file = await previewFile(kept);
+  console.error("[probe-ql] file ready, module", quickLookModule === null ? "missing" : "present");
   const shown = quickLookModule !== null && (await quickLookModule.preview(file, kept.name));
 
   if (!shown) await Share.share({ url: file, title: kept.name });

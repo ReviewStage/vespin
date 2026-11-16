@@ -984,8 +984,14 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
   return (
     <HeldMenu acts={acts}>
       <Press
-        onPress={show}
-        disabled={show === undefined}
+        onPress={() => {
+          console.error(
+            "[probe-ql] picture pressed, show",
+            show === undefined ? "missing" : "present",
+          );
+          show?.();
+        }}
+        onPressIn={() => console.error("[probe-ql] picture press in")}
         accessibilityRole="imagebutton"
         accessibilityLabel={heard}
         accessibilityHint="Opens full screen"
