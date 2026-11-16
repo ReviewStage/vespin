@@ -33,7 +33,9 @@ const handed = new Map<ProductSurface, readonly HandedOpen[]>();
 
 /** The layout the window stands in now, read live rather than from a render. */
 function layoutNow(): ProductLayout {
-  return LAYOUT_OF_SIZE_CLASS[windowSizeClass(Dimensions.get("window").width)];
+  const { width, height } = Dimensions.get("window");
+
+  return LAYOUT_OF_SIZE_CLASS[windowSizeClass(width, height)];
 }
 
 /** Takes the open of `surface` and `of` a layout change closed lately, if one waits, so it is carried on rather than counted. */

@@ -152,26 +152,35 @@ it.layer(getTestDB())("look_at_picture", (it) => {
       }),
   );
 
-  it.effect(
-    "a look at a video the description holds is refused, pointing at its words, and the model is handed none of its bytes",
-    () =>
+  it.effect.each([
+    [
+      "video",
+      { contentType: PICTURE_MEDIA_TYPE.WEBM, bytes: webmBytes(1280, 800) },
+      PICTURE_LOOK_REFUSAL.VIDEO,
+    ],
+    [
+      "sound clip",
+      {
+        contentType: PICTURE_MEDIA_TYPE.OGG,
+        bytes: Uint8Array.from([0x4f, 0x67, 0x67, 0x53, 0, 2, 7, 7, 7, 7, 7, 7]),
+      },
+      PICTURE_LOOK_REFUSAL.CLIP,
+    ],
+  ] as const satisfies ReadonlyArray<readonly [string, Picture, string]>)(
+    "a look at a %s the description holds is refused, pointing at its words, and the model is handed none of its bytes",
+    ([, played, refusal]) =>
       Effect.gen(function* () {
         const { owner, taskId } = yield* openPicturedTasks;
 
-        const video: Picture = {
-          contentType: PICTURE_MEDIA_TYPE.WEBM,
-          bytes: webmBytes(1280, 800),
-        };
-
-        const kept = yield* keepDescriptionAttachment(owner, taskId, video);
+        const kept = yield* keepDescriptionAttachment(owner, taskId, played);
 
         if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT)
-          return assert.fail("the video was not kept");
+          return assert.fail("the file was not kept");
         const address = descriptionAttachmentAddress({ taskId, attachmentId: kept.id }, "acme");
 
         const answered = yield* look(lookCall(owner, taskId), address);
 
-        assert.deepEqual(answered, pictureNotLooked(PICTURE_LOOK_REFUSAL.VIDEO));
+        assert.deepEqual(answered, pictureNotLooked(refusal));
       }),
   );
 
