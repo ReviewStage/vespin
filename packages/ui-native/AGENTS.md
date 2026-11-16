@@ -286,8 +286,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
-  card and prompting with its label while empty, a select's menu picker at
-  the end of its label's row, a
+  card and prompting "Required" or "Optional" while empty, a number field's
+  pad standing one Done over it for the card, a select's menu picker
+  under its label, reading "None" until a pick, a
   boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because
   a `Form` scrolls on its own inside the thread's scroll; a card's hairlines
   start where its rows' words do, as iOS insets a list's separator) and the pull request
