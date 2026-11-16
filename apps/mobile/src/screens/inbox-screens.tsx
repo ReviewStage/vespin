@@ -98,6 +98,7 @@ import {
   useDetailPush,
   useStackRoot,
   useStandFocusedDetailFront,
+  useTopPage,
 } from "../detail-stack.js";
 import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -1342,14 +1343,15 @@ function InboxSplitScreen({
   const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
-  // Note that the iPad's K and J step through the rows the list column shows now, its scope and its search as they stand, from the thread beside it, as the panel's step through the list on screen.
+  // Note that the iPad's K and J step through the rows the list column shows now, its scope and its search as they stand, from the thread beside it, as the panel's step through the list on screen; never while a page pushed over the thread covers it, since a pick would take that page away.
   const focused = useIsFocused();
+  const covered = useTopPage(SIDEBAR_PLACE.INBOX) !== undefined;
   const shownIds = listing.listed.map(({ item }) => item.id);
   const at = selected === undefined ? -1 : shownIds.indexOf(selected);
   useStandFrontSteps(
     at < 0 ? {} : { previous: shownIds[at - 1], next: shownIds[at + 1] },
     select,
-    focused && at >= 0,
+    focused && at >= 0 && !covered,
   );
 
   const rows = (
