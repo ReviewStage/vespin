@@ -12,6 +12,7 @@ import {
   type FeedbackImage,
   type FeedbackKind,
   feedbackSignature,
+  isFeedbackImageType,
   signatureLine,
 } from "@repo/features/feedback";
 import { ACT_KIND } from "@repo/host/acts";
@@ -21,9 +22,11 @@ import {
   BUZZ,
   buzz,
   ConfirmAsk,
+  FOOTER_TONE,
   GLYPH,
   glyphSymbol,
   ListSection,
+  SCREEN_GROUND,
   ScopePicker,
   Screen,
   SettingsForm,
@@ -32,8 +35,9 @@ import {
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { Fragment, useEffect, useRef, useState } from "react";
+import { useCloseSheet } from "../../close-sheet.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import {
@@ -68,11 +72,11 @@ const NO_WORDS: Readonly<Record<FeedbackKind, string>> = {
   [FEEDBACK_KIND.PROMPT]: "",
 };
 
-/** The screenshots a note carries, as the endpoint takes them: each a JPEG under the name it was attached as. */
+/** The screenshots a note carries, as the endpoint takes them: each as it was attached, a PNG kept a PNG, under the name it was attached as. */
 function screenshotsOf(pictures: AttachedPictures): readonly FeedbackImage[] {
   return (pictures.files ?? []).map((file) => ({
     name: file.name,
-    mediaType: FEEDBACK_IMAGE_TYPE.JPEG,
+    mediaType: isFeedbackImageType(file.mediaType) ? file.mediaType : FEEDBACK_IMAGE_TYPE.JPEG,
     base64: file.data,
   }));
 }
@@ -92,7 +96,7 @@ function screenshotsOf(pictures: AttachedPictures): readonly FeedbackImage[] {
  */
 export default function FeedbackScreen() {
   const colors = useColors();
-  const router = useRouter();
+  const close = useCloseSheet();
   const acts = useHostActs();
   const write = useWrite();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
@@ -195,17 +199,21 @@ export default function FeedbackScreen() {
       const added = now[kind].some((picture) => !sent.has(picture.id));
       const otherHeld = now.words[other].trim() !== "" || now[other].length > 0;
 
+      // Note that a picture dropped while the send was out and still being read keeps the page too, so it lands where it can be seen.
+      const leaves = standing.current && !edited && !added && !otherHeld && !now.reading;
+
       for (const id of sent) detach(id);
 
       if (!edited) {
         setWords((current) => ({ ...current, [kind]: "" }));
-        setSends((count) => count + 1);
+
+        // Note that the field is drawn afresh only on a page that stays, because a new field takes the keyboard as it appears, and a List torn down around a field taking focus aborts the app.
+        if (standing.current && !leaves) setSends((count) => count + 1);
       }
 
-      // Note that a picture dropped while the send was out and still being read keeps the page too, so it lands where it can be seen.
-      if (!standing.current || edited || added || otherHeld || now.reading) return;
+      if (!leaves) return;
       kept.release();
-      router.back();
+      close();
     });
   };
 
@@ -242,10 +250,10 @@ export default function FeedbackScreen() {
         }}
         onDismiss={kept.stay}
       />
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <ScopePicker label={FEEDBACK_WORDS.KIND} scopes={scopes}>
           <SettingsForm>
-            <ListSection footer={note}>
+            <ListSection footer={note} footerTone={FOOTER_TONE.FAILURE}>
               {/* Note that each kind's field stands apart, so a change of kind shows that kind's own words, and is drawn afresh once its words were sent. */}
               <Fragment key={sends}>
                 <WordsField

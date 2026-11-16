@@ -1572,6 +1572,71 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
+    "a Vespin tool's stored answer keeps what its result's _meta carried for the people watching beside the words the model read",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const answered = '{"status":"ran","done":"pressed"}';
+
+        const kept = {
+          picture: { id: "picture-1", contentType: "image/jpeg", width: 2560, height: 1600 },
+        };
+
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "assistant",
+            message: {
+              id: "msg_1",
+              content: [
+                {
+                  type: "tool_use",
+                  id: "toolu_click",
+                  name: "mcp__team__computer",
+                  input: { action: "click", app: "Simulator", element_index: 3 },
+                },
+              ],
+            },
+            ...top,
+          },
+          {
+            type: "user",
+            message: {
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: "toolu_click",
+                  content: [{ type: "text", text: answered }],
+                },
+              ],
+            },
+            // Note that the CLI hands its SDK a result's _meta beside its content, as 2.1.323 does.
+            tool_use_result: {
+              content: [{ type: "text", text: answered }],
+              _meta: { "vespin.dev/watched": { kept } },
+            },
+            ...top,
+          },
+        ];
+
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const events = messagesOfTurn.map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, events);
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(rows.at(-1)?.parts.map(drawn), [
+          ["step-start"],
+          ["tool-computer", "output-available", { status: "ran", done: "pressed", kept }],
+        ]);
+      }),
+  );
+
+  it.effect(
     "a call to an integration's own server is stored as that integration's tool, the account named past its first, and its answer kept as the text the model read",
     () =>
       Effect.gen(function* () {

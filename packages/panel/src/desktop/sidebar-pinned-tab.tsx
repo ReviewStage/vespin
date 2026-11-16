@@ -1,5 +1,5 @@
-import { AGENT_BOUNDS, type AgentPullRequest, type AgentSummary } from "@repo/features/agent-wire";
-import { pullRequestAddressOf } from "@repo/features/link-grammar";
+import { AGENT_BOUNDS, type AgentSummary } from "@repo/features/agent-wire";
+import { type NumberedAddress, pullRequestAddressOf } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { agentsOfTask, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskPullRequestLine, TaskPullRequests, TaskSummary } from "@repo/features/task-wire";
@@ -26,7 +26,11 @@ import {
   VisuallyHidden,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { pullRequestLabelOf, STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
+import {
+  pullRequestLabelOf,
+  STRIP_TAB_KIND,
+  samePullRequestAddress,
+} from "@repo/ui/tab-strip-model";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { absurd, Predicate } from "effect";
 import { useCallback, useRef } from "react";
@@ -38,8 +42,6 @@ import { agentName, RENAME_FAILED } from "../tasks/agent-model.js";
 import { agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { useChangesPeople } from "../tasks/changes-people.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
-import type { PullRequestMarked } from "../tasks/pull-request-mark.js";
-import { pullRequestOfTab } from "../tasks/pull-request-number.js";
 import { stripTabLook } from "../tasks/strip-tab-kinds.js";
 import { PlanGlyph, TAB_KIND, type TabSubject, tabLook } from "../tasks/tab-look.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
@@ -52,6 +54,7 @@ import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { type MenuAction, type MenuEntry, rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
 import { useRowPlace, withRowMoves } from "./row-moves.js";
+import { listedAgentOf } from "./side-panel.js";
 import { tabCard } from "./tab-card.js";
 import { PullRequestLine, RepositoryDetail } from "./task-card.js";
 
@@ -149,69 +152,49 @@ function pinSubject(
   return stripTabLook(pin.tab, { plan, pullRequest, agent: { name: pin.label, agent: standing } });
 }
 
-/** What a pin's pull request is drawn and named from: its number, title, and where it stands. */
-type PinnedPullRequest = PullRequestMarked & Pick<AgentPullRequest, "title">;
+/** What a pin's pull request is drawn and named from: its task's line for it, its number, title, and where it stands. */
+type PinnedPullRequest = TaskPullRequestLine;
 
-/** The repository a pull request's address names, `owner/name` in lowercase, as GitHub reads it: what two pull requests of one repository share. */
-function repositoryOfLine(line: TaskPullRequestLine): string | undefined {
-  return line.url === undefined
-    ? undefined
-    : pullRequestAddressOf(line.url)?.repository.toLowerCase();
+/** The pull request a pin of a Pull request tab shows, by its repository and number; none for any other pin. */
+function pinnedAddress({ tab }: SidebarPin): NumberedAddress | undefined {
+  return Predicate.isString(tab) || tab.kind !== STRIP_TAB_KIND.CHANGES ? undefined : tab.changes;
 }
 
 /**
- * The pull request a pin of an agent's Changes shows, as the open task's
- * agents last read it: the very read the Changes tab draws from
- * (`pullRequestOfTab`), a numbered tab's included. Nothing for any other pin,
- * or for a pin of another task, whose agents the window does not read.
+ * The open task's agent whose listed pull request a pin of a Pull request
+ * tab shows, and that pull request as the list carries it, which its card
+ * draws; none for any other pin, a pin of another task, whose agents the
+ * window does not read, or a pull request none of the task's agents opened.
  */
-function openPullRequestOf(pin: SidebarPin, tasks: TasksControl): AgentPullRequest | undefined {
-  const { tab } = pin;
+function openListedOf(pin: SidebarPin, tasks: TasksControl): ReturnType<typeof listedAgentOf> {
+  const address = pinnedAddress(pin);
 
-  if (Predicate.isString(tab) || tab.kind !== STRIP_TAB_KIND.CHANGES) return undefined;
+  if (address === undefined || pinTaskId(pin) !== tasks.activeTaskId) return undefined;
 
-  // A turn's Changes tab shows no pull request.
-  if (tab.turn !== undefined) return undefined;
-
-  if (pinTaskId(pin) !== tasks.activeTaskId) return undefined;
-
-  return pullRequestOfTab(tasks.agents, tab);
+  return listedAgentOf(tasks.agents, address);
 }
 
 /**
- * The pull request a pin of an agent's Changes shows, as the window last
- * read it from GitHub: the open task's own read where the pin is on it, else
- * the task's pull request (`pullRequestsOfTask`) naming the agent. A numbered
- * tab names another pull request of its agent's repository, which the task's
- * pull requests identify by number alone, so one is taken from them only
- * where they all stand in one repository. Nothing for any other pin, or where the
- * window cannot tell which pull request the pin is of; the pin then keeps
- * the label and the gray icon it was pinned with.
+ * The pull request a pin of a Pull request tab shows, as the window last
+ * read it from GitHub: the task's line for it (`pullRequestsOfTask`), its
+ * repository and number matched. Nothing for any other pin, or where the
+ * task's lines name none; the pin then keeps the label and the gray icon it
+ * was pinned with.
  */
 function pinPullRequest(
   pin: SidebarPin,
   on: PinnedOn,
-  tasks: TasksControl,
   taskPullRequests: readonly TaskPullRequests[] | undefined,
 ): PinnedPullRequest | undefined {
-  const { tab } = pin;
+  const address = pinnedAddress(pin);
 
-  if (Predicate.isString(tab) || tab.kind !== STRIP_TAB_KIND.CHANGES || tab.turn !== undefined) {
-    return undefined;
-  }
+  if (address === undefined) return undefined;
 
-  const own = openPullRequestOf(pin, tasks);
+  return pullRequestsOfTask(taskPullRequests, on.task.id).find((line) => {
+    const named = line.url === undefined ? undefined : pullRequestAddressOf(line.url);
 
-  if (own !== undefined) return own;
-  const lines = pullRequestsOfTask(taskPullRequests, on.task.id);
-
-  if (tab.number !== undefined) {
-    const sameRepository = new Set(lines.map(repositoryOfLine)).size <= 1;
-
-    return sameRepository ? lines.find((line) => line.number === tab.number) : undefined;
-  }
-
-  return lines.find((line) => line.agentId === tab.changes);
+    return named !== undefined && samePullRequestAddress(named, address);
+  });
 }
 
 /**
@@ -232,7 +215,7 @@ function namedPin<Pin extends SidebarPin>(
   return pullRequest === undefined ? pin : { ...pin, label: pullRequestLabelOf(pullRequest) };
 }
 
-/** The agent a pin of an agent's tab or of its Changes is of; none for any other pin. */
+/** The agent a pin of an agent's tab is of; none for any other pin, a Pull request tab's among them, which is no agent's. */
 function pinAgentId({ tab }: SidebarPin): string | undefined {
   if (Predicate.isString(tab)) return undefined;
 
@@ -240,7 +223,6 @@ function pinAgentId({ tab }: SidebarPin): string | undefined {
     case STRIP_TAB_KIND.AGENT:
       return tab.agent;
     case STRIP_TAB_KIND.CHANGES:
-      return tab.changes;
     case STRIP_TAB_KIND.FILE:
       return undefined;
     default:
@@ -299,11 +281,9 @@ function PinPullRequest({ agentId }: { agentId: string }): React.JSX.Element | n
 }
 
 /**
- * The card the Changes tab itself hangs (`tabCard`), for a pin of a Changes
- * tab whose agent the open task still holds and whose pull request it has
- * read; none otherwise, where the pin hangs its own card, which shows the
- * pull request the task list holds. Note that a pin whose agent is gone hangs none,
- * since the open task no longer lists it.
+ * The card the Pull request tab itself hangs (`tabCard`), for a pin of a
+ * Pull request tab one of the open task's agents opened; none otherwise,
+ * where the pin hangs its own card.
  */
 function pinChangesCard(
   pin: SidebarPin,
@@ -312,21 +292,19 @@ function pinChangesCard(
   people: HeldPeople | undefined,
   onOpenAgent: (agentId: string) => void,
 ): React.JSX.Element | null {
-  const { tab } = pin;
-  const pullRequest = openPullRequestOf(pin, tasks);
+  const listed = openListedOf(pin, tasks);
 
-  if (gone || pullRequest === undefined) return null;
-
-  if (Predicate.isString(tab) || tab.kind !== STRIP_TAB_KIND.CHANGES) return null;
+  if (gone || listed === undefined) return null;
   const { agents } = tasks;
+  const { agent, pullRequest } = listed;
 
   return tabCard({
     kind: TAB_KIND.CHANGES,
-    subject: agentSubject(agents, tab.changes, NOTHING_HELD, false),
+    subject: agentSubject(agents, agent.id, NOTHING_HELD, false),
     models: agents.models,
     pullRequest,
     people: peopleOf(people, pullRequest),
-    onOpenAgent: () => onOpenAgent(tab.changes),
+    onOpenAgent: () => onOpenAgent(agent.id),
   });
 }
 
@@ -382,7 +360,16 @@ function PinnedTabCard({
         />
       )}
       {gone ? <HoverCardNote>{GONE_NOTE}</HoverCardNote> : null}
-      {agentId === undefined ? null : <PinPullRequest agentId={agentId} />}
+      {agentId !== undefined ? (
+        <PinPullRequest agentId={agentId} />
+      ) : pullRequest === undefined ? null : (
+        <>
+          <HoverCardRule />
+          <HoverCardList label="Pull request">
+            <PullRequestLine pullRequest={pullRequest} />
+          </HoverCardList>
+        </>
+      )}
     </HoverCard>
   );
 }
@@ -592,18 +579,14 @@ export function SidebarPinnedTab({
   /** Takes the row out of Pinned: a tab's pin on this Mac, an agent's on the account. */
   onUnpin: () => void;
 }): React.JSX.Element {
-  const livePullRequest = pinPullRequest(kept, on, tasks, useListedTaskPullRequests());
+  const livePullRequest = pinPullRequest(kept, on, useListedTaskPullRequests());
   const agent = pinAgent(kept, on, tasks);
   const pin = namedPin(kept, agent, livePullRequest, tasks.agents.models);
   const gone = pinGone(pin, tasks);
   const taskId = pinTaskId(pin);
 
-  // Note that a pin's agent may be another task's, whose people its own Changes tab read.
-  const changesPeople = useChangesPeople(
-    !Predicate.isString(pin.tab) && pin.tab.kind === STRIP_TAB_KIND.CHANGES
-      ? pin.tab.changes
-      : undefined,
-  );
+  // Note that a pin may be another task's, whose people its own Pull request tab read.
+  const changesPeople = useChangesPeople(pinnedAddress(pin));
 
   const changesCard = pinChangesCard(pin, tasks, gone, changesPeople, (agentId) => {
     if (taskId !== undefined) tasks.onShowAgent(taskId, agentId);

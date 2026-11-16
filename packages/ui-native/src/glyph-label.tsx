@@ -4,32 +4,50 @@ import { Image, Label, Text } from "@expo/ui/swift-ui";
 import { font } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { type Glyph, glyphImage } from "./glyph.js";
+import { MARK_SIZE } from "./tokens/space.js";
 
 /** The text style a glyph stands at beside an act's words, as SwiftUI sizes a symbol by its text. */
 type GlyphTextStyle = "body" | "callout" | "subheadline" | "footnote" | "caption";
 
 /**
- * A glyph on its own, sized by a text style as a symbol beside words is,
- * and drawn in `color` where one is given. Note that the color is drawn into
- * the symbol's own image (`originalColor`, from the app's `@expo/ui` patch),
- * because a system menu draws an icon tinted any other way in its own ink.
+ * A glyph on its own, sized by a text style as a symbol beside words is. In
+ * a view it stands in `color`, its foreground, where one is given; in a
+ * system menu, which draws an icon tinted any other way in its own ink, it
+ * stands in `menuColor`, drawn into the symbol's own image (`originalColor`,
+ * from the app's `@expo/ui` patch). Note that the two never meet, because
+ * outside a menu SwiftUI draws that image's custom symbol in its template's
+ * own black, past any foreground.
  */
 export function GlyphImage({
   glyph,
   textStyle = "body",
   color,
+  menuColor,
 }: {
   readonly glyph: Glyph;
   readonly textStyle?: GlyphTextStyle | undefined;
+  /** Its ink in a view, such as a problem line's attention ink. */
   readonly color?: string | undefined;
+  /** Its ink in a system menu, such as a status's tone. */
+  readonly menuColor?: string | undefined;
 }) {
   return (
     <Image
       {...glyphImage(glyph)}
-      {...(color === undefined ? {} : { originalColor: color })}
+      {...(menuColor === undefined ? {} : { originalColor: menuColor })}
+      {...(color === undefined ? {} : { color })}
       modifiers={[font({ textStyle })]}
     />
   );
+}
+
+/**
+ * A person's photo as a system menu draws it: a file on this device, drawn
+ * round at a menu glyph's size and kept as it is (`photoSize`, from the app's
+ * `@expo/ui` patch), because a menu templates any other image in its ink.
+ */
+function MenuPhoto({ photo }: { readonly photo: string }) {
+  return <Image uiImage={photo} photoSize={MARK_SIZE.MENU_PHOTO} />;
 }
 
 /**
@@ -50,21 +68,28 @@ export function GlyphLabel({
   readonly color?: string | undefined;
 }) {
   return (
-    <Label title={title} icon={<GlyphImage glyph={glyph} textStyle={textStyle} color={color} />} />
+    <Label
+      title={title}
+      icon={<GlyphImage glyph={glyph} textStyle={textStyle} menuColor={color} />}
+    />
   );
 }
 
 /**
- * What a SwiftUI button holds: its words alone, or its words beside its glyph,
- * which `@expo/ui`'s `Button` draws from its children where it is given no
- * label of its own.
+ * What a SwiftUI button holds: its words alone, its words beside a person's
+ * photo where it has one, or its words beside its glyph, which `@expo/ui`'s
+ * `Button` draws from its children where it is given no label of its own.
  */
 export function actContent(
   label: string,
   glyph: Glyph | undefined,
   textStyle?: GlyphTextStyle,
   color?: string,
+  photo?: string,
 ): { readonly label: string } | { readonly children: ReactElement } {
+  if (photo !== undefined)
+    return { children: <Label title={label} icon={<MenuPhoto photo={photo} />} /> };
+
   return glyph === undefined
     ? { label }
     : {
@@ -90,7 +115,7 @@ export function menuActContent(
       <>
         <Text>{label}</Text>
         <Text>{detail}</Text>
-        {glyph === undefined ? null : <GlyphImage glyph={glyph} color={color} />}
+        {glyph === undefined ? null : <GlyphImage glyph={glyph} menuColor={color} />}
       </>
     ),
   };
