@@ -78,6 +78,22 @@ it("offers every model Cursor lists, each at fast speed where a variant runs fas
   );
 });
 
+it("reads each model of Cursor's list on its own: one it cannot read is left out, and one with no name is named by its id", () => {
+  const offered = withCursorModels(
+    [],
+    OFFER,
+    cursorModelsOf([{ id: 7, displayName: "Broken" }, { id: "kimi-k3" }, ...LIST.slice(0, 1)]),
+  );
+
+  assert.deepEqual(
+    offered.map((model) => [model.id, model.name]),
+    [
+      ["cursor/kimi-k3", "kimi-k3"],
+      ["cursor/auto", "Auto"],
+    ],
+  );
+});
+
 it.each([
   ["Auto, which sends nothing to choose", "cursor/auto", "default", { id: "default" }],
   [
