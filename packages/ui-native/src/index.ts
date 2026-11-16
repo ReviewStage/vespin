@@ -114,6 +114,7 @@ export {
   type LucideSymbol,
   type MarkLook,
   runsOnGlyph,
+  sectionEmoji,
   sectionGlyph,
 } from "./glyph.js";
 

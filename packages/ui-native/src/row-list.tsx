@@ -403,6 +403,8 @@ type ListSectionProps = {
   readonly mark?: MarkLook | undefined;
   /** What the group is, before its title in the muted ink, as the panel's sidebar leads a section with its icon and a repository with its own mark; none where the words say it alone. */
   readonly glyph?: Glyph | undefined;
+  /** The emoji a section's member chose as its icon, drawn as words in the glyph's place, as the panel's sidebar draws it. */
+  readonly emoji?: string | undefined;
   /** The repository, `owner/name`, whose owner's picture stands in the glyph's place, as the panel's sidebar leads a repository's group; the glyph stands in until it draws. */
   readonly repository?: string | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
@@ -474,6 +476,7 @@ function GroupHeader({
   progress,
   mark,
   glyph,
+  emoji,
   repository,
   folded,
 }: {
@@ -482,6 +485,7 @@ function GroupHeader({
   readonly progress: SectionProgress | undefined;
   readonly mark: MarkLook | undefined;
   readonly glyph: Glyph | undefined;
+  readonly emoji: string | undefined;
   readonly repository: string | undefined;
   readonly folded: boolean | undefined;
 }) {
@@ -511,6 +515,10 @@ function GroupHeader({
       )}
       {repository !== undefined ? (
         <RepositoryPicture repository={repository} size={glyphSize} />
+      ) : emoji !== undefined ? (
+        <Text modifiers={[font({ textStyle: TYPE_ROLE.GROUP_HEADER }), accessibilityHidden()]}>
+          {emoji}
+        </Text>
       ) : glyph === undefined ? null : (
         <Image
           {...glyphImage(glyph)}
@@ -675,6 +683,7 @@ export function ListSection({
   progress,
   mark,
   glyph,
+  emoji,
   repository,
   foldable = false,
   folded: held,
@@ -707,6 +716,7 @@ export function ListSection({
         progress={progress}
         mark={mark}
         glyph={glyph}
+        emoji={emoji}
         repository={repository}
         folded={foldable ? folded : undefined}
       />

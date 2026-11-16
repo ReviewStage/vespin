@@ -12,6 +12,7 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityHidden,
   accessibilityHint,
   accessibilityIdentifier,
   accessibilityLabel,
@@ -690,6 +691,8 @@ type GroupRowProps = {
   readonly id: string;
   readonly title: string;
   readonly symbol: Glyph;
+  /** The emoji a section's member chose as its icon, drawn as words in the glyph's place, as the panel's sidebar draws it. */
+  readonly emoji?: string | undefined;
   /** How many it holds, such as the Inbox's threads waiting on you; no count where none is given or it holds none, as Mail shows none on an empty mailbox. */
   readonly count?: number | undefined;
   /** What a flow finds the row by, such as the Search tab's id where the sidebar stands for the tab bar. */
@@ -705,7 +708,15 @@ type GroupRowProps = {
  * body's size, and how many it holds at the trailing edge in the muted ink,
  * the whole row in a rounded fill while it is picked.
  */
-export function GroupRow({ id, title, symbol, count: held, testId, onDropLink }: GroupRowProps) {
+export function GroupRow({
+  id,
+  title,
+  symbol,
+  emoji,
+  count: held,
+  testId,
+  onDropLink,
+}: GroupRowProps) {
   const colors = useColors();
   const count = held === 0 ? undefined : held;
   const leadWidth = useScaledSize(MARK_SIZE.SIDEBAR_LEAD);
@@ -715,7 +726,13 @@ export function GroupRow({ id, title, symbol, count: held, testId, onDropLink }:
   const row: ReactElement = (
     <HStack spacing={SPACE.ROW} alignment="center">
       <HStack modifiers={[frame({ width: leadWidth })]}>
-        <LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.SIDEBAR_GLYPH} />
+        {emoji === undefined ? (
+          <LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.SIDEBAR_GLYPH} />
+        ) : (
+          <Text modifiers={[font({ textStyle: TYPE_ROLE.SIDEBAR_GLYPH }), accessibilityHidden()]}>
+            {emoji}
+          </Text>
+        )}
       </HStack>
       <Text
         modifiers={[
