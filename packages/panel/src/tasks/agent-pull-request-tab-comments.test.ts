@@ -21,6 +21,7 @@ import {
   type ReadLink,
 } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { RepositoryPullRequestParams } from "@repo/features/pull-request-view";
 import {
   FILE_VIEWED_STATE,
   PULL_REQUEST_ACTION,
@@ -64,6 +65,7 @@ import {
   option,
   PAGE,
   PULL_REQUEST,
+  PULL_REQUEST_KEY,
   partsOf,
   pillOf,
   pressAction,
@@ -93,7 +95,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { chooseMenuItem } from "../testing/phone-head.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { windowRouter } from "../testing/window-router.js";
-import { AgentPullRequestTab } from "./agent-pull-request-tab.js";
+import { PullRequestTab } from "./agent-pull-request-tab.js";
 import { PULL_REQUEST_VIEW, type PullRequestView } from "./task-tab-model.js";
 import { type ThreadReveal, ThreadRevealProvider } from "./thread-reveal.js";
 import type { AgentsControl } from "./use-agents.js";
@@ -208,15 +210,15 @@ test("a thread is replied on from its box and resolved and opened again from its
 
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       {
         action: PULL_REQUEST_ACTION.REPLY_TO_THREAD,
         threadId: "PRRT_flag",
         body: "Renamed in the next push.",
       },
     ],
-    [AGENT.id, { action: PULL_REQUEST_ACTION.RESOLVE_THREAD, threadId: "PRRT_flag" }],
-    [AGENT.id, { action: PULL_REQUEST_ACTION.UNRESOLVE_THREAD, threadId: "PRRT_flag" }],
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.RESOLVE_THREAD, threadId: "PRRT_flag" }],
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.UNRESOLVE_THREAD, threadId: "PRRT_flag" }],
   ]);
 });
 
@@ -308,9 +310,10 @@ test("a folded thread whose Reopen GitHub refuses opens, so its refusal stands i
   );
 });
 
-test("a tab naming another pull request of the agent's repository by its number reads that one, counts its own lines and files, and changes it rather than the agent's own", async () => {
+test("a tab opened on an agent's other pull request, by its repository and number, reads, counts, and changes exactly that one, never the one the agent's row names", async () => {
   const asked: unknown[] = [];
   const url = "https://github.com/acme/relay/pull/41";
+  const other = { ...PULL_REQUEST_KEY, number: 41 };
 
   const earlier = {
     ...published(PULL_REQUEST_STATE.OPEN),
@@ -324,33 +327,36 @@ test("a tab naming another pull request of the agent's repository by its number 
 
   const recorded =
     <A>(kind: string, answer: A) =>
-    (agentId: string, number?: number) => {
-      asked.push([kind, agentId, number]);
+    (pullRequest: RepositoryPullRequestParams) => {
+      asked.push([kind, pullRequest.repository, pullRequest.number]);
 
       return Promise.resolve(answer);
     };
 
-  const control = {
-    ...controlAnswering({
-      pullRequest: recorded("pull request", {
-        pullRequest: {
-          ...PULL_REQUEST,
-          number: 41,
-          title: earlier.title,
-          url,
-          merge: MERGE_STATE.CLEAN,
-          merging: MERGING,
-        },
-      }),
-      conversation: recorded("conversation", { pullRequest: CONVERSATION }),
+  // Note that the agent's row names #42, as `controlAnswering` lists it.
+  const control = controlAnswering({
+    pullRequest: recorded("pull request", {
+      pullRequest: {
+        ...PULL_REQUEST,
+        number: 41,
+        title: earlier.title,
+        url,
+        merge: MERGE_STATE.CLEAN,
+        merging: MERGING,
+      },
     }),
-    numberedPullRequests: new Map([[AGENT.id, new Map([[41, earlier]])]]),
-  };
+    conversation: recorded("conversation", { pullRequest: CONVERSATION }),
+    published: recorded("published", {
+      repository: "acme/relay",
+      branch: "luke/base",
+      pullRequest: earlier,
+    }),
+  });
 
   const tab = await drawn(
-    createElement(AgentPullRequestTab, {
-      agentId: AGENT.id,
-      number: 41,
+    createElement(PullRequestTab, {
+      pullRequest: other,
+      taskId: AGENT.taskId,
       control,
       shown: true,
       repository: "acme/relay",
@@ -360,18 +366,18 @@ test("a tab naming another pull request of the agent's repository by its number 
     }),
   );
 
-  assert.deepEqual(asked, [
-    ["pull request", AGENT.id, 41],
-    ["conversation", AGENT.id, 41],
+  assert.deepEqual([...asked].sort(), [
+    ["conversation", "acme/relay", 41],
+    ["published", "acme/relay", 41],
+    ["pull request", "acme/relay", 41],
   ]);
   assert.equal(headerLines(tab), "+9 −2");
   assert.equal(tabCount(tab, "Files changed"), "3");
   await pressAction(tab, "Close pull request");
-  assert.deepEqual(world.changes, [[AGENT.id, { action: PULL_REQUEST_ACTION.CLOSE }]]);
-  assert.deepEqual(world.changeNumbers, [41]);
+  assert.deepEqual(world.changes, [[other, { action: PULL_REQUEST_ACTION.CLOSE }]]);
 });
 
-test("a numbered pull request nothing published shows how its checks went on its Checks tab from the merge read, before they are read, where the merge control draws no chip for them", async () => {
+test("a pull request nothing published shows how its checks went on its Checks tab from the merge read, before they are read, where the merge control draws no chip for them", async () => {
   const control = controlAnswering({
     pullRequest: () =>
       Promise.resolve({
@@ -385,9 +391,9 @@ test("a numbered pull request nothing published shows how its checks went on its
   });
 
   const tab = await drawn(
-    createElement(AgentPullRequestTab, {
-      agentId: AGENT.id,
-      number: 41,
+    createElement(PullRequestTab, {
+      pullRequest: { ...PULL_REQUEST_KEY, number: 41 },
+      taskId: AGENT.taskId,
       control,
       shown: true,
       repository: "acme/relay",
@@ -420,8 +426,8 @@ test("an open pull request's pill offers Close and a closed one's Reopen, each a
   await pressAction(closed, "Reopen pull request");
 
   assert.deepEqual(world.changes, [
-    [AGENT.id, { action: PULL_REQUEST_ACTION.CLOSE }],
-    [AGENT.id, { action: PULL_REQUEST_ACTION.REOPEN }],
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.CLOSE }],
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.REOPEN }],
   ]);
 });
 
@@ -456,14 +462,14 @@ test("Close acts at once on an open pull request and a draft, a toast offering R
   await pressAction(tab, "Close pull request");
 
   assert.equal(question(), false, "closing is not asked about");
-  assert.deepEqual(world.changes, [[AGENT.id, { action: PULL_REQUEST_ACTION.CLOSE }]]);
+  assert.deepEqual(world.changes, [[PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.CLOSE }]]);
   assert.equal(newestToastSays(), "Pull request closedReopen");
 
   act(() => newestToastAction()?.click());
   await settle();
   assert.deepEqual(world.changes, [
-    [AGENT.id, { action: PULL_REQUEST_ACTION.CLOSE }],
-    [AGENT.id, { action: PULL_REQUEST_ACTION.REOPEN }],
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.CLOSE }],
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.REOPEN }],
   ]);
   assert.notEqual(newestToastSays(), "Pull request closedReopen", "the toast goes with its press");
   act(() => world.root?.unmount());
@@ -542,7 +548,7 @@ test("Close on a pull request in the merge queue asks first with the queue's war
 
   await pressAction(tab, "Close pull request");
   await answerQuestion("Close pull request");
-  assert.deepEqual(world.changes, [[AGENT.id, { action: PULL_REQUEST_ACTION.CLOSE }]]);
+  assert.deepEqual(world.changes, [[PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.CLOSE }]]);
   assert.equal(
     newestToastSays(),
     undefined,
@@ -715,7 +721,7 @@ test("the title is edited where it stands: Return keeps new words trimmed, and E
   await key(words, "Enter");
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       { action: PULL_REQUEST_ACTION.EDIT_TITLE, title: "Expire invitations after a week" },
     ],
   ]);
@@ -733,7 +739,10 @@ test("the title's edit is kept as the focus leaves its words, and where GitHub r
   act(() => words.blur());
   await settle();
   assert.deepEqual(world.changes, [
-    [AGENT.id, { action: PULL_REQUEST_ACTION.EDIT_TITLE, title: "Expire invitations after a day" }],
+    [
+      PULL_REQUEST_KEY,
+      { action: PULL_REQUEST_ACTION.EDIT_TITLE, title: "Expire invitations after a day" },
+    ],
   ]);
   await vi.waitFor(() => assert.equal(words.textContent, PULL_REQUEST.title));
 });
@@ -1067,10 +1076,10 @@ test("a review thread on its line in Files changed is replied on and resolved as
 
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       { action: PULL_REQUEST_ACTION.REPLY_TO_THREAD, threadId: "PRRT_flag", body: "Renamed." },
     ],
-    [AGENT.id, { action: PULL_REQUEST_ACTION.RESOLVE_THREAD, threadId: "PRRT_flag" }],
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.RESOLVE_THREAD, threadId: "PRRT_flag" }],
   ]);
 });
 
@@ -1130,7 +1139,7 @@ test("a comment written at the Conversation's foot is asked of the service for t
   await settle();
 
   assert.deepEqual(world.changes, [
-    [AGENT.id, { action: PULL_REQUEST_ACTION.COMMENT, body: "Shipping after **lunch**." }],
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.COMMENT, body: "Shipping after **lunch**." }],
   ]);
   assert.equal(
     boxWords(tab.querySelector(".pull-request-comment-box") ?? tab),
@@ -1317,7 +1326,7 @@ test("the gutter's + opens a comment under the last line picked, however the pic
 
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       {
         action: PULL_REQUEST_ACTION.ADD_REVIEW_COMMENT,
         mode: REVIEW_COMMENT_MODE.SINGLE,
@@ -1441,7 +1450,7 @@ test("the words of a line comment outlast the tab: a window drawn again finds th
   assert.equal(boxWords(await pickLines(removed)), "Gone?", "the others stay");
 });
 
-test("the words of a line comment are kept apart for each pull request a tab shows: the agent's own and one named by its number do not meet each other's", async () => {
+test("the words of a line comment are kept apart for each pull request a tab shows, two pull requests' words never meeting", async () => {
   const lines = {
     start: 13,
     side: DIFF_SELECTION_SIDE.ADDITIONS,
@@ -1450,25 +1459,20 @@ test("the words of a line comment are kept apart for each pull request a tab sho
   };
 
   await drawCommentable();
-  writeLineComment(await pickLines(lines), "For the agent's own");
+  writeLineComment(await pickLines(lines), "For #42");
   act(() => world.root?.unmount());
   world.root = undefined;
 
-  const control = {
-    ...controlAnswering({}, PULL_REQUEST_STATE.OPEN, () =>
-      Promise.resolve({
-        pullRequest: { url: PAGE, headSha: READ_HEAD, truncated: false, files: [INVITE_FILE] },
-      }),
-    ),
-    numberedPullRequests: new Map([
-      [AGENT.id, new Map([[41, published(PULL_REQUEST_STATE.OPEN)]])],
-    ]),
-  };
+  const control = controlAnswering({}, PULL_REQUEST_STATE.OPEN, () =>
+    Promise.resolve({
+      pullRequest: { url: PAGE, headSha: READ_HEAD, truncated: false, files: [INVITE_FILE] },
+    }),
+  );
 
   await drawn(
-    createElement(AgentPullRequestTab, {
-      agentId: AGENT.id,
-      number: 41,
+    createElement(PullRequestTab, {
+      pullRequest: { ...PULL_REQUEST_KEY, number: 41 },
+      taskId: AGENT.taskId,
       control,
       shown: true,
       repository: "acme/relay",
@@ -1479,13 +1483,13 @@ test("the words of a line comment are kept apart for each pull request a tab sho
   );
   await settle();
   const numbered = await pickLines(lines);
-  assert.equal(boxWords(numbered), "", "the numbered pull request meets none of the agent's own");
+  assert.equal(boxWords(numbered), "", "another pull request meets none of the first one's words");
   writeLineComment(numbered, "For #41");
   act(() => world.root?.unmount());
   world.root = undefined;
 
   await drawCommentable();
-  assert.equal(boxWords(await pickLines(lines)), "For the agent's own");
+  assert.equal(boxWords(await pickLines(lines)), "For #42");
 });
 
 test("a comment opened on lines takes the keyboard once the list stands its note in the window", async () => {
@@ -1817,8 +1821,9 @@ test("Remove from queue's question goes with its panel: hidden, the question is 
     const [shown, setShown] = useState(true);
     show = setShown;
 
-    return createElement(AgentPullRequestTab, {
-      agentId: AGENT.id,
+    return createElement(PullRequestTab, {
+      pullRequest: PULL_REQUEST_KEY,
+      taskId: AGENT.taskId,
       control,
       shown,
       repository: "acme/relay",
@@ -1872,8 +1877,9 @@ function Routed({
 
     if (place.kind !== LINK_DESTINATION.PULL_REQUEST_THREAD) return;
     setView(place.view);
+    // Note that the window opens a thread's link under its agent on the pull request the agent's line names, this tab's.
     setReveal((last) => ({
-      agentId: place.agentId,
+      pullRequest: PULL_REQUEST_KEY,
       threadId: place.threadId,
       view: place.view,
       ask: (last?.ask ?? 0) + 1,
@@ -1893,8 +1899,9 @@ function Routed({
           onRevealed: (ask: number) => setReveal((last) => (last?.ask === ask ? undefined : last)),
         },
       },
-      createElement(AgentPullRequestTab, {
-        agentId: AGENT.id,
+      createElement(PullRequestTab, {
+        pullRequest: PULL_REQUEST_KEY,
+        taskId: AGENT.taskId,
         control,
         shown: true,
         repository: "acme/relay",
@@ -1961,7 +1968,7 @@ async function threadMenuItem(card: Element, label: string): Promise<void> {
   await settle();
 }
 
-test("a thread's file and lines in the Conversation take it to Files changed through the window's route for its link: its collapsed file opened, its minimized chip shown, the list scrolled to its line, its lines lit, the thread ringed and focused, and the lines let go as the ring ends", async () => {
+test("a thread's file and lines in the Conversation take it to Files changed in the tab itself, opening no link: its collapsed file opened, its minimized chip shown, the list scrolled to its line, its lines lit, the thread ringed and focused, and the lines let go as the ring ends", async () => {
   handSettings({}, { [LIVE_READ.WORKSPACE_MEMBERS]: HELD_PEOPLE });
   const heard: ReadLink[] = [];
 
@@ -1991,12 +1998,7 @@ test("a thread's file and lines in the Conversation take it to Files changed thr
   act(() => headPress(tab).click());
   await settle();
 
-  assert.deepEqual(heard.at(-1)?.place, {
-    kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
-    agentId: AGENT.id,
-    threadId: JUMPED,
-    view: PULL_REQUEST_THREAD_VIEW.FILES,
-  });
+  assert.deepEqual(heard, []);
   assert.equal(option(tab, "Files changed").getAttribute("aria-selected"), "true");
   const list = world.lists.at(-1) ?? assert.fail("the files are drawn");
   assert.equal(list.files[0]?.collapsed, false, "the file is opened");
@@ -2250,7 +2252,7 @@ test("every review thread's head leads with its chevron and ends with its ⋯, i
   }
 });
 
-test("a thread's ⋯ in Files changed shows it in the Conversation through the same route, standing through Hide resolved, ringed and focused there", async () => {
+test("a thread's ⋯ in Files changed shows it in the Conversation in the tab itself, standing through Hide resolved, ringed and focused there", async () => {
   window.localStorage.clear();
   const heard: ReadLink[] = [];
   const resolved = thread({ id: JUMPED, resolved: true });
@@ -2282,7 +2284,7 @@ test("a thread's ⋯ in Files changed shows it in the Conversation through the s
   await threadMenuItem(note, "View in Conversation");
   await frames();
 
-  assert.equal(heard.at(-1)?.place.kind, LINK_DESTINATION.PULL_REQUEST_THREAD);
+  assert.deepEqual(heard, []);
   assert.equal(option(tab, "Conversation").getAttribute("aria-selected"), "true");
   const card = tab.querySelector(".pull-request-thread") ?? assert.fail("the thread stands");
   assert.equal(card.querySelector("details")?.open, true, "the resolved thread is opened");
@@ -2290,7 +2292,7 @@ test("a thread's ⋯ in Files changed shows it in the Conversation through the s
   assert.equal(document.activeElement, card.querySelector("summary"));
 });
 
-test("Copy link in a thread's ⋯ copies its Vespin link in the view it is drawn in; a thread with no id offers no ⋯ and no press to Files changed", async () => {
+test("Copy GitHub link in a thread's ⋯ copies its first comment's page on GitHub, since no link of ours names a thread of a pull request by its repository", async () => {
   const copied: string[] = [];
   fakeAppPlatform({ ...DESKTOP_LINKS, ...copyingInto(copied) });
 
@@ -2307,14 +2309,12 @@ test("Copy link in a thread's ⋯ copies its Vespin link in the view it is drawn
 
   const [card] = tab.querySelectorAll(".pull-request-thread");
 
-  await threadMenuItem(card ?? assert.fail("the thread is drawn"), "Copy link");
+  await threadMenuItem(card ?? assert.fail("the thread is drawn"), "Copy GitHub link");
 
-  assert.deepEqual(copied, [
-    `https://vespin.dev/acme/agent/${AGENT.id}/changes/conversation/thread/${JUMPED}`,
-  ]);
+  assert.deepEqual(copied, [`${PAGE}#discussion_r1`]);
 });
 
-test("a link in the pull request's words to one of its own comments on GitHub opens it in the tab: a line comment through its thread's route, a comment brought into view, ringed and focused; one the read did not reach opens on GitHub", async () => {
+test("a link in the pull request's words to one of its own comments on GitHub opens it in the tab: a line comment's thread in the Conversation, a comment brought into view, ringed and focused; one the read did not reach opens on GitHub", async () => {
   const heard: ReadLink[] = [];
 
   const links = [
@@ -2353,12 +2353,8 @@ test("a link in the pull request's words to one of its own comments on GitHub op
   };
 
   await press("the thread");
-  assert.deepEqual(heard.at(-1)?.place, {
-    kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
-    agentId: AGENT.id,
-    threadId: JUMPED,
-    view: PULL_REQUEST_THREAD_VIEW.CONVERSATION,
-  });
+  assert.deepEqual(heard, []);
+  assert.equal(option(tab, "Conversation").getAttribute("aria-selected"), "true");
 
   await press("the note");
   await frames();
@@ -2418,8 +2414,9 @@ test("a thread on a changed image a filter left out lands above its picture once
   function WithTree() {
     const [view, setView] = useState<PullRequestView>(PULL_REQUEST_VIEW.FILES);
 
-    return createElement(AgentPullRequestTab, {
-      agentId: AGENT.id,
+    return createElement(PullRequestTab, {
+      pullRequest: PULL_REQUEST_KEY,
+      taskId: AGENT.taskId,
       control: jumpControl([onLogo], [INVITE_FILE, logo]),
       shown: true,
       repository: "acme/relay",
@@ -2735,7 +2732,10 @@ test("a pending comment edited and saved untouched sends its Markdown back byte 
   await settle();
 
   assert.deepEqual(world.changes, [
-    [AGENT.id, { action: PULL_REQUEST_ACTION.EDIT_REVIEW_COMMENT, commentId: "PRRC_start", body }],
+    [
+      PULL_REQUEST_KEY,
+      { action: PULL_REQUEST_ACTION.EDIT_REVIEW_COMMENT, commentId: "PRRC_start", body },
+    ],
   ]);
 });
 
@@ -2822,14 +2822,17 @@ test("the member's pending comments stand on their lines in Files changed, marke
 
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       {
         action: PULL_REQUEST_ACTION.EDIT_REVIEW_COMMENT,
         commentId: "PRRC_start",
         body: "Why **five**?",
       },
     ],
-    [AGENT.id, { action: PULL_REQUEST_ACTION.DELETE_REVIEW_COMMENT, commentId: "PRRC_reply" }],
+    [
+      PULL_REQUEST_KEY,
+      { action: PULL_REQUEST_ACTION.DELETE_REVIEW_COMMENT, commentId: "PRRC_reply" },
+    ],
   ]);
 
   act(() =>

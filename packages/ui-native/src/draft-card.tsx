@@ -36,21 +36,20 @@ import {
   type TextStyle,
   View,
 } from "react-native";
-import { glyphSymbol } from "./glyph.js";
+import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { useKeeping } from "./held-menu.js";
 import { KEEP_ACT, KEEP_SYMBOL } from "./keep-model.js";
 import { Press } from "./press.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 
-/** The SF Symbol each draft's header leads with, the closest to the panel's: a message's bubble for Slack, whose mark SF Symbols has no drawing of, an envelope, and a pen. */
-const DRAFT_SYMBOL = {
-  [DRAFT_KIND.SLACK]: "bubble.left",
-  [DRAFT_KIND.EMAIL]: "envelope",
-  [DRAFT_KIND.DRAFT]: "pencil.line",
-} as const satisfies Record<DraftKind, SfSymbol>;
+/** The glyph each draft's header leads with, the panel's own: Slack's nearest, the mail, and the pen. */
+const DRAFT_GLYPH = {
+  [DRAFT_KIND.SLACK]: GLYPH.DRAFT_SLACK,
+  [DRAFT_KIND.EMAIL]: GLYPH.DRAFT_EMAIL,
+  [DRAFT_KIND.DRAFT]: GLYPH.DRAFT_WRITTEN,
+} as const satisfies Record<DraftKind, Glyph>;
 
 /** How each Slack mark is drawn, as Slack draws it. */
 const MARK_LOOK = {
@@ -64,7 +63,7 @@ const MARK_LOOK = {
 const BAR_PADDING = 6;
 
 const styles = StyleSheet.create({
-  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.BLOCK, overflow: "hidden" },
   bar: {
     flexDirection: "row",
     alignItems: "center",
@@ -216,7 +215,7 @@ export function DraftCard({
     <View style={[styles.card, edge, { backgroundColor: colors.SURFACE }]}>
       <View style={[styles.bar, edge, { backgroundColor: colors.WELL }]}>
         <SymbolView
-          name={DRAFT_SYMBOL[draft.kind]}
+          name={glyphSymbol(DRAFT_GLYPH[draft.kind])}
           size={MARK_SIZE.GLYPH}
           tintColor={colors.TEXT_MUTED}
           accessibilityElementsHidden

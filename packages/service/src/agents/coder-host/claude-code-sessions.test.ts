@@ -33,6 +33,7 @@ import {
   writeAgentRunnerRecord,
 } from "@repo/database/models/agent-runner-record";
 import {
+  recordAgentSandboxBeat,
   recordAgentSandboxTerminalEnded,
   recordAgentSandboxTerminalOpened,
 } from "@repo/database/models/agent-sandbox-holds";
@@ -66,7 +67,7 @@ import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { queuedTurnOf, recordTurnSnapshot } from "@repo/database/models/turn-state";
 import { workspaceDriveRepositories } from "@repo/database/models/workspace-drive-repositories";
-import { setWorkspaceVariable } from "@repo/database/models/workspace-environment-store";
+import { setWorkspaceVariables } from "@repo/database/models/workspace-environment-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { listScriptRuns } from "@repo/database/models/workspace-sandbox-script-run-store";
 import {
@@ -75,7 +76,7 @@ import {
 } from "@repo/database/models/workspace-sandbox-script-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable, type StoredStartedFrom } from "@repo/database/schemas/agent";
-import { agentSandboxTable } from "@repo/database/schemas/agent-sandbox";
+import { AGENT_SANDBOX_BEAT_KIND, agentSandboxTable } from "@repo/database/schemas/agent-sandbox";
 import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
@@ -172,6 +173,7 @@ import {
   runnerTook,
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
+import { sandboxesMovedTo } from "../../workspace-sandbox-size/workspace-sandbox-size.js";
 import { warmedAgent } from "../agent-lifecycle.js";
 import {
   AGENT_TAG,
@@ -1041,39 +1043,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           eventsUrl: `${EVENTS_URL}${FIRST_LAUNCH}`,
           linesUrl: `${LINES_URL}${FIRST_LAUNCH}`,
           mcpUrl: MCP_URL,
-          // Every tool of ours that does more than read, which the worker is denied; it keeps the reads.
-          workerDenied: [
-            "post_thread",
-            "withdraw_ask",
-            "open_pull_request",
-            "edit_description",
-            "show_image",
-            "show_page",
-            "start_agent",
-            "stop_agent",
-            "message_agent",
-            "add_suggestion",
-            "update_agent",
-            "create_task",
-            "update_task",
-            "create_section",
-            "delete_section",
-            "create_automation",
-            "update_automation",
-            "delete_automation",
-            "run_automation",
-            "save_memory",
-            "forget_memory",
-            "reply_to_comment",
-            "update_comment",
-            "run_on_mac",
-            "computer",
-            "browser",
-            "list_ports",
-            "share_port",
-            "schedule_wakeup",
-            "end_turn",
-          ],
           transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
           integrations: [LINEAR_SERVER],
           installedSkills: "/opt/agent/installed-skills",
@@ -2515,6 +2484,76 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.ok(read.some((line) => line.text.includes("Now the emails.")));
         assert.equal(api.commands.length, 1);
+      }),
+  );
+
+  it.effect(
+    "a new workspace size stops an idle sandbox whose chat is shown but not one a Terminal tab holds, and the next message resumes it and tells the agent its new memory",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const { sessionId } = opened;
+        const sandboxName = agentSandboxName(sessionId);
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        const at = new Date(yield* Clock.currentTimeMillis);
+
+        // The member watches the agent's chat, which keeps its sandbox up past the turn's end.
+        yield* recordAgentSandboxBeat(
+          sandboxName,
+          { kind: AGENT_SANDBOX_BEAT_KIND.CHAT, holder: "window-1" },
+          at,
+        );
+        yield* runnerTook(agent.id);
+        yield* settleRunnerLostTurns(writer, agent.conversationId, at.getTime());
+
+        yield* runnerIdled({
+          target: { userId, conversationId: agent.conversationId },
+          sessionId,
+          sequence: 41,
+        }).pipe(Effect.provide(api.layer));
+
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+        const moved = sandboxesMovedTo(agent.organizationId, 2, 4).pipe(Effect.provide(api.layer));
+
+        yield* recordAgentSandboxTerminalOpened(sandboxName, "tab-1", at);
+        yield* moved;
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running", "a Terminal tab holds it");
+
+        yield* recordAgentSandboxTerminalEnded(sandboxName, "tab-1");
+        yield* moved;
+        assert.equal(sandboxOfAgent(api, agent)?.status, "stopped", "a chat shown holds nothing");
+
+        const sent = yield* sentAndDelivered(
+          sessions,
+          sessionId,
+          agent,
+          "Run the typecheck again.",
+        );
+
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+        // Note that the relaunch hands its runner the session's lines so far, the message last.
+        const resumed = (yield* textsOf(api.commands[1])).at(-1);
+
+        assert.ok(
+          resumed?.[0]?.startsWith(
+            "The sandbox now has 8 GB of memory, up from 4 GB, as its workspace's sandbox size changed since your last turn. Run again any command",
+          ),
+          resumed?.[0] ?? "",
+        );
       }),
   );
 
@@ -4231,6 +4270,60 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a warm runner whose workspace's variables changed since its launch is ended and relaunched for the next message, which its new launch is handed",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const ring = parseKeyRing(Redacted.make(RING));
+        assert.ok(Result.isSuccess(ring));
+        const workspace = agent.organizationId;
+        const sequence = { next: 1 };
+        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* runnerTook(agent.id);
+        sequence.next = 2;
+        // A member sets a variable while the runner stands warm.
+        yield* setWorkspaceVariables(
+          workspace,
+          [
+            {
+              name: "DATABASE_URL",
+              sealed: sealWorkspaceVariable(
+                ring.success,
+                { organizationId: workspace, name: "DATABASE_URL" },
+                Redacted.make("postgres://fixture"),
+              ),
+            },
+          ],
+          undefined,
+          userId,
+          new Date(yield* Clock.currentTimeMillis),
+        );
+
+        const sent = yield* sentAndDelivered(
+          sessions,
+          opened.sessionId,
+          agent,
+          "Use the database.",
+        );
+
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const [first, second] = api.commands;
+        assert.ok(first !== undefined && second !== undefined);
+        assert.notEqual(first.exitCode, null);
+        assert.ok(JSON.stringify(yield* handedLines(userId, second)).includes("Use the database."));
+      }),
+  );
+
+  it.effect(
     "a message sent while another call holds the lease waits on it where the warm runner was launched in another mode, and goes to a launch in the agent's mode",
     () =>
       Effect.gen(function* () {
@@ -4798,14 +4891,20 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           "pnpm install",
           new Date(0),
         );
-        yield* setWorkspaceVariable(
+        yield* setWorkspaceVariables(
           workspace,
-          "DATABASE_URL",
-          sealWorkspaceVariable(
-            ring.success,
-            { organizationId: workspace, name: "DATABASE_URL" },
-            Redacted.make("postgres://fixture"),
-          ),
+          [
+            {
+              name: "DATABASE_URL",
+              sealed: sealWorkspaceVariable(
+                ring.success,
+                { organizationId: workspace, name: "DATABASE_URL" },
+                Redacted.make("postgres://fixture"),
+              ),
+            },
+          ],
+          undefined,
+          agent.userId,
           new Date(0),
         );
 

@@ -168,12 +168,13 @@ env:
 - waitForAnimationToEnd
 - takeScreenshot: tasks-row-unread
 # Mark done on a task whose agent is at work asks first, as the panel does,
-# and Cancel leaves the task where it stands.
+# and Cancel leaves the task where it stands. Its menu now offers Mark as
+# read, so the unread mark held.
 - runFlow:
     file: subflows/row-menu.yaml
     env:
       ROW: Weekly digest email
-      ITEM: Mark done
+      ITEM: Mark as read
 - tapOn: "Mark done"
 - assertVisible: "Mark as Done?"
 - assertVisible: "Stop agent"

@@ -871,6 +871,8 @@ function deviceMachineOver(
 
     // Note that a Mac is asked for no MP4, because nothing says it has an H.264 encoder, so its recordings keep their WebM alone.
     phoneVideo: () => Effect.succeed(undefined),
+    // Note that a Mac is asked for no M4A of an Ogg clip either, for the same reason.
+    phoneAudio: () => Effect.succeed(undefined),
   };
 }
 

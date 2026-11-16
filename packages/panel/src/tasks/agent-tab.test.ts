@@ -1085,6 +1085,30 @@ test("a call on one of its owner's several accounts ends in the account's chip, 
   assert.equal(row.querySelector(".tool-place")?.textContent?.trim(), "Acme");
 });
 
+test("a search of a server's tools names the server by its chip after the verb, then the query, and ends in no tag", () => {
+  const { container } = drawn(
+    assistant([
+      toolPart("connection_search", { connection: "slack", query: "send message" }, { tools: [] }),
+    ]),
+    true,
+  );
+
+  const row = container.querySelector<HTMLElement>(
+    '[data-call-id="call-connection_search"] summary',
+  );
+
+  assert.ok(row, "the call's row is a fold's line");
+  assert.match(row.textContent ?? "", /^Searched\s*Slack\s*tools for “send message”$/u);
+  const chip = row.querySelector(".tool-chip");
+  assert.equal(chip?.textContent?.trim(), "Slack");
+  assert.equal(
+    chip?.querySelector("svg")?.outerHTML,
+    renderToStaticMarkup(createElement(ProviderMark, { provider: INTEGRATION_PROVIDER.SLACK })),
+    "the chip wears Slack's mark",
+  );
+  assert.equal(row.querySelector(".tool-place"), null, "the row ends in no tag");
+});
+
 test("a connection_execute with no integration's call under it keeps its own row", () => {
   const [execute] = LINEAR_RUN;
   assert.ok(execute);
