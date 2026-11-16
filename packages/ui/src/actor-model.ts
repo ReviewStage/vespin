@@ -168,7 +168,7 @@ function isBotLogin(login: string): boolean {
 
 /**
  * Someone GitHub names by their login alone, as a line GitHub told an agent
- * of does: an App's bot by its login's suffix, on its robot, since GitHub
+ * of does: an App's bot by its login's suffix, on its hard hat, since GitHub
  * serves its App's picture only at an address the login does not name, and
  * a person by the avatar GitHub serves for their login.
  */

@@ -368,7 +368,7 @@ export const HARNESS_MARK_ASSET = {
 /**
  * An agent's tile, as the panel's messages lead an agent's words with it: a
  * rounded square on the brand's well, the mark of the harness the agent runs
- * in on it (Claude Code's Clawd, Codex's picture), or the ink's sparkles where
+ * in on it (Claude Code's Clawd, Codex's picture), or the ink's hard hat where
  * the harness is not known, heard as the agent's name, so an agent never
  * reads as a person.
  */

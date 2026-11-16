@@ -18,6 +18,7 @@ import {
   type AutomationScope,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE, glyphStateWords } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
@@ -42,8 +43,6 @@ import {
   EmptyState,
   ERROR_STATE_PLACEMENT,
   ErrorState,
-  FoldingButton,
-  type FoldingButtonHint,
   GAP,
   IconButton,
   Inline,
@@ -73,7 +72,7 @@ import { ACTOR_KIND, actorName } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { BotIcon, PlusIcon, ZapIcon } from "lucide-react";
+import { PlusIcon, ZapIcon } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
 import { unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
@@ -82,6 +81,7 @@ import { useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
 import { workspaceIntegrationsQuery, workspaceIntegrationsRetryMutation } from "../live-reads.js";
 import { MemberDirectory, useCreator } from "../member-directory.js";
@@ -184,13 +184,6 @@ const WORKSPACES_UNREAD_LINE = "The workspaces could not be read.";
 
 /** Why the bar's two acts are unavailable while no workspace is chosen. */
 const NO_WORKSPACE_HINT = "Choose a workspace first";
-
-/** The hint a folding act of the bar hangs while no workspace is chosen: why it is off, after its words where they are folded. */
-const NoWorkspaceHint: FoldingButtonHint = ({ label, children }) => (
-  <Tooltip label={label === undefined ? NO_WORKSPACE_HINT : `${label}: ${NO_WORKSPACE_HINT}`}>
-    {children}
-  </Tooltip>
-);
 
 /** Who owns an automation, as its row's column says it: the workspace's photo and its name, or the maker's picture and Only you, its name whole on hover where the column cuts it short. */
 function OwnerCell({
@@ -579,7 +572,7 @@ function AutomationsHead({
             [
               {
                 label: CREATE_WITH_AGENT,
-                icon: <BotIcon />,
+                icon: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
                 disabled: workspace === undefined,
                 onSelect: tasks.newTask.onOpenForAutomation,
               },
@@ -591,15 +584,16 @@ function AutomationsHead({
     />
   ) : (
     <AutomationsToolbar>
-      <FoldingButton
-        label="Create with an agent"
-        icon={<BotIcon />}
-        variant={BUTTON_VARIANT.OUTLINE}
-        disabled={workspace === undefined}
-        focusableWhenDisabled
-        hint={workspace === undefined ? NoWorkspaceHint : undefined}
-        onClick={tasks.newTask.onOpenForAutomation}
-      />
+      <Tooltip label={workspace === undefined ? NO_WORKSPACE_HINT : undefined}>
+        <Button
+          variant={BUTTON_VARIANT.PRIMARY}
+          disabled={workspace === undefined}
+          focusableWhenDisabled
+          onClick={tasks.newTask.onOpenForAutomation}
+        >
+          {CREATE_WITH_AGENT}
+        </Button>
+      </Tooltip>
       <Tooltip label={workspace === undefined ? NO_WORKSPACE_HINT : undefined}>
         <Button
           variant={BUTTON_VARIANT.OUTLINE}
