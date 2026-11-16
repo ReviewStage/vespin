@@ -295,6 +295,7 @@ function CallStep({
       input={call.input}
       output={call.output}
       errorText={view.errorText}
+      refused={call.refused}
     />
   );
 }
