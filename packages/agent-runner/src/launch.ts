@@ -57,7 +57,11 @@ export function harnessEnvOf(
 export function toolEnvOf(
   env: Readonly<Record<string, string | undefined>>,
 ): Readonly<Record<string, string>> {
-  return runsOnHost(env) ? {} : SANDBOX_TOOL_ENV;
+  if (runsOnHost(env)) return {};
+
+  // Note that a `NODE_PATH` the launch already carries stays, ahead of the image's.
+  const nodePath = [env.NODE_PATH, SANDBOX_TOOL_ENV.NODE_PATH].filter(Boolean).join(":");
+  return { ...SANDBOX_TOOL_ENV, NODE_PATH: nodePath };
 }
 
 /** Why a launch could not run at all, before or after its harness. */
