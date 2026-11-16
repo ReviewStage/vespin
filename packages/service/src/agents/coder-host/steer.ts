@@ -34,9 +34,11 @@ import {
   turnWaitingLines,
 } from "@repo/database/models/writer";
 import { type ConversationRuntime, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
+import { runsGoal } from "@repo/features/agent-goal-model";
 import { AGENT_MACHINE, AGENT_STATUS, type AgentAttachment } from "@repo/features/agent-wire";
 import { MENTION_KIND, withoutMemberLinks } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
+import { leadingCommand, SLASH_COMMAND } from "@repo/features/slash-command";
 import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -523,6 +525,11 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   );
 
   const runtime = yield* admittedRuntime(userId, agent, yield* Effect.fromResult(read.routing));
+
+  // Note that a harness that keeps no goal, as Cursor's, is refused a `/goal` line rather than handed it as words, so the member is told no goal runs.
+  if (!runsGoal(runtime) && leadingCommand(line.text)?.name === SLASH_COMMAND.GOAL) {
+    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+  }
 
   if (yield* Effect.fromResult(read.repeated)) return { outcome: STEER_OUTCOME.REPEATED };
   const held = yield* Effect.fromResult(read.task);

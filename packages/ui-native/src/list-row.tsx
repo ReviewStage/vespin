@@ -158,6 +158,8 @@ export type RowSubmenu = {
   readonly label: string;
   readonly symbol: Glyph;
   readonly choices: readonly MenuChoice[];
+  /** Menus one level further down, after its choices, such as a task's repository inside More. */
+  readonly submenus?: readonly RowSubmenu[] | undefined;
   readonly actions?: readonly RowAction[] | undefined;
 };
 
@@ -309,6 +311,7 @@ function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
           onIsOnChange={() => choice.onPress()}
         />
       ))}
+      {(submenu.submenus ?? []).map((inner) => rowSubmenu(inner, colors, ink))}
       {(submenu.actions ?? []).map((action) => actionButton(action, colors))}
     </Menu>
   );
