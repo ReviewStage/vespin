@@ -1190,7 +1190,7 @@ function PinnedRows({
  * to. A row's hover Pin and its ⋯ menu still make the first pin. A pinned
  * plan's child tasks stand under it, folded until it opens them, as in any
  * list, and are not counted as pins. Its head is headed as every sidebar
- * group's is (`sidebarHead`), with no glyph of its own, and offers, from its
+ * group's is (`sidebarHead`), led by the pin Pin draws, and offers, from its
  * ⋯ and a right-click alike, Mark all as read while a pinned task is unread;
  * it offers no menu while none is, and no Move up or down, since Pinned is
  * the one of its kind.
@@ -1254,6 +1254,7 @@ function PinnedSection({
                 noun: PIN_NOUN,
               },
         )}
+        glyph={<GLYPH.PIN />}
         label="Pinned"
         menuOpen={menu.open !== undefined}
         contextMenu={actionGroups.length === 0 ? undefined : menu.contextMenu(ellipsis)}
@@ -1312,7 +1313,8 @@ function PinnedSection({
  * they keep up with, newest active first, its rows naming no repository, as
  * Pinned's and a section's do not. It stands only
  * while it holds a task, so a task followed lands in it at once and one
- * unfollowed leaves it, as the live list moves. Its head folds it as
+ * unfollowed leaves it, as the live list moves. Its head is led by the eye
+ * Follow draws, and folds it as
  * Pinned's does, kept across launches, the open task still standing under
  * the fold, and offers Mark all as read while a task in it is unread. It is
  * no drop zone, since letting a row go in it would follow nothing, but a
@@ -1343,6 +1345,7 @@ function FollowingSection({
           count: tasks.length,
           noun: TASK_NOUN,
         })}
+        glyph={<GLYPH.SHOW />}
         label={FOLLOWING_HEAD}
         menuOpen={menu.open !== undefined}
         contextMenu={actionGroups.length === 0 ? undefined : menu.contextMenu(ellipsis)}
