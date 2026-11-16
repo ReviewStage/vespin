@@ -13,7 +13,8 @@
  * the phone draws the one record every window draws. One refused hands its
  * words and pictures back to the field, the refusal said over it in the
  * panel's words, its line let go (`AGENTS_UNSEND`), and the phone buzzes as
- * a refusal does.
+ * a refusal does. A paste long enough to bury the message is attached as a
+ * text file beside the pictures (`useAttachedPictures`' `pasteText`).
  * Stop is offered while the agent may still write (`agentStillWriting`),
  * starting or awaiting its turn included, as the panel offers it. A `/`
  * offers the skills of the agent's task's repository (`use-skill-offer.ts`).
@@ -60,6 +61,18 @@ import { useWrite } from "../use-write.js";
 /** What the field says before anything is typed, as the panel's box says it to a started agent. */
 const PLACEHOLDER = "Send a follow-up";
 
+/**
+ * Each agent's words typed and not yet sent, with the suggestion last laid
+ * into them, by the agent, so they outlive the page that drew them, as a
+ * widening window hands a page from its tab's stack to a split view's
+ * detail, each drawing its own, and the page drawn anew lays no suggestion
+ * in again.
+ */
+const unsentWords = new Map<
+  string,
+  { readonly words: string; readonly laidFor: string | undefined }
+>();
+
 /** A send out on the act port: what it carries, so a refusal hands it back. */
 interface Sent {
   readonly id: string;
@@ -79,7 +92,7 @@ export interface AgentComposer {
   readonly placeholder: string;
   readonly words: string;
   readonly onWords: (words: string) => void;
-  /** Whether Send stands lit with no words typed: a picture is attached. */
+  /** Whether Send stands lit with no words typed: a picture or a pasted file is attached. */
   readonly sendable: boolean;
   readonly send: () => void;
   /** Whether Send queues the message behind the turn rather than sending it to the agent now. */
@@ -88,6 +101,8 @@ export interface AgentComposer {
   readonly attach: () => void;
   /** Attaches pictures dropped on the composer, on an iPad, by the files the drop kept. */
   readonly dropPictures: (uris: readonly string[], unreadable: number) => void;
+  /** Takes a long paste as a text file beside the pictures, answering whether it did. */
+  readonly pasteText: (words: string) => boolean;
   readonly detach: (id: string) => void;
   /** Stops the turn under way; none while the agent rests. */
   readonly stop: (() => void) | undefined;
@@ -144,9 +159,15 @@ export function useAgentComposer(
   });
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const [words, setWords] = useState("");
+  const [words, setWords] = useState(() => unsentWords.get(agentId)?.words ?? "");
   // The suggestion whose words the box last laid in, so each is laid in once.
-  const [laidFor, setLaidFor] = useState<string | undefined>(undefined);
+  const [laidFor, setLaidFor] = useState(() => unsentWords.get(agentId)?.laidFor);
+
+  // Note that the words and the suggestion laid in are kept beside the agent as they change, so a page drawn anew for it opens on them.
+  useEffect(() => {
+    if (words === "" && laidFor === undefined) unsentWords.delete(agentId);
+    else unsentWords.set(agentId, { words, laidFor });
+  }, [agentId, words, laidFor]);
 
   if (suggested !== undefined && suggested.key !== laidFor) {
     setLaidFor(suggested.key);
@@ -358,6 +379,7 @@ export function useAgentComposer(
     attached: pictures.attached,
     attach: pictures.attach,
     dropPictures: pictures.drop,
+    pasteText: pictures.pasteText,
     detach: pictures.detach,
     stop: writing ? stop : undefined,
     stopping,

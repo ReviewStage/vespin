@@ -19,6 +19,11 @@ import { withQueryClient } from "../testing/copy-feedback.js";
 import { chooseMenuItem } from "../testing/phone-head.js";
 import { PendingComment } from "./pending-comments.js";
 import {
+  type PullRequestSource,
+  PullRequestSourceProvider,
+  repositoryPullRequestWrite,
+} from "./pull-request-source.js";
+import {
   ThreadReply,
   ThreadWritesProvider,
   useThreadControls,
@@ -70,7 +75,7 @@ beforeEach(() => {
   changes = [];
   fakeAppBridge({});
   fakeActPort({
-    [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: ({ request }) => {
+    [ACT_KIND.PULL_REQUESTS_ACTION]: ({ request }) => {
       changes.push(request);
 
       return Promise.resolve({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE });
@@ -96,6 +101,18 @@ function Thread(): React.JSX.Element | null {
   return createElement(ThreadReply, { controls: useThreadControls(THREAD) });
 }
 
+/** The pull request the tab's writes go to. */
+const PULL_REQUEST = { workspaceId: "workspace-acme", repository: "acme/relay", number: 42 };
+
+/** The tab's source, through which every write goes to the act port. */
+const SOURCE: PullRequestSource = {
+  pullRequest: PULL_REQUEST,
+  place: { taskId: null },
+  published: undefined,
+  generateChapters: () => new Promise(() => undefined),
+  write: repositoryPullRequestWrite(PULL_REQUEST),
+};
+
 /** The thread's reply and a pending comment, under one tab's provider. */
 function draw(): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
@@ -103,17 +120,20 @@ function draw(): HTMLElement {
   act(() =>
     root?.render(
       withQueryClient(
-        createElement(ThreadWritesProvider, {
-          value: { agentId: "agent-1", onWritten: () => undefined },
-          children: [
-            createElement(Thread, { key: "thread" }),
-            createElement(PendingComment, {
-              key: "pending",
-              draft: PENDING,
-              head: { person: PENDING.by, at: PENDING.at, now: PENDING.at },
-              words: createElement("p", null, PENDING.body),
-            }),
-          ],
+        createElement(PullRequestSourceProvider, {
+          value: SOURCE,
+          children: createElement(ThreadWritesProvider, {
+            value: { onWritten: () => undefined },
+            children: [
+              createElement(Thread, { key: "thread" }),
+              createElement(PendingComment, {
+                key: "pending",
+                draft: PENDING,
+                head: { person: PENDING.by, at: PENDING.at, now: PENDING.at },
+                words: createElement("p", null, PENDING.body),
+              }),
+            ],
+          }),
         }),
       ),
     ),

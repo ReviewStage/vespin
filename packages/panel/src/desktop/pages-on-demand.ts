@@ -14,7 +14,7 @@ import { lazy } from "react";
 /** Whether the Pull request tab's module has landed, so its boundary's Reload knows a failed chunk from a failed draw. */
 let pullRequestTabLanded = false;
 
-/** The module an agent's Pull request tab is drawn from, read once whether its draw or its card asks first. */
+/** The module a Pull request tab is drawn from, read once whether its draw or its card asks first. */
 const loadPullRequestTab = () =>
   import("../tasks/agent-pull-request-tab.js").then((loaded) => {
     pullRequestTabLanded = true;
@@ -22,9 +22,9 @@ const loadPullRequestTab = () =>
     return loaded;
   });
 
-/** An agent's Pull request tab in a side panel, its Files changed and its merge box among it (`agent-pull-request-tab.tsx`). */
+/** A pull request's tab in a side panel, its Files changed and its merge box among it (`agent-pull-request-tab.tsx`). */
 export const PULL_REQUEST_TAB = lazy(() =>
-  loadPullRequestTab().then((loaded) => ({ default: loaded.AgentPullRequestTab })),
+  loadPullRequestTab().then((loaded) => ({ default: loaded.PullRequestTab })),
 );
 
 /** Whether the Pull request tab's module has landed (`LazyBoundary`'s `loaded`). */

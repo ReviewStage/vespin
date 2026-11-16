@@ -1,26 +1,11 @@
 // open-link.ts -- a link the app draws opened where it goes: on the app's own screen where it draws one, and in Safari otherwise.
 
-import {
-  type AgentPullRequestLink,
-  iosAppRouteOfAddress,
-  iosHostConnectCode,
-} from "@repo/features/ios-app-links";
-import type { AppStateSnapshot } from "@repo/host/app-state";
-import { selectTasks } from "@repo/host/app-state-reads";
-import { useQuery } from "@tanstack/react-query";
+import { iosAppRouteOfAddress, iosHostConnectCode } from "@repo/features/ios-app-links";
 import { openURL } from "expo-linking";
 import { useRouter } from "expo-router";
-import { appStateQuery } from "./host/app-state-query.js";
+import { useTaskListCollections } from "./host/host-provider.js";
 import { handHostConnect } from "./host-connect-link.js";
 import { useOnTab } from "./tab-route.js";
-
-/** No pull request of the member's agents read yet. */
-const NO_PULL_REQUESTS: readonly AgentPullRequestLink[] = [];
-
-/** The pull requests the member's agents opened, as the document lists them. */
-function selectAgentPullRequests(state: AppStateSnapshot): readonly AgentPullRequestLink[] {
-  return selectTasks(state).agentPullRequests ?? NO_PULL_REQUESTS;
-}
 
 /** Opens an address in Safari, saying on the console where it could not. */
 export function openInSafari(address: string): void {
@@ -38,10 +23,7 @@ export function useOpenLink(): (address: string) => void {
   const router = useRouter();
   const onTab = useOnTab();
 
-  const { data: pullRequests = NO_PULL_REQUESTS } = useQuery({
-    ...appStateQuery,
-    select: selectAgentPullRequests,
-  });
+  const { agentPullRequests } = useTaskListCollections();
 
   return (address) => {
     const code = iosHostConnectCode(address);
@@ -52,7 +34,8 @@ export function useOpenLink(): (address: string) => void {
       return;
     }
 
-    const route = iosAppRouteOfAddress(address, pullRequests);
+    // Note that the pull requests are read as the link opens, so no screen drawing a link is drawn again as they move.
+    const route = iosAppRouteOfAddress(address, agentPullRequests.toArray);
 
     if (route === undefined) openInSafari(address);
     else router.push(onTab(route));

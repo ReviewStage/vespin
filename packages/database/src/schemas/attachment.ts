@@ -3,6 +3,7 @@ import {
   AGENT_BOUNDS,
   type AgentAttachmentType,
 } from "@repo/features/agent-wire";
+import { AUDIO_TYPE } from "@repo/features/audio-signature";
 import {
   CONVERSATION_MEDIA_TYPE,
   CONVERSATION_PICTURE_BOUNDS,
@@ -36,13 +37,30 @@ import { inboxMessage } from "./inbox-message.js";
 import { conversations } from "./storage.js";
 import { task } from "./task.js";
 
-/** Whether a row's bytes are a WebM an agent recorded, the one recording kept with an MP4 copy. */
-const isWebm = (table: { readonly contentType: AnyPgColumn }) =>
-  sql`${table.contentType} = ${literal(CONVERSATION_MEDIA_TYPE.WEBM)}`;
+/** Whether a row's bytes are a WebM an agent recorded or an Ogg clip it made, the two kept with a copy for a phone: an H.264 MP4 of the one, an AAC M4A of the other. */
+const keepsPhoneCopy = (table: { readonly contentType: AnyPgColumn }) =>
+  sql`${table.contentType} in (${literal(CONVERSATION_MEDIA_TYPE.WEBM)}, ${literal(AUDIO_TYPE.OGG)})`;
 
-/** Whether a row's bytes are a recording an agent made, a WebM or an H.264 MP4, which an inbox message or a plan holds to a video's bound rather than a picture's. */
+/** Whether a row's bytes are a sound clip, whose copy for a phone is an M4A rather than a video. */
+const isAudio = (table: { readonly contentType: AnyPgColumn }) =>
+  sql`${table.contentType} in (${sql.join(
+    Object.values(AUDIO_TYPE).map((type) => literal(type)),
+    sql`, `,
+  )})`;
+
+/** The types an agent's recording or sound clip is kept under, which an inbox message or a plan holds to a video's bound rather than a picture's. */
+const PLAYED_TYPES = [
+  CONVERSATION_MEDIA_TYPE.WEBM,
+  CONVERSATION_MEDIA_TYPE.MP4,
+  ...Object.values(AUDIO_TYPE),
+] as const;
+
+/** Whether a row's bytes are a recording an agent made, a WebM or an H.264 MP4, or a sound clip it made, which an inbox message or a plan holds to a video's bound rather than a picture's. */
 const isVideo = (table: { readonly contentType: AnyPgColumn }) =>
-  sql`${table.contentType} in (${literal(CONVERSATION_MEDIA_TYPE.WEBM)}, ${literal(CONVERSATION_MEDIA_TYPE.MP4)})`;
+  sql`${table.contentType} in (${sql.join(
+    PLAYED_TYPES.map((type) => literal(type)),
+    sql`, `,
+  )})`;
 
 /** Whether a row's bytes are a PDF, which a plan holds to a PDF's bound rather than a picture's. */
 const isPdf = (table: { readonly contentType: AnyPgColumn }) =>
@@ -109,8 +127,9 @@ export const ownedByTaskAlone = (table: {
  * check on the column. The media type is what the service sniffed a
  * picture's bytes to be, or the type a file traveled as, which the bytes
  * are served under. A WebM recording may carry an H.264 MP4 of itself
- * beside its bytes (`mp4_bytes`), which a player that plays no WebM is
- * served instead, so the copy is read, shown, and deleted with its row.
+ * beside its bytes (`mp4_bytes`), and an Ogg clip an AAC M4A of itself,
+ * which a player that plays neither is served instead, so the copy is
+ * read, shown, and deleted with its row.
  */
 export const attachment = pgTable(
   "attachment",
@@ -156,7 +175,7 @@ export const attachment = pgTable(
     /** How many bytes it is, read off the row without the bytes. */
     byteCount: integer("byte_count").notNull(),
     bytes: bytea("bytes").notNull(),
-    /** An H.264 MP4 of a WebM recording, made in the agent's sandbox beside it for a player that plays no WebM, iOS's; null for every other row, an MP4 recording's among them, which every player plays as it is, and for a recording kept before it or one its sandbox could not encode. Held to the WebM's own bound, and counted in no owner's bound, which count the WebM alone. */
+    /** An H.264 MP4 of a WebM recording, or an AAC M4A of an Ogg sound clip, made in the agent's sandbox beside it for a player that plays neither, iOS's; null for every other row, an MP4 recording's among them, which every player plays as it is, and for a file kept before it or one its sandbox could not encode. Held to the bound a function answers whole, and counted in no owner's bound, which count the file alone. */
     mp4Bytes: bytea("mp4_bytes"),
     createdAt: timestamptz("created_at").notNull(),
   },
@@ -196,10 +215,10 @@ export const attachment = pgTable(
       "attachment_inbox_file_task",
       sql`${table.inboxItemId} is null or ${table.taskId} is not null`,
     ),
-    // Only a WebM recording carries an MP4 copy, held to the bound a function may answer whole, as the WebM is.
+    // Only a WebM recording or an Ogg clip carries a copy for a phone, held to the bound a function may answer whole, as the file is.
     check(
-      "attachment_mp4_copy",
-      sql`${table.mp4Bytes} is null or (${isWebm(table)} and octet_length(${table.mp4Bytes}) <= ${bound(PHONE_VIDEO_BOUNDS.MAX_BYTES)})`,
+      "attachment_phone_copy",
+      sql`${table.mp4Bytes} is null or (${keepsPhoneCopy(table)} and octet_length(${table.mp4Bytes}) <= ${bound(PHONE_VIDEO_BOUNDS.MAX_BYTES)})`,
     ),
     // A conversation's picture carries its hash and its size in pixels.
     check(
@@ -216,8 +235,9 @@ export const attachment = pgTable(
 
 /**
  * The columns a read serves a row by, for a reader that plays the video
- * given: a recording's MP4 copy under its own type where the reader plays
- * MP4 and the row keeps one, and the row's own bytes and type otherwise.
+ * given: a recording's MP4 copy, or a clip's M4A copy, under its own type
+ * where the reader plays MP4 and the row keeps one, and the row's own bytes
+ * and type otherwise.
  * Note that the choice is made in the statement, so a read loads one copy
  * of the recording's bytes, never both.
  */
@@ -227,7 +247,7 @@ export function servedColumns(playable: PlayableVideoType) {
   }
 
   return {
-    contentType: sql<string>`case when ${attachment.mp4Bytes} is null then ${attachment.contentType} else ${literal(MP4_TYPE)} end`,
+    contentType: sql<string>`case when ${attachment.mp4Bytes} is null then ${attachment.contentType} when ${isAudio(attachment)} then ${literal(AUDIO_TYPE.M4A)} else ${literal(MP4_TYPE)} end`,
     bytes: sql<Uint8Array>`coalesce(${attachment.mp4Bytes}, ${attachment.bytes})`.mapWith(
       attachment.bytes,
     ),

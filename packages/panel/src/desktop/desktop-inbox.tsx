@@ -37,6 +37,12 @@ import { HERE, placeAddress, ROUTE, THING } from "../places/pressed-address.js";
 import { useInboxDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
+import {
+  NAMED_ORDER,
+  useNamedTask,
+  useNamedTasks,
+  useTaskListCollections,
+} from "../task-list-collections.js";
 import { agentName } from "../tasks/agent-model.js";
 import {
   INBOX_COLUMNS,
@@ -59,6 +65,7 @@ import {
   useSavedDescriptionText,
 } from "../tasks/task-mentions.js";
 import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
+import { useAgentPullRequestAddress } from "../tasks/use-agent-pull-request.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useInboxListing } from "../tasks/use-inbox-listing.js";
 import { useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";
@@ -76,7 +83,6 @@ import { useCloudTerminalTab } from "../tasks/use-terminal-session.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { AgentPane } from "./main-tabs.js";
 import {
-  changesTabOf,
   SIDE_PANEL_HOLDER,
   SidePanel,
   type SidePanelDrawing,
@@ -194,7 +200,8 @@ export const DesktopInbox = memo(function DesktopInbox({
   const inbox = useInboxDoor(tasks);
   // A task chosen narrows the Inbox to its own items, which a chip over the list names and clears.
   const narrowedTask = useInboxView(tasks).narrowed;
-  const narrowedTaskRow = tasks.tasks.find((task) => task.id === narrowedTask);
+  const narrowedTaskRow = useNamedTask(narrowedTask, tasks.typedNames);
+  const collections = useTaskListCollections();
   const narrowedTaskName = narrowedTaskRow?.name;
 
   const {
@@ -281,7 +288,12 @@ export const DesktopInbox = memo(function DesktopInbox({
       : (tasks.workspaces.find((each) => each.id === chosenWorkspaceId)?.slug ?? chosenWorkspaceId);
 
   // What the chosen item's box offers an `@`, read under that workspace and repository.
-  const readMentionAgents = useMentionAgentsReader(place?.workspaceId, tasks.tasks, named.models);
+  const readMentionAgents = useMentionAgentsReader(
+    place?.workspaceId,
+    useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED),
+    named.models,
+  );
+
   // An item's box starts a new thread with its agent, which opens in its place.
   const { startInboxThread } = agents;
 
@@ -325,6 +337,8 @@ export const DesktopInbox = memo(function DesktopInbox({
   // The task's agents this Inbox read, an archived one's among them, whose Pull request tabs the panel beside the item draws.
   const { heldIds } = agents;
   const router = useLinkRouter();
+  // An earlier link to an agent's Changes or review thread opens the pull request the agent's line names.
+  const agentPullRequestOf = useAgentPullRequestAddress();
 
   // An address pressed on the item or in the panel beside it, or a place a part there names, opens what it names beside the item where the item's own choices say so (`inbox-item-links.ts`), a place in the app matched on the route tree.
   const openHere: OpenAddressHere = (address) => {
@@ -332,7 +346,6 @@ export const DesktopInbox = memo(function DesktopInbox({
       kind: HERE.INBOX_ITEM,
       taskId,
       repository: chosenTask?.repository ?? null,
-      pullRequests: named.pullRequests,
       agentIds: named.agentIds,
       heldIds,
     });
@@ -376,31 +389,31 @@ export const DesktopInbox = memo(function DesktopInbox({
         openPanelTab(pageTab(thing.pageId), thing.place);
 
         return true;
-      case THING.CHANGES:
-        openPanelTab(changesTab(thing.agentId));
+      // An agent's Changes, as an earlier link names it, opens the pull request the agent's line names; none named, the window's.
+      case THING.CHANGES: {
+        const pullRequest = agentPullRequestOf(thing.agentId);
+
+        if (pullRequest === undefined) return false;
+        openPanelTab(changesTab(pullRequest));
 
         return true;
+      }
+
       case THING.PULL_REQUEST:
         showPullRequest(
           { ...sidePanel, onOpen: openPanelTab },
-          named,
-          thing.agentId,
+          thing.pullRequest,
           PULL_REQUEST_VIEW.CONVERSATION,
-          thing.number,
         );
 
         return true;
-      // A review thread opens its agent's Pull request tab on the view the link names, which brings the thread into view as it draws.
+      // A review thread opens the tab of the pull request its agent's line names on the view the link names, which brings the thread into view as it draws.
       case THING.THREAD: {
-        const tab = changesTabOf(named, thing.agentId, sidePanel.changes);
-        sidePanel.onPullRequestView(tab, thing.view);
-        openPanelTab(tab);
-        tasks.onRevealThread(tab.changes, {
-          kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
-          agentId: thing.agentId,
-          threadId: thing.threadId,
-          view: thing.view,
-        });
+        const pullRequest = agentPullRequestOf(thing.agentId);
+
+        if (pullRequest === undefined) return false;
+        showPullRequest({ ...sidePanel, onOpen: openPanelTab }, pullRequest, thing.view);
+        tasks.onRevealThread(pullRequest, { threadId: thing.threadId, view: thing.view });
 
         return true;
       }
@@ -411,7 +424,7 @@ export const DesktopInbox = memo(function DesktopInbox({
 
         // Note that the Inbox lists the listed workspace's tasks alone, so an item of a task listed
         // elsewhere is the window's, which lists that task's workspace before opening it.
-        if (holder !== taskId && !tasks.tasks.some((each) => each.id === holder)) return false;
+        if (holder !== taskId && !collections.tasks.has(holder)) return false;
 
         const choice: InboxChoice = {
           taskId: holder,
@@ -901,8 +914,7 @@ function InboxSidePanel({
   // through the agents the Inbox read of the item's task, its plan's card naming the task, whose
   // press opens the plan. Note that no press opens one here any more, since an agent opens in its own
   // tab on the task (`inbox-item-links.ts`); it is drawn only for a tab an earlier version kept.
-  const listedTask =
-    taskId === undefined ? undefined : tasks.tasks.find((each) => each.id === taskId);
+  const listedTask = useNamedTask(taskId, tasks.typedNames);
 
   const cards = taskCards({
     agents,
@@ -943,8 +955,8 @@ function InboxSidePanel({
 
           if (taskId !== undefined) tasks.onShowAgent(taskId, agent);
         }}
-        onOpenPullRequest={(agent) =>
-          showPullRequest(panel, agents, agent, PULL_REQUEST_VIEW.CONVERSATION)
+        onOpenPullRequest={(pullRequest) =>
+          showPullRequest(panel, pullRequest, PULL_REQUEST_VIEW.CONVERSATION)
         }
         onOpenTarget={openTarget}
         cards={cards}

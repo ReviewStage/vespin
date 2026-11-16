@@ -27,6 +27,11 @@ import { macShellActsContract } from "./mac-shells.js";
 import { macTerminalActsContract } from "./mac-terminals.js";
 import { MACHINE_COMMAND_ACTS, machineCommandActsContract } from "./machine-commands.js";
 import { PORT_FORWARD_ACTS, portForwardActsContract } from "./port-forwards.js";
+import {
+  PULL_REQUEST_ACTS,
+  PULL_REQUEST_FOLLOWS,
+  pullRequestActsContract,
+} from "./pull-requests.js";
 import { pushesContract } from "./pushes.js";
 import { SETTINGS_ACTS, settingsActsContract } from "./settings.js";
 import { TASKS_ACTS, TASKS_FOLLOWS, tasksActsContract } from "./tasks.js";
@@ -102,6 +107,7 @@ export {
   PLATFORM_PORT_ACT_KIND,
   type PlatformPortActKind,
   type PortActKind,
+  PULL_REQUEST_ACT_KIND,
   SETTINGS_ACT_KIND,
   TASKS_ACT_KIND,
   TERMINAL_ACT_KIND,
@@ -131,6 +137,8 @@ export { type ComputerUseStatus, MACHINE_COMMAND_ACTS, type MacApp } from "./mac
 
 export { PORT_FORWARD_ACTS } from "./port-forwards.js";
 
+export { PULL_REQUEST_ACTS, PULL_REQUEST_FOLLOWS } from "./pull-requests.js";
+
 export {
   type EventPushName,
   PUSH,
@@ -150,8 +158,38 @@ export { CONTACT_MAILTO } from "./window-surface.js";
 
 export { WORKSPACE_ACTS, WORKSPACE_FOLLOWS } from "./workspaces.js";
 
+/**
+ * Every act declared once, each domain's own, as one type. Note that it is
+ * spelled rather than inferred, because the inferred type of the spreads
+ * below is past the length the compiler will write into a declaration.
+ */
+type HostActs = typeof ACCOUNT_ACTS &
+  typeof ACCOUNT_ASK_ACTS &
+  typeof ACCOUNT_ASK_FOLLOWS &
+  typeof AGENT_INBOX_ACTS &
+  typeof AGENT_INBOX_FOLLOWS &
+  typeof AGENT_ACTS &
+  typeof AGENT_FOLLOWS &
+  typeof AUTOMATION_ACTS &
+  typeof AUTOMATION_FOLLOWS &
+  typeof CHAPTERS_ACTS &
+  typeof CHAPTERS_FOLLOWS &
+  typeof INSTALLED_SKILL_ACTS &
+  typeof INSTALLED_SKILL_FOLLOWS &
+  typeof INTEGRATION_ACTS &
+  typeof INTEGRATION_FOLLOWS &
+  typeof MACHINE_COMMAND_ACTS &
+  typeof PORT_FORWARD_ACTS &
+  typeof PULL_REQUEST_ACTS &
+  typeof PULL_REQUEST_FOLLOWS &
+  typeof SETTINGS_ACTS &
+  typeof TASKS_ACTS &
+  typeof TASKS_FOLLOWS &
+  typeof WORKSPACE_ACTS &
+  typeof WORKSPACE_FOLLOWS;
+
 /** Every act declared once, plain (`declared-act.ts`) or a live follow (`live-follow.ts`), one domain's spread each, in alphabetical order: what the host's composers answer directly. */
-export const HOST_ACTS = {
+export const HOST_ACTS: HostActs = {
   ...ACCOUNT_ACTS,
   ...ACCOUNT_ASK_ACTS,
   ...ACCOUNT_ASK_FOLLOWS,
@@ -169,6 +207,8 @@ export const HOST_ACTS = {
   ...INTEGRATION_FOLLOWS,
   ...MACHINE_COMMAND_ACTS,
   ...PORT_FORWARD_ACTS,
+  ...PULL_REQUEST_ACTS,
+  ...PULL_REQUEST_FOLLOWS,
   ...SETTINGS_ACTS,
   ...TASKS_ACTS,
   ...TASKS_FOLLOWS,
@@ -195,6 +235,7 @@ export const actContract = {
   ...macShellActsContract,
   ...macTerminalActsContract,
   ...portForwardActsContract,
+  ...pullRequestActsContract,
   ...settingsActsContract,
   ...tasksActsContract,
   ...terminalActsContract,

@@ -74,7 +74,9 @@ import type { DictationControl } from "./use-dictation.js";
  * how narrow the card stands. `MessageBox` draws the card: the shared
  * composer card (`../ai-elements/prompt-input.tsx`), a form whose Send and
  * Enter both submit it, each file it takes written into its words as its
- * chip where the caret stood (`file-chips.tsx`), and the files its words
+ * chip where the caret stood (`file-chips.tsx`), a paste long enough to
+ * bury the message among them as a text file (`use-attached-files.ts`'s
+ * `pasteText`), and the files its words
  * do not name in a row over its field (`@repo/ui`'s `ComposerBody`), and
  * its foot (`ComposerFoot`): the + at the left, which
  * opens the file picker or, where the owner hands rows (`plus`), a menu of
@@ -186,8 +188,6 @@ interface MessageBoxOptions extends PickerOptions {
   readonly holder?: AttachedFilesOptions["holder"];
   /** Whether the box takes files at all, each written into its words as its chip; a field-only box sends words alone. */
   readonly takesFiles?: boolean | undefined;
-  /** Whether words pasted long enough to bury the message come as a text file, as an agent's box takes them. */
-  readonly pastesTextAsFile?: boolean | undefined;
   /** The words a dictation is likely to say (`dictation-keywords.ts`); none for a comment. */
   readonly keywords?: readonly string[] | undefined;
   /** A key the field's lists and dictation left, answering whether the owner took it. */
@@ -498,7 +498,7 @@ function BoxField({
       onKey={(event) => pickers.field.onKey(event) || options.onKey?.(event) === true}
       onEnter={onEnter}
       onPasteFiles={takesFiles ? files.paste : () => false}
-      onPasteText={options.pastesTextAsFile === true ? files.pasteText : undefined}
+      onPasteText={files.pasteText}
       files={inWords.field}
     />
   );

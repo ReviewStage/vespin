@@ -114,6 +114,9 @@ const IOS = {
     "iOS floats no window over other apps; a call keeps on with the screen locked, and its way back stands over the tab bar",
   ),
   DIFF: byDesign("iOS v1 opens the diff on GitHub"),
+  REPOSITORY_PULL_REQUEST: notYet(
+    "iOS's pull request screen reads its pull request through its agent for now, not by its repository and number",
+  ),
   CHANGELOG: byDesign("iOS opens the changelog in its own Safari sheet (Settings › What's new)"),
   CONTACT_MAIL: byDesign("iOS writes the contact mail itself through openURL (Settings › Email)"),
   LINKS: byDesign("iOS opens a link through the system itself (openURL)"),
@@ -124,7 +127,9 @@ const IOS = {
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
   ),
   PINNED_TABS: byDesign("iOS pins no tab to a sidebar, so no pinned tab's task is read for one"),
-  MACHINE_ASKS: notYet("iOS doesn't draw a machine's asks on the agent's screen yet"),
+  MACHINE_ASKS_RETRY: notYet(
+    "iOS follows a machine's asks and the machines that name them, but doesn't read either again after a failed read yet",
+  ),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
   MACHINE_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
@@ -249,13 +254,13 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.HOSTS_PRESENCE_FOLLOW]: panel(IOS.HOSTS_STANDING),
   [PORT_ACT_KIND.HOSTS_PRESENCE_REFRESH]: panel(IOS.HOSTS_STANDING),
   [PORT_ACT_KIND.HOSTS_REMOVE]: EVERYWHERE,
-  [PORT_ACT_KIND.MACHINES_FOLLOW]: panel(IOS.MACHINE_SETTINGS),
-  [PORT_ACT_KIND.MACHINES_RETRY]: panel(IOS.MACHINE_SETTINGS),
+  [PORT_ACT_KIND.MACHINES_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.MACHINES_RETRY]: panel(IOS.MACHINE_ASKS_RETRY),
   [PORT_ACT_KIND.MACHINES_CHANGE]: panel(IOS.MACHINE_SETTINGS),
   [PORT_ACT_KIND.MACHINES_REMOVE]: panel(IOS.MACHINE_SETTINGS),
-  [PORT_ACT_KIND.MACHINE_ASKS_FOLLOW]: panel(IOS.MACHINE_ASKS),
-  [PORT_ACT_KIND.MACHINE_ASKS_RETRY]: panel(IOS.MACHINE_ASKS),
-  [PORT_ACT_KIND.MACHINE_ASK_ANSWER]: panel(IOS.MACHINE_ASKS),
+  [PORT_ACT_KIND.MACHINE_ASKS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.MACHINE_ASKS_RETRY]: panel(IOS.MACHINE_ASKS_RETRY),
+  [PORT_ACT_KIND.MACHINE_ASK_ANSWER]: EVERYWHERE,
   [PORT_ACT_KIND.HOSTS_THIS_MAC_SET]: desktopOnly(
     byDesign("Runs agents on the Mac the app is on, which a tab is not"),
     byDesign("Runs agents on the Mac the app is on, which a phone is not"),
@@ -339,6 +344,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.CHAPTERS_FOLLOW]: panel(IOS.DIFF),
   [PORT_ACT_KIND.CHAPTERS_RETRY]: panel(IOS.DIFF),
   [PORT_ACT_KIND.CHAPTERS_GENERATE]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_RETRY]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]: panel(IOS.DIFF),
 
   [PORT_ACT_KIND.CLI_INSTALL]: desktopOnly(WEB.CLI, IOS.DESKTOP_ONLY),
 
@@ -385,6 +393,12 @@ export const CLIENT_PARITY = {
 
   [PORT_ACT_KIND.PORT_FORWARD_SET]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.PORT_SHARE_SET]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
+
+  [PORT_ACT_KIND.PULL_REQUESTS_PART_FOLLOW]: panel(IOS.REPOSITORY_PULL_REQUEST),
+  [PORT_ACT_KIND.PULL_REQUESTS_PART_RETRY]: panel(IOS.REPOSITORY_PULL_REQUEST),
+  [PORT_ACT_KIND.PULL_REQUESTS_CHANGES]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.PULL_REQUESTS_GITHUB_IMAGE]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.PULL_REQUESTS_ACTION]: panel(IOS.REPOSITORY_PULL_REQUEST),
 
   [PORT_ACT_KIND.SETTING_UPDATE]: EVERYWHERE,
   [PORT_ACT_KIND.SETTINGS_RESET]: panel(IOS.SETTINGS),
@@ -531,10 +545,13 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WORKSPACE_ENVIRONMENT_LIST]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_ENVIRONMENT_PUT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_ENVIRONMENT_DELETE]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_ENVIRONMENT_SAVE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_SANDBOX_SIZE_READ]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_SANDBOX_SIZE_PUT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_MERGE_QUEUE_READ]: panel(IOS.MERGE_QUEUE),
   [PORT_ACT_KIND.WORKSPACE_MACHINES_READ]: panel(IOS.MENTION_MACHINES),
 } as const satisfies Record<PortActKind, ClientParityRow>;

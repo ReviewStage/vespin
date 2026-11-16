@@ -1,10 +1,10 @@
+import { base64Of } from "@repo/features/attached-files";
 import type { FeedbackImage } from "@repo/features/feedback";
 import { FEEDBACK_IMAGE_TYPE, FEEDBACK_LIMITS, isFeedbackImageType } from "@repo/features/feedback";
 import { ACT_KIND } from "@repo/host/acts";
 import { Predicate } from "effect";
 import { askAct } from "./act.js";
 import { isHeicFile, isPictureFile } from "./picture-files.js";
-import { base64Of } from "./tasks/attached-files.js";
 
 /**
  * What becomes of a picked file: it rides as it is, it is re-encoded first, or

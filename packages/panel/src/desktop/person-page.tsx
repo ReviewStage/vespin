@@ -9,7 +9,7 @@ import { AUTOMATION_SCOPE, type AutomationSummary } from "@repo/features/automat
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { NEEDS_YOU, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf, pullRequestAddressOf } from "@repo/features/link-grammar";
 import { machineName, type ThisMac } from "@repo/features/machine-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ASSIGNED_TO } from "@repo/features/task-list-model";
@@ -105,6 +105,7 @@ import { QUERY_ROOT } from "../query-keys.js";
 import { centerWithin, scrollerOf } from "../scroll-within.js";
 import { useShortcutTargetsOf } from "../shortcut-target.js";
 import { stateEndMark } from "../state-glyph.js";
+import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { HOME_ROW_CONTEXT, HOME_ROW_META, HOME_ROW_PICTURE } from "../tasks/home-row.js";
@@ -288,7 +289,12 @@ function AgentRow({
       place={place}
       more={more}
       onPress={() => tasks.onShowAgent(task.id, agent.id)}
-      onOpenPullRequest={() => tasks.onShowPanelTab(task.id, changesTab(agent.id))}
+      onOpenPullRequest={() => {
+        const url = pullRequests.get(agent.id)?.url;
+        const address = url === undefined ? undefined : pullRequestAddressOf(url);
+
+        if (address !== undefined) tasks.onShowPanelTab(task.id, changesTab(address));
+      }}
     />
   );
 }
@@ -983,7 +989,8 @@ function PersonColumn({
   const { workspace: standing, landing } = usePersonRoute();
   // What a phone's bar picks up from the page's header once it scrolls away.
   const [pickUp, setPickUp] = useState<ToolbarPickUp>({ name: "", shown: false });
-  const listed = tasks.listed.tasks;
+  // The listed workspace's tasks, or every task while none is listed, as the sidebar lists them.
+  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
   // Named as the list names them, else as the members read does, else by the name the page was opened with, else as the former members read does; nobody's name where none does.
   const { members, readerId, former, refused, retry } = useMemberDirectory();
   const member = members?.find((each) => each.userId === userId);

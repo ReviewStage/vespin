@@ -161,24 +161,42 @@ const deleteTerminals = SqlSchema.void({
 });
 
 /** That the sandbox's row is held at `at`: a Terminal tab open in it, or any holder's beat inside `FRESH`. */
-function heldAt(at: Date) {
+/** Every kind of beat, each of which holds a sandbox up. */
+const EVERY_BEAT: readonly AgentSandboxBeatKind[] = Object.values(AGENT_SANDBOX_BEAT_KIND);
+
+/**
+ * The beats that hold a sandbox for work a member does in it: its ports
+ * forwarded or its Browser view open, but not its agent's chat shown, which
+ * only keeps it warm for the next message.
+ */
+export const WORK_BEATS: readonly AgentSandboxBeatKind[] = [
+  AGENT_SANDBOX_BEAT_KIND.FORWARD,
+  AGENT_SANDBOX_BEAT_KIND.VIEW,
+];
+
+/** Whether the row's sandbox is held at `at`: a Terminal tab open in it, or a fresh beat of one of `beats`. */
+function heldAt(at: Date, beats: readonly AgentSandboxBeatKind[] = EVERY_BEAT) {
   const fresh = before(at, AGENT_SANDBOX_HOLD.FRESH).toISOString();
 
   return or(
     sql`exists (select 1 from ${agentSandboxTerminalTable} where ${agentSandboxTerminalTable.sandboxName} = ${agentSandboxTable.sandboxName})`,
-    sql`exists (select 1 from ${agentSandboxBeatTable} where ${agentSandboxBeatTable.sandboxName} = ${agentSandboxTable.sandboxName} and ${agentSandboxBeatTable.beatAt} > ${fresh}::timestamptz)`,
+    sql`exists (select 1 from ${agentSandboxBeatTable} where ${agentSandboxBeatTable.sandboxName} = ${agentSandboxTable.sandboxName} and ${agentSandboxBeatTable.beatAt} > ${fresh}::timestamptz and ${inArray(agentSandboxBeatTable.kind, [...beats])})`,
   );
 }
 
 const findHeld = SqlSchema.findAll({
-  Request: Schema.Struct({ sandboxName: Schema.String, at: Schema.Date }),
+  Request: Schema.Struct({
+    sandboxName: Schema.String,
+    at: Schema.Date,
+    beats: Schema.Array(Schema.Literals(Object.values(AGENT_SANDBOX_BEAT_KIND))),
+  }),
   Result: Schema.Struct({ sandboxName: Schema.String }),
-  execute: ({ sandboxName, at }) =>
+  execute: ({ sandboxName, at, beats }) =>
     Database.use((db) =>
       db
         .select({ sandboxName: agentSandboxTable.sandboxName })
         .from(agentSandboxTable)
-        .where(and(eq(agentSandboxTable.sandboxName, sandboxName), heldAt(at))),
+        .where(and(eq(agentSandboxTable.sandboxName, sandboxName), heldAt(at, beats))),
     ),
 });
 
@@ -250,9 +268,13 @@ export function forgetAgentSandboxHolds(sandboxName: string): HoldEffect<void> {
   return Effect.andThen(deleteTerminals({ sandboxName }), deleteBeats({ sandboxName }));
 }
 
-/** Whether a member holds the sandbox open at `now`: a Terminal tab open in it, or any holder's beat inside `FRESH`. */
-export function agentSandboxHeld(sandboxName: string, now: Date): HoldEffect<boolean> {
-  return Effect.map(findHeld({ sandboxName, at: now }), (rows) => rows.length > 0);
+/** Whether a member holds the sandbox open at `now`: a Terminal tab open in it, or a holder's beat of one of `beats` inside `FRESH`, any kind's by default. */
+export function agentSandboxHeld(
+  sandboxName: string,
+  now: Date,
+  beats: readonly AgentSandboxBeatKind[] = EVERY_BEAT,
+): HoldEffect<boolean> {
+  return Effect.map(findHeld({ sandboxName, at: now, beats }), (rows) => rows.length > 0);
 }
 
 /** The LIVE sandboxes, among every account's, a member holds open at `now`, at most `limit` of them, drawn in an order of their own each read: the ones the minute sweep keeps up. */
