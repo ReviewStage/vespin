@@ -1074,6 +1074,9 @@ const actOnAddressed = Effect.fnUntraced(function* (addressed: SlackAddressed) {
       const kept = yield* slackAgentThreadAt(organizationId, addressed.channel, thread);
 
       if (Option.isNone(kept)) continue;
+
+      // Note that a thread kept in a workspace holding no token is left alone, because its agent's turns could not be posted back and an ended one must not be continued unseen.
+      if (!bot.connected) return;
       const member = yield* memberIn(bot, email, organizationId, addressed);
 
       if (Option.isNone(member)) {
