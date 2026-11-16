@@ -111,7 +111,7 @@ const FIELD_TRAILING = SPACE.TIGHT;
 const FIELD_LINES = { REGULAR: 6, LARGE: 3 } as const;
 
 /** What the + is named by, whether it opens one act or a menu. */
-const ADD_LABEL = "Add";
+export const ADD_LABEL = "Add";
 
 /**
  * What the + offers where it opens a menu rather than one act, in the
@@ -220,25 +220,13 @@ function SendButton({
   );
 }
 
-/** The + as a menu, as SwiftUI draws one from a press: its acts, a rule, then its choices within and its switches. */
-function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testId: string }) {
-  const colors = useColors();
-  const addSize = useScaledSize(MARK_SIZE.LEAD + 2);
+/** What the + menu holds, wherever its button stands: its acts, a rule, then its choices within and its switches. */
+export function AddMenuItems({ menu }: { readonly menu: ComposerMenu }) {
   const submenus = menu.submenus ?? [];
   const switches = menu.switches ?? [];
 
   return (
-    <Menu
-      label={
-        <Image
-          {...glyphImage(GLYPH.ADD)}
-          size={addSize}
-          color={colors.TEXT_MUTED}
-          modifiers={PRESS_FRAME}
-        />
-      }
-      modifiers={[accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
-    >
+    <>
       {menu.actions.map((action) => (
         <Button
           key={action.label}
@@ -260,6 +248,28 @@ function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testI
           onIsOnChange={() => each.onPress()}
         />
       ))}
+    </>
+  );
+}
+
+/** The + as a menu, as SwiftUI draws one from a press. */
+function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testId: string }) {
+  const colors = useColors();
+  const addSize = useScaledSize(MARK_SIZE.LEAD + 2);
+
+  return (
+    <Menu
+      label={
+        <Image
+          {...glyphImage(GLYPH.ADD)}
+          size={addSize}
+          color={colors.TEXT_MUTED}
+          modifiers={PRESS_FRAME}
+        />
+      }
+      modifiers={[accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
+    >
+      <AddMenuItems menu={menu} />
     </Menu>
   );
 }
