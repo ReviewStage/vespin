@@ -302,7 +302,7 @@ export const LIST_AUTOMATIONS_TOOL = {
     "automationId to read that one whole, its prompt in full and its newest runs, each with why " +
     "it was skipped or failed and the agent it started. An automation fires on a schedule, a " +
     "GitHub event, a webhook, or a Sentry event, and starts an agent on its prompt, as " +
-    "its creator. Answers `accepted` with them, or `rejected` and why.",
+    "its creator.",
   inputSchema: LIST_AUTOMATIONS_INPUT,
 } as const;
 
@@ -315,8 +315,7 @@ export const CREATE_AUTOMATION_TOOL = {
     "hands the run to the one agent named. It is on as it is made, and runs as the developer. " +
     `One fired by Sentry needs ${PRODUCT_NAME}'s Sentry integration installed on the workspace first. ` +
     "Make one when the developer asks for it, never otherwise on your own, and read " +
-    `${AGENT_TOOL.LIST_AUTOMATIONS} first so you make none they already have. Answers ` +
-    "`accepted` with the automation as it stands, or `rejected` and why.",
+    `${AGENT_TOOL.LIST_AUTOMATIONS} first so you make none they already have.`,
   inputSchema: CREATE_AUTOMATION_INPUT,
 } as const;
 
@@ -327,8 +326,7 @@ export const UPDATE_AUTOMATION_TOOL = {
     `${AGENT_TOOL.LIST_AUTOMATIONS} answered it, as its editor on the automations page would: ` +
     "what you leave out stands, and a trigger given replaces the one standing whole, a switch " +
     `to Sentry needing ${PRODUCT_NAME}'s Sentry integration installed on the workspace. Change one only ` +
-    "where the developer asked for it. Answers `accepted` with the automation as it now " +
-    "stands, or `rejected` and why.",
+    "where the developer asked for it.",
   inputSchema: UPDATE_AUTOMATION_INPUT,
 } as const;
 
@@ -338,8 +336,7 @@ export const DELETE_AUTOMATION_TOOL = {
     "Delete an automation of your workspace with its history of runs, by its id as " +
     `${AGENT_TOOL.LIST_AUTOMATIONS} answered it, as its Delete on the automations page would; ` +
     "the agents its runs started stay. Delete one only when the developer asks for it, and " +
-    `pause one with ${AGENT_TOOL.UPDATE_AUTOMATION} where they only want it to stop. Answers ` +
-    "`accepted` with the automation's id and name, or `rejected` and why.",
+    `pause one with ${AGENT_TOOL.UPDATE_AUTOMATION} where they only want it to stop.`,
   inputSchema: DELETE_AUTOMATION_INPUT,
 } as const;
 
@@ -350,9 +347,7 @@ export const RUN_AUTOMATION_TOOL = {
     "answered it, as its Run now on the automations page would: one run, whatever its trigger, " +
     "through the same guards a firing takes, starting its agent on its prompt as a " +
     "scheduled run would, or handing it to the one agent it names. Run one when the developer " +
-    "asks for it, such as to try an automation just made, never otherwise on your own. Answers " +
-    "`accepted` with the run, started with its agent or skipped or failed and why, or " +
-    "`rejected` and why.",
+    "asks for it, such as to try an automation just made, never otherwise on your own.",
   inputSchema: RUN_AUTOMATION_INPUT,
 } as const;
 

@@ -110,6 +110,7 @@ const CATALOG: JsonValue = {
       reasoning: null,
     }),
     entry("xai/grok-5", "Grok 5"),
+    entry("cursor/composer-2.5", "Composer 2.5"),
   ],
 };
 
@@ -161,6 +162,19 @@ it.effect(
           contextWindow: 1_050_000,
           pricing: { inputUsd: 0.00006, outputUsd: 0.0003, cachedInputUsd: 0.000006 },
         },
+      );
+    }),
+);
+
+it.effect(
+  "a Cursor slug the gateway lists is never offered from it, since Cursor's models are offered to the accounts and clients that read them alone",
+  () =>
+    Effect.gen(function* () {
+      const { layer } = gateway(() => jsonResponse(CATALOG));
+      const offered = yield* readCatalog.pipe(Effect.provide(layer));
+      assert.deepEqual(
+        offered.filter((model) => model.id.startsWith("cursor/")),
+        [],
       );
     }),
 );

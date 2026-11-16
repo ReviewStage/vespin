@@ -6,6 +6,7 @@ import { user } from "@repo/database/schemas/auth";
 import { openHostedStoreTestDatabase } from "@repo/database/testing";
 import type { ModelChoice } from "@repo/features/models-wire";
 import {
+  type ModelApiProvider,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
   type ProviderKeyProvider,
@@ -131,7 +132,7 @@ async function accountWithKeys(
 /** The own key a call beside the account's agents spends on, preferring the provider given, as its provider and revealed key, on a deployment holding the ring named, or none for null, and the Preview stand-ins given. */
 async function ownKey(
   userId: string,
-  preferred: ProviderKeyProvider,
+  preferred: ModelApiProvider,
   ring: string | null = RING.HELD,
   standIns: Partial<Record<ProviderKeyProvider, string>> = {},
 ) {

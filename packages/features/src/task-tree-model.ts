@@ -5,8 +5,8 @@
  * `task-sections-model.ts`, `pin-order.ts`), read under the view the
  * sidebar starts from (`DEFAULT_TASK_LIST_VIEW`): the reader's own tasks,
  * to do and in progress, grouped by repository, the pinned repositories'
- * groups first. A pin is the reader's own choice and is never filtered, as
- * the sidebar never filters one.
+ * groups first. A pin or a section is the reader's own choice, which the
+ * view's filters never thin, as the sidebar's never do.
  */
 
 import { inPinOrder } from "./pin-order.js";
@@ -28,16 +28,17 @@ import {
   repositoryLabel,
   TASK_GROUPING,
   TASK_ORDER,
-  taskInView,
+  taskListed,
   taskSections,
   tasksAssignedTo,
   tasksById,
   taskTime,
+  withSubTasks,
 } from "./task-list-model.js";
 import type { TaskSection } from "./task-section-wire.js";
-import { NO_TASK_SECTIONS, sectionedTasks, sectionInView } from "./task-sections-model.js";
+import { NO_TASK_SECTIONS, sectionedTasks, sectionWithoutSettled } from "./task-sections-model.js";
 import type { TaskSummary } from "./task-wire.js";
-import type { TasksView } from "./tasks-view.js";
+import type { TaskListParts, TasksView } from "./tasks-view.js";
 import { taskKey } from "./workspace-key.js";
 
 /** What heads the reader's pinned tasks, as the sidebar's section is called. */
@@ -81,7 +82,7 @@ export interface TaskTree {
 /** What the tree is read from: the host's task list, the workspace it is narrowed to, the reader, and what the group headings say of no repository. */
 export interface TaskTreeInput {
   readonly view: {
-    readonly tasks: TasksView["tasks"];
+    readonly tasks: TaskListParts["tasks"];
     readonly taskSections?: TasksView["taskSections"] | undefined;
     readonly repositoryPins?: TasksView["repositoryPins"] | undefined;
   };
@@ -112,11 +113,12 @@ const NONE_STANDING = () => false;
  * The tree the phone's Tasks tab draws, as the sidebar draws it under its
  * first view: Pinned in the order dragged, Following with the tasks to do and
  * in progress the reader follows that no other list holds (`followingTasks`),
- * each section with its tasks to do and in progress in its own order, and
- * the reader's other tasks to do and in progress grouped by repository,
- * each child task moved under its parent
- * wherever a list holds it (`homedTaskRows`) and nested there, but one
- * pinned or put in a section of its own, which stays where it was put.
+ * each section with its open tasks in its own order, and the reader's other
+ * tasks to do and in progress grouped by repository, each child task moved
+ * under its parent wherever a list holds it (`homedTaskRows`), an open one
+ * whatever its status or whoever is on it (`withSubTasks`), and nested
+ * there, but one pinned or put in a section of its own, which stays where
+ * it was put.
  */
 export function taskTree(input: TaskTreeInput): TaskTree {
   const { view, workspaceId, readerId } = input;
@@ -131,17 +133,14 @@ export function taskTree(input: TaskTreeInput): TaskTree {
   const free = listed.filter((task) => task.pinnedAt === undefined);
   const sectioned = sectionedTasks(view.taskSections ?? NO_TASK_SECTIONS, workspaceId, free);
 
-  const sections = sectioned.sections.map((drawn) =>
-    sectionInView(drawn, DEFAULT_TASK_LIST_VIEW, readerId),
-  );
-
+  const sections = sectioned.sections.map(sectionWithoutSettled);
   const unplaced = free.filter((task) => !sectioned.taskIds.has(task.id));
 
   const rest = tasksAssignedTo(unplaced, DEFAULT_TASK_LIST_VIEW.assignedTo, readerId).filter(
-    (task) => taskInView(task, DEFAULT_TASK_LIST_VIEW),
+    taskListed,
   );
 
-  const followed = followingTasks(unplaced, rest, DEFAULT_TASK_LIST_VIEW, readerId);
+  const followed = followingTasks(unplaced, rest, readerId);
 
   const grouped = taskSections(
     orderTasks(rest),
@@ -151,15 +150,19 @@ export function taskTree(input: TaskTreeInput): TaskTree {
 
   const groups = grouped.grouping === TASK_GROUPING.REPOSITORY ? grouped.groups : [];
 
-  const homed = homedTaskRows(
-    [
-      pinned,
-      ...sections.map((drawn) => drawn.tasks),
-      followed,
-      ...groups.map((group) => group.tasks),
-    ],
-    every,
-    1 + sections.length,
+  const homed = withSubTasks(
+    homedTaskRows(
+      [
+        pinned,
+        ...sections.map((drawn) => drawn.tasks),
+        followed,
+        ...groups.map((group) => group.tasks),
+      ],
+      every,
+      1 + sections.length,
+    ),
+    orderTasks(free),
+    DEFAULT_TASK_LIST_VIEW.finishedSubTasks,
   );
 
   const followingRows = drawnTaskRows(
@@ -286,7 +289,7 @@ export interface TaskRowLook {
 export function taskRowLook(
   task: TaskSummary,
   waiting: number,
-  taskPullRequests: TasksView["taskPullRequests"],
+  taskPullRequests: TaskListParts["taskPullRequests"],
 ): TaskRowLook {
   const at = taskTime(task, TASK_ORDER.UPDATED);
 

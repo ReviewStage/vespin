@@ -9,7 +9,7 @@ import { AUTOMATION_SCOPE, type AutomationSummary } from "@repo/features/automat
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { NEEDS_YOU, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf, pullRequestAddressOf } from "@repo/features/link-grammar";
 import { machineName, type ThisMac } from "@repo/features/machine-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ASSIGNED_TO } from "@repo/features/task-list-model";
@@ -289,7 +289,12 @@ function AgentRow({
       place={place}
       more={more}
       onPress={() => tasks.onShowAgent(task.id, agent.id)}
-      onOpenPullRequest={() => tasks.onShowPanelTab(task.id, changesTab(agent.id))}
+      onOpenPullRequest={() => {
+        const url = pullRequests.get(agent.id)?.url;
+        const address = url === undefined ? undefined : pullRequestAddressOf(url);
+
+        if (address !== undefined) tasks.onShowPanelTab(task.id, changesTab(address));
+      }}
     />
   );
 }

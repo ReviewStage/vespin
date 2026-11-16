@@ -23,7 +23,8 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { HOST_LIVE, type TaskListStanding } from "@repo/features/tasks-view";
+import type { TaskListParts } from "@repo/features/tasks-view";
+import { HOST_LIVE } from "@repo/features/tasks-view";
 import { formatInstant } from "@repo/features/time-format";
 import {
   type AccountExperiment,
@@ -39,13 +40,14 @@ import {
   workspaceExperimentChoicesFrom,
 } from "@repo/settings";
 import { type AppSettingsView, appSettingsView } from "@repo/settings/wire";
-import { Predicate, Struct } from "effect";
+import { Predicate } from "effect";
 import type { ReadonlyRecord } from "effect/Record";
 import {
   type AppHistories,
   type AppHostRead,
   type AppMemories,
   type AppStateDelivery,
+  type AppStateRead,
   type AppStateSnapshot,
   type AppTranscript,
   OWN_TRANSCRIPT,
@@ -74,7 +76,7 @@ function adoptAppStateDelivery(
 
 /** The bridge's two reads of the document: the whole of it on request, and what moved on every change. */
 export interface AppStateBridgeReads {
-  readonly requestAppState: () => Promise<AppStateSnapshot>;
+  readonly requestAppState: () => Promise<AppStateRead>;
   readonly onAppState: (listener: (delivery: AppStateDelivery) => void) => () => void;
 }
 
@@ -85,6 +87,14 @@ export interface FollowedAppState {
   /** The document as last adopted, for a reader that writes it again; none before the first read answers. */
   readonly held: () => AppStateSnapshot | undefined;
   readonly stop: () => void;
+}
+
+/** A reader of what crosses beside the document: the task list's lists. */
+export interface AppStateBeside {
+  /** Each delivery, as it arrives. */
+  readonly heard: (delivery: AppStateDelivery) => void;
+  /** The lists a whole read answers beside the document `read`, before the document is written. */
+  readonly read: (read: AppStateSnapshot, taskList: TaskListParts) => void;
 }
 
 /**
@@ -102,11 +112,19 @@ export interface FollowedAppState {
  * on, such as an older read or another account's; the refusal is said
  * through `report`. Note that the read is asked after the subscription
  * stands, so a delivery sent while it is in flight is heard.
+ *
+ * What crosses beside the document, the task list's lists, is handed to
+ * `beside` (`task-list-following.ts`), which keeps its own order: each
+ * delivery the moment it arrives, before it is laid and whether or not a
+ * whole read stands to lay it over, and each whole read's lists before the
+ * document it came with is written. The document held is the read's alone,
+ * never the lists beside it.
  */
 export function followAppStateOver(
   bridge: AppStateBridgeReads,
   write: (state: AppStateSnapshot, delivery?: AppStateDelivery) => Promise<void> | undefined,
   report: (message: string, cause: unknown) => void,
+  beside?: AppStateBeside,
 ): FollowedAppState {
   let following = true;
   let held: AppStateSnapshot | undefined;
@@ -117,10 +135,12 @@ export function followAppStateOver(
     reading = true;
 
     return bridge.requestAppState().then(
-      (read) => {
+      ({ taskList, ...read }) => {
         reading = false;
 
         if (!following) return undefined;
+
+        if (taskList !== undefined) beside?.read(read, taskList);
         held = early.reduce(adoptAppStateDelivery, read);
         early = [];
 
@@ -134,6 +154,8 @@ export function followAppStateOver(
   };
 
   const stopHearing = bridge.onAppState((delivered) => {
+    beside?.heard(delivered);
+
     if (held === undefined) {
       early.push(delivered);
 
@@ -205,19 +227,14 @@ export function sameAccount(
 
 export const selectAccess = (state: AppStateSnapshot) => state.access;
 export const selectAudio = (state: AppStateSnapshot) => state.audio;
-export const selectTasks = (state: AppStateSnapshot) => state.tasks;
 
-/** What main holds of the account's tasks but the list itself, which a window reads from its task list's collections; the same object across a delivery moving only the list, as the document's sharing keeps it (`shareAppState`). */
-export const selectTaskListStanding = (state: AppStateSnapshot): TaskListStanding =>
-  Struct.omit(state.tasks, ["tasks"]);
+/** What main holds of the account's tasks but the list itself, which a window reads from its task list's collections. */
+export const selectTasks = (state: AppStateSnapshot) => state.tasks;
 
 export const selectInbox = (state: AppStateSnapshot) => state.inbox;
 export const selectInboxWaiting = (state: AppStateSnapshot) => state.inbox.waiting;
 export const selectInboxTasks = (state: AppStateSnapshot) => state.inbox.tasks;
 export const selectFailedRuns = (state: AppStateSnapshot) => state.inbox.failedRuns;
-
-export const selectPullRequestPublished = (state: AppStateSnapshot) =>
-  state[LIVE_READ.PULL_REQUEST_PUBLISHED];
 
 export const selectMachineCommands = (state: AppStateSnapshot) => state.machineCommands;
 
@@ -269,6 +286,10 @@ export const selectLiveMark = (state: AppStateSnapshot): LiveMark | undefined =>
 
 /** Where the task list's read stands: not yet asked, on its way, read, or refused. */
 export const selectTaskListStatus = (state: AppStateSnapshot) => state.tasks.listStatus;
+
+/** Whether the task list's lists have been drawn, so a reader of its agents or pull requests can tell none from none read yet. */
+export const selectTaskListListed = (state: AppStateSnapshot): boolean =>
+  state.tasks.listed === true;
 
 /** The account's workspaces, which tell their readers only as the list moves, not as the tasks beside it do. */
 export const selectWorkspaces = (state: AppStateSnapshot) => state.tasks.workspaces;
