@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
-import { TASK_SECTION_GLYPH } from "@repo/features/task-section-wire";
+import { glyphKey, TASK_SECTION_GLYPH } from "@repo/features/task-section-wire";
 import { describe, it } from "vitest";
 import {
   emojiGroups,
   findEmoji,
   findGlyphs,
   glyphChoices,
-  glyphKey,
   glyphName,
 } from "./section-icon-model.js";
 

@@ -11,11 +11,13 @@ committed copy from them, and what those copies are.
   that table's roles name a step of (`geist.mjs`), and the DMG window layout
   the desktop's packaging reads.
 - `src/` holds geometry and the generated mark art, brand palette, motion
-  tokens, provider-mark paths, Lucide symbol templates, and a task's status
-  and priority marks with their symbol templates the apps draw from; the templates are
-  outlined by `scripts/lucide-symbols.mjs`, Lucide's from the `lucide-react`
-  `@repo/ui` resolves and the status and priority marks from `scripts/task-status-marks.mjs`,
-  which `@repo/ui`'s `TaskStatusMark` and `TaskPriorityMark` draw as SVG too.
+  tokens, provider-mark paths, and a task's status and priority marks with
+  their symbol templates the apps draw from, outlined by
+  `scripts/lucide-symbols.mjs` from `scripts/task-status-marks.mjs`, which
+  `@repo/ui`'s `TaskStatusMark` and `TaskPriorityMark` draw as SVG too.
+  Lucide's glyphs are not committed: `scripts/lucide-catalog.mjs` outlines
+  every one, from the `lucide-react` `@repo/ui` resolves, when the iOS app's
+  prebuild asks (`@repo/brand/lucide-catalog`), about 15 MB of SVG.
 
 Regenerate the generated files (under `src/generated/`, `assets/`, and
 `@repo/ui`'s `src/tokens/geist.css`, `brand.css`, `identity.css`, and

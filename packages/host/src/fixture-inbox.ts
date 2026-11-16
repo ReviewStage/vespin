@@ -110,7 +110,7 @@ import {
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
-import { TASK_SECTION_GLYPH, TASK_SECTION_ICON_KIND } from "@repo/features/task-section-wire";
+import { TASK_SECTION_ICON_KIND } from "@repo/features/task-section-wire";
 import {
   DESCRIPTION_ACTOR,
   type DescriptionRevisionsAnswer,
@@ -1093,7 +1093,7 @@ const STAGED_TASK_IDS: ReadonlySet<string> = new Set(
 /**
  * The account's sections: Launch, with no icon, holding the launch's
  * checklist, then two empty ones wearing an icon from the panel's picker,
- * one of its suggested glyphs and one emoji, so a sidebar draws each kind.
+ * a glyph beyond its suggestions and one emoji, so a sidebar draws each kind.
  */
 const LISTED_SECTIONS: NonNullable<TasksView["taskSections"]> = {
   sections: [
@@ -1107,7 +1107,7 @@ const LISTED_SECTIONS: NonNullable<TasksView["taskSections"]> = {
       id: LISTED.SECTION_GLYPH,
       workspaceId: FIXTURE_IDS.WORKSPACE,
       title: "Experiments",
-      icon: { kind: TASK_SECTION_ICON_KIND.GLYPH, glyph: TASK_SECTION_GLYPH.ROCKET },
+      icon: { kind: TASK_SECTION_ICON_KIND.GLYPH, glyph: "telescope" },
       createdAt: LANDED - 7 * DAY,
     },
     {

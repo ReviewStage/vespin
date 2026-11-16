@@ -156,7 +156,11 @@ builds a control of its own.
   button, and a composer's button alike. `@repo/brand`'s generator outlines
   each, at the `lucide-react` `@repo/ui` pins, into a custom symbol template
   the app's config writes into the asset catalog as a symbol set, so it
-  sizes with Dynamic Type and weighs with its words as an SF Symbol does. A
+  sizes with Dynamic Type and weighs with its words as an SF Symbol does.
+  The prebuild writes every Lucide glyph, not only `GLYPH`'s
+  (`@repo/brand/lucide-catalog`), so a section leads with whichever the
+  panel's icon picker offered its member (`sectionGlyph`), and a name Lucide
+  doesn't know draws nothing, as on the panel. A
   glyph is a branded `Glyph`, minted only in that table, so no component
   takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
   items, which expo-router types as plain names, take `GLYPH.X` too

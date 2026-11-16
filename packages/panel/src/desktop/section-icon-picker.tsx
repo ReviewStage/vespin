@@ -1,4 +1,5 @@
 import {
+  glyphKey,
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_COLOR,
   TASK_SECTION_ICON_KIND,
@@ -42,7 +43,6 @@ import {
   findEmoji,
   findGlyphs,
   glyphChoices,
-  glyphKey,
   glyphLabel,
   isSuggestedGlyph,
   recentIcons,

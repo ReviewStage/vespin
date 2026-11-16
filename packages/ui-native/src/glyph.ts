@@ -2,9 +2,8 @@
 
 import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
 import {
-  TASK_SECTION_GLYPH,
+  glyphKey,
   TASK_SECTION_ICON_KIND,
-  type TaskSectionGlyph,
   type TaskSectionIcon,
 } from "@repo/features/task-section-wire";
 import type { SfSymbol } from "./sf-symbol.js";
@@ -264,27 +263,6 @@ export const GLYPH = {
   MCP_CLIENTS: system("app.connected.to.app.below.fill"),
 } as const;
 
-/** Each glyph the panel's section icon picker suggests (`TASK_SECTION_GLYPH`), as its Lucide glyph, so a section wears on the phone the icon its member chose. */
-const SECTION_GLYPH: Readonly<Record<TaskSectionGlyph, Glyph>> = {
-  [TASK_SECTION_GLYPH.FOLDER]: lucide(LUCIDE_SYMBOL.FOLDER),
-  [TASK_SECTION_GLYPH.STAR]: lucide(LUCIDE_SYMBOL.STAR),
-  [TASK_SECTION_GLYPH.BOOKMARK]: lucide(LUCIDE_SYMBOL.BOOKMARK),
-  [TASK_SECTION_GLYPH.FLAG]: lucide(LUCIDE_SYMBOL.FLAG),
-  [TASK_SECTION_GLYPH.ROCKET]: lucide(LUCIDE_SYMBOL.ROCKET),
-  [TASK_SECTION_GLYPH.ZAP]: lucide(LUCIDE_SYMBOL.ZAP),
-  [TASK_SECTION_GLYPH.BUG]: lucide(LUCIDE_SYMBOL.BUG),
-  [TASK_SECTION_GLYPH.FLASK]: lucide(LUCIDE_SYMBOL.FLASK_CONICAL),
-  [TASK_SECTION_GLYPH.BRIEFCASE]: lucide(LUCIDE_SYMBOL.BRIEFCASE),
-  [TASK_SECTION_GLYPH.LAYERS]: lucide(LUCIDE_SYMBOL.LAYERS),
-  [TASK_SECTION_GLYPH.HEART]: lucide(LUCIDE_SYMBOL.HEART),
-  [TASK_SECTION_GLYPH.CIRCLE]: lucide(LUCIDE_SYMBOL.CIRCLE),
-};
-
-/** Whether a glyph's name is one the section icon picker suggests. */
-function isSectionGlyph(name: string): name is TaskSectionGlyph {
-  return Object.hasOwn(SECTION_GLYPH, name);
-}
-
 /**
  * Where an agent runs, as the panel's runs-on mark draws it (`runs-on.tsx`):
  * the cloud's glyph, a Linux server's, or the laptop for a Mac and for a
@@ -299,33 +277,37 @@ export function runsOnGlyph(place: {
   return place.platform === DEVICE_PLATFORM.LINUX ? GLYPH.HOST : GLYPH.MAC;
 }
 
+/** Any of Lucide's glyphs by the name the asset catalog holds it as, its PascalCase key, which a section wears as its member chose it. */
+// SAFETY: the app's prebuild writes every Lucide glyph into the asset catalog under that key (`@repo/brand`'s `lucide-catalog.mjs`), and a name Lucide doesn't know draws nothing, as the panel's sidebar draws it.
+const catalogLucide = (key: string): Glyph => key as Glyph;
+
 /**
  * The glyph a section leads with, as the panel's sidebar draws its icon: the
- * glyph its member chose from the picker's suggestions; the folder, the
- * picker's first, for an emoji, a glyph the app's catalog doesn't hold, or
- * no icon, since a sidebar row always leads with a glyph. Note that a
- * glyph's color is left to the panel, which alone draws it.
+ * Lucide glyph its member chose, any of the picker's, or the folder, the
+ * picker's first, for an emoji or no icon, since a sidebar row always leads
+ * with a glyph. Note that a glyph's color is left to the panel, which alone
+ * draws it.
  */
 export function sectionGlyph(icon: TaskSectionIcon | undefined): Glyph {
   if (icon === undefined || icon.kind === TASK_SECTION_ICON_KIND.EMOJI) return GLYPH.FOLDER;
 
-  return isSectionGlyph(icon.glyph) ? SECTION_GLYPH[icon.glyph] : GLYPH.FOLDER;
+  return catalogLucide(glyphKey(icon.glyph));
 }
 
-/** The glyphs the asset catalog holds, Lucide's and the task status and priority marks, rather than the system's symbols. */
-const CATALOG_SYMBOLS: ReadonlySet<string> = new Set([
-  ...Object.values(LUCIDE_SYMBOL),
-  ...Object.values(TASK_STATUS_SYMBOL),
-  ...Object.values(TASK_PRIORITY_SYMBOL),
-  TASK_PRIORITY_BARS_SYMBOL,
-]);
+/** A name the asset catalog holds, which begins with a capital. */
+const CATALOG_NAME = /^[A-Z]/;
 
-/** A glyph as `@expo/ui`'s `Image` draws it: a custom symbol by its asset's name, an SF Symbol by its own. */
+/**
+ * A glyph as `@expo/ui`'s `Image` draws it: a custom symbol by its asset's
+ * name, an SF Symbol by its own. Note that every name the asset catalog holds
+ * begins with a capital (`GitMerge`, `TaskStatusDone`) and no SF Symbol's
+ * does (`square.and.arrow.up`), so the first letter tells them apart.
+ */
 export function glyphImage(
   glyph: Glyph,
 ): { readonly assetName: string } | { readonly systemName: SfSymbol } {
-  // SAFETY: a glyph the asset catalog doesn't hold was minted by `system` from an SF Symbol's name.
-  return CATALOG_SYMBOLS.has(glyph) ? { assetName: glyph } : { systemName: glyph as SfSymbol };
+  // SAFETY: a glyph whose name begins in lower case was minted by `system` from an SF Symbol's name.
+  return CATALOG_NAME.test(glyph) ? { assetName: glyph } : { systemName: glyph as SfSymbol };
 }
 
 /**

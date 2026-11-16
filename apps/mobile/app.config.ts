@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
-import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
+import { lucideCatalog } from "@repo/brand/lucide-catalog";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import {
   CLAWD_PATH,
@@ -598,21 +598,7 @@ const extensionPlist = (extension: AppExtension, version: string, build: string)
 const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConfig => {
   const colors = Object.entries(extension.COLORS ?? {});
 
-  const symbols = LUCIDE_SYMBOL_TEMPLATES.filter(({ name }) =>
-    (extension.SYMBOLS ?? []).includes(name),
-  );
-
-  // Note that a name with no template would leave the Swift's `Image(name)` blank on a device, so the prebuild refuses it.
-  const missing = (extension.SYMBOLS ?? []).filter(
-    (name) => !symbols.some((symbol) => symbol.name === name),
-  );
-
-  if (missing.length > 0)
-    throw new Error(
-      `${extension.TARGET} names Lucide symbols with no template: ${missing.join(", ")}`,
-    );
-
-  const catalogued = colors.length > 0 || symbols.length > 0;
+  const catalogued = colors.length > 0 || (extension.SYMBOLS ?? []).length > 0;
 
   const written = withDangerousMod(config, [
     "ios",
@@ -648,6 +634,17 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         mkdirSync(set, { recursive: true });
         writeFileSync(join(set, "Contents.json"), `${JSON.stringify(colorSet(role), null, 2)}\n`);
       }
+
+      const asked = extension.SYMBOLS ?? [];
+      const symbols = lucideCatalog(asked);
+
+      // Note that a name with no template would leave the Swift's `Image(name)` blank on a device, so the prebuild refuses it.
+      const missing = asked.filter((name) => !symbols.some((symbol) => symbol.name === name));
+
+      if (missing.length > 0)
+        throw new Error(
+          `${extension.TARGET} names Lucide symbols with no template: ${missing.join(", ")}`,
+        );
 
       for (const { name, svg } of symbols)
         writeSymbolSet(join(folder, extensionCatalogName(extension)), name, svg);
@@ -769,9 +766,11 @@ type ImageSource = { readonly FILE: string } | { readonly SVG: string };
 // Each of `IMAGE_SETS` as a vector image set of the asset catalog, its dark
 // appearance beside its light one where it has one, each of `PICTURE_SETS`
 // as an image set of its files at their scales, and each of Lucide's
-// glyphs `@repo/ui-native` draws (`LUCIDE_SYMBOL`) as a symbol set, a custom
-// SF Symbol from the brand's outlined template, so it sizes with Dynamic
-// Type, weighs with its text, and sits on its baseline as SF Symbols do.
+// glyphs as a symbol set, a custom SF Symbol outlined by the brand at
+// prebuild, so it sizes with Dynamic Type, weighs with its text, and sits on
+// its baseline as SF Symbols do. Every one is written, not only those
+// `@repo/ui-native` names (`LUCIDE_SYMBOL`), so a section wears whichever the
+// panel's icon picker offered its member.
 const withImageSets = (config: ExpoConfig): ExpoConfig =>
   withDangerousMod(config, [
     "ios",
@@ -882,7 +881,7 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
       }
 
       for (const { name, svg } of [
-        ...LUCIDE_SYMBOL_TEMPLATES,
+        ...lucideCatalog(),
         ...TASK_STATUS_SYMBOL_TEMPLATES,
         ...TASK_PRIORITY_SYMBOL_TEMPLATES,
       ])

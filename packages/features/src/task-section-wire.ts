@@ -66,6 +66,26 @@ export const TASK_SECTION_GLYPH = {
 
 export type TaskSectionGlyph = (typeof TASK_SECTION_GLYPH)[keyof typeof TASK_SECTION_GLYPH];
 
+/** The glyphs whose stored name is not Lucide's own, and the Lucide icon each is drawn as. */
+const RENAMED_GLYPH = new Map<string, string>([[TASK_SECTION_GLYPH.FLASK, "flask-conical"]]);
+
+/** The Lucide icon a glyph's stored name draws: its own, or Lucide's for one a section wore before Lucide renamed it (`flask` as `flask-conical`). */
+export function lucideGlyphName(glyph: string): string {
+  return RENAMED_GLYPH.get(glyph) ?? glyph;
+}
+
+/**
+ * The key Lucide's `icons` draws a glyph's name under, and the name the iOS
+ * app's asset catalog holds it as: each word of its Lucide name begun by a
+ * capital, `arrow-down01` as `ArrowDown01`.
+ */
+export function glyphKey(glyph: string): string {
+  return lucideGlyphName(glyph)
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join("");
+}
+
 /** The colors a glyph may wear; a glyph without one wears the text's own. */
 export const TASK_SECTION_ICON_COLOR = {
   RED: "red",

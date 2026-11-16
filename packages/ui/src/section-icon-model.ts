@@ -18,6 +18,8 @@
 
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import {
+  glyphKey,
+  lucideGlyphName,
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_KIND,
   type TaskSectionIcon,
@@ -26,13 +28,8 @@ import {
 /** The newest emoji version offered: one newer is not yet drawn by every macOS a Mac may run. */
 const NEWEST_EMOJI_VERSION = 15.1;
 
-/** The glyphs whose stored name is not Lucide's own, and the Lucide icon each is drawn as. */
-const RENAMED_GLYPH = new Map<string, string>([[TASK_SECTION_GLYPH.FLASK, "flask-conical"]]);
-
 /** The glyphs offered first while nothing is searched, as Lucide names them. */
-const SUGGESTED_GLYPHS = Object.values(TASK_SECTION_GLYPH).map(
-  (glyph) => RENAMED_GLYPH.get(glyph) ?? glyph,
-);
+const SUGGESTED_GLYPHS = Object.values(TASK_SECTION_GLYPH).map(lucideGlyphName);
 
 /** One glyph the picker offers: its name on the wire, what it is called, and the words it is found by. */
 export interface GlyphChoice {
@@ -73,16 +70,6 @@ export interface UnicodeEmojiGroup {
  */
 export function glyphName(pascal: string): string {
   return (pascal.match(/[A-Z][^A-Z]*|^[^A-Z]+/g) ?? []).map((word) => word.toLowerCase()).join("-");
-}
-
-/** The key Lucide's `icons` draws a glyph's name under, the inverse of `glyphName`: `arrow-down01` as `ArrowDown01`. */
-export function glyphKey(glyph: string): string {
-  const drawn = RENAMED_GLYPH.get(glyph) ?? glyph;
-
-  return drawn
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join("");
 }
 
 /** What a glyph is called where it is named, its words in sentence case: `flask-conical` as "Flask conical". */

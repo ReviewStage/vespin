@@ -12,7 +12,6 @@
 //   src/motion-tokens.ts        the same durations and sizes, as numbers
 //   src/provider-mark-paths.ts  SVG path data for the sign-in provider marks
 //   src/brand-palette.ts        the brand's colors as plain values
-//   src/lucide-symbols.ts       Lucide's glyphs as SF Symbols templates, outlined
 //   src/task-status-marks.ts    a task's status and priority marks, as @repo/ui draws them
 //   src/task-status-symbols.ts  the same marks as SF Symbols templates
 //   ui/src/tokens/motion-tokens.css  the --ui-* motion tokens the shared
@@ -24,7 +23,9 @@
 //                               colors, as values SwiftUI is handed
 //   ui-native/src/tokens/identity-hues.ts  the same identity hues, as values
 //   ui-native/src/tokens/lucide-symbols.ts  the names the iOS app's asset
-//                               catalog holds those templates under
+//                               catalog holds the Lucide glyphs it draws
+//                               under, whose templates its prebuild outlines
+//                               (scripts/lucide-catalog.mjs)
 //   ui-native/src/tokens/task-status-symbols.ts  the names it holds the
 //                               status and priority marks' templates under
 //
@@ -36,10 +37,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { BRAND, IDENTITY } from "./brand-palette.mjs";
 import { GEIST } from "./geist.mjs";
-import { markTemplate, symbolTemplate } from "./lucide-symbols.mjs";
+import { lucideAssetName } from "./lucide-catalog.mjs";
+import { markTemplate } from "./lucide-symbols.mjs";
 import {
   TASK_MARK_BOX,
   TASK_MARK_ELEMENT,
@@ -355,33 +357,29 @@ const LUCIDE_SYMBOLS = {
   ZAP: "zap",
 };
 
-// Note that the drawings are read from the lucide-react @repo/ui resolves,
-// so the phone's glyphs are the panel's at the very version it pins, and
-// brand declares no second copy beside it.
+// The names the asset catalog holds the glyphs `@repo/ui-native` names under,
+// each checked against the lucide-react @repo/ui resolves, so the phone's
+// glyphs are the panel's at the very version it pins. Note that an alias of
+// Lucide's (`trash-2`) re-exports the component alone, and the prebuild
+// writes no symbol set for it (scripts/lucide-catalog.mjs), so the table
+// names the icon it stands for (`trash`).
 const lucideFrom = createRequire(UI_MANIFEST);
 
-// The asset's name: Lucide's own component name, "git-merge" as "GitMerge".
-const assetName = (icon) => icon.replace(/(?:^|-)([a-z0-9])/g, (_, letter) => letter.toUpperCase());
+const lucideSymbols = Object.entries(LUCIDE_SYMBOLS).map(([key, icon]) => {
+  const { __iconData } = lucideFrom(`lucide-react/dist/esm/icons/${icon}.mjs`);
 
-const lucideSymbols = await Promise.all(
-  Object.entries(LUCIDE_SYMBOLS).map(async ([key, icon]) => {
-    const module = lucideFrom.resolve(`lucide-react/dist/esm/icons/${icon}.mjs`);
-    const { __iconData } = await import(pathToFileURL(module).href);
+  if (__iconData === undefined)
+    throw new Error(
+      `generate-surface-shared: "${icon}" is an alias of a Lucide icon; name the icon it re-exports`,
+    );
 
-    // Note that an alias of Lucide's (`trash-2`) re-exports the component alone, so the table names the icon it stands for (`trash`).
-    if (__iconData === undefined)
-      throw new Error(
-        `generate-surface-shared: "${icon}" is an alias of a Lucide icon; name the icon it re-exports`,
-      );
-
-    return { key, name: assetName(icon), svg: symbolTemplate(__iconData.node) };
-  }),
-);
+  return { key, name: lucideAssetName(icon) };
+});
 
 // The status marks' symbols, named for the status: "IN_PROGRESS" as "TaskStatusInProgress".
 const taskStatusSymbols = Object.entries(TASK_STATUS_MARK).map(([key, parts]) => ({
   key,
-  name: `TaskStatus${assetName(key.toLowerCase().replaceAll("_", "-"))}`,
+  name: `TaskStatus${lucideAssetName(key.toLowerCase().replaceAll("_", "-"))}`,
   svg: markTemplate(parts, {
     box: TASK_MARK_BOX,
     lineWidth: TASK_MARK_LINE_WIDTH,
@@ -402,7 +400,7 @@ const priorityTemplate = (parts) =>
 // The priority marks' symbols, named for the priority: "URGENT" as "TaskPriorityUrgent", each its lit parts alone. Note that a priority's unlit bars stand in a symbol of their own, which the app draws faint beneath it, rather than as a second layer, since a palette of the two drew the whole symbol black on iOS.
 const taskPrioritySymbols = Object.entries(TASK_PRIORITY_MARK).map(([key, parts]) => ({
   key,
-  name: `TaskPriority${assetName(key.toLowerCase())}`,
+  name: `TaskPriority${lucideAssetName(key.toLowerCase())}`,
   svg: priorityTemplate(parts.filter(({ layer }) => layer !== TASK_MARK_LAYER.UNLIT)),
 }));
 
@@ -521,24 +519,6 @@ ${pathConsts}
 // Google's "G" sign-in mark, drawn as filled layers in an 18×18 box.
 export const GOOGLE_MARK_LAYERS: readonly { fill: string; path: string }[] = [
 ${google}
-];
-`;
-}
-
-function lucideSymbolsTs() {
-  const templates = lucideSymbols
-    .map(({ name, svg }) => `  {\n    name: "${name}",\n    svg: '${svg}',\n  },`)
-    .join("\n");
-
-  return `// Generated by packages/brand/scripts/generate-surface-shared.mjs. Do not edit by hand: change
-// the tables in that script and re-run it.
-//
-// Lucide's glyphs as SF Symbols custom symbol templates, their strokes
-// outlined in three weights iOS interpolates (scripts/lucide-symbols.mjs),
-// which the iOS app's config writes into its asset catalog as symbol sets.
-
-export const LUCIDE_SYMBOL_TEMPLATES: readonly { name: string; svg: string }[] = [
-${templates}
 ];
 `;
 }
@@ -855,7 +835,6 @@ const outputs = [
   [join(UI_NATIVE_TOKENS, "brand-colors.ts"), nativeBrandColorsTs()],
   [join(UI_TOKENS, "identity.css"), uiIdentityCss()],
   [join(UI_NATIVE_TOKENS, "identity-hues.ts"), nativeIdentityHuesTs()],
-  [join(SURFACE, "lucide-symbols.ts"), lucideSymbolsTs()],
   [join(UI_NATIVE_TOKENS, "lucide-symbols.ts"), nativeLucideSymbolsTs()],
   [join(SURFACE, "task-status-marks.ts"), taskStatusMarksTs()],
   [join(SURFACE, "task-status-symbols.ts"), taskStatusSymbolsTs()],
