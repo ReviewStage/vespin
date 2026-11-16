@@ -6,6 +6,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
+  FOOTER_TONE,
   ListSection,
   Screen,
   SettingsForm,
@@ -130,7 +131,11 @@ export function NewWorkspaceScreen() {
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection title={WORDS.WORKSPACE} footer={create.refusal}>
+          <ListSection
+            title={WORDS.WORKSPACE}
+            footer={create.refusal}
+            footerTone={FOOTER_TONE.FAILURE}
+          >
             <WordsField
               look={WORDS_LOOK.LINE}
               placeholder={WORDS.TEAM_NAME}
