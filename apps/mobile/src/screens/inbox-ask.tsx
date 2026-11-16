@@ -50,10 +50,10 @@ import {
   StepList,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { useFocusShown } from "../focus-shown.js";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
-import { pickPictures, takePictures } from "../use-attached-pictures.js";
+import { attachedFiles, pickPictures, takePictures } from "../use-attached-pictures.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
 /** The ⋯ menu a thread's bar holds. */
@@ -349,7 +349,8 @@ export function ThreadComposer({
     }));
   };
 
-  const pictures = draft.attachments.map((file) => ({ id: file.name, name: file.name }));
+  // Note that each picture's thumbnail draws from its bytes, made once for the files the draft holds, so a redraw neither builds its address anew nor hands the thumbnail a new string.
+  const pictures = useMemo(() => attachedFiles(draft.attachments), [draft.attachments]);
 
   // Note that the box's head holds the pictures attached, then what the picker refused, then why the last send didn't go.
   const head =

@@ -96,6 +96,22 @@ function isText(file: AgentAttachment): boolean {
   return file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT;
 }
 
+/**
+ * The files a holder that keeps its pictures itself attached, such as an
+ * Inbox thread's draft, as the composer's head draws them: each by its name,
+ * a picture with the `data:` address its thumbnail draws from, and a pasted
+ * text file with none, which draws as its tile.
+ */
+export function attachedFiles(
+  files: readonly AgentAttachment[],
+): readonly { readonly id: string; readonly name: string; readonly address?: string }[] {
+  return files.map((file) =>
+    isText(file)
+      ? { id: file.name, name: file.name }
+      : { id: file.name, name: file.name, address: `data:${file.mediaType};base64,${file.data}` },
+  );
+}
+
 /** The next picture's name, numbered past every picture held, a pasted text file not counted. */
 function nextName(pictures: readonly HeldPicture[], offset: number): string {
   return pictureName(pictures.filter(({ file }) => !isText(file)).length + offset + 1);
