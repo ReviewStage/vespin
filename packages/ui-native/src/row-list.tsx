@@ -17,6 +17,7 @@ import {
   Animation,
   accessibilityAddTraits,
   accessibilityElement,
+  accessibilityHidden,
   accessibilityHint,
   accessibilityLabel,
   accessibilityValue,
@@ -58,7 +59,7 @@ import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
-import { ToneGlyph } from "./marks.js";
+import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -397,6 +398,10 @@ type ListSectionProps = {
   readonly count?: number | undefined;
   /** A glyph in its tone before the count, saying how what it counts went, such as checks failing. */
   readonly mark?: MarkLook | undefined;
+  /** What the group is, before its title in the muted ink, as the panel's sidebar leads a section with its icon and a repository with its own mark; none where the words say it alone. */
+  readonly glyph?: Glyph | undefined;
+  /** The repository, `owner/name`, whose owner's picture stands in the glyph's place, as the panel's sidebar leads a repository's group; the glyph stands in until it draws. */
+  readonly repository?: string | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
   readonly foldable?: boolean | undefined;
   /** Whether a foldable section stands folded, where its screen holds that across a change of layout; it holds its own where none is given. */
@@ -454,16 +459,21 @@ function GroupHeader({
   count,
   progress,
   mark,
+  glyph,
+  repository,
   folded,
 }: {
   readonly title: string;
   readonly count: number | undefined;
   readonly progress: SectionProgress | undefined;
   readonly mark: MarkLook | undefined;
+  readonly glyph: Glyph | undefined;
+  readonly repository: string | undefined;
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
   const chevron = useScaledSize(CHEVRON_SIZE);
+  const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
 
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
@@ -482,6 +492,16 @@ function GroupHeader({
           size={chevron}
           color={colors.TEXT_MUTED}
           modifiers={[frame({ width: chevron + 2 })]}
+        />
+      )}
+      {repository !== undefined ? (
+        <RepositoryPicture repository={repository} size={glyphSize} />
+      ) : glyph === undefined ? null : (
+        <Image
+          {...glyphImage(glyph)}
+          size={glyphSize}
+          color={colors.TEXT_MUTED}
+          modifiers={[accessibilityHidden()]}
         />
       )}
       <Text
@@ -637,6 +657,8 @@ export function ListSection({
   count,
   progress,
   mark,
+  glyph,
+  repository,
   foldable = false,
   folded: held,
   onFold,
@@ -667,6 +689,8 @@ export function ListSection({
         count={shown}
         progress={progress}
         mark={mark}
+        glyph={glyph}
+        repository={repository}
         folded={foldable ? folded : undefined}
       />
     );

@@ -45,6 +45,7 @@ import {
 } from "@repo/features/task-standing-words";
 import {
   foldedTaskRows,
+  NO_REPOSITORY_KEY,
   TASK_TREE_GROUP,
   type TaskTree,
   type TaskTreeGroup,
@@ -365,6 +366,7 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
     symbol: GLYPH.MOVE,
     choices: placing.sections.map((section) => ({
       label: section.title,
+      symbol: sectionGlyph(section.icon),
       on: section.id === standing,
       onPress: () => {
         if (section.id !== standing) placing.moveToSection(task.id, section.id);
@@ -925,6 +927,8 @@ function GroupSection({
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
+      glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
+      repository={headPicture(group)}
       count={group.rows.length}
       foldable
       folded={hold.folded.has(group.key)}
@@ -1087,6 +1091,34 @@ function TasksTree({
       ))}
     </RowList>
   );
+}
+
+/**
+ * What a Tasks list group's header leads with, as the panel's sidebar
+ * heads each: a section with its own icon, a repository with the
+ * repository's mark, which stands in until its owner's picture draws
+ * (`headPicture`), the tasks with none with no-repository's; and nothing
+ * for Pinned and Following, whose words say what they are.
+ */
+function groupHeadGlyph(group: TaskTreeGroup): Glyph | undefined {
+  switch (group.kind) {
+    case TASK_TREE_GROUP.SECTION:
+      return sectionGlyph(group.icon);
+    case TASK_TREE_GROUP.REPOSITORY:
+      return group.key === NO_REPOSITORY_KEY ? GLYPH.NO_REPOSITORY : GLYPH.REPOSITORY;
+    case TASK_TREE_GROUP.PINNED:
+    case TASK_TREE_GROUP.FOLLOWING:
+      return undefined;
+  }
+}
+
+/** The repository whose owner's picture leads a repository group's header, as the panel's sidebar draws it; none for any other group, or the tasks with no repository. */
+function headPicture(group: TaskTreeGroup): string | undefined {
+  return group.kind === TASK_TREE_GROUP.REPOSITORY &&
+    group.title !== undefined &&
+    group.key !== NO_REPOSITORY_KEY
+    ? group.key
+    : undefined;
 }
 
 /** The glyph a collection's sidebar row leads with: Pinned's pin, Following's eye, and a section's own icon, as the panel's sidebar draws it (`sectionGlyph`). */
