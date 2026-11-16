@@ -330,12 +330,12 @@ function keepMove(
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
-  if (kind !== ACT_KIND.AGENTS_PULL_REQUEST_ACTION) return;
+  if (kind !== ACT_KIND.PULL_REQUESTS_ACTION) return;
   // SAFETY: the payload is the kind's, which the guard above names.
-  const { number, request } = payload as PortActPayload<typeof ACT_KIND.AGENTS_PULL_REQUEST_ACTION>;
+  const { number, request } = payload as PortActPayload<typeof ACT_KIND.PULL_REQUESTS_ACTION>;
   const move = pullRequestMoveOf(request);
 
-  if (number === undefined || move === undefined) return;
+  if (move === undefined) return;
   MOVES.set(state, new Map(MOVES.get(state) ?? NO_MOVES).set(number, move));
   stageFixture(state);
 }

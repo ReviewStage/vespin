@@ -7,13 +7,18 @@ import type { DescriptionCommentThread } from "@repo/features/description-commen
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { INBOX_LINE, INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
-import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
+import {
+  iosAgentRoute,
+  iosAppRouteOf,
+  iosRepositoryPullRequestRoute,
+} from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
 import {
   LINK_DESTINATION,
   type LinkDestination,
   linkOf,
   linkWorkspaceStep,
+  pullRequestAddressOf,
   readLink,
   taskLinkStep,
   taskNumberOf,
@@ -1799,14 +1804,24 @@ export function TaskAgentRow({
               state: pullRequest.state,
               queued: pullRequest.queued,
               onPress: () => {
+                const named = pullRequestAddressOf(pullRequest.url);
+
+                // Note that a line whose address names no pull request of GitHub's opens it there, as Safari reads it.
+                if (named === undefined) {
+                  openInSafari(pullRequest.url);
+
+                  return;
+                }
+
+                const key = { workspaceId: agent.workspaceId, ...named };
+
                 const opened = {
                   kind: PUSHED_PAGE.PULL_REQUEST,
+                  ...key,
                   agentId: agent.id,
-                  number: pullRequest.number,
                 } as const;
 
-                if (!toDetail(opened))
-                  router.push(onTab(iosPullRequestRoute(agent.id, pullRequest.number)));
+                if (!toDetail(opened)) router.push(onTab(iosRepositoryPullRequestRoute(key)));
               },
             }
       }
@@ -1940,7 +1955,7 @@ function OverviewDescription({
   const router = useRouter();
   const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
-  const openLink = useOpenLink();
+  const openLink = useOpenLink(overview.task.workspaceId);
   const { task } = overview;
   const threads = useTaskComments(task.id);
   const blocks = useMemo(() => descriptionBlocks(body), [body]);

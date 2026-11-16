@@ -2695,7 +2695,7 @@ const ANSWERS: StagedAnswers = {
     return { item: takenBackNow(held, Date.now()), outcome: INBOX_TAKE_BACK.TAKEN };
   },
   // Note that a change to one of the invitations agent's pull requests is taken as GitHub takes one, and the run lays how it moved it over the parts (`pullRequestPartsAppState`).
-  [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
+  [ACT_KIND.PULL_REQUESTS_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
   // An agent's sandbox listens on two ports, one served by Vite, and shares neither, so its Ports sheet lists them and offers Share.
   [ACT_KIND.AGENTS_PORTS]: () => ({
     running: true,

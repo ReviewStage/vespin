@@ -12,11 +12,11 @@ import {
 } from "@repo/features/agent-browser-tab-wire";
 import {
   AGENT_CALL_FAILURE,
+  type AgentPullRequestAnswerView,
   type AgentTranscriptKey,
   INBOX_SCOPE_KIND,
   PULL_REQUEST_PART,
   type PullRequestPart,
-  type PullRequestPartParams,
 } from "@repo/features/agent-view";
 import { MAC_PRESENCE } from "@repo/features/agent-wire";
 import { AUTOMATION_FOLLOW, type AutomationFollow } from "@repo/features/automation-view";
@@ -56,11 +56,11 @@ import {
   type AppIntegrationTools,
   type AppPages,
   type AppProviderKeyList,
-  type AppPullRequestParts,
   type AppRepositoryLists,
   type AppRepositoryPullRequestHeld,
   type AppRepositoryPullRequestParts,
   type AppSlackChannels,
+  type AppState,
   type AppStateDelivery,
   type AppStateSnapshot,
   type AppTokenRepositories,
@@ -74,15 +74,12 @@ import {
   EVERY_WORKSPACE,
   NO_AGENT_ORIGINS,
   NO_BROWSER_TABS,
-  NO_CHAPTERS,
   NO_DESCRIPTION_COMMENTS,
   NO_HOLDER_INBOXES,
   NO_KEYS_HELD,
   NO_PAGES,
   NO_TRANSCRIPTS,
-  OWN_PULL_REQUEST,
   OWN_TRANSCRIPT,
-  PULL_REQUEST_PART_READ,
   REPOSITORY_PULL_REQUEST_PART_READ,
   UNREAD,
 } from "@repo/host/app-state";
@@ -236,17 +233,11 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.MODELS]: NO_KEYS_HELD,
     [LIVE_READ.PAGES]: NO_PAGES,
     [LIVE_READ.PROVIDER_KEYS]: NO_KEYS_HELD,
-    [LIVE_READ.PULL_REQUEST]: NO_KEYS_HELD,
     [LIVE_READ.REPOSITORY_LISTS]: NO_KEYS_HELD,
     [LIVE_READ.GITHUB_TOKEN]: NO_KEYS_HELD,
     [LIVE_READ.ALLOWED_COMMANDS]: NO_KEYS_HELD,
-    [LIVE_READ.PULL_REQUEST_CHAPTERS]: NO_CHAPTERS,
     [LIVE_READ.BROWSER_TABS]: NO_BROWSER_TABS,
-    [LIVE_READ.PULL_REQUEST_CHECKS]: NO_KEYS_HELD,
-    [LIVE_READ.PULL_REQUEST_CONVERSATION]: NO_KEYS_HELD,
     [LIVE_READ.PULL_REQUEST_PUBLISHED]: NO_KEYS_HELD,
-    [LIVE_READ.PULL_REQUEST_VIEWED]: NO_KEYS_HELD,
-    [LIVE_READ.REVIEW_OPTIONS]: NO_KEYS_HELD,
     [LIVE_READ.REPOSITORY_PULL_REQUEST]: NO_KEYS_HELD,
     [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: NO_KEYS_HELD,
     [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: NO_KEYS_HELD,
@@ -513,8 +504,11 @@ export interface HostReadsHanded {
   readonly deliverAutomations: (next: Partial<AppAutomationReads>) => void;
   readonly deliverComments: (next: AppDescriptionComments) => void;
   readonly deliverTools: (next: AppIntegrationTools) => void;
+  /** The parts of the pull requests held by their repository, and what each agent published. */
   readonly deliverParts: (
-    next: Partial<AppPullRequestParts> | Partial<AppRepositoryPullRequestParts>,
+    next: Partial<
+      AppRepositoryPullRequestParts & Pick<AppState, typeof LIVE_READ.PULL_REQUEST_PUBLISHED>
+    >,
   ) => void;
   /** The signed-in account's keys, held under its id. */
   readonly deliverKeys: (next: AppHostRead<AppProviderKeyList>) => void;
@@ -776,86 +770,44 @@ export function holdAutomations(
   };
 }
 
-/** What a test's service answers one part of a pull request with, by the part, as the read it replaces did. */
-type PartAnswerOf<Part extends PullRequestPart> =
-  AppHostReads[(typeof PULL_REQUEST_PART_READ)[Part]];
-
-/** How a test's service answers each part of a pull request, by the part, for the agent and the number the tab names; a part it does not answer is held quietly. */
-export type PullRequestPartAnswers = {
-  readonly [Part in PullRequestPart]?: (
-    agentId: string,
-    number?: number,
-  ) => Promise<PartAnswerOf<Part>>;
-};
-
 /**
- * Answers the window's holds on the parts of a pull request, and its Try
- * again on one, as the host does, beside whatever acts the test answers by
- * now: each part asked of `answers` as it is first held and again on Try
- * again, which settles once its answer is laid, and laid on the document
- * through `deliver`; an answer that is a failure keeps an answer the part
- * held, but for the viewed marks, which hold every answer as the host's do,
- * and one that rejects is a failure. Answers with every ask made, in order.
+ * Answers the window's holds on what an agent published, and its Try again,
+ * as the host does, beside whatever acts the test answers by now: each
+ * agent asked of `answer` as it is first held and again on Try again, which
+ * settles once its answer is laid, and laid on the document through
+ * `deliver`; an answer that is a failure, or one that rejects, keeps an
+ * answer the agent held. Answers with every agent asked, in order.
  */
-export function holdPullRequestParts(
+export function holdAgentPullRequests(
   deliver: HostReadsHanded["deliverParts"],
-  answers: PullRequestPartAnswers,
-): readonly PullRequestPartParams[] {
-  const asked: PullRequestPartParams[] = [];
+  answer: (agentId: string) => Promise<AgentPullRequestAnswerView>,
+): readonly string[] {
+  const asked: string[] = [];
+  let held: AppState[typeof LIVE_READ.PULL_REQUEST_PUBLISHED] = NO_KEYS_HELD;
 
-  let held: AppPullRequestParts = {
-    [LIVE_READ.PULL_REQUEST]: NO_KEYS_HELD,
-    [LIVE_READ.PULL_REQUEST_CHECKS]: NO_KEYS_HELD,
-    [LIVE_READ.PULL_REQUEST_CONVERSATION]: NO_KEYS_HELD,
-    [LIVE_READ.PULL_REQUEST_PUBLISHED]: NO_KEYS_HELD,
-    [LIVE_READ.PULL_REQUEST_VIEWED]: NO_KEYS_HELD,
-    [LIVE_READ.REVIEW_OPTIONS]: NO_KEYS_HELD,
-  };
+  const ask = async ({ agentId }: { readonly agentId: string }) => {
+    asked.push(agentId);
 
-  const ask = async (params: PullRequestPartParams) => {
-    const answer = answers[params.part];
-
-    if (answer === undefined) return;
-    asked.push(params);
-    const read = PULL_REQUEST_PART_READ[params.part];
-    const number = params.number === undefined ? OWN_PULL_REQUEST : String(params.number);
-
-    const landed: object = await answer(params.agentId, params.number).catch(() => ({
+    const landed: AgentPullRequestAnswerView = await answer(agentId).catch(() => ({
       failure: AGENT_CALL_FAILURE.UNANSWERED,
     }));
 
-    const slice: Readonly<Record<string, Readonly<Record<string, AppHostRead<object>>>>> =
-      held[read];
+    const was = held[agentId]?.rows;
 
-    const was = slice[params.agentId]?.[number]?.rows;
-
-    const kept =
-      params.part !== PULL_REQUEST_PART.VIEWED &&
-      "failure" in landed &&
-      was !== undefined &&
-      !("failure" in was);
-
-    if (kept) return;
-    // SAFETY: what lands for a part is that part's read (`PartAnswerOf`), laid at its key's path.
-    held = {
-      ...held,
-      [read]: {
-        ...slice,
-        [params.agentId]: { ...slice[params.agentId], [number]: { rows: landed } },
-      },
-    } as AppPullRequestParts;
-    deliver(held);
+    if ("failure" in landed && was !== undefined && !("failure" in was)) return;
+    held = { ...held, [agentId]: { rows: landed } };
+    deliver({ [LIVE_READ.PULL_REQUEST_PUBLISHED]: held });
   };
 
   fakeActPort({
     ...fakeActPortCalls(),
-    [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]: (params) => {
+    [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_FOLLOW]: (params) => {
       // Note that the host lays what it read once the hold is taken, never inside it.
       void Promise.resolve().then(() => ask(params));
 
       return quietHold();
     },
-    [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_RETRY]: (params) => ask(params),
+    [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_RETRY]: (params) => ask(params),
   });
 
   return asked;
@@ -878,9 +830,13 @@ export type RepositoryPullRequestPartAnswers = {
 /**
  * Answers the window's holds on the parts of a pull request named by its
  * repository and number, and its Try again on one, as the host does,
- * beside whatever acts the test answers by now, on the terms
- * `holdPullRequestParts` answers an agent's: each laid at the workspace,
- * the repository, and the number. Answers with every ask made, in order.
+ * beside whatever acts the test answers by now: each part asked of
+ * `answers` as it is first held and again on Try again, which settles once
+ * its answer is laid, and laid on the document through `deliver` at the
+ * workspace, the repository, and the number; an answer that is a failure
+ * keeps an answer the part held, but for the viewed marks, which hold every
+ * answer as the host's do, and one that rejects is a failure. Answers with
+ * every ask made, in order.
  */
 export function holdRepositoryPullRequestParts(
   deliver: HostReadsHanded["deliverParts"],

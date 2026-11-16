@@ -425,7 +425,7 @@ function ReplayFoot({
   agentId: string;
   place: ReplayPlace;
 }): React.JSX.Element | null {
-  const held = useQuery(pullRequestPublishedQuery({ agentId })).data;
+  const held = useQuery(pullRequestPublishedQuery(agentId)).data;
   const published = held === undefined || "failure" in held ? undefined : held;
   const doors = useMentionDoors();
   // Note that the task list's pull request stands first, since it moves without a read.

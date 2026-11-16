@@ -93,6 +93,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useFollowedAgent } from "../agents/use-agent.js";
 import { useAppReadyCount } from "../app-ready.js";
 import {
   PUSHED_PAGE,
@@ -664,7 +665,8 @@ function ThreadDetail({
 }) {
   const colors = useColors();
   const { holder, item } = listed;
-  const openLink = useOpenLink();
+  // Note that a pull request a thread names opens in the app by the workspace its agent stands in.
+  const openLink = useOpenLink(useFollowedAgent(item.agentId)?.workspaceId);
   const { name: agentName, harness } = useAgentLabel(item.agentId);
   const pictureOf = useMemberPictures();
 
