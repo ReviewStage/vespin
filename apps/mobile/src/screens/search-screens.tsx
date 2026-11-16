@@ -34,6 +34,9 @@ import {
   ScopePicker,
   Screen,
   UNDER_SPLIT_SCREEN,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import {
@@ -55,8 +58,6 @@ import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
-import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { AgentConversation } from "./agent-screens.js";
 import { PLUS_TAB, SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
@@ -245,7 +246,13 @@ function FoundList({
           count={found.agents.length}
         >
           {shown.agents.map((line) => (
-            <TaskAgentRow key={line.agent.id} line={line} onArchive={onArchiveAgent} />
+            <TaskAgentRow
+              key={line.agent.id}
+              line={line}
+              task={found.tasksById.get(line.agent.taskId)}
+              named
+              onArchive={onArchiveAgent}
+            />
           ))}
         </ListSection>
       )}

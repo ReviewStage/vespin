@@ -126,6 +126,9 @@ import {
   TaskRow,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
   WordsRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -186,8 +189,6 @@ import {
   useTasksReadStatus,
   useTaskWrites,
 } from "../tasks/use-tasks.js";
-import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
   PLUS_TAB,
@@ -321,6 +322,30 @@ function statusSubmenu(
       onPress: () => setStatus(task.id, status),
     })),
   };
+}
+
+/**
+ * A task row's trailing swipe, as the panel's row offers it: Mark done while
+ * it isn't, which a full swipe runs, then Status. Note that `setStatus` is
+ * the one that asks before Done stops a working agent.
+ */
+function settleSwipes(
+  task: TaskSummary,
+  setStatus: (taskId: string, status: TaskStatus) => void,
+): readonly RowSwipe[] {
+  const markDone: readonly RowSwipe[] =
+    task.status === TASK_STATUS.DONE
+      ? []
+      : [
+          {
+            label: WORDS.MARK_DONE,
+            symbol: GLYPH.CHECK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => setStatus(task.id, TASK_STATUS.DONE),
+          },
+        ];
+
+  return [...markDone, statusSubmenu(task, setStatus)];
 }
 
 /**
@@ -488,20 +513,8 @@ function rowActs(
 ): RowActsResult {
   const pinned = task.pinnedAt !== undefined;
 
-  const markDone: readonly RowSwipe[] =
-    task.status === TASK_STATUS.DONE
-      ? []
-      : [
-          {
-            label: WORDS.MARK_DONE,
-            symbol: GLYPH.CHECK,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => listing.setStatus(task.id, TASK_STATUS.DONE),
-          },
-        ];
-
   return {
-    trailingActions: [...markDone, statusSubmenu(task, listing.setStatus)],
+    trailingActions: settleSwipes(task, listing.setStatus),
     leadingActions: [
       {
         label: pinned ? WORDS.UNPIN : WORDS.PIN,
@@ -763,25 +776,56 @@ type OpenedParents = {
   readonly toggle: (taskId: string) => void;
 };
 
-/**
- * Which parents of a group stand open. Note that the group's owner holds it,
- * rather than each row, since a recycled row draws another task once
- * scrolled past, and rather than the rows, since a folded section drops its
- * rows and a parent opened before the fold must stand open after it.
- */
-function useOpenedParents(): OpenedParents {
-  const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
+/** What the tree holds of its own reading: each group's opened parents, and the groups folded shut, by the group's key. */
+type TreeHold = {
+  readonly opened: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly toggleParent: (group: string, taskId: string) => void;
+  readonly folded: ReadonlySet<string>;
+  readonly setFolded: (group: string, folded: boolean) => void;
+};
 
-  const toggle = (taskId: string) =>
+/**
+ * The tree's hold: which parents stand open and which groups stand folded.
+ * Note that it is held above the rows, since a recycled row draws another
+ * task once scrolled past and a folded section drops its rows, and above the
+ * Tasks tab's two layouts, since a fold or an unfold of the iPhone Duo, or a
+ * rotation across the split's cutoff, swaps one layout for the other and
+ * would lose what the reader opened. It is handed to the tree as a prop,
+ * never a context, because a three-column window draws the tree in the
+ * tabs' one split view, above this root screen.
+ */
+function useTreeHoldState(): TreeHold {
+  const [opened, setOpened] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
+  const [folded, setFoldedSet] = useState<ReadonlySet<string>>(NONE_OPEN);
+
+  const toggleParent = (group: string, taskId: string) =>
     setOpened((was) => {
+      const parents = new Set(was.get(group) ?? NONE_OPEN);
+
+      if (!parents.delete(taskId)) parents.add(taskId);
+
+      return new Map(was).set(group, parents);
+    });
+
+  const setFolded = (group: string, shut: boolean) =>
+    setFoldedSet((was) => {
       const next = new Set(was);
 
-      if (!next.delete(taskId)) next.add(taskId);
+      if (shut) next.add(group);
+      else next.delete(group);
 
       return next;
     });
 
-  return { opened, toggle };
+  return { opened, toggleParent, folded, setFolded };
+}
+
+/** One group's opened parents out of the tree's hold. */
+function groupParents(hold: TreeHold, group: string): OpenedParents {
+  return {
+    opened: hold.opened.get(group) ?? NONE_OPEN,
+    toggle: (taskId) => hold.toggleParent(group, taskId),
+  };
 }
 
 /** A group's rows, a task's sub-tasks folded under it, each parent opened and shut by its chevron. */
@@ -825,15 +869,19 @@ function FoldedRows({
 function CollectionRows({
   collection,
   listing,
+  hold,
 }: {
   readonly collection: TaskTreeGroup;
   readonly listing: TasksListing;
+  readonly hold: TreeHold;
 }) {
-  const parents = useOpenedParents();
-
   return (
     <ListSection>
-      <FoldedRows rows={collection.rows} listing={listing} parents={parents} />
+      <FoldedRows
+        rows={collection.rows}
+        listing={listing}
+        parents={groupParents(hold, collection.key)}
+      />
     </ListSection>
   );
 }
@@ -847,20 +895,22 @@ function CollectionRows({
 function GroupSection({
   group,
   listing,
+  hold,
 }: {
   readonly group: TaskTreeGroup;
   readonly listing: TasksListing;
+  readonly hold: TreeHold;
 }) {
-  const parents = useOpenedParents();
-
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
       count={group.rows.length}
       foldable
+      folded={hold.folded.has(group.key)}
+      onFold={(shut) => hold.setFolded(group.key, shut)}
       onDropLink={dropOnto(group, listing)}
     >
-      <FoldedRows rows={group.rows} listing={listing} parents={parents} />
+      <FoldedRows rows={group.rows} listing={listing} parents={groupParents(hold, group.key)} />
     </ListSection>
   );
 }
@@ -917,6 +967,8 @@ function treeEmpty(tree: TaskTree): boolean {
 
 type TasksTreeProps = {
   readonly listing: TasksListing;
+  /** The parents opened and groups folded, held by the Tasks tab's root screen. */
+  readonly hold: TreeHold;
   readonly look: ListLook;
   readonly search: string;
   /** The collection the app sidebar picked, Pinned, Following, or a section, whose rows alone the list draws; every group where none is. */
@@ -937,6 +989,7 @@ type TasksTreeProps = {
  */
 function TasksTree({
   listing,
+  hold,
   look,
   search,
   collection,
@@ -984,7 +1037,7 @@ function TasksTree({
 
     return (
       <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
-        <CollectionRows collection={collection} listing={listing} />
+        <CollectionRows collection={collection} listing={listing} hold={hold} />
       </RowList>
     );
   }
@@ -996,18 +1049,20 @@ function TasksTree({
 
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
-      {tree.pinned === undefined ? null : <GroupSection group={tree.pinned} listing={listing} />}
+      {tree.pinned === undefined ? null : (
+        <GroupSection group={tree.pinned} listing={listing} hold={hold} />
+      )}
       {tree.following === undefined ? null : (
-        <GroupSection group={tree.following} listing={listing} />
+        <GroupSection group={tree.following} listing={listing} hold={hold} />
       )}
       {/* Note that a section holding no task stands only in the app sidebar, where a task is dropped onto it, as Reminders keeps an empty list off a grouped view. */}
       {tree.sections
         .filter((group) => group.rows.length > 0)
         .map((group) => (
-          <GroupSection key={group.key} group={group} listing={listing} />
+          <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
         ))}
       {tree.tasks.map((group) => (
-        <GroupSection key={group.key} group={group} listing={listing} />
+        <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
       ))}
     </RowList>
   );
@@ -1421,12 +1476,12 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
             id={sub.id}
             name={sub.name}
             status={sub.status}
-            trailingActions={relationSwipes(
-              task.id,
-              sub.id,
-              TASK_RELATION_KIND.SUB_TASK,
-              relations,
-            )}
+            faded={taskFinished(sub)}
+            // Note that a sub-task is settled in place, as Reminders' subtasks are and the panel's related rows' Status is, before its relation is changed.
+            trailingActions={[
+              ...settleSwipes(sub, overview.setStatus),
+              ...relationSwipes(task.id, sub.id, TASK_RELATION_KIND.SUB_TASK, relations),
+            ]}
           />
         ))}
       </ListSection>
@@ -1456,6 +1511,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
                   id={id}
                   name={other?.name ?? WORDS.UNLISTED_TASK}
                   status={other?.status}
+                  faded={other !== undefined && taskFinished(other)}
                   relation={TASK_RELATION_WORDS[kind]}
                   trailingActions={relationSwipes(task.id, id, kind, relations)}
                 />
@@ -1592,11 +1648,14 @@ export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
 export function TaskAgentRow({
   line,
   task,
+  named = false,
   onArchive,
 }: {
   readonly line: TaskAgentLine;
   /** The task it works on, which its preview names over it; none where the list does not hold it. */
   readonly task?: TaskSummary | undefined;
+  /** Whether its row names the task in its line, as a list of many tasks' agents does, such as Search's; its preview names it either way. */
+  readonly named?: boolean | undefined;
   /** Asks to archive the agent, once it rests (`useAgentArchiveAsk`); its row offers no Archive where none is given. */
   readonly onArchive?: ((agentId: string) => void) | undefined;
 }) {
@@ -1630,6 +1689,7 @@ export function TaskAgentRow({
       runsOn={runsOn}
       runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform })}
       waiting={waiting}
+      task={named ? task?.name : undefined}
       pullRequest={
         pullRequest === undefined
           ? undefined
@@ -2019,15 +2079,24 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
   return { search, setSearch, listing, status, deletion, refreshTasks };
 }
 
+/** The list screens' state, held by the tab's root screen above its two layouts. */
+type TasksScreenState = ReturnType<typeof useTasksScreen>;
+
 // A compact window: the tree, the account's photo opening Settings and the
 // workspace switcher beside it at the bar's leading edge and its search a round glass button at its trailing one, each
 // row pushing its task as the Stack's next screen.
-function TasksStackList(words: TasksSearch) {
+function TasksStackList({
+  screen,
+  hold,
+}: {
+  readonly screen: TasksScreenState;
+  readonly hold: TreeHold;
+}) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
-  const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
+  const { search, setSearch, listing, refreshTasks } = screen;
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
 
@@ -2057,6 +2126,7 @@ function TasksStackList(words: TasksSearch) {
       <Screen>
         <TasksTree
           listing={listing}
+          hold={hold}
           look={LIST_LOOK.PLAIN}
           search={search}
           onSelect={(id) =>
@@ -2065,8 +2135,6 @@ function TasksStackList(words: TasksSearch) {
           onRefresh={refreshTasks}
         />
       </Screen>
-      <StatusQuestionAsk question={status} />
-      <StatusQuestionAsk question={deletion} />
     </>
   );
 }
@@ -2191,13 +2259,15 @@ export function TaskColumnPage({ taskId }: { readonly taskId: string }) {
 function TasksSplitScreen({
   selected,
   select,
-  words,
+  screen,
+  hold,
 }: {
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
-  readonly words: TasksSearch;
+  readonly screen: TasksScreenState;
+  readonly hold: TreeHold;
 }) {
-  const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
+  const { search, setSearch, listing, refreshTasks } = screen;
   const threeColumns = useThreeColumns();
   const picked = useTasksCollection();
 
@@ -2216,6 +2286,7 @@ function TasksSplitScreen({
     view: (
       <TasksTree
         listing={listing}
+        hold={hold}
         look={LIST_LOOK.PLAIN}
         search={search}
         collection={collection}
@@ -2257,23 +2328,35 @@ function TasksSplitScreen({
           />
         </Screen>
       )}
-      <StatusQuestionAsk question={status} />
-      <StatusQuestionAsk question={deletion} />
       {asks}
     </>
   );
 }
 
-/** The Tasks tab's root screen: its tree, laid out by the window's size class, its search held here so a rotation or a fold keeps it. */
+/**
+ * The Tasks tab's root screen: its tree, laid out by the window's size
+ * class. Note that what the reader set is held here, above the two layouts,
+ * so a rotation or a fold of the iPhone Duo, which swaps one layout for the
+ * other, keeps it: the search, the parents opened and the groups folded
+ * (`TreeHold`), and a status or a delete question standing open.
+ */
 export function TasksListScreen() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
   const [search, setSearch] = useState("");
+  const screen = useTasksScreen({ search, setSearch });
+  const hold = useTreeHoldState();
 
-  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-    <TasksSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
-  ) : (
-    <TasksStackList search={search} setSearch={setSearch} />
+  return (
+    <>
+      {sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
+        <TasksSplitScreen selected={selected} select={select} screen={screen} hold={hold} />
+      ) : (
+        <TasksStackList screen={screen} hold={hold} />
+      )}
+      <StatusQuestionAsk question={screen.status} />
+      <StatusQuestionAsk question={screen.deletion} />
+    </>
   );
 }
 

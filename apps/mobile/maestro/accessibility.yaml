@@ -100,7 +100,7 @@ appId: dev.vespin.ios
     timeout: 15000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: ".*, Settings"
+- tapOn: "Settings, .*"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-settings
@@ -114,7 +114,7 @@ appId: dev.vespin.ios
     timeout: 15000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: ".*, Settings"
+- tapOn: "Settings, .*"
 - waitForAnimationToEnd:
     timeout: 5000
 - tapOn:
@@ -136,7 +136,7 @@ appId: dev.vespin.ios
     timeout: 15000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: ".*, Settings"
+- tapOn: "Settings, .*"
 - waitForAnimationToEnd:
     timeout: 5000
 - scrollUntilVisible:
@@ -156,7 +156,7 @@ appId: dev.vespin.ios
     timeout: 15000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: ".*, Settings"
+- tapOn: "Settings, .*"
 - waitForAnimationToEnd:
     timeout: 5000
 - scrollUntilVisible:

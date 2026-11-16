@@ -73,11 +73,13 @@ function withSignIn(signIns: SignIns, server: string, next: SignIn | undefined):
   return changed;
 }
 
-/** The account's integrations, followed while the screen that reads them stands, and the sign-ins it waits on. */
-export function useIntegrationStatuses(): IntegrationStatuses {
+/** The account's integrations, followed while `active` (a screen that reads them stands), and the sign-ins it waits on. */
+export function useIntegrationStatuses(active = true): IntegrationStatuses {
   const acts = useHostActs();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
-  useLiveFollow(signedInAccountId(account), () => acts[ACT_KIND.INTEGRATIONS_FOLLOW]());
+  useLiveFollow(active ? signedInAccountId(account) : undefined, () =>
+    acts[ACT_KIND.INTEGRATIONS_FOLLOW](),
+  );
   const held = useQuery({ ...appStateQuery, select: selectIntegrations }).data;
   const answer = held?.rows;
   const [signIns, setSignIns] = useState<SignIns>(NO_SIGN_INS);

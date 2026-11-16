@@ -132,6 +132,8 @@ export type BarMenu = {
   readonly actions: readonly BarMenuAction[];
   /** Menus within it, after its acts, such as a task's Status. */
   readonly submenus?: readonly BarMenu[] | undefined;
+  /** Whether the menu stands dimmed and opens on nothing, as a bar's act does while it can't act. */
+  readonly disabled?: boolean | undefined;
   /** Groups after its acts and menus, each set apart by a rule, such as a task's ⋯ setting Permanently delete apart. */
   readonly groups?: readonly BarMenuGroup[] | undefined;
 };
@@ -272,7 +274,10 @@ export const BarMenuButton = memo(function BarMenuButton({
   const colors = useColors();
 
   return (
-    <Menu label={menuLabel(menu.label, menu.symbol)} modifiers={[...modifiers]}>
+    <Menu
+      label={menuLabel(menu.label, menu.symbol)}
+      modifiers={[...modifiers, disabled(menu.disabled === true)]}
+    >
       {menu.choices.map((choice) => (
         <Toggle
           key={choice.id ?? choice.label}
