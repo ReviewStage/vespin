@@ -1,0 +1,9 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "subsystem == "com.facebook.react.log""
+Timestamp               Ty Process[PID:TID]
+2026-11-16 18:35:21.773 I  Vespin[60283:b362b8a] [com.facebook.react.log:javascript] Running "main"
+2026-11-16 18:35:21.833 I  Vespin[60283:b362b8a] [com.facebook.react.log:native] Using video encoder factory: RTCDefaultVideoEncoderFactory
+2026-11-16 18:35:21.833 I  Vespin[60283:b362b8a] [com.facebook.react.log:native] Using video decoder factory: RTCDefaultVideoDecoderFactory
+2026-11-16 18:35:26.509 I  Vespin[60283:b361731] [com.facebook.react.log:native] Could not find image file:///Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/1F3C7F09-623F-4F8A-9F54-5B3F47CAA0E3/dev.vespin.ios-1794872112998.app/ChevronDown.png
+2026-11-16 18:35:26.512 I  Vespin[60283:b361731] [com.facebook.react.log:native] Could not find image file:///Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/1F3C7F09-623F-4F8A-9F54-5B3F47CAA0E3/dev.vespin.ios-1794872112998.app/ChevronUp.png
+Child process terminated with signal 15: Terminated

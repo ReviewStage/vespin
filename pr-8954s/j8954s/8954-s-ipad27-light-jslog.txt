@@ -1,0 +1,1147 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "subsystem == "com.facebook.react.log" OR (process == "Vespin" AND (subsystem CONTAINS "dev.vespin" OR category CONTAINS "QuickLook" OR subsystem CONTAINS "quicklook"))"
+Timestamp               Ty Process[PID:TID]
+2026-11-16 18:24:48.737 I  Vespin[38201:b2bcf6f] [com.facebook.react.log:javascript] Running "main"
+2026-11-16 18:24:48.790 I  Vespin[38201:b2bcf6f] [com.facebook.react.log:native] Using video encoder factory: RTCDefaultVideoEncoderFactory
+2026-11-16 18:24:48.790 I  Vespin[38201:b2bcf6f] [com.facebook.react.log:native] Using video decoder factory: RTCDefaultVideoDecoderFactory
+2026-11-16 18:25:02.365 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] canPreviewIem: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A11PreviewItem: 0x129261290> #PreviewController
+2026-11-16 18:25:02.378 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Invalid UTI org.khronos.astc returned by CGImageSourceCopyTypeIdentifiers() #UTI
+2026-11-16 18:25:02.378 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Invalid UTI org.khronos.ktx returned by CGImageSourceCopyTypeIdentifiers() #UTI
+2026-11-16 18:25:02.378 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Invalid UTI org.khronos.ktx2 returned by CGImageSourceCopyTypeIdentifiers() #UTI
+2026-11-16 18:25:02.378 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Invalid UTI public.avis returned by CGImageSourceCopyTypeIdentifiers() #UTI
+2026-11-16 18:25:02.379 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Invalid UTI com.microsoft.cur returned by CGImageSourceCopyTypeIdentifiers() #UTI
+2026-11-16 18:25:02.379 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Invalid UTI public.radiance returned by CGImageSourceCopyTypeIdentifiers() #UTI
+2026-11-16 18:25:02.379 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Invalid UTI public.pbm returned by CGImageSourceCopyTypeIdentifiers() #UTI
+2026-11-16 18:25:02.379 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Invalid UTI public.pvr returned by CGImageSourceCopyTypeIdentifiers() #UTI
+2026-11-16 18:25:02.379 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Invalid UTI com.microsoft.dds returned by CGImageSourceCopyTypeIdentifiers() #UTI
+2026-11-16 18:25:02.383 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Invalid UTI com.apple.itunes-timed-text returned by [AVURLAsset audiovisualTypes] #UTI
+2026-11-16 18:25:02.383 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Invalid UTI com.apple.immersive-video returned by [AVURLAsset audiovisualTypes] #UTI
+2026-11-16 18:25:02.385 I  Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Determined preview item type of item (<QLItem: 0x12448af40> - The invite page) - Preview type is 2 #PreviewItem
+2026-11-16 18:25:02.390 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] setDataSource: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.391 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:02.391 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:02.391 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:02.391 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] setDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.391 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.391 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.391 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.392 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 9223372036854775807 #PreviewController
+2026-11-16 18:25:02.392 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] reloadData #PreviewController
+2026-11-16 18:25:02.392 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.392 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.392 I  Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Determined preview item type of item (<QLItem: 0x12448af40> - The invite page) - Preview type is 2 #PreviewItem
+2026-11-16 18:25:02.398 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.398 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.398 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.398 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.398 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.398 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.398 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.398 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.398 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.398 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.398 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.462 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A7Preview: 0x1292d49a0> #PreviewController
+2026-11-16 18:25:02.468 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.468 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.497 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.502 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.502 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.502 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.502 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.503 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.503 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.503 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.503 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.503 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.503 I  Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Not refreshing the current preview item at index 0 because the preview collection still needs to be configured. #PreviewController
+2026-11-16 18:25:02.505 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:02.505 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.508 I  Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Returning transition animator: <QLTransitionController: 0x127823c60> for previewController: <QLPreviewController: 0x10867ea00> showing: YES #AppearanceTransition
+2026-11-16 18:25:03.529 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.529 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.529 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.529 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.529 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Setting whitepoint adaptivity style to _UIWhitePointAdaptivityStylePhoto (2) #Harmony
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItem called, returning <_TtC15VespinQuickLookP33_6D4CA98F89A644C198A9D402B4E1149A11PreviewItem: 0x129261290> #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.530 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.531 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.531 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.531 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.531 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.531 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.533 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Setting whitepoint adaptivity style to _UIWhitePointAdaptivityStylePhoto (2) #Harmony
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.537 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:03.606 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Will request whitepoint adaptivity style update, since requested style (_UIWhitePointAdaptivityStyleStandard [0]) doesn't match the current one (_UIWhitePointAdaptivityStylePhoto [2]) #Harmony
+2026-11-16 18:25:03.606 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Setting whitepoint adaptivity style to _UIWhitePointAdaptivityStyleStandard (0) #Harmony
+2026-11-16 18:25:05.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.014 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.014 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.014 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.014 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.014 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.014 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.014 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.014 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.017 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.017 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.017 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.017 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.017 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.017 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.018 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.018 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.479 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Setting whitepoint adaptivity style to _UIWhitePointAdaptivityStyleStandard (0) #Harmony
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.480 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.482 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.482 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.482 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.482 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.482 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.483 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Setting whitepoint adaptivity style to _UIWhitePointAdaptivityStyleStandard (0) #Harmony
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.485 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.485 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.485 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.485 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.485 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.488 I  Vespin[38201:b2bc0e9] [com.apple.quicklook:default] QLTransitionController (<QLTransitionController: 0x127823c60>) is being setup (<_UIViewControllerOneToOneTransitionContext: 0x1292ea840>). #AppearanceTransition
+2026-11-16 18:25:05.488 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.488 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.488 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.488 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.488 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.488 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.488 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.488 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.494 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.494 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.495 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.496 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.497 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.497 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.497 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.498 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.498 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.503 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.503 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.505 I  Vespin[38201:b2bcdf7] [com.apple.quicklook:default] Network reachability flags changed to 0x2 #Downloading
+2026-11-16 18:25:05.505 I  Vespin[38201:b2bcdf7] [com.apple.quicklook:default] Network state changed to QLNetworkStateConnectedToWiFi #Downloading
+2026-11-16 18:25:05.509 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.509 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.516 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.516 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.516 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.516 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.517 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.518 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.518 I  Vespin[38201:b2bc0e9] [com.apple.quicklook:default] QLTransitionController is updating overlay with progress:0.000000 #AppearanceTransition
+2026-11-16 18:25:05.518 I  Vespin[38201:b2bf81f] [com.apple.quicklook:default] QLTransitionController (<QLTransitionController: 0x127823c60>) is notifying preview collection about transition #AppearanceTransition
+2026-11-16 18:25:05.520 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.520 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.520 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.520 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.520 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.520 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.520 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.520 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.520 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.520 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.521 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.522 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.522 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.522 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.522 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.522 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.522 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.522 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.522 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.522 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.522 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.524 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.524 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.525 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.525 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.526 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.526 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.526 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.526 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.526 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.526 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.526 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.526 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.527 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.527 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.528 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.528 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.532 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.532 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.532 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.532 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.532 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.532 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.532 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.532 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.533 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.534 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.534 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.534 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.534 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.540 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.540 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.540 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.540 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.540 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.540 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.568 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.568 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.568 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.568 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.568 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.568 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.573 Df Vespin[38201:b2bf81f] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.573 Df Vespin[38201:b2bf81f] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.689 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] QLPreviewItem has an url, create a tmp dir in the host: <QLItem: 0x12448af40> - The invite page #PreviewItem
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.732 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.733 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.734 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:05.734 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.058 Df Vespin[38201:b2bf81f] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:06.186 Df Vespin[38201:b2bf81f] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bf81f] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.187 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.188 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 327}, {320, 180}} #Generic
+2026-11-16 18:25:06.339 Df Vespin[38201:b2bcdf2] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:06.339 Df Vespin[38201:b2bcdf2] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:06.430 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.430 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.430 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.430 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.430 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.430 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.430 I  Vespin[38201:b2bc0e9] [com.apple.quicklook:default] QLTransitionController is updating overlay with progress:0.000000 #AppearanceTransition
+2026-11-16 18:25:06.430 I  Vespin[38201:b2bc0e9] [com.apple.quicklook:default] QLTransitionController (<QLTransitionController: 0x127823c60>) setup is done, calling handler to perform transition. #AppearanceTransition
+2026-11-16 18:25:06.430 I  Vespin[38201:b2bc0e9] [com.apple.quicklook:default] QLTransitionController is updating overlay with progress:1.000000 #AppearanceTransition
+2026-11-16 18:25:06.431 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.431 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.431 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.431 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.431 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.431 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.431 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.431 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.431 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:06.431 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.431 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.455 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:06.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.457 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.458 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.481 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.484 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.485 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.485 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.485 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.485 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.485 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.485 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.486 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.486 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.506 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.506 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.507 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.507 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.514 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.515 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.785 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.785 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.957 I  Vespin[38201:b2bc0e9] [com.apple.quicklook:default] QLTransitionController is completing transition. didComplete:YES #AppearanceTransition
+2026-11-16 18:25:06.958 I  Vespin[38201:b2bc0e9] [com.apple.quicklook:default] QLTransitionController is tearing down transition. didComplete:YES #AppearanceTransition
+2026-11-16 18:25:06.958 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.958 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.958 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.958 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.958 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.958 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.958 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.958 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.969 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.970 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.971 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:06.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:06.980 Db Vespin[38201:b2bc0e9] [com.apple.quicklook:default] Setting currentAnimator to nil from viewDidAppear #AppearanceTransition
+2026-11-16 18:25:06.998 Df Vespin[38201:b2bcdb2] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:07.061 I  Vespin[38201:b2bc0e9] [com.apple.quicklook:default] About to tearDownTransition with remote previewCollection #AppearanceTransition
+2026-11-16 18:25:07.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.107 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.123 Df Vespin[38201:b2bcdf2] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:07.124 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:07.124 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.124 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.124 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.124 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.124 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.125 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.125 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.125 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.125 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.125 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.125 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.125 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.125 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:07.125 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.009 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] getDelegate: (null) #PreviewController
+2026-11-16 18:25:12.009 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.009 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.009 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.009 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:12.010 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] [API] currentPreviewItemIndex called, returning 0 #PreviewController
+2026-11-16 18:25:26.360 Df Vespin[38201:b2bcdf2] [dev.vespin.ios:spotlight] Spotlight's delete-all was answered
+2026-11-16 18:25:41.306 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 320}, {320, 180}} #Generic
+2026-11-16 18:25:41.323 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 312.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.339 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 306}, {320, 180}} #Generic
+2026-11-16 18:25:41.356 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 301.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.373 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 297}, {320, 180}} #Generic
+2026-11-16 18:25:41.389 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 292.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.406 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 288}, {320, 180}} #Generic
+2026-11-16 18:25:41.423 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 283.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.439 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 279}, {320, 180}} #Generic
+2026-11-16 18:25:41.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 274.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.473 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 270}, {320, 180}} #Generic
+2026-11-16 18:25:41.489 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 265.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.506 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 261.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 257}, {320, 180}} #Generic
+2026-11-16 18:25:41.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 252.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.556 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 248}, {320, 180}} #Generic
+2026-11-16 18:25:41.573 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 243.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.589 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 239.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.606 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 235.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.623 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 231}, {320, 180}} #Generic
+2026-11-16 18:25:41.640 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 227}, {320, 180}} #Generic
+2026-11-16 18:25:41.656 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 223}, {320, 180}} #Generic
+2026-11-16 18:25:41.673 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 219}, {320, 180}} #Generic
+2026-11-16 18:25:41.690 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 215}, {320, 180}} #Generic
+2026-11-16 18:25:41.706 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 211.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.723 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 208}, {320, 180}} #Generic
+2026-11-16 18:25:41.740 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 204.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.756 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 200.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.773 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 197}, {320, 180}} #Generic
+2026-11-16 18:25:41.790 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 194}, {320, 180}} #Generic
+2026-11-16 18:25:41.806 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 191}, {320, 180}} #Generic
+2026-11-16 18:25:41.824 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 187.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.840 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 184.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.856 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 182}, {320, 180}} #Generic
+2026-11-16 18:25:41.873 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 179.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.890 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 177}, {320, 180}} #Generic
+2026-11-16 18:25:41.906 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 175}, {320, 180}} #Generic
+2026-11-16 18:25:41.923 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 173}, {320, 180}} #Generic
+2026-11-16 18:25:41.940 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 189}, {320, 180}} #Generic
+2026-11-16 18:25:41.956 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 202.5}, {320, 180}} #Generic
+2026-11-16 18:25:41.973 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 216}, {320, 180}} #Generic
+2026-11-16 18:25:41.989 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 228.5}, {320, 180}} #Generic
+2026-11-16 18:25:42.006 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 239}, {320, 180}} #Generic
+2026-11-16 18:25:42.023 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 248.5}, {320, 180}} #Generic
+2026-11-16 18:25:42.039 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 257}, {320, 180}} #Generic
+2026-11-16 18:25:42.056 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 264}, {320, 180}} #Generic
+2026-11-16 18:25:42.073 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 270.5}, {320, 180}} #Generic
+2026-11-16 18:25:42.089 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 276}, {320, 180}} #Generic
+2026-11-16 18:25:42.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 280.5}, {320, 180}} #Generic
+2026-11-16 18:25:42.123 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 284.5}, {320, 180}} #Generic
+2026-11-16 18:25:42.139 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 288}, {320, 180}} #Generic
+2026-11-16 18:25:42.156 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 290.5}, {320, 180}} #Generic
+2026-11-16 18:25:42.172 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 293}, {320, 180}} #Generic
+2026-11-16 18:25:42.189 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 295}, {320, 180}} #Generic
+2026-11-16 18:25:42.206 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 297}, {320, 180}} #Generic
+2026-11-16 18:25:42.223 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 298.5}, {320, 180}} #Generic
+2026-11-16 18:25:42.239 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 300}, {320, 180}} #Generic
+2026-11-16 18:25:42.256 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 301}, {320, 180}} #Generic
+2026-11-16 18:25:42.272 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 302}, {320, 180}} #Generic
+2026-11-16 18:25:42.289 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 302.5}, {320, 180}} #Generic
+2026-11-16 18:25:42.306 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 303.5}, {320, 180}} #Generic
+2026-11-16 18:25:42.322 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 304}, {320, 180}} #Generic
+2026-11-16 18:25:42.339 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 304.5}, {320, 180}} #Generic
+2026-11-16 18:25:42.372 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 305}, {320, 180}} #Generic
+2026-11-16 18:25:42.389 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 305.5}, {320, 180}} #Generic
+2026-11-16 18:25:42.423 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 306}, {320, 180}} #Generic
+2026-11-16 18:25:42.472 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 306.5}, {320, 180}} #Generic
+2026-11-16 18:25:42.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 307}, {320, 180}} #Generic
+2026-11-16 18:25:43.723 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 303}, {320, 180}} #Generic
+2026-11-16 18:25:43.739 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 299}, {320, 180}} #Generic
+2026-11-16 18:25:43.756 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 295}, {320, 180}} #Generic
+2026-11-16 18:25:43.773 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 291}, {320, 180}} #Generic
+2026-11-16 18:25:43.789 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 286.5}, {320, 180}} #Generic
+2026-11-16 18:25:43.806 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 282}, {320, 180}} #Generic
+2026-11-16 18:25:43.823 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 278}, {320, 180}} #Generic
+2026-11-16 18:25:43.839 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 273.5}, {320, 180}} #Generic
+2026-11-16 18:25:43.856 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 269}, {320, 180}} #Generic
+2026-11-16 18:25:43.872 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 264.5}, {320, 180}} #Generic
+2026-11-16 18:25:43.890 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 260.5}, {320, 180}} #Generic
+2026-11-16 18:25:43.906 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 256}, {320, 180}} #Generic
+2026-11-16 18:25:43.923 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 251.5}, {320, 180}} #Generic
+2026-11-16 18:25:43.940 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 247.5}, {320, 180}} #Generic
+2026-11-16 18:25:43.956 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 243}, {320, 180}} #Generic
+2026-11-16 18:25:43.973 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 238.5}, {320, 180}} #Generic
+2026-11-16 18:25:43.990 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 234.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.006 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 230.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.023 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 226.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.039 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 222.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.056 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 218.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.073 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 214.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.090 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 210.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 206.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.123 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 203}, {320, 180}} #Generic
+2026-11-16 18:25:44.139 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 199.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.156 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 196}, {320, 180}} #Generic
+2026-11-16 18:25:44.173 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 192.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.190 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 189}, {320, 180}} #Generic
+2026-11-16 18:25:44.206 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 185.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.223 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 182.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.240 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 180}, {320, 180}} #Generic
+2026-11-16 18:25:44.256 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 177}, {320, 180}} #Generic
+2026-11-16 18:25:44.273 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 174}, {320, 180}} #Generic
+2026-11-16 18:25:44.289 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 171.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.306 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 169.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.323 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 167}, {320, 180}} #Generic
+2026-11-16 18:25:44.339 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 165.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.356 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 182.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.373 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 198}, {320, 180}} #Generic
+2026-11-16 18:25:44.389 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 212.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.406 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 225}, {320, 180}} #Generic
+2026-11-16 18:25:44.423 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 236.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.439 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 246.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 255}, {320, 180}} #Generic
+2026-11-16 18:25:44.472 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 262.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.489 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 269}, {320, 180}} #Generic
+2026-11-16 18:25:44.506 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 274.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 279.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 283.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.556 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 287}, {320, 180}} #Generic
+2026-11-16 18:25:44.572 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 290}, {320, 180}} #Generic
+2026-11-16 18:25:44.589 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 292.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.606 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 295}, {320, 180}} #Generic
+2026-11-16 18:25:44.623 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 296.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.639 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 298.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.656 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 299.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.672 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 300.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.689 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 301.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.706 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 302.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.723 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 303}, {320, 180}} #Generic
+2026-11-16 18:25:44.739 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 304}, {320, 180}} #Generic
+2026-11-16 18:25:44.756 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 304.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.789 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 305}, {320, 180}} #Generic
+2026-11-16 18:25:44.806 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 305.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.839 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 306}, {320, 180}} #Generic
+2026-11-16 18:25:44.889 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 306.5}, {320, 180}} #Generic
+2026-11-16 18:25:44.939 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 307}, {320, 180}} #Generic
+2026-11-16 18:25:46.139 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 303}, {320, 180}} #Generic
+2026-11-16 18:25:46.156 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 299}, {320, 180}} #Generic
+2026-11-16 18:25:46.173 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 295}, {320, 180}} #Generic
+2026-11-16 18:25:46.189 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 291}, {320, 180}} #Generic
+2026-11-16 18:25:46.206 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 286.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.223 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 282}, {320, 180}} #Generic
+2026-11-16 18:25:46.239 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 278}, {320, 180}} #Generic
+2026-11-16 18:25:46.256 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 273.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.273 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 269}, {320, 180}} #Generic
+2026-11-16 18:25:46.289 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 264.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.306 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 260.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.323 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 256}, {320, 180}} #Generic
+2026-11-16 18:25:46.339 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 251.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.356 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 247.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.373 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 243}, {320, 180}} #Generic
+2026-11-16 18:25:46.389 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 238.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.406 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 234.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.423 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 230.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.439 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 226.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 222.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.473 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 218.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.489 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 214.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.506 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 210.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 206.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 203}, {320, 180}} #Generic
+2026-11-16 18:25:46.556 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 199.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.573 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 196}, {320, 180}} #Generic
+2026-11-16 18:25:46.589 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 192.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.606 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 189}, {320, 180}} #Generic
+2026-11-16 18:25:46.623 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 185.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.639 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 182.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.656 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 180}, {320, 180}} #Generic
+2026-11-16 18:25:46.673 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 177}, {320, 180}} #Generic
+2026-11-16 18:25:46.689 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 174}, {320, 180}} #Generic
+2026-11-16 18:25:46.706 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 171.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.723 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 169.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.739 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 167}, {320, 180}} #Generic
+2026-11-16 18:25:46.756 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 165.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.773 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 183}, {320, 180}} #Generic
+2026-11-16 18:25:46.789 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 198}, {320, 180}} #Generic
+2026-11-16 18:25:46.806 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 212.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.823 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 225}, {320, 180}} #Generic
+2026-11-16 18:25:46.839 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 236.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.856 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 246.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.873 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 255}, {320, 180}} #Generic
+2026-11-16 18:25:46.889 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 262.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.906 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 269}, {320, 180}} #Generic
+2026-11-16 18:25:46.922 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 275}, {320, 180}} #Generic
+2026-11-16 18:25:46.939 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 279.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.956 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 283.5}, {320, 180}} #Generic
+2026-11-16 18:25:46.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 287}, {320, 180}} #Generic
+2026-11-16 18:25:46.989 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 290}, {320, 180}} #Generic
+2026-11-16 18:25:47.006 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 292.5}, {320, 180}} #Generic
+2026-11-16 18:25:47.023 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 295}, {320, 180}} #Generic
+2026-11-16 18:25:47.039 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 296.5}, {320, 180}} #Generic
+2026-11-16 18:25:47.056 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 298.5}, {320, 180}} #Generic
+2026-11-16 18:25:47.073 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 299.5}, {320, 180}} #Generic
+2026-11-16 18:25:47.089 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 300.5}, {320, 180}} #Generic
+2026-11-16 18:25:47.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 301.5}, {320, 180}} #Generic
+2026-11-16 18:25:47.123 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 302.5}, {320, 180}} #Generic
+2026-11-16 18:25:47.139 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 303}, {320, 180}} #Generic
+2026-11-16 18:25:47.156 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 304}, {320, 180}} #Generic
+2026-11-16 18:25:47.172 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 304.5}, {320, 180}} #Generic
+2026-11-16 18:25:47.206 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 305}, {320, 180}} #Generic
+2026-11-16 18:25:47.223 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 305.5}, {320, 180}} #Generic
+2026-11-16 18:25:47.256 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 306}, {320, 180}} #Generic
+2026-11-16 18:25:47.306 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 306.5}, {320, 180}} #Generic
+2026-11-16 18:25:47.356 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 307}, {320, 180}} #Generic
+2026-11-16 18:25:48.606 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 303}, {320, 180}} #Generic
+2026-11-16 18:25:48.623 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 299}, {320, 180}} #Generic
+2026-11-16 18:25:48.640 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 295}, {320, 180}} #Generic
+2026-11-16 18:25:48.656 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 291}, {320, 180}} #Generic
+2026-11-16 18:25:48.673 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 286.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.689 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 282}, {320, 180}} #Generic
+2026-11-16 18:25:48.706 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 278}, {320, 180}} #Generic
+2026-11-16 18:25:48.723 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 273.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.739 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 269}, {320, 180}} #Generic
+2026-11-16 18:25:48.756 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 264.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.773 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 260.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.790 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 256}, {320, 180}} #Generic
+2026-11-16 18:25:48.806 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 251.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.823 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 247.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.840 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 243}, {320, 180}} #Generic
+2026-11-16 18:25:48.857 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 238.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.873 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 234.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.891 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 230.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.906 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 226.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.923 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 222.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.941 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 218.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.956 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 214.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.974 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 210.5}, {320, 180}} #Generic
+2026-11-16 18:25:48.991 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 206.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.008 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 203}, {320, 180}} #Generic
+2026-11-16 18:25:49.023 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 199.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.040 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 196}, {320, 180}} #Generic
+2026-11-16 18:25:49.056 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 192.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.073 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 189}, {320, 180}} #Generic
+2026-11-16 18:25:49.089 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 185.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 182.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.124 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 180}, {320, 180}} #Generic
+2026-11-16 18:25:49.140 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 177}, {320, 180}} #Generic
+2026-11-16 18:25:49.158 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 174}, {320, 180}} #Generic
+2026-11-16 18:25:49.174 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 171.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.191 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 169.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.207 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 167}, {320, 180}} #Generic
+2026-11-16 18:25:49.223 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 165.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.240 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 183}, {320, 180}} #Generic
+2026-11-16 18:25:49.256 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 197.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.273 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 212}, {320, 180}} #Generic
+2026-11-16 18:25:49.290 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 225}, {320, 180}} #Generic
+2026-11-16 18:25:49.307 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 236.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.323 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 246.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.339 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 255}, {320, 180}} #Generic
+2026-11-16 18:25:49.357 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 262.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.373 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 269}, {320, 180}} #Generic
+2026-11-16 18:25:49.389 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 274.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.406 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 279.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.423 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 283.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.439 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 287}, {320, 180}} #Generic
+2026-11-16 18:25:49.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 290}, {320, 180}} #Generic
+2026-11-16 18:25:49.473 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 292.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.489 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 295}, {320, 180}} #Generic
+2026-11-16 18:25:49.506 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 296.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 298}, {320, 180}} #Generic
+2026-11-16 18:25:49.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 299.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.556 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 300.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.573 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 301.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.589 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 302.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.606 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 303}, {320, 180}} #Generic
+2026-11-16 18:25:49.623 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 303.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.639 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 304}, {320, 180}} #Generic
+2026-11-16 18:25:49.656 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 304.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.673 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 305}, {320, 180}} #Generic
+2026-11-16 18:25:49.689 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 305.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.723 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 306}, {320, 180}} #Generic
+2026-11-16 18:25:49.772 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 306.5}, {320, 180}} #Generic
+2026-11-16 18:25:49.822 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 307}, {320, 180}} #Generic
+2026-11-16 18:25:51.023 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 303}, {320, 180}} #Generic
+2026-11-16 18:25:51.039 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 299.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.056 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 295.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.073 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 291.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.089 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 287}, {320, 180}} #Generic
+2026-11-16 18:25:51.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 282.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.123 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 278.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.139 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 274}, {320, 180}} #Generic
+2026-11-16 18:25:51.156 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 270}, {320, 180}} #Generic
+2026-11-16 18:25:51.173 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 265.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.189 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 261}, {320, 180}} #Generic
+2026-11-16 18:25:51.206 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 257}, {320, 180}} #Generic
+2026-11-16 18:25:51.223 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 252.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.240 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 248}, {320, 180}} #Generic
+2026-11-16 18:25:51.256 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 244}, {320, 180}} #Generic
+2026-11-16 18:25:51.273 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 239.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.289 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 235.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.306 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 231}, {320, 180}} #Generic
+2026-11-16 18:25:51.323 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 227}, {320, 180}} #Generic
+2026-11-16 18:25:51.339 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 223}, {320, 180}} #Generic
+2026-11-16 18:25:51.356 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 219}, {320, 180}} #Generic
+2026-11-16 18:25:51.373 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 215}, {320, 180}} #Generic
+2026-11-16 18:25:51.389 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 211.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.406 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 207.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.423 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 203.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.439 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 200}, {320, 180}} #Generic
+2026-11-16 18:25:51.456 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 196.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.473 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 193}, {320, 180}} #Generic
+2026-11-16 18:25:51.489 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 189.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.506 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 186}, {320, 180}} #Generic
+2026-11-16 18:25:51.523 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 183}, {320, 180}} #Generic
+2026-11-16 18:25:51.539 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 180}, {320, 180}} #Generic
+2026-11-16 18:25:51.556 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 177}, {320, 180}} #Generic
+2026-11-16 18:25:51.573 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 174}, {320, 180}} #Generic
+2026-11-16 18:25:51.589 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 171.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.606 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 169}, {320, 180}} #Generic
+2026-11-16 18:25:51.623 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 166.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.639 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 164.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.656 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 162.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.673 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 180}, {320, 180}} #Generic
+2026-11-16 18:25:51.689 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 196}, {320, 180}} #Generic
+2026-11-16 18:25:51.706 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 210.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.722 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 223.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.739 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 235.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.756 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 245.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.772 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 254.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.789 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 262}, {320, 180}} #Generic
+2026-11-16 18:25:51.806 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 268.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.823 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 274}, {320, 180}} #Generic
+2026-11-16 18:25:51.839 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 279}, {320, 180}} #Generic
+2026-11-16 18:25:51.856 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 283.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.873 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 287}, {320, 180}} #Generic
+2026-11-16 18:25:51.889 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 290}, {320, 180}} #Generic
+2026-11-16 18:25:51.906 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 292.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.922 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 294.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.939 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 296.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.956 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 298}, {320, 180}} #Generic
+2026-11-16 18:25:51.972 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 299.5}, {320, 180}} #Generic
+2026-11-16 18:25:51.989 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 300.5}, {320, 180}} #Generic
+2026-11-16 18:25:52.006 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 301.5}, {320, 180}} #Generic
+2026-11-16 18:25:52.023 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 302.5}, {320, 180}} #Generic
+2026-11-16 18:25:52.039 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 303}, {320, 180}} #Generic
+2026-11-16 18:25:52.056 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 303.5}, {320, 180}} #Generic
+2026-11-16 18:25:52.072 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 304}, {320, 180}} #Generic
+2026-11-16 18:25:52.089 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 304.5}, {320, 180}} #Generic
+2026-11-16 18:25:52.106 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 305}, {320, 180}} #Generic
+2026-11-16 18:25:52.122 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 305.5}, {320, 180}} #Generic
+2026-11-16 18:25:52.156 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 306}, {320, 180}} #Generic
+2026-11-16 18:25:52.206 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 306.5}, {320, 180}} #Generic
+2026-11-16 18:25:52.256 Df Vespin[38201:b2bc0e9] [com.apple.quicklook:default] received contentFrameUpdate: {{445, 307}, {320, 180}} #Generic
+Child process terminated with signal 15: Terminated
