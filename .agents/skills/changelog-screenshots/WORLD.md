@@ -211,3 +211,7 @@ a finished one ran minutes. Yesterday's call ran 12 minutes 41 seconds.
 - **acme/relay's run actions**: Dev server (`pnpm dev`, the default), Members tests (`pnpm test src/members`), Seed pending invites (`pnpm db:seed --invites`), and Email previews (`pnpm email:dev`).
 - **Issue #231 "Expired invite link shows a 404"** (acme/relay): Dana asked the `vespin-agent` bot to take it, and its agent opened #232 "Show an expired invite link as no longer valid", adding Ask for a new invite (`v0.34.0-github-mention.html`).
 - **The Add teammate invitations agent's later lines** (`mention-transcript.ts`): Dean asked it to seed two pending invites on staging, the Update docs after a merge automation sent it #213's rename, Theo's Handle Postmark bounces agent (#222) asked it to keep the state names, and Dana's `@vespin` comment on #214 sent it back to work on the expired link.
+
+## Added in 0.36.0
+
+- **acme's cloud environment** (`sandbox-size.ts`): its sandboxes moved up to 4 vCPUs · 8 GB; its variables are `DATABASE_URL`, `POSTMARK_SERVER_TOKEN`, `SENTRY_AUTH_TOKEN`, and `STRIPE_SECRET_KEY`; every sandbox installs Postgres's and Redis's clients, the Stripe CLI, and pnpm 10.20.0, and acme/ledger and acme/relay each run their own setup (0.29.0's scripts).

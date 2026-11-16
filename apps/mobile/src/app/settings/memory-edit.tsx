@@ -52,10 +52,21 @@ export default function MemoryEditScreen() {
     refused?: string;
   }>();
 
-  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const { data: read } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const workspaces = read ?? [];
   const { chosen } = useChosenWorkspace(workspaces);
-  // Note that a refused save reopens in the workspace it was for, even where another has been chosen since.
-  const target = workspaces.find((each) => each.id === workspace) ?? chosen;
+
+  // Note that a refused save reopens in the workspace it was for, even where another has been chosen since, and opens nowhere once that workspace is gone, so its words are never saved into another.
+  const target =
+    workspace === undefined ? chosen : workspaces.find((each) => each.id === workspace);
+
+  if (target === undefined && workspace !== undefined && read !== undefined) {
+    return (
+      <Screen ground={SCREEN_GROUND.GROUPED}>
+        <EmptyState title={MEMORY_EDITOR_WORDS.WORKSPACE_GONE} symbol={MEMORY_SYMBOL} />
+      </Screen>
+    );
+  }
 
   if (target === undefined) return null;
 

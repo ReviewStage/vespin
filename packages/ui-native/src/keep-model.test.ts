@@ -32,6 +32,11 @@ describe("keepActs", () => {
       [KEEP_ACT.SHARE],
     ],
     [
+      "a sound clip, which neither Photos nor the pasteboard holds, is only shared",
+      { kind: KEPT_KIND.SOUND, source: "file:///caches/inbox-3.m4a", name: "chime.m4a" },
+      [KEEP_ACT.SHARE],
+    ],
+    [
       "a text file's words are copied, and it is shared",
       {
         kind: KEPT_KIND.FILE,
