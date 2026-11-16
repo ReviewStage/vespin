@@ -21,7 +21,8 @@ import { agoText } from "@repo/features/time-format";
 import type { ReactElement } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { FieldChip, LabelChip } from "./button.js";
-import { GLYPH, type MarkLook } from "./glyph.js";
+import { GLYPH, type Glyph, type MarkLook } from "./glyph.js";
+import { GlyphLabel } from "./glyph-label.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
@@ -463,5 +464,63 @@ export function MergeActRow({
         />
       ))}
     </Menu>
+  );
+}
+
+/** MOCK: one hand-off a pull request's page offers its agent, such as Fix failing checks. */
+export interface HandOff {
+  readonly label: string;
+  readonly symbol: Glyph;
+  /** Whether it is the page's one act, filled in the accent. */
+  readonly prominent: boolean;
+  readonly onPress: () => void;
+}
+
+/**
+ * MOCK: the hand-offs a pull request's page offers where it cannot merge,
+ * each the system's large button with its glyph, stacked under the
+ * heading where Merge stands, the first filled in the accent, so one tap
+ * sends the agent that opened it the work.
+ */
+export function HandOffRow({ handOffs }: { readonly handOffs: readonly HandOff[] }) {
+  const colors = useColors();
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT * 2}
+      modifiers={[
+        listRowBackground("clear"),
+        listRowSeparator("hidden"),
+        listRowInsets({
+          leading: SPACE.EDGE,
+          trailing: SPACE.EDGE,
+          top: SPACE.TIGHT,
+          bottom: SPACE.TIGHT,
+        }),
+      ]}
+    >
+      {handOffs.map((handOff) => (
+        <Menu
+          key={handOff.label}
+          label={
+            <GlyphLabel
+              title={handOff.label}
+              glyph={handOff.symbol}
+              color={handOff.prominent ? colors.ON_ACCENT : colors.TEXT}
+            />
+          }
+          onPrimaryAction={handOff.onPress}
+          modifiers={[
+            buttonStyle(handOff.prominent ? "borderedProminent" : "bordered"),
+            controlSize("large"),
+            tint(handOff.prominent ? colors.ACCENT : colors.TEXT),
+            menuIndicator("hidden"),
+          ]}
+        >
+          {[]}
+        </Menu>
+      ))}
+    </VStack>
   );
 }

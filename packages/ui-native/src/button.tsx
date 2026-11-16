@@ -6,6 +6,7 @@ import {
   Menu,
   Overlay,
   Picker,
+  ScrollView,
   Button as SwiftUIButton,
   Text,
   Toggle,
@@ -32,6 +33,7 @@ import {
   opacity,
   padding,
   pickerStyle,
+  scrollIndicators,
   strokeBorder,
   tag,
   tint,
@@ -297,6 +299,8 @@ export type Scope = {
 export const SCOPE_LOOK = {
   SEGMENTED: "segmented",
   MENU: "menu",
+  /** MOCK: a row of capsules with counts, scrolled sideways, as a filter over a list. */
+  CHIPS: "chips",
 } as const;
 
 export type ScopeLook = (typeof SCOPE_LOOK)[keyof typeof SCOPE_LOOK];
@@ -326,6 +330,34 @@ export type ListScopes = {
  */
 export function ScopeControl({ label, scopes, look = SCOPE_LOOK.SEGMENTED }: ListScopes) {
   const chosen = scopes.find((scope) => scope.selected);
+
+  // MOCK: the chips look, a sideways row of the system's small capsules, the chosen one filled with the ink.
+  if (look === SCOPE_LOOK.CHIPS) {
+    return (
+      <ScrollView
+        axes="horizontal"
+        showsIndicators={false}
+        modifiers={[scrollIndicators("hidden", "horizontal"), accessibilityLabel(label)]}
+      >
+        <HStack
+          spacing={SPACE.TIGHT * 2}
+          modifiers={[
+            padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT, bottom: SPACE.TIGHT * 2 }),
+          ]}
+        >
+          {scopes.map((scope) => (
+            <Chip
+              key={scope.label}
+              label={scope.label}
+              count={scope.count}
+              selected={scope.selected}
+              onPress={scope.onPress}
+            />
+          ))}
+        </HStack>
+      </ScrollView>
+    );
+  }
 
   return (
     <Picker<string>

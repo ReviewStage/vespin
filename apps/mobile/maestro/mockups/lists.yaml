@@ -1,0 +1,47 @@
+# lists.yaml -- MOCK: the Tasks list's filter chips, all then one chosen, and a pull request's hand-offs in its conflict state and its failing-checks state.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: ../subflows/tab.yaml
+    env:
+      TAB: Tasks
+- extendedWaitUntil:
+    visible: "All.*"
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: chips-all
+- tapOn: "Needs you.*"
+- waitForAnimationToEnd
+- takeScreenshot: chips-needs-you
+- tapOn: "Working.*"
+- waitForAnimationToEnd
+- takeScreenshot: chips-working
+- tapOn: "In review.*"
+- waitForAnimationToEnd
+- takeScreenshot: chips-in-review
+- launchApp:
+    stopApp: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      pullRequest: "126"
+- extendedWaitUntil:
+    visible: "Resolve conflicts"
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: pr-conflicts
+- launchApp:
+    stopApp: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      pullRequest: "127"
+- extendedWaitUntil:
+    visible: "Fix failing checks"
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: pr-failing

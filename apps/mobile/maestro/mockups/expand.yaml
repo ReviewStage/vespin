@@ -1,0 +1,14 @@
+# expand.yaml -- MOCK: the pushed notification found in Notification Center and held, so it stands expanded with its actions; `TEXT` names its title.
+appId: dev.vespin.ios
+---
+- swipe:
+    start: 30%, 0%
+    end: 30%, 70%
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: ".*${TEXT}.*"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-list
+- longPressOn: ".*${TEXT}.*"
+- waitForAnimationToEnd
+- takeScreenshot: ${SHOT}-expanded

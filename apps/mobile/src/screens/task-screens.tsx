@@ -24,7 +24,11 @@ import {
   taskNumberOf,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
-import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
+import {
+  agentRunsOnWords,
+  agentStillWriting,
+  TASK_AGENTS_STATUS,
+} from "@repo/features/task-agents-model";
 import {
   CHANGE_REPOSITORY,
   CHOOSE_REPOSITORY,
@@ -125,6 +129,8 @@ import {
   type RowSubmenu,
   type RowSwipe,
   runsOnGlyph,
+  SCOPE_LOOK,
+  type Scope,
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
@@ -1046,7 +1052,56 @@ type TasksTreeProps = {
   readonly onSelect: (id: string) => void;
   /** Reads the list again, on a pull. */
   readonly onRefresh: () => Promise<void>;
+  /** MOCK: the filter chips over a compact list, and the one chosen. */
+  readonly filter?:
+    | { readonly chosen: TaskFilter; readonly choose: (to: TaskFilter) => void }
+    | undefined;
 };
+
+/** MOCK: the filters the chips over the Tasks list offer. */
+const TASK_FILTER = {
+  ALL: "All",
+  NEEDS_YOU: "Needs you",
+  WORKING: "Working",
+  IN_REVIEW: "In review",
+} as const;
+
+type TaskFilter = (typeof TASK_FILTER)[keyof typeof TASK_FILTER];
+
+/** MOCK: whether a task stands under a filter, by its row's look. */
+function underFilter(filter: TaskFilter, task: TaskSummary, listing: TasksListing): boolean {
+  const look = listing.lookOf(task);
+
+  switch (filter) {
+    case TASK_FILTER.ALL:
+      return true;
+    case TASK_FILTER.NEEDS_YOU:
+      return look.needsYou;
+    case TASK_FILTER.WORKING:
+      return look.agents.kind === TASK_AGENTS_STATUS.WORKING;
+    case TASK_FILTER.IN_REVIEW:
+      return look.agents.kind === TASK_AGENTS_STATUS.PULL_REQUEST;
+  }
+}
+
+/** MOCK: every open task the tree lists, once each. */
+function treeTasks(tree: TaskTree): readonly TaskSummary[] {
+  const groups = [
+    ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
+    ...tree.sections,
+    ...tree.tasks,
+  ];
+  const byId = new Map<string, TaskSummary>();
+
+  for (const group of groups) {
+    for (const row of group.rows) {
+      if (!taskFinished(row.task)) byId.set(row.task.id, row.task);
+    }
+  }
+
+  return [...byId.values()];
+}
 
 /**
  * The Tasks list as the panel's phone Tasks draws it: Pinned, Following,
@@ -1065,9 +1120,27 @@ function TasksTree({
   selected,
   onSelect,
   onRefresh,
+  filter,
 }: TasksTreeProps) {
   const { tree } = listing;
   const read = useTasksReadStatus();
+  // MOCK: the chips' counts, by what each filter keeps of the open tasks.
+  const open = treeTasks(tree);
+  const scopes =
+    filter === undefined
+      ? undefined
+      : {
+          label: "Filter",
+          look: SCOPE_LOOK.CHIPS,
+          scopes: Object.values(TASK_FILTER).map(
+            (each): Scope => ({
+              label: each,
+              count: open.filter((task) => underFilter(each, task, listing)).length,
+              selected: each === filter.chosen,
+              onPress: () => filter.choose(each),
+            }),
+          ),
+        };
 
   // Note that a search under a picked collection finds only that collection's tasks, as its title says.
   const found =
@@ -1116,8 +1189,34 @@ function TasksTree({
     return notRead(read, onRefresh) ?? <EmptyState title={WORDS.NO_TASKS} symbol={GLYPH.TASK} />;
   }
 
+  // MOCK: a filter other than All lists the tasks it keeps, flat, under the chips.
+  if (filter !== undefined && filter.chosen !== TASK_FILTER.ALL) {
+    return (
+      <RowList
+        look={look}
+        selected={selected}
+        onSelect={onSelect}
+        onRefresh={onRefresh}
+        scopes={scopes}
+      >
+        <ListSection>
+          <TaskRows
+            tasks={open.filter((task) => underFilter(filter.chosen, task, listing))}
+            listing={listing}
+          />
+        </ListSection>
+      </RowList>
+    );
+  }
+
   return (
-    <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
+    <RowList
+      look={look}
+      selected={selected}
+      onSelect={onSelect}
+      onRefresh={onRefresh}
+      scopes={scopes}
+    >
       {tree.pinned === undefined ? null : (
         <GroupSection group={tree.pinned} listing={listing} hold={hold} />
       )}
@@ -2288,6 +2387,7 @@ function TasksStackList({
   const { search, setSearch, listing, refreshTasks } = screen;
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
+  const [filter, setFilter] = useState<TaskFilter>(TASK_FILTER.ALL);
 
   return (
     <>
@@ -2322,6 +2422,7 @@ function TasksStackList({
             router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })))
           }
           onRefresh={refreshTasks}
+          filter={{ chosen: filter, choose: setFilter }}
         />
       </Screen>
     </>

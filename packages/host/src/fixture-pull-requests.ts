@@ -199,13 +199,14 @@ const QUEUED = pullRequestOf(
   "Send the invite email from the workspace",
   "agent/invite-email",
   {
-    merge: MERGE_STATE.CLEAN,
+    // MOCK: in conflict with its base, for the hand-off mockups.
+    merge: MERGE_STATE.CONFLICTS,
     requested: [],
     merging: {
       methods: [MERGE_METHOD.SQUASH],
       autoMergeAllowed: true,
       queue: true,
-      queued: { position: 2 },
+      queued: null,
       autoMerge: null,
       headSha: "1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c",
       review: REVIEW_DECISION.APPROVED,

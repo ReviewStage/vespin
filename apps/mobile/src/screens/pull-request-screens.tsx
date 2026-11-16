@@ -4,7 +4,10 @@ import { githubAvatarUrl } from "@repo/features/account-picture";
 import {
   type AgentOverviewPullRequest,
   CHECK_STATE,
+  CHECK_SUMMARY,
+  MERGE_STATE,
   type PullRequestCheck,
+  REVIEW_DECISION,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { iosAgentPullRequestOf } from "@repo/features/ios-app-links";
@@ -53,6 +56,8 @@ import {
   GLYPH,
   githubFace,
   glyphSymbol,
+  type HandOff,
+  HandOffRow,
   LIST_LOOK,
   ListSection,
   MARK_FACE,
@@ -292,6 +297,32 @@ function methodsOffered(pullRequest: AgentOverviewPullRequest | undefined): read
   const chooses = action === MERGE_ACTION.MERGE || action === MERGE_ACTION.ENABLE_AUTO_MERGE;
 
   return chooses ? (pullRequest?.merging?.methods ?? []) : [];
+}
+
+/** MOCK: the hand-offs a pull request's page offers its agent, in the order they stand. */
+const HAND_OFF_WORDS = {
+  RESOLVE_CONFLICTS: "Resolve conflicts",
+  FIX_CHECKS: "Fix failing checks",
+  ADDRESS_REVIEW: "Address review comments",
+} as const;
+
+/** MOCK: what the pull request asks of its agent as it stands: its conflicts, its failed checks, the changes its reviewers asked for; the first filled. */
+function handOffsOf(pullRequest: AgentOverviewPullRequest | undefined): readonly HandOff[] {
+  if (pullRequest === undefined || !isLivePullRequest(pullRequest)) return [];
+  const sent = () => buzz(BUZZ.SUCCESS);
+  const words = [
+    ...(pullRequest.merge === MERGE_STATE.CONFLICTS
+      ? [{ label: HAND_OFF_WORDS.RESOLVE_CONFLICTS, symbol: GLYPH.MERGED }]
+      : []),
+    ...(pullRequest.merging?.checks === CHECK_SUMMARY.FAILING
+      ? [{ label: HAND_OFF_WORDS.FIX_CHECKS, symbol: GLYPH.TOOL }]
+      : []),
+    ...(pullRequest.merging?.review === REVIEW_DECISION.CHANGES_REQUESTED
+      ? [{ label: HAND_OFF_WORDS.ADDRESS_REVIEW, symbol: GLYPH.THREAD }]
+      : []),
+  ];
+
+  return words.map((each, place) => ({ ...each, prominent: place === 0, onPress: sent }));
 }
 
 /** The heading of a pull request's description, as the task page heads its own. */
@@ -569,6 +600,7 @@ export function PullRequestPage({
 
   const action = pullRequest === undefined ? undefined : mergeActionFor(pullRequest);
   const summary = checks === undefined ? undefined : checksSummaryOf(checks);
+  const handOffs = handOffsOf(pullRequest);
   // Note that a pull request with no description, one read from a service before it, or one that holds only HTML GitHub's page hides (a template's comments, a bot's badges), shows no Description section, rather than the panel's "No description provided.", since the phone draws no empty section.
   const description = pullRequest?.body ?? "";
   const described = markdownShows(description, { hidesHtml: true });
@@ -659,6 +691,7 @@ export function PullRequestPage({
             }}
           />
         )}
+        {handOffs.length === 0 ? null : <HandOffRow handOffs={handOffs} />}
       </ListSection>
       {described ? (
         <ListSection title={DESCRIPTION_WORDS}>

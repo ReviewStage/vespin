@@ -1,0 +1,23 @@
+{
+  "Simulator Target Bundle": "dev.vespin.ios",
+  "aps": {
+    "alert": {
+      "title": "Run the migration on staging?",
+      "subtitle": "Invitations agent · ACME-41",
+      "body": "pnpm db:migrate --env staging adds the invite_expires_at column."
+    },
+    "thread-id": "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5",
+    "category": "inbox-decide",
+    "mutable-content": 1,
+    "sound": "default",
+    "badge": 2
+  },
+  "kind": "ask",
+  "itemId": "81e2a425-6d9f-4ab7-92df-000000000002",
+  "messageId": "81e2a425-6d9f-4ab7-92df-000000000066",
+  "agentId": "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5",
+  "revision": 1,
+  "ask": "decide",
+  "options": ["Allow once", "Deny"],
+  "recommended": ["Allow once"]
+}

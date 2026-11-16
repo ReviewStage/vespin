@@ -218,6 +218,8 @@ export {
 
 export {
   githubFace,
+  type HandOff,
+  HandOffRow,
   MARK_FACE,
   type MarkFace,
   MarkRow,
