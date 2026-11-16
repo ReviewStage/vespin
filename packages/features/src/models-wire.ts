@@ -54,11 +54,18 @@ export type ModelProvider = (typeof MODEL_PROVIDER)[keyof typeof MODEL_PROVIDER]
  */
 export const MODEL_CATALOG_TTL = Duration.hours(1);
 
+/**
+ * The one effort a model with no effort of its own lists, as Cursor's
+ * Composer and Auto do: a choice always names an effort, and this one asks
+ * the harness for none.
+ */
+export const NO_EFFORT = "default";
+
 /** What a first-time account starts an agent on until it chooses, by the provider whose credential pays for it (`agentFallbackChoice`). */
 export const AGENT_FALLBACK_CHOICE = {
   [MODEL_PROVIDER.ANTHROPIC]: { model: "anthropic/claude-opus-5.5", effort: "high" },
   [MODEL_PROVIDER.OPENAI]: { model: "openai/gpt-6.1-sol", effort: "high" },
-  [MODEL_PROVIDER.CURSOR]: { model: "cursor/composer-2.5", effort: "high" },
+  [MODEL_PROVIDER.CURSOR]: { model: "cursor/composer-2.5", effort: NO_EFFORT },
 } as const satisfies Record<ModelProvider, ModelChoice>;
 
 /** What a first-time account starts an agent on, until it chooses, where a Claude credential pays or none does. */

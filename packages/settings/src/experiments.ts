@@ -34,6 +34,8 @@ export const EXPERIMENT = {
   GOALS: "goals",
   /** Move agents: an agent's Move to ›, its place chip's menu of places, and Move to cloud, each continuing the agent in the cloud or on another of the member's devices. */
   MOVE_AGENTS: "move-agents",
+  /** Cursor agents, in the making: Cursor's models in Start's model menu and the model chip, run on Cursor's own harness on the member's Cursor API key. */
+  CURSOR: "cursor",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -104,6 +106,15 @@ export interface ExperimentEntry {
  * Settings sets it, and every other read treats it as any experiment.
  */
 export const EXPERIMENTS = [
+  {
+    key: EXPERIMENT.CURSOR,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: false,
+    name: "Cursor agents",
+    detail: "Start agents on Cursor's models, run in Cursor's own harness on your Cursor API key.",
+    owner: "Dean",
+    since: "2026-11-16",
+  },
   {
     key: EXPERIMENT.MOVE_AGENTS,
     scope: EXPERIMENT_SCOPE.ACCOUNT,

@@ -336,6 +336,7 @@ export const PRODUCT_EXPERIMENT = {
   VOICE: "voice",
   GOALS: "goals",
   MOVE_AGENTS: "move-agents",
+  CURSOR: "cursor",
 } as const;
 
 export type ProductExperiment = (typeof PRODUCT_EXPERIMENT)[keyof typeof PRODUCT_EXPERIMENT];
