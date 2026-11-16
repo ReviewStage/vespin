@@ -74,6 +74,7 @@ import {
   Screen,
   SplitView,
   scopeMenu,
+  scopeSubtitle,
   THREAD_MEDIA,
   type ThreadMedia,
   type ThreadMessage,
@@ -137,7 +138,7 @@ const INBOX_TITLE = "Inbox";
 const TRY_AGAIN = "Try again";
 
 /** The compact list's search, which it never narrows by: the Search tab finds threads there. */
-const UNSEARCHED: InboxSearch = { search: "", setSearch: () => {} };
+const UNSEARCHED: Pick<InboxHeld, "search" | "setSearch"> = { search: "", setSearch: () => {} };
 
 /** What a pushed thread's screen says where the feed, once read, holds no such thread, such as one a link names that was deleted. */
 const THREAD_NOT_FOUND = "This thread isn't in your inbox";
@@ -147,6 +148,12 @@ const SCOPE_LABEL = "Filter";
 
 /** The scopes whose pill carries its count, the two that say how much waits. */
 const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INBOX_SHOW.OPEN]);
+
+/** The scopes that narrow Open, which the filter button stands filled for and the bar names under its title, as Mail's filters do; All widens it instead, so it names no filter. */
+const NARROWING_SCOPES: ReadonlySet<InboxShow> = new Set([
+  INBOX_SHOW.NEEDS_ME,
+  INBOX_SHOW.REMINDERS,
+]);
 
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
 const MORE = { label: "More", symbol: GLYPH.MORE } as const;
@@ -942,18 +949,21 @@ export function ThreadColumn({
   );
 }
 
-/** The list's search words and how to change them, held by the tab's root screen above its two layouts. */
-type InboxSearch = { readonly search: string; readonly setSearch: (search: string) => void };
+/** What the tab's root screen holds above its two layouts, so a rotation or a fold keeps it: the list's search words and how to change them, and the Remind me picker sheet its rows' menus open. */
+type InboxHeld = {
+  readonly search: string;
+  readonly setSearch: (search: string) => void;
+  readonly remind: ReturnType<typeof useRemind>;
+};
 
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
-function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | undefined) {
+function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
   useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
-  const remind = useRemind();
   const selecting = useInboxChoosing();
 
   const menu = moreMenu(listing.unread, acts.markAll, {
@@ -1003,13 +1013,13 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
 // rail, always stands the Search tab beside it, whose Inbox scope finds the
 // same threads, as Photos keeps one search; a regular window's list column
 // keeps its field, and the words typed there wait over a fold.
-function InboxStackList() {
+function InboxStackList({ remind: held }: Pick<InboxHeld, "remind">) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
 
   const { show, search, listing, acts, scopes, menu, remind, choosing, chooseStart } =
-    useInboxScreen(UNSEARCHED);
+    useInboxScreen({ ...UNSEARCHED, remind: held });
 
   // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
   return (
@@ -1081,7 +1091,6 @@ function InboxStackList() {
           />
         )}
       </Screen>
-      {remind.sheet}
     </>
   );
 }
@@ -1098,14 +1107,14 @@ function InboxStackList() {
 function InboxSplitScreen({
   selected,
   select,
-  words,
+  held,
 }: {
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
-  readonly words: InboxSearch;
+  readonly held: InboxHeld;
 }) {
   const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing, chooseStart } =
-    useInboxScreen(words, selected);
+    useInboxScreen(held, selected);
 
   const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
@@ -1151,8 +1160,10 @@ function InboxSplitScreen({
       choosing === undefined
         ? {
             title: INBOX_TITLE,
+            // Note that beside the app sidebar the scope leaves the list for the filter button, so the bar names a narrowing one under its title, as Mail's "Filtered by: Unread"; elsewhere the scopes stand over the list and say it themselves.
+            titleLine: threeColumns ? scopeSubtitle(scopes, NARROWING_SCOPES.has(show)) : undefined,
             filter: threeColumns
-              ? scopeMenu(SCOPE_LABEL, scopes, show !== INBOX_SHOW.OPEN)
+              ? scopeMenu(SCOPE_LABEL, scopes, NARROWING_SCOPES.has(show))
               : undefined,
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
@@ -1197,22 +1208,35 @@ function InboxSplitScreen({
           />
         </Screen>
       )}
-      {remind.sheet}
     </>
   );
 }
 
-/** The Inbox tab's root screen: its list, laid out by the window's size class, its search held here so a rotation or a fold keeps it. */
+/**
+ * The Inbox tab's root screen: its list, laid out by the window's size
+ * class. Note that a rotation or a fold swaps one layout for the other,
+ * redrawing all under it, so what must outlive the swap is held here: the
+ * search, and Remind me's picker sheet, drawn beside the layout rather than
+ * in it, so a picker open on a thread stays open across the swap.
+ */
 export function InboxListScreen() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.INBOX);
   const [search, setSearch] = useState("");
+  const remind = useRemind();
   useSurfaceOpen(PRODUCT_SURFACE.INBOX);
 
-  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-    <InboxSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
-  ) : (
-    <InboxStackList />
+  const held = { search, setSearch, remind };
+
+  return (
+    <>
+      {sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
+        <InboxSplitScreen selected={selected} select={select} held={held} />
+      ) : (
+        <InboxStackList remind={remind} />
+      )}
+      {remind.sheet}
+    </>
   );
 }
 
@@ -1222,8 +1246,6 @@ export function InboxThreadScreen() {
   const { listed, readerId, feed, retry } = useInboxThread(id);
   const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
-
-  if (handed) return null;
 
   return (
     <>

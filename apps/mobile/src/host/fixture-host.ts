@@ -18,6 +18,7 @@ import {
   FOLLOWER_CALL_FAILURE,
   type ListedApart,
   listedApart,
+  TASK_CALL_FAILURE,
   type TaskListParts,
 } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -302,8 +303,10 @@ function olderRead(
  * The writes `-refuseWrites true` refuses, each answered as the host
  * answers once the service has refused it: a task's status and its pin
  * not kept, so the screens put the row back and say why, as they would
- * of a live refusal, and a follower added or a memory deleted unanswered,
- * so a flow sees the notice over Add a follower's sheet and Settings'.
+ * of a live refusal, a task's start unanswered, so a flow sees New task's
+ * notice with Try again once its sheet has closed, and a follower added or a
+ * memory deleted unanswered, so a flow sees the notice over Add a
+ * follower's sheet and Settings'.
  */
 const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>> = new Map<
   PortActKind,
@@ -314,6 +317,7 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
   [ACT_KIND.TASKS_RESTORE, () => false],
   [ACT_KIND.TASKS_SET_STANDING, () => false],
   [ACT_KIND.TASKS_PIN, () => false],
+  [ACT_KIND.TASKS_START, () => ({ failure: TASK_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.TASKS_ADD_FOLLOWER, () => ({ failure: FOLLOWER_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.MEMORIES_FORGET, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
   // Note that a note to the people who make the app is refused too, so its footer's failure tone shows.

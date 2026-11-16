@@ -1,6 +1,6 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the app sidebar, the tree, and the task side by side in a regular one.
 
-import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
@@ -110,6 +110,7 @@ import {
   RowList,
   type RowSubmenu,
   type RowSwipe,
+  runsOnGlyph,
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
@@ -159,6 +160,7 @@ import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
+import { useDevicePlatform } from "../tasks/use-start.js";
 import {
   type ReadListing,
   type StatusQuestion,
@@ -1478,6 +1480,8 @@ export function TaskAgentRow({
   const name = agentName(agent);
   const harness = providerOf(agent.model);
   const runsOn = agentRunsOnWords(agent);
+  // Note that a device's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac.
+  const platform = useDevicePlatform(agent.mac?.deviceId);
 
   return (
     <AgentRow
@@ -1486,6 +1490,7 @@ export function TaskAgentRow({
       harness={harness}
       state={agentState(agent.status)}
       runsOn={runsOn}
+      runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform })}
       waiting={waiting}
       pullRequest={
         pullRequest === undefined
@@ -2173,8 +2178,6 @@ export function TaskScreen() {
   // Note that the open is told apart by the task's id, as the split view's is, so a number found and handed over on an unfold carries the same open; a number not yet found shows no task to count.
   useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
-
-  if (handed) return null;
 
   return (
     <>
