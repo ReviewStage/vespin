@@ -1,0 +1,38 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow r9228push
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, refuseWrites=true})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Tap on "Recorded the invite flow.*"... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Run flow when "Remind me" is not visible...
+  Tap on "More", Index: -1... COMPLETED
+Run flow when "Remind me" is not visible... COMPLETED
+Tap on "Remind me"... COMPLETED
+Assert that "Pick a date and time…" is visible... COMPLETED
+Tap on "In 1 hour.*|Tomorrow.*|Next week.*", Index: 0... COMPLETED
+Assert that "Could not set the reminder.*" is visible... COMPLETED
+Take screenshot ${P}-1-refused-at-foot...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Swiping in UP direction on id: failure-notice... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Teammate invitations.*"... COMPLETED
+Tap on "Open task"... FAILED
+
+Element not found: Text matching regex: Open task
+
+Element with Text matching regex: Open task not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/jb3b/9228/9228-iphone-light/r9228push/2026-11-16_030455
