@@ -141,7 +141,7 @@ import { type ListedMember, useListedMembers, useMemberPictures } from "../membe
 import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
-import { useRefilledSearchField } from "../search-field.js";
+import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
@@ -1891,6 +1891,7 @@ function TasksStackList(words: TasksSearch) {
   const compose = useComposeAction();
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const field = useRefilledSearchField(search);
+  const placement = useHeldSearchPlacement(search);
 
   return (
     <>
@@ -1898,7 +1899,7 @@ function TasksStackList(words: TasksSearch) {
         <Stack.SearchBar
           ref={field}
           placeholder={SEARCH_TASKS}
-          placement="integratedButton"
+          placement={placement}
           allowToolbarIntegration={false}
           onChangeText={(event) => setSearch(event.nativeEvent.text)}
           onCancelButtonPress={() => setSearch("")}

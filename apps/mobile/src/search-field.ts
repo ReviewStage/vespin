@@ -1,7 +1,7 @@
 // search-field.ts -- the Stack's search field refilled with a tab's words when it stands again, so a rotation or a fold that swaps a tab's layout keeps what was typed.
 
 import { type RefObject, useState } from "react";
-import type { SearchBarCommands } from "react-native-screens";
+import type { SearchBarCommands, SearchBarPlacement } from "react-native-screens";
 
 /** A ref that, the first time the field it is handed stands, tells it `text`, and never again, so nothing typed after is overwritten. */
 function refillingRef(text: string): RefObject<SearchBarCommands | null> {
@@ -36,4 +36,21 @@ export function useRefilledSearchField(text: string): RefObject<SearchBarCommand
   const [field] = useState(() => refillingRef(text));
 
   return field;
+}
+
+/**
+ * Where a list's search field stands in a compact bar: behind the bar's
+ * search button, as the Inbox and Tasks keep it, or open under the title
+ * when the list mounts holding words, as after a turn or a fold that swapped
+ * its layout. Note that a field behind its button never shows the words it
+ * is refilled with, so it would leave the list filtered with no words in
+ * sight and nothing to clear them by. It is read once as the list mounts, so
+ * the field never moves while one types or clears it.
+ */
+export function useHeldSearchPlacement(text: string): SearchBarPlacement {
+  const [placement] = useState<SearchBarPlacement>(() =>
+    text === "" ? "integratedButton" : "stacked",
+  );
+
+  return placement;
 }

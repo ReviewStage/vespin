@@ -104,7 +104,7 @@ import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns, useInFront } from "../place-columns.js";
-import { useRefilledSearchField } from "../search-field.js";
+import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -1014,6 +1014,7 @@ function InboxStackList(words: InboxSearch) {
     useInboxScreen(words);
 
   const field = useRefilledSearchField(search);
+  const placement = useHeldSearchPlacement(search);
 
   // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
   return (
@@ -1023,7 +1024,7 @@ function InboxStackList(words: InboxSearch) {
           <Stack.SearchBar
             ref={field}
             placeholder={SEARCH_INBOX}
-            placement="integratedButton"
+            placement={placement}
             allowToolbarIntegration={false}
             onChangeText={(event) => setSearch(event.nativeEvent.text)}
             onCancelButtonPress={() => setSearch("")}
