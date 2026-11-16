@@ -31,7 +31,7 @@ import {
   REVIEW_STATE,
   type ReviewThread,
 } from "@repo/features/agent-wire";
-import type { ReadLink } from "@repo/features/link-grammar";
+import type { NumberedAddress } from "@repo/features/link-grammar";
 import type {
   RepositoryChangesAnswerView,
   RepositoryPullRequestParams,
@@ -58,9 +58,9 @@ import type { DiffListProps, DiffViewModule, DiffViewProps } from "../diff-view/
 import type { FileTreeModule } from "../file-tree/contract.js";
 import { type GitHubConnectControl, GitHubConnectProvider } from "../github-connect.js";
 import { PullRequestTab } from "../tasks/agent-pull-request-tab.js";
+import { OpenPullRequestProvider } from "../tasks/open-pull-request.js";
 import { PULL_REQUEST_VIEW, type PullRequestView } from "../tasks/task-tab-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import { OpenLinkProvider } from "../tasks/use-open-link.js";
 import { ToastHost } from "../toast.js";
 import { answeringChanges, fakeActPort, fakeActPortCalls, fakeAppBridge } from "./app-bridge.js";
 import { DESKTOP_LINKS, fakeAppPlatform } from "./app-platform.js";
@@ -604,24 +604,24 @@ export const NO_GITHUB: GitHubConnectControl = {
   disconnect: () => Promise.resolve(false),
 };
 
-/** Draws the agent's tab inside the workspace's member directory and the account's GitHub, its reads landed; inside the window's opener for a place in the app where one is given. */
+/** Draws the agent's tab inside the workspace's member directory and the account's GitHub, its reads landed; inside a panel that opens another pull request in a tab of its own where `openPullRequest` is given. */
 export async function draw(
   control: AgentsControl,
   first: PullRequestView = PULL_REQUEST_VIEW.CONVERSATION,
   github: GitHubConnectControl = NO_GITHUB,
-  openPlace?: (link: ReadLink) => void,
+  openPullRequest?: (pullRequest: NumberedAddress) => void,
 ) {
   world.drawnParts = partsOf.get(control) ?? world.drawnParts;
   world.drawnChanges = changesOf.get(control) ?? world.drawnChanges;
 
-  return drawn(createElement(Switching, { control, first }), github, openPlace);
+  return drawn(createElement(Switching, { control, first }), github, openPullRequest);
 }
 
-/** Draws `tab` inside the workspace's member directory and the account's GitHub, its reads landed; inside the window's opener for a place in the app where one is given. */
+/** Draws `tab` inside the workspace's member directory and the account's GitHub, its reads landed; inside a panel that opens another pull request in a tab of its own where `openPullRequest` is given. */
 export async function drawn(
   tab: React.ReactElement,
   github: GitHubConnectControl = NO_GITHUB,
-  openPlace?: (link: ReadLink) => void,
+  openPullRequest?: (pullRequest: NumberedAddress) => void,
 ) {
   holdDrawnParts();
   const container = document.body.appendChild(document.createElement("div"));
@@ -639,9 +639,12 @@ export async function drawn(
                 Fragment,
                 null,
                 createElement(ToastHost),
-                openPlace === undefined
+                openPullRequest === undefined
                   ? tab
-                  : createElement(OpenLinkProvider, { value: openPlace, children: tab }),
+                  : createElement(OpenPullRequestProvider, {
+                      value: openPullRequest,
+                      children: tab,
+                    }),
               ),
             ),
           }),

@@ -267,6 +267,8 @@ interface Standing {
   loadedAt?: string;
   /** Whether Home's own composer is drawn while Home stands, its words heeding New task as Home's do (`useHomeNewTask`). */
   homeComposer?: boolean;
+  /** Whether the window's task list has yet to answer as the tab mounts, as at launch, until the test stands it. */
+  listUnanswered?: boolean;
 }
 
 /** Home's own composer as New task reaches it: words that take the caret at each press while it stands. */
@@ -598,8 +600,12 @@ function mount(
   document.body.append(container);
   // The window's toast stands beside the tab, as the app draws it.
   const surface = createElement(Fragment, null, createElement(Probe), createElement(ToastHost));
+
   // The window's task-list collections, standing on the tasks the tab lists, as the window's follow writes them.
-  const taskList = standingTaskList(listedOf(standing));
+  const taskList = standingTaskList(
+    standing.listUnanswered === true ? undefined : listedOf(standing),
+  );
+
   const root = createRoot(container);
   roots.push(root);
 
@@ -1905,6 +1911,38 @@ test("a link an earlier version wrote to an agent's Pull request tab opens the o
   const sharedTab = changesTab({ repository: "acme/relay", number: 41 });
   assert.deepEqual(panelOf(tab), { open: true, tab: sharedTab });
   assert.deepEqual(tab.control().sidePanel.changes, [sharedTab]);
+});
+
+test("a link an earlier version wrote to an agent's Pull request tab, opened before the task list first answers, waits for it and opens the pull request the agent's row names", async () => {
+  const pullRequest = {
+    number: 41,
+    title: "Teammate invitations",
+    url: "https://github.com/acme/relay/pull/41",
+    state: PULL_REQUEST_STATE.OPEN,
+    checks: CHECK_SUMMARY.PASSING,
+    additions: 12,
+    deletions: 3,
+    changedFiles: 2,
+  };
+
+  const tab = mount({ shown: true, listUnanswered: true, tasks: withAgents([RUNNING_AGENT]) });
+  await settle();
+
+  act(() =>
+    tab
+      .control()
+      .onOpenLink(linkAt(`${LINK_ORIGIN}/acme/task/${TASK.id}/agent/${AGENT_ID}/changes`)),
+  );
+  tab.stand({
+    tasks: {
+      ...withAgents([RUNNING_AGENT]),
+      agentPullRequests: [{ agentId: AGENT_ID, taskId: TASK.id, pullRequest }],
+    },
+  });
+  await settle();
+
+  const opened = changesTab({ repository: "acme/relay", number: 41 });
+  assert.deepEqual(panelOf(tab), { open: true, tab: opened });
 });
 
 test("a Vespin link to an agent's message opens the agent and asks its tab to bring the message into view, each ask its own, let go once answered", async () => {

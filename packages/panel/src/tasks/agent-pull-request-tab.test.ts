@@ -24,7 +24,7 @@ import {
   REVIEW_STATE,
 } from "@repo/features/agent-wire";
 import { FAILURE_FACT } from "@repo/features/failure-facts";
-import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
+import type { NumberedAddress } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   MERGE_METHOD,
@@ -2998,9 +2998,7 @@ test("its reviewers stand compactly, three faces and a count of the rest: where 
   );
 });
 
-test("the stack it stands in sits beside its branches; its menu lists it tip first, and opens an agent's Pull request tab on its task, this one or another, and one no agent owns on GitHub", async () => {
-  const elsewhere = "3c5e7a9b-1d2f-4a6b-8c0e-2f4a6b8c0e1d";
-
+test("the stack it stands in sits beside its branches; its menu lists it tip first, and opens each other one in a Pull request tab of the panel by its repository and number, whichever agent opened it", async () => {
   const entry = (number: number, agent?: { id: string; taskId: string }) => ({
     number,
     title: `Step ${number}`,
@@ -3009,10 +3007,13 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
     ...(agent === undefined ? undefined : { agent }),
   });
 
+  const away = {
+    id: "7c9e1b3d-5f7b-4d9f-8b3d-5f7b9d1f3b5d",
+    taskId: "3c5e7a9b-1d2f-4a6b-8c0e-2f4a6b8c0e1d",
+  };
+
   const sibling = { id: "5a7c9e1b-3d5f-4b7d-9f1b-3d5f7b9d1f3a", taskId: AGENT.taskId };
-  const away = { id: "7c9e1b3d-5f7b-4d9f-8b3d-5f7b9d1f3b5d", taskId: elsewhere };
-  const beside = { id: "9e1b3d5f-7b9d-4f1b-8d5f-7b9d1f3b5d7f", taskId: elsewhere };
-  const links: ReadLink[] = [];
+  const opened: NumberedAddress[] = [];
 
   const tab = await draw(
     controlAnswering({
@@ -3024,7 +3025,7 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
               entry(38, away),
               entry(40, sibling),
               entry(42, { id: AGENT.id, taskId: AGENT.taskId }),
-              entry(44, beside),
+              entry(44),
               entry(46),
             ],
           },
@@ -3032,7 +3033,7 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
     }),
     PULL_REQUEST_VIEW.CONVERSATION,
     undefined,
-    (link) => links.push(link),
+    (pullRequest) => opened.push(pullRequest),
   );
 
   const button = await vi.waitFor(
@@ -3074,22 +3075,12 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
   press(40);
   press(38);
   press(44);
-  press(46);
-  assert.deepEqual(links, [
-    {
-      workspace: "",
-      place: { kind: LINK_DESTINATION.CHANGES, taskId: AGENT.taskId, agentId: sibling.id },
-    },
-    {
-      workspace: "",
-      place: { kind: LINK_DESTINATION.CHANGES, taskId: elsewhere, agentId: away.id },
-    },
-    {
-      workspace: "",
-      place: { kind: LINK_DESTINATION.CHANGES, taskId: elsewhere, agentId: beside.id },
-    },
+  assert.deepEqual(opened, [
+    { repository: "acme/relay", number: 40 },
+    { repository: "acme/relay", number: 38 },
+    { repository: "acme/relay", number: 44 },
   ]);
-  await vi.waitFor(() => assert.deepEqual(world.opened, ["https://github.com/acme/relay/pull/46"]));
+  assert.deepEqual(world.opened, [], "none leaves for GitHub");
 });
 
 test("a pull request of the stack GitHub's merge queue holds says Queued in the stack's menu, and one it does not says nothing of it", async () => {

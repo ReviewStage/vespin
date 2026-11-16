@@ -2514,6 +2514,24 @@ export function useTasksTab(input: {
    * the agent's tab opens with it, and that its tab is opened with no task
    * words, since a link carries none; its own rows name its task once they land.
    */
+  // The pull request an agent's line names, at once where the task list stands, else once it first answers, unless the window moved on before then.
+  const onAgentPullRequest = (
+    agentId: string,
+    then: (pullRequest: NumberedAddress | undefined) => void,
+  ) => {
+    if (listCollections.agentPullRequests.isReady()) {
+      then(agentPullRequestOf(agentId));
+
+      return;
+    }
+
+    const current = linkRead();
+    const opening = keepLinkLanded();
+    listCollections.agentPullRequests.onFirstReady(() => {
+      if (current()) opening(() => then(agentPullRequestOf(agentId)));
+    });
+  };
+
   const openOnTask = (taskId: string, place: AgentPlace) => {
     const column = agentTab(place.agentId);
     // A tab of the side panel a link opens, and the link a narrow room's step on it stands at (`places/task-step.ts`).
@@ -2531,42 +2549,40 @@ export function useTasksTab(input: {
       }
 
       // An agent's Changes opens the pull request its line names, and the agent's own tab where its line names none.
-      case LINK_DESTINATION.CHANGES: {
-        const pullRequest = agentPullRequestOf(place.agentId);
+      case LINK_DESTINATION.CHANGES:
+        onAgentPullRequest(place.agentId, (pullRequest) => {
+          if (pullRequest === undefined) {
+            linkOnTask({ taskId: taskId, column }, () => showColumnTab(taskId, column));
 
-        if (pullRequest === undefined) {
-          linkOnTask({ taskId: taskId, column }, () => showColumnTab(taskId, column));
+            return;
+          }
 
-          return;
-        }
-
-        const tab = changesTab(pullRequest);
-        linkOnTask({ taskId: taskId, side: sideOf(tab) }, () =>
-          linkPanelTab({ ...place, taskId }, tab),
-        );
-
-        return;
-      }
-
-      // A review thread opens the tab of the pull request its agent's line names on the view the link names, and the agent's own tab where its line names none.
-      case LINK_DESTINATION.PULL_REQUEST_THREAD: {
-        const pullRequest = agentPullRequestOf(place.agentId);
-
-        if (pullRequest === undefined) {
-          linkOnTask({ taskId: taskId, column }, () => showColumnTab(taskId, column));
-
-          return;
-        }
-
-        const tab = changesTab(pullRequest);
-        linkOnTask({ taskId: taskId, side: sideOf(tab) }, () => {
-          sidePanel.onPullRequestView(tab, place.view);
-          linkPanelTab({ ...place, taskId }, tab);
-          revealThread(pullRequest, place);
+          const tab = changesTab(pullRequest);
+          linkOnTask({ taskId: taskId, side: sideOf(tab) }, () =>
+            linkPanelTab({ ...place, taskId }, tab),
+          );
         });
 
         return;
-      }
+
+      // A review thread opens the tab of the pull request its agent's line names on the view the link names, and the agent's own tab where its line names none.
+      case LINK_DESTINATION.PULL_REQUEST_THREAD:
+        onAgentPullRequest(place.agentId, (pullRequest) => {
+          if (pullRequest === undefined) {
+            linkOnTask({ taskId: taskId, column }, () => showColumnTab(taskId, column));
+
+            return;
+          }
+
+          const tab = changesTab(pullRequest);
+          linkOnTask({ taskId: taskId, side: sideOf(tab) }, () => {
+            sidePanel.onPullRequestView(tab, place.view);
+            linkPanelTab({ ...place, taskId }, tab);
+            revealThread(pullRequest, place);
+          });
+        });
+
+        return;
 
       case LINK_DESTINATION.AGENT:
         linkOnTask({ taskId: taskId, column }, () => showColumnTab(taskId, column));

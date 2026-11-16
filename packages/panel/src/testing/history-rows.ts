@@ -56,8 +56,8 @@ export interface StandingTaskList {
   readonly provide: (element: ReactNode) => ReactElement;
 }
 
-/** The window's task-list collections, standing on `initial`'s tasks and agents until `stand` writes others. */
-export function standingTaskList(initial: ListedTasks): StandingTaskList {
+/** The window's task-list collections, standing on `initial`'s tasks and agents until `stand` writes others; none answered yet, as at launch, where `initial` is none. */
+export function standingTaskList(initial: ListedTasks | undefined): StandingTaskList {
   const following = taskListFollowing();
   let version = 0;
 
@@ -72,7 +72,7 @@ export function standingTaskList(initial: ListedTasks): StandingTaskList {
     });
   };
 
-  stand(initial);
+  if (initial !== undefined) stand(initial);
 
   return {
     stand,

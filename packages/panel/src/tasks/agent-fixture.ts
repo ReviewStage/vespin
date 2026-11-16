@@ -99,11 +99,13 @@ import { SANDBOX_STATE, type SandboxState } from "@repo/features/terminal-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppPages,
+  type AppPullRequestPart,
   type AppRepositoryPullRequestHeld,
   type AppStateSnapshot,
   type AppTranscript,
   type AppTranscripts,
   type AppWorkspaceTools,
+  OWN_PULL_REQUEST,
   OWN_TRANSCRIPT,
   RUN_PROFILE,
 } from "@repo/host/app-state";
@@ -1559,6 +1561,29 @@ function stagedPart<Read>(
   };
 }
 
+/** Main's held branch reads with the agent's own laid over them, which its tab's pull request card reads (`use-agent-pull-request.ts`), one object for each of main's. */
+const STAGED_PUBLISHED = new WeakMap<
+  AppPullRequestPart<AgentPullRequestAnswerView>,
+  AppPullRequestPart<AgentPullRequestAnswerView>
+>();
+
+/** What the agent published, its branch and pull request, as its tab's read of it holds it. */
+function stagedPublished(
+  held: AppPullRequestPart<AgentPullRequestAnswerView>,
+): AppPullRequestPart<AgentPullRequestAnswerView> {
+  let laid = STAGED_PUBLISHED.get(held);
+
+  if (laid === undefined) {
+    laid = {
+      ...held,
+      [FIXTURE_AGENT_ID]: { ...held[FIXTURE_AGENT_ID], [OWN_PULL_REQUEST]: { rows: PUBLISHED } },
+    };
+    STAGED_PUBLISHED.set(held, laid);
+  }
+
+  return laid;
+}
+
 /** The reads of the agent's pull request its tab holds, as the host would lay each. */
 const STAGED_PARTS = {
   [LIVE_READ.REPOSITORY_PULL_REQUEST]:
@@ -1687,6 +1712,7 @@ export function agentAppState(
     [LIVE_READ.PAGES]: staged,
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT], stagedTranscript(stage)),
     [LIVE_READ.WORKSPACE_TOOLS]: stagedRunOnMac(state[LIVE_READ.WORKSPACE_TOOLS]),
+    [LIVE_READ.PULL_REQUEST_PUBLISHED]: stagedPublished(state[LIVE_READ.PULL_REQUEST_PUBLISHED]),
     [LIVE_READ.REPOSITORY_PULL_REQUEST]: STAGED_PARTS[LIVE_READ.REPOSITORY_PULL_REQUEST](
       state[LIVE_READ.REPOSITORY_PULL_REQUEST],
       workspaceId,
