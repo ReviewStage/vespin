@@ -2,6 +2,7 @@
 
 import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
 import { COMMENT_NOTE } from "@repo/features/description-comment-notes";
+import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { agentName } from "@repo/features/model-label";
 import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
@@ -155,6 +156,13 @@ export function CommentThread({
     head: reply.note === undefined ? undefined : <AskNote words={reply.note} />,
   };
 
+  // Note that a split view's detail bar stands Resolve or Reopen among the page's acts, as a compact window's toolbar stands it, since a column draws no stack toolbar.
+  const settleAct = (shown: DescriptionCommentThread) => ({
+    label: threadOpen(shown) ? WORDS.RESOLVE : WORDS.REOPEN,
+    symbol: threadOpen(shown) ? GLYPH.CHECK : GLYPH.RESTORE,
+    onPress: () => settle(shown),
+  });
+
   const page = (foot?: ReactNode) =>
     thread === undefined ? undefined : (
       <ThreadPage
@@ -165,6 +173,7 @@ export function CommentThread({
         repository={task?.repository}
         onOpenLink={openLink}
         standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
+        acts={inColumn ? [settleAct(thread)] : undefined}
         foot={foot}
       />
     );
