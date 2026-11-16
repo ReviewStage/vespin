@@ -4,15 +4,15 @@ import { workspaceGithubContract } from "./contract/workspace-github.js";
 import { workspaceInvitationsContract } from "./contract/workspace-invitations.js";
 import { workspaceMergeQueueContract } from "./contract/workspace-merge-queue.js";
 import { workspaceSandboxSetupContract } from "./contract/workspace-sandbox-setup.js";
+import { workspaceSandboxSizeContract } from "./contract/workspace-sandbox-size.js";
 import { workspaceSentryContract } from "./contract/workspace-sentry.js";
 import { workspaceSlackBotContract } from "./contract/workspace-slack-bot.js";
 import { workspacesContract } from "./contract/workspaces.js";
 import { failureSetOf } from "./hosted-failure.js";
 import { HOSTED_API_ERROR } from "./service-wire.js";
-import type { TaskCallResult } from "./task-client.js";
 
 /**
- * workspace-call.ts -- why a workspace call did not happen, and the result a call answers.
+ * workspace-call.ts -- why a workspace call did not happen.
  *
  * Its own module, apart from the client, so the tasks view, which the
  * window reads, takes the words without taking the client and the account
@@ -42,6 +42,7 @@ const WORKSPACE_CALLS = {
   workspaceInvitations: workspaceInvitationsContract,
   workspaceEnvironment: workspaceEnvironmentContract,
   workspaceSandboxSetup: workspaceSandboxSetupContract,
+  workspaceSandboxSize: workspaceSandboxSizeContract,
   workspaceMergeQueue: workspaceMergeQueueContract,
   workspaceGithub: workspaceGithubContract,
   workspaceSentry: workspaceSentryContract,
@@ -55,6 +56,3 @@ export const WORKSPACE_CALL_FAILURE = failureSetOf(WORKSPACE_CALLS, { as: WORKSP
 
 export type WorkspaceCallFailure =
   (typeof WORKSPACE_CALL_FAILURE)[keyof typeof WORKSPACE_CALL_FAILURE];
-
-/** One workspace call's answer, or why there is none. */
-export type WorkspaceCallResult<Answer> = TaskCallResult<Answer, WorkspaceCallFailure>;

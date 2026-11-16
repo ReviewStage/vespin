@@ -1,12 +1,13 @@
 import { ACCOUNT_STATUS, type AccountProvider } from "@repo/credentials/snapshot";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { readingWords, type SignInFailure } from "@repo/features/words";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BACK_BUTTON_LOOK,
   BackButton,
+  CALL_CARD_SURFACE,
   COLLECTION_STATE,
   CollectionPage,
   DetailPage,
@@ -29,6 +30,7 @@ import {
   useDrawerSwipe,
 } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { Outlet, useMatch } from "@tanstack/react-router";
 import {
@@ -47,6 +49,7 @@ import { AdminCollectionPage, AdminPlaceFrameProvider } from "../admin/chrome/pa
 import type { AdminView } from "../admin/routing.js";
 import { useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
+import { CallAgentShown, CallCardDock } from "../call/standing-call.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { MERGE_QUEUE_WORDS } from "../history-titles.js";
 import { useMergeQueueOn } from "../merge-queue-route.js";
@@ -68,6 +71,7 @@ import type { NavigationHistory, WindowHistory } from "../places/window-history.
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { type HiddenColumns, hiddenColumns, SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SignInGate } from "../sign-in-gate.js";
+import { useNamedTask, useTaskListRows } from "../task-list-collections.js";
 import { ChipCards, type TaskFocus } from "../tasks/chip-cards.js";
 import { MentionedAgents } from "../tasks/mentioned-place.js";
 import { NewTaskDialog } from "../tasks/new-task-dialog.js";
@@ -104,6 +108,7 @@ import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
 import { homeTaskCardOf } from "./task-card.js";
 import { awayBack } from "./task-pane-switcher.js";
 import { TasksPagesHeld } from "./tasks-page-held.js";
+import { UpdateNeeded, useUpdateNeeded } from "./update-needed.js";
 import { useWindowTitle } from "./window-title.js";
 
 /** What stands while the Tasks page's chunk loads: its frame and title over quiet blocks, and its own way out, so Escape closes the page rather than reaching the plan behind it. */
@@ -850,7 +855,13 @@ export function DesktopShell({
 }): React.JSX.Element {
   const { account } = settings;
   const shell = useRef<HTMLDivElement>(null);
-  const gated = gates.accountRequired && account.status !== ACCOUNT_STATUS.SIGNED_IN;
+  // While the service refuses this build, the update screen takes the whole window, the sign-in, setup, and New workspace
+  // among what it stands over, since every call any of them would make is refused until the build is updated.
+  const updateNeeded = useUpdateNeeded();
+
+  const gated =
+    !updateNeeded && gates.accountRequired && account.status !== ACCOUNT_STATUS.SIGNED_IN;
+
   // A new account is set up once, in the window before the app, until it finishes on any machine.
   const signedInId = account.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined;
   const [finishedHere, setFinishedHere] = useState<string>();
@@ -882,9 +893,10 @@ export function DesktopShell({
   const setToggleRoom = usePanelToggleRoom();
   // Note that setup standing before the app holds the places' chords too, so none lands behind it, as New workspace's cards do.
   const newWorkspace = useNewWorkspace(tasks.placeLeave);
-  const founding = !gated && newWorkspace.open;
+  const founding = !gated && !updateNeeded && newWorkspace.open;
+  // Note that setup the update screen stands in place of holds no chords, so Settings stays a key away.
   usePlaceCommands(
-    !gated && setup === SETUP_GATE.NONE && !founding,
+    !gated && (updateNeeded || setup === SETUP_GATE.NONE) && !founding,
     tab,
     onTabChange,
     tasks,
@@ -913,27 +925,46 @@ export function DesktopShell({
     place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
 
   const shownTask =
-    tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READY
+    tab === PANEL_TAB.TASKS && !standingIn && region.kind === TASK_REGION.READY
       ? region.task
       : undefined;
 
+  // The agent the window shows in its work, where a call into it is drawn by the agent's own controls rather
+  // than a card: an agent's page's, or the agent the open task's column shows, while no version or panel covers it.
+  const columnTab = tasks.mainTabs.tab;
+
+  const columnAgent =
+    standingIn ||
+    tasks.history.open ||
+    tasks.sidePanel.fullScreen ||
+    columnTab === undefined ||
+    isOverviewTab(columnTab) ||
+    columnTab.kind !== STRIP_TAB_KIND.AGENT
+      ? undefined
+      : columnTab.agent;
+
+  const agentShown = tab === PANEL_TAB.TASKS ? (tasks.agentView.agentId ?? columnAgent) : undefined;
+
   // Note that while the plan's description is read, the window is named by the task as the list holds it.
-  const namedTask =
-    shownTask ??
-    (tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READING
-      ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
-      : undefined);
+  const readingTask = useNamedTask(
+    tab === PANEL_TAB.TASKS && !standingIn && region.kind === TASK_REGION.READING
+      ? tasks.activeTaskId
+      : undefined,
+    tasks.typedNames,
+  );
+
+  const namedTask = shownTask ?? readingTask;
 
   useWindowTitle(titleSubject(tab, tasks, namedTask, place, inAutomations));
 
   // The plan is looked at the moment it is on screen, whichever of its column's tabs is chosen,
-  // from the mark and the agents' activity its row in the list carries.
+  // from the mark and the agents' activity its row in the list carries; not while the update screen stands over the window.
+  const listedShown = useNamedTask(shownTask?.id, tasks.typedNames);
+
   const looks = useTaskLooks(
-    shownTask,
+    updateNeeded ? undefined : shownTask,
     tasks.me,
-    shownTask === undefined
-      ? undefined
-      : (tasks.tasks.find((row) => row.id === shownTask.id) ?? shownTask),
+    shownTask === undefined ? undefined : (listedShown ?? shownTask),
   );
 
   const mentionedAgents = useMemo(
@@ -945,15 +976,17 @@ export function DesktopShell({
   // Note that what the columns are handed is held across draws over the same
   // tasks, because each column holds while what it is handed does
   // (`DesktopSidebar`, `DesktopTasks`), and a chip reads its cards from here.
+  const taskRows = useTaskListRows(tasks.typedNames);
+
   const chipCards = useMemo(
     () => ({
       taskCard: (taskId: string, now: number, focus: TaskFocus | undefined) => {
-        const task = tasks.tasks.find((each) => each.id === taskId);
+        const task = taskRows.task(taskId);
 
         return task === undefined ? undefined : homeTaskCardOf(tasks, task, now, focus);
       },
     }),
-    [tasks],
+    [tasks, taskRows],
   );
 
   // New task asks over whatever stands, the tasks or a version history.
@@ -982,7 +1015,7 @@ export function DesktopShell({
   // so while they stand there is no panel to toggle either; but a panel left
   // filling the window over them hides them too, and its toggle is the way out.
   const detailsShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
-  const descriptionToggle = tasks.page === TASKS_PAGE.DOCUMENT && !standingIn && !detailsShown;
+  const descriptionToggle = tasks.page === TASKS_PAGE.TASK && !standingIn && !detailsShown;
   // A phone's task leads its own row with the way back to the page it was opened from, named for it (`task-pane-switcher.tsx`).
   const awayLabel = awayBack(history.away, history.onLeave).label;
   const { onLeave } = history;
@@ -991,7 +1024,7 @@ export function DesktopShell({
   // Note that the onboarding column's drag strip stands over its top rather
   // than in flow, because the AuthPage beneath is already a whole window tall
   // and a strip above it would overflow the window by the strip's height.
-  if (setup !== SETUP_GATE.NONE && signedInId !== undefined) {
+  if (!updateNeeded && setup !== SETUP_GATE.NONE && signedInId !== undefined) {
     // While a new account's agent is still read, the window waits on setup's own ground rather than glimpsing the app.
     return (
       <ScrollArea>
@@ -1042,6 +1075,10 @@ export function DesktopShell({
     );
   }
 
+  // The update screen takes the whole window but for Settings, which stays to reach the account and the build.
+  if (updateNeeded && tab !== PANEL_TAB.SETTINGS)
+    return <UpdateNeeded updates={settings.updates} />;
+
   // New workspace takes the whole window on setup's own ground, its cards being setup's.
   if (founding) {
     return (
@@ -1085,7 +1122,9 @@ export function DesktopShell({
   return (
     <NewWorkspaceOpener value={newWorkspace.onOpen}>
       <ShellPlacesContext value={places}>
-        <Outlet />
+        <CallAgentShown value={agentShown}>
+          <Outlet />
+        </CallAgentShown>
       </ShellPlacesContext>
     </NewWorkspaceOpener>
   );
@@ -1187,6 +1226,8 @@ export function ShellPlaces(): React.JSX.Element {
         ) : null}
       </main>
       {barShown ? <MobileBar tasks={tasks} /> : null}
+      {/* Folded, the sidebar's call card floats in the corner it would have stood over. */}
+      <CallCardDock docked={sidebar.collapsed} surface={CALL_CARD_SURFACE.FLOATING} />
       {/* Note that the floating sidebar's title-bar row is claimed back from the work's drag strips here, after the work,
           because a later drag region wins and the sidebar comes before the work, so its Back and Forward keep their presses. */}
       {sidebar.overlay !== SIDEBAR_OVERLAY.CLOSED && room === SHELL_ROOM.WIDE ? (
@@ -1232,13 +1273,13 @@ export function ShellPlaces(): React.JSX.Element {
       {panelToggle && room === SHELL_ROOM.NARROW ? (
         <SidePanelChord
           panel={tasks.sidePanel}
-          disabled={descriptionToggle && tasks.region.kind !== DOCUMENT_REGION.READY}
+          disabled={descriptionToggle && tasks.region.kind !== TASK_REGION.READY}
         />
       ) : panelToggle ? (
         <div ref={setToggleRoom} className="title-bar-controls" data-edge="end" inert={drawerOver}>
           <SidePanelToggle
             panel={tasks.sidePanel}
-            disabled={descriptionToggle && tasks.region.kind !== DOCUMENT_REGION.READY}
+            disabled={descriptionToggle && tasks.region.kind !== TASK_REGION.READY}
           />
         </div>
       ) : null}

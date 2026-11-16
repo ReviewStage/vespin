@@ -21,6 +21,7 @@ import { confirmFailure } from "../failure-report.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { clickPlacement, documentWordsAt } from "./description-document-editor.js";
 import { EDITOR_NOTE_CLASS, MarkdownEditor } from "./markdown-editor.js";
+import { usePullRequestSource } from "./pull-request-source.js";
 import {
   PullRequestWriteNote,
   type ReadAgain,
@@ -114,26 +115,27 @@ interface HeldDraft {
 }
 
 /**
- * The drafts refused as their descriptions went, by agent and then by pull
- * request number, each opened on again the next time its description is
+ * The drafts refused as their descriptions went, by repository, whatever
+ * the case it is spelled in, and then by pull request number, each opened on again the next time its description is
  * drawn, so no refused words are lost with the surface they were typed on.
  */
 const heldDrafts = new Map<string, Map<number, HeldDraft>>();
 
 /** The draft held for a pull request's description; none where none is. */
-function heldDraft(agentId: string, number: number): HeldDraft | undefined {
-  return heldDrafts.get(agentId)?.get(number);
+function heldDraft(repository: string, number: number): HeldDraft | undefined {
+  return heldDrafts.get(repository.toLowerCase())?.get(number);
 }
 
 /** A refused draft kept for its description, or let go where `draft` is none. */
-function holdDraft(agentId: string, number: number, draft: HeldDraft | undefined): void {
-  const kept = heldDrafts.get(agentId) ?? new Map<number, HeldDraft>();
+function holdDraft(repository: string, number: number, draft: HeldDraft | undefined): void {
+  const named = repository.toLowerCase();
+  const kept = heldDrafts.get(named) ?? new Map<number, HeldDraft>();
 
   if (draft === undefined) kept.delete(number);
   else kept.set(number, draft);
 
-  if (kept.size === 0) heldDrafts.delete(agentId);
-  else heldDrafts.set(agentId, kept);
+  if (kept.size === 0) heldDrafts.delete(named);
+  else heldDrafts.set(named, kept);
 }
 
 /**
@@ -191,13 +193,11 @@ function DescriptionNote({
  * asks the description's read again, which Reload waits on.
  */
 export function PullRequestDescription({
-  agentId,
   pullRequest,
   body,
   drawn,
   onRead,
 }: {
-  agentId: string;
   pullRequest: AgentOverviewPullRequest;
   /** The description as written, Markdown, empty where it has none. */
   body: string;
@@ -206,11 +206,12 @@ export function PullRequestDescription({
   onRead: ReadAgain;
 }): React.JSX.Element {
   const { number } = pullRequest;
-  const writes = usePullRequestWrites(agentId, onRead);
+  const repository = usePullRequestSource()?.pullRequest.repository ?? "";
+  const writes = usePullRequestWrites(onRead);
   const prefetchEditorBundle = usePrefetchEditorBundle();
   const block = useRef<HTMLDivElement>(null);
   // A draft refused as the description last went opens the editor on it again, saying why.
-  const [held] = useState(() => heldDraft(agentId, number));
+  const [held] = useState(() => heldDraft(repository, number));
   const [heldNote, setHeldNote] = useState(held?.note);
 
   const [editing, setEditing] = useState<Editing>(() =>
@@ -226,7 +227,7 @@ export function PullRequestDescription({
   );
 
   useEffect(() => {
-    if (held !== undefined) holdDraft(agentId, number, undefined);
+    if (held !== undefined) holdDraft(repository, number, undefined);
   }, []);
   // The editor's words as they stand, handed over at every change; none until the first.
   const draft = useRef<string | undefined>(undefined);
@@ -341,7 +342,7 @@ export function PullRequestDescription({
           expectedBody,
         }).then((outcome) => {
           if (outcome.done) return;
-          holdDraft(agentId, number, { draft: words, base: expectedBody, note: outcome.note });
+          holdDraft(repository, number, { draft: words, base: expectedBody, note: outcome.note });
         });
       });
     },

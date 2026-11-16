@@ -8,8 +8,8 @@ import { CALL_ITEM, type CallItem, callItemsOf } from "./voice-call-lines.js";
 /**
  * Each edge a call leaves in a transcript, as the rows the service stores in
  * the conversation's order (`seq`), against what the tab draws of them in
- * order: a call's start and end, each row, a turn folded where the voice
- * retells it, and the lines a turn took in under way inside it. The rules
+ * order: a call's start and end, each row, and the lines a turn took in
+ * under way inside it. The rules
  * they hold are `callItemsOf`'s.
  */
 
@@ -66,21 +66,22 @@ function typed(id: string, into?: string): AgentTranscriptMessage {
   };
 }
 
-/** What the tab draws of an item, in a word: a call's start or end, a row by its id, a folded turn marked so, and the lines it took in after a colon. */
+/** What the tab draws of an item, in a word: a call's start or end, a row by its id, and the lines it took in after a colon. */
 function drawn(item: CallItem): string {
   if (item.kind === CALL_ITEM.START) return `start ${item.span.callId}`;
 
   if (item.kind === CALL_ITEM.END) return `end ${item.span.callId}`;
 
-  return item.folded ? `${item.message.id} folded` : item.message.id;
+  return item.message.id;
 }
 
-/** The rows as the tab draws them: placed (`placedMessages`), then with the calls among them. */
-function drawing(script: Script): readonly string[] {
+/** The rows as the tab draws them: placed (`placedMessages`), then with the calls among them, those `standing` still under way. */
+function drawing(script: Script, standing: readonly string[]): readonly string[] {
   const placed = placedMessages(script);
   const arrived = new Map(placed.map((row) => [row.message.id, row.arrived]));
+  const calls = standing.map((callId) => ({ callId, callerId: "ada", startedAt: 0 }));
 
-  return callItemsOf(placed).map((item) => {
+  return callItemsOf(placed, calls).map((item) => {
     const lines = item.kind === CALL_ITEM.ROW ? (arrived.get(item.message.id) ?? []) : [];
 
     return lines.length === 0
@@ -89,11 +90,16 @@ function drawing(script: Script): readonly string[] {
   });
 }
 
-test.each<{ readonly case: string; readonly script: Script; readonly drawn: readonly string[] }>([
+test.each<{
+  readonly case: string;
+  readonly script: Script;
+  readonly standing?: readonly string[];
+  readonly drawn: readonly string[];
+}>([
   {
-    case: "a plain exchange: the ask handed on, the turn, and the voice retelling it, the turn folded",
+    case: "a plain exchange: the ask handed on, the turn, and the voice retelling it, the turn",
     script: [caller("ask", true), voice("ack"), turn("work"), voice("retell")],
-    drawn: ["start call-1", "ask", "ack", "work folded", "retell", "end call-1"],
+    drawn: ["start call-1", "ask", "ack", "work", "retell", "end call-1"],
   },
   {
     case: "small talk the voice answers itself, no turn",
@@ -118,18 +124,6 @@ test.each<{ readonly case: string; readonly script: Script; readonly drawn: read
     drawn: ["start call-1", "cut", "wait", "end call-1"],
   },
   {
-    case: "a long ask said over pauses, handed on together",
-    script: [
-      caller("one", true),
-      caller("two", true),
-      caller("three", true),
-      voice("ack"),
-      turn("work"),
-      voice("retell"),
-    ],
-    drawn: ["start call-1", "one", "two", "three", "ack", "work folded", "retell", "end call-1"],
-  },
-  {
     case: "a line typed into the turn a call opened, inside the turn that took it",
     script: [
       caller("ask", true),
@@ -138,7 +132,7 @@ test.each<{ readonly case: string; readonly script: Script; readonly drawn: read
       typed("typed", "work"),
       voice("retell"),
     ],
-    drawn: ["start call-1", "ask", "ack", "work folded: typed", "retell", "end call-1"],
+    drawn: ["start call-1", "ask", "ack", "work: typed", "retell", "end call-1"],
   },
   {
     case: "a hand-over that failed: the line stands as said, and no turn",
@@ -146,12 +140,7 @@ test.each<{ readonly case: string; readonly script: Script; readonly drawn: read
     drawn: ["start call-1", "lost", "sorry", "end call-1"],
   },
   {
-    case: "a line edited in the queue: the line as said, then its edit, which opens the turn",
-    script: [caller("said"), caller("edited", true), turn("work"), voice("retell")],
-    drawn: ["start call-1", "said", "edited", "work folded", "retell", "end call-1"],
-  },
-  {
-    case: "a line spoken mid-turn stands after the turn, which folds all the same",
+    case: "a line spoken mid-turn stands after the turn",
     script: [
       caller("ask", true),
       voice("ack"),
@@ -160,38 +149,12 @@ test.each<{ readonly case: string; readonly script: Script; readonly drawn: read
       voice("reply"),
       voice("retell"),
     ],
-    drawn: ["start call-1", "ask", "ack", "work folded", "chat", "reply", "retell", "end call-1"],
-  },
-  {
-    case: "two delegations in a row before the agent answers",
-    script: [
-      caller("first", true),
-      voice("ack"),
-      caller("second", true),
-      voice("ack-2"),
-      turn("work"),
-      voice("retell"),
-    ],
-    drawn: [
-      "start call-1",
-      "first",
-      "ack",
-      "second",
-      "ack-2",
-      "work folded",
-      "retell",
-      "end call-1",
-    ],
+    drawn: ["start call-1", "ask", "ack", "work", "chat", "reply", "retell", "end call-1"],
   },
   {
     case: "the caller talking over the voice's retelling",
     script: [caller("ask", true), turn("work"), voice("retell"), caller("over")],
-    drawn: ["start call-1", "ask", "work folded", "retell", "over", "end call-1"],
-  },
-  {
-    case: "a typed turn never folds, though a call follows it",
-    script: [typed("typed"), turn("work"), caller("hello"), voice("hi")],
-    drawn: ["typed", "work", "start call-1", "hello", "hi", "end call-1"],
+    drawn: ["start call-1", "ask", "work", "retell", "over", "end call-1"],
   },
   {
     case: "two calls, each between its own start and end",
@@ -239,6 +202,18 @@ test.each<{ readonly case: string; readonly script: Script; readonly drawn: read
       "end call-2",
     ],
   },
-])("$case", ({ script, drawn: expected }) => {
-  assert.deepEqual(drawing(script), expected);
+  {
+    case: "a call just opened, before anyone speaks: its start after every row, and no end",
+    script: [typed("typed"), turn("work")],
+    standing: ["call-1"],
+    drawn: ["typed", "work", "start call-1"],
+  },
+  {
+    case: "a call still standing once spoken on: its start before its first line, and no end",
+    script: [typed("typed"), turn("work"), caller("hello"), voice("hi")],
+    standing: ["call-1"],
+    drawn: ["typed", "work", "start call-1", "hello", "hi"],
+  },
+])("$case", ({ script, standing = [], drawn: expected }) => {
+  assert.deepEqual(drawing(script, standing), expected);
 });

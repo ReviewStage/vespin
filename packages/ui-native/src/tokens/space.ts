@@ -22,7 +22,9 @@ export const READING_WIDTH = 720;
 
 /** The sizes the marks are drawn at, in points. */
 export const MARK_SIZE = {
-  /** The unread dot, in the row's margin. */
+  /** The unread dot, in the row's margin: the strongest mark a row carries, as Mail's is. */
+  UNREAD: 9,
+  /** A row's end dot, such as a task's thread that needs you. */
   DOT: 6,
   /** A row's leading mark, a status ring or an ask's glyph, and a chip's. */
   GLYPH: 14,
@@ -34,6 +36,8 @@ export const MARK_SIZE = {
   AVATAR: 28,
   /** A teammate's face among a row's end marks, and on a chip. */
   FACE: 16,
+  /** A person's photo in a system menu's glyph place, as the glyphs beside it stand. */
+  MENU_PHOTO: 20,
   /** The account's photo in a bar, inside the round glass the bar's other buttons stand in. */
   BAR_FACE: 32,
   /**
@@ -79,7 +83,7 @@ export const SIDEBAR_ROW = {
  */
 export const ROW_INSET = {
   /** The row's own leading inset, the dot's margin. */
-  LEADING: SPACE.EDGE - MARK_SIZE.DOT - SPACE.TIGHT,
+  LEADING: SPACE.EDGE - MARK_SIZE.UNREAD - SPACE.TIGHT,
   /** Where the words, and the hairline under them, start from the screen's edge. */
   TEXT: SPACE.EDGE + MARK_SIZE.LEAD + SPACE.ROW,
   /** A row's top and bottom. */

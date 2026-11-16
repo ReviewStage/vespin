@@ -144,7 +144,7 @@ const standing = (sandbox: PageSandbox | undefined) =>
   });
 
 const framePath = (taskId: string, pageId: string, version: number) =>
-  `/api/plans/${taskId}/pages/${pageId}/versions/${version}/frame`;
+  `/api/tasks/${taskId}/pages/${pageId}/versions/${version}/frame`;
 
 /** The link a frame's answer sends it on to, where it is a redirect. */
 function linkOf(answer: Response): string {

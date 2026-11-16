@@ -1400,7 +1400,7 @@ test("a thread's row previews its latest message, an answer led by its answerer 
   assert.equal(inboxLineKind(settledNote), INBOX_LINE.SAID);
 });
 
-test("a thread's row says the ask itself while one is open: a choice's options, the recommended said so in words, the steps left and the next as its draft ticks them, or the fields; once none is open, the latest words, the agent's alone", () => {
+test("a thread's row says the ask itself while one is open: a choice's options, the recommended said so in words, the steps left and the next as its draft ticks them, or the fields; once none is open or a member followed up, the latest words, the agent's alone", () => {
   const rowOf = (ask: InboxAsk, ticked?: readonly number[]) =>
     inboxPreview(item({ id: "t3", thread: [asking(ask)] }), previewName, ticked);
 
@@ -1447,8 +1447,8 @@ test("a thread's row says the ask itself while one is open: a choice's options, 
       item({ id: "t4", thread: [asking({ type: INBOX_ASK.ANSWER }), reply] }),
       previewName,
     ),
-    "Write an answer",
-    "a reply leaves the ask open, so the row still says it",
+    "Charles Pan: Looking now.",
+    "a reply leaves the ask open but makes it its agent's turn, so the row says the reply",
   );
   const withdrawn = asking({ type: INBOX_ASK.ANSWER });
 
@@ -1467,7 +1467,7 @@ test("a comment's files are drawn after its words but for a picture its words dr
 
   const place = {
     kind: LINK_DESTINATION.INBOX_ITEM,
-    planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+    taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
     itemId,
   } as const;
 
@@ -1533,7 +1533,7 @@ test("a recording an agent posted stands with a comment's pictures, never its ot
 
   const place = {
     kind: LINK_DESTINATION.INBOX_ITEM,
-    planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+    taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
     itemId,
   } as const;
 

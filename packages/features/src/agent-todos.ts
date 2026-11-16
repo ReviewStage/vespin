@@ -408,11 +408,10 @@ export interface StandingTodos {
 }
 
 /**
- * The agent's newest to-do list, which its tab keeps out of a finished
- * turn's fold and draws open, or docks above the composer while it is
- * worked (`dockedTodos`); nothing before the first. Note that a write whose
- * input does not yet read as a list is passed over, because while it
- * streams the list before it is still the one standing.
+ * The agent's newest to-do list, which its tab docks above the composer
+ * while it is worked (`dockedTodos`); nothing before the first. Note that
+ * a write whose input does not yet read as a list is passed over, because
+ * while it streams the list before it is still the one standing.
  */
 export function newestTodos(
   messages: readonly AgentTranscriptMessage[],

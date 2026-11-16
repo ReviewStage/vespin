@@ -28,7 +28,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
+import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
   handHostReads,
@@ -38,6 +38,7 @@ import {
   writeListedTasks,
 } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
 import { relayout } from "../testing/resize-observer.js";
 import { layScrollerOut } from "../testing/scroller.js";
@@ -278,7 +279,7 @@ async function mountPage(
             Fragment,
             null,
             leavingBy(() => (closed += 1)),
-            createElement(TasksPage, { tasks: control, room }),
+            overListedTasks(control, createElement(TasksPage, { tasks: control, room })),
             createElement(ToastHost),
           ),
         ),
@@ -367,14 +368,16 @@ test("a row and a card count the threads waiting on the reader, as the sidebar c
   const sidebar = { count: -1 };
 
   function Sidebar() {
-    sidebar.count = useInboxWaiting(tasksControl({ tasks: [...TASKS], me: DEAN }));
+    sidebar.count = useInboxWaiting(control);
 
     return null;
   }
 
+  const control = tasksControl({ tasks: [...TASKS], me: DEAN });
+
   const sidebarRoot = createRoot(document.createElement("div"));
   roots.push(sidebarRoot);
-  act(() => sidebarRoot.render(withQueryClient(createElement(Sidebar))));
+  act(() => sidebarRoot.render(withQueryClient(overListedTasks(control, createElement(Sidebar)))));
 
   // Note that the count's words are read as an element's own, since a row's key runs into them.
   const says = (holder: Element | undefined) => {
@@ -445,12 +448,25 @@ function closeMenus(): void {
   }
 }
 
-test("Show completed stands Done with a foot counting the tasks finished before its window, which shows them all, kept on this Mac", async () => {
+test("Show completed stands Done with a foot counting the tasks finished before its window, which shows them all, read from the service a page at a time, kept on this Mac", async () => {
+  // Each page of settled tasks the page asks the host for, by its workspace.
+  const paged: string[] = [];
+
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_SETTLED_PAGE]: ({ workspaceId }) => {
+      paged.push(workspaceId);
+
+      return Promise.resolve({});
+    },
+  });
+
   const page = await mountPage();
   openOptions(page, "View options");
   choose("Show completed", "Past week");
   closeMenus();
   assert.deepEqual(groups(page).at(-1), ["Done", []]);
+  assert.deepEqual(paged, [], "no page is read while the window holds the older back");
 
   const older = [...page.querySelectorAll<HTMLButtonElement>(".tasks-list-group button")].find(
     (button) => button.textContent === "Show 1 more",
@@ -458,11 +474,39 @@ test("Show completed stands Done with a foot counting the tasks finished before 
 
   act(() => (older ?? assert.fail("no Show more line under Done")).click());
   assert.deepEqual(groups(page).at(-1), ["Done", ["ACME-35"]]);
+  assert.deepEqual(paged, [ACME.id], "the newest page of the settled is read as they all show");
 
   act(() => {
     for (const root of roots.splice(0)) root.unmount();
   });
   assert.deepEqual((await mountPage()).querySelectorAll(".tasks-list-group").length, 5);
+});
+
+test("a Status filter naming Canceled reads the settled a page at a time until a page draws one or the last is read", async () => {
+  // Each page asked, by the cursor it reads past: the first answers a page after it, the second none.
+  const paged: (string | undefined)[] = [];
+
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_SETTLED_PAGE]: ({ before }) => {
+      paged.push(before?.taskId);
+
+      return Promise.resolve(
+        before === undefined ? { next: { finishedAt: 1, taskId: "t-35" } } : {},
+      );
+    },
+  });
+
+  const page = await mountPage();
+  openOptions(page, "Filter");
+  choose("Status", "Canceled");
+  closeMenus();
+
+  // Note that the pages land as their answers settle.
+  for (let turn = 0; turn < 3; turn += 1) await act(async () => undefined);
+
+  assert.deepEqual(groups(page), [], "no Canceled task is drawn");
+  assert.deepEqual(paged, [undefined, "t-35"], "no Canceled task drawn, so the next page is read");
 });
 
 test("the Filter narrows the List to the values chosen, several in one visit, a chip says so and its × lifts it, and it is kept on this Mac", async () => {

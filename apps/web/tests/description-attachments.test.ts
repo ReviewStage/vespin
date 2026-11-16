@@ -40,7 +40,7 @@ import {
 } from "@repo/service/testing/integration-connect";
 import { unparsedWire } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { paddedTo, webmBytes } from "@repo/wire/testing";
+import { m4aBytes, paddedTo, webmBytes } from "@repo/wire/testing";
 import { Clock, type Context, Effect, Layer, Option, Result } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -62,7 +62,7 @@ import { SqlClient } from "effect/sql";
  */
 
 const ORIGIN = "https://app.test";
-const ATTACHMENT = "/api/plans/attachment";
+const ATTACHMENT = "/api/tasks/attachment";
 
 /** A PNG's signature and a few bytes more: all the service reads of a picture. */
 const PNG_BYTES = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7, 7]);
@@ -137,7 +137,7 @@ function upload(
   body: string,
   headers: Readonly<Record<string, string>> = {},
 ): Request {
-  return new Request(new URL(`/api/plans/${taskId}/attachments`, ORIGIN), {
+  return new Request(new URL(`/api/tasks/${taskId}/attachments`, ORIGIN), {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -181,7 +181,7 @@ const openSharedTask = Effect.gen(function* () {
   yield* joinWorkspace(workspace, teammate);
   const { id: taskId } = yield* createTask(owner, { organizationId: workspace, name: "Invites" });
 
-  return { owner, teammate, outsider, planId: taskId };
+  return { owner, teammate, outsider, taskId: taskId };
 });
 
 it.layer(getTestDB())("a description's picture routes", (it) => {
@@ -189,7 +189,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
     "a file a teammate's comment carries is served to every member as its bytes, and to nobody else",
     () =>
       Effect.gen(function* () {
-        const { owner, teammate, outsider, planId: taskId } = yield* openSharedTask;
+        const { owner, teammate, outsider, taskId } = yield* openSharedTask;
         const text = "## Goal\n\nInvites expire in seven days.\n";
         yield* saveDescriptionText(owner, taskId, text);
         const pdf = new TextEncoder().encode("%PDF-1.4\n");
@@ -238,7 +238,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
     "a picture a teammate keeps on the description is served to every member as its bytes, and to nobody else",
     () =>
       Effect.gen(function* () {
-        const { owner, teammate, outsider, planId: taskId } = yield* openSharedTask;
+        const { owner, teammate, outsider, taskId } = yield* openSharedTask;
 
         const kept = yield* ask(upload(taskId, teammate, pictureBody(PNG_URL)));
 
@@ -265,7 +265,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
 
   it.effect("bytes that are not the image their label names are refused, and nothing is kept", () =>
     Effect.gen(function* () {
-      const { owner, planId: taskId } = yield* openSharedTask;
+      const { owner, taskId } = yield* openSharedTask;
       const mislabeled = PNG_URL.replace("image/png", "image/webp");
 
       const refused = yield* ask(upload(taskId, owner, pictureBody(mislabeled)));
@@ -282,7 +282,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
     "an upload refuses as the old route did, byte for byte: no bearer before its body is read, a key the upload does not name, and a body past its bound",
     () =>
       Effect.gen(function* () {
-        const { owner, planId: taskId } = yield* openSharedTask;
+        const { owner, taskId } = yield* openSharedTask;
 
         const bare = (answered: Answered) => ({
           status: answered.status,
@@ -336,7 +336,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
 
   it.effect("a description holding its bound of pictures refuses one more in band", () =>
     Effect.gen(function* () {
-      const { owner, planId: taskId } = yield* openSharedTask;
+      const { owner, taskId } = yield* openSharedTask;
       const db = yield* Database;
       yield* db.insert(attachment).values(
         Array.from({ length: DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION }, () => ({
@@ -357,10 +357,10 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
   );
 
   it.effect(
-    "a recording a member keeps is served as the video it was sent, and one past a sent video's bound, or past the description's videos, is not kept",
+    "a recording a member keeps is served as the video it was sent, and one past a sent video's bound is not kept",
     () =>
       Effect.gen(function* () {
-        const { owner, teammate, planId: taskId } = yield* openSharedTask;
+        const { owner, teammate, taskId } = yield* openSharedTask;
         const recording = webmBytes(1280, 800);
 
         const videoUrl = (bytes: Uint8Array) =>
@@ -371,31 +371,38 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
         const served = yield* ask(read(taskId, kept.id, teammate));
         const long = paddedTo(recording, PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES + 1);
         const tooLong = yield* ask(upload(taskId, owner, pictureBody(videoUrl(long))));
-        const db = yield* Database;
-        yield* db.insert(attachment).values(
-          Array.from(
-            { length: DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION - 1 },
-            () => ({
-              taskId: taskId,
-              userId: owner,
-              contentType: PICTURE_MEDIA_TYPE.WEBM,
-              byteCount: recording.length,
-              bytes: recording,
-              createdAt: new Date(0),
-            }),
-          ),
-        );
-        const past = yield* ask(upload(taskId, owner, pictureBody(videoUrl(recording))));
 
         assert.equal(served.status, HOSTED_HTTP_STATUS.OK);
         assert.equal(served.contentType, PICTURE_MEDIA_TYPE.WEBM);
         assert.deepEqual([...served.bytes], [...recording]);
         assert.equal(tooLong.status, HOSTED_HTTP_STATUS.BAD_REQUEST);
-        assert.equal(past.status, HOSTED_HTTP_STATUS.OK);
-        assert.deepEqual(uploaded(past), {
-          refused: DESCRIPTION_ATTACHMENT_REFUSAL.TOO_MANY_VIDEOS,
-        });
-        assert.ok("id" in uploaded(yield* ask(upload(taskId, owner, pictureBody(PNG_URL)))));
+      }),
+  );
+
+  it.effect(
+    "an M4A a member keeps is served as the sound clip it is, and one labeled a video is not kept",
+    () =>
+      Effect.gen(function* () {
+        const { owner, teammate, taskId } = yield* openSharedTask;
+        const clip = m4aBytes();
+        const base64 = Buffer.from(clip).toString("base64");
+
+        const kept = uploaded(
+          yield* ask(
+            upload(taskId, owner, pictureBody(`data:${PICTURE_MEDIA_TYPE.M4A};base64,${base64}`)),
+          ),
+        );
+
+        assert.ok("id" in kept);
+        const served = yield* ask(read(taskId, kept.id, teammate));
+
+        const mislabeled = yield* ask(
+          upload(taskId, owner, pictureBody(`data:${PICTURE_MEDIA_TYPE.MP4};base64,${base64}`)),
+        );
+
+        assert.equal(served.contentType, PICTURE_MEDIA_TYPE.M4A);
+        assert.deepEqual([...served.bytes], [...clip]);
+        assert.equal(mislabeled.status, HOSTED_HTTP_STATUS.BAD_REQUEST);
       }),
   );
 });

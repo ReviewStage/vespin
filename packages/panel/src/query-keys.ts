@@ -29,14 +29,22 @@ export const QUERY_ROOT = {
   WORKSPACE_ENVIRONMENT: "workspace-environment",
   /** Settings › Cloud environment's scripts: a workspace's install script and each repository's setup script (`settings/cloud-setup-sections.tsx`). */
   WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
+  /** A workspace's cloud sandbox size and the most it may choose (`workspace-sandbox-size.ts`). */
+  WORKSPACE_SANDBOX_SIZE: "workspace-sandbox-size",
   /** The Merge queue page: every pull request a workspace's merge queues hold (`desktop/merge-queue-page.tsx`). */
   MERGE_QUEUE: "merge-queue",
+  /** The machines of a workspace's members, as the `@` list offers them and a machine's chip names its owner (`tasks/workspace-machines.tsx`). */
+  WORKSPACE_MACHINES: "workspace-machines",
   /** Settings › This Mac's computer use: the Mac's grants and the apps agents use without asking, as the host reads them through the helper. */
   COMPUTER_USE_STATUS: "computer-use-status",
   /** The apps on this Mac the composer's `@` list offers (`tasks/mac-apps.ts`). */
   COMPUTER_USE_APPS: "computer-use-apps",
   /** One app's icon on this Mac, by its bundle id or its name (`tasks/mac-apps.ts`). */
   COMPUTER_USE_APP_ICON: "computer-use-app-icon",
+  /** A task's followers' machines, with where each stands, as a follower's card lists them (`tasks/following-chip.tsx`). */
+  FOLLOWER_MACHINES: "follower-machines",
+  /** One member's machines as their profile lists them, by the workspace and the member (`desktop/person-page.tsx`). */
+  MEMBER_MACHINES: "member-machines",
   /** The apps the account's own machines always allow, as an agent's `@` lists them off the agent's Mac. */
   MACHINE_ALLOWED_APPS: "machine-allowed-apps",
   INSTALLED_SKILL: "installed-skill",
@@ -61,7 +69,7 @@ export const QUERY_ROOT = {
   TASK_BY_NUMBER: "task-by-number",
   AGENT_MESSAGES: "agent-messages",
   REPOSITORY_SKILLS: "repository-skills",
-  AGENT_CHANGES: "agent-changes",
+  PULL_REQUEST_CHANGES: "pull-request-changes",
   AGENT_TURN_CHANGES: "agent-turn-changes",
   /** A cloud agent's listening ports and its shared link, as a host that forwards none asks the service for them (`tasks/agent-forward.tsx`). */
   AGENT_PORTS: "agent-ports",
@@ -78,6 +86,8 @@ export const QUERY_ROOT = {
   PICTURE: "picture",
   /** The section icon picker's wholes loaded on demand (`desktop/section-icon-picker.tsx`), Lucide's and the emoji, by which. */
   SECTION_ICONS: "section-icons",
+  /** A person's page: how many of their tasks and agents the service counts, their newest read into the task list (`desktop/person-page.tsx`). */
+  PERSON_PAGE: "person-page",
 } as const;
 
 /**
@@ -95,15 +105,19 @@ const ACCOUNT_SCOPED_ROOTS: ReadonlySet<unknown> = new Set<string>([
   QUERY_ROOT.REPOSITORY_PATHS,
   QUERY_ROOT.AGENT_PART,
   QUERY_ROOT.TASK_NEWEST_REVISION,
-  QUERY_ROOT.AGENT_CHANGES,
+  QUERY_ROOT.PULL_REQUEST_CHANGES,
   QUERY_ROOT.TASK_REVISION,
   QUERY_ROOT.INSTALLED_SKILL,
   QUERY_ROOT.INSTALLED_SKILL_PREVIEW,
   QUERY_ROOT.HOST_PAIRING,
   QUERY_ROOT.WORKSPACE_ENVIRONMENT,
   QUERY_ROOT.WORKSPACE_SANDBOX_SETUP,
+  QUERY_ROOT.WORKSPACE_SANDBOX_SIZE,
   QUERY_ROOT.MERGE_QUEUE,
   QUERY_ROOT.MACHINE_ALLOWED_APPS,
+  QUERY_ROOT.WORKSPACE_MACHINES,
+  QUERY_ROOT.PERSON_PAGE,
+  QUERY_ROOT.MEMBER_MACHINES,
 ]);
 
 /**

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { EXPERIMENT } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { NOTIFICATIONS_STATUS } from "@repo/settings/settings-controls";
@@ -94,6 +94,9 @@ const PHONE = 390;
 
 let root: Root | undefined;
 
+/** The pull request whose tab the panel was left on, by its repository and number. */
+const PULL_REQUEST = { repository: "acme/relay", number: 42 };
+
 /** How wide the panel's stage is laid out, which jsdom, laying out nothing, leaves to the test. */
 let stageWidth = 0;
 
@@ -105,10 +108,10 @@ beforeEach(() => {
     JSON.stringify({
       open: true,
       tabs: ["plan", "inbox", "comments"],
-      tab: { changes: AGENT },
+      tab: { changes: PULL_REQUEST },
       width: 400,
       tasks: {
-        [DOCUMENT_TASK.id]: { opened: [], closed: [], changes: [{ changes: AGENT }] },
+        [DOCUMENT_TASK.id]: { opened: [], closed: [], changes: [{ changes: PULL_REQUEST }] },
       },
     }),
   );
@@ -158,10 +161,10 @@ function Window({ onTask }: { onTask: boolean }): React.JSX.Element {
     tab,
     onTabChange: setTab,
     tasks: tasksControl({
-      page: onTask ? TASKS_PAGE.DOCUMENT : TASKS_PAGE.HOME,
+      page: onTask ? TASKS_PAGE.TASK : TASKS_PAGE.HOME,
       // An account with a task, so Home rests on its own page rather than a new account's welcome.
       tasks: [DOCUMENT_TASK],
-      region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+      region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
       // Note that the panel stands beside a draft agent's tab, since the task's details take its room.
       mainTabs: {
         ...tasksControl().mainTabs,

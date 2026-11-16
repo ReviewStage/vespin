@@ -1,11 +1,10 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { agentName } from "@repo/features/model-label";
 import type { TaskSummary } from "@repo/features/task-wire";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import { type Actor, type OriginAgent, originActor } from "@repo/ui/actor-model";
-import { useQuery } from "@tanstack/react-query";
-import { useCallback } from "react";
-import { appStateQuery, memoizedSelect } from "../use-app-state.js";
+import { useLiveQuery } from "@tanstack/react-db";
+import { useCallback, useMemo } from "react";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { agentActorState, providerOf } from "./agent-model.js";
 
 /**
@@ -14,9 +13,8 @@ import { agentActorState, providerOf } from "./agent-model.js";
  * A task names the agent that made it by id alone (`TaskSummary.origin`),
  * and the window already holds every agent it lists, each task's own and
  * those with no task, so the agent's name, harness, and standing are read
- * here rather than sent on every task. They are built once per delivery
- * that moved the task list, in a memoized select every row shares, and each
- * row reads its own agent through a select of that agent's alone, so a
+ * here rather than sent on every task. Each row reads its own agent, and the
+ * task that agent works on, by id from the task list's collections, so a
  * delivery that moved another redraws none of its rows. An agent the window does not
  * hold, archived or gone, is drawn as a coding agent on the mark of no
  * known harness.
@@ -49,41 +47,26 @@ function originAgentOf(
   };
 }
 
-/** Every agent the window holds, by id: every task's, followed live. */
-const selectOriginAgents = memoizedSelect(
-  (state) => [state.tasks],
-  (planning): ReadonlyMap<string, OriginAgent> => {
-    const agents = new Map<string, OriginAgent>();
-    const names = new Map(planning.tasks.map((task) => [task.id, task.name]));
+/** No task names: what an agent on no task, or one the list does not carry, is drawn with. */
+const NO_TASK_NAMES: ReadonlyMap<string, string> = new Map();
 
-    for (const agent of planning.taskAgents ?? []) {
-      agents.set(agent.id, originAgentOf(agent, agent.planId, names));
-    }
+/** One agent as the window holds it, by id, with the task it works on; none where it holds none. It is drawn again only as that agent or its task moves. */
+function useOriginAgent(agentId: string | undefined): OriginAgent | undefined {
+  const { tasks, agents } = useTaskListCollections();
+  const agent = useTaskListRow(agents, agentId);
+  const task = useTaskListRow(tasks, agent?.taskId ?? undefined);
 
-    return agents;
-  },
-);
-
-/** No agents, before the first document arrives. */
-const NO_AGENTS: ReadonlyMap<string, OriginAgent> = new Map();
-
-/** The key a row with no agent behind it reads, which no agent's id is. */
-const NO_AGENT = "";
-
-/**
- * One agent as the window holds it, by id, none where it holds none. Note
- * that its reader is told only where the agent reads otherwise, although
- * every delivery that moves the task list builds every agent anew, because
- * Query's structural sharing hands back the object it held while each field
- * is the same plain value.
- */
-function useOriginAgent(agentId: string): OriginAgent | undefined {
-  const select = useCallback(
-    (state: AppStateSnapshot) => selectOriginAgents(state).get(agentId),
-    [agentId],
+  return useMemo(
+    () =>
+      agent === undefined
+        ? undefined
+        : originAgentOf(
+            agent,
+            agent.taskId,
+            task === undefined ? NO_TASK_NAMES : new Map([[task.id, task.name]]),
+          ),
+    [agent, task],
   );
-
-  return useQuery({ ...appStateQuery, select }).data;
 }
 
 /** What names who made a task: its origin, the one field read. */
@@ -94,7 +77,17 @@ type OriginTask = Pick<TaskSummary, "origin">;
  * agents the window holds; none for a task its member made by hand.
  */
 export function useTaskOrigin(): (task: OriginTask) => Actor | undefined {
-  const agents = useQuery({ ...appStateQuery, select: selectOriginAgents }).data ?? NO_AGENTS;
+  const collections = useTaskListCollections();
+  const { data: listedAgents } = useLiveQuery((q) => q.from({ agent: collections.agents }));
+  const { data: listedTasks } = useLiveQuery((q) => q.from({ task: collections.tasks }));
+
+  const agents = useMemo(() => {
+    const names = new Map(listedTasks.map((task) => [task.id, task.name]));
+
+    return new Map(
+      listedAgents.map((agent) => [agent.id, originAgentOf(agent, agent.taskId, names)]),
+    );
+  }, [listedAgents, listedTasks]);
 
   return useCallback(
     (task: OriginTask) => {
@@ -114,7 +107,7 @@ interface TaskMadeBy {
 
 /** Who made the task, as `useTaskOrigin` names them, and the task it came from; none for one made by hand. */
 export function useTaskMaker(task: OriginTask): TaskMadeBy | undefined {
-  const agent = useOriginAgent(task.origin?.agentId ?? NO_AGENT);
+  const agent = useOriginAgent(task.origin?.agentId);
   const actor = originActor(task.origin, agent);
 
   if (actor === undefined) return undefined;
