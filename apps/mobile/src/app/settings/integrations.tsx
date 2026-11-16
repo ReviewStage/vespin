@@ -38,7 +38,6 @@ import { readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   askForName,
-  BUTTON_LOOK,
   ConfirmAsk,
   type ConnectionLine,
   ConnectionRow,
@@ -47,8 +46,10 @@ import {
   INTEGRATION_MARK_ASSET,
   ListSection,
   type MemberRowAct,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
+  TRY_AGAIN_WORDS,
 } from "@repo/ui-native";
 import { Stack } from "expo-router";
 import { useState } from "react";
@@ -77,12 +78,9 @@ const UNREAD_HEALTH: ConnectionHealth = { kind: CONNECTION_HEALTH.CHECKING };
 /** No server switched off, since the page switches none for an agent. */
 const NONE_OFF: readonly string[] = [];
 
-/** What a row's press to read or sign in again says, in the app's words for it rather than the panel's Retry. */
-const TRY_AGAIN = "Try again";
-
 /** A grant's words as the app says them: the panel's Retry after a sign-in that failed is the app's Try again. */
 function grantWords(label: string): string {
-  return label === SIGN_IN_ACTION.TRY_AGAIN ? TRY_AGAIN : label;
+  return label === SIGN_IN_ACTION.TRY_AGAIN ? TRY_AGAIN_WORDS : label;
 }
 
 /** What the rename alert asks, by the provider whose account it renames: "Rename Notion account". */
@@ -178,7 +176,7 @@ export default function IntegrationsScreen() {
         <EmptyState
           title={INTEGRATIONS_PAGE_WORDS.READ_FAILED}
           symbol={GLYPH.FAILED}
-          action={{ label: TRY_AGAIN, onPress: page.retry, look: BUTTON_LOOK.BORDERED }}
+          retry={page.retry}
         />
       ) : (
         <EmptyState title={READING} symbol={INTEGRATIONS_SYMBOL} loading />
@@ -223,7 +221,7 @@ export default function IntegrationsScreen() {
           onCancelButtonPress={() => setQuery("")}
         />
       </Stack.Screen>
-      <Screen>{body}</Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>{body}</Screen>
       <ConfirmAsk
         title={question?.title ?? ""}
         message={question?.body}
@@ -245,12 +243,12 @@ export default function IntegrationsScreen() {
 /**
  * What each row offers, and why its last act did not go: a grant (Connect,
  * Reconnect, or Try again) at its end, which opens the sign-in and waits on
- * it; Retry at the end of a connected one whose tools couldn't be read;
+ * it; Try again at the end of a connected one whose tools couldn't be read;
  * Cancel at the end of one waited on, Reopen in its menu; and, on one
  * connected, Rename where the provider holds several accounts, Add another
  * account where the provider offers it, and Disconnect, which asks first
  * (`onAsk`). A server that rides the account's GitHub sign-in offers only its
- * Retry here, as the desktop and the web connect it.
+ * Try again here, as the desktop and the web connect it.
  */
 function useIntegrationActs(
   statuses: IntegrationStatuses,
@@ -390,7 +388,11 @@ function useIntegrationActs(
       row.kind === SERVER_ROW.SWITCH &&
       healthOf(row.connection).kind === CONNECTION_HEALTH.FAILED
     ) {
-      return { label: TRY_AGAIN, disabled: false, onPress: () => tools.retry(row.connection) };
+      return {
+        label: TRY_AGAIN_WORDS,
+        disabled: false,
+        onPress: () => tools.retry(row.connection),
+      };
     }
 
     if (bySignIn(row.provider)) return undefined;

@@ -8,11 +8,15 @@ import {
   AppWindowStack,
   BUTTON_VARIANT,
   Button,
+  INLINE_REF_LOOK,
   Inline,
+  InlineRef,
+  MacAppCard,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
 } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { PICTURE_STATE } from "@repo/ui/picture-read";
 import { useState } from "react";
 import { CATALOG_FAILURE } from "../catalog-failure";
@@ -31,7 +35,10 @@ import { CatalogSection } from "../section";
  * pointer mirrored at the front window's corner, more apps than the stack draws behind
  * its front, which pile, an app whose window is still being read, and one
  * whose window's read did not land, with Retry; and the stack minimized to
- * its pill, while the agent works in an app and once it is done.
+ * its pill, while the agent works in an app and once it is done; and the
+ * card an app hangs, from an `@` mention of it in words and from its name's
+ * chip over the stack while the agent is in it, naming the machine it is on
+ * by that machine's chip and whether the machine always allows it.
  */
 
 /** A synthetic app's icon, a rounded square with a phone in it, as a Mac's app sends one. */
@@ -48,6 +55,25 @@ const PHONE = `data:image/svg+xml,${encodeURIComponent(
 const EDITOR = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 320 200"><rect width="320" height="200" fill="#1f2125"/><rect width="320" height="20" fill="#2b2e33"/><circle cx="12" cy="10" r="4" fill="#ff5f57"/><circle cx="24" cy="10" r="4" fill="#febc2e"/><circle cx="36" cy="10" r="4" fill="#28c840"/><rect y="20" width="70" height="180" fill="#26292e"/><rect x="80" y="34" width="150" height="6" rx="3" fill="#7aa2f7"/><rect x="80" y="48" width="200" height="6" rx="3" fill="#9ece6a"/><rect x="80" y="62" width="120" height="6" rx="3" fill="#bb9af7"/></svg>',
 )}`;
+
+/** The chip a machine is named by, as a tool call's row ends in it, which hangs the machine's own card in the window. */
+const MACHINE_CHIP = (
+  <InlineRef look={INLINE_REF_LOOK.PILL} glyph={<GLYPH.DESKTOP />} kind="machine" label="Studio" />
+);
+
+/** An app's card as an `@` mention of it hangs it, and as its chip over the stack does while the agent is in it. */
+function appCard(inUse: boolean): React.JSX.Element {
+  return (
+    <MacAppCard
+      name="Simulator"
+      bundleId="com.apple.iphonesimulator"
+      iconSrc={ICON}
+      inUse={inUse}
+      machine={MACHINE_CHIP}
+      alwaysAllowed
+    />
+  );
+}
 
 /** The apps an agent is using as the stack floating over its box draws them, every press doing nothing here. */
 function Stack({
@@ -210,6 +236,34 @@ function AppAsks(): React.JSX.Element {
                 },
               },
             ]}
+          />
+        </Inline>
+      </CatalogSection>
+      <CatalogSection id="mac-app-card" title="An app's card, from a mention and from the stack">
+        <Text>
+          Check the build in{" "}
+          <InlineRef
+            look={INLINE_REF_LOOK.PILL}
+            glyph={<AppIcon src={ICON} />}
+            kind="app"
+            label="Simulator"
+            card={appCard(false)}
+          />{" "}
+          before you merge.
+        </Text>
+        <Inline>
+          <Stack
+            apps={[
+              {
+                id: "Simulator",
+                name: "Simulator",
+                iconSrc: ICON,
+                window: ready(PHONE, 236, 512),
+                card: appCard(true),
+              },
+              { id: "Xcode", name: "Xcode" },
+            ]}
+            using="Simulator"
           />
         </Inline>
       </CatalogSection>

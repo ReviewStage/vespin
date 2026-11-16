@@ -47,18 +47,6 @@ export function askForName({ title, act, name, onName }: NameAsk): void {
 }
 
 /**
- * Raises the system's share sheet on a link, whose first row copies it, so
- * Copy link copies and sends a link as iOS does everywhere else. Note that
- * a sheet put away answers nothing, and a sheet that could not stand is said
- * on the console, since the press had nothing else to show.
- */
-export function shareLink(url: string): void {
-  Share.share({ url }).catch((cause: unknown) => {
-    console.error("The share sheet did not open.", cause);
-  });
-}
-
-/**
  * Raises the system's share sheet on words, such as a transcript copied as
  * Markdown, which it sends as text to Messages, Mail, Notes or a file. Note
  * that a sheet put away answers nothing, and a sheet that could not stand

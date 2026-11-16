@@ -1,6 +1,6 @@
 import { Schema as EffectSchema } from "effect";
 import { githubPullRequestNumberSchema } from "./github-repositories-wire.js";
-import { MODEL_PROVIDER } from "./models-wire.js";
+import { modelApiProviderSchema } from "./provider-key-wire.js";
 import { chapterSchema } from "./pull-request-chapters.js";
 import { countedNumber } from "./service-wire.js";
 
@@ -81,7 +81,7 @@ export type PullRequestChaptersState = typeof pullRequestChaptersStateSchema.Typ
  * id, and the provider whose API key, the member's own, it runs on.
  */
 export const chaptersRunsOnSchema = EffectSchema.Struct({
-  provider: EffectSchema.Literals(Object.values(MODEL_PROVIDER)),
+  provider: modelApiProviderSchema,
   model: EffectSchema.NonEmptyString,
 });
 

@@ -41,10 +41,10 @@ import {
 import {
   COMMENT_SUBJECT,
   HOST_LIVE,
+  type ListedTasksView,
   PICTURE_KEEP_FAILURE,
   TASK_CALL_FAILURE,
   TASKS_READ,
-  type TasksView,
   type TasksWriteSectionParams,
 } from "@repo/features/tasks-view";
 import { GATEWAY_METHOD } from "@repo/gateway";
@@ -1663,7 +1663,7 @@ it.effect(
       const service = fakeService([task(INVITES, "Teammate invitations", "# Draft", 10)]);
       const { call, last, told, settled } = yield* subject(service);
 
-      const pinned = (view: TasksView | undefined) =>
+      const pinned = (view: ListedTasksView | undefined) =>
         view?.repositoryPins?.map((pin) => pin.repository) ?? [];
 
       yield* call("TASKS_REFRESH", undefined);
@@ -1747,7 +1747,7 @@ it.effect(
       const service = fakeService([task(INVITES, "Teammate invitations", "# Draft", 10)]);
       const { call, last, told, settled, listed } = yield* subject(service);
 
-      const pinned = (view: TasksView | undefined) =>
+      const pinned = (view: ListedTasksView | undefined) =>
         view?.tasks.find((row) => row.id === INVITES)?.pinnedAt !== undefined;
 
       yield* call("TASKS_REFRESH", undefined);

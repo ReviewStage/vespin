@@ -32,6 +32,8 @@ export * from "./components/attachment-ref/attachment-ref.js";
 
 export * from "./components/attention-mark/attention-mark.js";
 
+export * from "./components/audio-player/audio-player.js";
+
 export * from "./components/auth-page/auth-mark.js";
 
 export * from "./components/auth-page/auth-page.js";
@@ -79,6 +81,8 @@ export * from "./components/caption-field/caption-field.js";
 export * from "./components/card/card.js";
 
 export * from "./components/card-press/card-press.js";
+
+export * from "./components/check-glyph/check-glyph.js";
 
 export * from "./components/checkbox/checkbox.js";
 
@@ -220,7 +224,11 @@ export * from "./components/list-row/list-row.js";
 
 export * from "./components/list-row/list-row-hint.js";
 
+export * from "./components/mac-app-card/mac-app-card.js";
+
 export * from "./components/mark-strip/mark-strip.js";
+
+export type { WordsMark } from "./components/marked-words/marked-words.js";
 
 export * from "./components/menu/context-menu.js";
 
@@ -243,6 +251,8 @@ export * from "./components/message/message-head.js";
 export * from "./components/message/message-line.js";
 
 export * from "./components/more-button/more-button.js";
+
+export * from "./components/name-value-rows/name-value-rows.js";
 
 export * from "./components/nav-item/nav-item.js";
 
@@ -337,6 +347,8 @@ export * from "./components/saved-tick/saved-tick.js";
 export * from "./components/scroll-area/scroll-area.js";
 
 export * from "./components/search-field/search-field.js";
+
+export * from "./components/search-line/search-line.js";
 
 export * from "./components/search-match/search-match.js";
 
@@ -437,8 +449,6 @@ export * from "./components/toolbar/toolbar.js";
 export * from "./components/tooltip/hint.js";
 
 export * from "./components/tooltip/tooltip.js";
-
-export * from "./components/track-list/track-list.js";
 
 export * from "./components/transcript-rail/transcript-rail.js";
 

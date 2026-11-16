@@ -1,18 +1,21 @@
 // settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
 
 import {
+  Circle,
   ContextMenu,
   Form,
   HStack,
   Image,
   LabeledContent,
   Menu,
+  ProgressView,
   Spacer,
   Button as SwiftUIButton,
   SwipeActions,
   Text,
   Toggle,
   VStack,
+  ZStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
@@ -25,11 +28,16 @@ import {
   alignmentGuide,
   aspectRatio,
   background,
+  buttonStyle,
   disabled,
   font,
   foregroundStyle,
   frame,
   listRowBackground,
+  listSectionSpacing,
+  menuIndicator,
+  menuStyle,
+  multilineTextAlignment,
   resizable,
   scrollContentBackground,
   scrollDismissesKeyboard,
@@ -37,17 +45,27 @@ import {
   useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
-import { useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
 import { Avatar } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
-import { useColors } from "./tokens/colors.js";
+import { type BrandColors, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
+
+/** How far apart a form's sections stand, and how far its first stands under the bar. */
+export const FORM_SPACING = {
+  /** The system's grouped spacing, as a page of Settings stands. */
+  REGULAR: "regular",
+  /** Close under the bar and between sections, as a short sheet of a few rows stands, Reminders' Details and Mail's options among them. */
+  COMPACT: "compact",
+} as const;
+
+export type FormSpacing = (typeof FORM_SPACING)[keyof typeof FORM_SPACING];
 
 /** An account's face in its row, larger than a list's. */
 const ACCOUNT_FACE_SIZE = 36;
@@ -58,15 +76,18 @@ const ROW_FACE_SIZE = ACCOUNT_FACE_SIZE - 8;
 /** An account's face heading its own page, as large as Apple Account's photo stands over its name. */
 const ACCOUNT_HEAD_FACE_SIZE = 72;
 
-/** Where a `PushRow` goes, and the mark at its end that says so, where iOS's own Settings marks them. */
+/** Where a row goes on a press, such as a `PushRow` or a pull request's check, and the mark at its end that says so, where iOS's own Settings marks them. */
 export const PUSH_ROW_GOES = {
   /** A page of Settings, pushed over this one: iOS's own chevron, as every row that goes on draws it. */
   PAGE: GLYPH.DISCLOSURE,
-  /** Out of the app, to Safari or iOS's own Settings: the panel's arrow out. */
-  OUT: GLYPH.OPEN_EXTERNALLY,
+  /** Out of the app, to Safari or iOS's own Settings: iOS's own small arrow out, as its Settings marks a link. */
+  OUT: GLYPH.GOES_OUT,
 } as const satisfies Record<string, Glyph>;
 
 export type PushRowGoes = (typeof PUSH_ROW_GOES)[keyof typeof PUSH_ROW_GOES];
+
+/** What VoiceOver hears a row's ⋯ as. */
+const ROW_MORE_LABEL = "More";
 
 /** The size of the glyph leading a `MenuRow`, as a list's leading mark stands. */
 const GLYPH_SIZE = 15;
@@ -75,19 +96,50 @@ const GLYPH_SIZE = 15;
 const LEAD_GLYPH_SIZE = 17;
 
 /**
- * The mark at a row's end that says where a press goes, in the muted ink,
- * semibold at the row's small line, as iOS draws its chevron, so it grows
- * with the reader's text size.
+ * A row's value at its end, and the mark that says where a press goes, in
+ * the label hierarchy iOS's own Settings draws them in: a value in the
+ * secondary ink and the chevron in the tertiary, each of the words' own ink,
+ * so they stand lighter than the row's name rather than nearly as dark.
  */
-function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
-  const colors = useColors();
+const VALUE_INK = { type: "hierarchical", style: "secondary" } as const;
+const GOES_INK = { type: "hierarchical", style: "tertiary" } as const;
 
+/**
+ * The mark at a row's end that says where a press goes, in the tertiary
+ * ink, semibold at the row's small line, as iOS draws its chevron, so it
+ * grows with the reader's text size.
+ */
+export function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
   return (
     <Image
       {...glyphImage(goes)}
-      color={colors.TEXT_MUTED}
-      modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" })]}
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
+        foregroundStyle(GOES_INK),
+      ]}
     />
+  );
+}
+
+/**
+ * The ⋯ at the end of a row whose acts would otherwise hide behind a long
+ * press and a swipe, such as a connection with nothing to press at its end:
+ * the system's menu of them under the glyph alone, in the secondary ink, so
+ * the row says it holds acts, as the panel's ⋯ does.
+ */
+function RowMoreMenu({ acts }: { readonly acts: readonly MenuRowAct[] }) {
+  return (
+    <Menu
+      label={<Image {...glyphImage(GLYPH.MORE)} modifiers={[foregroundStyle(VALUE_INK)]} />}
+      modifiers={[
+        menuStyle("button"),
+        buttonStyle("plain"),
+        menuIndicator("hidden"),
+        accessibilityLabel(ROW_MORE_LABEL),
+      ]}
+    >
+      <RowActs acts={acts} />
+    </Menu>
   );
 }
 
@@ -96,6 +148,37 @@ function spokenValue(...parts: readonly (string | undefined)[]) {
   const said = parts.filter((part) => part !== undefined && part.length > 0).join(", ");
 
   return said.length === 0 ? [] : [accessibilityValue(said)];
+}
+
+/**
+ * A row's words and what stands at its end, such as a value, a role or an
+ * act: beside each other at the reader's usual sizes, and the end under the
+ * words at an accessibility size, as iOS Settings stacks a value under its
+ * label, so neither is squeezed into a word a line. A spacer follows either
+ * way, so a chevron after it keeps the row's end.
+ */
+function WordsAndEnd({ words, end }: { readonly words: ReactNode; readonly end: ReactNode }) {
+  const stacked = useAccessibilitySize();
+
+  if (!stacked || end === null) {
+    return (
+      <>
+        {words}
+        <Spacer />
+        {end}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <VStack alignment="leading" spacing={SPACE.TIGHT}>
+        {words}
+        {end}
+      </VStack>
+      <Spacer />
+    </>
+  );
 }
 
 /**
@@ -147,12 +230,20 @@ function PressedRow({
  * on the surface, as the panel's settings cards stand on its page, rather
  * than on the system's grouped grays. A drag on it lowers the keyboard at
  * once, as a composing sheet's words otherwise keep it standing over the
- * rows below them, with no key of the keyboard's own that lowers it.
+ * rows below them, with no key of the keyboard's own that lowers it. A
+ * clear form paints no ground between its cards, so they stand on a
+ * half-height sheet's own glass.
  */
 export function SettingsForm({
   onContentHeight,
+  clear = false,
+  spacing = FORM_SPACING.REGULAR,
   children,
 }: {
+  /** Whether the form stands on what is under it, such as a half-height sheet's glass, rather than on its own ground. */
+  readonly clear?: boolean | undefined;
+  /** How far apart its sections stand; a short sheet's stand close, so its first section doesn't sit under an empty band. */
+  readonly spacing?: FormSpacing;
   /** Told the height its rows stand in, as they lay out, for a popover that fits it; none where the form fills its place. */
   readonly onContentHeight?: ((height: number) => void) | undefined;
   readonly children: ReactNode;
@@ -169,9 +260,10 @@ export function SettingsForm({
     <Form
       modifiers={[
         ...(measured === null ? [] : [measured]),
+        ...(spacing === FORM_SPACING.COMPACT ? [listSectionSpacing("compact")] : []),
         scrollContentBackground("hidden"),
         scrollDismissesKeyboard("immediately"),
-        background(colors.GROUPED),
+        ...(clear ? [] : [background(colors.GROUPED)]),
         tint(colors.TEXT),
         font({ textStyle: TYPE_ROLE.ROW_TITLE }),
       ]}
@@ -209,10 +301,12 @@ function HeadRow({ face, name, line, detail, onPress, testId }: HeadRowProps) {
     >
       {face}
       <VStack alignment="leading" spacing={2}>
+        {/* Note that the separator starts at the words, not the face, as every row of the form starts it. */}
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
             foregroundStyle(colors.TEXT),
+            alignmentGuide("listRowSeparatorLeading", 0),
           ]}
         >
           {name}
@@ -385,11 +479,14 @@ export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRo
         {symbol === undefined ? null : (
           <Image {...glyphImage(symbol)} size={leadSize} color={colors.TEXT_MUTED} />
         )}
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
-        <Spacer />
-        {detail === undefined ? null : (
-          <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{detail}</Text>
-        )}
+        <WordsAndEnd
+          words={<Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>}
+          end={
+            detail === undefined ? null : (
+              <Text modifiers={[foregroundStyle(VALUE_INK)]}>{detail}</Text>
+            )
+          }
+        />
         <GoesMark goes={goes} />
       </HStack>
     </PressedRow>
@@ -428,13 +525,29 @@ export function ToggleRow({ label, detail, on, disabled: off = false, onChange }
   );
 }
 
+/**
+ * A group's rows while they are read: the system's small spinner beside the
+ * read's words in the muted ink, as Settings stands one in a group still
+ * filling, so a header never stands over nothing.
+ */
+export function LoadingRow({ words }: { readonly words: string }) {
+  const colors = useColors();
+
+  return (
+    <HStack spacing={SPACE.ROW} modifiers={[listRowBackground(colors.RAISED)]}>
+      <ProgressView modifiers={[tint(colors.TEXT_MUTED)]} />
+      <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{words}</Text>
+    </HStack>
+  );
+}
+
 /** A setting's name and where it stands, as the system lays a value out beside its label. */
 export function ValueRow({ label, value }: { readonly label: string; readonly value: string }) {
   const colors = useColors();
 
   return (
     <LabeledContent label={label} modifiers={[listRowBackground(colors.RAISED)]}>
-      <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{value}</Text>
+      <Text modifiers={[foregroundStyle(VALUE_INK)]}>{value}</Text>
     </LabeledContent>
   );
 }
@@ -480,8 +593,10 @@ type ActionRowProps = {
 };
 
 /**
- * A row a person presses to act, in the accent, or the system's red where it
- * ends something; dimmed where it takes no press, with a line under its
+ * A row a person presses to act, in the ink with its glyph leading where it
+ * has one, such as Invite's +, flashing the row's gray while held as
+ * Settings' rows do, or the system's red where it ends something; dimmed
+ * where it takes no press, with a line under its
  * name where one is given, such as why Unfollow is out for a task's
  * assignee.
  */
@@ -740,7 +855,7 @@ export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
             spacing={SPACE.ROW}
             modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
           >
-            <Avatar name={name} picture={picture} size={faceSize} />
+            <Avatar name={name} id={id} picture={picture} size={faceSize} />
             <VStack alignment="leading" spacing={1}>
               <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
                 {name}
@@ -782,6 +897,8 @@ type MemberRowProps = {
   readonly picture?: string | undefined;
   /** Their role, in the words the panel says it: Owner, Admin, Member; none for an address invited, whose line says it. */
   readonly role?: string | undefined;
+  /** Whether they are an address invited rather than a member, which a person mark leads in place of a face, since an address has no photo and its letters would read as someone's. */
+  readonly invited?: boolean | undefined;
   /** The badge beside the reader's own name, such as "You"; none on anyone else's row. */
   readonly badge?: string | undefined;
   /** What the reader may do to them; a row with none takes no press. */
@@ -794,26 +911,54 @@ type MemberRowProps = {
  * ink. Where the reader may act on them, a press opens the system's menu of
  * those acts, as a contact's row opens one.
  */
-export function MemberRow({ name, email, picture, role, badge, acts }: MemberRowProps) {
+export function MemberRow({ name, email, picture, role, invited, badge, acts }: MemberRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(ROW_FACE_SIZE);
 
   const face = (
     <HStack spacing={SPACE.ROW}>
-      <Avatar name={name} picture={picture} size={faceSize} />
-      <VStack alignment="leading" spacing={1}>
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>
-          {badge === undefined ? name : `${name} · ${badge}`}
-        </Text>
-        <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
-        >
-          {email}
-        </Text>
-      </VStack>
-      <Spacer />
-      {role === undefined ? null : (
-        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
+      {invited === true ? (
+        <ZStack modifiers={[frame({ width: faceSize, height: faceSize }), accessibilityHidden()]}>
+          <Circle modifiers={[foregroundStyle(colors.GROUPED)]} />
+          <Image {...glyphImage(GLYPH.PERSON)} color={colors.TEXT_MUTED} />
+        </ZStack>
+      ) : (
+        <Avatar name={name} picture={picture} size={faceSize} />
+      )}
+      <WordsAndEnd
+        words={
+          <VStack alignment="leading" spacing={1}>
+            {/* Note that a row holding acts is a menu's label, which centers a wrapped line, so its lines keep to their leading edge, as Settings' subtitles do. */}
+            <Text
+              modifiers={[
+                foregroundStyle(colors.TEXT),
+                alignmentGuide("listRowSeparatorLeading", 0),
+                multilineTextAlignment("leading"),
+              ]}
+            >
+              {badge === undefined ? name : `${name} · ${badge}`}
+            </Text>
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+                multilineTextAlignment("leading"),
+              ]}
+            >
+              {email}
+            </Text>
+          </VStack>
+        }
+        end={
+          role === undefined ? null : <Text modifiers={[foregroundStyle(VALUE_INK)]}>{role}</Text>
+        }
+      />
+      {/* Note that a row a press opens a menu on ends in the system's up-and-down chevron, as a menu picker's value does, so the reader knows it acts. */}
+      {acts.length === 0 ? null : (
+        <Image
+          {...glyphImage(GLYPH.MENU_OPENS)}
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(GOES_INK)]}
+        />
       )}
     </HStack>
   );
@@ -839,6 +984,8 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
 type FollowerRowProps = {
   /** Their name, or You for the reader. */
   readonly name: string;
+  /** Their member id, which their letters' hue is read off. */
+  readonly id: string;
   readonly picture?: string | undefined;
   /** The muted word after their name, such as Assignee; none for none. */
   readonly role?: string | undefined;
@@ -855,7 +1002,7 @@ type FollowerRowProps = {
  * press. VoiceOver hears it as one element, its name then its role and what
  * agents may do there, since the laptop alone says that on screen.
  */
-export function FollowerRow({ name, picture, role, machines, heard }: FollowerRowProps) {
+export function FollowerRow({ name, id, picture, role, machines, heard }: FollowerRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(ROW_FACE_SIZE);
 
@@ -869,7 +1016,7 @@ export function FollowerRow({ name, picture, role, machines, heard }: FollowerRo
         ...spokenValue(role, heard),
       ]}
     >
-      <Avatar name={name} picture={picture} size={faceSize} />
+      <Avatar name={name} id={id} picture={picture} size={faceSize} />
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
       {role === undefined ? null : (
         <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
@@ -918,23 +1065,26 @@ export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
   const face = (
     <HStack spacing={SPACE.ROW}>
       <Image {...glyphImage(symbol)} size={glyphSize} color={colors.TEXT_MUTED} />
-      <VStack alignment="leading" spacing={1}>
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
-        {detail === undefined ? null : (
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE }),
-              foregroundStyle(colors.TEXT_MUTED),
-            ]}
-          >
-            {detail}
-          </Text>
-        )}
-      </VStack>
-      <Spacer />
-      {value === undefined ? null : (
-        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{value}</Text>
-      )}
+      <WordsAndEnd
+        words={
+          <VStack alignment="leading" spacing={1}>
+            <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
+            {detail === undefined ? null : (
+              <Text
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                  foregroundStyle(colors.TEXT_MUTED),
+                ]}
+              >
+                {detail}
+              </Text>
+            )}
+          </VStack>
+        }
+        end={
+          value === undefined ? null : <Text modifiers={[foregroundStyle(VALUE_INK)]}>{value}</Text>
+        }
+      />
     </HStack>
   );
 
@@ -1025,7 +1175,11 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
       )}
       {lines}
       <Spacer />
-      {pressed === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
+      {pressed !== undefined ? (
+        <GoesMark goes={PUSH_ROW_GOES.PAGE} />
+      ) : remove === undefined ? null : (
+        <RowMoreMenu acts={[{ ...remove, symbol: NOTE_REMOVE.SYMBOL, destructive: true }]} />
+      )}
     </HStack>
   );
 
@@ -1064,15 +1218,47 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
     </ContextMenu>
   );
 
-  if (removeAct === undefined) return <HStack modifiers={placed}>{menu}</HStack>;
+  if (remove === undefined) return <HStack modifiers={placed}>{menu}</HStack>;
 
   return (
     <SwipeActions modifiers={placed}>
       {menu}
       <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
-        {removeAct}
+        <SwipeRemove
+          label={remove.label}
+          symbol={NOTE_REMOVE.SYMBOL}
+          onPress={remove.onPress}
+          colors={colors}
+        />
       </SwipeActions.Actions>
     </SwipeActions>
+  );
+}
+
+/**
+ * A row's swiped act that takes something away, filled with the danger fill
+ * that holds 4.5:1 under white. Note that it takes no destructive role,
+ * because SwiftUI takes a row out of its list the moment a destructive swipe
+ * is pressed, before an act that asks first, such as Disconnect, hears its
+ * answer, so a Cancel left the row gone; the long press menu keeps the role.
+ */
+function SwipeRemove({
+  label,
+  symbol,
+  onPress,
+  colors,
+}: {
+  readonly label: string;
+  readonly symbol?: Glyph | undefined;
+  readonly onPress: () => void;
+  readonly colors: BrandColors;
+}) {
+  return (
+    <SwiftUIButton
+      {...(symbol === undefined ? { label } : actContent(label, symbol))}
+      onPress={onPress}
+      modifiers={[tint(colors.DANGER_FILL)]}
+    />
   );
 }
 
@@ -1138,34 +1324,43 @@ export function ConnectionRow({ name, mark, lines, act, menu = [] }: ConnectionR
           ]}
         />
       )}
-      <VStack alignment="leading" spacing={SPACE.TIGHT}>
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
-        {lines.map((line) =>
-          line.problem === true ? (
-            <ProblemLine key={line.text} text={line.text} />
+      <WordsAndEnd
+        words={
+          <VStack alignment="leading" spacing={SPACE.TIGHT}>
+            <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
+            {lines.map((line) =>
+              line.problem === true ? (
+                <ProblemLine key={line.text} text={line.text} />
+              ) : (
+                <Text
+                  key={line.text}
+                  modifiers={[
+                    font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                    foregroundStyle(colors.TEXT_MUTED),
+                  ]}
+                >
+                  {line.text}
+                </Text>
+              ),
+            )}
+          </VStack>
+        }
+        end={
+          act === undefined ? (
+            menu.length > 0 ? (
+              <RowMoreMenu acts={menu} />
+            ) : null
           ) : (
-            <Text
-              key={line.text}
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.ROW_LINE }),
-                foregroundStyle(colors.TEXT_MUTED),
-              ]}
-            >
-              {line.text}
-            </Text>
-          ),
-        )}
-      </VStack>
-      <Spacer />
-      {act === undefined ? null : (
-        <Button
-          label={act.label}
-          look={BUTTON_LOOK.BORDERED}
-          size={BUTTON_SIZE.SMALL}
-          disabled={act.disabled}
-          onPress={act.onPress}
-        />
-      )}
+            <Button
+              label={act.label}
+              look={BUTTON_LOOK.BORDERED}
+              size={BUTTON_SIZE.SMALL}
+              disabled={act.disabled}
+              onPress={act.onPress}
+            />
+          )
+        }
+      />
     </HStack>
   );
 
@@ -1198,12 +1393,7 @@ export function ConnectionRow({ name, mark, lines, act, menu = [] }: ConnectionR
       {held}
       <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
         {swiped.map((each) => (
-          <SwiftUIButton
-            key={each.label}
-            label={each.label}
-            role={NOTE_REMOVE.ROLE}
-            onPress={each.onPress}
-          />
+          <SwipeRemove key={each.label} label={each.label} onPress={each.onPress} colors={colors} />
         ))}
       </SwipeActions.Actions>
     </SwipeActions>

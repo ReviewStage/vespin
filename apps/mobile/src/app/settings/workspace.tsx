@@ -3,7 +3,7 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
-import { ACT_UNREACHED_WORDS } from "@repo/features/words";
+import { ACT_UNREACHED_WORDS, readingWords } from "@repo/features/words";
 import {
   INVITATION_ROLE,
   type WorkspaceInvitation,
@@ -30,12 +30,18 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   ActionRow,
+  BUZZ,
+  buzz,
   ConfirmAsk,
+  FOOTER_TONE,
+  footerToneOf,
   GLYPH,
   ListSection,
+  LoadingRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   useAsyncAction,
@@ -44,6 +50,7 @@ import {
   WorkspaceRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { setStringAsync } from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
@@ -55,6 +62,9 @@ import { pickWorkspacePhoto } from "../../workspace-photo.js";
 import { selectPhotos, switcherWorkspace } from "../../workspace-switcher.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
+
+/** What an invitation's menu calls copying its accept link, as the panel's row's button says it. */
+const INVITE_LINK_WORDS = { COPY: "Copy link" } as const;
 
 /** The rename's alert: its title, its field's placeholder, and its act, the panel's words. */
 const RENAME_WORDS = {
@@ -229,7 +239,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
 
   return (
     <>
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <SettingsForm>
           <ListSection
             footer={
@@ -237,6 +247,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                 .filter((refusal) => refusal !== undefined)
                 .join(" ") || undefined
             }
+            footerTone={FOOTER_TONE.FAILURE}
           >
             <WorkspaceRow
               workspace={switcherWorkspace(workspace, false, photos)}
@@ -245,6 +256,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             {manages && !personal ? (
               <ActionRow
                 label={RENAME_WORDS.ROW}
+                symbol={GLYPH.RENAME}
                 onPress={() => setAsking({ kind: ASKING.RENAME })}
               />
             ) : null}
@@ -284,7 +296,15 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                 ? WORKSPACE_READ_FAILED.MEMBERS
                 : people.said.join(" ") || (ownerAlone ? LEAVE_WORDS.OWNER_NO_ADMIN : undefined)
             }
+            footerTone={
+              held?.members?.failed === true || people.said.length > 0
+                ? FOOTER_TONE.FAILURE
+                : FOOTER_TONE.NOTE
+            }
           >
+            {members === undefined && held?.members?.failed !== true ? (
+              <LoadingRow words={readingWords("the members")} />
+            ) : null}
             {(members ?? []).map((member) => (
               <MemberRow
                 key={member.userId}
@@ -306,17 +326,34 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                   ? WORKSPACE_READ_FAILED.INVITATIONS
                   : invite.said.join(" ") || undefined
               }
+              footerTone={FOOTER_TONE.FAILURE}
             >
               <ActionRow
                 label={INVITATION_WORDS.INVITE}
+                symbol={GLYPH.ADD}
                 onPress={() => setAsking({ kind: ASKING.INVITE })}
               />
+              {invitations === undefined && held?.invitations?.failed !== true ? (
+                <LoadingRow words={readingWords("the invitations")} />
+              ) : null}
               {(invitations ?? []).map((invitation) => (
                 <MemberRow
                   key={invitation.id}
                   name={invitation.email}
                   email={invitationLine(invitation)}
+                  invited
                   acts={[
+                    // Note that the service mails the accept link where the deployment names a sender, so Copy link sends it by hand, as the panel's row offers it.
+                    {
+                      label: INVITE_LINK_WORDS.COPY,
+                      symbol: GLYPH.LINK,
+                      onPress: () =>
+                        void setStringAsync(invitation.acceptUrl)
+                          .then(() => buzz(BUZZ.SUCCESS))
+                          .catch((cause: unknown) =>
+                            console.error("The invite link was not copied.", cause),
+                          ),
+                    },
                     {
                       label: INVITATION_WORDS.CANCEL,
                       destructive: true,
@@ -328,7 +365,10 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             </ListSection>
           ) : null}
           {owner && !personal && heir !== undefined ? (
-            <ListSection footer={transfer.refusal ?? LEAVE_WORDS.OWNER}>
+            <ListSection
+              footer={transfer.refusal ?? LEAVE_WORDS.OWNER}
+              footerTone={footerToneOf(transfer.refusal)}
+            >
               <ActionRow
                 label={TRANSFER_WORDS.VERB}
                 onPress={() => setAsking({ kind: ASKING.TRANSFER, member: heir })}
@@ -336,7 +376,10 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             </ListSection>
           ) : null}
           {personal || owner ? null : (
-            <ListSection footer={leave.refusal ?? LEAVE_WORDS.LINE}>
+            <ListSection
+              footer={leave.refusal ?? LEAVE_WORDS.LINE}
+              footerTone={footerToneOf(leave.refusal)}
+            >
               <ActionRow
                 label={LEAVE_WORDS.VERB(workspace.name)}
                 destructive

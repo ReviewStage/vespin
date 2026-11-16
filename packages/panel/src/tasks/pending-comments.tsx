@@ -186,7 +186,7 @@ export function usePendingActs(
   onAct?: (() => void) | undefined,
 ): PendingActs {
   const writing = useThreadWriting();
-  const writes = usePullRequestWrites(writing?.agentId ?? "", writing?.onWritten ?? noop);
+  const writes = usePullRequestWrites(writing?.onWritten ?? noop);
   const [editing, setEditing] = useState(false);
   const surfaceOpen = useContext(PendingSurfaceContext);
 
