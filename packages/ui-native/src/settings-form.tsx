@@ -45,7 +45,7 @@ import {
   useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
-import { useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage } from "./glyph-label.js";
@@ -148,6 +148,37 @@ function spokenValue(...parts: readonly (string | undefined)[]) {
   const said = parts.filter((part) => part !== undefined && part.length > 0).join(", ");
 
   return said.length === 0 ? [] : [accessibilityValue(said)];
+}
+
+/**
+ * A row's words and what stands at its end, such as a value, a role or an
+ * act: beside each other at the reader's usual sizes, and the end under the
+ * words at an accessibility size, as iOS Settings stacks a value under its
+ * label, so neither is squeezed into a word a line. A spacer follows either
+ * way, so a chevron after it keeps the row's end.
+ */
+function WordsAndEnd({ words, end }: { readonly words: ReactNode; readonly end: ReactNode }) {
+  const stacked = useAccessibilitySize();
+
+  if (!stacked || end === null) {
+    return (
+      <>
+        {words}
+        <Spacer />
+        {end}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <VStack alignment="leading" spacing={SPACE.TIGHT}>
+        {words}
+        {end}
+      </VStack>
+      <Spacer />
+    </>
+  );
 }
 
 /**
@@ -448,11 +479,14 @@ export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRo
         {symbol === undefined ? null : (
           <Image {...glyphImage(symbol)} size={leadSize} color={colors.TEXT_MUTED} />
         )}
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
-        <Spacer />
-        {detail === undefined ? null : (
-          <Text modifiers={[foregroundStyle(VALUE_INK)]}>{detail}</Text>
-        )}
+        <WordsAndEnd
+          words={<Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>}
+          end={
+            detail === undefined ? null : (
+              <Text modifiers={[foregroundStyle(VALUE_INK)]}>{detail}</Text>
+            )
+          }
+        />
         <GoesMark goes={goes} />
       </HStack>
     </PressedRow>
@@ -891,29 +925,34 @@ export function MemberRow({ name, email, picture, role, invited, badge, acts }: 
       ) : (
         <Avatar name={name} picture={picture} size={faceSize} />
       )}
-      <VStack alignment="leading" spacing={1}>
-        {/* Note that a row holding acts is a menu's label, which centers a wrapped line, so its lines keep to their leading edge, as Settings' subtitles do. */}
-        <Text
-          modifiers={[
-            foregroundStyle(colors.TEXT),
-            alignmentGuide("listRowSeparatorLeading", 0),
-            multilineTextAlignment("leading"),
-          ]}
-        >
-          {badge === undefined ? name : `${name} · ${badge}`}
-        </Text>
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_LINE }),
-            foregroundStyle(colors.TEXT_MUTED),
-            multilineTextAlignment("leading"),
-          ]}
-        >
-          {email}
-        </Text>
-      </VStack>
-      <Spacer />
-      {role === undefined ? null : <Text modifiers={[foregroundStyle(VALUE_INK)]}>{role}</Text>}
+      <WordsAndEnd
+        words={
+          <VStack alignment="leading" spacing={1}>
+            {/* Note that a row holding acts is a menu's label, which centers a wrapped line, so its lines keep to their leading edge, as Settings' subtitles do. */}
+            <Text
+              modifiers={[
+                foregroundStyle(colors.TEXT),
+                alignmentGuide("listRowSeparatorLeading", 0),
+                multilineTextAlignment("leading"),
+              ]}
+            >
+              {badge === undefined ? name : `${name} · ${badge}`}
+            </Text>
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+                multilineTextAlignment("leading"),
+              ]}
+            >
+              {email}
+            </Text>
+          </VStack>
+        }
+        end={
+          role === undefined ? null : <Text modifiers={[foregroundStyle(VALUE_INK)]}>{role}</Text>
+        }
+      />
       {/* Note that a row a press opens a menu on ends in the system's up-and-down chevron, as a menu picker's value does, so the reader knows it acts. */}
       {acts.length === 0 ? null : (
         <Image
@@ -1026,21 +1065,26 @@ export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
   const face = (
     <HStack spacing={SPACE.ROW}>
       <Image {...glyphImage(symbol)} size={glyphSize} color={colors.TEXT_MUTED} />
-      <VStack alignment="leading" spacing={1}>
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
-        {detail === undefined ? null : (
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE }),
-              foregroundStyle(colors.TEXT_MUTED),
-            ]}
-          >
-            {detail}
-          </Text>
-        )}
-      </VStack>
-      <Spacer />
-      {value === undefined ? null : <Text modifiers={[foregroundStyle(VALUE_INK)]}>{value}</Text>}
+      <WordsAndEnd
+        words={
+          <VStack alignment="leading" spacing={1}>
+            <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
+            {detail === undefined ? null : (
+              <Text
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                  foregroundStyle(colors.TEXT_MUTED),
+                ]}
+              >
+                {detail}
+              </Text>
+            )}
+          </VStack>
+        }
+        end={
+          value === undefined ? null : <Text modifiers={[foregroundStyle(VALUE_INK)]}>{value}</Text>
+        }
+      />
     </HStack>
   );
 
@@ -1280,35 +1324,43 @@ export function ConnectionRow({ name, mark, lines, act, menu = [] }: ConnectionR
           ]}
         />
       )}
-      <VStack alignment="leading" spacing={SPACE.TIGHT}>
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
-        {lines.map((line) =>
-          line.problem === true ? (
-            <ProblemLine key={line.text} text={line.text} />
+      <WordsAndEnd
+        words={
+          <VStack alignment="leading" spacing={SPACE.TIGHT}>
+            <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
+            {lines.map((line) =>
+              line.problem === true ? (
+                <ProblemLine key={line.text} text={line.text} />
+              ) : (
+                <Text
+                  key={line.text}
+                  modifiers={[
+                    font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                    foregroundStyle(colors.TEXT_MUTED),
+                  ]}
+                >
+                  {line.text}
+                </Text>
+              ),
+            )}
+          </VStack>
+        }
+        end={
+          act === undefined ? (
+            menu.length > 0 ? (
+              <RowMoreMenu acts={menu} />
+            ) : null
           ) : (
-            <Text
-              key={line.text}
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.ROW_LINE }),
-                foregroundStyle(colors.TEXT_MUTED),
-              ]}
-            >
-              {line.text}
-            </Text>
-          ),
-        )}
-      </VStack>
-      <Spacer />
-      {act === undefined && menu.length > 0 ? <RowMoreMenu acts={menu} /> : null}
-      {act === undefined ? null : (
-        <Button
-          label={act.label}
-          look={BUTTON_LOOK.BORDERED}
-          size={BUTTON_SIZE.SMALL}
-          disabled={act.disabled}
-          onPress={act.onPress}
-        />
-      )}
+            <Button
+              label={act.label}
+              look={BUTTON_LOOK.BORDERED}
+              size={BUTTON_SIZE.SMALL}
+              disabled={act.disabled}
+              onPress={act.onPress}
+            />
+          )
+        }
+      />
     </HStack>
   );
 
