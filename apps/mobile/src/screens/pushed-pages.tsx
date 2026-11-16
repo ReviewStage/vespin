@@ -19,6 +19,7 @@ export function PushedPageView({ page }: { readonly page: PushedPage }) {
           id={page.agentId}
           suggestedBy={page.suggestedBy}
           button={page.button}
+          brief={page.brief}
           inColumn
         />
       );

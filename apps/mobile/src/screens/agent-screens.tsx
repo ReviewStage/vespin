@@ -646,13 +646,26 @@ export function AgentScreen() {
     id = "",
     suggestedBy,
     button,
-  } = useLocalSearchParams<{ id: string; suggestedBy?: string; button?: string }>();
+    brief,
+  } = useLocalSearchParams<{
+    id: string;
+    suggestedBy?: string;
+    button?: string;
+    /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
+    brief?: string;
+  }>();
 
-  const handed = useHandToDetail({ kind: PUSHED_PAGE.AGENT, agentId: id, suggestedBy, button });
+  const handed = useHandToDetail({
+    kind: PUSHED_PAGE.AGENT,
+    agentId: id,
+    suggestedBy,
+    button,
+    brief,
+  });
 
   if (handed) return null;
 
-  return <AgentConversation id={id} suggestedBy={suggestedBy} button={button} />;
+  return <AgentConversation id={id} suggestedBy={suggestedBy} button={button} brief={brief} />;
 }
 
 /**
@@ -668,12 +681,15 @@ export function AgentConversation({
   id,
   suggestedBy,
   button,
+  brief,
   inColumn = false,
   onLeave,
 }: {
   readonly id: string;
   readonly suggestedBy?: string | undefined;
   readonly button?: string | undefined;
+  /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
+  readonly brief?: string | undefined;
   /** Where the page goes once its agent is archived or deleted, where it stands as a detail's root, such as Search's pick; a pushed page leaves its stack, and a stack's screen goes back. */
   readonly onLeave?: (() => void) | undefined;
   /** Whether it stands pushed over a split view's detail rather than on a stack over the window. */
@@ -803,9 +819,10 @@ export function AgentConversation({
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
 
-  const title = cardTitle(
-    shown === undefined ? (transcript?.word?.title ?? UNLISTED_AGENT) : agentName(shown),
-  );
+  // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
+  const title =
+    cardTitle(shown === undefined ? (transcript?.word?.title ?? brief ?? "") : agentName(shown)) ||
+    UNLISTED_AGENT;
 
   useScreenActivity((workspaces) =>
     shown === undefined

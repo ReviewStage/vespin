@@ -42,6 +42,8 @@ export type PushedPage =
       /** The suggestion a box opened the agent on, as the route's `suggestedBy` and `button` name it. */
       readonly suggestedBy?: string | undefined;
       readonly button?: string | undefined;
+      /** The words a start sheet started the agent on, which name it until the list or its transcript does. */
+      readonly brief?: string | undefined;
     }
   | {
       readonly kind: typeof PUSHED_PAGE.PULL_REQUEST;
@@ -206,7 +208,7 @@ function replaceDetail(place: SidebarPlace, key: string, page: PushedPage): void
 }
 
 /** An agent route's params, as `AgentScreen` reads them. */
-type AgentRouteParams = { id: string; suggestedBy?: string; button?: string };
+type AgentRouteParams = { id: string; suggestedBy?: string; button?: string; brief?: string };
 
 /** A version route's params, as `VersionScreen` reads them. */
 type VersionRouteParams = { id: string; seq: string; at?: string; newest?: string };
@@ -224,6 +226,8 @@ function routeOf(page: PushedPage, tab: IosTab): Href {
       if (page.suggestedBy !== undefined) params.suggestedBy = page.suggestedBy;
 
       if (page.button !== undefined) params.button = page.button;
+
+      if (page.brief !== undefined) params.brief = page.brief;
 
       return { pathname: on("/tasks/agent/[id]"), params };
     }
