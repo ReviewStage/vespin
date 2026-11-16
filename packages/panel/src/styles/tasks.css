@@ -1935,14 +1935,20 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
    of what is seen (`--ui-stage-height`), so a short window, a laptop's
    with a dock, is not filled by its composer; a narrow room's keyboard
    takes a smaller share (desktop.css). */
+/* A line of the box stands as a line of the message it sends: the body
+   type at the transcript's reading leading (`@repo/ui`'s prose.css), so
+   what is typed reads as it will once sent, a code span's pill clear of the
+   lines around it. The box and its placeholder set the leading itself, as
+   the transcript does; this is its length, for the heights the box and what
+   stands in for it while it loads (the automation prompt's skeleton) take.
+   Note that it stands on the root, where the profile's type is, so a
+   skeleton outside the field and a box in a dialog read it alike. */
+:root {
+  --agent-composer-line: calc(var(--ui-type-body-size) * var(--ui-type-reading-leading));
+}
+
 .agent-composer-field {
   position: relative;
-  /* A line of the box stands as a line of the message it sends: the body
-     type at the transcript's reading leading (`@repo/ui`'s prose.css), so
-     what is typed reads as it will once sent, a code span's pill clear of
-     the lines around it. The box and its placeholder set the leading itself,
-     as the transcript does; this is its length, for the box's heights. */
-  --agent-composer-line: calc(var(--ui-type-body-size) * var(--ui-type-reading-leading));
   --agent-composer-field-cap: calc(var(--ui-stage-height) * 0.4);
   --agent-composer-field-block: calc(var(--ui-space-16) + var(--ui-space-8));
   --agent-composer-field-lines: calc(
