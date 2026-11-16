@@ -1,13 +1,8 @@
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
-import {
-  PAGE_SHOWER,
-  type PageLine,
-  type PagePlace,
-  type PageShower,
-} from "@repo/features/page-wire";
+import type { PageLine, PagePlace, PageShower } from "@repo/features/page-wire";
 import { HoverCard, HoverCardHead, HoverCardSkeleton, PageThumb, Time, useMinute } from "@repo/ui";
-import { ACTOR_KIND, ACTOR_STATE, type Actor, APP_ACTOR } from "@repo/ui/actor-model";
+import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { useRef } from "react";
 import { PROVENANCE_VERB, ProvenanceRow } from "../actor-ref.js";
@@ -62,7 +57,7 @@ function PagePreview({ place, page }: CardPage): React.JSX.Element {
 }
 
 /**
- * Who showed a page's version: the app, or a coding agent by the name the
+ * Who showed a page's version: a coding agent by the name the
  * window holds now, its tile at rest since its model is not known here,
  * hanging its own card on the task it works on; nothing for one shown
  * before who showed it was kept.
@@ -73,8 +68,6 @@ function showerActor(
   agents: ReadonlyMap<string, string>,
 ): Actor | undefined {
   if (shownBy === undefined) return undefined;
-
-  if (shownBy.kind === PAGE_SHOWER.APP) return APP_ACTOR;
 
   return {
     kind: ACTOR_KIND.AGENT,

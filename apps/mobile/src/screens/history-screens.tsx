@@ -67,7 +67,7 @@ function versionNumber(spelled: string | undefined): number | undefined {
   return Number.isInteger(seq) && seq >= 1 ? seq : undefined;
 }
 
-/** Who wrote a version, by the mark its row leads with, as the panel's version rows lead: a person by their face, its picture looked up only for a person, since a notetaker's version names the person whose call it was written on, whose photo is not its writer's. */
+/** Who wrote a version, by the mark its row leads with, as the panel's version rows lead: a person by their face, its picture looked up only for a person. */
 function versionWriter(
   lastEdit: DescriptionLastEdit,
   pictureOf: PictureOf,
@@ -84,8 +84,6 @@ function versionWriter(
       };
     case DESCRIPTION_ACTOR.AGENT:
       return { kind: VERSION_WRITER.AGENT, name: revisionWriterName(lastEdit, undefined), harness };
-    case DESCRIPTION_ACTOR.NOTETAKER:
-      return { kind: VERSION_WRITER.PRODUCT };
     case DESCRIPTION_ACTOR.EARLIER:
       return { kind: VERSION_WRITER.EARLIER };
   }

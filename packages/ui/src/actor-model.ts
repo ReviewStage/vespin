@@ -414,8 +414,7 @@ export interface OriginAgent {
 
 /**
  * Who made a task for its member, where they did not make it by hand
- * (`TaskOrigin`): the app itself for one made on their call; the automation whose run
- * started the agent that made it; or that agent, as `agent` names it, or as
+ * (`TaskOrigin`): the automation whose run started the agent that made it; or that agent, as `agent` names it, or as
  * a coding agent the window does not hold, on the mark of no known harness.
  * None for a task its member made by hand, whose creator alone names it.
  */
@@ -424,8 +423,6 @@ export function originActor(
   agent: OriginAgent | undefined,
 ): Actor | undefined {
   if (origin === undefined) return undefined;
-
-  if (origin.actor === DESCRIPTION_ACTOR.NOTETAKER) return APP_ACTOR;
 
   if (agent?.automationName !== undefined) {
     return { kind: ACTOR_KIND.AUTOMATION, name: agent.automationName, state: ACTOR_STATE.REST };
@@ -466,7 +463,7 @@ function editPerson(edit: DescriptionLastEdit, reader: EditReader): Actor {
 }
 
 /**
- * Who wrote an edit: a member, the reader among them; the app itself; a coding agent
+ * Who wrote an edit: a member, the reader among them; a coding agent
  * as its row names it now, wearing the harness and state of `agent` where
  * the window found it; nobody for the one revision from before history.
  */
@@ -478,8 +475,6 @@ export function editActor(
   switch (edit.actor) {
     case DESCRIPTION_ACTOR.DEVELOPER:
       return editPerson(edit, reader);
-    case DESCRIPTION_ACTOR.NOTETAKER:
-      return APP_ACTOR;
     case DESCRIPTION_ACTOR.AGENT:
       return {
         kind: ACTOR_KIND.AGENT,
@@ -499,13 +494,11 @@ export interface ActorActivity {
   readonly at: number;
 }
 
-/** Whether a section's last change is the actor's: a member's by their id, the app's, or a coding agent's by its name. */
+/** Whether a section's last change is the actor's: a member's by their id, or a coding agent's by its name. */
 function changedBy(edit: DescriptionLastEdit, actor: Actor): boolean {
   switch (actor.kind) {
     case ACTOR_KIND.PERSON:
       return edit.actor === DESCRIPTION_ACTOR.DEVELOPER && edit.by?.userId === actor.userId;
-    case ACTOR_KIND.APP:
-      return edit.actor === DESCRIPTION_ACTOR.NOTETAKER;
     case ACTOR_KIND.AGENT:
       return (
         edit.actor === DESCRIPTION_ACTOR.AGENT &&

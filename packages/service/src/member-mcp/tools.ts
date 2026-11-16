@@ -1530,7 +1530,7 @@ const LIST_DESCRIPTION_REVISIONS_TOOL = memberMcpTool({
     "List the history of a task's description, by its taskId, as its History tab does: every save " +
     "is kept, and saves one writer makes one after another are one revision. Answers the newest " +
     `${DESCRIPTION_HISTORY_BOUNDS.PAGE} revisions first, each with its number (seq), its writer ` +
-    "(developer for a member, notetaker, agent, or earlier for the text from before history began), " +
+    "(developer for a member, agent, or earlier for the text from before history began), " +
     "by whom (the member's or the agent's name, null for none), the agentId of an agent's, when it " +
     "began and last moved, how many changes its saves made, and restoredFrom, the revision a " +
     "member's restore brought back; and earlier, which before takes to read the next older page, " +

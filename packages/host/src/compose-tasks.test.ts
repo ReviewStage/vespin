@@ -2731,7 +2731,14 @@ it.effect(
       yield* TestClock.adjust(Duration.seconds(2));
       yield* followSettled;
       yield* answered(() => pages.set({ pages: [{ ...FUNNEL, shownBy: null }] }));
-      const shown = { ...FUNNEL, version: 2, at: 2_500, shownBy: { kind: PAGE_SHOWER.APP } };
+
+      const shown = {
+        ...FUNNEL,
+        version: 2,
+        at: 2_500,
+        shownBy: { kind: PAGE_SHOWER.AGENT, agentId: "8d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a" },
+      };
+
       yield* answered(() => pages.set({ pages: [shown] }));
       assert.deepEqual(pushed.slice(1), [held({ rows: [FUNNEL] }), held({ rows: [shown] })]);
       assert.equal(told.length, 0, "a plan's pages held for the Inbox are never told in the view");

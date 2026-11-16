@@ -1414,7 +1414,7 @@ test("the line a thread's ask leaves is not drawn, since the mention in its word
           actor: DESCRIPTION_COMMENT_ACTOR.MEMBER,
           by: { userId: "u-dean", name: "Dean Stratakos" },
         },
-        asked: { actor: DESCRIPTION_COMMENT_ACTOR.APP },
+        asked: { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: AGENT.id },
         at: 2,
       },
     ],

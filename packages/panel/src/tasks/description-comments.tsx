@@ -93,7 +93,7 @@ import {
   usePressAway,
   VisuallyHidden,
 } from "@repo/ui";
-import { type Actor, APP_ACTOR, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
+import { type Actor, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
 import { neverBusyAct } from "@repo/ui/confirm-state";
 import {
   type DescriptionCommentsControl,
@@ -517,10 +517,6 @@ function useWriter(
   const person = usePerson(writer.by);
   const written = useWriterSubject(agents, writer);
 
-  if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) {
-    return { author: commentAuthor(APP_ACTOR), nameRef: <ActorRef actor={APP_ACTOR} nameOnly /> };
-  }
-
   if (written !== undefined && agents !== undefined) {
     const { agentId, subject, elsewhere } = written;
 
@@ -585,10 +581,7 @@ function WriterMark({
 }): ReactNode {
   const person = usePerson(writer.by);
   const written = useWriterSubject(agents, writer);
-  let actor: Actor = person;
-
-  if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) actor = APP_ACTOR;
-  else if (written !== undefined) actor = written.subject.tile;
+  const actor: Actor = written === undefined ? person : written.subject.tile;
 
   return <ActorMark actor={actor} />;
 }

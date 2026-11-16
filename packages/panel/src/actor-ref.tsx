@@ -726,20 +726,11 @@ export function PersonCard({
   );
 }
 
-/** The app's own card: its face, how long ago it wrote where the place knows, then what it wrote here. Read, never followed. */
-export function AppCard({
-  sub,
-  latest,
-}: {
-  /** How long ago he wrote: "2h ago". */
-  sub?: ReactNode;
-  /** What he last wrote in this description, in a line: "Edited Rollout and Risks". */
-  latest?: ReactNode;
-}): React.JSX.Element {
+/** The app's own card: its face. Read, never followed. */
+export function AppCard(): React.JSX.Element {
   return (
     <HoverCard data-actor-card={ACTOR_KIND.APP}>
-      <ActorHead actor={APP_ACTOR} sub={sub} />
-      {latest === undefined ? null : <LatestRow latest={latest} />}
+      <ActorHead actor={APP_ACTOR} />
     </HoverCard>
   );
 }

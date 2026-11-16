@@ -352,7 +352,12 @@ test("an Inbox whose task list could not be read says so, never that nothing nee
 
 const REVISION: DescriptionRevisionLine = {
   seq: 2,
-  lastEdit: { actor: DESCRIPTION_ACTOR.NOTETAKER, at: 20, duringCall: false },
+  lastEdit: {
+    actor: DESCRIPTION_ACTOR.DEVELOPER,
+    by: { userId: "user-charles", name: "Charles Pan" },
+    at: 20,
+    duringCall: false,
+  },
   startedAt: 20,
   changes: 2,
 };

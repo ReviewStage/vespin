@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { type Agent, createAgent } from "@repo/database/models/agent-store";
+import type { DescriptionWriter } from "@repo/database/models/description-revisions";
 import { tallyMemoryRecalls } from "@repo/database/models/memory-recall-store";
 import { type MemoryOutcome, rememberMemory } from "@repo/database/models/memory-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -13,6 +14,7 @@ import {
   startTask,
 } from "@repo/database/testing";
 import { AGENT_PAYER } from "@repo/features/agent-wire";
+import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
 import { RUN_STATUS, RUN_TURN_ORIGIN, TURN_TRIGGER } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { EXPERIMENT } from "@repo/settings";
@@ -52,6 +54,9 @@ const STALE_WORDS = "before the most recent work; check it against the code befo
 
 /** When the agent's first turn starts, which a test reads against its own clock, which starts at nothing. */
 const TURN_STARTS_AT = 10 * 60_000;
+
+/** The developer, as the writer of our notes. */
+const DEVELOPER: DescriptionWriter = { actor: DESCRIPTION_ACTOR.DEVELOPER };
 
 /** A sandbox door no call of notes alone opens: one that fails if it is. */
 const noSandbox: InboxSandboxDoor = () => Promise.reject(new Error("the sandbox was opened"));
@@ -191,7 +196,7 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
 
         // Our notes before the agent's first turn: that turn opens on the description as its first message.
         yield* TestClock.adjust("1 minute");
-        yield* saveNotes(binding, [added("Context", "Invites go by email.")]);
+        yield* saveNotes(binding, [added("Context", "Invites go by email.")], DEVELOPER);
         assert.equal(yield* typedAt(firstTurn), undefined);
         // The first turn runs, started after our notes.
         yield* ranTurn(admitted, firstTurn, TURN_STARTS_AT);
@@ -210,7 +215,11 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         // Our notes while that turn ran, and the agent's after them in the same section, which
         // leave the agent the section's last writer: the next typed turn is handed the description all the same.
         yield* TestClock.adjust("1 minute");
-        yield* saveNotes(binding, [added("Approach", "- A withdrawn invite never grants access.")]);
+        yield* saveNotes(
+          binding,
+          [added("Approach", "- A withdrawn invite never grants access.")],
+          DEVELOPER,
+        );
         yield* TestClock.adjust("1 minute");
         assert.equal(
           yield* agentNotes([added("Approach", "- Resending renews the link.")]),
@@ -224,7 +233,11 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         // With Task descriptions off a save hands nothing, and the description is never what a turn reads.
         yield* experimentInTestWorkspace(userId, EXPERIMENT.DESCRIPTIONS, false);
         yield* TestClock.adjust("1 minute");
-        yield* saveNotes(binding, [added("Approach", "- Only admins withdraw invites.")]);
+        yield* saveNotes(
+          binding,
+          [added("Approach", "- Only admins withdraw invites.")],
+          DEVELOPER,
+        );
         assert.equal(yield* typedAt(nextTurn), undefined);
 
         // A turn runs after that save, and Task descriptions goes back on: the next turn is handed the description it was not.

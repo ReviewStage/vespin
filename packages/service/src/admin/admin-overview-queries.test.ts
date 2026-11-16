@@ -234,8 +234,8 @@ const signIn = (userId: string, updatedAt: string) =>
 
 /**
  * Ada joined this week and did one of everything. Bob joined long ago, made a
- * task in the prior week, and this week only had the app's notetaker write on its
- * description, which is the app's and not a meaningful action of its own. Carol joined
+ * task in the prior week, and this week only had a coding agent write on its
+ * description, which is the agent's and not a meaningful action of his own. Carol joined
  * this week and did nothing. Root is an admin who joined this week and acted.
  */
 const seedService = Effect.gen(function* () {
@@ -275,7 +275,7 @@ const seedService = Effect.gen(function* () {
 
   const bobWorkspace = yield* openWorkspace(bob);
   const bobTask = yield* createTask(bob, bobWorkspace, "2026-10-10T10:00:00Z");
-  yield* writeRevision(bobTask, bob, DESCRIPTION_ACTOR.NOTETAKER, "2026-10-20T10:00:00Z");
+  yield* writeRevision(bobTask, bob, DESCRIPTION_ACTOR.AGENT, "2026-10-20T10:00:00Z");
   yield* connectIntegration(bob);
 
   const rootWorkspace = yield* openWorkspace(root);
@@ -305,7 +305,7 @@ it.layer(getTestDB())("the overview's reads", (it) => {
           windowDays: ADMIN_METRICS_WINDOW.WEEK,
         });
 
-        // Bob's notetaker revision makes him no active developer this week.
+        // The agent's revision on Bob's task makes him no active developer this week, and is no developer's revision.
         assert.deepEqual(source.activeDevelopers, { recent: 1, prior: 1 });
         assert.deepEqual(daysOf(source.daily, DAILY_COUNT.TASKS_CREATED), {
           "2026-10-10": 1,
@@ -321,7 +321,6 @@ it.layer(getTestDB())("the overview's reads", (it) => {
         assert.deepEqual(daysOf(source.daily, DAILY_COUNT.PRS_MERGED), { "2026-10-20": 1 });
         assert.deepEqual(daysOf(source.daily, DAILY_COUNT.DESCRIPTION_REVISIONS), {
           "2026-10-18": 1,
-          "2026-10-20": 1,
         });
         assert.deepEqual(daysOf(source.daily, DAILY_COUNT.INBOX_ANSWERED), { "2026-10-20": 1 });
         // The guard's skip started nothing, so it is no run.
@@ -437,10 +436,10 @@ it.layer(getTestDB())("one day's reads", (it) => {
           scope: ADMIN_METRICS_SCOPE.NON_ADMINS,
         });
 
-        // Bob's notetaker revision is in the bar, as the chart counts it, but makes him no active account.
+        // The agent's revision on Bob's task is not in the bar, and makes him no active account.
         assert.deepEqual(day.activity.features, {
           agentsStarted: 1,
-          descriptionRevisions: 1,
+          descriptionRevisions: 0,
           inboxAnswered: 1,
           automationRuns: 1,
         });

@@ -16,7 +16,7 @@
 export const ACTIVITY_FEATURE = {
   /** A coding agent started (`agent.created_at`), by hand, by the app, or by an automation. */
   AGENTS_STARTED: "agentsStarted",
-  /** A description revision written by the developer, or by the retired notetaker on their behalf before agents wrote descriptions. */
+  /** A description revision written by the developer, among them those the retired notetaker wrote on their behalf before agents wrote descriptions, which read as the developer's own. */
   DESCRIPTION_REVISIONS: "descriptionRevisions",
   /** An inbox item the developer answered (`inbox_item.settled_at`, answered). */
   INBOX_ANSWERED: "inboxAnswered",
